@@ -1,12 +1,12 @@
 #pragma once
-#include "Model.h"
-#include <cstdint>
-#include <string>
-#include <vector>
 #include "MeshManager.h"
+#include "Model.h"
 #include "ModelRenderer.h"
 #include "ObjLoader.h"
 #include "TextureManager.h"
+#include <cstdint>
+#include <string>
+#include <vector>
 
 class DirectXCommon;
 class SrvManager;
@@ -32,8 +32,10 @@ class ModelManager {
     /// モデルを描画する
     /// </summary>
     /// <param name="modelId">描画するモデルのモデルID</param>
+    /// <param name="transform">描画するモデルのトランスフォーム</param>
     /// <param name="camera">描画に使用するカメラ</param>
-    void Draw(uint32_t modelId, const Camera &camera);
+    void Draw(uint32_t modelId, const Transform &transform,
+              const Camera &camera);
 
     /// <summary>
     /// 描画前処理

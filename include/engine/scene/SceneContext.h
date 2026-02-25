@@ -1,6 +1,7 @@
 #pragma once
 
 class Input;
+class WinApp;
 class SoundManager;
 class ModelManager;
 class SpriteManager;
@@ -11,6 +12,7 @@ class ImguiManager;
 
 struct SceneContext {
     Input *input = nullptr;
+    WinApp *winApp = nullptr;
     SoundManager *sound = nullptr;
     ModelManager *model = nullptr;
     SpriteManager *sprite = nullptr;

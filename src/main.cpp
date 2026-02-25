@@ -15,7 +15,7 @@
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     // WinApp初期化
     WinApp winApp;
-    winApp.Initialize(hInstance, nCmdShow, 1280, 720, L"Engine");
+    winApp.Initialize(hInstance, nCmdShow, 1280, 720, L"Game");
 
     // クライアント領域の幅と高さ
     int width = winApp.GetWidth();
@@ -58,6 +58,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
 
     SceneContext sceneCtx{};
     sceneCtx.input = &input;
+    sceneCtx.winApp = &winApp;
     sceneCtx.sound = &soundManager;
     sceneCtx.model = &modelManager;
     sceneCtx.sprite = &spriteManager;

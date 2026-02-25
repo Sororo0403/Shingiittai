@@ -229,6 +229,9 @@
     <ClInclude Include="include\engine\scene\SceneContext.h">
       <Filter>include\engine\scene</Filter>
     </ClInclude>
+    <ClInclude Include="include\engine\model\Transform.h">
+      <Filter>include\engine\model</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="resources\shaders\sprite\SpritePS.hlsl">

@@ -115,6 +115,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\app\scene\GameScene.h" />
+    <ClInclude Include="include\engine\model\Transform.h" />
     <ClInclude Include="include\engine\scene\BaseScene.h" />
     <ClInclude Include="include\engine\imgui\ImguiManager.h" />
     <ClInclude Include="include\engine\camera\Camera.h" />

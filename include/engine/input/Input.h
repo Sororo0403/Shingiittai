@@ -10,7 +10,7 @@ class Input {
     /// 初期化処理
     /// </summary>
     /// <param name="hInstance">アプリケーションのインスタンスハンドル</param>
-    /// <param name="hwnd">メインウィンドウのハンドル</param>
+    /// <param name="hwnd">入力を取得するウィンドウのハンドル</param>
     void Initialize(HINSTANCE hInstance, HWND hwnd);
 
     /// <summary>
@@ -18,15 +18,28 @@ class Input {
     /// </summary>
     void Update();
 
-    // キー入力判定
-    bool IsPress(int dik);
-    bool IsTrigger(int dik);
-    bool IsRelease(int dik);
+    // KeyBoard
+    bool IsKeyPress(int dik) const;
+    bool IsKeyTrigger(int dik) const;
+    bool IsKeyRelease(int dik) const;
+
+    // Mouse
+    LONG GetMouseMoveX() const { return mouseState_.lX; }
+    LONG GetMouseMoveY() const { return mouseState_.lY; }
+    LONG GetMouseMoveZ() const { return mouseState_.lZ; }
+
+    bool IsMousePress(int button) const;
+    bool IsMouseTrigger(int button) const;
+    bool IsMouseRelease(int button) const;
 
   private:
     Microsoft::WRL::ComPtr<IDirectInput8> directInput_;
     Microsoft::WRL::ComPtr<IDirectInputDevice8> keyboard_;
+    Microsoft::WRL::ComPtr<IDirectInputDevice8> mouse_;
 
-    std::array<BYTE, 256> now_;
-    std::array<BYTE, 256> prev_;
+    std::array<BYTE, 256> keyNow_{};
+    std::array<BYTE, 256> keyPrev_{};
+
+    DIMOUSESTATE mouseState_{};
+    DIMOUSESTATE mousePrevState_{};
 };

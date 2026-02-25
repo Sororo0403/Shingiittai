@@ -33,68 +33,85 @@ void ModelRenderer::PreDraw() {
     auto cmd = dxCommon_->GetCommandList();
 
     ID3D12DescriptorHeap *heaps[] = {srvManager_->GetHeap()};
-
     cmd->SetDescriptorHeaps(1, heaps);
 
     cmd->SetPipelineState(pipelineState_.Get());
     cmd->SetGraphicsRootSignature(rootSignature_.Get());
-    cmd->SetGraphicsRootConstantBufferView(
-        0, constBuffer_->GetGPUVirtualAddress());
-
     cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    drawIndex_ = 0;
 }
 
-void ModelRenderer::Draw(const Model &model, const Camera &camera) {
+void ModelRenderer::Draw(const Model &model, const Transform &transform,
+                         const Camera &camera) {
+    if (drawIndex_ >= kMaxDraws) {
+        return;
+    }
 
     auto cmd = dxCommon_->GetCommandList();
     const Mesh &mesh = meshManager_->GetMesh(model.meshId);
 
+    // World行列
     XMMATRIX world =
-        XMMatrixScaling(model.scale.x, model.scale.y, model.scale.z) *
-        XMMatrixRotationRollPitchYaw(model.rotation.x, model.rotation.y,
-                                     model.rotation.z) *
-        XMMatrixTranslation(model.position.x, model.position.y,
-                            model.position.z);
+        XMMatrixScaling(transform.scale.x, transform.scale.y,
+                        transform.scale.z) *
+        XMMatrixRotationRollPitchYaw(transform.rotation.x, transform.rotation.y,
+                                     transform.rotation.z) *
+        XMMatrixTranslation(transform.position.x, transform.position.y,
+                            transform.position.z);
 
     XMMATRIX wvp = world * camera.GetView() * camera.GetProj();
 
-    ConstBufferData *mapped = nullptr;
-    constBuffer_->Map(0, nullptr, (void **)&mapped);
-    XMStoreFloat4x4(&mapped->matWVP, XMMatrixTranspose(wvp));
-    constBuffer_->Unmap(0, nullptr);
+    // Drawごとに専用領域へ書き込み
+    auto *dst =
+        reinterpret_cast<ConstBufferData *>(mappedCB_ + cbStride_ * drawIndex_);
 
-    cmd->SetGraphicsRootConstantBufferView(
-        0, constBuffer_->GetGPUVirtualAddress());
+    XMStoreFloat4x4(&dst->matWVP, XMMatrixTranspose(wvp));
 
+    // GPUアドレスをオフセット
+    D3D12_GPU_VIRTUAL_ADDRESS cbAddr =
+        constBuffer_->GetGPUVirtualAddress() + cbStride_ * drawIndex_;
+
+    cmd->SetGraphicsRootConstantBufferView(0, cbAddr);
     cmd->SetGraphicsRootDescriptorTable(
         1, textureManager_->GetGpuHandle(model.textureId));
 
     cmd->IASetVertexBuffers(0, 1, &mesh.vbView);
     cmd->IASetIndexBuffer(&mesh.ibView);
     cmd->DrawIndexedInstanced(mesh.indexCount, 1, 0, 0, 0);
+
+    drawIndex_++;
 }
 
 void ModelRenderer::PostDraw() {}
 
 void ModelRenderer::CreateConstantBuffer() {
-    UINT size = Align256(sizeof(ConstBufferData));
+    cbStride_ = Align256(sizeof(ConstBufferData));
+    UINT totalSize = cbStride_ * kMaxDraws;
+
     CD3DX12_HEAP_PROPERTIES heap(D3D12_HEAP_TYPE_UPLOAD);
-    auto desc = CD3DX12_RESOURCE_DESC::Buffer(size);
+    auto desc = CD3DX12_RESOURCE_DESC::Buffer(totalSize);
 
     ThrowIfFailed(dxCommon_->GetDevice()->CreateCommittedResource(
                       &heap, D3D12_HEAP_FLAG_NONE, &desc,
                       D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
                       IID_PPV_ARGS(&constBuffer_)),
                   "CreateCommittedResource(ConstantBuffer) failed");
+
+    // Mapしっぱなし
+    ThrowIfFailed(
+        constBuffer_->Map(0, nullptr, reinterpret_cast<void **>(&mappedCB_)),
+        "ConstantBuffer Map failed");
 }
+
 void ModelRenderer::CreateRootSignature() {
 
     CD3DX12_ROOT_PARAMETER params[2];
 
-    // b0 : 定数バッファ
+    // b0: 定数バッファ
     params[0].InitAsConstantBufferView(0);
 
-    // t0 : テクスチャ
+    // t0: テクスチャ
     CD3DX12_DESCRIPTOR_RANGE range;
     range.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
     params[1].InitAsDescriptorTable(1, &range);

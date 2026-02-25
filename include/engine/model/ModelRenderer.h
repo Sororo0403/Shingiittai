@@ -1,6 +1,7 @@
 #pragma once
 #include "Camera.h"
 #include "Model.h"
+#include "Transform.h"
 #include <d3d12.h>
 #include <wrl.h>
 
@@ -25,8 +26,10 @@ class ModelRenderer {
     /// モデルを描画する
     /// </summary>
     /// <param name="model">描画するモデル</param>
+    /// <param name="transform">描画するモデルのトランスフォーム</param>
     /// <param name="camera">描画に使用するカメラ</param>
-    void Draw(const Model &model, const Camera &camera);
+    void Draw(const Model &model, const Transform &transform,
+              const Camera &camera);
 
     /// <summary>
     /// 描画前処理
@@ -45,6 +48,8 @@ class ModelRenderer {
     void CreateConstantBuffer();
 
   private:
+    static constexpr uint32_t kMaxDraws = 4096;
+
     DirectXCommon *dxCommon_ = nullptr;
     SrvManager *srvManager_ = nullptr;
     MeshManager *meshManager_ = nullptr;
@@ -53,4 +58,9 @@ class ModelRenderer {
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
     Microsoft::WRL::ComPtr<ID3D12Resource> constBuffer_;
+
+    uint32_t drawIndex_ = 0;
+    uint32_t cbStride_ = 0;
+
+    uint8_t *mappedCB_ = nullptr;
 };
