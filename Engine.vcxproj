@@ -60,7 +60,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>$(ProjectDir)include\app\scene;$(ProjectDir)include\engine\scene;$(ProjectDir)include\engine\input;$(ProjectDir)include\engine\camera;$(ProjectDir)\include\engine\core;$(ProjectDir)include\engine\graphics;$(ProjectDir)include\engine\imgui;$(ProjectDir)include\engine\model;$(ProjectDir)include\engine\sound;$(ProjectDir)include\engine\sprite;$(ProjectDir)include\engine\texture;$(ProjectDir)externals\DirectX-Headers;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)include\app\scene;$(ProjectDir)include\engine\scene;$(ProjectDir)include\engine\input;$(ProjectDir)include\engine\camera;$(ProjectDir)\include\engine\core;$(ProjectDir)include\engine\graphics;$(ProjectDir)include\engine\imgui;$(ProjectDir)include\engine\model;$(ProjectDir)include\engine\sound;$(ProjectDir)include\engine\sprite;$(ProjectDir)include\engine\texture;$(ProjectDir)externals\DirectX-Headers;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\JoyShockLibrary\include;$(ProjectDir)externals\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
     </ClCompile>
@@ -68,9 +68,14 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
-      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;imgui.lib;dinput8.lib;dxguid.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(SolutionDir)..\generated\outputs\$(Configuration)\imgui\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;imgui.lib;dinput8.lib;dxguid.lib;JoyShockLibrary.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ProjectDir)externals\JoyShockLibrary\lib\;$(SolutionDir)..\generated\outputs\$(Configuration)\imgui\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
+    <PostBuildEvent>
+      <Command>if exist "$(ProjectDir)externals\JoyShockLibrary\lib\JoyShockLibrary.dll" (
+    xcopy /Y /D "$(ProjectDir)externals\JoyShockLibrary\lib\JoyShockLibrary.dll" "$(TargetDir)"
+)</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -82,7 +87,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>$(ProjectDir)include\app\scene;$(ProjectDir)include\engine\scene;$(ProjectDir)include\engine\input;$(ProjectDir)include\engine\camera;$(ProjectDir)\include\engine\core;$(ProjectDir)include\engine\graphics;$(ProjectDir)include\engine\imgui;$(ProjectDir)include\engine\model;$(ProjectDir)include\engine\sound;$(ProjectDir)include\engine\sprite;$(ProjectDir)include\engine\texture;$(ProjectDir)externals\DirectX-Headers;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)include\app\scene;$(ProjectDir)include\engine\scene;$(ProjectDir)include\engine\input;$(ProjectDir)include\engine\camera;$(ProjectDir)\include\engine\core;$(ProjectDir)include\engine\graphics;$(ProjectDir)include\engine\imgui;$(ProjectDir)include\engine\model;$(ProjectDir)include\engine\sound;$(ProjectDir)include\engine\sprite;$(ProjectDir)include\engine\texture;$(ProjectDir)externals\DirectX-Headers;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\JoyShockLibrary\include;$(ProjectDir)externals\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
@@ -90,9 +95,14 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
-      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;imgui.lib;dinput8.lib;dxguid.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(SolutionDir)..\generated\outputs\$(Configuration)\imgui\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;imgui.lib;dinput8.lib;dxguid.lib;JoyShockLibrary.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ProjectDir)externals\JoyShockLibrary\lib\;$(SolutionDir)..\generated\outputs\$(Configuration)\imgui\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
+    <PostBuildEvent>
+      <Command>if exist "$(ProjectDir)externals\JoyShockLibrary\lib\JoyShockLibrary.dll" (
+    xcopy /Y /D "$(ProjectDir)externals\JoyShockLibrary\lib\JoyShockLibrary.dll" "$(TargetDir)"
+)</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\app\scene\GameScene.cpp" />

@@ -1,10 +1,11 @@
 #include "Input.h"
 #include <cassert>
+#include <cmath>
 
 void Input::Initialize(HINSTANCE hInstance, HWND hwnd) {
     HRESULT hr;
 
-    // DirectInput作成
+    // DirectInput 初期化
     hr = DirectInput8Create(
         hInstance, DIRECTINPUT_VERSION, IID_IDirectInput8,
         reinterpret_cast<void **>(directInput_.GetAddressOf()), nullptr);
@@ -40,10 +41,19 @@ void Input::Initialize(HINSTANCE hInstance, HWND hwnd) {
 
     keyNow_.fill(0);
     keyPrev_.fill(0);
+
+    // JoyShock 初期化
+    JslConnectDevices();
+
+    int handles[4];
+    int count = JslGetConnectedDeviceHandles(handles, 4);
+
+    if (count > 0) {
+        jsHandle_ = handles[0];
+    }
 }
 
 void Input::Update() {
-
     keyPrev_ = keyNow_;
     mousePrevState_ = mouseState_;
 
@@ -63,6 +73,27 @@ void Input::Update() {
     if (FAILED(hr)) {
         mouse_->Acquire();
         mouse_->GetDeviceState(sizeof(DIMOUSESTATE), &mouseState_);
+    }
+
+    // JoyShock 再接続チェック
+    if (jsHandle_ == -1) {
+        JslConnectDevices();
+        int handles[4];
+        int count = JslGetConnectedDeviceHandles(handles, 4);
+        if (count > 0) {
+            jsHandle_ = handles[0];
+        }
+    }
+
+    // Gyro 更新
+    if (jsHandle_ != -1) {
+        IMU_STATE imu = JslGetIMUState(jsHandle_);
+
+        gyroX_ = imu.gyroX * degToRad;
+        gyroY_ = imu.gyroY * degToRad;
+    } else {
+        gyroX_ = 0.0f;
+        gyroY_ = 0.0f;
     }
 }
 

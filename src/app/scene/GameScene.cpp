@@ -11,13 +11,11 @@ using namespace DirectX;
 void GameScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
 
-    // モデル読み込み
     enemyModelId_ = ctx.model->Load(L"resources/model/enemy/enemy.obj");
 
-    // プレイヤー初期位置
     playerTf_.position = {0, 0, 0};
 
-    // 敵を大量に奥へ配置
+    // 敵配置
     for (int z = 10; z < 100; z += 10) {
         for (int x = -20; x <= 20; x += 10) {
             Transform tf;
@@ -37,23 +35,17 @@ void GameScene::Update() {
 
     float dt = 1.0f / 60.0f;
 
-    // ======================
-    // マウス回転
-    // ======================
-    LONG mouseX = ctx_->input->GetMouseMoveX();
-    LONG mouseY = ctx_->input->GetMouseMoveY();
+    // ジャイロ入力
+    float gyroX = ctx_->input->GetGyroX();
+    float gyroY = ctx_->input->GetGyroY();
 
-    float sensitivity = 0.0025f;
-
-    cameraRot_.y += mouseX * sensitivity;
-    cameraRot_.x += mouseY * sensitivity;
+    cameraRot_.y += gyroY * gyroSensitivity_ * dt;
+    cameraRot_.x -= gyroX * gyroSensitivity_ * dt;
 
     cameraRot_.x =
         std::clamp(cameraRot_.x, -XM_PIDIV2 + 0.1f, XM_PIDIV2 - 0.1f);
 
-    // ======================
-    // WASD移動
-    // ======================
+    // 移動
     XMVECTOR forward =
         XMVectorSet(sinf(cameraRot_.y), 0, cosf(cameraRot_.y), 0);
 
@@ -73,13 +65,12 @@ void GameScene::Update() {
     if (!XMVector3Equal(move, XMVectorZero())) {
         move = XMVector3Normalize(move);
         move *= moveSpeed_ * dt;
+
         XMStoreFloat3(&playerTf_.position,
                       XMLoadFloat3(&playerTf_.position) + move);
     }
 
-    // ======================
     // カメラ追従
-    // ======================
     XMFLOAT3 camPos = playerTf_.position;
     camPos.y += 1.6f;
 
@@ -89,7 +80,6 @@ void GameScene::Update() {
 }
 
 void GameScene::Draw() {
-
     ctx_->model->PreDraw();
 
     for (auto &enemy : enemies_) {

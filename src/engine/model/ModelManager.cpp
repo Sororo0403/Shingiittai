@@ -1,11 +1,7 @@
 #include "ModelManager.h"
 #include "Camera.h"
 #include "DirectXCommon.h"
-#include "MeshManager.h"
-#include "ModelRenderer.h"
-#include "ObjLoader.h"
 #include "SrvManager.h"
-#include "TextureManager.h"
 
 void ModelManager::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager) {
     dxCommon_ = dxCommon;
