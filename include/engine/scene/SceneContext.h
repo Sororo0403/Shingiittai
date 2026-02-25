@@ -1,0 +1,20 @@
+#pragma once
+
+class Input;
+class SoundManager;
+class ModelManager;
+class SpriteManager;
+
+#ifndef IMGUI_DISABLED
+class ImguiManager;
+#endif // IMGUI_DISABLED
+
+struct SceneContext {
+    Input *input = nullptr;
+    SoundManager *sound = nullptr;
+    ModelManager *model = nullptr;
+    SpriteManager *sprite = nullptr;
+#ifndef IMGUI_DISABLED
+    ImguiManager *imgui = nullptr;
+#endif // IMGUI_DISABLED
+};
