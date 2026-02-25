@@ -11,9 +11,17 @@ using namespace DirectX;
 void GameScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
 
+    // モデルロード
     enemyModelId_ = ctx.model->Load(L"resources/model/enemy/enemy.obj");
+    playerModelId_ = ctx.model->Load(L"resources/model/player/player.obj");
+    swordModelId_ = ctx.model->Load(L"resources/model/sword/sword.obj");
 
+    // プレイヤー初期化
     playerTf_.position = {0, 0, 0};
+    playerTf_.scale = {1.5f, 1.5f, 1.5f};
+
+    // 剣スケール
+    swordTf_.scale = {0.5f, 0.5f, 0.5f};
 
     // 敵配置
     for (int z = 10; z < 100; z += 10) {
@@ -35,7 +43,7 @@ void GameScene::Update() {
 
     float dt = 1.0f / 60.0f;
 
-    // ジャイロ入力
+    // ===== ジャイロ回転 =====
     float gyroX = ctx_->input->GetGyroX();
     float gyroY = ctx_->input->GetGyroY();
 
@@ -45,7 +53,7 @@ void GameScene::Update() {
     cameraRot_.x =
         std::clamp(cameraRot_.x, -XM_PIDIV2 + 0.1f, XM_PIDIV2 - 0.1f);
 
-    // 移動
+    // ===== 移動方向ベクトル =====
     XMVECTOR forward =
         XMVectorSet(sinf(cameraRot_.y), 0, cosf(cameraRot_.y), 0);
 
@@ -70,21 +78,40 @@ void GameScene::Update() {
                       XMLoadFloat3(&playerTf_.position) + move);
     }
 
-    // カメラ追従
+    // ===== カメラを頭位置へ =====
     XMFLOAT3 camPos = playerTf_.position;
     camPos.y += 1.6f;
+    camPos.z += 1.6f;
 
     camera_.SetPosition(camPos);
     camera_.SetRotation(cameraRot_);
     camera_.Update();
+
+    // ===== 剣をカメラ右下へ =====
+    XMVECTOR camPosVec = XMLoadFloat3(&camPos);
+    XMVECTOR up = XMVectorSet(0, 1, 0, 0);
+
+    XMVECTOR offset = right * 0.4f + up * -0.3f + forward * 0.8f;
+
+    XMVECTOR swordPos = camPosVec + offset;
+
+    XMStoreFloat3(&swordTf_.position, swordPos);
+    swordTf_.rotation = cameraRot_;
 }
 
 void GameScene::Draw() {
+
     ctx_->model->PreDraw();
 
+    // 敵描画
     for (auto &enemy : enemies_) {
         ctx_->model->Draw(enemyModelId_, enemy, camera_);
     }
+
+    ctx_->model->Draw(playerModelId_, playerTf_, camera_);
+
+    // 剣描画（最後）
+    ctx_->model->Draw(swordModelId_, swordTf_, camera_);
 
     ctx_->model->PostDraw();
 }
