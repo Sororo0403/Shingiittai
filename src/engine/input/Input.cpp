@@ -115,13 +115,13 @@ void Input::Update(float deltaTime) {
     // 1) 推定重力方向（ワールドの下= (0,-1,0) とするなら、機体座標での重力は
     // q^-1 * down * q）
     //    ここでは「現在姿勢から見た down ベクトル」を求める
-    XMVECTOR downW = XMVectorSet(0, -1, 0, 0);
+    XMVECTOR downW = XMVectorSet(0, 1, 0, 0);
     XMVECTOR gEst =
         XMVector3Normalize(XMVector3Rotate(downW, XMQuaternionConjugate(q)));
 
     // 2) 観測重力（加速度）を正規化。振ってる最中は信用しない（|a| が 1g
     // 近い時だけ）
-    XMVECTOR aMeas = XMVectorSet(ax, ay, az, 0);
+    XMVECTOR aMeas = XMVectorSet(-ax, -ay, -az, 0);
     float aLen = XMVectorGetX(XMVector3Length(aMeas));
 
     float trust = 0.0f;
