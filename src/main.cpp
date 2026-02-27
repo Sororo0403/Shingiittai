@@ -74,7 +74,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     // メインループ
     while (winApp.ProcessMessage()) {
         // 入力更新
-        input.Update();
+        input.Update(1.0f / 60.0f);
 
         // Scene 更新
         sceneManager.Update();

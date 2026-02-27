@@ -1,4 +1,7 @@
 #pragma once
+#define DIRECTINPUT_VERSION 0x0800
+
+#include <DirectXMath.h>
 #include <JoyShockLibrary.h>
 #include <Windows.h>
 #include <array>
@@ -7,19 +10,10 @@
 
 class Input {
   public:
-    /// <summary>
-    /// 初期化処理
-    /// </summary>
-    /// <param name="hInstance">アプリケーションのインスタンスハンドル</param>
-    /// <param name="hwnd">入力を取得するウィンドウのハンドル</param>
     void Initialize(HINSTANCE hInstance, HWND hwnd);
+    void Update(float deltaTime);
 
-    /// <summary>
-    /// 更新処理
-    /// </summary>
-    void Update();
-
-    // KeyBoard
+    // Keyboard
     bool IsKeyPress(int dik) const;
     bool IsKeyTrigger(int dik) const;
     bool IsKeyRelease(int dik) const;
@@ -37,8 +31,18 @@ class Input {
     float GetGyroX() const { return gyroX_; }
     float GetGyroY() const { return gyroY_; }
 
+    // Orientation
+    DirectX::XMVECTOR GetOrientation() const;
+    void ResetOrientation();
+
   private:
     static constexpr float degToRad = 3.1415926535f / 180.0f;
+
+    // ★ 強めデッドゾーン
+    static constexpr float gyroDeadZone = 0.05f;
+
+    // ★ スムージング
+    static constexpr float smoothFactor = 0.2f;
 
     Microsoft::WRL::ComPtr<IDirectInput8> directInput_;
     Microsoft::WRL::ComPtr<IDirectInputDevice8> keyboard_;
@@ -51,6 +55,20 @@ class Input {
     DIMOUSESTATE mousePrevState_{};
 
     int jsHandle_ = -1;
+
     float gyroX_ = 0.0f;
     float gyroY_ = 0.0f;
+
+    float gyroBiasX_ = 0.0f;
+    float gyroBiasY_ = 0.0f;
+    float gyroBiasZ_ = 0.0f;
+
+    bool biasInitialized_ = false;
+
+    int biasSampleCount_ = 0;
+    float biasSumX_ = 0;
+    float biasSumY_ = 0;
+    float biasSumZ_ = 0;
+
+    DirectX::XMFLOAT4 orientation_{0, 0, 0, 1};
 };

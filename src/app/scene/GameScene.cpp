@@ -43,21 +43,12 @@ void GameScene::Update() {
 
     float dt = 1.0f / 60.0f;
 
-    // ===== ジャイロ回転 =====
-    float gyroX = ctx_->input->GetGyroX();
-    float gyroY = ctx_->input->GetGyroY();
+    // =========================
+    // プレイヤー移動（そのまま）
+    // =========================
 
-    cameraRot_.y += gyroY * gyroSensitivity_ * dt;
-    cameraRot_.x -= gyroX * gyroSensitivity_ * dt;
-
-    cameraRot_.x =
-        std::clamp(cameraRot_.x, -XM_PIDIV2 + 0.1f, XM_PIDIV2 - 0.1f);
-
-    // ===== 移動方向ベクトル =====
-    XMVECTOR forward =
-        XMVectorSet(sinf(cameraRot_.y), 0, cosf(cameraRot_.y), 0);
-
-    XMVECTOR right = XMVectorSet(cosf(cameraRot_.y), 0, -sinf(cameraRot_.y), 0);
+    XMVECTOR forward = XMVectorSet(0, 0, 1, 0);
+    XMVECTOR right = XMVectorSet(1, 0, 0, 0);
 
     XMVECTOR move = XMVectorZero();
 
@@ -78,27 +69,48 @@ void GameScene::Update() {
                       XMLoadFloat3(&playerTf_.position) + move);
     }
 
-    // ===== カメラを頭位置へ =====
+    // =========================
+    // カメラ固定（プレイヤー追従のみ）
+    // =========================
+
     XMFLOAT3 camPos = playerTf_.position;
     camPos.y += 1.6f;
     camPos.z += 1.6f;
 
     camera_.SetPosition(camPos);
-    camera_.SetRotation(cameraRot_);
+    camera_.SetRotation({0, 0, 0}); // 回転なし
     camera_.Update();
 
-    // ===== 剣をカメラ右下へ =====
-    XMVECTOR camPosVec = XMLoadFloat3(&camPos);
-    XMVECTOR up = XMVectorSet(0, 1, 0, 0);
+    // =========================
+    // 剣をコントローラー姿勢にする
+    // =========================
 
-    XMVECTOR offset = right * 0.4f + up * -0.3f + forward * 0.8f;
+    XMVECTOR controllerQ = ctx_->input->GetOrientation();
+
+    // 剣位置（カメラ右下）
+    XMVECTOR camPosVec = XMLoadFloat3(&camPos);
+    XMVECTOR forwardVec = XMVectorSet(0, 0, 1, 0);
+    XMVECTOR rightVec = XMVectorSet(1, 0, 0, 0);
+    XMVECTOR upVec = XMVectorSet(0, 1, 0, 0);
+
+    XMVECTOR offset = rightVec * 0.4f + upVec * -0.3f + forwardVec * 0.8f;
 
     XMVECTOR swordPos = camPosVec + offset;
-
     XMStoreFloat3(&swordTf_.position, swordPos);
-    swordTf_.rotation = cameraRot_;
-}
 
+    // ★ クォータニオンをオイラーに変換してTransformへ
+    XMFLOAT4 qf;
+    XMStoreFloat4(&qf, controllerQ);
+
+    // 簡易変換（Yaw/Pitch/Roll）
+    XMMATRIX rotM = XMMatrixRotationQuaternion(controllerQ);
+
+    float pitch = asinf(-rotM.r[2].m128_f32[1]);
+    float yaw = atan2f(rotM.r[2].m128_f32[0], rotM.r[2].m128_f32[2]);
+    float roll = atan2f(rotM.r[0].m128_f32[1], rotM.r[1].m128_f32[1]);
+
+    swordTf_.rotation = {pitch, yaw, roll};
+}
 void GameScene::Draw() {
 
     ctx_->model->PreDraw();
