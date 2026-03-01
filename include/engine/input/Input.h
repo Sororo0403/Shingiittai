@@ -59,7 +59,6 @@ class Input {
 
     // JoyShock
     int jsHandle_ = -1;
-    float sensitivity_ = 1.0f;
 
     DirectX::XMFLOAT4 orientation_{0, 0, 0, 1};
 

@@ -100,9 +100,9 @@ void Input::UpdateJoyShock(float deltaTime) {
     gy -= gyroOffset_.y;
     gz -= gyroOffset_.z;
 
-    float radX = XMConvertToRadians(gx) * sensitivity_ * deltaTime;
-    float radY = XMConvertToRadians(gy) * sensitivity_ * deltaTime;
-    float radZ = XMConvertToRadians(-gz) * sensitivity_ * deltaTime;
+    float radX = XMConvertToRadians(gx) * deltaTime;
+    float radY = XMConvertToRadians(gy) * deltaTime;
+    float radZ = XMConvertToRadians(-gz) * deltaTime;
 
     XMVECTOR delta = XMQuaternionRotationRollPitchYaw(radX, radY, radZ);
     XMVECTOR current = XMLoadFloat4(&orientation_);
