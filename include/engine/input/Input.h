@@ -43,7 +43,7 @@ class Input {
   private:
     static constexpr BYTE kPressMask = 0x80;
 
-    static constexpr float calibrationTime_ = 2.0f;
+    static constexpr float kCalibrationTime_ = 2.0f;
 
     // Keyboard
     Microsoft::WRL::ComPtr<IDirectInput8> directInput_;

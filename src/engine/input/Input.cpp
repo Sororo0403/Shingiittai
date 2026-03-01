@@ -86,7 +86,7 @@ void Input::UpdateJoyShock(float deltaTime) {
         gyroAccum_.z += gz;
         gyroSampleCount_++;
 
-        if (calibrationTimer_ >= calibrationTime_) {
+        if (calibrationTimer_ >= kCalibrationTime_) {
             gyroOffset_.x = gyroAccum_.x / gyroSampleCount_;
             gyroOffset_.y = gyroAccum_.y / gyroSampleCount_;
             gyroOffset_.z = gyroAccum_.z / gyroSampleCount_;
