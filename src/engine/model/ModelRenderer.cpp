@@ -51,24 +51,22 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
     auto cmd = dxCommon_->GetCommandList();
     const Mesh &mesh = meshManager_->GetMesh(model.meshId);
 
-    // World行列
+    XMVECTOR q = XMQuaternionNormalize(XMLoadFloat4(&transform.rotation));
+
     XMMATRIX world =
         XMMatrixScaling(transform.scale.x, transform.scale.y,
                         transform.scale.z) *
-        XMMatrixRotationRollPitchYaw(transform.rotation.x, transform.rotation.y,
-                                     transform.rotation.z) *
+        XMMatrixRotationQuaternion(q) *
         XMMatrixTranslation(transform.position.x, transform.position.y,
                             transform.position.z);
 
     XMMATRIX wvp = world * camera.GetView() * camera.GetProj();
 
-    // Drawごとに専用領域へ書き込み
     auto *dst =
         reinterpret_cast<ConstBufferData *>(mappedCB_ + cbStride_ * drawIndex_);
 
     XMStoreFloat4x4(&dst->matWVP, XMMatrixTranspose(wvp));
 
-    // GPUアドレスをオフセット
     D3D12_GPU_VIRTUAL_ADDRESS cbAddr =
         constBuffer_->GetGPUVirtualAddress() + cbStride_ * drawIndex_;
 

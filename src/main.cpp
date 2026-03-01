@@ -62,6 +62,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     sceneCtx.sound = &soundManager;
     sceneCtx.model = &modelManager;
     sceneCtx.sprite = &spriteManager;
+
+    sceneCtx.deltaTime = 0.0f;
+
 #ifndef IMGUI_DISABLED
     sceneCtx.imgui = &imguiManager;
 #endif // IMGUI_DISABLED
@@ -71,17 +74,47 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     sceneManager.Initialize(sceneCtx);
     sceneManager.ChangeScene(std::make_unique<GameScene>());
 
+    // 高精細タイマの周波数を取得
+    LARGE_INTEGER freq;
+    QueryPerformanceFrequency(&freq);
+
+    LARGE_INTEGER prevTime;
+    QueryPerformanceCounter(&prevTime);
+
     // メインループ
     while (winApp.ProcessMessage()) {
+        // deltaTime計算
+        LARGE_INTEGER currentTime;
+        QueryPerformanceCounter(&currentTime);
+
+        float deltaTime =
+            static_cast<float>(currentTime.QuadPart - prevTime.QuadPart) /
+            static_cast<float>(freq.QuadPart);
+
+        prevTime = currentTime;
+
+        sceneCtx.deltaTime = deltaTime;
+
         // 入力更新
-        input.Update(1.0f / 60.0f);
+        input.Update(deltaTime);
 
         // Scene 更新
         sceneManager.Update();
 
         // 描画
         dxCommon.BeginFrame();
+
+#ifndef IMGUI_DISABLED
+        ID3D12GraphicsCommandList *cmdList = dxCommon.GetCommandList();
+        imguiManager.Begin(cmdList);
+#endif // IMGUI_DISABLED
+
         sceneManager.Draw();
+
+#ifndef IMGUI_DISABLED
+        imguiManager.End(cmdList);
+#endif // IMGUI_DISABLED
+
         dxCommon.EndFrame();
     }
 

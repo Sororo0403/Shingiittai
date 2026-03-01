@@ -16,6 +16,9 @@ struct SceneContext {
     SoundManager *sound = nullptr;
     ModelManager *model = nullptr;
     SpriteManager *sprite = nullptr;
+
+    float deltaTime = 0.0f;
+
 #ifndef IMGUI_DISABLED
     ImguiManager *imgui = nullptr;
 #endif // IMGUI_DISABLED
