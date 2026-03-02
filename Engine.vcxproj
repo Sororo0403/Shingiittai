@@ -105,6 +105,7 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\engine\particle\ParticleManager.cpp" />
     <ClCompile Include="src\engine\particle\ParticleSystem.cpp" />
     <ClCompile Include="src\app\scene\GameScene.cpp" />
     <ClCompile Include="src\engine\scene\SceneManager.cpp" />
@@ -153,6 +154,7 @@
     <ClInclude Include="include\engine\input\Input.h" />
     <ClInclude Include="include\engine\scene\SceneManager.h" />
     <ClInclude Include="include\engine\particle\ParticleSystem.h" />
+    <ClInclude Include="include\engine\particle\ParticleManager.h" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="resources\shaders\model\ModelPS.hlsl">

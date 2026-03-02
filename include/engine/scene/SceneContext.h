@@ -5,6 +5,7 @@ class WinApp;
 class SoundManager;
 class ModelManager;
 class SpriteManager;
+class ParticleManager;
 
 #ifndef IMGUI_DISABLED
 class ImguiManager;
@@ -16,6 +17,7 @@ struct SceneContext {
     SoundManager *sound = nullptr;
     ModelManager *model = nullptr;
     SpriteManager *sprite = nullptr;
+    ParticleManager *particle = nullptr;
 
     float deltaTime = 0.0f;
 

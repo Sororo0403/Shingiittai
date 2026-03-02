@@ -1,6 +1,7 @@
 #include "GameScene.h"
 #include "Input.h"
 #include "ModelManager.h"
+#include "ParticleManager.h"
 #include "WinApp.h"
 #include <DirectXMath.h>
 
@@ -30,12 +31,12 @@ void GameScene::Initialize(const SceneContext &ctx) {
     swordTf_.rotation = {0.0f, 0.0f, 0.0f, 1.0f};
 
     // =============================
-    // Particle 初期化
+    // ParticleSystem を Manager に登録
     // =============================
-    particleModelId_ =
-        ctx.model->Load(L"resources/model/particle/particle.obj");
+    uint32_t particleModelId =
+        ctx_->model->Load(L"resources/model/particle/particle.obj");
 
-    particle_.Initialize(ctx.model, particleModelId_);
+    ctx_->particle->CreateSystem("slash", particleModelId);
 
     emitTimer_ = 0.0f;
 }
@@ -50,15 +51,15 @@ void GameScene::Update() {
     q = XMQuaternionConjugate(q);
     XMStoreFloat4(&swordTf_.rotation, q);
 
-    const float dt = 1.0f / 60.0f;
+    float dt = ctx_->deltaTime;
 
     // =============================
-    // Particle 更新
+    // ParticleManager 更新
     // =============================
-    particle_.Update(dt);
+    ctx_->particle->Update(dt);
 
     // =============================
-    // 剣の向き取得
+    // 剣の forward 取得
     // =============================
     XMVECTOR swordQ = XMLoadFloat4(&swordTf_.rotation);
     XMVECTOR forward = XMVector3Rotate(XMVectorSet(0, 0, 1, 0), swordQ);
@@ -68,19 +69,19 @@ void GameScene::Update() {
 
     // 剣の先端位置
     XMFLOAT3 emitPos = swordTf_.position;
-    const float tipOffset = 1.0f;
+    float tipOffset = 1.0f;
 
     emitPos.x += f.x * tipOffset;
     emitPos.y += f.y * tipOffset;
     emitPos.z += f.z * tipOffset;
 
     // =============================
-    // 一定間隔でEmit
+    // 一定間隔で Emit
     // =============================
     emitTimer_ += dt;
     if (emitTimer_ >= emitInterval_) {
         emitTimer_ = 0.0f;
-        particle_.Emit(emitPos, f);
+        ctx_->particle->Emit("slash", emitPos, f);
     }
 }
 
@@ -90,8 +91,8 @@ void GameScene::Draw() {
     // Sword描画
     ctx_->model->Draw(swordModelId_, swordTf_, camera_);
 
-    // Particle描画
-    particle_.Draw(camera_);
+    // Particle描画（Manager経由）
+    ctx_->particle->Draw(camera_);
 
     ctx_->model->PostDraw();
 }

@@ -1,7 +1,6 @@
 #pragma once
 #include "BaseScene.h"
 #include "Camera.h"
-#include "ParticleSystem.h"
 #include "Transform.h"
 #include <cstdint>
 
@@ -36,11 +35,8 @@ class GameScene : public BaseScene {
     Transform swordTf_;
 
     // =============================
-    // Particle
+    // Emit制御
     // =============================
-    ParticleSystem particle_;
-    uint32_t particleModelId_ = 0;
-
     float emitTimer_ = 0.0f;
     float emitInterval_ = 0.03f;
 };

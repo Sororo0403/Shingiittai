@@ -156,7 +156,10 @@
       <Filter>src\app\scene</Filter>
     </ClCompile>
     <ClCompile Include="src\engine\particle\ParticleSystem.cpp">
-      <Filter>src</Filter>
+      <Filter>src\engine\particle</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\particle\ParticleManager.cpp">
+      <Filter>src\engine\particle</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -242,7 +245,10 @@
       <Filter>include\engine\model</Filter>
     </ClInclude>
     <ClInclude Include="include\engine\particle\ParticleSystem.h">
-      <Filter>include</Filter>
+      <Filter>include\engine\particle</Filter>
+    </ClInclude>
+    <ClInclude Include="include\engine\particle\ParticleManager.h">
+      <Filter>include\engine\particle</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
