@@ -96,6 +96,12 @@
     <Filter Include="src\app\scene">
       <UniqueIdentifier>{c6b405a1-c5d6-4941-86eb-45d93c446dbc}</UniqueIdentifier>
     </Filter>
+    <Filter Include="include\engine\particle">
+      <UniqueIdentifier>{c2999ce7-771d-4d07-9c9e-fb53f656af97}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\engine\particle">
+      <UniqueIdentifier>{58a1f206-67c0-4ac7-a3ee-733507e97254}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp">
@@ -148,6 +154,9 @@
     </ClCompile>
     <ClCompile Include="src\app\scene\GameScene.cpp">
       <Filter>src\app\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\particle\ParticleSystem.cpp">
+      <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -231,6 +240,9 @@
     </ClInclude>
     <ClInclude Include="include\engine\model\Transform.h">
       <Filter>include\engine\model</Filter>
+    </ClInclude>
+    <ClInclude Include="include\engine\particle\ParticleSystem.h">
+      <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
