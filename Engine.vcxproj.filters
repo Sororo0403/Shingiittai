@@ -161,6 +161,9 @@
     <ClCompile Include="src\engine\particle\ParticleManager.cpp">
       <Filter>src\engine\particle</Filter>
     </ClCompile>
+    <ClCompile Include="src\engine\particle\ParticleEmitter.cpp">
+      <Filter>src\engine\particle</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\engine\core\WinApp.h">
@@ -248,6 +251,12 @@
       <Filter>include\engine\particle</Filter>
     </ClInclude>
     <ClInclude Include="include\engine\particle\ParticleManager.h">
+      <Filter>include\engine\particle</Filter>
+    </ClInclude>
+    <ClInclude Include="include\engine\particle\ParticleEmitter.h">
+      <Filter>include\engine\particle</Filter>
+    </ClInclude>
+    <ClInclude Include="include\engine\particle\ParticleParams.h">
       <Filter>include\engine\particle</Filter>
     </ClInclude>
   </ItemGroup>

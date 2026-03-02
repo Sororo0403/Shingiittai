@@ -105,6 +105,7 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\engine\particle\ParticleEmitter.cpp" />
     <ClCompile Include="src\engine\particle\ParticleManager.cpp" />
     <ClCompile Include="src\engine\particle\ParticleSystem.cpp" />
     <ClCompile Include="src\app\scene\GameScene.cpp" />
@@ -128,6 +129,7 @@
   <ItemGroup>
     <ClInclude Include="include\app\scene\GameScene.h" />
     <ClInclude Include="include\engine\model\Transform.h" />
+    <ClInclude Include="include\engine\particle\ParticleParams.h" />
     <ClInclude Include="include\engine\scene\BaseScene.h" />
     <ClInclude Include="include\engine\imgui\ImguiManager.h" />
     <ClInclude Include="include\engine\camera\Camera.h" />
@@ -155,6 +157,7 @@
     <ClInclude Include="include\engine\scene\SceneManager.h" />
     <ClInclude Include="include\engine\particle\ParticleSystem.h" />
     <ClInclude Include="include\engine\particle\ParticleManager.h" />
+    <ClInclude Include="include\engine\particle\ParticleEmitter.h" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="resources\shaders\model\ModelPS.hlsl">

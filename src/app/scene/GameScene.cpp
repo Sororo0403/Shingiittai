@@ -1,6 +1,7 @@
 #include "GameScene.h"
 #include "Input.h"
 #include "ModelManager.h"
+#include "ParticleEmitter.h"
 #include "ParticleManager.h"
 #include "WinApp.h"
 #include <DirectXMath.h>
@@ -11,7 +12,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
 
     // =============================
-    // Camera 初期化
+    // Camera
     // =============================
     float aspect = static_cast<float>(ctx_->winApp->GetWidth()) /
                    static_cast<float>(ctx_->winApp->GetHeight());
@@ -22,30 +23,46 @@ void GameScene::Initialize(const SceneContext &ctx) {
     camera_.Update();
 
     // =============================
-    // Sword 初期化
+    // Sword
     // =============================
-    swordModelId_ = ctx.model->Load(L"resources/model/sword/sword.obj");
+    swordModelId_ = ctx_->model->Load(L"resources/model/sword/sword.obj");
 
     swordTf_.position = {0.0f, 0.0f, 3.0f};
     swordTf_.scale = {1.0f, 1.0f, 1.0f};
-    swordTf_.rotation = {0.0f, 0.0f, 0.0f, 1.0f};
+    swordTf_.rotation = {0, 0, 0, 1};
 
     // =============================
-    // ParticleSystem を Manager に登録
+    // ParticleEmitter作成
     // =============================
     uint32_t particleModelId =
         ctx_->model->Load(L"resources/model/particle/particle.obj");
 
-    ctx_->particle->CreateSystem("slash", particleModelId);
+    ctx_->particle->CreateEmitter("slash", particleModelId);
 
-    emitTimer_ = 0.0f;
+    // エミッタ取得
+    ParticleEmitter *emitter = ctx_->particle->GetEmitter("slash");
+
+    // =============================
+    // ParticleParams 設定
+    // =============================
+    ParticleParams params;
+
+    params.emissionRate = 40.0f;
+    params.lifeTime = 0.4f;
+    params.speed = 4.0f;
+    params.startScale = 0.3f;
+    params.baseDirection = {0, 0, 1};
+    params.startColor = {1, 0.6f, 0.2f, 1};
+
+    emitter->SetParams(params);
 }
 
 void GameScene::Update() {
+
     camera_.Update();
 
     // =============================
-    // 剣の姿勢更新（ジャイロ）
+    // 剣の姿勢更新
     // =============================
     XMVECTOR q = ctx_->input->GetOrientation();
     q = XMQuaternionConjugate(q);
@@ -54,44 +71,22 @@ void GameScene::Update() {
     float dt = ctx_->deltaTime;
 
     // =============================
-    // ParticleManager 更新
+    // エミッタを剣に追従
+    // =============================
+    ctx_->particle->GetEmitter("slash")->SetTransform(swordTf_);
+
+    // =============================
+    // Particle更新
     // =============================
     ctx_->particle->Update(dt);
-
-    // =============================
-    // 剣の forward 取得
-    // =============================
-    XMVECTOR swordQ = XMLoadFloat4(&swordTf_.rotation);
-    XMVECTOR forward = XMVector3Rotate(XMVectorSet(0, 0, 1, 0), swordQ);
-
-    XMFLOAT3 f;
-    XMStoreFloat3(&f, forward);
-
-    // 剣の先端位置
-    XMFLOAT3 emitPos = swordTf_.position;
-    float tipOffset = 1.0f;
-
-    emitPos.x += f.x * tipOffset;
-    emitPos.y += f.y * tipOffset;
-    emitPos.z += f.z * tipOffset;
-
-    // =============================
-    // 一定間隔で Emit
-    // =============================
-    emitTimer_ += dt;
-    if (emitTimer_ >= emitInterval_) {
-        emitTimer_ = 0.0f;
-        ctx_->particle->Emit("slash", emitPos, f);
-    }
 }
 
 void GameScene::Draw() {
+
     ctx_->model->PreDraw();
 
-    // Sword描画
     ctx_->model->Draw(swordModelId_, swordTf_, camera_);
 
-    // Particle描画（Manager経由）
     ctx_->particle->Draw(camera_);
 
     ctx_->model->PostDraw();
