@@ -155,13 +155,10 @@
     <ClCompile Include="src\app\scene\GameScene.cpp">
       <Filter>src\app\scene</Filter>
     </ClCompile>
-    <ClCompile Include="src\engine\particle\ParticleSystem.cpp">
+    <ClCompile Include="src\engine\particle\BaseParticleSystem.cpp">
       <Filter>src\engine\particle</Filter>
     </ClCompile>
-    <ClCompile Include="src\engine\particle\ParticleManager.cpp">
-      <Filter>src\engine\particle</Filter>
-    </ClCompile>
-    <ClCompile Include="src\engine\particle\ParticleEmitter.cpp">
+    <ClCompile Include="src\engine\particle\HitParticleSystem.cpp">
       <Filter>src\engine\particle</Filter>
     </ClCompile>
   </ItemGroup>
@@ -247,16 +244,13 @@
     <ClInclude Include="include\engine\model\Transform.h">
       <Filter>include\engine\model</Filter>
     </ClInclude>
-    <ClInclude Include="include\engine\particle\ParticleSystem.h">
+    <ClInclude Include="include\engine\particle\Particle.h">
       <Filter>include\engine\particle</Filter>
     </ClInclude>
-    <ClInclude Include="include\engine\particle\ParticleManager.h">
+    <ClInclude Include="include\engine\particle\BaseParticleSystem.h">
       <Filter>include\engine\particle</Filter>
     </ClInclude>
-    <ClInclude Include="include\engine\particle\ParticleEmitter.h">
-      <Filter>include\engine\particle</Filter>
-    </ClInclude>
-    <ClInclude Include="include\engine\particle\ParticleParams.h">
+    <ClInclude Include="include\engine\particle\HitParticleSystem.h">
       <Filter>include\engine\particle</Filter>
     </ClInclude>
   </ItemGroup>

@@ -3,7 +3,6 @@
 #include "ImguiManager.h"
 #include "Input.h"
 #include "ModelManager.h"
-#include "ParticleManager.h"
 #include "SceneContext.h"
 #include "SceneManager.h"
 #include "SoundManager.h"
@@ -51,10 +50,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     spriteManager.Initialize(&dxCommon, &textureManager, &srvManager, width,
                              height);
 
-    // ParticleManager
-    ParticleManager particleManager;
-    particleManager.Initialize(&modelManager);
-
 #ifndef IMGUI_DISABLED
     // ImguiManager
     ImguiManager imguiManager;
@@ -67,7 +62,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     sceneCtx.sound = &soundManager;
     sceneCtx.model = &modelManager;
     sceneCtx.sprite = &spriteManager;
-    sceneCtx.particle = &particleManager;
 
     sceneCtx.deltaTime = 0.0f;
 

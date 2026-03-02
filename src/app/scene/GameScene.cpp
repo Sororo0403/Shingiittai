@@ -1,8 +1,6 @@
 #include "GameScene.h"
 #include "Input.h"
 #include "ModelManager.h"
-#include "ParticleEmitter.h"
-#include "ParticleManager.h"
 #include "WinApp.h"
 #include <DirectXMath.h>
 
@@ -32,29 +30,12 @@ void GameScene::Initialize(const SceneContext &ctx) {
     swordTf_.rotation = {0, 0, 0, 1};
 
     // =============================
-    // ParticleEmitter作成
+    // Hit Particle
     // =============================
-    uint32_t particleModelId =
+    hitParticleModelId_ =
         ctx_->model->Load(L"resources/model/particle/particle.obj");
 
-    ctx_->particle->CreateEmitter("slash", particleModelId);
-
-    // エミッタ取得
-    ParticleEmitter *emitter = ctx_->particle->GetEmitter("slash");
-
-    // =============================
-    // ParticleParams 設定
-    // =============================
-    ParticleParams params;
-
-    params.emissionRate = 40.0f;
-    params.lifeTime = 0.4f;
-    params.speed = 4.0f;
-    params.startScale = 0.3f;
-    params.baseDirection = {0, 0, 1};
-    params.startColor = {1, 0.6f, 0.2f, 1};
-
-    emitter->SetParams(params);
+    hitEffect_.Initialize(ctx_->model, hitParticleModelId_);
 }
 
 void GameScene::Update() {
@@ -62,7 +43,7 @@ void GameScene::Update() {
     camera_.Update();
 
     // =============================
-    // 剣の姿勢更新
+    // 剣の姿勢（ジャイロ）
     // =============================
     XMVECTOR q = ctx_->input->GetOrientation();
     q = XMQuaternionConjugate(q);
@@ -71,23 +52,25 @@ void GameScene::Update() {
     float dt = ctx_->deltaTime;
 
     // =============================
-    // エミッタを剣に追従
+    // Hitエフェクト（テスト）
     // =============================
-    ctx_->particle->GetEmitter("slash")->SetTransform(swordTf_);
+    if (ctx_->input->IsKeyTrigger(DIK_SPACE)) {
+        hitEffect_.Spawn(swordTf_);
+    }
 
-    // =============================
-    // Particle更新
-    // =============================
-    ctx_->particle->Update(dt);
+    // 更新
+    hitEffect_.Update(dt);
 }
 
 void GameScene::Draw() {
 
     ctx_->model->PreDraw();
 
+    // 剣描画
     ctx_->model->Draw(swordModelId_, swordTf_, camera_);
 
-    ctx_->particle->Draw(camera_);
+    // Hitエフェクト描画
+    hitEffect_.Draw(camera_);
 
     ctx_->model->PostDraw();
 }
