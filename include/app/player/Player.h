@@ -20,7 +20,8 @@ class Player {
     /// 更新処理
     /// </summary>
     /// <param name="input">Inputインスタンス</param>
-    void Update(Input *input);
+    /// <param name="deltaTime">前フレームからの経過時間(秒)</param>
+    void Update(Input *input, float deltaTime);
 
     /// <summary>
     /// 描画処理
@@ -29,9 +30,18 @@ class Player {
     /// <param name="camera">描画使用するカメラ</param>
     void Draw(ModelManager *modelManager, const Camera &camera);
 
+    // Getter
+    const Sword &GetSword() const { return sword_; }
+
   private:
-    Transform playerTf_;
-    uint32_t playerModelId_ = 0;
+    // Update
+    void UpdateMovement(Input *input, float deltaTime);
+
+  private:
+    Transform tf_;
+    uint32_t modelId_ = 0;
 
     Sword sword_;
+
+    float moveSpeed_ = 5.0f;
 };

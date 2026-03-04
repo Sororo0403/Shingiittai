@@ -1,4 +1,5 @@
 #include "GameScene.h"
+#include "CollisionUtil.h"
 #include "Input.h"
 #include "ModelManager.h"
 #include "WinApp.h"
@@ -30,9 +31,16 @@ void GameScene::Initialize(const SceneContext &ctx) {
 void GameScene::Update() {
     camera_.Update();
 
-    player_.Update(ctx_->input);
+    player_.Update(ctx_->input, ctx_->deltaTime);
 
     enemy_.Update();
+
+    auto swordPos = player_.GetSword().GetTransform().position;
+    auto enemyPos = enemy_.GetTransform().position;
+
+    if (CollisionUtil::CheckSphere(swordPos, enemyPos, 2.0f)) {
+        enemy_.TakeDamage(100.0f);
+    }
 }
 
 void GameScene::Draw() {

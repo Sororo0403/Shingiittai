@@ -12,7 +12,9 @@ void Sword::Initialize(uint32_t modelId) {
     tf_.rotation = {0, 0, 0, 1};
 }
 
-void Sword::Update(Input *input) {
+void Sword::Update(Input *input, const DirectX::XMFLOAT3 &playerPos) {
+    tf_.position = playerPos;
+
     XMVECTOR q = input->GetOrientation();
     q = XMQuaternionConjugate(q);
 

@@ -19,7 +19,8 @@ class Sword {
     /// 更新処理
     /// </summary>
     /// <param name="input">Inputインスタンス</param>
-    void Update(Input *input);
+    /// <param name="playerPos">プレイヤーの座標</param>
+    void Update(Input *input, const DirectX::XMFLOAT3 &playerPos);
 
     /// <summary>
     /// 描画処理
@@ -27,6 +28,9 @@ class Sword {
     /// <param name="modelManager">ModelManagerインスタンス</param>
     /// <param name="camera">描画に使用するカメラ</param>
     void Draw(ModelManager *modelManager, const Camera &camera);
+
+    // Getter
+    const Transform &GetTransform() const { return tf_; }
 
   private:
     Transform tf_;

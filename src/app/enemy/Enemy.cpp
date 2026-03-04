@@ -9,8 +9,22 @@ void Enemy::Initialize(uint32_t modelId) {
     tf_.rotation = {0, 0, 0, 1};
 }
 
-void Enemy::Update() {}
+void Enemy::Update() {
+    if (!IsAlive())
+        return;
+}
 
 void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
+    if (!IsAlive())
+        return;
+
     modelManager->Draw(modelId_, tf_, camera);
+}
+
+void Enemy::TakeDamage(float damage) {
+    hp_ -= damage;
+
+    if (hp_ < 0.0f) {
+        hp_ = 0.0f;
+    }
 }
