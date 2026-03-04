@@ -28,14 +28,6 @@ void GameScene::Initialize(const SceneContext &ctx) {
     swordTf_.position = {0.0f, 0.0f, 3.0f};
     swordTf_.scale = {1.0f, 1.0f, 1.0f};
     swordTf_.rotation = {0, 0, 0, 1};
-
-    // =============================
-    // Hit Particle
-    // =============================
-    hitParticleModelId_ =
-        ctx_->model->Load(L"resources/model/particle/particle.obj");
-
-    hitEffect_.Initialize(ctx_->model, hitParticleModelId_);
 }
 
 void GameScene::Update() {
@@ -48,18 +40,6 @@ void GameScene::Update() {
     XMVECTOR q = ctx_->input->GetOrientation();
     q = XMQuaternionConjugate(q);
     XMStoreFloat4(&swordTf_.rotation, q);
-
-    float dt = ctx_->deltaTime;
-
-    // =============================
-    // Hitエフェクト（テスト）
-    // =============================
-    if (ctx_->input->IsKeyTrigger(DIK_SPACE)) {
-        hitEffect_.Spawn(swordTf_);
-    }
-
-    // 更新
-    hitEffect_.Update(dt);
 }
 
 void GameScene::Draw() {
@@ -68,9 +48,6 @@ void GameScene::Draw() {
 
     // 剣描画
     ctx_->model->Draw(swordModelId_, swordTf_, camera_);
-
-    // Hitエフェクト描画
-    hitEffect_.Draw(camera_);
 
     ctx_->model->PostDraw();
 }

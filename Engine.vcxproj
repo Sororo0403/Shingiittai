@@ -105,7 +105,6 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\engine\particle\HitParticleSystem.cpp" />
     <ClCompile Include="src\engine\particle\BaseParticleSystem.cpp" />
     <ClCompile Include="src\app\scene\GameScene.cpp" />
     <ClCompile Include="src\engine\scene\SceneManager.cpp" />
@@ -126,7 +125,6 @@
     <ClCompile Include="src\engine\texture\TextureManager.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="include\engine\particle\HitParticleSystem.h" />
     <ClInclude Include="include\engine\particle\BaseParticleSystem.h" />
     <ClInclude Include="include\app\scene\GameScene.h" />
     <ClInclude Include="include\engine\model\Transform.h" />
