@@ -15,7 +15,7 @@
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     // WinApp初期化
     WinApp winApp;
-    winApp.Initialize(hInstance, nCmdShow, 1280, 720, L"Game");
+    winApp.Initialize(hInstance, nCmdShow, 1280, 720, L"singiittai");
 
     // クライアント領域の幅と高さ
     int width = winApp.GetWidth();

@@ -114,6 +114,12 @@
     <Filter Include="include\app\enemy">
       <UniqueIdentifier>{2a9241d8-c55c-437b-ae69-4244c98edaa4}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\engine\collision">
+      <UniqueIdentifier>{024bd489-5878-4b22-bcf0-02c6b87fc14e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\engine\collision">
+      <UniqueIdentifier>{ae2140d3-1036-4cf2-8cc4-63cdbc1d3c3d}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp">
@@ -176,11 +182,11 @@
     <ClCompile Include="src\app\enemy\Enemy.cpp">
       <Filter>src\app\enemy</Filter>
     </ClCompile>
-    <ClCompile Include="src\engine\collision\CollisionUtil.cpp">
-      <Filter>src</Filter>
-    </ClCompile>
     <ClCompile Include="src\app\player\Sword.cpp">
       <Filter>src\app\player</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\collision\CollisionUtil.cpp">
+      <Filter>src\engine\collision</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -277,11 +283,17 @@
     <ClInclude Include="include\app\enemy\Enemy.h">
       <Filter>include\app\enemy</Filter>
     </ClInclude>
-    <ClInclude Include="include\engine\collision\CollisionUtil.h">
-      <Filter>include</Filter>
-    </ClInclude>
     <ClInclude Include="include\app\player\Sword.h">
       <Filter>include\app\player</Filter>
+    </ClInclude>
+    <ClInclude Include="include\engine\collision\CollisionUtil.h">
+      <Filter>include\engine\collision</Filter>
+    </ClInclude>
+    <ClInclude Include="include\engine\collision\AABB.h">
+      <Filter>include\engine\collision</Filter>
+    </ClInclude>
+    <ClInclude Include="include\engine\collision\OBB.h">
+      <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

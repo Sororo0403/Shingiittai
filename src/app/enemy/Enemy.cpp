@@ -28,3 +28,13 @@ void Enemy::TakeDamage(float damage) {
         hp_ = 0.0f;
     }
 }
+
+OBB Enemy::GetOBB() const {
+    OBB box;
+
+    box.center = tf_.position;
+    box.size = size_;
+    box.rotation = tf_.rotation;
+
+    return box;
+}

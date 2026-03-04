@@ -26,6 +26,9 @@ class GameScene : public BaseScene {
     Camera camera_;
 
     Player player_;
-
     Enemy enemy_;
+
+    uint32_t debugBoxModel_ = 0;
+    Transform swordBoxTf_;
+    Transform enemyBoxTf_;
 };

@@ -1,4 +1,5 @@
 #pragma once
+#include "OBB.h"
 #include "Camera.h"
 #include "Transform.h"
 #include <cstdint>
@@ -34,10 +35,13 @@ class Enemy {
     // Getter
     const Transform &GetTransform() const { return tf_; }
     bool IsAlive() const { return hp_ > 0.0f; }
+    OBB GetOBB() const;
 
   private:
     Transform tf_;
     uint32_t modelId_ = 0;
+
+    DirectX::XMFLOAT3 size_ = {1.0f, 1.0f, 1.0f};
 
     float hp_ = 100.0f;
 };

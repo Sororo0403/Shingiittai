@@ -3,7 +3,10 @@
 #include "Input.h"
 #include "ModelManager.h"
 #include "WinApp.h"
+
+#ifndef IMGUI_DISABLED
 #include "imgui.h"
+#endif // IMGUI_DISABLED
 
 void GameScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
@@ -19,10 +22,9 @@ void GameScene::Initialize(const SceneContext &ctx) {
     // モデルロード
     uint32_t playerModel =
         ctx_->model->Load(L"resources/model/player/player.obj");
-
     uint32_t swordModel = ctx_->model->Load(L"resources/model/sword/sword.obj");
-
     uint32_t enemyModel = ctx_->model->Load(L"resources/model/enemy/enemy.obj");
+    debugBoxModel_ = ctx_->model->Load(L"resources/model/debug/box.obj");
 
     player_.Initialize(playerModel, swordModel);
 
@@ -36,23 +38,40 @@ void GameScene::Update() {
 
     enemy_.Update();
 
-    auto swordPos = player_.GetSword().GetTransform().position;
-    auto enemyPos = enemy_.GetTransform().position;
+    // 当たり判定
+    auto swordBox = player_.GetSword().GetOBB();
+    auto enemyBox = enemy_.GetOBB();
 
-    if (CollisionUtil::CheckSphere(swordPos, enemyPos, 2.0f)) {
-        enemy_.TakeDamage(100.0f);
+    if (CollisionUtil::CheckOBB(swordBox, enemyBox)) {
+        enemy_.TakeDamage(100);
     }
+
+    auto MakeTf = [](const OBB &box) {
+        Transform tf;
+
+        tf.position = box.center;
+        tf.scale = box.size;
+        tf.rotation = box.rotation;
+
+        return tf;
+    };
+
+    swordBoxTf_ = MakeTf(swordBox);
+    enemyBoxTf_ = MakeTf(enemyBox);
 }
 
 void GameScene::Draw() {
     ctx_->model->PreDraw();
 
     player_.Draw(ctx_->model, camera_);
-
     enemy_.Draw(ctx_->model, camera_);
+
+    ctx_->model->Draw(debugBoxModel_, swordBoxTf_, camera_);
+    ctx_->model->Draw(debugBoxModel_, enemyBoxTf_, camera_);
 
     ctx_->model->PostDraw();
 
+#ifndef IMGUI_DISABLED
     ImGui::Begin("Camera");
 
     auto pos = camera_.GetPosition();
@@ -70,4 +89,5 @@ void GameScene::Draw() {
     }
 
     ImGui::End();
+#endif // IMGUI_DISABLED
 }

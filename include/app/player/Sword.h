@@ -1,4 +1,5 @@
 #pragma once
+#include "OBB.h"
 #include "Transform.h"
 #include <DirectXMath.h>
 #include <cstdint>
@@ -31,8 +32,11 @@ class Sword {
 
     // Getter
     const Transform &GetTransform() const { return tf_; }
+    OBB GetOBB() const;
 
   private:
     Transform tf_;
     uint32_t modelId_ = 0;
+
+    DirectX::XMFLOAT3 size_ = {0.1f, 0.1f, 0.5f};
 };
