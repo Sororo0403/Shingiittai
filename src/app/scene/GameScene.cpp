@@ -3,6 +3,7 @@
 #include "Input.h"
 #include "ModelManager.h"
 #include "WinApp.h"
+#include "imgui.h"
 
 void GameScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
@@ -51,4 +52,22 @@ void GameScene::Draw() {
     enemy_.Draw(ctx_->model, camera_);
 
     ctx_->model->PostDraw();
+
+    ImGui::Begin("Camera");
+
+    auto pos = camera_.GetPosition();
+    auto rot = camera_.GetRotation();
+
+    float p[3] = {pos.x, pos.y, pos.z};
+    float r[3] = {rot.x, rot.y, rot.z};
+
+    if (ImGui::DragFloat3("Position", p, 0.1f)) {
+        camera_.SetPosition({p[0], p[1], p[2]});
+    }
+
+    if (ImGui::DragFloat3("Rotation", r, 0.01f)) {
+        camera_.SetRotation({r[0], r[1], r[2]});
+    }
+
+    ImGui::End();
 }

@@ -21,6 +21,8 @@ class Camera {
     // Getter
     const DirectX::XMMATRIX &GetView() const { return view_; }
     const DirectX::XMMATRIX &GetProj() const { return proj_; }
+    const DirectX::XMFLOAT3 &GetPosition() const { return position_; }
+    const DirectX::XMFLOAT3 &GetRotation() const { return rotation_; }
 
   private:
     DirectX::XMFLOAT3 position_{0.0f, 0.0f, -5.0f};
