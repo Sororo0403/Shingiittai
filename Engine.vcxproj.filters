@@ -108,6 +108,18 @@
     <Filter Include="src\app\player">
       <UniqueIdentifier>{df699ed3-a990-4658-a2a1-70db4322fed6}</UniqueIdentifier>
     </Filter>
+    <Filter Include="include\app\sword">
+      <UniqueIdentifier>{d53671ea-486d-4bcd-b08f-bd180e6d85f9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\app\sword">
+      <UniqueIdentifier>{1e0da2e5-23b9-41a3-801c-e45273512baf}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\app\enemy">
+      <UniqueIdentifier>{b6294e60-4eec-420a-885b-35ecb521310a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\app\enemy">
+      <UniqueIdentifier>{2a9241d8-c55c-437b-ae69-4244c98edaa4}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp">
@@ -167,8 +179,11 @@
     <ClCompile Include="src\app\player\Player.cpp">
       <Filter>src\app\player</Filter>
     </ClCompile>
-    <ClCompile Include="src\app\player\Sword.cpp">
-      <Filter>src\app\player</Filter>
+    <ClCompile Include="src\app\sword\Sword.cpp">
+      <Filter>src\app\sword</Filter>
+    </ClCompile>
+    <ClCompile Include="src\app\enemy\Enemy.cpp">
+      <Filter>src\app\enemy</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -262,8 +277,11 @@
     <ClInclude Include="include\app\player\Player.h">
       <Filter>include\app\player</Filter>
     </ClInclude>
-    <ClInclude Include="include\app\player\Sword.h">
-      <Filter>include\app\player</Filter>
+    <ClInclude Include="include\app\sword\Sword.h">
+      <Filter>include\app\sword</Filter>
+    </ClInclude>
+    <ClInclude Include="include\app\enemy\Enemy.h">
+      <Filter>include\app\enemy</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
