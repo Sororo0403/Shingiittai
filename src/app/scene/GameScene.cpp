@@ -2,16 +2,11 @@
 #include "Input.h"
 #include "ModelManager.h"
 #include "WinApp.h"
-#include <DirectXMath.h>
-
-using namespace DirectX;
 
 void GameScene::Initialize(const SceneContext &ctx) {
+
     BaseScene::Initialize(ctx);
 
-    // =============================
-    // Camera
-    // =============================
     float aspect = static_cast<float>(ctx_->winApp->GetWidth()) /
                    static_cast<float>(ctx_->winApp->GetHeight());
 
@@ -20,34 +15,27 @@ void GameScene::Initialize(const SceneContext &ctx) {
     camera_.SetRotation({0.0f, 0.0f, 0.0f});
     camera_.Update();
 
-    // =============================
-    // Sword
-    // =============================
-    swordModelId_ = ctx_->model->Load(L"resources/model/sword/sword.obj");
+    // モデルロード
+    uint32_t playerModel =
+        ctx_->model->Load(L"resources/model/player/player.obj");
 
-    swordTf_.position = {0.0f, 0.0f, 3.0f};
-    swordTf_.scale = {1.0f, 1.0f, 1.0f};
-    swordTf_.rotation = {0, 0, 0, 1};
+    uint32_t swordModel = ctx_->model->Load(L"resources/model/sword/sword.obj");
+
+    player_.Initialize(playerModel, swordModel);
 }
 
 void GameScene::Update() {
 
     camera_.Update();
 
-    // =============================
-    // 剣の姿勢（ジャイロ）
-    // =============================
-    XMVECTOR q = ctx_->input->GetOrientation();
-    q = XMQuaternionConjugate(q);
-    XMStoreFloat4(&swordTf_.rotation, q);
+    player_.Update(ctx_->input);
 }
 
 void GameScene::Draw() {
 
     ctx_->model->PreDraw();
 
-    // 剣描画
-    ctx_->model->Draw(swordModelId_, swordTf_, camera_);
+    player_.Draw(ctx_->model, camera_);
 
     ctx_->model->PostDraw();
 }

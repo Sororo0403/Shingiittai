@@ -102,6 +102,12 @@
     <Filter Include="src\engine\particle">
       <UniqueIdentifier>{58a1f206-67c0-4ac7-a3ee-733507e97254}</UniqueIdentifier>
     </Filter>
+    <Filter Include="include\app\player">
+      <UniqueIdentifier>{6182c842-c19f-41a2-b0c6-4d5266886bc7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\app\player">
+      <UniqueIdentifier>{df699ed3-a990-4658-a2a1-70db4322fed6}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp">
@@ -157,6 +163,12 @@
     </ClCompile>
     <ClCompile Include="src\engine\particle\BaseParticleSystem.cpp">
       <Filter>src\engine\particle</Filter>
+    </ClCompile>
+    <ClCompile Include="src\app\player\Player.cpp">
+      <Filter>src\app\player</Filter>
+    </ClCompile>
+    <ClCompile Include="src\app\player\Sword.cpp">
+      <Filter>src\app\player</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -246,6 +258,12 @@
     </ClInclude>
     <ClInclude Include="include\engine\particle\BaseParticleSystem.h">
       <Filter>include\engine\particle</Filter>
+    </ClInclude>
+    <ClInclude Include="include\app\player\Player.h">
+      <Filter>include\app\player</Filter>
+    </ClInclude>
+    <ClInclude Include="include\app\player\Sword.h">
+      <Filter>include\app\player</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

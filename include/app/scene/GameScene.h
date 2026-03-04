@@ -1,8 +1,7 @@
 #pragma once
 #include "BaseScene.h"
 #include "Camera.h"
-#include "Transform.h"
-#include <cstdint>
+#include "Player.h"
 
 class GameScene : public BaseScene {
   public:
@@ -13,7 +12,5 @@ class GameScene : public BaseScene {
   private:
     Camera camera_;
 
-    // Sword
-    uint32_t swordModelId_ = 0;
-    Transform swordTf_;
+    Player player_;
 };
