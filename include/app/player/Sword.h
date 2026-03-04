@@ -35,8 +35,13 @@ class Sword {
     OBB GetOBB() const;
 
   private:
+    static constexpr float kHandHeight = 0.8f;
+    static constexpr float kSwordLength = 1.0f;
+
     Transform tf_;
     uint32_t modelId_ = 0;
 
     DirectX::XMFLOAT3 size_ = {0.1f, 0.1f, 0.5f};
+
+    float length_ = 0.6f;
 };

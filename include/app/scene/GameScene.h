@@ -28,7 +28,9 @@ class GameScene : public BaseScene {
     Player player_;
     Enemy enemy_;
 
+#ifdef _DEBUG
     uint32_t debugBoxModel_ = 0;
     Transform swordBoxTf_;
     Transform enemyBoxTf_;
+#endif // _DEBUG
 };

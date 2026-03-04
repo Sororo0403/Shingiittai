@@ -24,7 +24,9 @@ void GameScene::Initialize(const SceneContext &ctx) {
         ctx_->model->Load(L"resources/model/player/player.obj");
     uint32_t swordModel = ctx_->model->Load(L"resources/model/sword/sword.obj");
     uint32_t enemyModel = ctx_->model->Load(L"resources/model/enemy/enemy.obj");
+#ifdef _DEBUG
     debugBoxModel_ = ctx_->model->Load(L"resources/model/debug/box.obj");
+#endif // _DEBUG
 
     player_.Initialize(playerModel, swordModel);
 
@@ -46,6 +48,7 @@ void GameScene::Update() {
         enemy_.TakeDamage(100);
     }
 
+#ifdef _DEBUG
     auto MakeTf = [](const OBB &box) {
         Transform tf;
 
@@ -58,6 +61,7 @@ void GameScene::Update() {
 
     swordBoxTf_ = MakeTf(swordBox);
     enemyBoxTf_ = MakeTf(enemyBox);
+#endif // _DEBUG
 }
 
 void GameScene::Draw() {
@@ -66,8 +70,10 @@ void GameScene::Draw() {
     player_.Draw(ctx_->model, camera_);
     enemy_.Draw(ctx_->model, camera_);
 
+#ifdef _DEBUG
     ctx_->model->Draw(debugBoxModel_, swordBoxTf_, camera_);
     ctx_->model->Draw(debugBoxModel_, enemyBoxTf_, camera_);
+#endif // _DEBUG
 
     ctx_->model->PostDraw();
 
