@@ -1,6 +1,9 @@
 #include "Sword.h"
 #include "Input.h"
 #include "ModelManager.h"
+#include <algorithm>
+#include <cmath>
+#include "imgui.h"
 
 using namespace DirectX;
 
@@ -12,10 +15,35 @@ void Sword::Initialize(uint32_t modelId) {
     tf_.rotation = {0, 0, 0, 1};
 }
 
-void Sword::Update(Input *input, const DirectX::XMFLOAT3 &playerPos) {
+void Sword::Update(Input *input, float dt, const DirectX::XMFLOAT3 &playerPos) {
     XMVECTOR q = input->GetOrientation();
     q = XMQuaternionConjugate(q);
 
+    float dot = XMVectorGetX(XMQuaternionDot(q, XMLoadFloat4(&prevOrientation_)));
+    dot = std::clamp(dot, -1.0f, 1.0f);
+    float angleDiff = std::acos(dot) * 2.0f;
+
+    float angularVelocity = XMConvertToDegrees(angleDiff) / dt;
+
+    if (angularVelocity > kSlashHold) {
+        if (!isSlashMode_) {
+            isSlashMode_ = true;
+            slashTimer_ = 0.0f;
+        }
+    }
+
+    if (isSlashMode_) {
+        slashTimer_ += dt;
+        if (slashTimer_ > kTimeLimit) {
+            isSlashMode_ = false;
+        }
+
+        if (angularVelocity < kSlashHold * 0.5f && slashTimer_ > 1.0f) {
+            isSlashMode_ = false;
+        }
+    }
+
+    XMStoreFloat4(&prevOrientation_, q);
     XMStoreFloat4(&tf_.rotation, q);
 
     // 剣の向き
@@ -33,6 +61,7 @@ void Sword::Update(Input *input, const DirectX::XMFLOAT3 &playerPos) {
 
 void Sword::Draw(ModelManager *modelManager, const Camera &camera) {
     modelManager->Draw(modelId_, tf_, camera);
+    ImGuiDraw();
 }
 
 OBB Sword::GetOBB() const {
@@ -43,4 +72,17 @@ OBB Sword::GetOBB() const {
     box.rotation = tf_.rotation;
 
     return box;
+}
+
+void Sword::ImGuiDraw() {
+#ifndef IMGUI_DISABLED
+    ImGui::Begin("Debug");
+    if (isSlashMode_) {
+        ImGui::Text("isSlashMode_ = true");
+    } else {
+        ImGui::Text("isSlashMode_ = false");
+    }
+
+    ImGui::End();
+#endif
 }

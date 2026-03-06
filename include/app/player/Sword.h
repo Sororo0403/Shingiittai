@@ -21,7 +21,7 @@ class Sword {
     /// </summary>
     /// <param name="input">Inputインスタンス</param>
     /// <param name="playerPos">プレイヤーの座標</param>
-    void Update(Input *input, const DirectX::XMFLOAT3 &playerPos);
+    void Update(Input *input, float dt, const DirectX::XMFLOAT3 &playerPos);
 
     /// <summary>
     /// 描画処理
@@ -44,4 +44,13 @@ class Sword {
     DirectX::XMFLOAT3 size_ = {0.1f, 0.1f, 0.5f};
 
     float length_ = 0.6f;
+
+    bool isSlashMode_ = false;
+    float slashTimer_ = 0.0f;
+    DirectX::XMFLOAT4 prevOrientation_ = {0.0f, 0.0f, 0.0f, 1.0f};
+    const float kSlashHold = 720.0f;
+    const float kTimeLimit = 1.0f;
+
+    // メンバ関数
+    void ImGuiDraw();
 };

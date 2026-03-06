@@ -15,7 +15,7 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
 void Player::Update(Input *input, float deltaTime) {
     UpdateMovement(input, deltaTime);
 
-    sword_.Update(input, tf_.position);
+    sword_.Update(input, deltaTime, tf_.position);
 }
 
 void Player::Draw(ModelManager *modelManager, const Camera &camera) {
