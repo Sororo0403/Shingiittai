@@ -123,10 +123,8 @@ void Input::UpdateJoyShock(float deltaTime) {
             gyroOffset_.y = gyroAccum_.y / static_cast<float>(gyroSampleCount_);
             gyroOffset_.z = gyroAccum_.z / static_cast<float>(gyroSampleCount_);
             isCalibrating_ = false;
-
-            // キャリブ完了時点の縦持ちを基準姿勢にしたいならここで保存
-            SetBaseOrientation();
         }
+
         return;
     }
 
@@ -135,10 +133,6 @@ void Input::UpdateJoyShock(float deltaTime) {
     gy -= gyroOffset_.y;
     gz -= gyroOffset_.z;
 
-    // JoyShockLibrary v2以降は gyro/accel 軸系が整理されている。
-    // まずはそのまま Mahony に渡して基準姿勢で吸収する。
-    // もしゲーム空間で前後左右が合わなければ、
-    // ここではなく「モデル補正用クォータニオン」で合わせるのが安全。
     mahony_.Update(gx, gy, gz, ax, ay, az, deltaTime);
 
     XMVECTOR q = mahony_.GetQuaternion();
@@ -171,6 +165,5 @@ XMVECTOR Input::GetOrientation() const {
     XMVECTOR base = XMLoadFloat4(&baseOrientation_);
     XMVECTOR invBase = XMQuaternionInverse(base);
 
-    // 基準姿勢からの相対回転
     return XMQuaternionNormalize(XMQuaternionMultiply(invBase, raw));
 }

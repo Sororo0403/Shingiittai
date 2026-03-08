@@ -11,25 +11,37 @@
 
 class Input {
   public:
+    /// <summary>
+    /// 初期化処理
+    /// </summary>
+    /// <param name="hInstance">アプリケーションのインスタンスハンドル</param>
+    /// <param name="hwnd">入力を受け取るウィンドウハンドル</param>
     void Initialize(HINSTANCE hInstance, HWND hwnd);
+
+    /// <summary>
+    /// 更新処理
+    /// </summary>
+    /// <param name="deltaTime">前フレームからの経過時間(秒)</param>
     void Update(float deltaTime);
 
+    /// <summary>
+    /// ジャイロのキャリブレーションを開始
+    /// </summary>
     void StartCalibration();
 
-    /// 現在の姿勢を基準姿勢として保存
+    // Setter
     void SetBaseOrientation();
 
+    // Getter
     bool IsKeyPress(int dik) const;
     bool IsKeyTrigger(int dik) const;
     bool IsKeyRelease(int dik) const;
 
-    /// 基準姿勢込みの相対姿勢
     DirectX::XMVECTOR GetOrientation() const;
-
-    /// Mahonyが内部で持っている生の姿勢
     DirectX::XMVECTOR GetRawOrientation() const;
 
   private:
+    // Update
     void UpdateKeyboard();
     void UpdateMouse();
     void UpdateJoyShock(float deltaTime);
