@@ -108,6 +108,7 @@
     <ClCompile Include="src\engine\collision\CollisionUtil.cpp" />
     <ClCompile Include="src\app\enemy\Enemy.cpp" />
     <ClCompile Include="src\app\player\Player.cpp" />
+    <ClCompile Include="src\engine\input\MahonyFilter.cpp" />
     <ClCompile Include="src\engine\particle\BaseParticleSystem.cpp" />
     <ClCompile Include="src\app\scene\GameScene.cpp" />
     <ClCompile Include="src\engine\scene\SceneManager.cpp" />
@@ -133,6 +134,7 @@
     <ClInclude Include="include\engine\collision\CollisionUtil.h" />
     <ClInclude Include="include\app\enemy\Enemy.h" />
     <ClInclude Include="include\engine\collision\OBB.h" />
+    <ClInclude Include="include\engine\input\MahonyFilter.h" />
     <ClInclude Include="include\engine\particle\BaseParticleSystem.h" />
     <ClInclude Include="include\app\scene\GameScene.h" />
     <ClInclude Include="include\engine\model\Transform.h" />

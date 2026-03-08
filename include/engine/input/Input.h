@@ -1,5 +1,7 @@
 #pragma once
 #define DIRECTINPUT_VERSION 0x0800
+
+#include "MahonyFilter.h"
 #include <DirectXMath.h>
 #include <JoyShockLibrary.h>
 #include <Windows.h>
@@ -9,40 +11,31 @@
 
 class Input {
   public:
-    /// <summary>
-    /// 初期化処理
-    /// </summary>
-    /// <param name="hInstance">アプリケーションのインスタンスハンドル</param>
-    /// <param name="hwnd">入力を受け取るウィンドウのハンドル</param>
     void Initialize(HINSTANCE hInstance, HWND hwnd);
-
-    /// <summary>
-    /// 更新処理
-    /// </summary>
-    /// <param name="deltaTime">前フレームからの経過時間(秒)</param>
     void Update(float deltaTime);
 
-    /// <summary>
-    /// ジャイロのキャリブレーションを開始
-    /// </summary>
     void StartCalibration();
 
-    // Getter
+    /// 現在の姿勢を基準姿勢として保存
+    void SetBaseOrientation();
+
     bool IsKeyPress(int dik) const;
     bool IsKeyTrigger(int dik) const;
     bool IsKeyRelease(int dik) const;
 
+    /// 基準姿勢込みの相対姿勢
     DirectX::XMVECTOR GetOrientation() const;
 
+    /// Mahonyが内部で持っている生の姿勢
+    DirectX::XMVECTOR GetRawOrientation() const;
+
   private:
-    // Update
     void UpdateKeyboard();
     void UpdateMouse();
     void UpdateJoyShock(float deltaTime);
 
   private:
     static constexpr BYTE kPressMask = 0x80;
-
     static constexpr float kCalibrationTime_ = 2.0f;
 
     // Keyboard
@@ -60,7 +53,11 @@ class Input {
     // JoyShock
     int jsHandle_ = -1;
 
+    MahonyFilter mahony_;
+
     DirectX::XMFLOAT4 orientation_{0, 0, 0, 1};
+    DirectX::XMFLOAT4 baseOrientation_{0, 0, 0, 1};
+    bool hasBaseOrientation_ = false;
 
     bool isCalibrating_ = true;
     float calibrationTimer_ = 0.0f;

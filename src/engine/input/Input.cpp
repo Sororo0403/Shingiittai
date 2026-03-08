@@ -41,6 +41,7 @@ void Input::Initialize(HINSTANCE hInstance, HWND hwnd) {
         JslSetAutomaticCalibration(jsHandle_, false);
     }
 
+    mahony_.Initialize(2.0f, 0.05f);
     StartCalibration();
 }
 
@@ -56,27 +57,58 @@ void Input::StartCalibration() {
     gyroAccum_ = {0, 0, 0};
     gyroOffset_ = {0, 0, 0};
     gyroSampleCount_ = 0;
+
+    mahony_.Reset();
+    orientation_ = {0, 0, 0, 1};
+    baseOrientation_ = {0, 0, 0, 1};
+    hasBaseOrientation_ = false;
+}
+
+void Input::SetBaseOrientation() {
+    XMStoreFloat4(&baseOrientation_, GetRawOrientation());
+    hasBaseOrientation_ = true;
 }
 
 void Input::UpdateKeyboard() {
     keyPrev_ = keyNow_;
-    keyboard_->GetDeviceState(256, keyNow_.data());
+    HRESULT hr = keyboard_->GetDeviceState(256, keyNow_.data());
+
+    if (FAILED(hr)) {
+        hr = keyboard_->Acquire();
+
+        if (SUCCEEDED(hr)) {
+            keyboard_->GetDeviceState(256, keyNow_.data());
+        }
+    }
 }
 
 void Input::UpdateMouse() {
     mousePrevState_ = mouseState_;
-    mouse_->GetDeviceState(sizeof(DIMOUSESTATE), &mouseState_);
+    HRESULT hr = mouse_->GetDeviceState(sizeof(DIMOUSESTATE), &mouseState_);
+
+    if (FAILED(hr)) {
+        hr = mouse_->Acquire();
+
+        if (SUCCEEDED(hr)) {
+            mouse_->GetDeviceState(sizeof(DIMOUSESTATE), &mouseState_);
+        }
+    }
 }
 
 void Input::UpdateJoyShock(float deltaTime) {
-    if (jsHandle_ < 0 || !JslStillConnected(jsHandle_))
+    if (jsHandle_ < 0 || !JslStillConnected(jsHandle_)) {
         return;
+    }
 
-    float gx = 0.0f;
-    float gy = 0.0f;
-    float gz = 0.0f;
+    IMU_STATE imu = JslGetIMUState(jsHandle_);
 
-    JslGetAndFlushAccumulatedGyro(jsHandle_, gx, gy, gz);
+    float gx = imu.gyroX;
+    float gy = imu.gyroY;
+    float gz = -imu.gyroZ;
+
+    float ax = imu.accelX;
+    float ay = imu.accelY;
+    float az = -imu.accelZ;
 
     if (isCalibrating_) {
         calibrationTimer_ += deltaTime;
@@ -86,31 +118,31 @@ void Input::UpdateJoyShock(float deltaTime) {
         gyroAccum_.z += gz;
         gyroSampleCount_++;
 
-        if (calibrationTimer_ >= kCalibrationTime_) {
-            gyroOffset_.x = gyroAccum_.x / gyroSampleCount_;
-            gyroOffset_.y = gyroAccum_.y / gyroSampleCount_;
-            gyroOffset_.z = gyroAccum_.z / gyroSampleCount_;
+        if (calibrationTimer_ >= kCalibrationTime_ && gyroSampleCount_ > 0) {
+            gyroOffset_.x = gyroAccum_.x / static_cast<float>(gyroSampleCount_);
+            gyroOffset_.y = gyroAccum_.y / static_cast<float>(gyroSampleCount_);
+            gyroOffset_.z = gyroAccum_.z / static_cast<float>(gyroSampleCount_);
             isCalibrating_ = false;
-        }
 
+            // キャリブ完了時点の縦持ちを基準姿勢にしたいならここで保存
+            SetBaseOrientation();
+        }
         return;
     }
 
+    // バイアス除去
     gx -= gyroOffset_.x;
     gy -= gyroOffset_.y;
     gz -= gyroOffset_.z;
 
-    float radX = XMConvertToRadians(gx) * deltaTime;
-    float radY = XMConvertToRadians(gy) * deltaTime;
-    float radZ = XMConvertToRadians(-gz) * deltaTime;
+    // JoyShockLibrary v2以降は gyro/accel 軸系が整理されている。
+    // まずはそのまま Mahony に渡して基準姿勢で吸収する。
+    // もしゲーム空間で前後左右が合わなければ、
+    // ここではなく「モデル補正用クォータニオン」で合わせるのが安全。
+    mahony_.Update(gx, gy, gz, ax, ay, az, deltaTime);
 
-    XMVECTOR delta = XMQuaternionRotationRollPitchYaw(radX, radY, radZ);
-    XMVECTOR current = XMLoadFloat4(&orientation_);
-
-    current = XMQuaternionMultiply(current, delta);
-    current = XMQuaternionNormalize(current);
-
-    XMStoreFloat4(&orientation_, current);
+    XMVECTOR q = mahony_.GetQuaternion();
+    XMStoreFloat4(&orientation_, q);
 }
 
 bool Input::IsKeyPress(int dik) const {
@@ -125,4 +157,20 @@ bool Input::IsKeyRelease(int dik) const {
     return !(keyNow_[dik] & kPressMask) && (keyPrev_[dik] & kPressMask);
 }
 
-XMVECTOR Input::GetOrientation() const { return XMLoadFloat4(&orientation_); }
+XMVECTOR Input::GetRawOrientation() const {
+    return XMQuaternionNormalize(XMLoadFloat4(&orientation_));
+}
+
+XMVECTOR Input::GetOrientation() const {
+    XMVECTOR raw = GetRawOrientation();
+
+    if (!hasBaseOrientation_) {
+        return raw;
+    }
+
+    XMVECTOR base = XMLoadFloat4(&baseOrientation_);
+    XMVECTOR invBase = XMQuaternionInverse(base);
+
+    // 基準姿勢からの相対回転
+    return XMQuaternionNormalize(XMQuaternionMultiply(invBase, raw));
+}

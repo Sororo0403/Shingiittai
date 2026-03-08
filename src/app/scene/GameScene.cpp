@@ -28,6 +28,10 @@ void GameScene::Initialize(const SceneContext &ctx) {
 }
 
 void GameScene::Update() {
+    if (ctx_->input->IsKeyTrigger(DIK_SPACE)) {
+        ctx_->input->SetBaseOrientation();
+    }
+
     camera_.Update();
 
     player_.Update(ctx_->input, ctx_->deltaTime);
