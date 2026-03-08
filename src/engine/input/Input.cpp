@@ -1,5 +1,7 @@
 #include "Input.h"
+#include <algorithm>
 #include <cassert>
+#include <cmath>
 
 using namespace DirectX;
 
@@ -14,25 +16,32 @@ void Input::Initialize(HINSTANCE hInstance, HWND hwnd) {
     hr = directInput_->CreateDevice(GUID_SysKeyboard, keyboard_.GetAddressOf(),
                                     nullptr);
     assert(SUCCEEDED(hr));
+
     hr = keyboard_->SetDataFormat(&c_dfDIKeyboard);
     assert(SUCCEEDED(hr));
+
     hr = keyboard_->SetCooperativeLevel(hwnd,
                                         DISCL_FOREGROUND | DISCL_NONEXCLUSIVE);
     assert(SUCCEEDED(hr));
+
     keyboard_->Acquire();
 
     hr = directInput_->CreateDevice(GUID_SysMouse, mouse_.GetAddressOf(),
                                     nullptr);
     assert(SUCCEEDED(hr));
+
     hr = mouse_->SetDataFormat(&c_dfDIMouse);
     assert(SUCCEEDED(hr));
+
     hr = mouse_->SetCooperativeLevel(hwnd,
                                      DISCL_FOREGROUND | DISCL_NONEXCLUSIVE);
     assert(SUCCEEDED(hr));
+
     mouse_->Acquire();
 
     // JoyShock
     JslConnectDevices();
+
     int handles[4];
     int count = JslGetConnectedDeviceHandles(handles, 4);
 
@@ -41,7 +50,8 @@ void Input::Initialize(HINSTANCE hInstance, HWND hwnd) {
         JslSetAutomaticCalibration(jsHandle_, false);
     }
 
-    mahony_.Initialize(2.0f, 0.05f);
+    mahony_.Initialize(0.4f, 0.0f);
+
     StartCalibration();
 }
 
@@ -53,12 +63,14 @@ void Input::Update(float deltaTime) {
 
 void Input::StartCalibration() {
     isCalibrating_ = true;
-    calibrationTimer_ = 0.0f;
+    stillTimer_ = 0.0f;
+
     gyroAccum_ = {0, 0, 0};
     gyroOffset_ = {0, 0, 0};
     gyroSampleCount_ = 0;
 
     mahony_.Reset();
+
     orientation_ = {0, 0, 0, 1};
     baseOrientation_ = {0, 0, 0, 1};
     hasBaseOrientation_ = false;
@@ -71,6 +83,7 @@ void Input::SetBaseOrientation() {
 
 void Input::UpdateKeyboard() {
     keyPrev_ = keyNow_;
+
     HRESULT hr = keyboard_->GetDeviceState(256, keyNow_.data());
 
     if (FAILED(hr)) {
@@ -84,6 +97,7 @@ void Input::UpdateKeyboard() {
 
 void Input::UpdateMouse() {
     mousePrevState_ = mouseState_;
+
     HRESULT hr = mouse_->GetDeviceState(sizeof(DIMOUSESTATE), &mouseState_);
 
     if (FAILED(hr)) {
@@ -95,7 +109,10 @@ void Input::UpdateMouse() {
     }
 }
 
-void Input::UpdateJoyShock(float deltaTime) {
+void Input::UpdateJoyShock(float dt) {
+    if (dt <= 0.0f) {
+        return;
+    }
     if (jsHandle_ < 0 || !JslStillConnected(jsHandle_)) {
         return;
     }
@@ -111,31 +128,54 @@ void Input::UpdateJoyShock(float deltaTime) {
     float az = -imu.accelZ;
 
     if (isCalibrating_) {
-        calibrationTimer_ += deltaTime;
+        float gyroMagSq = gx * gx + gy * gy + gz * gz;
 
-        gyroAccum_.x += gx;
-        gyroAccum_.y += gy;
-        gyroAccum_.z += gz;
-        gyroSampleCount_++;
+        if (gyroMagSq < kStillGyroThresholdSq) {
+            stillTimer_ += dt;
 
-        if (calibrationTimer_ >= kCalibrationTime_ && gyroSampleCount_ > 0) {
-            gyroOffset_.x = gyroAccum_.x / static_cast<float>(gyroSampleCount_);
-            gyroOffset_.y = gyroAccum_.y / static_cast<float>(gyroSampleCount_);
-            gyroOffset_.z = gyroAccum_.z / static_cast<float>(gyroSampleCount_);
-            isCalibrating_ = false;
+            gyroAccum_.x += gx;
+            gyroAccum_.y += gy;
+            gyroAccum_.z += gz;
+            gyroSampleCount_++;
+
+            if (stillTimer_ >= kStillTime && gyroSampleCount_ > 0) {
+                gyroOffset_.x = gyroAccum_.x / gyroSampleCount_;
+                gyroOffset_.y = gyroAccum_.y / gyroSampleCount_;
+                gyroOffset_.z = gyroAccum_.z / gyroSampleCount_;
+
+                isCalibrating_ = false;
+            }
+
+        } else {
+            stillTimer_ = 0.0f;
+            gyroAccum_ = {0, 0, 0};
+            gyroSampleCount_ = 0;
         }
 
         return;
     }
 
-    // バイアス除去
     gx -= gyroOffset_.x;
     gy -= gyroOffset_.y;
     gz -= gyroOffset_.z;
 
-    mahony_.Update(gx, gy, gz, ax, ay, az, deltaTime);
+    float gyroMagSq = gx * gx + gy * gy + gz * gz;
+    if (gyroMagSq < 1.0f) {
+        gyroOffset_.x += gx * kDriftLearnRate;
+        gyroOffset_.y += gy * kDriftLearnRate;
+        gyroOffset_.z += gz * kDriftLearnRate;
+    }
 
-    XMVECTOR q = mahony_.GetQuaternion();
+    float norm = sqrtf(ax * ax + ay * ay + az * az);
+    if (norm > 0.0001f) {
+        ax /= norm;
+        ay /= norm;
+        az /= norm;
+    }
+
+    mahony_.Update(gx, gy, gz, ax, ay, az, dt);
+
+    XMVECTOR q = XMQuaternionNormalize(mahony_.GetQuaternion());
     XMStoreFloat4(&orientation_, q);
 }
 

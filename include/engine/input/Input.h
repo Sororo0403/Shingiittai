@@ -48,7 +48,12 @@ class Input {
 
   private:
     static constexpr BYTE kPressMask = 0x80;
-    static constexpr float kCalibrationTime_ = 2.0f;
+
+    static constexpr float kStillGyroThreshold = 19.0f;
+    static constexpr float kStillGyroThresholdSq =
+        kStillGyroThreshold * kStillGyroThreshold;
+    static constexpr float kStillTime = 0.5f;
+    static constexpr float kDriftLearnRate = 0.0005f;
 
     // Keyboard
     Microsoft::WRL::ComPtr<IDirectInput8> directInput_;
@@ -72,7 +77,7 @@ class Input {
     bool hasBaseOrientation_ = false;
 
     bool isCalibrating_ = true;
-    float calibrationTimer_ = 0.0f;
+    float stillTimer_ = 0.0f;
 
     DirectX::XMFLOAT3 gyroOffset_{0, 0, 0};
     DirectX::XMFLOAT3 gyroAccum_{0, 0, 0};
