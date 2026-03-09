@@ -19,6 +19,12 @@ void Sword::Update(Input *input, float dt, const DirectX::XMFLOAT3 &playerPos) {
     XMVECTOR q = input->GetOrientation();
     q = XMQuaternionConjugate(q);
 
+    if (input->IsJsButtunPress(1 << 0)) {
+        isGuard_ = true;
+    } else {
+        isGuard_ = false;
+    }
+
     float dot = XMVectorGetX(XMQuaternionDot(q, XMLoadFloat4(&prevOrientation_)));
     dot = std::clamp(dot, -1.0f, 1.0f);
     float angleDiff = std::acos(dot) * 2.0f;
@@ -45,6 +51,12 @@ void Sword::Update(Input *input, float dt, const DirectX::XMFLOAT3 &playerPos) {
 
     XMStoreFloat4(&prevOrientation_, q);
     XMStoreFloat4(&tf_.rotation, q);
+    
+    if (input->IsJsButtunPress(JSL_BUTTON_ZR)) {
+        isGuard_ = true;
+    } else {
+        isGuard_ = false;
+    }
 
     // 剣の向き
     XMVECTOR forward = XMVector3Rotate(XMVectorSet(0, 0, 1, 0), q);
@@ -81,6 +93,12 @@ void Sword::ImGuiDraw() {
         ImGui::Text("isSlashMode_ = true");
     } else {
         ImGui::Text("isSlashMode_ = false");
+    }
+
+    if (isGuard_) {
+        ImGui::Text("isGuard_ = true");
+    } else {
+        ImGui::Text("isGuard_ = false");
     }
 
     ImGui::End();

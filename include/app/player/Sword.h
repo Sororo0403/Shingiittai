@@ -51,6 +51,8 @@ class Sword {
     const float kSlashHold = 720.0f;
     const float kTimeLimit = 1.0f;
 
+    bool isGuard_ = false;
+
     // メンバ関数
     void ImGuiDraw();
 };

@@ -42,6 +42,7 @@ void Input::Initialize(HINSTANCE hInstance, HWND hwnd) {
     }
 
     StartCalibration();
+
 }
 
 void Input::Update(float deltaTime) {
@@ -69,8 +70,12 @@ void Input::UpdateMouse() {
 }
 
 void Input::UpdateJoyShock(float deltaTime) {
-    if (jsHandle_ < 0 || !JslStillConnected(jsHandle_))
+    if (jsHandle_ < 0 || !JslStillConnected(jsHandle_)) {
         return;
+    }
+
+    jsButtonsPrev_ = jsButtonsNow_;
+    jsButtonsNow_ = JslGetButtons(jsHandle_);
 
     float gx = 0.0f;
     float gy = 0.0f;
@@ -111,6 +116,14 @@ void Input::UpdateJoyShock(float deltaTime) {
     current = XMQuaternionNormalize(current);
 
     XMStoreFloat4(&orientation_, current);
+}
+
+bool Input::IsJsButtunPress(int buttunMask) const {
+    return jsButtonsNow_ & buttunMask;
+}
+
+bool Input::IsJsButtunTrigger(int buttunMask) const { 
+    return jsButtonsPrev_ & buttunMask; 
 }
 
 bool Input::IsKeyPress(int dik) const {
