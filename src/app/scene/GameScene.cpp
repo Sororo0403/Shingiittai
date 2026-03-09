@@ -23,7 +23,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
     // Player
     uint32_t playerModel =
         ctx_->model->Load(L"resources/model/player/player.obj");
-    uint32_t swordModel = ctx_->model->Load(L"resources/model/sword/sword.obj");
+    uint32_t swordModel = ctx_->model->Load(L"resources/model/sword/sword.gltf");
     player_.Initialize(playerModel, swordModel);
 
     // Enemy

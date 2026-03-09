@@ -78,7 +78,9 @@
     <PostBuildEvent>
       <Command>if exist "$(ProjectDir)externals\JoyShockLibrary\lib\JoyShockLibrary.dll" (
     xcopy /Y /D "$(ProjectDir)externals\JoyShockLibrary\lib\JoyShockLibrary.dll" "$(TargetDir)"
-)</Command>
+)
+
+copy "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -105,7 +107,9 @@
     <PostBuildEvent>
       <Command>if exist "$(ProjectDir)externals\JoyShockLibrary\lib\JoyShockLibrary.dll" (
     xcopy /Y /D "$(ProjectDir)externals\JoyShockLibrary\lib\JoyShockLibrary.dll" "$(TargetDir)"
-)</Command>
+)
+
+copy "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
