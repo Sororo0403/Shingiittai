@@ -89,17 +89,8 @@ OBB Sword::GetOBB() const {
 void Sword::ImGuiDraw() {
 #ifndef IMGUI_DISABLED
     ImGui::Begin("Debug");
-    if (isSlashMode_) {
-        ImGui::Text("isSlashMode_ = true");
-    } else {
-        ImGui::Text("isSlashMode_ = false");
-    }
-
-    if (isGuard_) {
-        ImGui::Text("isGuard_ = true");
-    } else {
-        ImGui::Text("isGuard_ = false");
-    }
+    ImGui::Text("isSlashMode_: %s", isSlashMode_ ? "true" : "false");
+    ImGui::Text("isGuard_: %s", isGuard_ ? "true" : "false");
 
     ImGui::End();
 #endif
