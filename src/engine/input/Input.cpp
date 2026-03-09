@@ -53,6 +53,7 @@ void Input::Initialize(HINSTANCE hInstance, HWND hwnd) {
     mahony_.Initialize(0.4f, 0.0f);
 
     StartCalibration();
+
 }
 
 void Input::Update(float deltaTime) {
@@ -117,13 +118,13 @@ void Input::UpdateMouse() {
     }
 }
 
-void Input::UpdateJoyShock(float dt) {
-    if (dt <= 0.0f) {
-        return;
-    }
+void Input::UpdateJoyShock(float deltaTime) {
     if (jsHandle_ < 0 || !JslStillConnected(jsHandle_)) {
         return;
     }
+
+    jsButtonsPrev_ = jsButtonsNow_;
+    jsButtonsNow_ = JslGetButtons(jsHandle_);
 
     IMU_STATE imu = JslGetIMUState(jsHandle_);
 
@@ -139,7 +140,7 @@ void Input::UpdateJoyShock(float dt) {
         float gyroMagSq = gx * gx + gy * gy + gz * gz;
 
         if (gyroMagSq < kStillGyroThresholdSq) {
-            stillTimer_ += dt;
+            stillTimer_ += deltaTime;
 
             gyroAccum_.x += gx;
             gyroAccum_.y += gy;
@@ -181,10 +182,18 @@ void Input::UpdateJoyShock(float dt) {
         az /= norm;
     }
 
-    mahony_.Update(gx, gy, gz, ax, ay, az, dt);
+    mahony_.Update(gx, gy, gz, ax, ay, az, deltaTime);
 
     XMVECTOR q = XMQuaternionNormalize(mahony_.GetQuaternion());
     XMStoreFloat4(&orientation_, q);
+}
+
+bool Input::IsJsButtunPress(int buttunMask) const {
+    return jsButtonsNow_ & buttunMask;
+}
+
+bool Input::IsJsButtunTrigger(int buttunMask) const { 
+    return jsButtonsPrev_ & buttunMask; 
 }
 
 bool Input::IsKeyPress(int dik) const {

@@ -46,6 +46,12 @@ void Sword::Update(Input *input, float dt, const DirectX::XMFLOAT3 &playerPos) {
 
     XMStoreFloat4(&prevOrientation_, q);
     XMStoreFloat4(&tf_.rotation, q);
+    
+    if (input->IsJsButtunPress(JSL_BUTTON_ZR)) {
+        isGuard_ = true;
+    } else {
+        isGuard_ = false;
+    }
 
     // 剣の向き
     XMVECTOR forward = XMVector3Rotate(XMVectorSet(0, 0, 1, 0), q);
@@ -62,6 +68,7 @@ void Sword::Update(Input *input, float dt, const DirectX::XMFLOAT3 &playerPos) {
 
 void Sword::Draw(ModelManager *modelManager, const Camera &camera) {
     modelManager->Draw(modelId_, tf_, camera);
+    ImGuiDraw();
 }
 
 OBB Sword::GetOBB() const {
@@ -82,4 +89,14 @@ OBB Sword::GetOBB() const {
     box.rotation = tf_.rotation;
 
     return box;
+}
+
+void Sword::ImGuiDraw() {
+#ifndef IMGUI_DISABLED
+    ImGui::Begin("Debug");
+    ImGui::Text("isSlashMode_: %s", isSlashMode_ ? "true" : "false");
+    ImGui::Text("isGuard_: %s", isGuard_ ? "true" : "false");
+
+    ImGui::End();
+#endif
 }

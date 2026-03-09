@@ -8,6 +8,10 @@
 #include <dinput.h>
 #include <wrl.h>
 
+#ifndef JSL_BUTTON_ZR
+#define JSL_BUTTON_ZR 0x00800
+#endif
+
 class Input {
   public:
     /// <summary>
@@ -35,6 +39,8 @@ class Input {
     bool IsKeyPress(int dik) const;
     bool IsKeyTrigger(int dik) const;
     bool IsKeyRelease(int dik) const;
+    bool IsJsButtunPress(int buttunMask) const;
+    bool IsJsButtunTrigger(int buttunMask) const;
 
     DirectX::XMVECTOR GetOrientation() const;
     DirectX::XMVECTOR GetRawOrientation() const;
@@ -45,10 +51,11 @@ class Input {
     void UpdateMouse();
     void UpdateJoyShock(float deltaTime);
 
+
   private:
     static constexpr BYTE kPressMask = 0x80;
 
-    static constexpr float kStillGyroThreshold = 19.0f;
+    static constexpr float kStillGyroThreshold = 20.0f;
     static constexpr float kStillGyroThresholdSq =
         kStillGyroThreshold * kStillGyroThreshold;
     static constexpr float kStillTime = 0.5f;
@@ -68,6 +75,8 @@ class Input {
 
     // JoyShock
     int jsHandle_ = -1;
+    int jsButtonsNow_ = 0;
+    int jsButtonsPrev_ = 0;
 
     MahonyFilter mahony_;
 
