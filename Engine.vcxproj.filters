@@ -194,6 +194,9 @@
     <ClCompile Include="src\engine\collision\DebugDraw.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\engine\model\AssimpLoader.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\engine\core\WinApp.h">
@@ -305,6 +308,9 @@
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="include\engine\collision\DebugDraw.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\engine\model\AssimpLoader.h">
       <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>

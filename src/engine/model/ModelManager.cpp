@@ -2,6 +2,7 @@
 #include "Camera.h"
 #include "DirectXCommon.h"
 #include "SrvManager.h"
+#include <filesystem>
 
 void ModelManager::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager) {
     dxCommon_ = dxCommon;
@@ -9,15 +10,17 @@ void ModelManager::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager) {
     meshManager_.Initialize(dxCommon_);
     textureManager_.Initialize(dxCommon_, srvManager);
 
-    objLoader_.Initialize(&textureManager_, &meshManager_);
+    assimpLoader_.Initialize(&textureManager_, &meshManager_);
 
     modelRenderer_.Initialize(dxCommon_, srvManager, &meshManager_,
                               &textureManager_);
 }
 
 uint32_t ModelManager::Load(const std::wstring &path) {
-    Model model = objLoader_.Load(path);
+    std::filesystem::path p = path;
+    std::string pathStr = p.string();
 
+    Model model = assimpLoader_.Load(pathStr);
     models_.push_back(model);
 
     return static_cast<uint32_t>(models_.size() - 1);

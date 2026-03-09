@@ -1,8 +1,8 @@
 #pragma once
+#include "AssimpLoader.h"
 #include "MeshManager.h"
 #include "Model.h"
 #include "ModelRenderer.h"
-#include "ObjLoader.h"
 #include "TextureManager.h"
 #include <cstdint>
 #include <string>
@@ -52,7 +52,7 @@ class ModelManager {
 
     MeshManager meshManager_;
     TextureManager textureManager_;
-    ObjLoader objLoader_;
+    AssimpLoader assimpLoader_;
     ModelRenderer modelRenderer_;
 
     std::vector<Model> models_;
