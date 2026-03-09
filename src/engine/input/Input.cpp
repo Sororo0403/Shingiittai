@@ -56,6 +56,14 @@ void Input::Initialize(HINSTANCE hInstance, HWND hwnd) {
 }
 
 void Input::Update(float deltaTime) {
+    if (IsKeyTrigger(DIK_C)) {
+        StartCalibration();
+    }
+
+    if (IsKeyTrigger(DIK_R)) {
+        SetBaseOrientation();
+    }
+
     UpdateKeyboard();
     UpdateMouse();
     UpdateJoyShock(deltaTime);

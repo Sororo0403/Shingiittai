@@ -1,6 +1,5 @@
 #include "DirectXCommon.h"
 #include "GameScene.h"
-#include "ImguiManager.h"
 #include "Input.h"
 #include "ModelManager.h"
 #include "SceneContext.h"
@@ -11,6 +10,14 @@
 #include "TextureManager.h"
 #include "WinApp.h"
 #include <memory>
+
+#ifdef _DEBUG
+#include "DebugDraw.h"
+#endif // _DEBUG
+
+#ifndef IMGUI_DISABLED
+#include "ImguiManager.h"
+#endif // IMGUI_DISABLED
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     // WinApp初期化
@@ -50,6 +57,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     spriteManager.Initialize(&dxCommon, &textureManager, &srvManager, width,
                              height);
 
+#ifdef _DEBUG
+    // DebugDraw
+    DebugDraw debugDraw;
+    uint32_t boxModelId = modelManager.Load(L"resources/model/debug/box.obj");
+
+    debugDraw.Initialize(boxModelId);
+#endif // _DEBUG
+
 #ifndef IMGUI_DISABLED
     // ImguiManager
     ImguiManager imguiManager;
@@ -62,6 +77,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     sceneCtx.sound = &soundManager;
     sceneCtx.model = &modelManager;
     sceneCtx.sprite = &spriteManager;
+
+#ifdef _DEBUG
+    sceneCtx.debugDraw = &debugDraw;
+#endif // _DEBUG
 
     sceneCtx.deltaTime = 0.0f;
 

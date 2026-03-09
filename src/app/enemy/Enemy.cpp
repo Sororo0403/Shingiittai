@@ -32,7 +32,8 @@ void Enemy::TakeDamage(float damage) {
 OBB Enemy::GetOBB() const {
     OBB box;
 
-    box.center = tf_.position;
+    box.center = {tf_.position.x, tf_.position.y + size_.y * 0.5f,
+                  tf_.position.z};
     box.size = size_;
     box.rotation = tf_.rotation;
 

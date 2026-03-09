@@ -38,19 +38,15 @@ class Sword {
     static constexpr float kHandHeight = 0.8f;
     static constexpr float kSwordLength = 1.0f;
 
+    static constexpr float kSlashHold = 720.0f;
+    static constexpr float kTimeLimit = 1.0f;
+
     Transform tf_;
     uint32_t modelId_ = 0;
 
     DirectX::XMFLOAT3 size_ = {0.1f, 0.1f, 0.5f};
 
-    float length_ = 0.6f;
-
     bool isSlashMode_ = false;
     float slashTimer_ = 0.0f;
     DirectX::XMFLOAT4 prevOrientation_ = {0.0f, 0.0f, 0.0f, 1.0f};
-    const float kSlashHold = 720.0f;
-    const float kTimeLimit = 1.0f;
-
-    // メンバ関数
-    void ImGuiDraw();
 };

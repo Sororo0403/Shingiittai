@@ -1,6 +1,6 @@
 #pragma once
-#include "OBB.h"
 #include "Camera.h"
+#include "OBB.h"
 #include "Transform.h"
 #include <cstdint>
 
@@ -41,7 +41,7 @@ class Enemy {
     Transform tf_;
     uint32_t modelId_ = 0;
 
-    DirectX::XMFLOAT3 size_ = {1.0f, 1.0f, 1.0f};
+    DirectX::XMFLOAT3 size_ = {0.5f, 1.2f, 0.5f};
 
     float hp_ = 100.0f;
 };

@@ -6,11 +6,11 @@
 namespace CollisionUtil {
 
 /// <summary>
-///
+/// 2つのOBBが衝突しているかを判定
 /// </summary>
-/// <param name="a"></param>
-/// <param name="b"></param>
-/// <returns></returns>
+/// <param name="a">判定対象となる1つ目のOBB</param>
+/// <param name="b">判定対象となる2つ目のOBB</param>
+/// <returns>2つのOBBが交差している場合はtrue、交差していない場合はfalse</returns>
 bool CheckOBB(const OBB &a, const OBB &b);
 
 /// <summary>

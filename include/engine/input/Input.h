@@ -1,6 +1,5 @@
 #pragma once
 #define DIRECTINPUT_VERSION 0x0800
-
 #include "MahonyFilter.h"
 #include <DirectXMath.h>
 #include <JoyShockLibrary.h>

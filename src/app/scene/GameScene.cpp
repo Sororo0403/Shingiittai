@@ -4,6 +4,10 @@
 #include "ModelManager.h"
 #include "WinApp.h"
 
+#ifdef _DEBUG
+#include "DebugDraw.h"
+#endif // _DEBUG
+
 void GameScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
 
@@ -52,6 +56,15 @@ void GameScene::Draw() {
 
     player_.Draw(ctx_->model, camera_);
     enemy_.Draw(ctx_->model, camera_);
+
+#ifdef _DEBUG
+    // 当たり判定描画
+    ctx_->debugDraw->DrawOBB(ctx_->model, player_.GetSword().GetOBB(), camera_);
+
+    if (enemy_.IsAlive()) {
+        ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetOBB(), camera_);
+    }
+#endif // _DEBUG
 
     ctx_->model->PostDraw();
 }
