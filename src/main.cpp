@@ -60,7 +60,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
 #ifdef _DEBUG
     // DebugDraw
     DebugDraw debugDraw;
+
+    dxCommon.BeginUpload();
+
     uint32_t boxModelId = modelManager.Load(L"resources/model/debug/box.obj");
+
+    dxCommon.EndUpload();
 
     debugDraw.Initialize(boxModelId);
 #endif // _DEBUG
@@ -77,6 +82,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     sceneCtx.sound = &soundManager;
     sceneCtx.model = &modelManager;
     sceneCtx.sprite = &spriteManager;
+    sceneCtx.dxCommon = &dxCommon;
 
 #ifdef _DEBUG
     sceneCtx.debugDraw = &debugDraw;

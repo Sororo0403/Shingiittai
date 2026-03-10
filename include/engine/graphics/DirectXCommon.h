@@ -25,6 +25,16 @@ class DirectXCommon {
     void EndFrame();
 
     /// <summary>
+    /// アップロード開始処理
+    /// </summary>
+    void BeginUpload();
+
+    /// <summary>
+    /// アップデート終了処理
+    /// </summary>
+    void EndUpload();
+
+    /// <summary>
     /// GPU同期待ち
     /// </summary>
     void WaitForGpu();

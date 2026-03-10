@@ -1,5 +1,6 @@
 #include "GameScene.h"
 #include "CollisionUtil.h"
+#include "DirectXCommon.h"
 #include "Input.h"
 #include "ModelManager.h"
 #include "WinApp.h"
@@ -20,14 +21,20 @@ void GameScene::Initialize(const SceneContext &ctx) {
     camera_.SetRotation({0.0f, 0.0f, 0.0f});
     camera_.Update();
 
+    ctx_->dxCommon->BeginUpload();
+
     // Player
     uint32_t playerModel =
         ctx_->model->Load(L"resources/model/player/player.obj");
-    uint32_t swordModel = ctx_->model->Load(L"resources/model/sword/sword.gltf");
-    player_.Initialize(playerModel, swordModel);
+    uint32_t swordModel =
+        ctx_->model->Load(L"resources/model/sword/sword.gltf");
 
     // Enemy
     uint32_t enemyModel = ctx_->model->Load(L"resources/model/enemy/enemy.obj");
+
+    ctx_->dxCommon->EndUpload();
+
+    player_.Initialize(playerModel, swordModel);
     enemy_.Initialize(enemyModel);
 }
 

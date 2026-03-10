@@ -25,6 +25,11 @@ class TextureManager {
     /// <returns>テクスチャid</returns>
     uint32_t Load(const std::wstring &filePath);
 
+    /// <summary>
+    /// ロード時に使った一時UploadBufferを解放
+    /// </summary>
+    void ReleaseUploadBuffers();
+
     // Getter
     D3D12_GPU_DESCRIPTOR_HANDLE GetGpuHandle(uint32_t textureId) const;
     ID3D12Resource *GetResource(uint32_t textureId) const;
@@ -42,4 +47,5 @@ class TextureManager {
     SrvManager *srvManager_ = nullptr;
 
     std::vector<Entry> textures_;
+    std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> uploadBuffers_;
 };

@@ -73,6 +73,23 @@ void DirectXCommon::EndFrame() {
     backBufferIndex_ = swapChain_->GetCurrentBackBufferIndex();
 }
 
+void DirectXCommon::BeginUpload() {
+    ThrowIfFailed(commandAllocator_->Reset(),
+                  "commandAllocator_->Reset failed");
+
+    ThrowIfFailed(commandList_->Reset(commandAllocator_.Get(), nullptr),
+                  "commandList_->Reset failed");
+}
+
+void DirectXCommon::EndUpload() {
+    ThrowIfFailed(commandList_->Close(), "commandList_->Close failed");
+
+    ID3D12CommandList *lists[] = {commandList_.Get()};
+    commandQueue_->ExecuteCommandLists(1, lists);
+
+    WaitForGpu();
+}
+
 void DirectXCommon::WaitForGpu() {
     fenceValue_++;
     ThrowIfFailed(commandQueue_->Signal(fence_.Get(), fenceValue_),
