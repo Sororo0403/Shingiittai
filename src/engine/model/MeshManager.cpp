@@ -10,13 +10,12 @@ void MeshManager::Initialize(DirectXCommon *dxCommon) { dxCommon_ = dxCommon; }
 
 uint32_t MeshManager::CreateMesh(const void *vertexData, uint32_t vertexStride,
                                  uint32_t vertexCount,
-                                 const uint16_t *indexData,
+                                 const uint32_t *indexData,
                                  uint32_t indexCount) {
     Mesh mesh{};
     mesh.indexCount = indexCount;
     mesh.vertexStride = vertexStride;
 
-    // Vertex Buffer
     UINT vbSize = vertexStride * vertexCount;
 
     CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_UPLOAD);
@@ -26,7 +25,7 @@ uint32_t MeshManager::CreateMesh(const void *vertexData, uint32_t vertexStride,
                       &heapProps, D3D12_HEAP_FLAG_NONE, &vbDesc,
                       D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
                       IID_PPV_ARGS(&mesh.vertexBuffer)),
-                  "CreateCommittedResource(VertexBuffer) failed");
+                  "Create VertexBuffer failed");
 
     void *vbMapped = nullptr;
     mesh.vertexBuffer->Map(0, nullptr, &vbMapped);
@@ -34,18 +33,19 @@ uint32_t MeshManager::CreateMesh(const void *vertexData, uint32_t vertexStride,
     mesh.vertexBuffer->Unmap(0, nullptr);
 
     mesh.vbView.BufferLocation = mesh.vertexBuffer->GetGPUVirtualAddress();
+
     mesh.vbView.SizeInBytes = vbSize;
     mesh.vbView.StrideInBytes = vertexStride;
 
-    // Index Buffer
-    UINT ibSize = sizeof(uint16_t) * indexCount;
+    UINT ibSize = sizeof(uint32_t) * indexCount;
+
     auto ibDesc = CD3DX12_RESOURCE_DESC::Buffer(ibSize);
 
     ThrowIfFailed(dxCommon_->GetDevice()->CreateCommittedResource(
                       &heapProps, D3D12_HEAP_FLAG_NONE, &ibDesc,
                       D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
                       IID_PPV_ARGS(&mesh.indexBuffer)),
-                  "CreateCommittedResource(IndexBuffer) failed");
+                  "Create IndexBuffer failed");
 
     void *ibMapped = nullptr;
     mesh.indexBuffer->Map(0, nullptr, &ibMapped);
@@ -53,11 +53,12 @@ uint32_t MeshManager::CreateMesh(const void *vertexData, uint32_t vertexStride,
     mesh.indexBuffer->Unmap(0, nullptr);
 
     mesh.ibView.BufferLocation = mesh.indexBuffer->GetGPUVirtualAddress();
-    mesh.ibView.Format = DXGI_FORMAT_R16_UINT;
+
+    mesh.ibView.Format = DXGI_FORMAT_R32_UINT;
     mesh.ibView.SizeInBytes = ibSize;
 
-    // 登録
     meshes_.push_back(mesh);
+
     return static_cast<uint32_t>(meshes_.size() - 1);
 }
 

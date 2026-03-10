@@ -35,7 +35,7 @@ class MeshManager {
     /// <param name="indexCount">インデックス数</param>
     /// <returns>登録されたMeshのID</returns>
     uint32_t CreateMesh(const void *vertexData, uint32_t vertexStride,
-                        uint32_t vertexCount, const uint16_t *indexData,
+                        uint32_t vertexCount, const uint32_t *indexData,
                         uint32_t indexCount);
 
     // Getter

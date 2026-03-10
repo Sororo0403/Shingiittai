@@ -36,7 +36,7 @@ Model ObjLoader::Load(const std::wstring &path) {
     std::vector<XMFLOAT2> uvs;
 
     std::vector<Vertex> vertices;
-    std::vector<uint16_t> indices;
+    std::vector<uint32_t> indices;
 
     // MTL state
     std::wstring mtlPath;
