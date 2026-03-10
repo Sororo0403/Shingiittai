@@ -3,6 +3,7 @@
 #include "DirectXCommon.h"
 #include "Input.h"
 #include "ModelManager.h"
+#include "TextureManager.h"
 #include "WinApp.h"
 
 #ifdef _DEBUG
@@ -33,6 +34,8 @@ void GameScene::Initialize(const SceneContext &ctx) {
     uint32_t enemyModel = ctx_->model->Load(L"resources/model/enemy/enemy.obj");
 
     ctx_->dxCommon->EndUpload();
+
+    ctx_->texture->ReleaseUploadBuffers();
 
     player_.Initialize(playerModel, swordModel);
     enemy_.Initialize(enemyModel);

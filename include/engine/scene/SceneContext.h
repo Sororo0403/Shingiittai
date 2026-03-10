@@ -5,6 +5,7 @@ class WinApp;
 class SoundManager;
 class ModelManager;
 class SpriteManager;
+class TextureManager;
 class DirectXCommon;
 
 #ifdef _DEBUG
@@ -21,6 +22,7 @@ struct SceneContext {
     SoundManager *sound = nullptr;
     ModelManager *model = nullptr;
     SpriteManager *sprite = nullptr;
+    TextureManager *texture = nullptr;
     DirectXCommon *dxCommon = nullptr;
 
 #ifdef _DEBUG

@@ -67,6 +67,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
 
     dxCommon.EndUpload();
 
+    textureManager.ReleaseUploadBuffers();
+
     debugDraw.Initialize(boxModelId);
 #endif // _DEBUG
 
@@ -82,6 +84,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     sceneCtx.sound = &soundManager;
     sceneCtx.model = &modelManager;
     sceneCtx.sprite = &spriteManager;
+    sceneCtx.texture = &textureManager;
     sceneCtx.dxCommon = &dxCommon;
 
 #ifdef _DEBUG
