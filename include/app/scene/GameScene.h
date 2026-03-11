@@ -3,6 +3,8 @@
 #include "Camera.h"
 #include "Enemy.h"
 #include "Player.h"
+#include "Transform.h"
+#include <cstdint>
 
 class GameScene : public BaseScene {
   public:
@@ -27,4 +29,7 @@ class GameScene : public BaseScene {
 
     Player player_;
     Enemy enemy_;
+
+    uint32_t modelId_ = 0;
+    Transform modelTf_;
 };

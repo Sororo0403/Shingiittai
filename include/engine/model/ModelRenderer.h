@@ -2,6 +2,7 @@
 #include "Camera.h"
 #include "Model.h"
 #include "Transform.h"
+#include <DirectXMath.h>
 #include <d3d12.h>
 #include <wrl.h>
 
@@ -46,9 +47,12 @@ class ModelRenderer {
     void CreateRootSignature();
     void CreatePipelineState();
     void CreateConstantBuffer();
+    void CreateBoneBuffer();
 
   private:
     static constexpr uint32_t kMaxDraws = 4096;
+
+    static constexpr uint32_t kMaxBones = 128;
 
     DirectXCommon *dxCommon_ = nullptr;
     SrvManager *srvManager_ = nullptr;
@@ -63,4 +67,7 @@ class ModelRenderer {
     uint32_t cbStride_ = 0;
 
     uint8_t *mappedCB_ = nullptr;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> boneBuffer_;
+    DirectX::XMFLOAT4X4 *mappedBones_ = nullptr;
 };

@@ -32,12 +32,17 @@ void GameScene::Initialize(const SceneContext &ctx) {
     // Enemy
     uint32_t enemyModel = ctx_->model->Load(L"resources/model/enemy/enemy.glb");
 
+    // Model
+    modelId_ = ctx_->model->Load(L"resources/model/debug/anime.glb");
+
     ctx_->dxCommon->EndUpload();
 
     ctx_->texture->ReleaseUploadBuffers();
 
     player_.Initialize(playerModel, swordModel);
     enemy_.Initialize(enemyModel);
+
+    modelTf_.position = {0.0f, 0.0f, 5.0f};
 }
 
 void GameScene::Update() {
@@ -61,6 +66,8 @@ void GameScene::Draw() {
 
     player_.Draw(ctx_->model, camera_);
     enemy_.Draw(ctx_->model, camera_);
+
+    ctx_->model->Draw(modelId_, modelTf_, camera_);
 
 #ifdef _DEBUG
     // 当たり判定描画
