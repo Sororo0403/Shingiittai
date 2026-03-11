@@ -32,6 +32,8 @@ class Player {
 
     // Getter
     const Sword &GetSword() const { return sword_; }
+    OBB GetOBB() const;
+    const Transform &GetTransform() const { return tf_; }
 
   private:
     // Update

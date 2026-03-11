@@ -34,6 +34,10 @@ class Sword {
     const Transform &GetTransform() const { return tf_; }
     OBB GetOBB() const;
 
+    // 剣を振っているかの判定
+    bool IsSlashMode() const { return isSlashMode_; }
+    bool IsGuard() const { return isGuard_; }
+
   private:
     static constexpr float kHandHeight = 0.8f;
     static constexpr float kSwordLength = 1.0f;

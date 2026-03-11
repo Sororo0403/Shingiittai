@@ -29,4 +29,14 @@ class GameScene : public BaseScene {
 
     Player player_;
     Enemy enemy_;
+
+    // ヒットクールダウンタイマー
+    float enemyHitCooldown_ = 0.0f;
+
+    // デバッグ用ヒット表示
+    bool dbgHitLeftHand_ = false;
+    bool dbgHitRightHand_ = false;
+    bool dbgHitBody_ = false;
+    bool dbgBossHitPlayer_ = false;
+    bool dbgBulletHitPlayer_ = false;
 };

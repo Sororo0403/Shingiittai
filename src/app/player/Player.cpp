@@ -44,3 +44,11 @@ void Player::UpdateMovement(Input *input, float deltaTime) {
     tf_.position.x += moveX * moveSpeed_ * deltaTime;
     tf_.position.z += moveZ * moveSpeed_ * deltaTime;
 }
+
+OBB Player::GetOBB() const {
+    OBB box{};
+    box.center = tf_.position;
+    box.size = {1.0f, 2.0f, 1.0f};
+    box.rotation = tf_.rotation;
+    return box;
+}
