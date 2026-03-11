@@ -75,7 +75,6 @@ XMFLOAT4 Animator::SampleQuat(const std::vector<AnimationKeyQuat> &keys,
 
             XMVECTOR q0 = XMLoadFloat4(&k0.value);
             XMVECTOR q1 = XMLoadFloat4(&k1.value);
-
             XMVECTOR q = XMQuaternionSlerp(q0, q1, t);
 
             XMFLOAT4 result;
@@ -87,7 +86,15 @@ XMFLOAT4 Animator::SampleQuat(const std::vector<AnimationKeyQuat> &keys,
     return keys.back().value;
 }
 
-XMMATRIX Animator::MakeLocalMatrix(const BoneAnimation &anim, float time) {
+XMMATRIX Animator::MakeAnimatedLocalMatrix(const BoneInfo &bone,
+                                           const Model &model, float time) {
+    auto it = model.animation.channels.find(bone.name);
+    if (it == model.animation.channels.end()) {
+        return XMLoadFloat4x4(&bone.localBindMatrix);
+    }
+
+    const BoneAnimation &anim = it->second;
+
     XMFLOAT3 pos = anim.positions.empty() ? XMFLOAT3{0.0f, 0.0f, 0.0f}
                                           : SampleVec3(anim.positions, time);
 
@@ -109,12 +116,14 @@ void Animator::Update(Model &model, float deltaTime) {
         return;
     }
 
-    if (model.animation.duration <= 0.0f) {
-        if (model.finalBoneMatrices.size() != model.bones.size()) {
-            model.finalBoneMatrices.resize(model.bones.size());
-        }
+    const size_t boneCount = model.bones.size();
 
-        for (size_t i = 0; i < model.bones.size(); i++) {
+    if (model.finalBoneMatrices.size() != boneCount) {
+        model.finalBoneMatrices.resize(boneCount);
+    }
+
+    if (model.animation.duration <= 0.0f) {
+        for (size_t i = 0; i < boneCount; i++) {
             model.finalBoneMatrices[i] = model.bones[i].offsetMatrix;
         }
         return;
@@ -126,28 +135,27 @@ void Animator::Update(Model &model, float deltaTime) {
         currentTime_ -= model.animation.duration;
     }
 
-    if (model.finalBoneMatrices.size() != model.bones.size()) {
-        model.finalBoneMatrices.resize(model.bones.size());
+    std::vector<XMMATRIX> localMatrices(boneCount);
+    std::vector<XMMATRIX> globalMatrices(boneCount);
+
+    for (size_t i = 0; i < boneCount; i++) {
+        localMatrices[i] =
+            MakeAnimatedLocalMatrix(model.bones[i], model, currentTime_);
     }
 
-    for (size_t i = 0; i < model.bones.size(); i++) {
-        XMMATRIX local = XMMatrixIdentity();
+    for (size_t i = 0; i < boneCount; i++) {
+        int parent = model.bones[i].parentIndex;
 
-        for (const auto &pair : model.boneMap) {
-            if (pair.second == i) {
-                auto it = model.animation.channels.find(pair.first);
-
-                if (it != model.animation.channels.end()) {
-                    local = MakeLocalMatrix(it->second, currentTime_);
-                }
-                break;
-            }
+        if (parent < 0) {
+            globalMatrices[i] = localMatrices[i];
+        } else {
+            globalMatrices[i] = localMatrices[i] * globalMatrices[parent];
         }
+    }
 
+    for (size_t i = 0; i < boneCount; i++) {
         XMMATRIX offset = XMLoadFloat4x4(&model.bones[i].offsetMatrix);
-
-        XMMATRIX final = local * offset;
-
+        XMMATRIX final = offset * globalMatrices[i];
         XMStoreFloat4x4(&model.finalBoneMatrices[i], final);
     }
 }

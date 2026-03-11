@@ -64,8 +64,8 @@ void GameScene::Update() {
 void GameScene::Draw() {
     ctx_->model->PreDraw();
 
-    //player_.Draw(ctx_->model, camera_);
-    //enemy_.Draw(ctx_->model, camera_);
+    // player_.Draw(ctx_->model, camera_);
+    // enemy_.Draw(ctx_->model, camera_);
 
     ctx_->model->UpdateAnimation(modelId_, ctx_->deltaTime);
     ctx_->model->Draw(modelId_, modelTf_, camera_);

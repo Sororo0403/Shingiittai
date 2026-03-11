@@ -2,11 +2,9 @@
 #include "MeshManager.h"
 #include "TextureManager.h"
 #include "Vertex.h"
-
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
-
 #include <filesystem>
 #include <stdexcept>
 #include <vector>
@@ -22,7 +20,6 @@ XMFLOAT4X4 ToMatrix(const aiMatrix4x4 &m) {
 
 void NormalizeWeights(std::vector<Vertex> &vertices) {
     for (auto &v : vertices) {
-
         float sum = v.boneWeight[0] + v.boneWeight[1] + v.boneWeight[2] +
                     v.boneWeight[3];
 
@@ -35,6 +32,106 @@ void NormalizeWeights(std::vector<Vertex> &vertices) {
     }
 }
 
+const aiNode *FindNodeByName(const aiNode *node, const std::string &name) {
+    if (!node) {
+        return nullptr;
+    }
+
+    if (name == node->mName.C_Str()) {
+        return node;
+    }
+
+    for (unsigned int i = 0; i < node->mNumChildren; i++) {
+        const aiNode *found = FindNodeByName(node->mChildren[i], name);
+        if (found) {
+            return found;
+        }
+    }
+
+    return nullptr;
+}
+
+void BuildBoneHierarchy(const aiScene *scene, Model &model) {
+    if (!scene || !scene->mRootNode) {
+        return;
+    }
+
+    for (size_t i = 0; i < model.bones.size(); i++) {
+        const std::string &boneName = model.bones[i].name;
+
+        const aiNode *node = FindNodeByName(scene->mRootNode, boneName);
+        if (!node) {
+            model.bones[i].parentIndex = -1;
+            model.bones[i].localBindMatrix = ToMatrix(aiMatrix4x4());
+            continue;
+        }
+
+        model.bones[i].localBindMatrix = ToMatrix(node->mTransformation);
+
+        int parentIndex = -1;
+        const aiNode *parent = node->mParent;
+
+        while (parent) {
+            auto it = model.boneMap.find(parent->mName.C_Str());
+            if (it != model.boneMap.end()) {
+                parentIndex = static_cast<int>(it->second);
+                break;
+            }
+            parent = parent->mParent;
+        }
+
+        model.bones[i].parentIndex = parentIndex;
+    }
+}
+
+void LoadAnimation(const aiScene *scene, Model &model) {
+    if (!scene || !scene->HasAnimations() || scene->mNumAnimations == 0) {
+        return;
+    }
+
+    aiAnimation *anim = scene->mAnimations[0];
+    if (!anim) {
+        return;
+    }
+
+    model.animation.duration = static_cast<float>(anim->mDuration);
+    model.animation.ticksPerSecond = static_cast<float>(
+        anim->mTicksPerSecond != 0.0 ? anim->mTicksPerSecond : 25.0);
+
+    for (unsigned int i = 0; i < anim->mNumChannels; i++) {
+        aiNodeAnim *channel = anim->mChannels[i];
+        if (!channel) {
+            continue;
+        }
+
+        BoneAnimation boneAnim;
+
+        for (unsigned int k = 0; k < channel->mNumPositionKeys; k++) {
+            const aiVectorKey &key = channel->mPositionKeys[k];
+            boneAnim.positions.push_back(
+                {static_cast<float>(key.mTime),
+                 XMFLOAT3{key.mValue.x, key.mValue.y, key.mValue.z}});
+        }
+
+        for (unsigned int k = 0; k < channel->mNumRotationKeys; k++) {
+            const aiQuatKey &key = channel->mRotationKeys[k];
+            boneAnim.rotations.push_back(
+                {static_cast<float>(key.mTime),
+                 XMFLOAT4{key.mValue.x, key.mValue.y, key.mValue.z,
+                          key.mValue.w}});
+        }
+
+        for (unsigned int k = 0; k < channel->mNumScalingKeys; k++) {
+            const aiVectorKey &key = channel->mScalingKeys[k];
+            boneAnim.scales.push_back(
+                {static_cast<float>(key.mTime),
+                 XMFLOAT3{key.mValue.x, key.mValue.y, key.mValue.z}});
+        }
+
+        model.animation.channels[channel->mNodeName.C_Str()] = boneAnim;
+    }
+}
+
 } // namespace
 
 void AssimpLoader::Initialize(TextureManager *textureManager,
@@ -44,6 +141,9 @@ void AssimpLoader::Initialize(TextureManager *textureManager,
 }
 
 Model AssimpLoader::Load(const std::string &path) {
+    if (!textureManager_ || !meshManager_) {
+        throw std::runtime_error("AssimpLoader is not initialized");
+    }
 
     Assimp::Importer importer;
 
@@ -56,11 +156,15 @@ Model AssimpLoader::Load(const std::string &path) {
     }
 
     aiMesh *mesh = scene->mMeshes[0];
+    if (!mesh) {
+        throw std::runtime_error("Mesh is null");
+    }
 
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
 
     vertices.reserve(mesh->mNumVertices);
+    indices.reserve(mesh->mNumFaces * 3);
 
     for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
         Vertex v{};
@@ -69,15 +173,13 @@ Model AssimpLoader::Load(const std::string &path) {
                       mesh->mVertices[i].z};
 
         if (mesh->HasTextureCoords(0)) {
-            v.uv.x = mesh->mTextureCoords[0][i].x;
-            v.uv.y = mesh->mTextureCoords[0][i].y;
+            v.uv = {mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y};
         }
 
         vertices.push_back(v);
     }
 
     for (unsigned int i = 0; i < mesh->mNumFaces; i++) {
-
         const aiFace &face = mesh->mFaces[i];
 
         for (unsigned int j = 0; j < face.mNumIndices; j++) {
@@ -85,42 +187,38 @@ Model AssimpLoader::Load(const std::string &path) {
         }
     }
 
-    Model model;
+    Model model{};
 
     uint32_t textureId = 0;
 
-    if (scene->HasMaterials()) {
-
+    if (scene->HasMaterials() && mesh->mMaterialIndex < scene->mNumMaterials) {
         aiMaterial *mat = scene->mMaterials[mesh->mMaterialIndex];
-
         aiString texPath;
 
-        if (mat->GetTexture(aiTextureType_DIFFUSE, 0, &texPath) == AI_SUCCESS) {
-
+        if (mat &&
+            mat->GetTexture(aiTextureType_DIFFUSE, 0, &texPath) == AI_SUCCESS) {
             std::string texName = texPath.C_Str();
 
             if (!texName.empty() && texName[0] == '*') {
-
                 int texIndex = std::atoi(texName.c_str() + 1);
-                aiTexture *tex = scene->mTextures[texIndex];
 
-                if (tex->mHeight == 0) {
+                if (texIndex >= 0 &&
+                    static_cast<unsigned int>(texIndex) < scene->mNumTextures) {
+                    aiTexture *tex = scene->mTextures[texIndex];
 
-                    textureId = textureManager_->LoadFromMemory(
-                        reinterpret_cast<uint8_t *>(tex->pcData), tex->mWidth);
-
-                } else {
-
-                    textureId = textureManager_->LoadFromMemory(
-                        reinterpret_cast<uint8_t *>(tex->pcData),
-                        tex->mWidth * tex->mHeight * 4);
+                    if (tex->mHeight == 0) {
+                        textureId = textureManager_->LoadFromMemory(
+                            reinterpret_cast<uint8_t *>(tex->pcData),
+                            tex->mWidth);
+                    } else {
+                        textureId = textureManager_->LoadFromMemory(
+                            reinterpret_cast<uint8_t *>(tex->pcData),
+                            tex->mWidth * tex->mHeight * 4);
+                    }
                 }
-
             } else {
-
                 std::filesystem::path modelPath(path);
                 auto fullPath = modelPath.parent_path() / texName;
-
                 textureId = textureManager_->Load(fullPath.wstring());
             }
         }
@@ -129,21 +227,25 @@ Model AssimpLoader::Load(const std::string &path) {
     if (mesh->HasBones()) {
         for (unsigned int i = 0; i < mesh->mNumBones; i++) {
             aiBone *bone = mesh->mBones[i];
-            std::string boneName = bone->mName.C_Str();
+            if (!bone) {
+                continue;
+            }
 
+            std::string boneName = bone->mName.C_Str();
             uint32_t boneIndex = 0;
 
             auto it = model.boneMap.find(boneName);
-
             if (it == model.boneMap.end()) {
                 boneIndex = static_cast<uint32_t>(model.bones.size());
                 model.boneMap[boneName] = boneIndex;
 
                 BoneInfo info{};
+                info.name = boneName;
                 info.offsetMatrix = ToMatrix(bone->mOffsetMatrix);
+                info.localBindMatrix = ToMatrix(aiMatrix4x4());
+                info.parentIndex = -1;
 
                 model.bones.push_back(info);
-
             } else {
                 boneIndex = it->second;
             }
@@ -157,12 +259,9 @@ Model AssimpLoader::Load(const std::string &path) {
                 }
 
                 for (int k = 0; k < 4; k++) {
-
                     if (vertices[vertexId].boneWeight[k] == 0.0f) {
-
                         vertices[vertexId].boneIndex[k] = boneIndex;
                         vertices[vertexId].boneWeight[k] = weight;
-
                         break;
                     }
                 }
@@ -170,48 +269,10 @@ Model AssimpLoader::Load(const std::string &path) {
         }
 
         NormalizeWeights(vertices);
+        BuildBoneHierarchy(scene, model);
     }
 
-    if (scene->HasAnimations()) {
-        aiAnimation *anim = scene->mAnimations[0];
-
-        model.animation.duration = static_cast<float>(anim->mDuration);
-
-        model.animation.ticksPerSecond = static_cast<float>(
-            anim->mTicksPerSecond != 0 ? anim->mTicksPerSecond : 25.0);
-
-        for (unsigned int i = 0; i < anim->mNumChannels; i++) {
-            aiNodeAnim *channel = anim->mChannels[i];
-
-            BoneAnimation boneAnim;
-
-            for (unsigned int k = 0; k < channel->mNumPositionKeys; k++) {
-                auto &key = channel->mPositionKeys[k];
-
-                boneAnim.positions.push_back(
-                    {static_cast<float>(key.mTime),
-                     {key.mValue.x, key.mValue.y, key.mValue.z}});
-            }
-
-            for (unsigned int k = 0; k < channel->mNumRotationKeys; k++) {
-                auto &key = channel->mRotationKeys[k];
-
-                boneAnim.rotations.push_back(
-                    {static_cast<float>(key.mTime),
-                     {key.mValue.x, key.mValue.y, key.mValue.z, key.mValue.w}});
-            }
-
-            for (unsigned int k = 0; k < channel->mNumScalingKeys; k++) {
-                auto &key = channel->mScalingKeys[k];
-
-                boneAnim.scales.push_back(
-                    {static_cast<float>(key.mTime),
-                     {key.mValue.x, key.mValue.y, key.mValue.z}});
-            }
-
-            model.animation.channels[channel->mNodeName.C_Str()] = boneAnim;
-        }
-    }
+    LoadAnimation(scene, model);
 
     uint32_t meshId = meshManager_->CreateMesh(
         vertices.data(), sizeof(Vertex), static_cast<uint32_t>(vertices.size()),
@@ -219,6 +280,7 @@ Model AssimpLoader::Load(const std::string &path) {
 
     model.meshId = meshId;
     model.textureId = textureId;
+    model.finalBoneMatrices.resize(model.bones.size());
 
     return model;
 }

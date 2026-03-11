@@ -6,19 +6,21 @@ class Animator {
     /// <summary>
     /// 更新処理
     /// </summary>
-    /// <param name="model">対象モデル</param>
-    /// <param name="deltaTime">経過秒</param>
+    /// <param name="model">アニメーションを更新するモデル</param>
+    /// <param name="deltaTime">前フレームからの経過時間(秒)</param>
     void Update(Model &model, float deltaTime);
 
   private:
-    float currentTime_ = 0.0f;
-
-  private:
+    // Sample
     DirectX::XMFLOAT3 SampleVec3(const std::vector<AnimationKeyVec3> &keys,
                                  float time);
-
     DirectX::XMFLOAT4 SampleQuat(const std::vector<AnimationKeyQuat> &keys,
                                  float time);
 
-    DirectX::XMMATRIX MakeLocalMatrix(const BoneAnimation &anim, float time);
+    // Make
+    DirectX::XMMATRIX MakeAnimatedLocalMatrix(const BoneInfo &bone,
+                                              const Model &model, float time);
+
+  private:
+    float currentTime_ = 0.0f;
 };

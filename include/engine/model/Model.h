@@ -6,7 +6,10 @@
 #include <vector>
 
 struct BoneInfo {
+    std::string name;
+    int parentIndex = -1;
     DirectX::XMFLOAT4X4 offsetMatrix{};
+    DirectX::XMFLOAT4X4 localBindMatrix{};
 };
 
 struct AnimationKeyVec3 {
@@ -39,6 +42,5 @@ struct Model {
     std::unordered_map<std::string, uint32_t> boneMap;
 
     AnimationClip animation;
-
     std::vector<DirectX::XMFLOAT4X4> finalBoneMatrices;
 };
