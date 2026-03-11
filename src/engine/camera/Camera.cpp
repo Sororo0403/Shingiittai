@@ -3,10 +3,10 @@ using namespace DirectX;
 
 void Camera::Initialize(float aspect) {
     aspect_ = aspect;
-    Update();
+    UpdateMatrices();
 }
 
-void Camera::Update() {
+void Camera::UpdateMatrices() {
     XMMATRIX world =
         XMMatrixRotationRollPitchYaw(rotation_.x, rotation_.y, rotation_.z) *
         XMMatrixTranslation(position_.x, position_.y, position_.z);

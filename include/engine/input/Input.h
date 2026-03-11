@@ -45,12 +45,19 @@ class Input {
     DirectX::XMVECTOR GetOrientation() const;
     DirectX::XMVECTOR GetRawOrientation() const;
 
+    long GetMouseDX() const { return mouseState_.lX; }
+    long GetMouseDY() const { return mouseState_.lY; }
+    long GetMouseWheel() const { return mouseState_.lZ; }
+
+    bool IsMousePress(int button) const;
+    bool IsMouseTrigger(int button) const;
+    bool IsMouseRelease(int button) const;
+
   private:
     // Update
     void UpdateKeyboard();
     void UpdateMouse();
     void UpdateJoyShock(float deltaTime);
-
 
   private:
     static constexpr BYTE kPressMask = 0x80;

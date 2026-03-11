@@ -113,6 +113,7 @@ copy "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" "$(OutDir)"</Comman
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\engine\camera\DebugCamera.cpp" />
     <ClCompile Include="src\engine\model\Animator.cpp" />
     <ClCompile Include="src\engine\model\AssimpLoader.cpp" />
     <ClCompile Include="src\engine\collision\DebugDraw.cpp" />
@@ -140,6 +141,7 @@ copy "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" "$(OutDir)"</Comman
     <ClCompile Include="src\app\player\Sword.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\engine\camera\DebugCamera.h" />
     <ClInclude Include="include\engine\model\Animator.h" />
     <ClInclude Include="include\engine\model\AssimpLoader.h" />
     <ClInclude Include="include\engine\collision\DebugDraw.h" />

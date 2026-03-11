@@ -53,7 +53,6 @@ void Input::Initialize(HINSTANCE hInstance, HWND hwnd) {
     mahony_.Initialize(0.4f, 0.0f);
 
     StartCalibration();
-
 }
 
 void Input::Update(float deltaTime) {
@@ -192,8 +191,8 @@ bool Input::IsJsButtunPress(int buttunMask) const {
     return jsButtonsNow_ & buttunMask;
 }
 
-bool Input::IsJsButtunTrigger(int buttunMask) const { 
-    return jsButtonsPrev_ & buttunMask; 
+bool Input::IsJsButtunTrigger(int buttunMask) const {
+    return (jsButtonsNow_ & buttunMask) && !(jsButtonsPrev_ & buttunMask);
 }
 
 bool Input::IsKeyPress(int dik) const {
@@ -223,4 +222,18 @@ XMVECTOR Input::GetOrientation() const {
     XMVECTOR invBase = XMQuaternionInverse(base);
 
     return XMQuaternionNormalize(XMQuaternionMultiply(invBase, raw));
+}
+
+bool Input::IsMousePress(int button) const {
+    return (mouseState_.rgbButtons[button] & 0x80) != 0;
+}
+
+bool Input::IsMouseTrigger(int button) const {
+    return (mouseState_.rgbButtons[button] & 0x80) &&
+           !(mousePrevState_.rgbButtons[button] & 0x80);
+}
+
+bool Input::IsMouseRelease(int button) const {
+    return !(mouseState_.rgbButtons[button] & 0x80) &&
+           (mousePrevState_.rgbButtons[button] & 0x80);
 }

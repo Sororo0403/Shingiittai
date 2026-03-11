@@ -18,30 +18,48 @@ void GameScene::Initialize(const SceneContext &ctx) {
                    static_cast<float>(ctx_->winApp->GetHeight());
 
     camera_.Initialize(aspect);
-    camera_.SetPosition({0.0f, 1.0f, 0.0f});
-    camera_.SetRotation({0.0f, 0.0f, 0.0f});
-    camera_.Update();
+    camera_.SetPosition(kCameraStartPos);
+    camera_.UpdateMatrices();
 
-    ctx_->dxCommon->BeginUpload();
+#ifdef _DEBUG
+    debugCamera_.Initialize(aspect);
+    debugCamera_.SetPosition(kCameraStartPos);
+    debugCamera_.UpdateMatrices();
+#endif
 
-    uint32_t playerModel =
-        ctx_->model->Load(L"resources/model/player/player.glb");
-    uint32_t swordModel =
-        ctx_->model->Load(L"resources/model/player/sword.glb");
+    currentCamera_ = &camera_;
 
-    uint32_t enemyModel = ctx_->model->Load(L"resources/model/enemy/enemy.glb");
+    DirectXCommon *dx = ctx_->dxCommon;
+    ModelManager *model = ctx_->model;
+    TextureManager *texture = ctx_->texture;
 
-    ctx_->dxCommon->EndUpload();
-    ctx_->texture->ReleaseUploadBuffers();
+    dx->BeginUpload();
+
+    uint32_t playerModel = model->Load(L"resources/model/player/player.glb");
+    uint32_t swordModel = model->Load(L"resources/model/player/sword.glb");
+
+    uint32_t enemyModel = model->Load(L"resources/model/enemy/enemy.glb");
+
+    dx->EndUpload();
+
+    texture->ReleaseUploadBuffers();
 
     player_.Initialize(playerModel, swordModel);
     enemy_.Initialize(enemyModel);
 }
 
 void GameScene::Update() {
-    camera_.Update();
+    Input *input = ctx_->input;
 
-    player_.Update(ctx_->input, ctx_->deltaTime);
+    UpdateCamera(input);
+
+#ifdef _DEBUG
+    if (currentCamera_ == &debugCamera_) {
+        return;
+    }
+#endif
+
+    player_.Update(input, ctx_->deltaTime);
 
     enemy_.Update();
 
@@ -55,19 +73,64 @@ void GameScene::Update() {
 }
 
 void GameScene::Draw() {
-    ctx_->model->PreDraw();
+    ModelManager *model = ctx_->model;
 
-    player_.Draw(ctx_->model, camera_);
-    enemy_.Draw(ctx_->model, camera_);
+#ifdef _DEBUG
+    DebugDraw *debugDraw = ctx_->debugDraw;
+#endif // _DEBUG
+
+    model->PreDraw();
+
+    player_.Draw(model, *currentCamera_);
+    enemy_.Draw(model, *currentCamera_);
 
 #ifdef _DEBUG
     // 当たり判定描画
-    ctx_->debugDraw->DrawOBB(ctx_->model, player_.GetSword().GetOBB(), camera_);
+    debugDraw->DrawOBB(model, player_.GetSword().GetOBB(), *currentCamera_);
 
     if (enemy_.IsAlive()) {
-        ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetOBB(), camera_);
+        debugDraw->DrawOBB(model, enemy_.GetOBB(), *currentCamera_);
     }
 #endif // _DEBUG
 
-    ctx_->model->PostDraw();
+    model->PostDraw();
+}
+
+void GameScene::UpdateCamera(Input *input) {
+#ifdef _DEBUG
+    if (input->IsKeyTrigger(DIK_F11)) {
+        WinApp *win = ctx_->winApp;
+
+        if (currentCamera_ == &camera_) {
+            currentCamera_ = &debugCamera_;
+
+            debugCamera_.SetPosition(camera_.GetPosition());
+            debugCamera_.SetRotation(camera_.GetRotation());
+
+            while (ShowCursor(FALSE) >= 0)
+                ;
+        } else {
+            currentCamera_ = &camera_;
+
+            while (ShowCursor(TRUE) < 0)
+                ;
+
+            int width = win->GetWidth();
+            int height = win->GetHeight();
+            HWND hwnd = win->GetHwnd();
+
+            POINT center{width / 2, height / 2};
+            ClientToScreen(hwnd, &center);
+            SetCursorPos(center.x, center.y);
+        }
+    }
+
+    if (currentCamera_ == &debugCamera_) {
+        debugCamera_.Update(*input, ctx_->deltaTime);
+    }
+#else
+    (void)input;
+#endif // _DEBUG
+
+    currentCamera_->UpdateMatrices();
 }

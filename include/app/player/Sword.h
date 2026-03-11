@@ -36,7 +36,7 @@ class Sword {
 
   private:
     static constexpr float kHandHeight = 0.8f;
-    static constexpr float kSwordLength = 1.0f;
+    static constexpr float kSwordLength = 1.2f;
 
     Transform tf_;
     uint32_t modelId_ = 0;
