@@ -24,25 +24,18 @@ void GameScene::Initialize(const SceneContext &ctx) {
 
     ctx_->dxCommon->BeginUpload();
 
-    // Player
     uint32_t playerModel =
         ctx_->model->Load(L"resources/model/player/player.glb");
-    uint32_t swordModel = ctx_->model->Load(L"resources/model/sword/sword.glb");
+    uint32_t swordModel =
+        ctx_->model->Load(L"resources/model/player/sword.glb");
 
-    // Enemy
     uint32_t enemyModel = ctx_->model->Load(L"resources/model/enemy/enemy.glb");
 
-    // Model
-    modelId_ = ctx_->model->Load(L"resources/model/debug/anime.glb");
-
     ctx_->dxCommon->EndUpload();
-
     ctx_->texture->ReleaseUploadBuffers();
 
     player_.Initialize(playerModel, swordModel);
     enemy_.Initialize(enemyModel);
-
-    modelTf_.position = {0.0f, 0.0f, 100.0f};
 }
 
 void GameScene::Update() {
@@ -64,11 +57,8 @@ void GameScene::Update() {
 void GameScene::Draw() {
     ctx_->model->PreDraw();
 
-    // player_.Draw(ctx_->model, camera_);
-    // enemy_.Draw(ctx_->model, camera_);
-
-    ctx_->model->UpdateAnimation(modelId_, ctx_->deltaTime);
-    ctx_->model->Draw(modelId_, modelTf_, camera_);
+    player_.Draw(ctx_->model, camera_);
+    enemy_.Draw(ctx_->model, camera_);
 
 #ifdef _DEBUG
     // 当たり判定描画

@@ -29,7 +29,4 @@ class GameScene : public BaseScene {
 
     Player player_;
     Enemy enemy_;
-
-    uint32_t modelId_ = 0;
-    Transform modelTf_;
 };
