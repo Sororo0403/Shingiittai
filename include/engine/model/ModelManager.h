@@ -1,14 +1,15 @@
 #pragma once
+#include "Animator.h"
+#include "AssimpLoader.h"
 #include "MeshManager.h"
 #include "Model.h"
 #include "ModelRenderer.h"
-#include "ObjLoader.h"
-#include "TextureManager.h"
 #include <cstdint>
 #include <string>
 #include <vector>
 
 class DirectXCommon;
+class TextureManager;
 class SrvManager;
 class Camera;
 
@@ -19,7 +20,9 @@ class ModelManager {
     /// </summary>
     /// <param name="dxCommon">DirectXCommonインスタンス</param>
     /// <param name="srvManager">SrvManagerインスタンス</param>
-    void Initialize(DirectXCommon *dxCommon, SrvManager *srvManager);
+    /// <param name="textureManager">TextureManagerインスタンス</param>
+    void Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
+                    TextureManager *textureManager);
 
     /// <summary>
     /// OBJファイルからモデルをロードする
@@ -47,13 +50,21 @@ class ModelManager {
     /// </summary>
     void PostDraw();
 
+    /// <summary>
+    /// アニメーションの更新
+    /// </summary>
+    /// <param name="modelId">アニメーションを更新するモデルのID</param>
+    /// <param name="deltaTime">前フレームからの経過時間(秒)</param>
+    void UpdateAnimation(uint32_t modelId, float deltaTime);
+
   private:
     DirectXCommon *dxCommon_ = nullptr;
+    TextureManager *textureManager_ = nullptr;
 
     MeshManager meshManager_;
-    TextureManager textureManager_;
-    ObjLoader objLoader_;
+    AssimpLoader assimpLoader_;
     ModelRenderer modelRenderer_;
+    Animator animator_;
 
     std::vector<Model> models_;
 };

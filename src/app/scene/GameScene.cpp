@@ -1,7 +1,9 @@
 #include "GameScene.h"
 #include "CollisionUtil.h"
+#include "DirectXCommon.h"
 #include "Input.h"
 #include "ModelManager.h"
+#include "TextureManager.h"
 #include "WinApp.h"
 
 #ifdef _DEBUG
@@ -20,22 +22,23 @@ void GameScene::Initialize(const SceneContext &ctx) {
     camera_.SetRotation({0.0f, 0.0f, 0.0f});
     camera_.Update();
 
-    // Player
-    uint32_t playerModel =
-        ctx_->model->Load(L"resources/model/player/player.obj");
-    uint32_t swordModel = ctx_->model->Load(L"resources/model/sword/sword.obj");
-    player_.Initialize(playerModel, swordModel);
+    ctx_->dxCommon->BeginUpload();
 
-    // Enemy
-    uint32_t enemyModel = ctx_->model->Load(L"resources/model/enemy/enemy.obj");
+    uint32_t playerModel =
+        ctx_->model->Load(L"resources/model/player/player.glb");
+    uint32_t swordModel =
+        ctx_->model->Load(L"resources/model/player/sword.glb");
+
+    uint32_t enemyModel = ctx_->model->Load(L"resources/model/enemy/enemy.glb");
+
+    ctx_->dxCommon->EndUpload();
+    ctx_->texture->ReleaseUploadBuffers();
+
+    player_.Initialize(playerModel, swordModel);
     enemy_.Initialize(enemyModel);
 }
 
 void GameScene::Update() {
-    if (ctx_->input->IsKeyTrigger(DIK_SPACE)) {
-        ctx_->input->SetBaseOrientation();
-    }
-
     camera_.Update();
 
     player_.Update(ctx_->input, ctx_->deltaTime);

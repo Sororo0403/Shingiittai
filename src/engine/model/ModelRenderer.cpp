@@ -6,7 +6,6 @@
 #include "ShaderCompiler.h"
 #include "SrvManager.h"
 #include "TextureManager.h"
-#include <DirectXMath.h>
 
 using namespace DirectX;
 using namespace DxUtils;
@@ -27,6 +26,7 @@ void ModelRenderer::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
     CreateRootSignature();
     CreatePipelineState();
     CreateConstantBuffer();
+    CreateBoneBuffer();
 }
 
 void ModelRenderer::PreDraw() {
@@ -70,9 +70,32 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
     D3D12_GPU_VIRTUAL_ADDRESS cbAddr =
         constBuffer_->GetGPUVirtualAddress() + cbStride_ * drawIndex_;
 
+    XMMATRIX id = XMMatrixTranspose(XMMatrixIdentity());
+
+    for (int i = 0; i < kMaxBones; i++) {
+        XMStoreFloat4x4(&mappedBones_[i], id);
+    }
+
+    if (!model.finalBoneMatrices.empty()) {
+        for (size_t i = 0; i < model.finalBoneMatrices.size() && i < kMaxBones;
+             i++) {
+            XMMATRIX m = XMLoadFloat4x4(&model.finalBoneMatrices[i]);
+            m = XMMatrixTranspose(m);
+            XMStoreFloat4x4(&mappedBones_[i], m);
+        }
+    } else {
+        for (size_t i = 0; i < model.bones.size() && i < kMaxBones; i++) {
+            XMMATRIX m = XMLoadFloat4x4(&model.bones[i].offsetMatrix);
+            m = XMMatrixTranspose(m);
+            XMStoreFloat4x4(&mappedBones_[i], m);
+        }
+    }
+
     cmd->SetGraphicsRootConstantBufferView(0, cbAddr);
+    cmd->SetGraphicsRootConstantBufferView(1,
+                                           boneBuffer_->GetGPUVirtualAddress());
     cmd->SetGraphicsRootDescriptorTable(
-        1, textureManager_->GetGpuHandle(model.textureId));
+        2, textureManager_->GetGpuHandle(model.textureId));
 
     cmd->IASetVertexBuffers(0, 1, &mesh.vbView);
     cmd->IASetIndexBuffer(&mesh.ibView);
@@ -103,16 +126,18 @@ void ModelRenderer::CreateConstantBuffer() {
 }
 
 void ModelRenderer::CreateRootSignature() {
+    CD3DX12_ROOT_PARAMETER params[3];
 
-    CD3DX12_ROOT_PARAMETER params[2];
-
-    // b0: 定数バッファ
+    // b0 Transform
     params[0].InitAsConstantBufferView(0);
 
-    // t0: テクスチャ
+    // b1 Skinning
+    params[1].InitAsConstantBufferView(1);
+
+    // t0 Texture
     CD3DX12_DESCRIPTOR_RANGE range;
     range.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
-    params[1].InitAsDescriptorTable(1, &range);
+    params[2].InitAsDescriptorTable(1, &range);
 
     CD3DX12_STATIC_SAMPLER_DESC sampler(0, D3D12_FILTER_MIN_MAG_MIP_LINEAR);
 
@@ -145,6 +170,11 @@ void ModelRenderer::CreatePipelineState() {
          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
         {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12,
          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"BONEINDEX", 0, DXGI_FORMAT_R32G32B32A32_UINT, 0, 20,
+         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"BONEWEIGHT", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 36,
+         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}
+
     };
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pso{};
@@ -164,4 +194,21 @@ void ModelRenderer::CreatePipelineState() {
     ThrowIfFailed(device->CreateGraphicsPipelineState(
                       &pso, IID_PPV_ARGS(&pipelineState_)),
                   "CreateGraphicsPipelineState failed");
+}
+
+void ModelRenderer::CreateBoneBuffer() {
+    UINT size = Align256(sizeof(XMFLOAT4X4) * kMaxBones);
+
+    CD3DX12_HEAP_PROPERTIES heap(D3D12_HEAP_TYPE_UPLOAD);
+    auto desc = CD3DX12_RESOURCE_DESC::Buffer(size);
+
+    ThrowIfFailed(dxCommon_->GetDevice()->CreateCommittedResource(
+                      &heap, D3D12_HEAP_FLAG_NONE, &desc,
+                      D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                      IID_PPV_ARGS(&boneBuffer_)),
+                  "CreateCommittedResource(BoneBuffer) failed");
+
+    ThrowIfFailed(
+        boneBuffer_->Map(0, nullptr, reinterpret_cast<void **>(&mappedBones_)),
+        "BoneBuffer Map failed");
 }

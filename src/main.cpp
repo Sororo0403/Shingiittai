@@ -44,13 +44,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     SoundManager soundManager;
     soundManager.Initialize();
 
-    // ModelManager
-    ModelManager modelManager;
-    modelManager.Initialize(&dxCommon, &srvManager);
-
     // TextureManager
     TextureManager textureManager;
     textureManager.Initialize(&dxCommon, &srvManager);
+
+    // ModelManager
+    ModelManager modelManager;
+    modelManager.Initialize(&dxCommon, &srvManager, &textureManager);
 
     // SpriteManager
     SpriteManager spriteManager;
@@ -60,7 +60,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
 #ifdef _DEBUG
     // DebugDraw
     DebugDraw debugDraw;
-    uint32_t boxModelId = modelManager.Load(L"resources/model/debug/box.obj");
+
+    dxCommon.BeginUpload();
+
+    uint32_t boxModelId = modelManager.Load(L"resources/model/debug/box.glb");
+
+    dxCommon.EndUpload();
+
+    textureManager.ReleaseUploadBuffers();
 
     debugDraw.Initialize(boxModelId);
 #endif // _DEBUG
@@ -77,6 +84,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     sceneCtx.sound = &soundManager;
     sceneCtx.model = &modelManager;
     sceneCtx.sprite = &spriteManager;
+    sceneCtx.texture = &textureManager;
+    sceneCtx.dxCommon = &dxCommon;
 
 #ifdef _DEBUG
     sceneCtx.debugDraw = &debugDraw;
