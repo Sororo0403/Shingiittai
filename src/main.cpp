@@ -1,3 +1,4 @@
+#include "Animator.h"
 #include "DirectXCommon.h"
 #include "GameScene.h"
 #include "Input.h"
@@ -44,13 +45,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     SoundManager soundManager;
     soundManager.Initialize();
 
-    // ModelManager
-    ModelManager modelManager;
-    modelManager.Initialize(&dxCommon, &srvManager);
-
     // TextureManager
     TextureManager textureManager;
     textureManager.Initialize(&dxCommon, &srvManager);
+
+    // ModelManager
+    ModelManager modelManager;
+    modelManager.Initialize(&dxCommon, &srvManager, &textureManager);
 
     // SpriteManager
     SpriteManager spriteManager;

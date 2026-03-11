@@ -42,7 +42,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
     player_.Initialize(playerModel, swordModel);
     enemy_.Initialize(enemyModel);
 
-    modelTf_.position = {0.0f, 0.0f, 5.0f};
+    modelTf_.position = {0.0f, 0.0f, 100.0f};
 }
 
 void GameScene::Update() {
@@ -64,9 +64,10 @@ void GameScene::Update() {
 void GameScene::Draw() {
     ctx_->model->PreDraw();
 
-    player_.Draw(ctx_->model, camera_);
-    enemy_.Draw(ctx_->model, camera_);
+    //player_.Draw(ctx_->model, camera_);
+    //enemy_.Draw(ctx_->model, camera_);
 
+    ctx_->model->UpdateAnimation(modelId_, ctx_->deltaTime);
     ctx_->model->Draw(modelId_, modelTf_, camera_);
 
 #ifdef _DEBUG

@@ -2,18 +2,20 @@
 #include "Camera.h"
 #include "DirectXCommon.h"
 #include "SrvManager.h"
+#include "TextureManager.h"
 #include <filesystem>
 
-void ModelManager::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager) {
+void ModelManager::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
+                              TextureManager *textureManager) {
     dxCommon_ = dxCommon;
+    textureManager_ = textureManager;
 
     meshManager_.Initialize(dxCommon_);
-    textureManager_.Initialize(dxCommon_, srvManager);
 
-    assimpLoader_.Initialize(&textureManager_, &meshManager_);
+    assimpLoader_.Initialize(textureManager_, &meshManager_);
 
     modelRenderer_.Initialize(dxCommon_, srvManager, &meshManager_,
-                              &textureManager_);
+                              textureManager_);
 }
 
 uint32_t ModelManager::Load(const std::wstring &path) {
@@ -38,3 +40,11 @@ void ModelManager::Draw(uint32_t modelId, const Transform &transform,
 void ModelManager::PreDraw() { modelRenderer_.PreDraw(); }
 
 void ModelManager::PostDraw() { modelRenderer_.PostDraw(); }
+
+void ModelManager::UpdateAnimation(uint32_t modelId, float deltaTime) {
+    if (modelId >= models_.size()) {
+        return;
+    }
+
+    animator_.Update(models_[modelId], deltaTime);
+}

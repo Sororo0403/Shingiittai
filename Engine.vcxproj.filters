@@ -152,9 +152,6 @@
     <ClCompile Include="src\engine\model\MeshManager.cpp">
       <Filter>src\engine\model</Filter>
     </ClCompile>
-    <ClCompile Include="src\engine\model\ObjLoader.cpp">
-      <Filter>src\engine\model</Filter>
-    </ClCompile>
     <ClCompile Include="src\engine\model\ModelManager.cpp">
       <Filter>src\engine\model</Filter>
     </ClCompile>
@@ -195,6 +192,9 @@
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\engine\model\AssimpLoader.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\model\Animator.cpp">
       <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>
@@ -245,9 +245,6 @@
       <Filter>include\engine\model</Filter>
     </ClInclude>
     <ClInclude Include="include\engine\model\Vertex.h">
-      <Filter>include\engine\model</Filter>
-    </ClInclude>
-    <ClInclude Include="include\engine\model\ObjLoader.h">
       <Filter>include\engine\model</Filter>
     </ClInclude>
     <ClInclude Include="include\engine\model\ModelManager.h">
@@ -311,6 +308,9 @@
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="include\engine\model\AssimpLoader.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\engine\model\Animator.h">
       <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>

@@ -76,11 +76,19 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
         XMStoreFloat4x4(&mappedBones_[i], id);
     }
 
-    for (size_t i = 0; i < model.bones.size() && i < kMaxBones; i++) {
-        XMMATRIX m = XMLoadFloat4x4(&model.bones[i].offsetMatrix);
-        m = XMMatrixTranspose(m);
-
-        XMStoreFloat4x4(&mappedBones_[i], m);
+    if (!model.finalBoneMatrices.empty()) {
+        for (size_t i = 0; i < model.finalBoneMatrices.size() && i < kMaxBones;
+             i++) {
+            XMMATRIX m = XMLoadFloat4x4(&model.finalBoneMatrices[i]);
+            m = XMMatrixTranspose(m);
+            XMStoreFloat4x4(&mappedBones_[i], m);
+        }
+    } else {
+        for (size_t i = 0; i < model.bones.size() && i < kMaxBones; i++) {
+            XMMATRIX m = XMLoadFloat4x4(&model.bones[i].offsetMatrix);
+            m = XMMatrixTranspose(m);
+            XMStoreFloat4x4(&mappedBones_[i], m);
+        }
     }
 
     cmd->SetGraphicsRootConstantBufferView(0, cbAddr);

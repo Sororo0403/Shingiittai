@@ -6,7 +6,29 @@
 #include <vector>
 
 struct BoneInfo {
-    DirectX::XMFLOAT4X4 offsetMatrix;
+    DirectX::XMFLOAT4X4 offsetMatrix{};
+};
+
+struct AnimationKeyVec3 {
+    float time = 0.0f;
+    DirectX::XMFLOAT3 value{};
+};
+
+struct AnimationKeyQuat {
+    float time = 0.0f;
+    DirectX::XMFLOAT4 value{};
+};
+
+struct BoneAnimation {
+    std::vector<AnimationKeyVec3> positions;
+    std::vector<AnimationKeyQuat> rotations;
+    std::vector<AnimationKeyVec3> scales;
+};
+
+struct AnimationClip {
+    float duration = 0.0f;
+    float ticksPerSecond = 1.0f;
+    std::unordered_map<std::string, BoneAnimation> channels;
 };
 
 struct Model {
@@ -15,4 +37,8 @@ struct Model {
 
     std::vector<BoneInfo> bones;
     std::unordered_map<std::string, uint32_t> boneMap;
+
+    AnimationClip animation;
+
+    std::vector<DirectX::XMFLOAT4X4> finalBoneMatrices;
 };
