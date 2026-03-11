@@ -139,8 +139,8 @@ void GameScene::Update() {
 void GameScene::Draw() {
     ctx_->model->PreDraw();
 
-    player_.Draw(ctx_->model, camera_);
-    enemy_.Draw(ctx_->model, camera_);
+    player_.Draw(ctx_->model, *currentCamera_);
+    enemy_.Draw(ctx_->model, *currentCamera_);
     int aliveBulletCount = 0;
     for (const auto& bullet : enemy_.GetBullets()) {
         if (bullet.isAlive) {
@@ -149,18 +149,18 @@ void GameScene::Draw() {
     }
 #ifdef _DEBUG
     // 当たり判定描画
-    ctx_->debugDraw->DrawOBB(ctx_->model, player_.GetSword().GetOBB(), camera_);
+    ctx_->debugDraw->DrawOBB(ctx_->model, player_.GetSword().GetOBB(), *currentCamera_);
 
     // ボス部位
     if (enemy_.IsAlive()) {
-        ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetBodyOBB(), camera_);
-        ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetLeftHandOBB(), camera_);
+        ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetBodyOBB(), *currentCamera_);
+        ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetLeftHandOBB(), *currentCamera_);
         ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetRightHandOBB(),
-            camera_);
+            *currentCamera_);
 
         if (enemy_.IsAttackActive()) {
             ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetAttackOBB(),
-                camera_);
+                *currentCamera_);
         }
     }
 #endif // _DEBUG
