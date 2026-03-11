@@ -76,11 +76,15 @@
       <AdditionalLibraryDirectories>$(ProjectDir)externals\assimp\lib\;$(ProjectDir)externals\JoyShockLibrary\lib\;$(SolutionDir)..\generated\outputs\$(Configuration)\imgui\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
-      <Command>if exist "$(ProjectDir)externals\JoyShockLibrary\lib\JoyShockLibrary.dll" (
+      <Command>REM JoyShockLibrary
+if exist "$(ProjectDir)externals\JoyShockLibrary\lib\JoyShockLibrary.dll" (
     xcopy /Y /D "$(ProjectDir)externals\JoyShockLibrary\lib\JoyShockLibrary.dll" "$(TargetDir)"
 )
 
-copy "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" "$(OutDir)"</Command>
+REM assimp
+if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
+    xcopy /Y /D "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" "$(TargetDir)"
+)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -105,11 +109,15 @@ copy "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" "$(OutDir)"</Comman
       <AdditionalLibraryDirectories>$(ProjectDir)externals\assimp\lib\;$(ProjectDir)externals\JoyShockLibrary\lib\;$(SolutionDir)..\generated\outputs\$(Configuration)\imgui\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
-      <Command>if exist "$(ProjectDir)externals\JoyShockLibrary\lib\JoyShockLibrary.dll" (
+      <Command>REM JoyShockLibrary
+if exist "$(ProjectDir)externals\JoyShockLibrary\lib\JoyShockLibrary.dll" (
     xcopy /Y /D "$(ProjectDir)externals\JoyShockLibrary\lib\JoyShockLibrary.dll" "$(TargetDir)"
 )
 
-copy "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" "$(OutDir)"</Command>
+REM assimp
+if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
+    xcopy /Y /D "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" "$(TargetDir)"
+)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
