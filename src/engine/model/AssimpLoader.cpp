@@ -69,15 +69,33 @@ Model AssimpLoader::Load(const std::string &path) {
         aiString texPath;
 
         if (mat->GetTexture(aiTextureType_DIFFUSE, 0, &texPath) == AI_SUCCESS) {
-            std::filesystem::path modelPath(path);
+            std::string texName = texPath.C_Str();
 
-            auto fullPath = modelPath.parent_path() / texPath.C_Str();
+            if (texName[0] == '*') {
+                int texIndex = std::atoi(texName.c_str() + 1);
 
-            textureId = textureManager_->Load(fullPath.wstring());
+                aiTexture *tex = scene->mTextures[texIndex];
+
+                if (tex->mHeight == 0) {
+                    textureId = textureManager_->LoadFromMemory(
+                        reinterpret_cast<uint8_t *>(tex->pcData), tex->mWidth);
+                } else {
+                    textureId = textureManager_->LoadFromMemory(
+                        reinterpret_cast<uint8_t *>(tex->pcData),
+                        tex->mWidth * tex->mHeight * 4);
+                }
+            } else {
+                std::filesystem::path modelPath(path);
+
+                auto fullPath = modelPath.parent_path() / texName;
+
+                textureId = textureManager_->Load(fullPath.wstring());
+            }
         }
     }
 
     Model model;
+
     model.meshId = meshId;
     model.textureId = textureId;
 

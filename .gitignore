@@ -363,3 +363,7 @@ FodyWeavers.xsd
 
 # imgui
 /imgui.ini
+
+# track resources
+!resources/
+!resources/**

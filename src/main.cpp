@@ -63,7 +63,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
 
     dxCommon.BeginUpload();
 
-    uint32_t boxModelId = modelManager.Load(L"resources/model/debug/box.obj");
+    uint32_t boxModelId = modelManager.Load(L"resources/model/debug/box.glb");
 
     dxCommon.EndUpload();
 

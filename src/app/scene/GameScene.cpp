@@ -26,12 +26,11 @@ void GameScene::Initialize(const SceneContext &ctx) {
 
     // Player
     uint32_t playerModel =
-        ctx_->model->Load(L"resources/model/player/player.obj");
-    uint32_t swordModel =
-        ctx_->model->Load(L"resources/model/sword/sword.gltf");
+        ctx_->model->Load(L"resources/model/player/player.glb");
+    uint32_t swordModel = ctx_->model->Load(L"resources/model/sword/sword.glb");
 
     // Enemy
-    uint32_t enemyModel = ctx_->model->Load(L"resources/model/enemy/enemy.obj");
+    uint32_t enemyModel = ctx_->model->Load(L"resources/model/enemy/enemy.glb");
 
     ctx_->dxCommon->EndUpload();
 
@@ -42,10 +41,6 @@ void GameScene::Initialize(const SceneContext &ctx) {
 }
 
 void GameScene::Update() {
-    if (ctx_->input->IsKeyTrigger(DIK_SPACE)) {
-        ctx_->input->SetBaseOrientation();
-    }
-
     camera_.Update();
 
     player_.Update(ctx_->input, ctx_->deltaTime);
