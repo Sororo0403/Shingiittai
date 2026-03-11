@@ -197,6 +197,9 @@
     <ClCompile Include="src\engine\model\Animator.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\engine\camera\DebugCamera.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\engine\core\WinApp.h">
@@ -311,6 +314,9 @@
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="include\engine\model\Animator.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\engine\camera\DebugCamera.h">
       <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>

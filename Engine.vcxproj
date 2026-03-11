@@ -76,11 +76,15 @@
       <AdditionalLibraryDirectories>$(ProjectDir)externals\assimp\lib\;$(ProjectDir)externals\JoyShockLibrary\lib\;$(SolutionDir)..\generated\outputs\$(Configuration)\imgui\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
-      <Command>if exist "$(ProjectDir)externals\JoyShockLibrary\lib\JoyShockLibrary.dll" (
+      <Command>REM JoyShockLibrary
+if exist "$(ProjectDir)externals\JoyShockLibrary\lib\JoyShockLibrary.dll" (
     xcopy /Y /D "$(ProjectDir)externals\JoyShockLibrary\lib\JoyShockLibrary.dll" "$(TargetDir)"
 )
 
-copy "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" "$(OutDir)"</Command>
+REM assimp
+if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
+    xcopy /Y /D "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" "$(TargetDir)"
+)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -105,14 +109,19 @@ copy "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" "$(OutDir)"</Comman
       <AdditionalLibraryDirectories>$(ProjectDir)externals\assimp\lib\;$(ProjectDir)externals\JoyShockLibrary\lib\;$(SolutionDir)..\generated\outputs\$(Configuration)\imgui\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
-      <Command>if exist "$(ProjectDir)externals\JoyShockLibrary\lib\JoyShockLibrary.dll" (
+      <Command>REM JoyShockLibrary
+if exist "$(ProjectDir)externals\JoyShockLibrary\lib\JoyShockLibrary.dll" (
     xcopy /Y /D "$(ProjectDir)externals\JoyShockLibrary\lib\JoyShockLibrary.dll" "$(TargetDir)"
 )
 
-copy "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" "$(OutDir)"</Command>
+REM assimp
+if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
+    xcopy /Y /D "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" "$(TargetDir)"
+)</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\engine\camera\DebugCamera.cpp" />
     <ClCompile Include="src\engine\model\Animator.cpp" />
     <ClCompile Include="src\engine\model\AssimpLoader.cpp" />
     <ClCompile Include="src\engine\collision\DebugDraw.cpp" />
@@ -140,6 +149,7 @@ copy "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" "$(OutDir)"</Comman
     <ClCompile Include="src\app\player\Sword.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\engine\camera\DebugCamera.h" />
     <ClInclude Include="include\engine\model\Animator.h" />
     <ClInclude Include="include\engine\model\AssimpLoader.h" />
     <ClInclude Include="include\engine\collision\DebugDraw.h" />

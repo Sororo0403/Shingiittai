@@ -10,9 +10,9 @@ class Camera {
     void Initialize(float aspect);
 
     /// <summary>
-    /// 更新処理
+    /// 行列を更新
     /// </summary>
-    void Update();
+    void UpdateMatrices();
 
     // Setter
     void SetPosition(const DirectX::XMFLOAT3 &pos) { position_ = pos; }
