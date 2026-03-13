@@ -49,6 +49,8 @@ class GameScene : public BaseScene {
     Player player_;
     Enemy enemy_;
 
+    float playerHitCooldown_ = 0.0f;
+
     // ヒットクールダウンタイマー
     float enemyHitCooldown_ = 0.0f;
 
@@ -58,4 +60,6 @@ class GameScene : public BaseScene {
     bool dbgHitBody_ = false;
     bool dbgBossHitPlayer_ = false;
     bool dbgBulletHitPlayer_ = false;
+    bool dbgWaveHitPlayer_ = false;
+    bool dbgPlayerGuardedHit_ = false;
 };

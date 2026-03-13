@@ -4,6 +4,7 @@
 #include "Transform.h"
 #include <cstdint>
 #include <vector>
+#include "EnemyTuningPreset.h"
 class ModelManager;
 enum class EnemyState {
     Idle,
@@ -22,7 +23,15 @@ enum class EnemyState {
 
     WarpStart,
     WarpMove,
-    WarpEnd
+    WarpEnd,
+
+    WaveCharge,
+    WaveFire,
+    WaveRecovery,
+
+    GuardMove,
+    GuardHold,
+    GuardRecovery
 };
 
 struct EnemyBullet {
@@ -30,6 +39,23 @@ struct EnemyBullet {
     DirectX::XMFLOAT3 velocity = {0.0f, 0.0f, 0.0f};
     float lifeTime = 0.0f;
     bool isAlive = false;
+};
+
+struct EnemyWave {
+    DirectX::XMFLOAT3 position = {0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT3 direction = {0.0f, 0.0f, 1.0f};
+    float speed = 0.0f;
+    float traveledDistance = 0.0f;
+    float maxDistance = 0.0f;
+    bool isAlive = false;
+};
+
+enum class GuardTarget { None, Face, BodyCenter, BodyLeft };
+
+struct AttackParam {
+    float damage = 0.0f;
+    float knockback = 0.0f;
+    DirectX::XMFLOAT3 hitBoxSize = {1.0f, 1.0f, 1.0f};
 };
 
 class Enemy {
@@ -59,7 +85,9 @@ class Enemy {
     /// <param name="damage">与えるダメージ量</param>
     void TakeDamage(float damage);
 
+    //************************
     // Getter
+    //************************
     const Transform &GetTransform() const { return tf_; }
     bool IsAlive() const { return hp_ > 0.0f; }
 
@@ -90,6 +118,80 @@ class Enemy {
     bool IsVisible() const { return isVisible_; }
     const DirectX::XMFLOAT3 &GetWarpTargetPos() const { return warpTargetPos_; }
 
+    const std::vector<EnemyWave> &GetWaves() const { return waves_; }
+
+    // ガードgetter
+    bool IsGuardActive() const { return isGuardActive_; }
+    GuardTarget GetGuardTarget() const { return guardTarget_; }
+
+   float GetSmashDamage() const { return smashParam_.damage; }
+    float GetSweepDamage() const { return sweepParam_.damage; }
+    float GetBulletDamage() const { return bulletParam_.damage; }
+    float GetWaveDamage() const { return waveParam_.damage; }
+
+    float GetSmashKnockback() const { return smashParam_.knockback; }
+    float GetSweepKnockback() const { return sweepParam_.knockback; }
+    float GetBulletKnockback() const { return bulletParam_.knockback; }
+    float GetWaveKnockback() const { return waveParam_.knockback; }
+
+    DirectX::XMFLOAT3 GetBulletHitBoxSize() const {
+        return bulletParam_.hitBoxSize;
+    }
+    DirectX::XMFLOAT3 GetWaveHitBoxSize() const {
+        return waveParam_.hitBoxSize;
+    }
+    DirectX::XMFLOAT3 GetSmashAttackBoxSize() const {
+        return smashParam_.hitBoxSize;
+    }
+    DirectX::XMFLOAT3 GetSweepAttackBoxSize() const {
+        return sweepParam_.hitBoxSize;
+    }
+
+    const AttackParam &GetSmashParam() const { return smashParam_; }
+    const AttackParam &GetSweepParam() const { return sweepParam_; }
+    const AttackParam &GetBulletParam() const { return bulletParam_; }
+    const AttackParam &GetWaveParam() const { return waveParam_; }
+
+    // ImGui調整用
+    AttackParam &EditSmashParam() { return smashParam_; }
+    AttackParam &EditSweepParam() { return sweepParam_; }
+    AttackParam &EditBulletParam() { return bulletParam_; }
+    AttackParam &EditWaveParam() { return waveParam_; }
+
+    float &EditNearAttackDistance() { return nearAttackDistance_; }
+    float &EditFarAttackDistance() { return farAttackDistance_; }
+
+    float &EditSmashChargeTime() { return smashChargeTime_; }
+    float &EditSmashAttackTime() { return smashAttackTime_; }
+    float &EditSmashRecoveryTime() { return smashRecoveryTime_; }
+
+    float &EditSweepChargeTime() { return sweepChargeTime_; }
+    float &EditSweepAttackTime() { return sweepAttackTime_; }
+    float &EditSweepRecoveryTime() { return sweepRecoveryTime_; }
+
+    float &EditShotChargeTime() { return shotChargeTime_; }
+    float &EditShotRecoveryTime() { return shotRecoveryTime_; }
+    float &EditShotInterval() { return shotInterval_; }
+    float &EditBulletSpeed() { return bulletSpeed_; }
+    float &EditBulletLifeTime() { return bulletLifeTime_; }
+
+    float &EditWaveChargeTime() { return waveChargeTime_; }
+    float &EditWaveRecoveryTime() { return waveRecoveryTime_; }
+    float &EditWaveSpeed() { return waveSpeed_; }
+    float &EditWaveMaxDistance() { return waveMaxDistance_; }
+
+    int &EditNearSmashWeight() { return nearSmashWeight_; }
+    int &EditNearSweepWeight() { return nearSweepWeight_; }
+    int &EditNearGuardWeight() { return nearGuardWeight_; }
+
+    int &EditFarShotWeight() { return farShotWeight_; }
+    int &EditFarWarpWeight() { return farWarpWeight_; }
+    int &EditFarWaveWeight() { return farWaveWeight_; }
+
+    EnemyTuningPreset CreateTuningPreset() const;
+    void ApplyTuningPreset(const EnemyTuningPreset &preset);
+    void ResetTuningPreset();
+
   private:
     // ボス全体の基準Transform
     Transform tf_;
@@ -113,14 +215,14 @@ class Enemy {
 
     // 振り下ろし用
     bool isAttackActive_ = false;
-    DirectX::XMFLOAT3 attackBoxSize_ = {1.5f, 1.5f, 1.5f};
+    //DirectX::XMFLOAT3 attackBoxSize_ = {1.5f, 1.5f, 1.5f};
 
     // 次の行動に移るかどうかのフラグ（振り下ろし→回復の切り替えタイミングで使用）
-    bool useSmashNext_ = true;
+    //bool useSmashNext_ = true;
 
      DirectX::XMFLOAT3 playerPos_ = {0.0f, 0.0f, 0.0f};
 
-    float nearAttackDistance_ = 4.0f;
+    //float nearAttackDistance_ = 4.0f;
 
     float facingYaw_ = 0.0f;       // 現在の向き
     float lockedAttackYaw_ = 0.0f; // 攻撃開始時に固定する向き
@@ -128,14 +230,96 @@ class Enemy {
     // 遠距離攻撃用弾
     std::vector<EnemyBullet> bullets_;
 
-    float farAttackDistance_ = 4.0f;
+    //float farAttackDistance_ = 4.0f;
     int shotsRemaining_ = 0;
     float shotIntervalTimer_ = 0.0f;
 
     // ワープ用
     DirectX::XMFLOAT3 warpTargetPos_ = {0.0f, 0.0f, 0.0f};
     bool isVisible_ = true;
-    bool useShotNext_ = true;
+    //bool useShotNext_ = true;
+
+    // 波動攻撃用
+    std::vector<EnemyWave> waves_;
+
+    //bool useWaveNext_ = true;
+
+    // デバッグ用行動切り替えインデックス
+    int farActionIndex_ = 0;
+
+    //ガード位置
+    GuardTarget guardTarget_ = GuardTarget::None;
+    bool isGuardActive_ = false;
+
+    // デバッグ用ガード位置切り替えインデックス
+    int nearActionIndex_ = 0;
+
+    //********************************
+    // 調整用パラーメータ群
+    //********************************
+    float nearAttackDistance_ = 4.0f;
+    float farAttackDistance_ = 4.0f;
+
+    //振り下ろし
+    AttackParam smashParam_ = {10.0f, 4.0f, {1.5f, 1.8f, 1.5f}};
+    float smashChargeTime_ = 0.6f;
+    float smashAttackTime_ = 0.25f;
+    float smashRecoveryTime_ = 1.0f;
+    float smashAttackForwardOffset_ = 1.4f;
+    float smashAttackHeightOffset_ = 0.8f;
+
+    //薙ぎ払い
+    AttackParam sweepParam_ = {10.0f, 4.0f, {3.2f, 1.2f, 1.4f}};
+    float sweepChargeTime_ = 0.5f;
+    float sweepAttackTime_ = 0.3f;
+    float sweepRecoveryTime_ = 1.0f;
+    float sweepAttackSideOffset_ = 0.2f;
+    float sweepAttackHeightOffset_ = 0.8f;
+
+    //弾
+    AttackParam bulletParam_ = {5.0f, 2.5f, {0.4f, 0.4f, 0.4f}};
+    float shotChargeTime_ = 0.6f;
+    float shotRecoveryTime_ = 0.8f;
+    float shotInterval_ = 0.2f;
+
+    int shotMinCount_ = 3;
+    int shotMaxCount_ = 5;
+
+    float bulletSpeed_ = 6.0f;
+    float bulletLifeTime_ = 2.0f;
+    float bulletSpawnHeightOffset_ = 0.2f;
+
+    //波状攻撃
+    AttackParam waveParam_ = {8.0f, 3.0f, {1.2f, 0.6f, 1.6f}};
+    float waveChargeTime_ = 0.6f;
+    float waveRecoveryTime_ = 0.8f;
+
+    float waveSpeed_ = 4.0f;
+    float waveMaxDistance_ = 8.0f;
+ 
+    float waveSpawnForwardOffset_ = 1.5f;
+    float waveSpawnHeightOffset_ = 0.0f;
+
+    //ワープ
+    float warpStartTime_ = 0.2f;
+    float warpEndTime_ = 0.2f;
+    float warpRadius_ = 2.0f;
+
+    //左手ガード
+    float guardMoveTime_ = 0.25f;
+    float guardHoldTime_ = 0.7f;
+    float guardRecoveryTime_ = 0.35f;
+
+    // 近距離行動の重み
+    int nearSmashWeight_ = 40;
+    int nearSweepWeight_ = 35;
+    int nearGuardWeight_ = 25;
+
+    // 遠距離行動の重み
+    int farShotWeight_ = 40;
+    int farWarpWeight_ = 25;
+    int farWaveWeight_ = 35;
+
   private:
     void UpdateParts();
     OBB MakeOBB(const Transform &tf, const DirectX::XMFLOAT3 &size) const;
@@ -171,4 +355,18 @@ class Enemy {
     void UpdateWarpEnd(float deltaTime);
 
     void DecideWarpTargetNearPlayer();
+
+    void UpdateWaveCharge(float deltaTime);
+    void UpdateWaveFire(float deltaTime);
+    void UpdateWaveRecovery(float deltaTime);
+
+    void SpawnWave();
+    void UpdateWaves(float deltaTime);
+
+    // ガード
+    void UpdateGuardMove(float deltaTime);
+    void UpdateGuardHold(float deltaTime);
+    void UpdateGuardRecovery(float deltaTime);
+
+    void DecideGuardTarget();
 };

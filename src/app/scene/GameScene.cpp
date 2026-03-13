@@ -8,6 +8,7 @@
 #include "imgui.h"
 #ifdef _DEBUG
 #include "DebugDraw.h"
+#include "EnemyTuningPresetIO.h"
 #endif // _DEBUG
 
 void GameScene::Initialize(const SceneContext &ctx) {
@@ -63,7 +64,7 @@ void GameScene::Update() {
 
     enemy_.Update(player_.GetTransform().position, ctx_->deltaTime);
 
-    // ヒットクールダウンの更新
+    // 敵ヒットクールダウンの更新
     if (enemyHitCooldown_ > 0.0f) {
         enemyHitCooldown_ -= ctx_->deltaTime;
         if (enemyHitCooldown_ < 0.0f) {
@@ -71,10 +72,20 @@ void GameScene::Update() {
         }
     }
 
+    // プレイヤーのヒットクールダウン更新
+    if (playerHitCooldown_ > 0.0f) {
+        playerHitCooldown_ -= ctx_->deltaTime;
+        if (playerHitCooldown_ < 0.0f) {
+            playerHitCooldown_ = 0.0f;
+        }
+    }
+
       // 毎フレームいったんリセット
     dbgHitLeftHand_ = false;
     dbgHitRightHand_ = false;
     dbgHitBody_ = false;
+    dbgWaveHitPlayer_ = false;
+    dbgPlayerGuardedHit_ = false;
 
     // プレイヤーの攻撃判定とあたり判定
     if (player_.GetSword().IsSlashMode()) {
@@ -93,9 +104,12 @@ void GameScene::Update() {
         dbgHitBody_ = hitBody;
 
         if (enemyHitCooldown_ <= 0.0f) {
-            if (hitBody) {
+            // 左手ガード中は左手優先
+            if (enemy_.IsGuardActive() && hitLeftHand) {
+                enemyHitCooldown_ = 0.2f;
+            } else if (hitBody) {
                 enemy_.TakeDamage(10.0f);
-                enemyHitCooldown_ = 0.2f; // 0.2秒だけ再ヒット禁止
+                enemyHitCooldown_ = 0.2f;
             }
         }
     }
@@ -108,14 +122,47 @@ void GameScene::Update() {
         auto playerBox = player_.GetOBB();
 
         bossHitPlayer = CollisionUtil::CheckOBB(enemyAttackBox, playerBox);
-        dbgBossHitPlayer_ = bossHitPlayer;
-        if (bossHitPlayer) {
-            // いったん確認用。あとでプレイヤーHP処理に置き換える
+
+        if (bossHitPlayer && playerHitCooldown_ <= 0.0f) {
+            float dx = player_.GetTransform().position.x -
+                       enemy_.GetTransform().position.x;
+            float dz = player_.GetTransform().position.z -
+                       enemy_.GetTransform().position.z;
+            float len = std::sqrt(dx * dx + dz * dz);
+            if (len < 0.0001f) {
+                len = 1.0f;
+            }
+
+            dx /= len;
+            dz /= len;
+
+            float damage = 0.0f;
+            float knockback = 0.0f;
+
+            if (enemy_.GetState() == EnemyState::SmashAttack) {
+                damage = enemy_.GetSmashDamage();
+                knockback = enemy_.GetSmashKnockback();
+            } else if (enemy_.GetState() == EnemyState::SweepAttack) {
+                damage = enemy_.GetSweepDamage();
+                knockback = enemy_.GetSweepKnockback();
+            }
+
+            if (player_.GetSword().IsGuard()) {
+                dbgPlayerGuardedHit_ = true;
+                player_.AddKnockback(
+                    {dx * (knockback * 0.5f), 0.0f, dz * (knockback * 0.5f)});
+                playerHitCooldown_ = 0.2f;
+            } else {
+                player_.TakeDamage(damage);
+                player_.AddKnockback({dx * knockback, 0.0f, dz * knockback});
+                playerHitCooldown_ = 0.4f;
+            }
         }
     }
 
-    // 敵の弾とプレイヤーのあたり判定
-    dbgBulletHitPlayer_ = false;
+    dbgBossHitPlayer_ = bossHitPlayer;
+
+   dbgBulletHitPlayer_ = false;
 
     auto playerBox = player_.GetOBB();
 
@@ -126,11 +173,80 @@ void GameScene::Update() {
 
         OBB bulletBox{};
         bulletBox.center = bullet.position;
-        bulletBox.size = {0.4f, 0.4f, 0.4f};
+        bulletBox.size = enemy_.GetBulletHitBoxSize();
         bulletBox.rotation = player_.GetTransform().rotation;
 
         if (CollisionUtil::CheckOBB(bulletBox, playerBox)) {
             dbgBulletHitPlayer_ = true;
+
+            if (playerHitCooldown_ <= 0.0f) {
+                float vx = bullet.velocity.x;
+                float vz = bullet.velocity.z;
+                float len = std::sqrt(vx * vx + vz * vz);
+                if (len < 0.0001f) {
+                    len = 1.0f;
+                }
+
+                vx /= len;
+                vz /= len;
+
+                if (player_.GetSword().IsGuard()) {
+                    dbgPlayerGuardedHit_ = true;
+                    player_.AddKnockback(
+                        {vx * (enemy_.GetBulletKnockback() * 0.5f), 0.0f,
+                         vz * (enemy_.GetBulletKnockback() * 0.5f)});
+                    playerHitCooldown_ = 0.15f;
+                } else {
+                    player_.TakeDamage(enemy_.GetBulletDamage());
+                    player_.AddKnockback({vx * enemy_.GetBulletKnockback(),
+                                          0.0f,
+                                          vz * enemy_.GetBulletKnockback()});
+                    playerHitCooldown_ = 0.3f;
+                }
+            }
+            break;
+        }
+    }
+
+    dbgWaveHitPlayer_ = false;
+
+    for (const auto &wave : enemy_.GetWaves()) {
+        if (!wave.isAlive) {
+            continue;
+        }
+
+        OBB waveBox{};
+        waveBox.center = wave.position;
+        waveBox.size = enemy_.GetWaveHitBoxSize();
+        waveBox.rotation = player_.GetTransform().rotation;
+
+        if (CollisionUtil::CheckOBB(waveBox, playerBox)) {
+            dbgWaveHitPlayer_ = true;
+
+            if (playerHitCooldown_ <= 0.0f) {
+                float vx = wave.direction.x;
+                float vz = wave.direction.z;
+                float len = std::sqrt(vx * vx + vz * vz);
+                if (len < 0.0001f) {
+                    len = 1.0f;
+                }
+
+                vx /= len;
+                vz /= len;
+
+                if (player_.GetSword().IsGuard()) {
+                    dbgPlayerGuardedHit_ = true;
+                    player_.AddKnockback(
+                        {vx * (enemy_.GetWaveKnockback() * 0.5f), 0.0f,
+                         vz * (enemy_.GetWaveKnockback() * 0.5f)});
+                    playerHitCooldown_ = 0.15f;
+                } else {
+                    player_.TakeDamage(enemy_.GetWaveDamage());
+                    player_.AddKnockback({vx * enemy_.GetWaveKnockback(), 0.0f,
+                                          vz * enemy_.GetWaveKnockback()});
+                    playerHitCooldown_ = 0.35f;
+                }
+            }
             break;
         }
     }
@@ -145,6 +261,13 @@ void GameScene::Draw() {
     for (const auto& bullet : enemy_.GetBullets()) {
         if (bullet.isAlive) {
             aliveBulletCount++;
+        }
+    }
+
+    int aliveWaveCount = 0;
+    for (const auto &wave : enemy_.GetWaves()) {
+        if (wave.isAlive) {
+            aliveWaveCount++;
         }
     }
 #ifdef _DEBUG
@@ -215,6 +338,24 @@ void GameScene::Draw() {
     case EnemyState::WarpEnd:
         stateName = "WarpEnd";
         break;
+    case EnemyState::WaveCharge:
+        stateName = "WaveCharge";
+        break;
+    case EnemyState::WaveFire:
+        stateName = "WaveFire";
+        break;
+    case EnemyState::WaveRecovery:
+        stateName = "WaveRecovery";
+        break;
+    case EnemyState::GuardMove:
+        stateName = "GuardMove";
+        break;
+    case EnemyState::GuardHold:
+        stateName = "GuardHold";
+        break;
+    case EnemyState::GuardRecovery:
+        stateName = "GuardRecovery";
+        break;
     }
 
     ImGui::Text("EnemyState   : %s", stateName);
@@ -229,6 +370,159 @@ void GameScene::Draw() {
     auto warpPos = enemy_.GetWarpTargetPos();
     ImGui::Text("Visible         : %s", enemy_.IsVisible() ? "true" : "false");
     ImGui::Text("WarpTarget      : (%.2f, %.2f, %.2f)", warpPos.x, warpPos.y, warpPos.z);
+    ImGui::Text("WaveHitPlayer   : %s", dbgWaveHitPlayer_ ? "true" : "false");
+    ImGui::Text("AliveWaves      : %d", aliveWaveCount);
+    const char *guardName = "None";
+    switch (enemy_.GetGuardTarget()) {
+    case GuardTarget::None:
+        guardName = "None";
+        break;
+    case GuardTarget::Face:
+        guardName = "Face";
+        break;
+    case GuardTarget::BodyCenter:
+        guardName = "BodyCenter";
+        break;
+    case GuardTarget::BodyLeft:
+        guardName = "BodyLeft";
+        break;
+    }
+
+    ImGui::Text("GuardActive     : %s",
+                enemy_.IsGuardActive() ? "true" : "false");
+    ImGui::Text("GuardTarget     : %s", guardName);
+    ImGui::Text("PlayerHP        : %.1f", player_.GetHP());
+    ImGui::Text("PlayerHitCD     : %.2f", playerHitCooldown_);
+    ImGui::Text("PlayerGuarded   : %s",
+                dbgPlayerGuardedHit_ ? "true" : "false");
+    ImGui::Text("PlayerGuard     : %s",
+                player_.GetSword().IsGuard() ? "true" : "false");
+    ImGui::Text("SmashDamage     : %.2f", enemy_.GetSmashDamage());
+    ImGui::Text("SweepDamage     : %.2f", enemy_.GetSweepDamage());
+    ImGui::Text("BulletDamage    : %.2f", enemy_.GetBulletDamage());
+    ImGui::Text("WaveDamage      : %.2f", enemy_.GetWaveDamage());
+    ImGui::Text("BulletKB        : %.2f", enemy_.GetBulletKnockback());
+    ImGui::Text("WaveKB          : %.2f", enemy_.GetWaveKnockback());
+    ImGui::Separator();
+    ImGui::Text("=== Enemy Tuning ===");
+
+    if (ImGui::TreeNode("Distance")) {
+        ImGui::DragFloat("NearAttackDistance", &enemy_.EditNearAttackDistance(),
+                         0.05f, 0.5f, 20.0f);
+        ImGui::DragFloat("FarAttackDistance", &enemy_.EditFarAttackDistance(),
+                         0.05f, 1.0f, 30.0f);
+        ImGui::TreePop();
+    }
+
+    if (ImGui::TreeNode("Smash")) {
+        auto &p = enemy_.EditSmashParam();
+        ImGui::DragFloat("Smash Damage", &p.damage, 0.1f, 0.0f, 100.0f);
+        ImGui::DragFloat("Smash Knockback", &p.knockback, 0.1f, 0.0f, 30.0f);
+        ImGui::DragFloat3("Smash HitBox", &p.hitBoxSize.x, 0.05f, 0.1f, 10.0f);
+
+        ImGui::DragFloat("Smash Charge", &enemy_.EditSmashChargeTime(), 0.01f,
+                         0.0f, 5.0f);
+        ImGui::DragFloat("Smash Attack", &enemy_.EditSmashAttackTime(), 0.01f,
+                         0.0f, 5.0f);
+        ImGui::DragFloat("Smash Recovery", &enemy_.EditSmashRecoveryTime(),
+                         0.01f, 0.0f, 5.0f);
+        ImGui::TreePop();
+    }
+
+    if (ImGui::TreeNode("Sweep")) {
+        auto &p = enemy_.EditSweepParam();
+        ImGui::DragFloat("Sweep Damage", &p.damage, 0.1f, 0.0f, 100.0f);
+        ImGui::DragFloat("Sweep Knockback", &p.knockback, 0.1f, 0.0f, 30.0f);
+        ImGui::DragFloat3("Sweep HitBox", &p.hitBoxSize.x, 0.05f, 0.1f, 10.0f);
+
+        ImGui::DragFloat("Sweep Charge", &enemy_.EditSweepChargeTime(), 0.01f,
+                         0.0f, 5.0f);
+        ImGui::DragFloat("Sweep Attack", &enemy_.EditSweepAttackTime(), 0.01f,
+                         0.0f, 5.0f);
+        ImGui::DragFloat("Sweep Recovery", &enemy_.EditSweepRecoveryTime(),
+                         0.01f, 0.0f, 5.0f);
+        ImGui::TreePop();
+    }
+
+    if (ImGui::TreeNode("Bullet")) {
+        auto &p = enemy_.EditBulletParam();
+        ImGui::DragFloat("Bullet Damage", &p.damage, 0.1f, 0.0f, 100.0f);
+        ImGui::DragFloat("Bullet Knockback", &p.knockback, 0.1f, 0.0f, 30.0f);
+        ImGui::DragFloat3("Bullet HitBox", &p.hitBoxSize.x, 0.01f, 0.05f, 5.0f);
+
+        ImGui::DragFloat("Bullet Speed", &enemy_.EditBulletSpeed(), 0.1f, 0.1f,
+                         30.0f);
+        ImGui::DragFloat("Bullet LifeTime", &enemy_.EditBulletLifeTime(), 0.01f,
+                         0.1f, 10.0f);
+        ImGui::DragFloat("Shot Charge", &enemy_.EditShotChargeTime(), 0.01f,
+                         0.0f, 5.0f);
+        ImGui::DragFloat("Shot Recovery", &enemy_.EditShotRecoveryTime(), 0.01f,
+                         0.0f, 5.0f);
+        ImGui::DragFloat("Shot Interval", &enemy_.EditShotInterval(), 0.01f,
+                         0.01f, 2.0f);
+        ImGui::TreePop();
+    }
+
+    if (ImGui::TreeNode("Wave")) {
+        auto &p = enemy_.EditWaveParam();
+        ImGui::DragFloat("Wave Damage", &p.damage, 0.1f, 0.0f, 100.0f);
+        ImGui::DragFloat("Wave Knockback", &p.knockback, 0.1f, 0.0f, 30.0f);
+        ImGui::DragFloat3("Wave HitBox", &p.hitBoxSize.x, 0.05f, 0.1f, 10.0f);
+
+        ImGui::DragFloat("Wave Speed", &enemy_.EditWaveSpeed(), 0.1f, 0.1f,
+                         30.0f);
+        ImGui::DragFloat("Wave MaxDistance", &enemy_.EditWaveMaxDistance(),
+                         0.1f, 0.1f, 50.0f);
+        ImGui::DragFloat("Wave Charge", &enemy_.EditWaveChargeTime(), 0.01f,
+                         0.0f, 5.0f);
+        ImGui::DragFloat("Wave Recovery", &enemy_.EditWaveRecoveryTime(), 0.01f,
+                         0.0f, 5.0f);
+        ImGui::TreePop();
+    }
+
+    ImGui::Separator();
+    ImGui::Text("=== Preset ===");
+
+    static char presetPath[256] = "Resources/enemy_tuning.txt";
+    ImGui::InputText("Preset Path", presetPath, sizeof(presetPath));
+
+    if (ImGui::Button("Save Preset")) {
+        EnemyTuningPreset preset = enemy_.CreateTuningPreset();
+        EnemyTuningPresetIO::Save(presetPath, preset);
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Load Preset")) {
+        EnemyTuningPreset preset{};
+        if (EnemyTuningPresetIO::Load(presetPath, preset)) {
+            enemy_.ApplyTuningPreset(preset);
+        }
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Reset Preset")) {
+        enemy_.ResetTuningPreset();
+    }
+
+    if (ImGui::TreeNode("Action Weight")) {
+        ImGui::DragInt("Near Smash Weight", &enemy_.EditNearSmashWeight(), 1.0f,
+                       0, 100);
+        ImGui::DragInt("Near Sweep Weight", &enemy_.EditNearSweepWeight(), 1.0f,
+                       0, 100);
+        ImGui::DragInt("Near Guard Weight", &enemy_.EditNearGuardWeight(), 1.0f,
+                       0, 100);
+
+        ImGui::DragInt("Far Shot Weight", &enemy_.EditFarShotWeight(), 1.0f, 0,
+                       100);
+        ImGui::DragInt("Far Warp Weight", &enemy_.EditFarWarpWeight(), 1.0f, 0,
+                       100);
+        ImGui::DragInt("Far Wave Weight", &enemy_.EditFarWaveWeight(), 1.0f, 0,
+                       100);
+        ImGui::TreePop();
+    }
+
     ImGui::End();
 #endif
 }

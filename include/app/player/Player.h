@@ -35,6 +35,12 @@ class Player {
     OBB GetOBB() const;
     const Transform &GetTransform() const { return tf_; }
 
+    // プレイヤーのHPを取得
+    float GetHP() const { return hp_; }
+    void TakeDamage(float damage);
+
+    void AddKnockback(const DirectX::XMFLOAT3 &velocity);
+
   private:
     // Update
     void UpdateMovement(Input *input, float deltaTime);
@@ -46,4 +52,8 @@ class Player {
     Sword sword_;
 
     float moveSpeed_ = 5.0f;
+
+    // プレイヤーのHP
+    float hp_ = 100.0f;
+    DirectX::XMFLOAT3 knockbackVelocity_ = {0.0f, 0.0f, 0.0f};
 };

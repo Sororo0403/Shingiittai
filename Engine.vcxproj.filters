@@ -200,6 +200,9 @@
     <ClCompile Include="src\engine\camera\DebugCamera.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\app\enemy\EnemyTuningPresetIO.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\engine\core\WinApp.h">
@@ -317,6 +320,12 @@
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="include\engine\camera\DebugCamera.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\app\enemy\EnemyTuningPreset.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\app\enemy\EnemyTuningPresetIO.h">
       <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>

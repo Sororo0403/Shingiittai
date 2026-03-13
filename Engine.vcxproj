@@ -121,6 +121,7 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\app\enemy\EnemyTuningPresetIO.cpp" />
     <ClCompile Include="src\engine\camera\DebugCamera.cpp" />
     <ClCompile Include="src\engine\model\Animator.cpp" />
     <ClCompile Include="src\engine\model\AssimpLoader.cpp" />
@@ -149,6 +150,8 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClCompile Include="src\app\player\Sword.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\app\enemy\EnemyTuningPreset.h" />
+    <ClInclude Include="include\app\enemy\EnemyTuningPresetIO.h" />
     <ClInclude Include="include\engine\camera\DebugCamera.h" />
     <ClInclude Include="include\engine\model\Animator.h" />
     <ClInclude Include="include\engine\model\AssimpLoader.h" />
