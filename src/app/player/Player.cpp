@@ -2,6 +2,8 @@
 #include "Input.h"
 #include "ModelManager.h"
 
+using namespace DirectX;
+
 void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
     modelId_ = playerModelId;
 
@@ -15,13 +17,25 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
 void Player::Update(Input *input, float deltaTime) {
     UpdateMovement(input, deltaTime);
 
-    sword_.Update(input, deltaTime, tf_.position);
+    sword_.Update(input, deltaTime, tf_.position, GetYaw(), kArmLength,
+                  kHandHeight);
 }
 
 void Player::Draw(ModelManager *modelManager, const Camera &camera) {
     modelManager->Draw(modelId_, tf_, camera);
 
     sword_.Draw(modelManager, camera);
+}
+
+void Player::LookAt(const DirectX::XMFLOAT3 &target) {
+    float dx = target.x - tf_.position.x;
+    float dz = target.z - tf_.position.z;
+
+    yaw_ = atan2f(dx, dz);
+
+    XMVECTOR q = XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), yaw_);
+
+    XMStoreFloat4(&tf_.rotation, q);
 }
 
 void Player::UpdateMovement(Input *input, float deltaTime) {

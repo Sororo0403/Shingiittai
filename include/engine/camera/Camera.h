@@ -14,6 +14,12 @@ class Camera {
     /// </summary>
     void UpdateMatrices();
 
+    /// <summary>
+    /// ターゲットを見るカメラ
+    /// </summary>
+    /// <param name="target">ターゲットの位置</param>
+    void LookAt(const DirectX::XMFLOAT3 &target);
+
     // Setter
     void SetPosition(const DirectX::XMFLOAT3 &pos) { position_ = pos; }
     void SetRotation(const DirectX::XMFLOAT3 &rot) { rotation_ = rot; }

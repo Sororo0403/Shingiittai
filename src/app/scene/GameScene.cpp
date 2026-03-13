@@ -8,12 +8,13 @@
 
 #ifdef _DEBUG
 #include "DebugDraw.h"
-#endif // _DEBUG
+#endif
+
+using namespace DirectX;
 
 void GameScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
 
-    // Camera
     float aspect = static_cast<float>(ctx_->winApp->GetWidth()) /
                    static_cast<float>(ctx_->winApp->GetHeight());
 
@@ -37,7 +38,6 @@ void GameScene::Initialize(const SceneContext &ctx) {
 
     uint32_t playerModel = model->Load(L"resources/model/player/player.glb");
     uint32_t swordModel = model->Load(L"resources/model/player/sword.glb");
-
     uint32_t enemyModel = model->Load(L"resources/model/enemy/enemy.glb");
 
     dx->EndUpload();
@@ -51,6 +51,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
 void GameScene::Update() {
     Input *input = ctx_->input;
 
+    // カメラ切り替え処理
     UpdateCamera(input);
 
 #ifdef _DEBUG
@@ -60,8 +61,10 @@ void GameScene::Update() {
 #endif
 
     player_.Update(input, ctx_->deltaTime);
-
     enemy_.Update();
+
+    // 戦闘カメラ更新
+    UpdateBattleCamera();
 
     // 当たり判定
     auto swordBox = player_.GetSword().GetOBB();
@@ -77,7 +80,7 @@ void GameScene::Draw() {
 
 #ifdef _DEBUG
     DebugDraw *debugDraw = ctx_->debugDraw;
-#endif // _DEBUG
+#endif
 
     model->PreDraw();
 
@@ -85,13 +88,12 @@ void GameScene::Draw() {
     enemy_.Draw(model, *currentCamera_);
 
 #ifdef _DEBUG
-    // 当たり判定描画
     debugDraw->DrawOBB(model, player_.GetSword().GetOBB(), *currentCamera_);
 
     if (enemy_.IsAlive()) {
         debugDraw->DrawOBB(model, enemy_.GetOBB(), *currentCamera_);
     }
-#endif // _DEBUG
+#endif
 
     model->PostDraw();
 }
@@ -99,38 +101,45 @@ void GameScene::Draw() {
 void GameScene::UpdateCamera(Input *input) {
 #ifdef _DEBUG
     if (input->IsKeyTrigger(DIK_F11)) {
-        WinApp *win = ctx_->winApp;
-
         if (currentCamera_ == &camera_) {
             currentCamera_ = &debugCamera_;
-
-            debugCamera_.SetPosition(camera_.GetPosition());
-            debugCamera_.SetRotation(camera_.GetRotation());
-
-            while (ShowCursor(FALSE) >= 0)
-                ;
         } else {
             currentCamera_ = &camera_;
-
-            while (ShowCursor(TRUE) < 0)
-                ;
-
-            int width = win->GetWidth();
-            int height = win->GetHeight();
-            HWND hwnd = win->GetHwnd();
-
-            POINT center{width / 2, height / 2};
-            ClientToScreen(hwnd, &center);
-            SetCursorPos(center.x, center.y);
         }
     }
 
     if (currentCamera_ == &debugCamera_) {
         debugCamera_.Update(*input, ctx_->deltaTime);
+        currentCamera_->UpdateMatrices();
+        return;
     }
 #else
     (void)input;
-#endif // _DEBUG
+#endif
+}
 
-    currentCamera_->UpdateMatrices();
+void GameScene::UpdateBattleCamera() {
+    auto &playerTf = player_.GetTransform();
+    auto &enemyTf = enemy_.GetTransform();
+
+    XMFLOAT3 playerPos = playerTf.position;
+    XMFLOAT3 enemyPos = enemyTf.position;
+
+    // プレイヤーを敵に向ける
+    player_.LookAt(enemyPos);
+
+    // forward
+    XMVECTOR playerPosV = XMLoadFloat3(&playerPos);
+    XMVECTOR enemyPosV = XMLoadFloat3(&enemyPos);
+
+    XMVECTOR forward = XMVector3Normalize(enemyPosV - playerPosV);
+
+    // カメラ位置
+    XMVECTOR camPos = playerPosV - forward * 3.5f + XMVectorSet(0, 1.2f, 0, 0);
+
+    XMFLOAT3 cameraPos;
+    XMStoreFloat3(&cameraPos, camPos);
+
+    camera_.SetPosition(cameraPos);
+    camera_.LookAt(enemyPos);
 }

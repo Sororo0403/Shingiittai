@@ -1,11 +1,12 @@
 #pragma once
+
 #include "OBB.h"
 #include "Transform.h"
 #include <DirectXMath.h>
 #include <cstdint>
 
-class ModelManager;
 class Input;
+class ModelManager;
 class Camera;
 
 class Sword {
@@ -19,9 +20,15 @@ class Sword {
     /// <summary>
     /// 更新処理
     /// </summary>
-    /// <param name="input">Inputインスタンス</param>
-    /// <param name="playerPos">プレイヤーの座標</param>
-    void Update(Input *input, float dt, const DirectX::XMFLOAT3 &playerPos);
+    /// <param name="input">入力管理クラス</param>
+    /// <param name="deltaTime">前フレームからの経過時間</param>
+    /// <param name="playerPos">プレイヤーのワールド座標</param>
+    /// <param name="playerYaw">プレイヤーのY軸回転</param>
+    /// <param name="playerArmLength">肩から手までの腕の長さ</param>
+    /// <param name="playerHandHeight">プレイヤー基準の手の高さ</param>
+    void Update(Input *input, float deltaTime,
+                const DirectX::XMFLOAT3 &playerPos, float playerYaw,
+                float playerArmLength, float playerHandHeight);
 
     /// <summary>
     /// 描画処理
@@ -31,26 +38,35 @@ class Sword {
     void Draw(ModelManager *modelManager, const Camera &camera);
 
     // Getter
-    const Transform &GetTransform() const { return tf_; }
     OBB GetOBB() const;
 
   private:
-    static constexpr float kHandHeight = 0.8f;
-    static constexpr float kSwordLength = 1.2f;
+    // Update
+    void UpdateOrientation(Input *input, float dt);
+    void UpdateGuard(Input *input);
+    void UpdateSlash(float dt);
+    void UpdateTransform(const DirectX::XMFLOAT3 &playerPos, float playerYaw,
+                         float playerArmLength, float playerHandHeight);
 
-    Transform tf_;
+  private:
+    static constexpr float kSwordLength = 1.5f;
+
+    static constexpr float kSlashHold = 250.0f;
+    static constexpr float kTimeLimit = 0.5f;
+
     uint32_t modelId_ = 0;
 
-    DirectX::XMFLOAT3 size_ = {0.1f, 0.1f, 0.5f};
+    Transform tf_{};
+
+    DirectX::XMFLOAT4 orientation_{0, 0, 0, 1};
+    DirectX::XMFLOAT4 prevOrientation_{0, 0, 0, 1};
+
+    float angularVelocity_ = 0.0f;
 
     bool isSlashMode_ = false;
     float slashTimer_ = 0.0f;
-    DirectX::XMFLOAT4 prevOrientation_ = {0.0f, 0.0f, 0.0f, 1.0f};
-    const float kSlashHold = 720.0f;
-    const float kTimeLimit = 1.0f;
 
     bool isGuard_ = false;
 
-    // メンバ関数
-    void ImGuiDraw();
+    DirectX::XMFLOAT3 size_ = {0.2f, 0.2f, 1.0f};
 };

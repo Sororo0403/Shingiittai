@@ -32,6 +32,7 @@ class GameScene : public BaseScene {
   private:
     // Update
     void UpdateCamera(Input *input);
+    void UpdateBattleCamera();
 
   private:
     static constexpr DirectX::XMFLOAT3 kCameraStartPos = {0.0f, 1.0f, 0.5f};

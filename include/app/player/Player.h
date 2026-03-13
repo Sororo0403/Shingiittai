@@ -30,18 +30,31 @@ class Player {
     /// <param name="camera">描画使用するカメラ</param>
     void Draw(ModelManager *modelManager, const Camera &camera);
 
+    /// <summary>
+    /// 指定した座標を見る
+    /// </summary>
+    /// <param name="target">見る座標</param>
+    void LookAt(const DirectX::XMFLOAT3 &target);
+
     // Getter
     const Sword &GetSword() const { return sword_; }
+    const Transform &GetTransform() const { return tf_; }
+    float GetYaw() const { return yaw_; }
 
   private:
     // Update
     void UpdateMovement(Input *input, float deltaTime);
 
   private:
+    static constexpr float kHandHeight = 1.0f;
+    static constexpr float kArmLength = 1.0f;
+
     Transform tf_;
     uint32_t modelId_ = 0;
 
     Sword sword_;
 
     float moveSpeed_ = 5.0f;
+
+    float yaw_ = 0.0f;
 };
