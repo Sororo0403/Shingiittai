@@ -1,6 +1,7 @@
 #pragma once
 #include "Animator.h"
 #include "AssimpLoader.h"
+#include "MaterialManager.h"
 #include "MeshManager.h"
 #include "Model.h"
 #include "ModelRenderer.h"
@@ -25,17 +26,17 @@ class ModelManager {
                     TextureManager *textureManager);
 
     /// <summary>
-    /// OBJファイルからモデルをロードする
+    /// モデルをファイルから読み、モデルIDを返す
     /// </summary>
-    /// <param name="path">OBJファイルパス</param>
-    /// <returns>モデルID</returns>
+    /// <param name="path">モデルのファイルパス</param>
+    /// <returns>読み込んだモデルのID</returns>
     uint32_t Load(const std::wstring &path);
 
     /// <summary>
-    /// モデルを描画する
+    /// 描画処理
     /// </summary>
-    /// <param name="modelId">描画するモデルのモデルID</param>
-    /// <param name="transform">描画するモデルのトランスフォーム</param>
+    /// <param name="modelId">描画するモデルのID</param>
+    /// <param name="transform">描画するモデルのTransform</param>
     /// <param name="camera">描画に使用するカメラ</param>
     void Draw(uint32_t modelId, const Transform &transform,
               const Camera &camera);
@@ -51,17 +52,23 @@ class ModelManager {
     void PostDraw();
 
     /// <summary>
-    /// アニメーションの更新
+    /// アニメーションの更新処理
     /// </summary>
     /// <param name="modelId">アニメーションを更新するモデルのID</param>
     /// <param name="deltaTime">前フレームからの経過時間(秒)</param>
     void UpdateAnimation(uint32_t modelId, float deltaTime);
+
+    // Getter
+    MaterialManager *GetMaterialManager() { return &materialManager_; }
+    Model &GetModel(uint32_t modelId) { return models_[modelId]; }
+    const Model &GetModel(uint32_t modelId) const { return models_[modelId]; }
 
   private:
     DirectXCommon *dxCommon_ = nullptr;
     TextureManager *textureManager_ = nullptr;
 
     MeshManager meshManager_;
+    MaterialManager materialManager_;
     AssimpLoader assimpLoader_;
     ModelRenderer modelRenderer_;
     Animator animator_;

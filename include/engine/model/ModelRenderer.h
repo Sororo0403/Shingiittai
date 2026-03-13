@@ -1,5 +1,6 @@
 #pragma once
 #include "Camera.h"
+#include "MaterialManager.h"
 #include "Model.h"
 #include "Transform.h"
 #include <DirectXMath.h>
@@ -16,18 +17,20 @@ class ModelRenderer {
     /// <summary>
     /// 初期化処理
     /// </summary>
-    /// <param name="dxCommon">DirectXCommonインスタンス</param>
-    /// <param name="srvManager">SrvManagerインスタンス</param>
-    /// <param name="meshManager">MeshManagerインスタンス</param>
-    /// <param name="textureManager">TextureManagerインスタンス</param>
+    /// <param name="dxCommon"></param>
+    /// <param name="srvManager"></param>
+    /// <param name="meshManager"></param>
+    /// <param name="textureManager"></param>
+    /// <param name="materialManager"></param>
     void Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
-                    MeshManager *meshManager, TextureManager *textureManager);
+                    MeshManager *meshManager, TextureManager *textureManager,
+                    MaterialManager *materialManager);
 
     /// <summary>
-    /// モデルを描画する
+    /// 描画処理
     /// </summary>
     /// <param name="model">描画するモデル</param>
-    /// <param name="transform">描画するモデルのトランスフォーム</param>
+    /// <param name="transform">描画するモデルのTransform</param>
     /// <param name="camera">描画に使用するカメラ</param>
     void Draw(const Model &model, const Transform &transform,
               const Camera &camera);
@@ -51,13 +54,13 @@ class ModelRenderer {
 
   private:
     static constexpr uint32_t kMaxDraws = 4096;
-
     static constexpr uint32_t kMaxBones = 128;
 
     DirectXCommon *dxCommon_ = nullptr;
     SrvManager *srvManager_ = nullptr;
     MeshManager *meshManager_ = nullptr;
     TextureManager *textureManager_ = nullptr;
+    MaterialManager *materialManager_ = nullptr;
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
@@ -65,7 +68,6 @@ class ModelRenderer {
 
     uint32_t drawIndex_ = 0;
     uint32_t cbStride_ = 0;
-
     uint8_t *mappedCB_ = nullptr;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> boneBuffer_;

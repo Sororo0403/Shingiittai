@@ -1,6 +1,7 @@
 #include "ModelManager.h"
 #include "Camera.h"
 #include "DirectXCommon.h"
+#include "MaterialManager.h"
 #include "SrvManager.h"
 #include "TextureManager.h"
 #include <filesystem>
@@ -11,11 +12,12 @@ void ModelManager::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
     textureManager_ = textureManager;
 
     meshManager_.Initialize(dxCommon_);
+    materialManager_.Initialize(dxCommon_);
 
-    assimpLoader_.Initialize(textureManager_, &meshManager_);
+    assimpLoader_.Initialize(textureManager_, &meshManager_, &materialManager_);
 
     modelRenderer_.Initialize(dxCommon_, srvManager, &meshManager_,
-                              textureManager_);
+                              textureManager_, &materialManager_);
 }
 
 uint32_t ModelManager::Load(const std::wstring &path) {

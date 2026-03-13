@@ -121,6 +121,8 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\engine\model\MaterialManager.cpp" />
+    <ClCompile Include="src\engine\model\Material.cpp" />
     <ClCompile Include="src\engine\camera\DebugCamera.cpp" />
     <ClCompile Include="src\engine\model\Animator.cpp" />
     <ClCompile Include="src\engine\model\AssimpLoader.cpp" />
@@ -188,6 +190,8 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClInclude Include="include\engine\scene\SceneManager.h" />
     <ClInclude Include="include\app\player\Player.h" />
     <ClInclude Include="include\app\player\Sword.h" />
+    <ClInclude Include="include\engine\model\Material.h" />
+    <ClInclude Include="include\engine\model\MaterialManager.h" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="resources\shaders\model\ModelPS.hlsl">

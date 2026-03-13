@@ -27,11 +27,16 @@ ModelVSOutput main(ModelVSInput input)
 
     if (weightSum > 0.0001f)
     {
+        uint i0 = min(input.boneIndex.x, (uint) (MAX_BONES - 1));
+        uint i1 = min(input.boneIndex.y, (uint) (MAX_BONES - 1));
+        uint i2 = min(input.boneIndex.z, (uint) (MAX_BONES - 1));
+        uint i3 = min(input.boneIndex.w, (uint) (MAX_BONES - 1));
+
         skinnedPos =
-            mul(localPos, boneMatrices[input.boneIndex.x]) * input.boneWeight.x +
-            mul(localPos, boneMatrices[input.boneIndex.y]) * input.boneWeight.y +
-            mul(localPos, boneMatrices[input.boneIndex.z]) * input.boneWeight.z +
-            mul(localPos, boneMatrices[input.boneIndex.w]) * input.boneWeight.w;
+            mul(localPos, boneMatrices[i0]) * input.boneWeight.x +
+            mul(localPos, boneMatrices[i1]) * input.boneWeight.y +
+            mul(localPos, boneMatrices[i2]) * input.boneWeight.z +
+            mul(localPos, boneMatrices[i3]) * input.boneWeight.w;
     }
 
     o.pos = mul(skinnedPos, matWVP);

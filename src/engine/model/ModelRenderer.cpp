@@ -17,11 +17,13 @@ struct ConstBufferData {
 
 void ModelRenderer::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
                                MeshManager *meshManager,
-                               TextureManager *textureManager) {
+                               TextureManager *textureManager,
+                               MaterialManager *materialManager) {
     dxCommon_ = dxCommon;
     srvManager_ = srvManager;
     meshManager_ = meshManager;
     textureManager_ = textureManager;
+    materialManager_ = materialManager;
 
     CreateRootSignature();
     CreatePipelineState();
@@ -94,8 +96,10 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
     cmd->SetGraphicsRootConstantBufferView(0, cbAddr);
     cmd->SetGraphicsRootConstantBufferView(1,
                                            boneBuffer_->GetGPUVirtualAddress());
+    cmd->SetGraphicsRootConstantBufferView(
+        2, materialManager_->GetGPUVirtualAddress(model.materialId));
     cmd->SetGraphicsRootDescriptorTable(
-        2, textureManager_->GetGpuHandle(model.textureId));
+        3, textureManager_->GetGpuHandle(model.textureId));
 
     cmd->IASetVertexBuffers(0, 1, &mesh.vbView);
     cmd->IASetIndexBuffer(&mesh.ibView);
@@ -119,25 +123,21 @@ void ModelRenderer::CreateConstantBuffer() {
                       IID_PPV_ARGS(&constBuffer_)),
                   "CreateCommittedResource(ConstantBuffer) failed");
 
-    // Mapしっぱなし
     ThrowIfFailed(
         constBuffer_->Map(0, nullptr, reinterpret_cast<void **>(&mappedCB_)),
         "ConstantBuffer Map failed");
 }
 
 void ModelRenderer::CreateRootSignature() {
-    CD3DX12_ROOT_PARAMETER params[3];
+    CD3DX12_ROOT_PARAMETER params[4];
 
-    // b0 Transform
     params[0].InitAsConstantBufferView(0);
-
-    // b1 Skinning
     params[1].InitAsConstantBufferView(1);
+    params[2].InitAsConstantBufferView(2);
 
-    // t0 Texture
     CD3DX12_DESCRIPTOR_RANGE range;
     range.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
-    params[2].InitAsDescriptorTable(1, &range);
+    params[3].InitAsDescriptorTable(1, &range);
 
     CD3DX12_STATIC_SAMPLER_DESC sampler(0, D3D12_FILTER_MIN_MAG_MIP_LINEAR);
 
@@ -168,13 +168,15 @@ void ModelRenderer::CreatePipelineState() {
     D3D12_INPUT_ELEMENT_DESC layout[] = {
         {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-        {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12,
+        {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,
+         D3D12_APPEND_ALIGNED_ELEMENT,
          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-        {"BONEINDEX", 0, DXGI_FORMAT_R32G32B32A32_UINT, 0, 20,
+        {"BONEINDEX", 0, DXGI_FORMAT_R32G32B32A32_UINT, 0,
+         D3D12_APPEND_ALIGNED_ELEMENT,
          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-        {"BONEWEIGHT", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 36,
-         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}
-
+        {"BONEWEIGHT", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
+         D3D12_APPEND_ALIGNED_ELEMENT,
+         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
     };
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pso{};
@@ -185,11 +187,27 @@ void ModelRenderer::CreatePipelineState() {
     pso.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     pso.NumRenderTargets = 1;
     pso.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+    pso.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
     pso.SampleDesc.Count = 1;
     pso.SampleMask = UINT_MAX;
     pso.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-    pso.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-    pso.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+
+    D3D12_BLEND_DESC blend{};
+    blend.RenderTarget[0].BlendEnable = TRUE;
+    blend.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+    blend.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+    blend.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+    blend.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+    blend.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+    blend.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    blend.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+    pso.BlendState = blend;
+
+    D3D12_DEPTH_STENCIL_DESC depthDesc =
+        CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+    depthDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+    pso.DepthStencilState = depthDesc;
 
     ThrowIfFailed(device->CreateGraphicsPipelineState(
                       &pso, IID_PPV_ARGS(&pipelineState_)),
