@@ -63,7 +63,8 @@ class ModelRenderer {
     MaterialManager *materialManager_ = nullptr;
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> opaquePSO_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> transparentPSO_;
     Microsoft::WRL::ComPtr<ID3D12Resource> constBuffer_;
 
     uint32_t drawIndex_ = 0;

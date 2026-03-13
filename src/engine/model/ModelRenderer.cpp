@@ -2,6 +2,7 @@
 #include "DirectXCommon.h"
 #include "DxHelpers.h"
 #include "DxUtils.h"
+#include "MaterialManager.h"
 #include "MeshManager.h"
 #include "ShaderCompiler.h"
 #include "SrvManager.h"
@@ -37,7 +38,6 @@ void ModelRenderer::PreDraw() {
     ID3D12DescriptorHeap *heaps[] = {srvManager_->GetHeap()};
     cmd->SetDescriptorHeaps(1, heaps);
 
-    cmd->SetPipelineState(pipelineState_.Get());
     cmd->SetGraphicsRootSignature(rootSignature_.Get());
     cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -52,6 +52,16 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
 
     auto cmd = dxCommon_->GetCommandList();
     const Mesh &mesh = meshManager_->GetMesh(model.meshId);
+
+    const Material &material = materialManager_->GetMaterial(model.materialId);
+
+    bool transparent = material.color.w < 1.0f;
+
+    if (transparent) {
+        cmd->SetPipelineState(transparentPSO_.Get());
+    } else {
+        cmd->SetPipelineState(opaquePSO_.Get());
+    }
 
     XMVECTOR q = XMQuaternionNormalize(XMLoadFloat4(&transform.rotation));
 
@@ -81,13 +91,8 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
     if (!model.finalBoneMatrices.empty()) {
         for (size_t i = 0; i < model.finalBoneMatrices.size() && i < kMaxBones;
              i++) {
+
             XMMATRIX m = XMLoadFloat4x4(&model.finalBoneMatrices[i]);
-            m = XMMatrixTranspose(m);
-            XMStoreFloat4x4(&mappedBones_[i], m);
-        }
-    } else {
-        for (size_t i = 0; i < model.bones.size() && i < kMaxBones; i++) {
-            XMMATRIX m = XMLoadFloat4x4(&model.bones[i].offsetMatrix);
             m = XMMatrixTranspose(m);
             XMStoreFloat4x4(&mappedBones_[i], m);
         }
@@ -96,13 +101,16 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
     cmd->SetGraphicsRootConstantBufferView(0, cbAddr);
     cmd->SetGraphicsRootConstantBufferView(1,
                                            boneBuffer_->GetGPUVirtualAddress());
+
     cmd->SetGraphicsRootConstantBufferView(
         2, materialManager_->GetGPUVirtualAddress(model.materialId));
+
     cmd->SetGraphicsRootDescriptorTable(
         3, textureManager_->GetGpuHandle(model.textureId));
 
     cmd->IASetVertexBuffers(0, 1, &mesh.vbView);
     cmd->IASetIndexBuffer(&mesh.ibView);
+
     cmd->DrawIndexedInstanced(mesh.indexCount, 1, 0, 0, 0);
 
     drawIndex_++;
@@ -146,6 +154,7 @@ void ModelRenderer::CreateRootSignature() {
               D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
     ComPtr<ID3DBlob> blob, error;
+
     ThrowIfFailed(D3D12SerializeRootSignature(
                       &desc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error),
                   "D3D12SerializeRootSignature failed");
@@ -192,7 +201,23 @@ void ModelRenderer::CreatePipelineState() {
     pso.SampleMask = UINT_MAX;
     pso.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 
-    D3D12_BLEND_DESC blend{};
+    // 不透明PSO
+    D3D12_BLEND_DESC blend = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+    blend.RenderTarget[0].BlendEnable = FALSE;
+    pso.BlendState = blend;
+
+    D3D12_DEPTH_STENCIL_DESC opaqueDepth =
+        CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+    opaqueDepth.DepthEnable = TRUE;
+    opaqueDepth.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+    opaqueDepth.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+    pso.DepthStencilState = opaqueDepth;
+
+    ThrowIfFailed(
+        device->CreateGraphicsPipelineState(&pso, IID_PPV_ARGS(&opaquePSO_)),
+        "CreateGraphicsPipelineState(Opaque) failed");
+
+    // 透明PSO
     blend.RenderTarget[0].BlendEnable = TRUE;
     blend.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
     blend.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
@@ -201,17 +226,18 @@ void ModelRenderer::CreatePipelineState() {
     blend.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
     blend.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
     blend.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-
     pso.BlendState = blend;
 
-    D3D12_DEPTH_STENCIL_DESC depthDesc =
+    D3D12_DEPTH_STENCIL_DESC transparentDepth =
         CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
-    depthDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-    pso.DepthStencilState = depthDesc;
+    transparentDepth.DepthEnable = TRUE;
+    transparentDepth.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+    transparentDepth.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+    pso.DepthStencilState = transparentDepth;
 
     ThrowIfFailed(device->CreateGraphicsPipelineState(
-                      &pso, IID_PPV_ARGS(&pipelineState_)),
-                  "CreateGraphicsPipelineState failed");
+                      &pso, IID_PPV_ARGS(&transparentPSO_)),
+                  "CreateGraphicsPipelineState(Transparent) failed");
 }
 
 void ModelRenderer::CreateBoneBuffer() {
