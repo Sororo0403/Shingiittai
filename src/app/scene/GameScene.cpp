@@ -19,12 +19,10 @@ void GameScene::Initialize(const SceneContext &ctx) {
                    static_cast<float>(ctx_->winApp->GetHeight());
 
     camera_.Initialize(aspect);
-    camera_.SetPosition(kCameraStartPos);
     camera_.UpdateMatrices();
 
 #ifdef _DEBUG
     debugCamera_.Initialize(aspect);
-    debugCamera_.SetPosition(kCameraStartPos);
     debugCamera_.UpdateMatrices();
 #endif
 
@@ -125,21 +123,19 @@ void GameScene::UpdateBattleCamera() {
     XMFLOAT3 playerPos = playerTf.position;
     XMFLOAT3 enemyPos = enemyTf.position;
 
-    // プレイヤーを敵に向ける
-    player_.LookAt(enemyPos);
+    player_.LookAt({enemyPos.x, kCameraHeight, enemyPos.z});
 
-    // forward
     XMVECTOR playerPosV = XMLoadFloat3(&playerPos);
     XMVECTOR enemyPosV = XMLoadFloat3(&enemyPos);
 
     XMVECTOR forward = XMVector3Normalize(enemyPosV - playerPosV);
 
-    // カメラ位置
-    XMVECTOR camPos = playerPosV - forward * 3.5f + XMVectorSet(0, 1.2f, 0, 0);
+    XMVECTOR camPos = playerPosV - forward * kCameraDistance +
+                      XMVectorSet(0, kCameraHeight, 0, 0);
 
     XMFLOAT3 cameraPos;
     XMStoreFloat3(&cameraPos, camPos);
 
     camera_.SetPosition(cameraPos);
-    camera_.LookAt(enemyPos);
+    camera_.LookAt({enemyPos.x, kCameraHeight, enemyPos.z});
 }

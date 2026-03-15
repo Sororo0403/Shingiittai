@@ -36,6 +36,8 @@ class GameScene : public BaseScene {
 
   private:
     static constexpr DirectX::XMFLOAT3 kCameraStartPos = {0.0f, 1.0f, 0.5f};
+    static constexpr float kCameraDistance = 3.5f;
+    static constexpr float kCameraHeight = 1.2f;
 
     // Camera
     Camera camera_;
