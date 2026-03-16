@@ -34,6 +34,34 @@ void Enemy::Update(const DirectX::XMFLOAT3 &playerPos, float deltaTime) {
         return;
     }
 
+    // Smash timing の安全補正
+    if (smashTiming_.activeStartTime < 0.0f) {
+        smashTiming_.activeStartTime = 0.0f;
+    }
+    if (smashTiming_.activeEndTime < smashTiming_.activeStartTime) {
+        smashTiming_.activeEndTime = smashTiming_.activeStartTime;
+    }
+    if (smashTiming_.recoveryStartTime < smashTiming_.activeEndTime) {
+        smashTiming_.recoveryStartTime = smashTiming_.activeEndTime;
+    }
+    if (smashTiming_.totalTime < smashTiming_.recoveryStartTime) {
+        smashTiming_.totalTime = smashTiming_.recoveryStartTime;
+    }
+
+    // Sweep timing の安全補正
+    if (sweepTiming_.activeStartTime < 0.0f) {
+        sweepTiming_.activeStartTime = 0.0f;
+    }
+    if (sweepTiming_.activeEndTime < sweepTiming_.activeStartTime) {
+        sweepTiming_.activeEndTime = sweepTiming_.activeStartTime;
+    }
+    if (sweepTiming_.recoveryStartTime < sweepTiming_.activeEndTime) {
+        sweepTiming_.recoveryStartTime = sweepTiming_.activeEndTime;
+    }
+    if (sweepTiming_.totalTime < sweepTiming_.recoveryStartTime) {
+        sweepTiming_.totalTime = sweepTiming_.recoveryStartTime;
+    }
+
     // プレイヤー位置を保存
     playerPos_ = playerPos;
 
@@ -198,12 +226,7 @@ void Enemy::UpdateParts() {
     // 攻撃途中でプレイヤー方向へ不自然に追従しないようにする。
     float usedYaw = facingYaw_;
 
-    if (state_ == EnemyState::SmashCharge ||
-        state_ == EnemyState::SmashAttack ||
-        state_ == EnemyState::SmashRecovery ||
-        state_ == EnemyState::SweepCharge ||
-        state_ == EnemyState::SweepAttack ||
-        state_ == EnemyState::SweepRecovery) {
+    if (ShouldUseLockedAttackYaw()) {
         usedYaw = lockedAttackYaw_;
     }
 
@@ -386,32 +409,32 @@ OBB Enemy::GetRightHandOBB() const { return MakeOBB(rightHandTf_, handSize_); }
 OBB Enemy::GetAttackOBB() const {
     OBB box{};
 
+    if (!isAttackActive_) {
+        box.center = rightHandTf_.position;
+        box.size = {0.1f, 0.1f, 0.1f};
+        box.rotation = bodyTf_.rotation;
+        return box;
+    }
+
     float usedYaw = lockedAttackYaw_;
     float forwardX = std::sinf(usedYaw);
     float forwardZ = std::cosf(usedYaw);
     float rightX = std::cosf(usedYaw);
     float rightZ = -std::sinf(usedYaw);
 
-    if (state_ == EnemyState::SmashAttack) {
-        // 振り下ろし：
-        // 胴体前方に判定を置く
+    if (IsCurrentAttack(AttackType::Smash)) {
         box.center = bodyTf_.position;
         box.center.y += smashAttackHeightOffset_;
         box.center.x += forwardX * smashAttackForwardOffset_;
         box.center.z += forwardZ * smashAttackForwardOffset_;
         box.size = smashParam_.hitBoxSize;
-
-    } else if (state_ == EnemyState::SweepAttack) {
-        // 薙ぎ払い：
-        // 胴体横方向に判定を置く
+    } else if (IsCurrentAttack(AttackType::Sweep)) {
         box.center = bodyTf_.position;
         box.center.y += sweepAttackHeightOffset_;
         box.center.x += rightX * sweepAttackSideOffset_;
         box.center.z += rightZ * sweepAttackSideOffset_;
         box.size = sweepParam_.hitBoxSize;
-
     } else {
-        // 攻撃状態でないときは、判定が誤って当たらないように極小サイズにする
         box.center = rightHandTf_.position;
         box.size = {0.1f, 0.1f, 0.1f};
     }
@@ -453,37 +476,31 @@ void Enemy::UpdateIdle(float deltaTime) {
     // 近距離行動選択
     // ------------------------------------------------------------
     if (distance <= nearAttackDistance_) {
-        // 近接攻撃開始前に向きを固定する
-        LockCurrentFacing();
-
-        // 重みの合計を計算
         int total = nearSmashWeight_ + nearSweepWeight_ + nearGuardWeight_;
         if (total <= 0) {
-            // 全部0以下の場合でも rand()%0 を避けるため最低1にする
             total = 1;
         }
 
-        // 0 ～ total-1 の乱数を使って行動を選ぶ
         int r = std::rand() % total;
 
         if (r < nearSmashWeight_) {
             state_ = EnemyState::SmashCharge;
+            BeginAttack(AttackType::Smash, AttackPhase::Charge);
         } else if (r < nearSmashWeight_ + nearSweepWeight_) {
             state_ = EnemyState::SweepCharge;
+            BeginAttack(AttackType::Sweep, AttackPhase::Charge);
         } else {
+            currentAttackType_ = AttackType::None;
+            currentAttackPhase_ = AttackPhase::None;
             DecideGuardTarget();
             state_ = EnemyState::GuardMove;
+            stateTimer_ = 0.0f;
         }
-
-        stateTimer_ = 0.0f;
     }
     // ------------------------------------------------------------
     // 遠距離行動選択
     // ------------------------------------------------------------
     else if (distance > farAttackDistance_) {
-        // 遠距離攻撃開始前に向きを固定する
-        LockCurrentFacing();
-
         int total = farShotWeight_ + farWarpWeight_ + farWaveWeight_;
         if (total <= 0) {
             total = 1;
@@ -493,14 +510,17 @@ void Enemy::UpdateIdle(float deltaTime) {
 
         if (r < farShotWeight_) {
             state_ = EnemyState::ShotCharge;
+            BeginAttack(AttackType::Shot, AttackPhase::Charge);
         } else if (r < farShotWeight_ + farWarpWeight_) {
+            currentAttackType_ = AttackType::None;
+            currentAttackPhase_ = AttackPhase::None;
             DecideWarpTargetNearPlayer();
             state_ = EnemyState::WarpStart;
+            stateTimer_ = 0.0f;
         } else {
             state_ = EnemyState::WaveCharge;
+            BeginAttack(AttackType::Wave, AttackPhase::Charge);
         }
-
-        stateTimer_ = 0.0f;
     }
 
     // 中距離帯では何もしない設計
@@ -512,38 +532,68 @@ void Enemy::UpdateIdle(float deltaTime) {
 
 // 振り下ろし準備
 void Enemy::UpdateSmashCharge(float deltaTime) {
-    // 未使用引数警告回避
     deltaTime = deltaTime;
 
-    // 実際の見た目は UpdateParts() 側で状態を見て反映している
+    currentAttackType_ = AttackType::Smash;
+    currentAttackPhase_ = AttackPhase::Charge;
+
+    // ため中はプレイヤー方向へ向く
+    UpdateFacingToPlayer();
+
     if (stateTimer_ >= smashChargeTime_) {
+        // 攻撃に入る瞬間の向きを固定
+        LockCurrentFacing();
+
         state_ = EnemyState::SmashAttack;
-        stateTimer_ = 0.0f;
+        ChangeAttackPhase(AttackPhase::Active);
     }
 }
 
 // 振り下ろし本体
 void Enemy::UpdateSmashAttack(float deltaTime) {
-    // 未使用引数警告回避
     deltaTime = deltaTime;
 
-    // 攻撃中のみ当たり判定を有効化
-    isAttackActive_ = true;
+    currentAttackType_ = AttackType::Smash;
+    currentAttackPhase_ = AttackPhase::Active;
 
-    if (stateTimer_ >= smashAttackTime_) {
+    const AttackTimingParam *timing = GetCurrentAttackTiming();
+    if (!timing) {
+        return;
+    }
+
+    float attackTime = GetCurrentActionTime();
+
+    if (attackTime >= timing->activeStartTime &&
+        attackTime <= timing->activeEndTime) {
+        isAttackActive_ = true;
+    }
+
+    if (attackTime >= timing->recoveryStartTime) {
         state_ = EnemyState::SmashRecovery;
-        stateTimer_ = 0.0f;
+        ChangeAttackPhase(AttackPhase::Recovery);
     }
 }
 
 // 振り下ろし後の隙
 void Enemy::UpdateSmashRecovery(float deltaTime) {
-    // 未使用引数警告回避
     deltaTime = deltaTime;
 
-    if (stateTimer_ >= smashRecoveryTime_) {
-        state_ = EnemyState::Idle;
-        stateTimer_ = 0.0f;
+    currentAttackType_ = AttackType::Smash;
+    currentAttackPhase_ = AttackPhase::Recovery;
+
+    const AttackTimingParam *timing = GetCurrentAttackTiming();
+    if (!timing) {
+        EndAttack();
+        return;
+    }
+
+    float recoveryDuration = timing->totalTime - timing->recoveryStartTime;
+    if (recoveryDuration < 0.0f) {
+        recoveryDuration = 0.0f;
+    }
+
+    if (stateTimer_ >= recoveryDuration) {
+        EndAttack();
     }
 }
 
@@ -553,39 +603,70 @@ void Enemy::UpdateSmashRecovery(float deltaTime) {
 
 // 薙ぎ払い準備
 void Enemy::UpdateSweepCharge(float deltaTime) {
-    // 未使用引数警告回避
     deltaTime = deltaTime;
 
+    currentAttackType_ = AttackType::Sweep;
+    currentAttackPhase_ = AttackPhase::Charge;
+
+    // ため中はプレイヤー方向へ向く
+    UpdateFacingToPlayer();
+
     if (stateTimer_ >= sweepChargeTime_) {
+        // 振る瞬間の向きを固定
+        LockCurrentFacing();
+
         state_ = EnemyState::SweepAttack;
-        stateTimer_ = 0.0f;
+        ChangeAttackPhase(AttackPhase::Active);
     }
 }
 
 // 薙ぎ払い本体
 void Enemy::UpdateSweepAttack(float deltaTime) {
-    // 未使用引数警告回避
     deltaTime = deltaTime;
 
-    isAttackActive_ = true;
+    currentAttackType_ = AttackType::Sweep;
+    currentAttackPhase_ = AttackPhase::Active;
 
-    if (stateTimer_ >= sweepAttackTime_) {
+    const AttackTimingParam *timing = GetCurrentAttackTiming();
+    if (!timing) {
+        return;
+    }
+
+    float attackTime = GetCurrentActionTime();
+
+    if (attackTime >= timing->activeStartTime &&
+        attackTime <= timing->activeEndTime) {
+        isAttackActive_ = true;
+    }
+
+    if (attackTime >= timing->recoveryStartTime) {
         state_ = EnemyState::SweepRecovery;
-        stateTimer_ = 0.0f;
+        ChangeAttackPhase(AttackPhase::Recovery);
     }
 }
 
 // 薙ぎ払い後の隙
 void Enemy::UpdateSweepRecovery(float deltaTime) {
-    // 未使用引数警告回避
     deltaTime = deltaTime;
 
-    if (stateTimer_ >= sweepRecoveryTime_) {
-        state_ = EnemyState::Idle;
-        stateTimer_ = 0.0f;
+    currentAttackType_ = AttackType::Sweep;
+    currentAttackPhase_ = AttackPhase::Recovery;
+
+    const AttackTimingParam *timing = GetCurrentAttackTiming();
+    if (!timing) {
+        EndAttack();
+        return;
+    }
+
+    float recoveryDuration = timing->totalTime - timing->recoveryStartTime;
+    if (recoveryDuration < 0.0f) {
+        recoveryDuration = 0.0f;
+    }
+
+    if (stateTimer_ >= recoveryDuration) {
+        EndAttack();
     }
 }
-
 // ============================================================
 // 向き更新処理
 // ============================================================
@@ -608,14 +689,18 @@ void Enemy::LockCurrentFacing() { lockedAttackYaw_ = facingYaw_; }
 
 // 弾攻撃準備
 void Enemy::UpdateShotCharge(float deltaTime) {
-    // 未使用引数警告回避
     deltaTime = deltaTime;
+
+    currentAttackType_ = AttackType::Shot;
+    currentAttackPhase_ = AttackPhase::Charge;
+
+    // 溜め中はずっとプレイヤーを向く
+    UpdateFacingToPlayer();
 
     if (stateTimer_ >= shotChargeTime_) {
         state_ = EnemyState::ShotFire;
-        stateTimer_ = 0.0f;
+        ChangeAttackPhase(AttackPhase::Active);
 
-        // 発射数は最小～最大の範囲でランダム決定
         shotsRemaining_ =
             shotMinCount_ + (std::rand() % (shotMaxCount_ - shotMinCount_ + 1));
 
@@ -625,30 +710,32 @@ void Enemy::UpdateShotCharge(float deltaTime) {
 
 // 弾発射中
 void Enemy::UpdateShotFire(float deltaTime) {
+    currentAttackType_ = AttackType::Shot;
+    currentAttackPhase_ = AttackPhase::Active;
+
     shotIntervalTimer_ += deltaTime;
 
-    // 一定間隔ごとに弾を生成する
     if (shotsRemaining_ > 0 && shotIntervalTimer_ >= shotInterval_) {
         SpawnBullet();
         shotsRemaining_--;
         shotIntervalTimer_ = 0.0f;
     }
 
-    // 規定数撃ち終わったら回復へ移行
     if (shotsRemaining_ <= 0) {
         state_ = EnemyState::ShotRecovery;
-        stateTimer_ = 0.0f;
+        ChangeAttackPhase(AttackPhase::Recovery);
     }
 }
 
 // 弾攻撃後の隙
 void Enemy::UpdateShotRecovery(float deltaTime) {
-    // 未使用引数警告回避
     deltaTime = deltaTime;
 
+    currentAttackType_ = AttackType::Shot;
+    currentAttackPhase_ = AttackPhase::Recovery;
+
     if (stateTimer_ >= shotRecoveryTime_) {
-        state_ = EnemyState::Idle;
-        stateTimer_ = 0.0f;
+        EndAttack();
     }
 }
 
@@ -761,6 +848,8 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
     isVisible_ = true;
 
     if (stateTimer_ >= warpEndTime_) {
+        currentAttackType_ = AttackType::None;
+        currentAttackPhase_ = AttackPhase::None;
         state_ = EnemyState::Idle;
         stateTimer_ = 0.0f;
     }
@@ -772,34 +861,45 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
 
 // 波攻撃準備
 void Enemy::UpdateWaveCharge(float deltaTime) {
-    // 未使用引数警告回避
     deltaTime = deltaTime;
 
+    currentAttackType_ = AttackType::Wave;
+    currentAttackPhase_ = AttackPhase::Charge;
+
+    // 溜め中はプレイヤー方向へ向く
+    UpdateFacingToPlayer();
+
     if (stateTimer_ >= waveChargeTime_) {
+        // 発射方向をここで固定
+        LockCurrentFacing();
+
         state_ = EnemyState::WaveFire;
-        stateTimer_ = 0.0f;
+        ChangeAttackPhase(AttackPhase::Active);
     }
 }
 
 // 波発射
 void Enemy::UpdateWaveFire(float deltaTime) {
-    // 未使用引数警告回避
     deltaTime = deltaTime;
+
+    currentAttackType_ = AttackType::Wave;
+    currentAttackPhase_ = AttackPhase::Active;
 
     SpawnWave();
 
     state_ = EnemyState::WaveRecovery;
-    stateTimer_ = 0.0f;
+    ChangeAttackPhase(AttackPhase::Recovery);
 }
 
 // 波攻撃後の隙
 void Enemy::UpdateWaveRecovery(float deltaTime) {
-    // 未使用引数警告回避
     deltaTime = deltaTime;
 
+    currentAttackType_ = AttackType::Wave;
+    currentAttackPhase_ = AttackPhase::Recovery;
+
     if (stateTimer_ >= waveRecoveryTime_) {
-        state_ = EnemyState::Idle;
-        stateTimer_ = 0.0f;
+        EndAttack();
     }
 }
 
@@ -902,10 +1002,68 @@ void Enemy::UpdateGuardRecovery(float deltaTime) {
     deltaTime = deltaTime;
 
     if (stateTimer_ >= guardRecoveryTime_) {
+        currentAttackType_ = AttackType::None;
+        currentAttackPhase_ = AttackPhase::None;
         state_ = EnemyState::Idle;
         stateTimer_ = 0.0f;
         guardTarget_ = GuardTarget::None;
     }
+}
+
+//**************************
+//アクションタイムの管理
+//**************************
+
+//アクションタイム
+float Enemy::GetCurrentActionTime() const { return stateTimer_; }
+
+// 現在の攻撃タイプに応じたタイミング情報を返す
+const AttackTimingParam *Enemy::GetCurrentAttackTiming() const {
+    switch (currentAttackType_) {
+    case AttackType::Smash:
+        return &smashTiming_;
+    case AttackType::Sweep:
+        return &sweepTiming_;
+    default:
+        return nullptr;
+    }
+}
+
+// 攻撃開始：攻撃タイプとフェーズをセット
+void Enemy::BeginAttack(AttackType type, AttackPhase phase) {
+    currentAttackType_ = type;
+    currentAttackPhase_ = phase;
+    stateTimer_ = 0.0f;
+}
+
+// 攻撃フェーズ移行：フェーズを切り替えてタイマーリセット
+void Enemy::ChangeAttackPhase(AttackPhase phase) {
+    currentAttackPhase_ = phase;
+    stateTimer_ = 0.0f;
+}
+
+// 攻撃終了：攻撃タイプとフェーズをリセットしてIdleに戻す
+void Enemy::EndAttack() {
+    currentAttackType_ = AttackType::None;
+    currentAttackPhase_ = AttackPhase::None;
+    state_ = EnemyState::Idle;
+    stateTimer_ = 0.0f;
+}
+
+// 現在の攻撃が、向き固定して攻撃判定を出すタイプか
+bool Enemy::ShouldUseLockedAttackYaw() const {
+    switch (currentAttackType_) {
+    case AttackType::Smash:
+    case AttackType::Sweep:
+        return true;
+    default:
+        return false;
+    }
+}
+
+// 現在の攻撃が、攻撃判定が有効なフェーズに入っているか
+bool Enemy::IsCurrentAttack(AttackType type) const {
+    return currentAttackType_ == type;
 }
 
 // ============================================================
@@ -922,19 +1080,21 @@ EnemyTuningPreset Enemy::CreateTuningPreset() const {
     p.smash.knockback = smashParam_.knockback;
     p.smash.hitBoxSize = smashParam_.hitBoxSize;
     p.smashChargeTime = smashChargeTime_;
-    p.smashAttackTime = smashAttackTime_;
-    p.smashRecoveryTime = smashRecoveryTime_;
+    //p.smashAttackTime = smashAttackTime_;
+    //p.smashRecoveryTime = smashRecoveryTime_;
     p.smashAttackForwardOffset = smashAttackForwardOffset_;
     p.smashAttackHeightOffset = smashAttackHeightOffset_;
+    p.smashTiming.trackingEndTime = smashTiming_.trackingEndTime;
 
     p.sweep.damage = sweepParam_.damage;
     p.sweep.knockback = sweepParam_.knockback;
     p.sweep.hitBoxSize = sweepParam_.hitBoxSize;
     p.sweepChargeTime = sweepChargeTime_;
-    p.sweepAttackTime = sweepAttackTime_;
-    p.sweepRecoveryTime = sweepRecoveryTime_;
+    //p.sweepAttackTime = sweepAttackTime_;
+    //p.sweepRecoveryTime = sweepRecoveryTime_;
     p.sweepAttackSideOffset = sweepAttackSideOffset_;
     p.sweepAttackHeightOffset = sweepAttackHeightOffset_;
+    p.sweepTiming.trackingEndTime = sweepTiming_.trackingEndTime;
 
     p.bullet.damage = bulletParam_.damage;
     p.bullet.knockback = bulletParam_.knockback;
@@ -958,6 +1118,16 @@ EnemyTuningPreset Enemy::CreateTuningPreset() const {
     p.waveSpawnForwardOffset = waveSpawnForwardOffset_;
     p.waveSpawnHeightOffset = waveSpawnHeightOffset_;
 
+    p.smashTiming.totalTime = smashTiming_.totalTime;
+    p.smashTiming.activeStartTime = smashTiming_.activeStartTime;
+    p.smashTiming.activeEndTime = smashTiming_.activeEndTime;
+    p.smashTiming.recoveryStartTime = smashTiming_.recoveryStartTime;
+
+    p.sweepTiming.totalTime = sweepTiming_.totalTime;
+    p.sweepTiming.activeStartTime = sweepTiming_.activeStartTime;
+    p.sweepTiming.activeEndTime = sweepTiming_.activeEndTime;
+    p.sweepTiming.recoveryStartTime = sweepTiming_.recoveryStartTime;
+
     return p;
 }
 
@@ -973,20 +1143,30 @@ void Enemy::ApplyTuningPreset(const EnemyTuningPreset &p) {
     smashParam_.knockback = p.smash.knockback;
     smashParam_.hitBoxSize = p.smash.hitBoxSize;
     smashChargeTime_ = p.smashChargeTime;
-    smashAttackTime_ = p.smashAttackTime;
-    smashRecoveryTime_ = p.smashRecoveryTime;
+   /* smashAttackTime_ = p.smashAttackTime;
+    smashRecoveryTime_ = p.smashRecoveryTime;*/
     smashAttackForwardOffset_ = p.smashAttackForwardOffset;
     smashAttackHeightOffset_ = p.smashAttackHeightOffset;
+    smashTiming_.totalTime = p.smashTiming.totalTime;
+    smashTiming_.activeStartTime = p.smashTiming.activeStartTime;
+    smashTiming_.activeEndTime = p.smashTiming.activeEndTime;
+    smashTiming_.recoveryStartTime = p.smashTiming.recoveryStartTime;
+    smashTiming_.trackingEndTime = p.smashTiming.trackingEndTime;
+    
 
     sweepParam_.damage = p.sweep.damage;
     sweepParam_.knockback = p.sweep.knockback;
     sweepParam_.hitBoxSize = p.sweep.hitBoxSize;
     sweepChargeTime_ = p.sweepChargeTime;
-    sweepAttackTime_ = p.sweepAttackTime;
-    sweepRecoveryTime_ = p.sweepRecoveryTime;
+    /*sweepAttackTime_ = p.sweepAttackTime;
+    sweepRecoveryTime_ = p.sweepRecoveryTime;*/
     sweepAttackSideOffset_ = p.sweepAttackSideOffset;
     sweepAttackHeightOffset_ = p.sweepAttackHeightOffset;
-
+    sweepTiming_.totalTime = p.sweepTiming.totalTime;
+    sweepTiming_.activeStartTime = p.sweepTiming.activeStartTime;
+    sweepTiming_.activeEndTime = p.sweepTiming.activeEndTime;
+    sweepTiming_.recoveryStartTime = p.sweepTiming.recoveryStartTime;
+    sweepTiming_.trackingEndTime = p.sweepTiming.trackingEndTime;
     bulletParam_.damage = p.bullet.damage;
     bulletParam_.knockback = p.bullet.knockback;
     bulletParam_.hitBoxSize = p.bullet.hitBoxSize;

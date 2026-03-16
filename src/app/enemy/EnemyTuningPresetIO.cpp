@@ -18,6 +18,9 @@ bool Save(const std::string &path, const EnemyTuningPreset &p) {
     ofs << p.smashChargeTime << " " << p.smashAttackTime << " "
         << p.smashRecoveryTime << " " << p.smashAttackForwardOffset << " "
         << p.smashAttackHeightOffset << "\n";
+    ofs << p.smashTiming.totalTime << " " << p.smashTiming.activeStartTime
+        << " " << p.smashTiming.activeEndTime << " "
+        << p.smashTiming.recoveryStartTime << "\n";
 
     ofs << p.sweep.damage << " " << p.sweep.knockback << " "
         << p.sweep.hitBoxSize.x << " " << p.sweep.hitBoxSize.y << " "
@@ -25,6 +28,9 @@ bool Save(const std::string &path, const EnemyTuningPreset &p) {
     ofs << p.sweepChargeTime << " " << p.sweepAttackTime << " "
         << p.sweepRecoveryTime << " " << p.sweepAttackSideOffset << " "
         << p.sweepAttackHeightOffset << "\n";
+    ofs << p.sweepTiming.totalTime << " " << p.sweepTiming.activeStartTime
+        << " " << p.sweepTiming.activeEndTime << " "
+        << p.sweepTiming.recoveryStartTime << "\n";
 
     ofs << p.bullet.damage << " " << p.bullet.knockback << " "
         << p.bullet.hitBoxSize.x << " " << p.bullet.hitBoxSize.y << " "
@@ -40,6 +46,7 @@ bool Save(const std::string &path, const EnemyTuningPreset &p) {
     ofs << p.waveChargeTime << " " << p.waveRecoveryTime << " " << p.waveSpeed
         << " " << p.waveMaxDistance << " " << p.waveSpawnForwardOffset << " "
         << p.waveSpawnHeightOffset << "\n";
+    
 
     return true;
 }
@@ -57,11 +64,15 @@ bool Load(const std::string &path, EnemyTuningPreset &p) {
         p.smash.hitBoxSize.y >> p.smash.hitBoxSize.z;
     ifs >> p.smashChargeTime >> p.smashAttackTime >> p.smashRecoveryTime >>
         p.smashAttackForwardOffset >> p.smashAttackHeightOffset;
+    ifs >> p.smashTiming.totalTime >> p.smashTiming.activeStartTime >>
+        p.smashTiming.activeEndTime >> p.smashTiming.recoveryStartTime;
 
     ifs >> p.sweep.damage >> p.sweep.knockback >> p.sweep.hitBoxSize.x >>
         p.sweep.hitBoxSize.y >> p.sweep.hitBoxSize.z;
     ifs >> p.sweepChargeTime >> p.sweepAttackTime >> p.sweepRecoveryTime >>
         p.sweepAttackSideOffset >> p.sweepAttackHeightOffset;
+    ifs >> p.sweepTiming.totalTime >> p.sweepTiming.activeStartTime >>
+        p.sweepTiming.activeEndTime >> p.sweepTiming.recoveryStartTime;
 
     ifs >> p.bullet.damage >> p.bullet.knockback >> p.bullet.hitBoxSize.x >>
         p.bullet.hitBoxSize.y >> p.bullet.hitBoxSize.z;

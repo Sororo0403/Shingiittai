@@ -7,6 +7,14 @@ struct AttackParamPreset {
     DirectX::XMFLOAT3 hitBoxSize = {1.0f, 1.0f, 1.0f};
 };
 
+struct AttackTimingParamPreset {
+    float totalTime = 0.0f;
+    float trackingEndTime = 0.0f;
+    float activeStartTime = 0.0f;
+    float activeEndTime = 0.0f;
+    float recoveryStartTime = 0.0f;
+};
+
 struct EnemyTuningPreset {
     float nearAttackDistance = 4.0f;
     float farAttackDistance = 4.0f;
@@ -42,4 +50,7 @@ struct EnemyTuningPreset {
     float waveMaxDistance = 8.0f;
     float waveSpawnForwardOffset = 1.5f;
     float waveSpawnHeightOffset = 0.0f;
+
+    AttackTimingParamPreset smashTiming;
+    AttackTimingParamPreset sweepTiming;
 };

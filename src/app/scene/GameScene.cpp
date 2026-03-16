@@ -420,12 +420,28 @@ void GameScene::Draw() {
         ImGui::DragFloat("Smash Knockback", &p.knockback, 0.1f, 0.0f, 30.0f);
         ImGui::DragFloat3("Smash HitBox", &p.hitBoxSize.x, 0.05f, 0.1f, 10.0f);
 
-        ImGui::DragFloat("Smash Charge", &enemy_.EditSmashChargeTime(), 0.01f,
-                         0.0f, 5.0f);
-        ImGui::DragFloat("Smash Attack", &enemy_.EditSmashAttackTime(), 0.01f,
+       float &smashCharge = enemy_.EditSmashChargeTime();
+        ImGui::DragFloat("Smash Charge", &smashCharge, 0.01f, 0.0f, 5.0f);
+
+       /* ImGui::DragFloat("Smash Attack", &enemy_.EditSmashAttackTime(), 0.01f,
                          0.0f, 5.0f);
         ImGui::DragFloat("Smash Recovery", &enemy_.EditSmashRecoveryTime(),
                          0.01f, 0.0f, 5.0f);
+        ImGui::DragFloat("Smash Active Start",
+                         &enemy_.EditSmashActiveStartTime(), 0.01f, 0.0f, 1.0f);
+        ImGui::DragFloat("Smash Active End", &enemy_.EditSmashActiveEndTime(),
+                         0.01f, 0.0f, 1.0f);*/
+        if (ImGui::TreeNode("Smash Timing")) {
+            auto &t = enemy_.EditSmashTiming();
+            ImGui::DragFloat("Smash Total", &t.totalTime, 0.01f, 0.0f, 3.0f);
+            ImGui::DragFloat("Smash Active Start", &t.activeStartTime, 0.01f,
+                             0.0f, 3.0f);
+            ImGui::DragFloat("Smash Active End", &t.activeEndTime, 0.01f, 0.0f,
+                             3.0f);
+            ImGui::DragFloat("Smash Recovery Start", &t.recoveryStartTime,
+                             0.01f, 0.0f, 3.0f);
+            ImGui::TreePop();
+        }
         ImGui::TreePop();
     }
 
@@ -435,12 +451,29 @@ void GameScene::Draw() {
         ImGui::DragFloat("Sweep Knockback", &p.knockback, 0.1f, 0.0f, 30.0f);
         ImGui::DragFloat3("Sweep HitBox", &p.hitBoxSize.x, 0.05f, 0.1f, 10.0f);
 
-        ImGui::DragFloat("Sweep Charge", &enemy_.EditSweepChargeTime(), 0.01f,
-                         0.0f, 5.0f);
-        ImGui::DragFloat("Sweep Attack", &enemy_.EditSweepAttackTime(), 0.01f,
+        float &sweepCharge = enemy_.EditSweepChargeTime();
+        ImGui::DragFloat("Sweep Charge", &sweepCharge, 0.01f, 0.0f, 5.0f);
+
+
+       /* ImGui::DragFloat("Sweep Attack", &enemy_.EditSweepAttackTime(), 0.01f,
                          0.0f, 5.0f);
         ImGui::DragFloat("Sweep Recovery", &enemy_.EditSweepRecoveryTime(),
                          0.01f, 0.0f, 5.0f);
+        ImGui::DragFloat("Sweep Active Start",
+                         &enemy_.EditSweepActiveStartTime(), 0.01f, 0.0f, 1.0f);
+        ImGui::DragFloat("Sweep Active End", &enemy_.EditSweepActiveEndTime(),
+                         0.01f, 0.0f, 1.0f);*/
+        if (ImGui::TreeNode("Sweep Timing")) {
+            auto &t = enemy_.EditSweepTiming();
+            ImGui::DragFloat("Sweep Total", &t.totalTime, 0.01f, 0.0f, 3.0f);
+            ImGui::DragFloat("Sweep Active Start", &t.activeStartTime, 0.01f,
+                             0.0f, 3.0f);
+            ImGui::DragFloat("Sweep Active End", &t.activeEndTime, 0.01f, 0.0f,
+                             3.0f);
+            ImGui::DragFloat("Sweep Recovery Start", &t.recoveryStartTime,
+                             0.01f, 0.0f, 3.0f);
+            ImGui::TreePop();
+        }
         ImGui::TreePop();
     }
 

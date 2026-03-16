@@ -58,6 +58,17 @@ struct AttackParam {
     DirectX::XMFLOAT3 hitBoxSize = {1.0f, 1.0f, 1.0f};
 };
 
+struct AttackTimingParam {
+    float totalTime = 1.0f;
+    float trackingEndTime = 0.0f;
+    float activeStartTime = 0.0f;
+    float activeEndTime = 0.0f;
+    float recoveryStartTime = 0.0f;
+};
+
+enum class AttackType { None, Smash, Sweep, Shot, Wave };
+enum class AttackPhase { None, Charge, Active, Recovery };
+
 class Enemy {
 
   public:
@@ -151,6 +162,8 @@ class Enemy {
     const AttackParam &GetSweepParam() const { return sweepParam_; }
     const AttackParam &GetBulletParam() const { return bulletParam_; }
     const AttackParam &GetWaveParam() const { return waveParam_; }
+    const AttackTimingParam &GetSmashTiming() const { return smashTiming_; }
+    const AttackTimingParam &GetSweepTiming() const { return sweepTiming_; }
 
     // ImGui調整用
     AttackParam &EditSmashParam() { return smashParam_; }
@@ -162,12 +175,12 @@ class Enemy {
     float &EditFarAttackDistance() { return farAttackDistance_; }
 
     float &EditSmashChargeTime() { return smashChargeTime_; }
-    float &EditSmashAttackTime() { return smashAttackTime_; }
-    float &EditSmashRecoveryTime() { return smashRecoveryTime_; }
+   /* float &EditSmashAttackTime() { return smashAttackTime_; }
+    float &EditSmashRecoveryTime() { return smashRecoveryTime_; }*/
 
     float &EditSweepChargeTime() { return sweepChargeTime_; }
-    float &EditSweepAttackTime() { return sweepAttackTime_; }
-    float &EditSweepRecoveryTime() { return sweepRecoveryTime_; }
+   /* float &EditSweepAttackTime() { return sweepAttackTime_; }
+    float &EditSweepRecoveryTime() { return sweepRecoveryTime_; }*/
 
     float &EditShotChargeTime() { return shotChargeTime_; }
     float &EditShotRecoveryTime() { return shotRecoveryTime_; }
@@ -187,6 +200,15 @@ class Enemy {
     int &EditFarShotWeight() { return farShotWeight_; }
     int &EditFarWarpWeight() { return farWarpWeight_; }
     int &EditFarWaveWeight() { return farWaveWeight_; }
+
+    /*float &EditSmashActiveStartTime() { return smashActiveStartTime_; }
+    float &EditSmashActiveEndTime() { return smashActiveEndTime_; }
+
+    float &EditSweepActiveStartTime() { return sweepActiveStartTime_; }
+    float &EditSweepActiveEndTime() { return sweepActiveEndTime_; }*/
+
+    AttackTimingParam &EditSmashTiming() { return smashTiming_; }
+    AttackTimingParam &EditSweepTiming() { return sweepTiming_; }
 
     EnemyTuningPreset CreateTuningPreset() const;
     void ApplyTuningPreset(const EnemyTuningPreset &preset);
@@ -262,19 +284,43 @@ class Enemy {
 
     //振り下ろし
     AttackParam smashParam_ = {10.0f, 4.0f, {1.5f, 1.8f, 1.5f}};
-    float smashChargeTime_ = 0.6f;
-    float smashAttackTime_ = 0.25f;
-    float smashRecoveryTime_ = 1.0f;
+    float smashChargeTime_ = 0.45f;
+
+    AttackTimingParam smashTiming_ = {
+        0.88f, // totalTime = attack + recovery の合計イメージ
+        0.00f, // trackingEndTime
+        0.04f, // activeStartTime
+        0.10f, // activeEndTime
+        0.18f  // recoveryStartTime
+    };
+ /*   float smashAttackTime_ = 0.24f;
+    float smashRecoveryTime_ = 0.75f;*/
     float smashAttackForwardOffset_ = 1.4f;
     float smashAttackHeightOffset_ = 0.8f;
 
+    // Smash の攻撃判定が出る時間帯（Attack状態の中）
+  /*  float smashActiveStartTime_ = 0.06f;
+    float smashActiveEndTime_ = 0.1f;*/
+
     //薙ぎ払い
     AttackParam sweepParam_ = {10.0f, 4.0f, {3.2f, 1.2f, 1.4f}};
-    float sweepChargeTime_ = 0.5f;
-    float sweepAttackTime_ = 0.3f;
+
+    AttackTimingParam sweepTiming_ = {
+        1.27f, // totalTime = attack + recovery の合計イメージ
+        0.00f, // trackingEndTime
+        0.12f, // activeStartTime
+        0.24f, // activeEndTime
+        0.32f  // recoveryStartTime
+    };
+    float sweepChargeTime_ = 0.65f;
+   // float sweepAttackTime_ = 0.3f;
     float sweepRecoveryTime_ = 1.0f;
     float sweepAttackSideOffset_ = 0.2f;
     float sweepAttackHeightOffset_ = 0.8f;
+
+    // Sweep の攻撃判定が出る時間帯（Attack状態の中）
+   /* float sweepActiveStartTime_ = 0.12f;
+    float sweepActiveEndTime_ = 0.24f;*/
 
     //弾
     AttackParam bulletParam_ = {5.0f, 2.5f, {0.4f, 0.4f, 0.4f}};
@@ -319,6 +365,10 @@ class Enemy {
     int farShotWeight_ = 40;
     int farWarpWeight_ = 25;
     int farWaveWeight_ = 35;
+
+    // attckタイプとフェーズ管理
+    AttackType currentAttackType_ = AttackType::None;
+    AttackPhase currentAttackPhase_ = AttackPhase::None;
 
   private:
     void UpdateParts();
@@ -369,4 +419,19 @@ class Enemy {
     void UpdateGuardRecovery(float deltaTime);
 
     void DecideGuardTarget();
+//ここから追加
+    float GetCurrentActionTime() const;
+
+    const AttackTimingParam *GetCurrentAttackTiming() const;
+    AttackParam *GetCurrentAttackParam();
+    const AttackParam *GetCurrentAttackParam() const;
+
+    bool IsCurrentAttackInActiveWindow() const;
+    bool IsCurrentAttackInRecoveryWindow() const;
+    bool ShouldUseLockedAttackYaw() const;
+    bool IsCurrentAttack(AttackType type) const;
+
+    void BeginAttack(AttackType type, AttackPhase phase);
+    void ChangeAttackPhase(AttackPhase phase);
+    void EndAttack();
 };
