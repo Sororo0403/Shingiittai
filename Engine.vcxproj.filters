@@ -185,26 +185,26 @@
     <ClCompile Include="src\engine\collision\CollisionUtil.cpp">
       <Filter>src\engine\collision</Filter>
     </ClCompile>
-    <ClCompile Include="src\engine\input\MahonyFilter.cpp">
-      <Filter>src</Filter>
-    </ClCompile>
-    <ClCompile Include="src\engine\collision\DebugDraw.cpp">
-      <Filter>src</Filter>
+    <ClCompile Include="src\engine\model\Animator.cpp">
+      <Filter>src\engine\model</Filter>
     </ClCompile>
     <ClCompile Include="src\engine\model\AssimpLoader.cpp">
-      <Filter>src</Filter>
-    </ClCompile>
-    <ClCompile Include="src\engine\model\Animator.cpp">
-      <Filter>src</Filter>
-    </ClCompile>
-    <ClCompile Include="src\engine\camera\DebugCamera.cpp">
-      <Filter>src</Filter>
+      <Filter>src\engine\model</Filter>
     </ClCompile>
     <ClCompile Include="src\engine\model\Material.cpp">
-      <Filter>src</Filter>
+      <Filter>src\engine\model</Filter>
     </ClCompile>
     <ClCompile Include="src\engine\model\MaterialManager.cpp">
-      <Filter>src</Filter>
+      <Filter>src\engine\model</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\camera\DebugCamera.cpp">
+      <Filter>src\engine\camera</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\collision\DebugDraw.cpp">
+      <Filter>src\engine\collision</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\input\MahonyFilter.cpp">
+      <Filter>src\engine\input</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -307,29 +307,29 @@
     <ClInclude Include="include\engine\collision\AABB.h">
       <Filter>include\engine\collision</Filter>
     </ClInclude>
-    <ClInclude Include="include\engine\collision\OBB.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="include\engine\input\MahonyFilter.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="include\engine\collision\DebugDraw.h">
-      <Filter>include</Filter>
+    <ClInclude Include="include\engine\model\Animator.h">
+      <Filter>include\engine\model</Filter>
     </ClInclude>
     <ClInclude Include="include\engine\model\AssimpLoader.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="include\engine\model\Animator.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="include\engine\camera\DebugCamera.h">
-      <Filter>include</Filter>
+      <Filter>include\engine\model</Filter>
     </ClInclude>
     <ClInclude Include="include\engine\model\Material.h">
-      <Filter>include</Filter>
+      <Filter>include\engine\model</Filter>
     </ClInclude>
     <ClInclude Include="include\engine\model\MaterialManager.h">
-      <Filter>include</Filter>
+      <Filter>include\engine\model</Filter>
+    </ClInclude>
+    <ClInclude Include="include\engine\collision\DebugDraw.h">
+      <Filter>include\engine\collision</Filter>
+    </ClInclude>
+    <ClInclude Include="include\engine\collision\OBB.h">
+      <Filter>include\engine\collision</Filter>
+    </ClInclude>
+    <ClInclude Include="include\engine\camera\DebugCamera.h">
+      <Filter>include\engine\camera</Filter>
+    </ClInclude>
+    <ClInclude Include="include\engine\input\MahonyFilter.h">
+      <Filter>include\engine\input</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
