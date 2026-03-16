@@ -3,6 +3,7 @@
 #include "Camera.h"
 #include "Enemy.h"
 #include "Player.h"
+#include "Bullet.h"
 #include "Transform.h"
 #include <DirectXMath.h>
 #include <cstdint>
@@ -49,4 +50,5 @@ class GameScene : public BaseScene {
     // Game
     Player player_;
     Enemy enemy_;
+    Bullet bullet_;
 };

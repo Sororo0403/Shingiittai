@@ -1,6 +1,7 @@
 #include "Sword.h"
 #include "Camera.h"
 #include "Input.h"
+#include "imgui.h"
 #include "ModelManager.h"
 #include <algorithm>
 #include <cmath>
@@ -23,10 +24,6 @@ void Sword::Update(Input *input, float deltaTime, const XMFLOAT3 &playerPos,
     UpdateSlash(deltaTime);
     UpdateTransform(playerPos, playerRotation, playerArmLength,
                     playerHandHeight);
-}
-
-void Sword::Draw(ModelManager *modelManager, const Camera &camera) {
-    modelManager->Draw(modelId_, tf_, camera);
 }
 
 OBB Sword::GetOBB() const {
@@ -84,7 +81,22 @@ void Sword::UpdateSlash(float dt) {
         if (angularVelocity_ < kSlashHold * 0.5f && slashTimer_ > 0.1f)
             isSlashMode_ = false;
     }
+
+    if (isCounter_) {
+        counterTimer_ -= 1;
+
+        if (counterTimer_ <= 0) {
+            isCounter_ = false;
+            counterTimer_ = 300;
+        }
+    }
 }
+
+void Sword::Draw(ModelManager *modelManager, const Camera &camera) {
+    modelManager->Draw(modelId_, tf_, camera);
+    ImGuiDraw();
+}
+
 
 void Sword::UpdateTransform(const XMFLOAT3 &playerPos,
                             const XMFLOAT4 &playerRotation,
@@ -107,4 +119,16 @@ void Sword::UpdateTransform(const XMFLOAT3 &playerPos,
     XMVECTOR handPos = shoulderPos + armVec;
 
     XMStoreFloat3(&tf_.position, handPos);
+}
+
+void Sword::SetCounter(bool isCounter) { isCounter_ = isCounter; }
+
+void Sword::ImGuiDraw() {
+#ifndef IMGUI_DISABLED
+    ImGui::Begin("Debug");
+    ImGui::Text("isSlashMode_: %s", isSlashMode_ ? "true" : "false");
+    ImGui::Text("isGuard_: %s", isGuard_ ? "true" : "false");
+    ImGui::Text("counter_: %s", isCounter_ ? "true" : "false");
+    ImGui::End();
+#endif
 }

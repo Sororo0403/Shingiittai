@@ -126,6 +126,7 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClCompile Include="src\engine\camera\DebugCamera.cpp" />
     <ClCompile Include="src\engine\model\Animator.cpp" />
     <ClCompile Include="src\engine\model\AssimpLoader.cpp" />
+    <ClCompile Include="src\app\enemy\Bullet.cpp" />
     <ClCompile Include="src\engine\collision\DebugDraw.cpp" />
     <ClCompile Include="src\engine\collision\CollisionUtil.cpp" />
     <ClCompile Include="src\app\enemy\Enemy.cpp" />
@@ -154,6 +155,7 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClInclude Include="include\engine\camera\DebugCamera.h" />
     <ClInclude Include="include\engine\model\Animator.h" />
     <ClInclude Include="include\engine\model\AssimpLoader.h" />
+    <ClInclude Include="include\app\enemy\Bullet.h" />
     <ClInclude Include="include\engine\collision\DebugDraw.h" />
     <ClInclude Include="include\engine\collision\AABB.h" />
     <ClInclude Include="include\engine\collision\CollisionUtil.h" />

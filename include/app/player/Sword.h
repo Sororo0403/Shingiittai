@@ -38,7 +38,12 @@ class Sword {
     void Draw(ModelManager *modelManager, const Camera &camera);
 
     // Getter
+    const Transform &GetTransform() const { return tf_; }
+    bool GetCounter() const { return isCounter_; }
+    bool GetSlashMode() const { return isSlashMode_; }
     OBB GetOBB() const;
+
+    void SetCounter(bool isCounter);
 
   private:
     // Update
@@ -50,9 +55,6 @@ class Sword {
                          float playerArmLength, float playerHandHeight);
 
   private:
-    static constexpr float kSlashHold = 200.0f;
-    static constexpr float kTimeLimit = 0.3f;
-
     static constexpr float kSwordLength = 1.2f;
 
     uint32_t modelId_ = 0;
@@ -63,10 +65,20 @@ class Sword {
 
     float angularVelocity_ = 0.0f;
 
-    bool isGuard_ = false;
     bool isSlashMode_ = false;
 
     float slashTimer_ = 0.0f;
+    const float kSlashHold = 720.0f;
+    const float kTimeLimit = 1.0f;
 
+    // ガードの判定
+    bool isGuard_ = false;
+
+    // カウンターの判定
+    bool isCounter_ = false;
+    int counterTimer_ = 300;
+
+    // メンバ関数
+    void ImGuiDraw();
     DirectX::XMFLOAT3 size_{0.2f, 0.2f, 0.6f};
 };

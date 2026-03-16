@@ -206,6 +206,9 @@
     <ClCompile Include="src\engine\input\MahonyFilter.cpp">
       <Filter>src\engine\input</Filter>
     </ClCompile>
+    <ClCompile Include="src\app\enemy\Bullet.cpp">
+      <Filter>src\app\enemy</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\engine\core\WinApp.h">
@@ -330,6 +333,9 @@
     </ClInclude>
     <ClInclude Include="include\engine\input\MahonyFilter.h">
       <Filter>include\engine\input</Filter>
+    </ClInclude>
+    <ClInclude Include="include\app\enemy\Bullet.h">
+      <Filter>include\app\enemy</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

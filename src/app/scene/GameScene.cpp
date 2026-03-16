@@ -44,6 +44,9 @@ void GameScene::Initialize(const SceneContext &ctx) {
 
     player_.Initialize(playerModel, swordModel);
     enemy_.Initialize(enemyModel);
+
+    uint32_t bulletModel = ctx_->model->Load(L"resources/model/bullet/bullet.obj");
+    bullet_.Initialize(bulletModel);
 }
 
 void GameScene::Update() {
@@ -59,15 +62,23 @@ void GameScene::Update() {
 
     enemy_.Update();
 
+    bullet_.Update();
+
+    // 当たり判定
     player_.Update(input, ctx_->deltaTime, enemy_.GetTransform().position);
 
     UpdateBattleCamera();
 
     auto swordBox = player_.GetSword().GetOBB();
     auto enemyBox = enemy_.GetOBB();
-
+    auto bulletBox = bullet_.GetOBB();
+    
     if (CollisionUtil::CheckOBB(swordBox, enemyBox)) {
         enemy_.TakeDamage(100);
+    }
+
+    if (CollisionUtil::CheckOBB(swordBox, bulletBox) && player_.GetSword().GetSlashMode()) {
+        player_.GetSword().SetCounter(true);
     }
 }
 
@@ -82,9 +93,12 @@ void GameScene::Draw() {
 
     player_.Draw(model, *currentCamera_);
     enemy_.Draw(model, *currentCamera_);
+    bullet_.Draw(model, *currentCamera_);
 
 #ifdef _DEBUG
+    // 当たり判定描画
     debugDraw->DrawOBB(model, player_.GetSword().GetOBB(), *currentCamera_);
+    debugDraw->DrawOBB(model, bullet_.GetOBB(), *currentCamera_);
 
     if (enemy_.IsAlive()) {
         debugDraw->DrawOBB(model, enemy_.GetOBB(), *currentCamera_);
