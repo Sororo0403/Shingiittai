@@ -25,8 +25,16 @@ uint32_t ModelManager::Load(const std::wstring &path) {
     std::string pathStr = p.string();
 
     Model model = assimpLoader_.Load(pathStr);
-    models_.push_back(model);
 
+    if (!model.animations.empty()) {
+        model.currentAnimation = model.animations.begin()->first;
+        model.animationTime = 0.0f;
+        model.isLoop = true;
+        model.isPlaying = true;
+        model.animationFinished = false;
+    }
+
+    models_.push_back(model);
     return static_cast<uint32_t>(models_.size() - 1);
 }
 
@@ -49,4 +57,29 @@ void ModelManager::UpdateAnimation(uint32_t modelId, float deltaTime) {
     }
 
     animator_.Update(models_[modelId], deltaTime);
+}
+
+void ModelManager::PlayAnimation(uint32_t modelId,
+                                 const std::string &animationName, bool loop) {
+    if (modelId >= models_.size()) {
+        return;
+    }
+
+    animator_.Play(models_[modelId], animationName, loop);
+}
+
+bool ModelManager::IsAnimationFinished(uint32_t modelId) const {
+    if (modelId >= models_.size()) {
+        return false;
+    }
+
+    return animator_.IsFinished(models_[modelId]);
+}
+
+Model *ModelManager::GetModel(uint32_t modelId) {
+    if (modelId >= models_.size()) {
+        return nullptr;
+    }
+
+    return &models_[modelId];
 }

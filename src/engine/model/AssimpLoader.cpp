@@ -286,50 +286,68 @@ void AssimpLoader::BuildBoneHierarchy(const aiScene *scene, Model &model) {
 }
 
 void AssimpLoader::LoadAnimation(const aiScene *scene, Model &model) {
-    if (!scene || !scene->HasAnimations() || scene->mNumAnimations == 0) {
+    if (!scene || !scene->HasAnimations()) {
         return;
     }
 
-    aiAnimation *anim = scene->mAnimations[0];
-    if (!anim) {
-        return;
-    }
-
-    model.animation.duration = static_cast<float>(anim->mDuration);
-    model.animation.ticksPerSecond = static_cast<float>(
-        anim->mTicksPerSecond != 0.0 ? anim->mTicksPerSecond : 25.0);
-
-    for (unsigned int i = 0; i < anim->mNumChannels; i++) {
-        aiNodeAnim *channel = anim->mChannels[i];
-        if (!channel) {
+    for (unsigned int a = 0; a < scene->mNumAnimations; a++) {
+        aiAnimation *anim = scene->mAnimations[a];
+        if (!anim) {
             continue;
         }
 
-        BoneAnimation boneAnim;
+        AnimationClip clip{};
 
-        for (unsigned int k = 0; k < channel->mNumPositionKeys; k++) {
-            const aiVectorKey &key = channel->mPositionKeys[k];
-            boneAnim.positions.push_back(
-                {static_cast<float>(key.mTime),
-                 XMFLOAT3{key.mValue.x, key.mValue.y, key.mValue.z}});
+        clip.duration = static_cast<float>(anim->mDuration);
+        clip.ticksPerSecond = static_cast<float>(
+            anim->mTicksPerSecond != 0.0 ? anim->mTicksPerSecond : 25.0);
+
+        for (unsigned int i = 0; i < anim->mNumChannels; i++) {
+            aiNodeAnim *channel = anim->mChannels[i];
+            if (!channel) {
+                continue;
+            }
+
+            BoneAnimation boneAnim;
+
+            for (unsigned int k = 0; k < channel->mNumPositionKeys; k++) {
+                const aiVectorKey &key = channel->mPositionKeys[k];
+                boneAnim.positions.push_back(
+                    {static_cast<float>(key.mTime),
+                     XMFLOAT3{key.mValue.x, key.mValue.y, key.mValue.z}});
+            }
+
+            for (unsigned int k = 0; k < channel->mNumRotationKeys; k++) {
+                const aiQuatKey &key = channel->mRotationKeys[k];
+                boneAnim.rotations.push_back(
+                    {static_cast<float>(key.mTime),
+                     XMFLOAT4{key.mValue.x, key.mValue.y, key.mValue.z,
+                              key.mValue.w}});
+            }
+
+            for (unsigned int k = 0; k < channel->mNumScalingKeys; k++) {
+                const aiVectorKey &key = channel->mScalingKeys[k];
+                boneAnim.scales.push_back(
+                    {static_cast<float>(key.mTime),
+                     XMFLOAT3{key.mValue.x, key.mValue.y, key.mValue.z}});
+            }
+
+            clip.channels[channel->mNodeName.C_Str()] = boneAnim;
         }
 
-        for (unsigned int k = 0; k < channel->mNumRotationKeys; k++) {
-            const aiQuatKey &key = channel->mRotationKeys[k];
-            boneAnim.rotations.push_back(
-                {static_cast<float>(key.mTime),
-                 XMFLOAT4{key.mValue.x, key.mValue.y, key.mValue.z,
-                          key.mValue.w}});
+        std::string animName = anim->mName.C_Str();
+        if (animName.empty()) {
+            animName = "Anim_" + std::to_string(a);
         }
 
-        for (unsigned int k = 0; k < channel->mNumScalingKeys; k++) {
-            const aiVectorKey &key = channel->mScalingKeys[k];
-            boneAnim.scales.push_back(
-                {static_cast<float>(key.mTime),
-                 XMFLOAT3{key.mValue.x, key.mValue.y, key.mValue.z}});
-        }
+        model.animations[animName] = clip;
+    }
 
-        model.animation.channels[channel->mNodeName.C_Str()] = boneAnim;
+    if (!model.animations.empty()) {
+        model.currentAnimation = model.animations.begin()->first;
+        model.animationTime = 0.0f;
+        model.isLoop = true;
+        model.isPlaying = true;
     }
 }
 

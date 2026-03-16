@@ -42,6 +42,13 @@ struct Model {
     std::vector<BoneInfo> bones;
     std::unordered_map<std::string, uint32_t> boneMap;
 
-    AnimationClip animation;
+    std::unordered_map<std::string, AnimationClip> animations;
+
     std::vector<DirectX::XMFLOAT4X4> finalBoneMatrices;
+
+    std::string currentAnimation = "";
+    float animationTime = 0.0f;
+    bool isLoop = true;
+    bool isPlaying = true;
+    bool animationFinished = false;
 };

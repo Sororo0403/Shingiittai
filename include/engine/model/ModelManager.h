@@ -5,63 +5,81 @@
 #include "MeshManager.h"
 #include "Model.h"
 #include "ModelRenderer.h"
-#include <cstdint>
+#include "Transform.h"
 #include <string>
 #include <vector>
 
 class DirectXCommon;
-class TextureManager;
 class SrvManager;
+class TextureManager;
 class Camera;
 
 class ModelManager {
   public:
     /// <summary>
-    /// 初期化処理
+    /// ModelManagerの初期化
     /// </summary>
-    /// <param name="dxCommon">DirectXCommonインスタンス</param>
-    /// <param name="srvManager">SrvManagerインスタンス</param>
-    /// <param name="textureManager">TextureManagerインスタンス</param>
+    /// <param name="dxCommon">DirectX共通管理クラス</param>
+    /// <param name="srvManager">SRVヒープ管理クラス</param>
+    /// <param name="textureManager">テクスチャ管理クラス</param>
     void Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
                     TextureManager *textureManager);
 
     /// <summary>
-    /// モデルをファイルから読み、モデルIDを返す
+    /// モデルを読み込む
     /// </summary>
-    /// <param name="path">モデルのファイルパス</param>
-    /// <returns>読み込んだモデルのID</returns>
+    /// <param name="path">モデルファイルのパス</param>
+    /// <returns>モデルID</returns>
     uint32_t Load(const std::wstring &path);
 
     /// <summary>
-    /// 描画処理
+    /// モデルを描画する
     /// </summary>
-    /// <param name="modelId">描画するモデルのID</param>
-    /// <param name="transform">描画するモデルのTransform</param>
+    /// <param name="modelId">描画するモデルID</param>
+    /// <param name="transform">ワールド変換</param>
     /// <param name="camera">描画に使用するカメラ</param>
     void Draw(uint32_t modelId, const Transform &transform,
               const Camera &camera);
 
     /// <summary>
-    /// 描画前処理
+    /// モデル描画前の共通処理
     /// </summary>
     void PreDraw();
 
     /// <summary>
-    /// 描画後処理
+    /// モデル描画後の後処理
     /// </summary>
     void PostDraw();
 
     /// <summary>
-    /// アニメーションの更新処理
+    /// モデルのアニメーションを更新する
     /// </summary>
-    /// <param name="modelId">アニメーションを更新するモデルのID</param>
+    /// <param name="modelId">更新するモデルID</param>
     /// <param name="deltaTime">前フレームからの経過時間(秒)</param>
     void UpdateAnimation(uint32_t modelId, float deltaTime);
 
-    // Getter
-    MaterialManager *GetMaterialManager() { return &materialManager_; }
-    Model &GetModel(uint32_t modelId) { return models_[modelId]; }
-    const Model &GetModel(uint32_t modelId) const { return models_[modelId]; }
+    /// <summary>
+    /// 指定したアニメーションを再生する
+    /// </summary>
+    /// <param name="modelId">対象モデルID</param>
+    /// <param name="animationName">再生するアニメーション名</param>
+    /// <param name="loop">ループ再生するか</param>
+    void PlayAnimation(uint32_t modelId, const std::string &animationName,
+                       bool loop = true);
+
+    /// <summary>
+    /// アニメーションが終了したか判定する
+    /// </summary>
+    /// <param name="modelId">対象モデルID</param>
+    /// <returns>アニメーション終了ならtrue</returns>
+    bool IsAnimationFinished(uint32_t modelId) const;
+
+    /// <summary>
+    /// モデルデータを取得する
+    /// </summary>
+    /// <param name="modelId">モデルID</param>
+    /// <returns>Modelポインタ</returns>
+    Model *GetModel(uint32_t modelId);
 
   private:
     DirectXCommon *dxCommon_ = nullptr;

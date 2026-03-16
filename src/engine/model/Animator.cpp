@@ -23,6 +23,23 @@ float SafeInv(float x) {
 
 } // namespace
 
+void Animator::Play(Model &model, const std::string &animationName, bool loop) {
+    auto it = model.animations.find(animationName);
+    if (it == model.animations.end()) {
+        return;
+    }
+
+    model.currentAnimation = animationName;
+    model.animationTime = 0.0f;
+    model.isLoop = loop;
+    model.isPlaying = true;
+    model.animationFinished = false;
+}
+
+bool Animator::IsFinished(const Model &model) const {
+    return model.animationFinished;
+}
+
 XMFLOAT3 Animator::SampleVec3(const std::vector<AnimationKeyVec3> &keys,
                               float time) {
     if (keys.empty()) {
@@ -76,6 +93,7 @@ XMFLOAT4 Animator::SampleQuat(const std::vector<AnimationKeyQuat> &keys,
             XMVECTOR q0 = XMLoadFloat4(&k0.value);
             XMVECTOR q1 = XMLoadFloat4(&k1.value);
             XMVECTOR q = XMQuaternionSlerp(q0, q1, t);
+            q = XMQuaternionNormalize(q);
 
             XMFLOAT4 result;
             XMStoreFloat4(&result, q);
@@ -87,9 +105,10 @@ XMFLOAT4 Animator::SampleQuat(const std::vector<AnimationKeyQuat> &keys,
 }
 
 XMMATRIX Animator::MakeAnimatedLocalMatrix(const BoneInfo &bone,
-                                           const Model &model, float time) {
-    auto it = model.animation.channels.find(bone.name);
-    if (it == model.animation.channels.end()) {
+                                           const AnimationClip &clip,
+                                           float time) {
+    auto it = clip.channels.find(bone.name);
+    if (it == clip.channels.end()) {
         return XMLoadFloat4x4(&bone.localBindMatrix);
     }
 
@@ -111,6 +130,37 @@ XMMATRIX Animator::MakeAnimatedLocalMatrix(const BoneInfo &bone,
            XMMatrixTranslation(pos.x, pos.y, pos.z);
 }
 
+void Animator::ApplyBindPose(Model &model) {
+    const size_t boneCount = model.bones.size();
+
+    if (model.finalBoneMatrices.size() != boneCount) {
+        model.finalBoneMatrices.resize(boneCount);
+    }
+
+    std::vector<XMMATRIX> localMatrices(boneCount);
+    std::vector<XMMATRIX> globalMatrices(boneCount);
+
+    for (size_t i = 0; i < boneCount; i++) {
+        localMatrices[i] = XMLoadFloat4x4(&model.bones[i].localBindMatrix);
+    }
+
+    for (size_t i = 0; i < boneCount; i++) {
+        int parent = model.bones[i].parentIndex;
+
+        if (parent < 0) {
+            globalMatrices[i] = localMatrices[i];
+        } else {
+            globalMatrices[i] = localMatrices[i] * globalMatrices[parent];
+        }
+    }
+
+    for (size_t i = 0; i < boneCount; i++) {
+        XMMATRIX offset = XMLoadFloat4x4(&model.bones[i].offsetMatrix);
+        XMMATRIX final = offset * globalMatrices[i];
+        XMStoreFloat4x4(&model.finalBoneMatrices[i], final);
+    }
+}
+
 void Animator::Update(Model &model, float deltaTime) {
     if (model.bones.empty()) {
         return;
@@ -122,17 +172,38 @@ void Animator::Update(Model &model, float deltaTime) {
         model.finalBoneMatrices.resize(boneCount);
     }
 
-    if (model.animation.duration <= 0.0f) {
-        for (size_t i = 0; i < boneCount; i++) {
-            model.finalBoneMatrices[i] = model.bones[i].offsetMatrix;
-        }
+    if (model.currentAnimation.empty()) {
+        ApplyBindPose(model);
         return;
     }
 
-    currentTime_ += deltaTime * model.animation.ticksPerSecond;
+    auto clipIt = model.animations.find(model.currentAnimation);
+    if (clipIt == model.animations.end()) {
+        ApplyBindPose(model);
+        return;
+    }
 
-    while (currentTime_ > model.animation.duration) {
-        currentTime_ -= model.animation.duration;
+    const AnimationClip &clip = clipIt->second;
+
+    if (clip.duration <= 0.0f) {
+        ApplyBindPose(model);
+        return;
+    }
+
+    if (model.isPlaying) {
+        model.animationTime += deltaTime * clip.ticksPerSecond;
+
+        if (model.isLoop) {
+            while (model.animationTime >= clip.duration) {
+                model.animationTime -= clip.duration;
+            }
+        } else {
+            if (model.animationTime >= clip.duration) {
+                model.animationTime = clip.duration;
+                model.isPlaying = false;
+                model.animationFinished = true;
+            }
+        }
     }
 
     std::vector<XMMATRIX> localMatrices(boneCount);
@@ -140,7 +211,7 @@ void Animator::Update(Model &model, float deltaTime) {
 
     for (size_t i = 0; i < boneCount; i++) {
         localMatrices[i] =
-            MakeAnimatedLocalMatrix(model.bones[i], model, currentTime_);
+            MakeAnimatedLocalMatrix(model.bones[i], clip, model.animationTime);
     }
 
     for (size_t i = 0; i < boneCount; i++) {

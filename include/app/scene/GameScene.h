@@ -41,14 +41,12 @@ class GameScene : public BaseScene {
 
     // Camera
     Camera camera_;
-
 #ifdef _DEBUG
     DebugCamera debugCamera_;
 #endif
-
     Camera *currentCamera_ = nullptr;
 
-    // Game objects
+    // Game
     Player player_;
     Enemy enemy_;
 };
