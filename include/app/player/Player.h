@@ -12,38 +12,35 @@ class Player {
     /// <summary>
     /// 初期化処理
     /// </summary>
-    /// <param name="playerModelId">プレイヤーのモデルID</param>
-    /// <param name="swordModelId">剣のモデルID</param>
+    /// <param name="playerModelId">プレイヤーモデルのID</param>
+    /// <param name="swordModelId">剣モデルのID</param>
     void Initialize(uint32_t playerModelId, uint32_t swordModelId);
 
     /// <summary>
     /// 更新処理
     /// </summary>
-    /// <param name="input">Inputインスタンス</param>
+    /// <param name="input">入力管理クラス</param>
     /// <param name="deltaTime">前フレームからの経過時間(秒)</param>
-    void Update(Input *input, float deltaTime);
+    /// <param name="lookTarget">プレイヤーが向く対象座標</param>
+    void Update(Input *input, float deltaTime,
+                const DirectX::XMFLOAT3 &lookTarget);
 
     /// <summary>
     /// 描画処理
     /// </summary>
-    /// <param name="modelManager">ModelManagerインスタンス</param>
-    /// <param name="camera">描画使用するカメラ</param>
+    /// <param name="modelManager">モデル描画管理クラス</param>
+    /// <param name="camera">描画に使用するカメラ</param>
     void Draw(ModelManager *modelManager, const Camera &camera);
-
-    /// <summary>
-    /// 指定した座標を見る
-    /// </summary>
-    /// <param name="target">見る座標</param>
-    void LookAt(const DirectX::XMFLOAT3 &target);
 
     // Getter
     const Sword &GetSword() const { return sword_; }
     const Transform &GetTransform() const { return tf_; }
-    float GetYaw() const { return yaw_; }
 
   private:
     // Update
     void UpdateMovement(Input *input, float deltaTime);
+
+    void LookAt(const DirectX::XMFLOAT3 &target);
 
   private:
     static constexpr float kHandHeight = 1.0f;
@@ -55,6 +52,5 @@ class Player {
     Sword sword_;
 
     float moveSpeed_ = 5.0f;
-
     float yaw_ = 0.0f;
 };

@@ -49,7 +49,6 @@ void GameScene::Initialize(const SceneContext &ctx) {
 void GameScene::Update() {
     Input *input = ctx_->input;
 
-    // カメラ切り替え処理
     UpdateCamera(input);
 
 #ifdef _DEBUG
@@ -58,13 +57,12 @@ void GameScene::Update() {
     }
 #endif
 
-    player_.Update(input, ctx_->deltaTime);
     enemy_.Update();
 
-    // 戦闘カメラ更新
+    player_.Update(input, ctx_->deltaTime, enemy_.GetTransform().position);
+
     UpdateBattleCamera();
 
-    // 当たり判定
     auto swordBox = player_.GetSword().GetOBB();
     auto enemyBox = enemy_.GetOBB();
 
@@ -122,8 +120,6 @@ void GameScene::UpdateBattleCamera() {
 
     XMFLOAT3 playerPos = playerTf.position;
     XMFLOAT3 enemyPos = enemyTf.position;
-
-    player_.LookAt({enemyPos.x, kCameraHeight, enemyPos.z});
 
     XMVECTOR playerPosV = XMLoadFloat3(&playerPos);
     XMVECTOR enemyPosV = XMLoadFloat3(&enemyPos);
