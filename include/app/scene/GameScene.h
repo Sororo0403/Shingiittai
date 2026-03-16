@@ -3,6 +3,7 @@
 #include "Camera.h"
 #include "Enemy.h"
 #include "Player.h"
+#include "Bullet.h"
 
 class GameScene : public BaseScene {
   public:
@@ -27,4 +28,5 @@ class GameScene : public BaseScene {
 
     Player player_;
     Enemy enemy_;
+    Bullet bullet_;
 };

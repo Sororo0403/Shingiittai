@@ -32,7 +32,11 @@ class Sword {
 
     // Getter
     const Transform &GetTransform() const { return tf_; }
+    bool GetCounter() const { return isCounter_; }
+    bool GetSlashMode() const { return isSlashMode_; }
     OBB GetOBB() const;
+
+    void SetCounter(bool isCounter);
 
   private:
     static constexpr float kHandHeight = 0.8f;
@@ -49,7 +53,12 @@ class Sword {
     const float kSlashHold = 720.0f;
     const float kTimeLimit = 1.0f;
 
+    // ガードの判定
     bool isGuard_ = false;
+
+    // カウンターの判定
+    bool isCounter_ = false;
+    int counterTimer_ = 300;
 
     // メンバ関数
     void ImGuiDraw();

@@ -194,6 +194,9 @@
     <ClCompile Include="src\engine\collision\DebugDraw.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\app\enemy\Bullet.cpp">
+      <Filter>src\app\enemy</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\engine\core\WinApp.h">
@@ -306,6 +309,9 @@
     </ClInclude>
     <ClInclude Include="include\engine\collision\DebugDraw.h">
       <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\app\enemy\Bullet.h">
+      <Filter>include\app\enemy</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

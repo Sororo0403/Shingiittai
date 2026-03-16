@@ -53,6 +53,15 @@ void Sword::Update(Input *input, float dt, const DirectX::XMFLOAT3 &playerPos) {
         isGuard_ = false;
     }
 
+    if (isCounter_) {
+        counterTimer_ -= 1;
+
+        if (counterTimer_ <= 0) {
+            isCounter_ = false;
+            counterTimer_ = 300;
+        }
+    }
+
     // 剣の向き
     XMVECTOR forward = XMVector3Rotate(XMVectorSet(0, 0, 1, 0), q);
 
@@ -91,12 +100,14 @@ OBB Sword::GetOBB() const {
     return box;
 }
 
+void Sword::SetCounter(bool isCounter) { isCounter_ = isCounter; }
+
 void Sword::ImGuiDraw() {
 #ifndef IMGUI_DISABLED
     ImGui::Begin("Debug");
     ImGui::Text("isSlashMode_: %s", isSlashMode_ ? "true" : "false");
     ImGui::Text("isGuard_: %s", isGuard_ ? "true" : "false");
-
+    ImGui::Text("counter_: %s", isCounter_ ? "true" : "false");
     ImGui::End();
 #endif
 }

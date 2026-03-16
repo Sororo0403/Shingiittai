@@ -51,7 +51,6 @@ class Input {
     void UpdateMouse();
     void UpdateJoyShock(float deltaTime);
 
-
   private:
     static constexpr BYTE kPressMask = 0x80;
 

@@ -32,6 +32,8 @@ class Player {
 
     // Getter
     const Sword &GetSword() const { return sword_; }
+    // 書き替え可能版
+    Sword &GetSword() { return sword_; }
 
   private:
     // Update

@@ -44,4 +44,5 @@ class Enemy {
     DirectX::XMFLOAT3 size_ = {0.5f, 1.2f, 0.5f};
 
     float hp_ = 100.0f;
+
 };
