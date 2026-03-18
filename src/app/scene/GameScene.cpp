@@ -403,6 +403,7 @@ void GameScene::Draw() {
     ImGui::Text("WaveDamage      : %.2f", enemy_.GetWaveDamage());
     ImGui::Text("BulletKB        : %.2f", enemy_.GetBulletKnockback());
     ImGui::Text("WaveKB          : %.2f", enemy_.GetWaveKnockback());
+
     ImGui::Separator();
     ImGui::Text("=== Enemy Tuning ===");
 
@@ -440,6 +441,10 @@ void GameScene::Draw() {
                              3.0f);
             ImGui::DragFloat("Smash Recovery Start", &t.recoveryStartTime,
                              0.01f, 0.0f, 3.0f);
+
+            ImGui::DragFloat("Smash Tracking End", &t.trackingEndTime,
+                             0.01f, 0.0f, 2.0f);
+
             ImGui::TreePop();
         }
         ImGui::TreePop();
@@ -472,6 +477,9 @@ void GameScene::Draw() {
                              3.0f);
             ImGui::DragFloat("Sweep Recovery Start", &t.recoveryStartTime,
                              0.01f, 0.0f, 3.0f);
+            
+            ImGui::DragFloat("Sweep Tracking End", &t.trackingEndTime,
+                             0.01f, 0.0f, 2.0f);
             ImGui::TreePop();
         }
         ImGui::TreePop();

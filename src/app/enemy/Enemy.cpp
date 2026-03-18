@@ -67,7 +67,7 @@ void Enemy::Update(const DirectX::XMFLOAT3 &playerPos, float deltaTime) {
 
     // Idle中は常にプレイヤー方向を向く
     if (state_ == EnemyState::Idle) {
-        UpdateFacingToPlayer();
+        UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_);
     }
 
     // 状態経過時間を進める
@@ -537,12 +537,26 @@ void Enemy::UpdateSmashCharge(float deltaTime) {
     currentAttackType_ = AttackType::Smash;
     currentAttackPhase_ = AttackPhase::Charge;
 
-    // ため中はプレイヤー方向へ向く
-    UpdateFacingToPlayer();
+    float trackingEnd = smashTiming_.trackingEndTime;
+    if (trackingEnd < 0.0f) {
+        trackingEnd = 0.0f;
+    }
+    if (trackingEnd > smashChargeTime_) {
+        trackingEnd = smashChargeTime_;
+    }
+
+    if (stateTimer_ < trackingEnd) {
+        UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_);
+    } else if (!hasTrackingLocked_) {
+        LockCurrentFacing();
+        hasTrackingLocked_ = true;
+    }
 
     if (stateTimer_ >= smashChargeTime_) {
-        // 攻撃に入る瞬間の向きを固定
-        LockCurrentFacing();
+        if (!hasTrackingLocked_) {
+            LockCurrentFacing();
+            hasTrackingLocked_ = true;
+        }
 
         state_ = EnemyState::SmashAttack;
         ChangeAttackPhase(AttackPhase::Active);
@@ -581,6 +595,10 @@ void Enemy::UpdateSmashRecovery(float deltaTime) {
     currentAttackType_ = AttackType::Smash;
     currentAttackPhase_ = AttackPhase::Recovery;
 
+    // 見た目は lockedAttackYaw_ を使うが、
+    // 内部の facingYaw_ はゆっくりプレイヤー方向へ戻す
+    UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_);
+
     const AttackTimingParam *timing = GetCurrentAttackTiming();
     if (!timing) {
         EndAttack();
@@ -608,12 +626,26 @@ void Enemy::UpdateSweepCharge(float deltaTime) {
     currentAttackType_ = AttackType::Sweep;
     currentAttackPhase_ = AttackPhase::Charge;
 
-    // ため中はプレイヤー方向へ向く
-    UpdateFacingToPlayer();
+    float trackingEnd = sweepTiming_.trackingEndTime;
+    if (trackingEnd < 0.0f) {
+        trackingEnd = 0.0f;
+    }
+    if (trackingEnd > sweepChargeTime_) {
+        trackingEnd = sweepChargeTime_;
+    }
+
+    if (stateTimer_ < trackingEnd) {
+        UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_);
+    } else if (!hasTrackingLocked_) {
+        LockCurrentFacing();
+        hasTrackingLocked_ = true;
+    }
 
     if (stateTimer_ >= sweepChargeTime_) {
-        // 振る瞬間の向きを固定
-        LockCurrentFacing();
+        if (!hasTrackingLocked_) {
+            LockCurrentFacing();
+            hasTrackingLocked_ = true;
+        }
 
         state_ = EnemyState::SweepAttack;
         ChangeAttackPhase(AttackPhase::Active);
@@ -652,6 +684,10 @@ void Enemy::UpdateSweepRecovery(float deltaTime) {
     currentAttackType_ = AttackType::Sweep;
     currentAttackPhase_ = AttackPhase::Recovery;
 
+    // 見た目は lockedAttackYaw_ を使うが、
+    // 内部の facingYaw_ はゆっくりプレイヤー方向へ戻す
+    UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_);
+
     const AttackTimingParam *timing = GetCurrentAttackTiming();
     if (!timing) {
         EndAttack();
@@ -683,6 +719,34 @@ void Enemy::UpdateFacingToPlayer() {
 // 現在向いている方向を攻撃用に固定する
 void Enemy::LockCurrentFacing() { lockedAttackYaw_ = facingYaw_; }
 
+float Enemy::NormalizeAngle(float angle) const {
+    while (angle > 3.14159265f) {
+        angle -= 6.28318530f;
+    }
+    while (angle < -3.14159265f) {
+        angle += 6.28318530f;
+    }
+    return angle;
+}
+
+void Enemy::UpdateFacingToPlayerWithSpeed(float deltaTime, float turnSpeed) {
+    float dx = playerPos_.x - tf_.position.x;
+    float dz = playerPos_.z - tf_.position.z;
+
+    float targetYaw = std::atan2f(dx, dz);
+    float diff = NormalizeAngle(targetYaw - facingYaw_);
+
+    float maxStep = turnSpeed * deltaTime;
+
+    if (diff > maxStep) {
+        diff = maxStep;
+    } else if (diff < -maxStep) {
+        diff = -maxStep;
+    }
+
+    facingYaw_ = NormalizeAngle(facingYaw_ + diff);
+}
+
 // ============================================================
 // 弾攻撃更新
 // ============================================================
@@ -694,8 +758,7 @@ void Enemy::UpdateShotCharge(float deltaTime) {
     currentAttackType_ = AttackType::Shot;
     currentAttackPhase_ = AttackPhase::Charge;
 
-    // 溜め中はずっとプレイヤーを向く
-    UpdateFacingToPlayer();
+    UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_);
 
     if (stateTimer_ >= shotChargeTime_) {
         state_ = EnemyState::ShotFire;
@@ -866,13 +929,10 @@ void Enemy::UpdateWaveCharge(float deltaTime) {
     currentAttackType_ = AttackType::Wave;
     currentAttackPhase_ = AttackPhase::Charge;
 
-    // 溜め中はプレイヤー方向へ向く
-    UpdateFacingToPlayer();
+    UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_);
 
     if (stateTimer_ >= waveChargeTime_) {
-        // 発射方向をここで固定
         LockCurrentFacing();
-
         state_ = EnemyState::WaveFire;
         ChangeAttackPhase(AttackPhase::Active);
     }
@@ -1033,6 +1093,7 @@ const AttackTimingParam *Enemy::GetCurrentAttackTiming() const {
 void Enemy::BeginAttack(AttackType type, AttackPhase phase) {
     currentAttackType_ = type;
     currentAttackPhase_ = phase;
+    hasTrackingLocked_ = false;
     stateTimer_ = 0.0f;
 }
 
@@ -1046,6 +1107,7 @@ void Enemy::ChangeAttackPhase(AttackPhase phase) {
 void Enemy::EndAttack() {
     currentAttackType_ = AttackType::None;
     currentAttackPhase_ = AttackPhase::None;
+    hasTrackingLocked_ = false;
     state_ = EnemyState::Idle;
     stateTimer_ = 0.0f;
 }

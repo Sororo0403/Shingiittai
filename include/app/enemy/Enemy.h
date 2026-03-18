@@ -210,6 +210,7 @@ class Enemy {
     AttackTimingParam &EditSmashTiming() { return smashTiming_; }
     AttackTimingParam &EditSweepTiming() { return sweepTiming_; }
 
+
     EnemyTuningPreset CreateTuningPreset() const;
     void ApplyTuningPreset(const EnemyTuningPreset &preset);
     void ResetTuningPreset();
@@ -288,7 +289,7 @@ class Enemy {
 
     AttackTimingParam smashTiming_ = {
         0.88f, // totalTime = attack + recovery の合計イメージ
-        0.00f, // trackingEndTime
+        0.28f, // trackingEndTime
         0.04f, // activeStartTime
         0.10f, // activeEndTime
         0.18f  // recoveryStartTime
@@ -307,7 +308,7 @@ class Enemy {
 
     AttackTimingParam sweepTiming_ = {
         1.27f, // totalTime = attack + recovery の合計イメージ
-        0.00f, // trackingEndTime
+        0.36f, // trackingEndTime
         0.12f, // activeStartTime
         0.24f, // activeEndTime
         0.32f  // recoveryStartTime
@@ -369,6 +370,11 @@ class Enemy {
     // attckタイプとフェーズ管理
     AttackType currentAttackType_ = AttackType::None;
     AttackPhase currentAttackPhase_ = AttackPhase::None;
+
+    float chargeTurnSpeed_ = 6.0f;   // ため中の追従
+    float recoveryTurnSpeed_ = 2.0f; // 硬直中の戻り
+    float idleTurnSpeed_ = 8.0f;     // 通常時
+    bool hasTrackingLocked_ = false;
 
   private:
     void UpdateParts();
@@ -434,4 +440,8 @@ class Enemy {
     void BeginAttack(AttackType type, AttackPhase phase);
     void ChangeAttackPhase(AttackPhase phase);
     void EndAttack();
+
+    
+    void UpdateFacingToPlayerWithSpeed(float deltaTime, float turnSpeed);
+    float NormalizeAngle(float angle) const;
 };
