@@ -5,6 +5,7 @@
 #include "ModelManager.h"
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 
 using namespace DirectX;
 
@@ -22,6 +23,8 @@ void Sword::Update(Input *input, float deltaTime, const XMFLOAT3 &playerPos,
     UpdateOrientation(input, deltaTime);
     UpdateGuard(input);
     UpdateSlash(deltaTime);
+    UpdateCounter();
+    UpdateSlashDir();
     UpdateTransform(playerPos, playerRotation, playerArmLength,
                     playerHandHeight);
 }
@@ -75,13 +78,18 @@ void Sword::UpdateSlash(float dt) {
     if (isSlashMode_) {
         slashTimer_ += dt;
 
-        if (slashTimer_ > kTimeLimit)
+        if (slashTimer_ > kTimeLimit) {
             isSlashMode_ = false;
+        }
 
-        if (angularVelocity_ < kSlashHold * 0.5f && slashTimer_ > 0.1f)
+        if (angularVelocity_ < kSlashHold * 0.5f && slashTimer_ > 0.1f) {
             isSlashMode_ = false;
+        }
     }
 
+}
+
+void Sword::UpdateCounter() {
     if (isCounter_) {
         counterTimer_ -= 1;
 
@@ -90,6 +98,26 @@ void Sword::UpdateSlash(float dt) {
             counterTimer_ = 300;
         }
     }
+}
+
+void Sword::UpdateSlashDir() { 
+    if (!isSlashMode_) return;
+
+    XMFLOAT2 current = { tf_.position.x, tf_.position.y };
+
+    XMVECTOR currentV = XMLoadFloat2(&current);
+    XMVECTOR prevV = XMLoadFloat2(&prevPos_);
+
+    XMVECTOR delta = currentV - prevV;
+
+    float len = XMVectorGetX(XMVector2Length(delta));
+    if (len > 0.001f) {
+        delta = XMVector2Normalize(delta);
+        XMStoreFloat2(&slashDir_, delta);
+    }
+
+    prevPos_.x = tf_.position.x;
+    prevPos_.y = tf_.position.y;
 }
 
 void Sword::Draw(ModelManager *modelManager, const Camera &camera) {
@@ -129,6 +157,7 @@ void Sword::ImGuiDraw() {
     ImGui::Text("isSlashMode_: %s", isSlashMode_ ? "true" : "false");
     ImGui::Text("isGuard_: %s", isGuard_ ? "true" : "false");
     ImGui::Text("counter_: %s", isCounter_ ? "true" : "false");
+    ImGui::Text("slashDir_: %.1f, %.1f", slashDir_.x, slashDir_.y);
     ImGui::End();
 #endif
 }

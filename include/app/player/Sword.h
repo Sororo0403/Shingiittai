@@ -50,6 +50,8 @@ class Sword {
     void UpdateOrientation(Input *input, float dt);
     void UpdateGuard(Input *input);
     void UpdateSlash(float dt);
+    void UpdateCounter();
+    void UpdateSlashDir();
     void UpdateTransform(const DirectX::XMFLOAT3 &playerPos,
                          const DirectX::XMFLOAT4 &playerRotation,
                          float playerArmLength, float playerHandHeight);
@@ -77,6 +79,9 @@ class Sword {
     // カウンターの判定
     bool isCounter_ = false;
     int counterTimer_ = 300;
+
+    DirectX::XMFLOAT2 prevPos_{};
+    DirectX::XMFLOAT2 slashDir_{};
 
     // メンバ関数
     void ImGuiDraw();
