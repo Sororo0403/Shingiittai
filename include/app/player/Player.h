@@ -34,6 +34,7 @@ class Player {
 
     // Getter
     const Sword &GetSword() const { return sword_; }
+    OBB GetOBB() const;
     // 書き替え可能版
     Sword &GetSword() { return sword_; }
     const Transform &GetTransform() const { return tf_; }
@@ -50,6 +51,8 @@ class Player {
 
     Transform tf_;
     uint32_t modelId_ = 0;
+
+    DirectX::XMFLOAT3 size_ = {0.5f, 1.0f, 0.5f};
 
     Sword sword_;
 

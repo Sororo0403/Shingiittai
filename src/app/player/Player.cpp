@@ -27,6 +27,17 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera) {
     sword_.Draw(modelManager, camera);
 }
 
+OBB Player::GetOBB() const {
+    OBB box;
+
+    box.center = {tf_.position.x, tf_.position.y + size_.y * 0.5f,
+                  tf_.position.z};
+    box.size = size_;
+    box.rotation = tf_.rotation;
+
+    return box;
+}
+
 void Player::LookAt(const XMFLOAT3 &target) {
     float dx = target.x - tf_.position.x;
     float dz = target.z - tf_.position.z;
