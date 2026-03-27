@@ -20,13 +20,23 @@ void Sword::Initialize(uint32_t modelId) {
 void Sword::Update(Input *input, float deltaTime, const XMFLOAT3 &playerPos,
                    const XMFLOAT4 &playerRotation, float playerArmLength,
                    float playerHandHeight) {
-    UpdateOrientation(input, deltaTime);
-    UpdateGuard(input);
-    UpdateSlash(deltaTime);
-    UpdateCounter();
-    UpdateSlashDir();
+    //swordJoyConController_.Update(input, deltaTime, tf_);
+    swordMouseController_.Update(input, deltaTime, tf_);
     UpdateTransform(playerPos, playerRotation, playerArmLength,
                     playerHandHeight);
+
+
+    //isSlashMode_ = swordJoyConController_.GetIsSlashMode();
+    //isGuard_ = swordJoyConController_.GetIsGuard();
+    //isCounter_ = swordJoyConController_.GetCounter();
+    //slashDir_ = swordJoyConController_.GetSlashDir();
+    //orientation_ = swordJoyConController_.GetOrientation();
+
+    isSlashMode_ = swordMouseController_.GetIsSlashMode();
+    isGuard_ = swordMouseController_.GetIsGuard();
+    isCounter_ = swordMouseController_.GetCounter();
+    slashDir_ = swordMouseController_.GetSlashDir();
+    orientation_ = swordMouseController_.GetOrientation();
 }
 
 OBB Sword::GetOBB() const {
@@ -46,85 +56,10 @@ OBB Sword::GetOBB() const {
     return box;
 }
 
-void Sword::UpdateOrientation(Input *input, float dt) {
-    XMVECTOR q = input->GetOrientation();
-
-    q = XMQuaternionConjugate(q);
-    q = XMQuaternionNormalize(q);
-
-    float dot =
-        XMVectorGetX(XMQuaternionDot(q, XMLoadFloat4(&prevOrientation_)));
-    dot = std::clamp(dot, -1.0f, 1.0f);
-
-    float angleDiff = std::acos(dot) * 2.0f;
-    angularVelocity_ = XMConvertToDegrees(angleDiff) / dt;
-
-    XMStoreFloat4(&orientation_, q);
-    XMStoreFloat4(&prevOrientation_, q);
-}
-
-void Sword::UpdateGuard(Input *input) {
-    isGuard_ = input->IsJsButtunPress(JSL_BUTTON_ZR);
-}
-
-void Sword::UpdateSlash(float dt) {
-    if (angularVelocity_ > kSlashHold) {
-        if (!isSlashMode_) {
-            isSlashMode_ = true;
-            slashTimer_ = 0.0f;
-        }
-    }
-
-    if (isSlashMode_) {
-        slashTimer_ += dt;
-
-        if (slashTimer_ > kTimeLimit) {
-            isSlashMode_ = false;
-        }
-
-        if (angularVelocity_ < kSlashHold * 0.5f && slashTimer_ > 0.1f) {
-            isSlashMode_ = false;
-        }
-    }
-
-}
-
-void Sword::UpdateCounter() {
-    if (isCounter_) {
-        counterTimer_ -= 1;
-
-        if (counterTimer_ <= 0) {
-            isCounter_ = false;
-            counterTimer_ = 300;
-        }
-    }
-}
-
-void Sword::UpdateSlashDir() { 
-    if (!isSlashMode_) return;
-
-    XMFLOAT2 current = { tf_.position.x, tf_.position.y };
-
-    XMVECTOR currentV = XMLoadFloat2(&current);
-    XMVECTOR prevV = XMLoadFloat2(&prevPos_);
-
-    XMVECTOR delta = currentV - prevV;
-
-    float len = XMVectorGetX(XMVector2Length(delta));
-    if (len > 0.001f) {
-        delta = XMVector2Normalize(delta);
-        XMStoreFloat2(&slashDir_, delta);
-    }
-
-    prevPos_.x = tf_.position.x;
-    prevPos_.y = tf_.position.y;
-}
-
 void Sword::Draw(ModelManager *modelManager, const Camera &camera) {
     modelManager->Draw(modelId_, tf_, camera);
     ImGuiDraw();
 }
-
 
 void Sword::UpdateTransform(const XMFLOAT3 &playerPos,
                             const XMFLOAT4 &playerRotation,
@@ -149,7 +84,9 @@ void Sword::UpdateTransform(const XMFLOAT3 &playerPos,
     XMStoreFloat3(&tf_.position, handPos);
 }
 
-void Sword::SetCounter(bool isCounter) { isCounter_ = isCounter; }
+void Sword::SetCounter(bool isCounter) {
+    swordMouseController_.SetCounter(isCounter);
+}
 
 void Sword::ImGuiDraw() {
 #ifndef IMGUI_DISABLED

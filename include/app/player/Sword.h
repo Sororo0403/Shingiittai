@@ -1,6 +1,8 @@
 #pragma once
 #include "OBB.h"
 #include "Transform.h"
+#include "SwordJoyConController.h"
+#include "SwordMouseController.h"
 #include <DirectXMath.h>
 #include <cstdint>
 
@@ -37,53 +39,39 @@ class Sword {
     /// <param name="camera">描画に使用するカメラ</param>
     void Draw(ModelManager *modelManager, const Camera &camera);
 
-    // Getter
+    // Getter関数
     const Transform &GetTransform() const { return tf_; }
     bool GetCounter() const { return isCounter_; }
     bool GetSlashMode() const { return isSlashMode_; }
     OBB GetOBB() const;
 
+    // Setter関数
     void SetCounter(bool isCounter);
 
   private:
-    // Update
-    void UpdateOrientation(Input *input, float dt);
-    void UpdateGuard(Input *input);
-    void UpdateSlash(float dt);
-    void UpdateCounter();
-    void UpdateSlashDir();
+    // メンバ関数
     void UpdateTransform(const DirectX::XMFLOAT3 &playerPos,
                          const DirectX::XMFLOAT4 &playerRotation,
                          float playerArmLength, float playerHandHeight);
 
-  private:
+    // メンバ変数
+    SwordJoyConController swordJoyConController_;
+    SwordMouseController swordMouseController_;
     static constexpr float kSwordLength = 1.2f;
+    DirectX::XMFLOAT3 size_{0.2f, 0.2f, 0.6f};
 
     uint32_t modelId_ = 0;
     Transform tf_;
 
-    DirectX::XMFLOAT4 orientation_{0, 0, 0, 1};
-    DirectX::XMFLOAT4 prevOrientation_{0, 0, 0, 1};
-
-    float angularVelocity_ = 0.0f;
-
     bool isSlashMode_ = false;
-
-    float slashTimer_ = 0.0f;
-    const float kSlashHold = 720.0f;
-    const float kTimeLimit = 1.0f;
-
-    // ガードの判定
     bool isGuard_ = false;
-
-    // カウンターの判定
     bool isCounter_ = false;
-    int counterTimer_ = 300;
+    bool isMouse = false;
+    bool isJoyCon = false;
 
-    DirectX::XMFLOAT2 prevPos_{};
     DirectX::XMFLOAT2 slashDir_{};
+    DirectX::XMFLOAT4 orientation_{0, 0, 0, 1};
 
     // メンバ関数
     void ImGuiDraw();
-    DirectX::XMFLOAT3 size_{0.2f, 0.2f, 0.6f};
 };
