@@ -209,6 +209,12 @@
     <ClCompile Include="src\app\enemy\Bullet.cpp">
       <Filter>src\app\enemy</Filter>
     </ClCompile>
+    <ClCompile Include="src\app\player\SwordMouseController.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\app\player\SwordJoyConController.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\engine\core\WinApp.h">
@@ -336,6 +342,12 @@
     </ClInclude>
     <ClInclude Include="include\app\enemy\Bullet.h">
       <Filter>include\app\enemy</Filter>
+    </ClInclude>
+    <ClInclude Include="include\app\player\SwordMouseController.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\app\player\SwordJoyConController.h">
+      <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
