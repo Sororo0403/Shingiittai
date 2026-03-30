@@ -63,4 +63,34 @@ void Player::UpdateMovement(Input *input, float deltaTime) {
 
     tf_.position.x += moveX * moveSpeed_ * deltaTime;
     tf_.position.z += moveZ * moveSpeed_ * deltaTime;
+
+    tf_.position.x += knockbackVelocity_.x * deltaTime;
+    tf_.position.y += knockbackVelocity_.y * deltaTime;
+    tf_.position.z += knockbackVelocity_.z * deltaTime;
+
+    // 減衰
+    knockbackVelocity_.x *= 0.85f;
+    knockbackVelocity_.y *= 0.85f;
+    knockbackVelocity_.z *= 0.85f;
+
+    if (std::fabs(knockbackVelocity_.x) < 0.01f)
+        knockbackVelocity_.x = 0.0f;
+    if (std::fabs(knockbackVelocity_.y) < 0.01f)
+        knockbackVelocity_.y = 0.0f;
+    if (std::fabs(knockbackVelocity_.z) < 0.01f)
+        knockbackVelocity_.z = 0.0f;
+}
+
+// ダメージを受ける関数
+void Player::TakeDamage(float damage) {
+    hp_ -= damage;
+    if (hp_ < 0.0f) {
+        hp_ = 0.0f;
+    }
+}
+
+void Player::AddKnockback(const DirectX::XMFLOAT3 &velocity) {
+    knockbackVelocity_.x += velocity.x;
+    knockbackVelocity_.y += velocity.y;
+    knockbackVelocity_.z += velocity.z;
 }

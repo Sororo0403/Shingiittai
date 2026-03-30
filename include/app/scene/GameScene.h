@@ -50,5 +50,19 @@ class GameScene : public BaseScene {
     // Game
     Player player_;
     Enemy enemy_;
+
+    float playerHitCooldown_ = 0.0f;
+
+    // ヒットクールダウンタイマー
+    float enemyHitCooldown_ = 0.0f;
+
+    // デバッグ用ヒット表示
+    bool dbgHitLeftHand_ = false;
+    bool dbgHitRightHand_ = false;
+    bool dbgHitBody_ = false;
+    bool dbgBossHitPlayer_ = false;
+    bool dbgBulletHitPlayer_ = false;
+    bool dbgWaveHitPlayer_ = false;
+    bool dbgPlayerGuardedHit_ = false;
     Bullet bullet_;
 };

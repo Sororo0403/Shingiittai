@@ -45,6 +45,10 @@ class Sword {
     bool GetSlashMode() const { return isSlashMode_; }
     OBB GetOBB() const;
 
+    // 剣を振っているかの判定
+    bool IsSlashMode() const { return isSlashMode_; }
+    bool IsGuard() const { return isGuard_; }
+
     // Setter関数
     void SetCounter(bool isCounter);
 
