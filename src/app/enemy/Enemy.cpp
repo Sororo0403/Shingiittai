@@ -7,172 +7,97 @@
 // ============================================================
 // 初期化処理
 // ============================================================
-// - ボス本体の初期位置・初期スケールを設定する
-// - 各部位（胴体・左右の手）のTransformも初期化する
 void Enemy::Initialize(uint32_t modelId) {
     modelId_ = modelId;
 
-    // ボス全体の基準位置
     tf_.position = {0.0f, 0.0f, 10.0f};
     tf_.scale = {1.0f, 1.0f, 1.0f};
     tf_.rotation = {0.0f, 0.0f, 0.0f, 1.0f};
 
-    // 基準Transformから各部位の位置を更新
     UpdateParts();
+    ValidateAllTimings();
 }
 
 // ============================================================
 // 毎フレーム更新処理
 // ============================================================
-// - プレイヤー位置を記録
-// - 現在の状態（Idle / Smash / Sweep / Shot ...）に応じた処理を実行
-// - 弾・波の更新
-// - 最後に各部位のTransformを更新
-void Enemy::Update(const DirectX::XMFLOAT3 &playerPos, float deltaTime) {
-    // HPが0なら更新しない
+void Enemy::Update(const DirectX::XMFLOAT3 &playerPos, float deltaTime,
+                   bool playerGuarding) {
     if (!IsAlive()) {
         return;
     }
 
-    // Smash timing の安全補正
-    if (smashTiming_.activeStartTime < 0.0f) {
-        smashTiming_.activeStartTime = 0.0f;
-    }
-    if (smashTiming_.activeEndTime < smashTiming_.activeStartTime) {
-        smashTiming_.activeEndTime = smashTiming_.activeStartTime;
-    }
-    if (smashTiming_.recoveryStartTime < smashTiming_.activeEndTime) {
-        smashTiming_.recoveryStartTime = smashTiming_.activeEndTime;
-    }
-    if (smashTiming_.totalTime < smashTiming_.recoveryStartTime) {
-        smashTiming_.totalTime = smashTiming_.recoveryStartTime;
-    }
-
-    // Sweep timing の安全補正
-    if (sweepTiming_.activeStartTime < 0.0f) {
-        sweepTiming_.activeStartTime = 0.0f;
-    }
-    if (sweepTiming_.activeEndTime < sweepTiming_.activeStartTime) {
-        sweepTiming_.activeEndTime = sweepTiming_.activeStartTime;
-    }
-    if (sweepTiming_.recoveryStartTime < sweepTiming_.activeEndTime) {
-        sweepTiming_.recoveryStartTime = sweepTiming_.activeEndTime;
-    }
-    if (sweepTiming_.totalTime < sweepTiming_.recoveryStartTime) {
-        sweepTiming_.totalTime = sweepTiming_.recoveryStartTime;
-    }
-
-    // プレイヤー位置を保存
     playerPos_ = playerPos;
+    playerGuarding_ = playerGuarding;
 
-    // Idle中は常にプレイヤー方向を向く
-    if (state_ == EnemyState::Idle) {
+    float currentDistance = GetDistanceToPlayer();
+    float distanceDelta = std::fabs(currentDistance - lastDistanceToPlayer_);
+
+    if (distanceDelta < stagnantDistanceThreshold_) {
+        stagnantTimer_ += deltaTime;
+    } else {
+        stagnantTimer_ = 0.0f;
+    }
+    isDistanceStagnant_ = (stagnantTimer_ >= stagnantTimeThreshold_);
+
+    if (currentDistance <= closePressureDistance_) {
+        closePressureTimer_ += deltaTime;
+        if (closePressureTimer_ > closePressureTimeThreshold_) {
+            closePressureTimer_ = closePressureTimeThreshold_;
+        }
+    } else {
+        closePressureTimer_ -= deltaTime;
+        if (closePressureTimer_ < 0.0f) {
+            closePressureTimer_ = 0.0f;
+        }
+    }
+
+    if (currentDistance > farAttackDistance_) {
+        farDistanceTimer_ += deltaTime;
+    } else {
+        farDistanceTimer_ = 0.0f;
+    }
+
+    if (warpEscapeCooldownTimer_ > 0.0f) {
+        warpEscapeCooldownTimer_ -= deltaTime;
+        if (warpEscapeCooldownTimer_ < 0.0f) {
+            warpEscapeCooldownTimer_ = 0.0f;
+        }
+    }
+
+    lastDistanceToPlayer_ = currentDistance;
+
+    if (action_.kind == ActionKind::None) {
         UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_);
     }
 
-    // 状態経過時間を進める
     stateTimer_ += deltaTime;
 
-    // 攻撃判定・ガード判定は毎フレームいったんOFFにして、
-    // 必要な状態のときだけ各更新関数内でONにする
     isAttackActive_ = false;
     isGuardActive_ = false;
 
-    // 現在の状態に応じた更新処理を呼ぶ
-    switch (state_) {
-    case EnemyState::Idle:
-        UpdateIdle(deltaTime);
-        break;
+    UpdateByAction(deltaTime);
 
-    case EnemyState::SmashCharge:
-        UpdateSmashCharge(deltaTime);
-        break;
-    case EnemyState::SmashAttack:
-        UpdateSmashAttack(deltaTime);
-        break;
-    case EnemyState::SmashRecovery:
-        UpdateSmashRecovery(deltaTime);
-        break;
-
-    case EnemyState::SweepCharge:
-        UpdateSweepCharge(deltaTime);
-        break;
-    case EnemyState::SweepAttack:
-        UpdateSweepAttack(deltaTime);
-        break;
-    case EnemyState::SweepRecovery:
-        UpdateSweepRecovery(deltaTime);
-        break;
-
-    case EnemyState::ShotCharge:
-        UpdateShotCharge(deltaTime);
-        break;
-    case EnemyState::ShotFire:
-        UpdateShotFire(deltaTime);
-        break;
-    case EnemyState::ShotRecovery:
-        UpdateShotRecovery(deltaTime);
-        break;
-
-    case EnemyState::WarpStart:
-        UpdateWarpStart(deltaTime);
-        break;
-    case EnemyState::WarpMove:
-        UpdateWarpMove(deltaTime);
-        break;
-    case EnemyState::WarpEnd:
-        UpdateWarpEnd(deltaTime);
-        break;
-
-    case EnemyState::WaveCharge:
-        UpdateWaveCharge(deltaTime);
-        break;
-    case EnemyState::WaveFire:
-        UpdateWaveFire(deltaTime);
-        break;
-    case EnemyState::WaveRecovery:
-        UpdateWaveRecovery(deltaTime);
-        break;
-
-    case EnemyState::GuardMove:
-        UpdateGuardMove(deltaTime);
-        break;
-    case EnemyState::GuardHold:
-        UpdateGuardHold(deltaTime);
-        break;
-    case EnemyState::GuardRecovery:
-        UpdateGuardRecovery(deltaTime);
-        break;
-    }
-
-    // 弾・波は状態とは独立して更新する
     UpdateBullets(deltaTime);
     UpdateWaves(deltaTime);
 
-    // 最後に各部位の見た目位置を更新する
     UpdateParts();
 }
 
 // ============================================================
 // 描画処理
 // ============================================================
-// - ボス本体（胴体・左右の手）を描画
-// - 生存中の弾を描画
-// - 生存中の波を描画
 void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
-    // HPが0なら描画しない
     if (!IsAlive()) {
         return;
     }
 
-    // ワープ中など非表示状態でなければ本体を描画
     if (isVisible_) {
         modelManager->Draw(modelId_, bodyTf_, camera);
         modelManager->Draw(modelId_, leftHandTf_, camera);
         modelManager->Draw(modelId_, rightHandTf_, camera);
     }
 
-    // 生存中の弾を描画
     for (const auto &bullet : bullets_) {
         if (!bullet.isAlive) {
             continue;
@@ -185,7 +110,6 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         modelManager->Draw(modelId_, bulletTf, camera);
     }
 
-    // 生存中の波を描画
     for (const auto &wave : waves_) {
         if (!wave.isAlive) {
             continue;
@@ -202,8 +126,6 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
 // ============================================================
 // 被ダメージ処理
 // ============================================================
-// - HPを減らす
-// - 0未満にはならないようにする
 void Enemy::TakeDamage(float damage) {
     hp_ -= damage;
 
@@ -215,38 +137,19 @@ void Enemy::TakeDamage(float damage) {
 // ============================================================
 // 各部位Transform更新処理
 // ============================================================
-// - ボス全体の基準Transformから胴体・左右の手の位置を決める
-// - 状態に応じて手の位置を変え、疑似的にアニメーションさせる
 void Enemy::UpdateParts() {
-    // ------------------------------------------------------------
-    // 向き計算
-    // ------------------------------------------------------------
-    // 通常は現在の向きを使用する。
-    // ただし近接攻撃中は、攻撃開始時に固定した向きを使うことで
-    // 攻撃途中でプレイヤー方向へ不自然に追従しないようにする。
-    float usedYaw = facingYaw_;
+    float usedYaw = GetVisualYaw();
 
-    if (ShouldUseLockedAttackYaw()) {
-        usedYaw = lockedAttackYaw_;
-    }
-
-    // 前方向ベクトル
     float forwardX = std::sinf(usedYaw);
     float forwardZ = std::cosf(usedYaw);
 
-    // 右方向ベクトル
     float rightX = std::cosf(usedYaw);
     float rightZ = -std::sinf(usedYaw);
 
-    // ------------------------------------------------------------
-    // 基本位置の設定
-    // ------------------------------------------------------------
-    // 胴体
     bodyTf_ = tf_;
     bodyTf_.position = tf_.position;
     bodyTf_.scale = {1.2f, 1.4f, 0.8f};
 
-    // 左手
     leftHandTf_ = tf_;
     leftHandTf_.position = tf_.position;
     leftHandTf_.position.x += (-rightX) * 1.2f;
@@ -254,7 +157,6 @@ void Enemy::UpdateParts() {
     leftHandTf_.position.z += (-rightZ) * 1.2f;
     leftHandTf_.scale = {0.6f, 0.6f, 0.6f};
 
-    // 右手
     rightHandTf_ = tf_;
     rightHandTf_.position = tf_.position;
     rightHandTf_.position.x += rightX * 1.2f;
@@ -262,117 +164,85 @@ void Enemy::UpdateParts() {
     rightHandTf_.position.z += rightZ * 1.2f;
     rightHandTf_.scale = {0.6f, 0.6f, 0.6f};
 
-    // ------------------------------------------------------------
-    // 状態ごとの疑似アニメーション
-    // ------------------------------------------------------------
-    // 実アニメーション未接続時でも、手の位置をずらすことで
-    // 「構え」「振り下ろし」「薙ぎ払い」などの見た目を出している。
-    if (state_ == EnemyState::SmashCharge) {
-        // 振り下ろし準備：
-        // 右手を上に持ち上げつつ、少し後ろへ引く
-        rightHandTf_.position.y += 1.5f;
-        rightHandTf_.position.x += (-forwardX) * 0.5f;
-        rightHandTf_.position.z += (-forwardZ) * 0.5f;
+    if (action_.kind == ActionKind::Smash) {
+        if (action_.step == ActionStep::Charge) {
+            rightHandTf_.position.y += 1.5f;
+            rightHandTf_.position.x += (-forwardX) * 0.5f;
+            rightHandTf_.position.z += (-forwardZ) * 0.5f;
+        } else if (action_.step == ActionStep::Active) {
+            rightHandTf_.position.y -= 0.2f;
+            rightHandTf_.position.x += forwardX * 1.8f;
+            rightHandTf_.position.z += forwardZ * 1.8f;
+        } else if (action_.step == ActionStep::Recovery) {
+            rightHandTf_.position.y += 0.3f;
+            rightHandTf_.position.x += forwardX * 0.8f;
+            rightHandTf_.position.z += forwardZ * 0.8f;
+        }
 
-    } else if (state_ == EnemyState::SmashAttack) {
-        // 振り下ろし本体：
-        // 右手を前下方向へ動かす
-        rightHandTf_.position.y -= 0.2f;
-        rightHandTf_.position.x += forwardX * 1.8f;
-        rightHandTf_.position.z += forwardZ * 1.8f;
+    } else if (action_.kind == ActionKind::Sweep) {
+        if (action_.step == ActionStep::Charge) {
+            rightHandTf_.position.x += rightX * 1.4f;
+            rightHandTf_.position.y += 0.4f;
+            rightHandTf_.position.z += rightZ * 1.4f;
+        } else if (action_.step == ActionStep::Active) {
+            rightHandTf_.position.x += (-rightX) * 1.6f;
+            rightHandTf_.position.y += 0.2f;
+            rightHandTf_.position.z += (-rightZ) * 1.6f;
+        } else if (action_.step == ActionStep::Recovery) {
+            rightHandTf_.position.x += rightX * 0.3f;
+            rightHandTf_.position.y += 0.1f;
+            rightHandTf_.position.z += rightZ * 0.3f;
+        }
 
-    } else if (state_ == EnemyState::SmashRecovery) {
-        // 振り下ろし後の戻り
-        rightHandTf_.position.y += 0.3f;
-        rightHandTf_.position.x += forwardX * 0.8f;
-        rightHandTf_.position.z += forwardZ * 0.8f;
+    } else if (action_.kind == ActionKind::Shot) {
+        if (action_.step == ActionStep::Charge) {
+            rightHandTf_.position.y += 0.5f;
+            rightHandTf_.position.x += forwardX * 0.8f;
+            rightHandTf_.position.z += forwardZ * 0.8f;
+        } else if (action_.step == ActionStep::Active) {
+            rightHandTf_.position.y += 0.3f;
+            rightHandTf_.position.x += forwardX * 1.0f;
+            rightHandTf_.position.z += forwardZ * 1.0f;
+        } else if (action_.step == ActionStep::Recovery) {
+            rightHandTf_.position.y += 0.2f;
+            rightHandTf_.position.x += forwardX * 0.4f;
+            rightHandTf_.position.z += forwardZ * 0.4f;
+        }
 
-    } else if (state_ == EnemyState::SweepCharge) {
-        // 薙ぎ払い準備：
-        // 右側へ大きく引く
-        rightHandTf_.position.x += rightX * 1.4f;
-        rightHandTf_.position.y += 0.4f;
-        rightHandTf_.position.z += rightZ * 1.4f;
+    } else if (action_.kind == ActionKind::Wave) {
+        if (action_.step == ActionStep::Charge) {
+            rightHandTf_.position.y += 0.8f;
+            rightHandTf_.position.x += forwardX * 0.6f;
+            rightHandTf_.position.z += forwardZ * 0.6f;
+        } else if (action_.step == ActionStep::Active) {
+            rightHandTf_.position.y += 0.4f;
+            rightHandTf_.position.x += forwardX * 1.0f;
+            rightHandTf_.position.z += forwardZ * 1.0f;
+        } else if (action_.step == ActionStep::Recovery) {
+            rightHandTf_.position.y += 0.2f;
+            rightHandTf_.position.x += forwardX * 0.4f;
+            rightHandTf_.position.z += forwardZ * 0.4f;
+        }
 
-    } else if (state_ == EnemyState::SweepAttack) {
-        // 薙ぎ払い本体：
-        // 右から左へ横切る
-        rightHandTf_.position.x += (-rightX) * 1.6f;
-        rightHandTf_.position.y += 0.2f;
-        rightHandTf_.position.z += (-rightZ) * 1.6f;
+    } else if (action_.kind == ActionKind::Warp) {
+        if (action_.step == ActionStep::End) {
+            rightHandTf_.position.y += 0.2f;
+            rightHandTf_.position.x += forwardX * 0.3f;
+            rightHandTf_.position.z += forwardZ * 0.3f;
+        }
 
-    } else if (state_ == EnemyState::SweepRecovery) {
-        // 薙ぎ払い後の戻り
-        rightHandTf_.position.x += rightX * 0.3f;
-        rightHandTf_.position.y += 0.1f;
-        rightHandTf_.position.z += rightZ * 0.3f;
-
-    } else if (state_ == EnemyState::ShotCharge) {
-        // 弾攻撃準備：
-        // 少し前へ出して溜める
-        rightHandTf_.position.y += 0.5f;
-        rightHandTf_.position.x += forwardX * 0.8f;
-        rightHandTf_.position.z += forwardZ * 0.8f;
-
-    } else if (state_ == EnemyState::ShotFire) {
-        // 弾発射中：
-        // 前に構えた状態を維持する
-        rightHandTf_.position.y += 0.3f;
-        rightHandTf_.position.x += forwardX * 1.0f;
-        rightHandTf_.position.z += forwardZ * 1.0f;
-
-    } else if (state_ == EnemyState::ShotRecovery) {
-        // 弾攻撃後の戻り
-        rightHandTf_.position.y += 0.2f;
-        rightHandTf_.position.x += forwardX * 0.4f;
-        rightHandTf_.position.z += forwardZ * 0.4f;
-
-    } else if (state_ == EnemyState::WarpEnd) {
-        // ワープ終了後：
-        // やや前に構えた見た目にする
-        rightHandTf_.position.y += 0.2f;
-        rightHandTf_.position.x += forwardX * 0.3f;
-        rightHandTf_.position.z += forwardZ * 0.3f;
-
-    } else if (state_ == EnemyState::WaveCharge) {
-        // 波攻撃準備：
-        // 右手を少し上げて力を溜める
-        rightHandTf_.position.y += 0.8f;
-        rightHandTf_.position.x += forwardX * 0.6f;
-        rightHandTf_.position.z += forwardZ * 0.6f;
-
-    } else if (state_ == EnemyState::WaveFire) {
-        // 波発射中：
-        // 前に押し出すような見た目
-        rightHandTf_.position.y += 0.4f;
-        rightHandTf_.position.x += forwardX * 1.0f;
-        rightHandTf_.position.z += forwardZ * 1.0f;
-
-    } else if (state_ == EnemyState::WaveRecovery) {
-        // 波攻撃後の戻り
-        rightHandTf_.position.y += 0.2f;
-        rightHandTf_.position.x += forwardX * 0.4f;
-        rightHandTf_.position.z += forwardZ * 0.4f;
-
-    } else if (state_ == EnemyState::GuardMove ||
-               state_ == EnemyState::GuardHold ||
-               state_ == EnemyState::GuardRecovery) {
-        // ガード中は左手を防御位置に移動させる。
-        // guardTarget_ に応じて防御する部位を変える。
+    } else if (action_.kind == ActionKind::Guard) {
         if (guardTarget_ == GuardTarget::Face) {
-            // 顔付近を守る
             leftHandTf_.position.x += forwardX * 0.6f;
             leftHandTf_.position.y += 0.9f;
             leftHandTf_.position.z += forwardZ * 0.6f;
 
         } else if (guardTarget_ == GuardTarget::BodyCenter) {
-            // 胴体中央を守る
             leftHandTf_.position.x += forwardX * 0.4f;
             leftHandTf_.position.y += 0.3f;
             leftHandTf_.position.z += forwardZ * 0.4f;
 
         } else if (guardTarget_ == GuardTarget::BodyLeft) {
-            // 胴体左側を守る
             leftHandTf_.position.x += (-rightX) * 0.2f;
             leftHandTf_.position.y += 0.3f;
             leftHandTf_.position.z += (-rightZ) * 0.2f;
@@ -383,8 +253,6 @@ void Enemy::UpdateParts() {
 // ============================================================
 // OBB生成共通処理
 // ============================================================
-// - TransformとサイズからOBBを作る
-// - center.y は見た目の足元基準から中央基準へ補正している
 OBB Enemy::MakeOBB(const Transform &tf, const DirectX::XMFLOAT3 &size) const {
     OBB box{};
     box.center = tf.position;
@@ -404,49 +272,85 @@ OBB Enemy::GetRightHandOBB() const { return MakeOBB(rightHandTf_, handSize_); }
 // ============================================================
 // 攻撃用OBB取得
 // ============================================================
-// - 近接攻撃中のみ、その攻撃に応じた判定サイズと位置を返す
-// - それ以外の状態では極小サイズのダミーOBBを返す
 OBB Enemy::GetAttackOBB() const {
-    OBB box{};
-
-    if (!isAttackActive_) {
-        box.center = rightHandTf_.position;
-        box.size = {0.1f, 0.1f, 0.1f};
-        box.rotation = bodyTf_.rotation;
-        return box;
+    switch (action_.kind) {
+    case ActionKind::Smash:
+        return GetSmashAttackOBB();
+    case ActionKind::Sweep:
+        return GetSweepAttackOBB();
+    default:
+        return OBB{};
     }
+}
 
-    float usedYaw = lockedAttackYaw_;
+OBB Enemy::GetSmashAttackOBB() const {
+    float usedYaw = ShouldUseLockedAttackYaw() ? lockedAttackYaw_ : facingYaw_;
+
     float forwardX = std::sinf(usedYaw);
     float forwardZ = std::cosf(usedYaw);
+
+    Transform attackTf{};
+    attackTf.scale = {1.0f, 1.0f, 1.0f};
+    attackTf.rotation = {0.0f, 0.0f, 0.0f, 1.0f};
+    attackTf.position = bodyTf_.position;
+    attackTf.position.x += forwardX * smashAttackForwardOffset_;
+    attackTf.position.y += smashAttackHeightOffset_;
+    attackTf.position.z += forwardZ * smashAttackForwardOffset_;
+
+    return MakeOBB(attackTf, GetCurrentAttackHitBoxSize());
+}
+
+OBB Enemy::GetSweepAttackOBB() const {
+    float usedYaw = ShouldUseLockedAttackYaw() ? lockedAttackYaw_ : facingYaw_;
+
     float rightX = std::cosf(usedYaw);
     float rightZ = -std::sinf(usedYaw);
 
-    if (IsCurrentAttack(AttackType::Smash)) {
-        box.center = bodyTf_.position;
-        box.center.y += smashAttackHeightOffset_;
-        box.center.x += forwardX * smashAttackForwardOffset_;
-        box.center.z += forwardZ * smashAttackForwardOffset_;
-        box.size = smashParam_.hitBoxSize;
-    } else if (IsCurrentAttack(AttackType::Sweep)) {
-        box.center = bodyTf_.position;
-        box.center.y += sweepAttackHeightOffset_;
-        box.center.x += rightX * sweepAttackSideOffset_;
-        box.center.z += rightZ * sweepAttackSideOffset_;
-        box.size = sweepParam_.hitBoxSize;
-    } else {
-        box.center = rightHandTf_.position;
-        box.size = {0.1f, 0.1f, 0.1f};
-    }
+    Transform attackTf{};
+    attackTf.scale = {1.0f, 1.0f, 1.0f};
+    attackTf.rotation = {0.0f, 0.0f, 0.0f, 1.0f};
+    attackTf.position = bodyTf_.position;
+    attackTf.position.x += rightX * sweepAttackSideOffset_;
+    attackTf.position.y += sweepAttackHeightOffset_;
+    attackTf.position.z += rightZ * sweepAttackSideOffset_;
 
-    box.rotation = bodyTf_.rotation;
-    return box;
+    return MakeOBB(attackTf, GetCurrentAttackHitBoxSize());
+}
+
+float Enemy::GetVisualYaw() const {
+    if (ShouldUseLockedAttackYaw()) {
+        return lockedAttackYaw_;
+    }
+    return facingYaw_;
+}
+
+float Enemy::GetCurrentAttackDamage() const {
+    const AttackParam *param = GetCurrentAttackParam();
+    if (!param) {
+        return 0.0f;
+    }
+    return param->damage;
+}
+
+float Enemy::GetCurrentAttackKnockback() const {
+    const AttackParam *param = GetCurrentAttackParam();
+    if (!param) {
+        return 0.0f;
+    }
+    return param->knockback;
+}
+
+DirectX::XMFLOAT3 Enemy::GetCurrentAttackHitBoxSize() const {
+    const AttackParam *param = GetCurrentAttackParam();
+    if (!param) {
+        return {0.1f, 0.1f, 0.1f};
+    }
+    return param->hitBoxSize;
 }
 
 // ============================================================
 // プレイヤーとの距離計算
 // ============================================================
-// - ボス中心とプレイヤー位置の3次元距離を返す
 float Enemy::GetDistanceToPlayer() const {
     float dx = playerPos_.x - tf_.position.x;
     float dy = playerPos_.y - tf_.position.y;
@@ -458,23 +362,15 @@ float Enemy::GetDistanceToPlayer() const {
 // ============================================================
 // Idle更新
 // ============================================================
-// - 一定時間ごとに次の行動を決める
-// - 近距離と遠距離で行動候補を分ける
-// - 行動は固定順ではなく重み付きランダムで選ぶ
 void Enemy::UpdateIdle(float deltaTime) {
-    // 未使用引数警告回避
-    deltaTime = deltaTime;
+    (void)deltaTime;
 
-    // すぐ次の行動に移ると慌ただしいので、少し待つ
     if (stateTimer_ < 0.5f) {
         return;
     }
 
     float distance = GetDistanceToPlayer();
 
-    // ------------------------------------------------------------
-    // 近距離行動選択
-    // ------------------------------------------------------------
     if (distance <= nearAttackDistance_) {
         int total = nearSmashWeight_ + nearSweepWeight_ + nearGuardWeight_;
         if (total <= 0) {
@@ -484,59 +380,61 @@ void Enemy::UpdateIdle(float deltaTime) {
         int r = std::rand() % total;
 
         if (r < nearSmashWeight_) {
-            state_ = EnemyState::SmashCharge;
-            BeginAttack(AttackType::Smash, AttackPhase::Charge);
+            BeginAction(ActionKind::Smash, ActionStep::Charge);
         } else if (r < nearSmashWeight_ + nearSweepWeight_) {
-            state_ = EnemyState::SweepCharge;
-            BeginAttack(AttackType::Sweep, AttackPhase::Charge);
+            BeginAction(ActionKind::Sweep, ActionStep::Charge);
         } else {
-            currentAttackType_ = AttackType::None;
-            currentAttackPhase_ = AttackPhase::None;
+            BeginAction(ActionKind::Guard, ActionStep::Move);
             DecideGuardTarget();
-            state_ = EnemyState::GuardMove;
-            stateTimer_ = 0.0f;
         }
-    }
-    // ------------------------------------------------------------
-    // 遠距離行動選択
-    // ------------------------------------------------------------
-    else if (distance > farAttackDistance_) {
-        int total = farShotWeight_ + farWarpWeight_ + farWaveWeight_;
+
+    } else if (distance > farAttackDistance_) {
+        int shotWeight = farShotWeight_;
+        int warpWeight = farWarpWeight_;
+        int waveWeight = farWaveWeight_;
+
+        if (isDistanceStagnant_) {
+            warpWeight += stagnantWarpBonus_;
+        }
+
+        if (lastActionKind_ == ActionKind::Shot) {
+            shotWeight /= 2;
+        } else if (lastActionKind_ == ActionKind::Warp) {
+            warpWeight /= 2;
+        } else if (lastActionKind_ == ActionKind::Wave) {
+            waveWeight /= 2;
+        }
+
+        if (playerGuarding_) {
+            waveWeight += 10;
+        }
+
+        int total = shotWeight + warpWeight + waveWeight;
         if (total <= 0) {
             total = 1;
         }
 
         int r = std::rand() % total;
+        if (r < shotWeight) {
+            BeginAction(ActionKind::Shot, ActionStep::Charge);
 
-        if (r < farShotWeight_) {
-            state_ = EnemyState::ShotCharge;
-            BeginAttack(AttackType::Shot, AttackPhase::Charge);
-        } else if (r < farShotWeight_ + farWarpWeight_) {
-            currentAttackType_ = AttackType::None;
-            currentAttackPhase_ = AttackPhase::None;
-            DecideWarpTargetNearPlayer();
-            state_ = EnemyState::WarpStart;
-            stateTimer_ = 0.0f;
+        } else if (r < shotWeight + warpWeight) {
+            if (PrepareWarpContext()) {
+                BeginAction(ActionKind::Warp, ActionStep::Start);
+            } else {
+                BeginAction(ActionKind::Wave, ActionStep::Charge);
+            }
+
         } else {
-            state_ = EnemyState::WaveCharge;
-            BeginAttack(AttackType::Wave, AttackPhase::Charge);
+            BeginAction(ActionKind::Wave, ActionStep::Charge);
         }
     }
-
-    // 中距離帯では何もしない設計
 }
 
 // ============================================================
 // 振り下ろし攻撃更新
 // ============================================================
-
-// 振り下ろし準備
 void Enemy::UpdateSmashCharge(float deltaTime) {
-    deltaTime = deltaTime;
-
-    currentAttackType_ = AttackType::Smash;
-    currentAttackPhase_ = AttackPhase::Charge;
-
     float trackingEnd = smashTiming_.trackingEndTime;
     if (trackingEnd < 0.0f) {
         trackingEnd = 0.0f;
@@ -558,45 +456,21 @@ void Enemy::UpdateSmashCharge(float deltaTime) {
             hasTrackingLocked_ = true;
         }
 
-        state_ = EnemyState::SmashAttack;
-        ChangeAttackPhase(AttackPhase::Active);
+        ChangeActionStep(ActionStep::Active);
     }
 }
 
-// 振り下ろし本体
 void Enemy::UpdateSmashAttack(float deltaTime) {
-    deltaTime = deltaTime;
+    (void)deltaTime;
 
-    currentAttackType_ = AttackType::Smash;
-    currentAttackPhase_ = AttackPhase::Active;
+    isAttackActive_ = IsCurrentAttackInActiveWindow();
 
-    const AttackTimingParam *timing = GetCurrentAttackTiming();
-    if (!timing) {
-        return;
-    }
-
-    float attackTime = GetCurrentActionTime();
-
-    if (attackTime >= timing->activeStartTime &&
-        attackTime <= timing->activeEndTime) {
-        isAttackActive_ = true;
-    }
-
-    if (attackTime >= timing->recoveryStartTime) {
-        state_ = EnemyState::SmashRecovery;
-        ChangeAttackPhase(AttackPhase::Recovery);
+    if (IsCurrentAttackInRecoveryWindow()) {
+        ChangeActionStep(ActionStep::Recovery);
     }
 }
 
-// 振り下ろし後の隙
 void Enemy::UpdateSmashRecovery(float deltaTime) {
-    deltaTime = deltaTime;
-
-    currentAttackType_ = AttackType::Smash;
-    currentAttackPhase_ = AttackPhase::Recovery;
-
-    // 見た目は lockedAttackYaw_ を使うが、
-    // 内部の facingYaw_ はゆっくりプレイヤー方向へ戻す
     UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_);
 
     const AttackTimingParam *timing = GetCurrentAttackTiming();
@@ -611,21 +485,14 @@ void Enemy::UpdateSmashRecovery(float deltaTime) {
     }
 
     if (stateTimer_ >= recoveryDuration) {
-        EndAttack();
+        FinishCurrentAction();
     }
 }
 
 // ============================================================
 // 薙ぎ払い攻撃更新
 // ============================================================
-
-// 薙ぎ払い準備
 void Enemy::UpdateSweepCharge(float deltaTime) {
-    deltaTime = deltaTime;
-
-    currentAttackType_ = AttackType::Sweep;
-    currentAttackPhase_ = AttackPhase::Charge;
-
     float trackingEnd = sweepTiming_.trackingEndTime;
     if (trackingEnd < 0.0f) {
         trackingEnd = 0.0f;
@@ -647,45 +514,21 @@ void Enemy::UpdateSweepCharge(float deltaTime) {
             hasTrackingLocked_ = true;
         }
 
-        state_ = EnemyState::SweepAttack;
-        ChangeAttackPhase(AttackPhase::Active);
+        ChangeActionStep(ActionStep::Active);
     }
 }
 
-// 薙ぎ払い本体
 void Enemy::UpdateSweepAttack(float deltaTime) {
-    deltaTime = deltaTime;
+    (void)deltaTime;
 
-    currentAttackType_ = AttackType::Sweep;
-    currentAttackPhase_ = AttackPhase::Active;
+    isAttackActive_ = IsCurrentAttackInActiveWindow();
 
-    const AttackTimingParam *timing = GetCurrentAttackTiming();
-    if (!timing) {
-        return;
-    }
-
-    float attackTime = GetCurrentActionTime();
-
-    if (attackTime >= timing->activeStartTime &&
-        attackTime <= timing->activeEndTime) {
-        isAttackActive_ = true;
-    }
-
-    if (attackTime >= timing->recoveryStartTime) {
-        state_ = EnemyState::SweepRecovery;
-        ChangeAttackPhase(AttackPhase::Recovery);
+    if (IsCurrentAttackInRecoveryWindow()) {
+        ChangeActionStep(ActionStep::Recovery);
     }
 }
 
-// 薙ぎ払い後の隙
 void Enemy::UpdateSweepRecovery(float deltaTime) {
-    deltaTime = deltaTime;
-
-    currentAttackType_ = AttackType::Sweep;
-    currentAttackPhase_ = AttackPhase::Recovery;
-
-    // 見た目は lockedAttackYaw_ を使うが、
-    // 内部の facingYaw_ はゆっくりプレイヤー方向へ戻す
     UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_);
 
     const AttackTimingParam *timing = GetCurrentAttackTiming();
@@ -700,23 +543,20 @@ void Enemy::UpdateSweepRecovery(float deltaTime) {
     }
 
     if (stateTimer_ >= recoveryDuration) {
-        EndAttack();
+        FinishCurrentAction();
     }
 }
+
 // ============================================================
 // 向き更新処理
 // ============================================================
-
-// プレイヤー方向へ現在向きを更新する
 void Enemy::UpdateFacingToPlayer() {
     float dx = playerPos_.x - tf_.position.x;
     float dz = playerPos_.z - tf_.position.z;
 
-    // atan2 を使うことで、全方向のyawを正しく計算する
     facingYaw_ = std::atan2f(dx, dz);
 }
 
-// 現在向いている方向を攻撃用に固定する
 void Enemy::LockCurrentFacing() { lockedAttackYaw_ = facingYaw_; }
 
 float Enemy::NormalizeAngle(float angle) const {
@@ -750,19 +590,11 @@ void Enemy::UpdateFacingToPlayerWithSpeed(float deltaTime, float turnSpeed) {
 // ============================================================
 // 弾攻撃更新
 // ============================================================
-
-// 弾攻撃準備
 void Enemy::UpdateShotCharge(float deltaTime) {
-    deltaTime = deltaTime;
-
-    currentAttackType_ = AttackType::Shot;
-    currentAttackPhase_ = AttackPhase::Charge;
-
     UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_);
 
     if (stateTimer_ >= shotChargeTime_) {
-        state_ = EnemyState::ShotFire;
-        ChangeAttackPhase(AttackPhase::Active);
+        ChangeActionStep(ActionStep::Active);
 
         shotsRemaining_ =
             shotMinCount_ + (std::rand() % (shotMaxCount_ - shotMinCount_ + 1));
@@ -771,11 +603,7 @@ void Enemy::UpdateShotCharge(float deltaTime) {
     }
 }
 
-// 弾発射中
 void Enemy::UpdateShotFire(float deltaTime) {
-    currentAttackType_ = AttackType::Shot;
-    currentAttackPhase_ = AttackPhase::Active;
-
     shotIntervalTimer_ += deltaTime;
 
     if (shotsRemaining_ > 0 && shotIntervalTimer_ >= shotInterval_) {
@@ -785,32 +613,24 @@ void Enemy::UpdateShotFire(float deltaTime) {
     }
 
     if (shotsRemaining_ <= 0) {
-        state_ = EnemyState::ShotRecovery;
-        ChangeAttackPhase(AttackPhase::Recovery);
+        ChangeActionStep(ActionStep::Recovery);
     }
 }
 
-// 弾攻撃後の隙
 void Enemy::UpdateShotRecovery(float deltaTime) {
-    deltaTime = deltaTime;
-
-    currentAttackType_ = AttackType::Shot;
-    currentAttackPhase_ = AttackPhase::Recovery;
+    (void)deltaTime;
 
     if (stateTimer_ >= shotRecoveryTime_) {
-        EndAttack();
+        FinishCurrentAction();
     }
 }
 
 // ============================================================
 // 弾生成・弾更新
 // ============================================================
-
-// プレイヤー方向へ飛ぶ弾を1発生成する
 void Enemy::SpawnBullet() {
     EnemyBullet bullet{};
 
-    // 右手位置からプレイヤー方向へのベクトルを計算
     float dirX = playerPos_.x - rightHandTf_.position.x;
     float dirY = playerPos_.y - rightHandTf_.position.y;
     float dirZ = playerPos_.z - rightHandTf_.position.z;
@@ -820,16 +640,13 @@ void Enemy::SpawnBullet() {
         len = 1.0f;
     }
 
-    // 正規化
     dirX /= len;
     dirY /= len;
     dirZ /= len;
 
-    // 右手位置から弾を出す
     bullet.position = rightHandTf_.position;
     bullet.position.y += bulletSpawnHeightOffset_;
 
-    // 速度・寿命を設定
     bullet.velocity = {dirX * bulletSpeed_, dirY * bulletSpeed_,
                        dirZ * bulletSpeed_};
     bullet.lifeTime = bulletLifeTime_;
@@ -838,19 +655,16 @@ void Enemy::SpawnBullet() {
     bullets_.push_back(bullet);
 }
 
-// 全弾を更新する
 void Enemy::UpdateBullets(float deltaTime) {
     for (auto &bullet : bullets_) {
         if (!bullet.isAlive) {
             continue;
         }
 
-        // 位置更新
         bullet.position.x += bullet.velocity.x * deltaTime;
         bullet.position.y += bullet.velocity.y * deltaTime;
         bullet.position.z += bullet.velocity.z * deltaTime;
 
-        // 寿命を減らし、0以下なら消滅
         bullet.lifeTime -= deltaTime;
         if (bullet.lifeTime <= 0.0f) {
             bullet.isAlive = false;
@@ -861,122 +675,414 @@ void Enemy::UpdateBullets(float deltaTime) {
 // ============================================================
 // ワープ処理
 // ============================================================
-
-// プレイヤー近くにワープ先を決める
-void Enemy::DecideWarpTargetNearPlayer() {
-    // プレイヤーの周囲にランダム角度でワープする
+bool Enemy::DecideWarpTargetNearPlayer(DirectX::XMFLOAT3 &outTarget) const {
     float angle = (std::rand() % 360) * 3.14159265f / 180.0f;
 
-    warpTargetPos_ = playerPos_;
-    warpTargetPos_.x += std::cosf(angle) * warpRadius_;
-    warpTargetPos_.z += std::sinf(angle) * warpRadius_;
+    float t = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+    float radius =
+        warpNearRadiusMin_ + (warpNearRadiusMax_ - warpNearRadiusMin_) * t;
 
-    // 地面高さは現状のボス高さをそのまま使う
-    warpTargetPos_.y = tf_.position.y;
+    outTarget = playerPos_;
+    outTarget.x += std::cosf(angle) * radius;
+    outTarget.z += std::sinf(angle) * radius;
+    outTarget.y = tf_.position.y;
+
+    return true;
 }
 
-// ワープ開始：非表示にする
-void Enemy::UpdateWarpStart(float deltaTime) {
-    // 未使用引数警告回避
-    deltaTime = deltaTime;
+bool Enemy::DecideWarpTargetFarFromPlayer(DirectX::XMFLOAT3 &outTarget) const {
+    float angle = (std::rand() % 360) * 3.14159265f / 180.0f;
 
-    isVisible_ = false;
+    float t = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+    float radius =
+        warpFarRadiusMin_ + (warpFarRadiusMax_ - warpFarRadiusMin_) * t;
 
-    if (stateTimer_ >= warpStartTime_) {
-        state_ = EnemyState::WarpMove;
-        stateTimer_ = 0.0f;
+    outTarget = playerPos_;
+    outTarget.x += std::cosf(angle) * radius;
+    outTarget.z += std::sinf(angle) * radius;
+    outTarget.y = tf_.position.y;
+
+    return true;
+}
+
+bool Enemy::PrepareWarpContext() {
+    ResetWarpContext();
+
+    int approachWeight = warpApproachWeight_;
+    int escapeWeight = 0;
+
+    if (isDistanceStagnant_) {
+        approachWeight += stagnantWarpBonus_;
+    }
+
+    if (farDistanceTimer_ >= farDistanceWarpTimeThreshold_) {
+        approachWeight += farDistanceWarpBonus_;
+    }
+
+    bool canUseEscapeWarp =
+        (closePressureTimer_ >= closePressureTimeThreshold_) &&
+        (warpEscapeCooldownTimer_ <= 0.0f);
+
+    if (canUseEscapeWarp) {
+        escapeWeight = warpEscapeWeight_;
+    }
+
+    int warpTypeTotal = approachWeight + escapeWeight;
+    if (warpTypeTotal <= 0) {
+        warp_.type = WarpType::Approach;
+    } else {
+        int wr = std::rand() % warpTypeTotal;
+        warp_.type =
+            (wr < approachWeight) ? WarpType::Approach : WarpType::Escape;
+    }
+
+    bool ok = false;
+    if (warp_.type == WarpType::Escape) {
+        ok = DecideWarpTargetFarFromPlayer(warp_.targetPos);
+    } else {
+        warp_.type = WarpType::Approach;
+        ok = DecideWarpTargetNearPlayer(warp_.targetPos);
+    }
+
+    if (!ok) {
+        ResetWarpContext();
+        return false;
+    }
+
+    warp_.hasValidTarget = true;
+
+    // 既に連携起点が仕込まれている場合は、その意図を優先
+    if (chain_.active && (chain_.starter == ChainStarter::SweepWarpSmash ||
+                          chain_.starter == ChainStarter::WaveWarpSmash)) {
+        OverrideWarpFollowupByChain();
+    } else {
+        DecideWarpFollowupFromContext();
+        SetupChainFromWarpContext();
+    }
+
+    return true;
+}
+
+void Enemy::DecideWarpFollowupFromContext() {
+    if (warp_.type == WarpType::Approach) {
+        int total = nearSmashWeight_ + nearSweepWeight_;
+        if (total <= 0) {
+            warp_.followupKind = ActionKind::Smash;
+            warp_.followupStep = ActionStep::Charge;
+            return;
+        }
+
+        int r = std::rand() % total;
+        if (r < nearSmashWeight_) {
+            warp_.followupKind = ActionKind::Smash;
+            warp_.followupStep = ActionStep::Charge;
+        } else {
+            warp_.followupKind = ActionKind::Sweep;
+            warp_.followupStep = ActionStep::Charge;
+        }
+    } else if (warp_.type == WarpType::Escape) {
+        int total = farShotWeight_ + farWaveWeight_;
+        if (total <= 0) {
+            warp_.followupKind = ActionKind::Shot;
+            warp_.followupStep = ActionStep::Charge;
+            return;
+        }
+
+        int r = std::rand() % total;
+        if (r < farShotWeight_) {
+            warp_.followupKind = ActionKind::Shot;
+            warp_.followupStep = ActionStep::Charge;
+        } else {
+            warp_.followupKind = ActionKind::Wave;
+            warp_.followupStep = ActionStep::Charge;
+        }
     }
 }
 
-// ワープ移動：座標を瞬間移動させる
+void Enemy::SetupChainFromWarpContext() {
+    ResetChainContext();
+
+    if (warp_.type == WarpType::Approach) {
+        chain_.active = true;
+        chain_.starter = ChainStarter::WarpApproach;
+        chain_.stepCount = 0;
+        chain_.maxSteps = warpApproachChainMaxSteps_;
+    } else if (warp_.type == WarpType::Escape) {
+        chain_.active = true;
+        chain_.starter = ChainStarter::WarpEscape;
+        chain_.stepCount = 0;
+        chain_.maxSteps = warpEscapeChainMaxSteps_;
+    }
+}
+
+void Enemy::SetupSweepWarpSmashChain() {
+    ResetChainContext();
+    chain_.active = true;
+    chain_.starter = ChainStarter::SweepWarpSmash;
+    chain_.stepCount = 0;
+    chain_.maxSteps = 2;
+}
+
+void Enemy::SetupWaveWarpSmashChain() {
+    ResetChainContext();
+    chain_.active = true;
+    chain_.starter = ChainStarter::WaveWarpSmash;
+    chain_.stepCount = 0;
+    chain_.maxSteps = 2;
+}
+
+void Enemy::OverrideWarpFollowupByChain() {
+    switch (chain_.starter) {
+    case ChainStarter::SweepWarpSmash:
+    case ChainStarter::WaveWarpSmash:
+        warp_.followupKind = ActionKind::Smash;
+        warp_.followupStep = ActionStep::Charge;
+        break;
+    default:
+        break;
+    }
+}
+
+void Enemy::BeginWarpFollowup() {
+    ActionKind nextKind = warp_.followupKind;
+    ActionStep nextStep = warp_.followupStep;
+
+    if (nextKind == ActionKind::None || nextStep == ActionStep::None) {
+        EndAttack();
+        return;
+    }
+
+    if (chain_.active) {
+        if (chain_.stepCount < 1) {
+            chain_.stepCount = 1;
+        }
+    }
+
+    BeginAction(nextKind, nextStep);
+}
+
+void Enemy::ResetWarpContext() { warp_ = WarpContext{}; }
+
+void Enemy::ResetChainContext() { chain_ = ChainContext{}; }
+
+bool Enemy::DecideNextChainAction(ActionKind finishedKind, ActionKind &outKind,
+                                  ActionStep &outStep) const {
+    outKind = ActionKind::None;
+    outStep = ActionStep::None;
+
+    if (!chain_.active) {
+        return false;
+    }
+
+    float distance = GetDistanceToPlayer();
+
+    switch (chain_.starter) {
+    case ChainStarter::WarpApproach:
+        // 接近Warp -> Smash -> Sweep
+        if (distance > approachChainContinueDistance_) {
+            return false;
+        }
+
+        if (finishedKind == ActionKind::Smash) {
+            outKind = ActionKind::Sweep;
+            outStep = ActionStep::Charge;
+            return true;
+        }
+
+        // Sweepで締める
+        return false;
+
+    case ChainStarter::WarpEscape:
+        if (finishedKind == ActionKind::Shot) {
+            if (playerGuarding_ || distance >= escapeChainContinueDistance_) {
+                outKind = ActionKind::Wave;
+                outStep = ActionStep::Charge;
+                return true;
+            }
+        }
+        return false;
+
+    case ChainStarter::SweepWarpSmash:
+        // Sweep -> Warp -> Smash
+        // Warp後Smashで締める
+        return false;
+
+    case ChainStarter::WaveWarpSmash:
+        // Wave -> Warp -> Smash
+        // Warp後Smashで締める
+        return false;
+
+    default:
+        return false;
+    }
+}
+
+bool Enemy::TryStartPostActionWarpChain(ActionKind finishedKind) {
+    float distance = GetDistanceToPlayer();
+
+    // Sweep -> Warp -> Smash
+    if (finishedKind == ActionKind::Sweep) {
+        if (distance <= sweepWarpSmashMaxDistance_) {
+            float r =
+                static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+            if (r < sweepWarpSmashChance_) {
+                SetupSweepWarpSmashChain();
+
+                warp_.type = WarpType::Approach;
+
+                if (!DecideWarpTargetNearPlayer(warp_.targetPos)) {
+                    ResetChainContext();
+                    ResetWarpContext();
+                    return false;
+                }
+
+                warp_.hasValidTarget = true;
+                OverrideWarpFollowupByChain();
+                BeginAction(ActionKind::Warp, ActionStep::Start);
+                return true;
+            }
+        }
+    }
+
+    // Wave -> 接近Warp -> Smash
+    if (finishedKind == ActionKind::Wave) {
+        if (distance >= waveWarpSmashMinDistance_) {
+            float r =
+                static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+            if (r < waveWarpSmashChance_) {
+                SetupWaveWarpSmashChain();
+
+                warp_.type = WarpType::Approach;
+
+                if (!DecideWarpTargetNearPlayer(warp_.targetPos)) {
+                    ResetChainContext();
+                    ResetWarpContext();
+                    return false;
+                }
+
+                warp_.hasValidTarget = true;
+                OverrideWarpFollowupByChain();
+                BeginAction(ActionKind::Warp, ActionStep::Start);
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool Enemy::TryContinueChain() {
+    ActionKind finishedKind = action_.kind;
+
+    // まず既存Chain継続
+    if (chain_.active) {
+        if (chain_.stepCount >= chain_.maxSteps) {
+            ResetChainContext();
+        } else {
+            ActionKind nextKind = ActionKind::None;
+            ActionStep nextStep = ActionStep::None;
+
+            if (DecideNextChainAction(finishedKind, nextKind, nextStep)) {
+                chain_.stepCount++;
+                BeginAction(nextKind, nextStep);
+                return true;
+            }
+
+            ResetChainContext();
+        }
+    }
+
+    // 次に行動終了後の新規Warp連携を試す
+    if (TryStartPostActionWarpChain(finishedKind)) {
+        return true;
+    }
+
+    return false;
+}
+
+void Enemy::FinishCurrentAction() {
+    if (TryContinueChain()) {
+        return;
+    }
+
+    EndAttack();
+}
+
+void Enemy::UpdateWarpStart(float deltaTime) {
+    (void)deltaTime;
+
+    isVisible_ = false;
+    warp_.collisionDisabled = true;
+
+    if (stateTimer_ >= warpStartTime_) {
+        ChangeActionStep(ActionStep::Move);
+    }
+}
+
 void Enemy::UpdateWarpMove(float deltaTime) {
-    // 未使用引数警告回避
-    deltaTime = deltaTime;
+    (void)deltaTime;
 
-    tf_.position = warpTargetPos_;
+    if (!warp_.hasValidTarget) {
+        EndAttack();
+        return;
+    }
 
-    // ワープ先でプレイヤー方向を向き直し、その向きを固定
+    tf_.position = warp_.targetPos;
+
     UpdateFacingToPlayer();
     LockCurrentFacing();
 
-    state_ = EnemyState::WarpEnd;
-    stateTimer_ = 0.0f;
+    ChangeActionStep(ActionStep::End);
 }
 
-// ワープ終了：再表示する
 void Enemy::UpdateWarpEnd(float deltaTime) {
-    // 未使用引数警告回避
-    deltaTime = deltaTime;
+    (void)deltaTime;
 
     isVisible_ = true;
+    warp_.collisionDisabled = false;
 
     if (stateTimer_ >= warpEndTime_) {
-        currentAttackType_ = AttackType::None;
-        currentAttackPhase_ = AttackPhase::None;
-        state_ = EnemyState::Idle;
-        stateTimer_ = 0.0f;
+        BeginWarpFollowup();
     }
 }
 
 // ============================================================
 // 波攻撃更新
 // ============================================================
-
-// 波攻撃準備
 void Enemy::UpdateWaveCharge(float deltaTime) {
-    deltaTime = deltaTime;
-
-    currentAttackType_ = AttackType::Wave;
-    currentAttackPhase_ = AttackPhase::Charge;
-
     UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_);
 
     if (stateTimer_ >= waveChargeTime_) {
         LockCurrentFacing();
-        state_ = EnemyState::WaveFire;
-        ChangeAttackPhase(AttackPhase::Active);
+        ChangeActionStep(ActionStep::Active);
     }
 }
 
-// 波発射
 void Enemy::UpdateWaveFire(float deltaTime) {
-    deltaTime = deltaTime;
-
-    currentAttackType_ = AttackType::Wave;
-    currentAttackPhase_ = AttackPhase::Active;
+    (void)deltaTime;
 
     SpawnWave();
-
-    state_ = EnemyState::WaveRecovery;
-    ChangeAttackPhase(AttackPhase::Recovery);
+    ChangeActionStep(ActionStep::Recovery);
 }
 
-// 波攻撃後の隙
 void Enemy::UpdateWaveRecovery(float deltaTime) {
-    deltaTime = deltaTime;
-
-    currentAttackType_ = AttackType::Wave;
-    currentAttackPhase_ = AttackPhase::Recovery;
+    (void)deltaTime;
 
     if (stateTimer_ >= waveRecoveryTime_) {
-        EndAttack();
+        FinishCurrentAction();
     }
 }
 
 // ============================================================
 // 波生成・波更新
 // ============================================================
-
-// 前方へ進む波を1つ生成する
 void Enemy::SpawnWave() {
     EnemyWave wave{};
 
-    // 攻撃開始時に固定した方向へ進ませる
     float usedYaw = lockedAttackYaw_;
     float forwardX = std::sinf(usedYaw);
     float forwardZ = std::cosf(usedYaw);
 
-    // 胴体前方の地面付近から波を発生させる
     wave.position = bodyTf_.position;
     wave.position.y = tf_.position.y + waveSpawnHeightOffset_;
     wave.position.x += forwardX * waveSpawnForwardOffset_;
@@ -991,21 +1097,18 @@ void Enemy::SpawnWave() {
     waves_.push_back(wave);
 }
 
-// 全波を更新する
 void Enemy::UpdateWaves(float deltaTime) {
     for (auto &wave : waves_) {
         if (!wave.isAlive) {
             continue;
         }
 
-        // 進行方向へ移動
         float moveX = wave.direction.x * wave.speed * deltaTime;
         float moveZ = wave.direction.z * wave.speed * deltaTime;
 
         wave.position.x += moveX;
         wave.position.z += moveZ;
 
-        // 移動距離を積算し、最大距離を超えたら消す
         float moved = std::sqrtf(moveX * moveX + moveZ * moveZ);
         wave.traveledDistance += moved;
 
@@ -1018,8 +1121,6 @@ void Enemy::UpdateWaves(float deltaTime) {
 // ============================================================
 // ガード処理
 // ============================================================
-
-// ランダムにどこを守るか決める
 void Enemy::DecideGuardTarget() {
     int r = std::rand() % 3;
 
@@ -1032,106 +1133,363 @@ void Enemy::DecideGuardTarget() {
     }
 }
 
-// ガード開始移動
 void Enemy::UpdateGuardMove(float deltaTime) {
-    // 未使用引数警告回避
-    deltaTime = deltaTime;
+    (void)deltaTime;
 
     if (stateTimer_ >= guardMoveTime_) {
-        state_ = EnemyState::GuardHold;
+        action_.step = ActionStep::Hold;
         stateTimer_ = 0.0f;
     }
 }
 
-// ガード維持
 void Enemy::UpdateGuardHold(float deltaTime) {
-    // 未使用引数警告回避
-    deltaTime = deltaTime;
+    (void)deltaTime;
 
     isGuardActive_ = true;
 
     if (stateTimer_ >= guardHoldTime_) {
-        state_ = EnemyState::GuardRecovery;
+        action_.step = ActionStep::Recovery;
         stateTimer_ = 0.0f;
     }
 }
 
-// ガード終了
 void Enemy::UpdateGuardRecovery(float deltaTime) {
-    // 未使用引数警告回避
-    deltaTime = deltaTime;
+    (void)deltaTime;
 
     if (stateTimer_ >= guardRecoveryTime_) {
-        currentAttackType_ = AttackType::None;
-        currentAttackPhase_ = AttackPhase::None;
-        state_ = EnemyState::Idle;
-        stateTimer_ = 0.0f;
         guardTarget_ = GuardTarget::None;
+        isGuardActive_ = false;
+        EndAttack();
     }
 }
 
-//**************************
-//アクションタイムの管理
-//**************************
-
-//アクションタイム
+// ============================================================
+// アクションタイムの管理
+// ============================================================
 float Enemy::GetCurrentActionTime() const { return stateTimer_; }
 
-// 現在の攻撃タイプに応じたタイミング情報を返す
 const AttackTimingParam *Enemy::GetCurrentAttackTiming() const {
-    switch (currentAttackType_) {
-    case AttackType::Smash:
+    switch (action_.kind) {
+    case ActionKind::Smash:
         return &smashTiming_;
-    case AttackType::Sweep:
+    case ActionKind::Sweep:
         return &sweepTiming_;
     default:
         return nullptr;
     }
 }
 
-// 攻撃開始：攻撃タイプとフェーズをセット
-void Enemy::BeginAttack(AttackType type, AttackPhase phase) {
-    currentAttackType_ = type;
-    currentAttackPhase_ = phase;
+AttackParam *Enemy::GetCurrentAttackParam() {
+    switch (action_.kind) {
+    case ActionKind::Smash:
+        return &smashParam_;
+    case ActionKind::Sweep:
+        return &sweepParam_;
+    case ActionKind::Shot:
+        return &bulletParam_;
+    case ActionKind::Wave:
+        return &waveParam_;
+    default:
+        return nullptr;
+    }
+}
+
+const AttackParam *Enemy::GetCurrentAttackParam() const {
+    switch (action_.kind) {
+    case ActionKind::Smash:
+        return &smashParam_;
+    case ActionKind::Sweep:
+        return &sweepParam_;
+    case ActionKind::Shot:
+        return &bulletParam_;
+    case ActionKind::Wave:
+        return &waveParam_;
+    default:
+        return nullptr;
+    }
+}
+
+bool Enemy::IsCurrentAttackInActiveWindow() const {
+    const AttackTimingParam *timing = GetCurrentAttackTiming();
+    if (!timing) {
+        return false;
+    }
+
+    float t = GetCurrentActionTime();
+    return (t >= timing->activeStartTime && t <= timing->activeEndTime);
+}
+
+bool Enemy::IsCurrentAttackInRecoveryWindow() const {
+    const AttackTimingParam *timing = GetCurrentAttackTiming();
+    if (!timing) {
+        return false;
+    }
+
+    return GetCurrentActionTime() >= timing->recoveryStartTime;
+}
+
+bool Enemy::HasReachedTrackingEnd() const {
+    const AttackTimingParam *timing = GetCurrentAttackTiming();
+    if (!timing) {
+        return false;
+    }
+    return GetCurrentActionTime() >= timing->trackingEndTime;
+}
+
+bool Enemy::HasReachedHitStart() const {
+    const AttackTimingParam *timing = GetCurrentAttackTiming();
+    if (!timing) {
+        return false;
+    }
+    return GetCurrentActionTime() >= timing->activeStartTime;
+}
+
+bool Enemy::HasReachedHitEnd() const {
+    const AttackTimingParam *timing = GetCurrentAttackTiming();
+    if (!timing) {
+        return false;
+    }
+    return GetCurrentActionTime() > timing->activeEndTime;
+}
+
+bool Enemy::HasReachedRecoveryStart() const {
+    const AttackTimingParam *timing = GetCurrentAttackTiming();
+    if (!timing) {
+        return false;
+    }
+    return GetCurrentActionTime() >= timing->recoveryStartTime;
+}
+
+// ============================================================
+// 行動開始・行動遷移
+// ============================================================
+void Enemy::BeginAction(ActionKind kind, ActionStep step) {
+    lastActionKind_ = kind;
+
+    if (kind == ActionKind::Warp) {
+        stagnantTimer_ = 0.0f;
+        isDistanceStagnant_ = false;
+
+        if (warp_.type == WarpType::Escape) {
+            warpEscapeCooldownTimer_ = warpEscapeCooldown_;
+        }
+    } else {
+        ResetWarpContext();
+    }
+
+    action_.kind = kind;
+    action_.step = step;
+
     hasTrackingLocked_ = false;
+    isAttackActive_ = false;
     stateTimer_ = 0.0f;
 }
 
-// 攻撃フェーズ移行：フェーズを切り替えてタイマーリセット
-void Enemy::ChangeAttackPhase(AttackPhase phase) {
-    currentAttackPhase_ = phase;
+void Enemy::ChangeActionStep(ActionStep step) {
+    action_.step = step;
+    isAttackActive_ = false;
     stateTimer_ = 0.0f;
 }
 
-// 攻撃終了：攻撃タイプとフェーズをリセットしてIdleに戻す
 void Enemy::EndAttack() {
-    currentAttackType_ = AttackType::None;
-    currentAttackPhase_ = AttackPhase::None;
+    action_.kind = ActionKind::None;
+    action_.step = ActionStep::None;
+
+    ResetWarpContext();
+    ResetChainContext();
+    isVisible_ = true;
+
     hasTrackingLocked_ = false;
-    state_ = EnemyState::Idle;
+    isAttackActive_ = false;
     stateTimer_ = 0.0f;
 }
 
+// ============================================================
 // 現在の攻撃が、向き固定して攻撃判定を出すタイプか
+// ============================================================
 bool Enemy::ShouldUseLockedAttackYaw() const {
-    switch (currentAttackType_) {
-    case AttackType::Smash:
-    case AttackType::Sweep:
+    switch (action_.kind) {
+    case ActionKind::Smash:
+    case ActionKind::Sweep:
         return true;
     default:
         return false;
     }
 }
 
-// 現在の攻撃が、攻撃判定が有効なフェーズに入っているか
-bool Enemy::IsCurrentAttack(AttackType type) const {
-    return currentAttackType_ == type;
+// ============================================================
+// Timing検証
+// ============================================================
+void Enemy::ValidateTiming(AttackTimingParam &timing, float chargeTime) {
+    if (timing.totalTime < 0.0f) {
+        timing.totalTime = 0.0f;
+    }
+
+    if (timing.trackingEndTime < 0.0f) {
+        timing.trackingEndTime = 0.0f;
+    }
+    if (timing.trackingEndTime > chargeTime) {
+        timing.trackingEndTime = chargeTime;
+    }
+
+    if (timing.activeStartTime < 0.0f) {
+        timing.activeStartTime = 0.0f;
+    }
+    if (timing.activeEndTime < timing.activeStartTime) {
+        timing.activeEndTime = timing.activeStartTime;
+    }
+    if (timing.recoveryStartTime < timing.activeEndTime) {
+        timing.recoveryStartTime = timing.activeEndTime;
+    }
+    if (timing.totalTime < timing.recoveryStartTime) {
+        timing.totalTime = timing.recoveryStartTime;
+    }
+}
+
+void Enemy::ValidateAllTimings() {
+    ValidateTiming(smashTiming_, smashChargeTime_);
+    ValidateTiming(sweepTiming_, sweepChargeTime_);
+}
+
+// ============================================================
+// action ベース更新
+// ============================================================
+void Enemy::UpdateByAction(float deltaTime) {
+    if (action_.kind == ActionKind::None) {
+        UpdateIdle(deltaTime);
+        return;
+    }
+
+    switch (action_.kind) {
+    case ActionKind::Smash:
+        UpdateSmashByStep(deltaTime);
+        break;
+    case ActionKind::Sweep:
+        UpdateSweepByStep(deltaTime);
+        break;
+    case ActionKind::Shot:
+        UpdateShotByStep(deltaTime);
+        break;
+    case ActionKind::Wave:
+        UpdateWaveByStep(deltaTime);
+        break;
+    case ActionKind::Warp:
+        UpdateWarpByStep(deltaTime);
+        break;
+    case ActionKind::Guard:
+        UpdateGuardByStep(deltaTime);
+        break;
+    default:
+        UpdateIdle(deltaTime);
+        break;
+    }
+}
+
+void Enemy::UpdateSmashByStep(float deltaTime) {
+    switch (action_.step) {
+    case ActionStep::Charge:
+        UpdateSmashCharge(deltaTime);
+        break;
+    case ActionStep::Active:
+        UpdateSmashAttack(deltaTime);
+        break;
+    case ActionStep::Recovery:
+        UpdateSmashRecovery(deltaTime);
+        break;
+    default:
+        EndAttack();
+        break;
+    }
+}
+
+void Enemy::UpdateSweepByStep(float deltaTime) {
+    switch (action_.step) {
+    case ActionStep::Charge:
+        UpdateSweepCharge(deltaTime);
+        break;
+    case ActionStep::Active:
+        UpdateSweepAttack(deltaTime);
+        break;
+    case ActionStep::Recovery:
+        UpdateSweepRecovery(deltaTime);
+        break;
+    default:
+        EndAttack();
+        break;
+    }
+}
+
+void Enemy::UpdateShotByStep(float deltaTime) {
+    switch (action_.step) {
+    case ActionStep::Charge:
+        UpdateShotCharge(deltaTime);
+        break;
+    case ActionStep::Active:
+        UpdateShotFire(deltaTime);
+        break;
+    case ActionStep::Recovery:
+        UpdateShotRecovery(deltaTime);
+        break;
+    default:
+        EndAttack();
+        break;
+    }
+}
+
+void Enemy::UpdateWaveByStep(float deltaTime) {
+    switch (action_.step) {
+    case ActionStep::Charge:
+        UpdateWaveCharge(deltaTime);
+        break;
+    case ActionStep::Active:
+        UpdateWaveFire(deltaTime);
+        break;
+    case ActionStep::Recovery:
+        UpdateWaveRecovery(deltaTime);
+        break;
+    default:
+        EndAttack();
+        break;
+    }
+}
+
+void Enemy::UpdateWarpByStep(float deltaTime) {
+    switch (action_.step) {
+    case ActionStep::Start:
+        UpdateWarpStart(deltaTime);
+        break;
+    case ActionStep::Move:
+        UpdateWarpMove(deltaTime);
+        break;
+    case ActionStep::End:
+        UpdateWarpEnd(deltaTime);
+        break;
+    default:
+        EndAttack();
+        break;
+    }
+}
+
+void Enemy::UpdateGuardByStep(float deltaTime) {
+    switch (action_.step) {
+    case ActionStep::Move:
+        UpdateGuardMove(deltaTime);
+        break;
+    case ActionStep::Hold:
+        UpdateGuardHold(deltaTime);
+        break;
+    case ActionStep::Recovery:
+        UpdateGuardRecovery(deltaTime);
+        break;
+    default:
+        EndAttack();
+        break;
+    }
 }
 
 // ============================================================
 // プリセット保存用：現在値 → 構造体
 // ============================================================
-// - 現在のEnemyチューニング値をまとめて取り出す
 EnemyTuningPreset Enemy::CreateTuningPreset() const {
     EnemyTuningPreset p{};
 
@@ -1142,8 +1500,6 @@ EnemyTuningPreset Enemy::CreateTuningPreset() const {
     p.smash.knockback = smashParam_.knockback;
     p.smash.hitBoxSize = smashParam_.hitBoxSize;
     p.smashChargeTime = smashChargeTime_;
-    //p.smashAttackTime = smashAttackTime_;
-    //p.smashRecoveryTime = smashRecoveryTime_;
     p.smashAttackForwardOffset = smashAttackForwardOffset_;
     p.smashAttackHeightOffset = smashAttackHeightOffset_;
     p.smashTiming.trackingEndTime = smashTiming_.trackingEndTime;
@@ -1152,8 +1508,6 @@ EnemyTuningPreset Enemy::CreateTuningPreset() const {
     p.sweep.knockback = sweepParam_.knockback;
     p.sweep.hitBoxSize = sweepParam_.hitBoxSize;
     p.sweepChargeTime = sweepChargeTime_;
-    //p.sweepAttackTime = sweepAttackTime_;
-    //p.sweepRecoveryTime = sweepRecoveryTime_;
     p.sweepAttackSideOffset = sweepAttackSideOffset_;
     p.sweepAttackHeightOffset = sweepAttackHeightOffset_;
     p.sweepTiming.trackingEndTime = sweepTiming_.trackingEndTime;
@@ -1181,14 +1535,26 @@ EnemyTuningPreset Enemy::CreateTuningPreset() const {
     p.waveSpawnHeightOffset = waveSpawnHeightOffset_;
 
     p.smashTiming.totalTime = smashTiming_.totalTime;
+    p.smashTiming.trackingEndTime = smashTiming_.trackingEndTime;
     p.smashTiming.activeStartTime = smashTiming_.activeStartTime;
     p.smashTiming.activeEndTime = smashTiming_.activeEndTime;
     p.smashTiming.recoveryStartTime = smashTiming_.recoveryStartTime;
 
     p.sweepTiming.totalTime = sweepTiming_.totalTime;
+    p.sweepTiming.trackingEndTime = sweepTiming_.trackingEndTime;
     p.sweepTiming.activeStartTime = sweepTiming_.activeStartTime;
     p.sweepTiming.activeEndTime = sweepTiming_.activeEndTime;
     p.sweepTiming.recoveryStartTime = sweepTiming_.recoveryStartTime;
+
+    p.warpApproachChainMaxSteps = warpApproachChainMaxSteps_;
+    p.warpEscapeChainMaxSteps = warpEscapeChainMaxSteps_;
+    p.approachChainContinueDistance = approachChainContinueDistance_;
+    p.escapeChainContinueDistance = escapeChainContinueDistance_;
+
+    p.sweepWarpSmashMaxDistance = sweepWarpSmashMaxDistance_;
+    p.sweepWarpSmashChance = sweepWarpSmashChance_;
+    p.waveWarpSmashMinDistance = waveWarpSmashMinDistance_;
+    p.waveWarpSmashChance = waveWarpSmashChance_;
 
     return p;
 }
@@ -1196,7 +1562,6 @@ EnemyTuningPreset Enemy::CreateTuningPreset() const {
 // ============================================================
 // プリセット読込用：構造体 → 現在値
 // ============================================================
-// - 保存済みプリセットの内容をEnemyに反映する
 void Enemy::ApplyTuningPreset(const EnemyTuningPreset &p) {
     nearAttackDistance_ = p.nearAttackDistance;
     farAttackDistance_ = p.farAttackDistance;
@@ -1205,8 +1570,6 @@ void Enemy::ApplyTuningPreset(const EnemyTuningPreset &p) {
     smashParam_.knockback = p.smash.knockback;
     smashParam_.hitBoxSize = p.smash.hitBoxSize;
     smashChargeTime_ = p.smashChargeTime;
-   /* smashAttackTime_ = p.smashAttackTime;
-    smashRecoveryTime_ = p.smashRecoveryTime;*/
     smashAttackForwardOffset_ = p.smashAttackForwardOffset;
     smashAttackHeightOffset_ = p.smashAttackHeightOffset;
     smashTiming_.totalTime = p.smashTiming.totalTime;
@@ -1214,14 +1577,11 @@ void Enemy::ApplyTuningPreset(const EnemyTuningPreset &p) {
     smashTiming_.activeEndTime = p.smashTiming.activeEndTime;
     smashTiming_.recoveryStartTime = p.smashTiming.recoveryStartTime;
     smashTiming_.trackingEndTime = p.smashTiming.trackingEndTime;
-    
 
     sweepParam_.damage = p.sweep.damage;
     sweepParam_.knockback = p.sweep.knockback;
     sweepParam_.hitBoxSize = p.sweep.hitBoxSize;
     sweepChargeTime_ = p.sweepChargeTime;
-    /*sweepAttackTime_ = p.sweepAttackTime;
-    sweepRecoveryTime_ = p.sweepRecoveryTime;*/
     sweepAttackSideOffset_ = p.sweepAttackSideOffset;
     sweepAttackHeightOffset_ = p.sweepAttackHeightOffset;
     sweepTiming_.totalTime = p.sweepTiming.totalTime;
@@ -1229,6 +1589,7 @@ void Enemy::ApplyTuningPreset(const EnemyTuningPreset &p) {
     sweepTiming_.activeEndTime = p.sweepTiming.activeEndTime;
     sweepTiming_.recoveryStartTime = p.sweepTiming.recoveryStartTime;
     sweepTiming_.trackingEndTime = p.sweepTiming.trackingEndTime;
+
     bulletParam_.damage = p.bullet.damage;
     bulletParam_.knockback = p.bullet.knockback;
     bulletParam_.hitBoxSize = p.bullet.hitBoxSize;
@@ -1251,15 +1612,24 @@ void Enemy::ApplyTuningPreset(const EnemyTuningPreset &p) {
     waveSpawnForwardOffset_ = p.waveSpawnForwardOffset;
     waveSpawnHeightOffset_ = p.waveSpawnHeightOffset;
 
-    // near > far になると距離判定ロジックが破綻するため、
-    // 必ず near <= far になるよう補正する
+    warpApproachChainMaxSteps_ = p.warpApproachChainMaxSteps;
+    warpEscapeChainMaxSteps_ = p.warpEscapeChainMaxSteps;
+    approachChainContinueDistance_ = p.approachChainContinueDistance;
+    escapeChainContinueDistance_ = p.escapeChainContinueDistance;
+
+    sweepWarpSmashMaxDistance_ = p.sweepWarpSmashMaxDistance;
+    sweepWarpSmashChance_ = p.sweepWarpSmashChance;
+    waveWarpSmashMinDistance_ = p.waveWarpSmashMinDistance;
+    waveWarpSmashChance_ = p.waveWarpSmashChance;
+
     if (nearAttackDistance_ > farAttackDistance_) {
         farAttackDistance_ = nearAttackDistance_;
     }
+
+    ValidateAllTimings();
 }
 
 // ============================================================
 // プリセット初期化
 // ============================================================
-// - デフォルト値のプリセットを適用して初期値に戻す
 void Enemy::ResetTuningPreset() { ApplyTuningPreset(EnemyTuningPreset{}); }

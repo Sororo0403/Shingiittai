@@ -21,15 +21,15 @@ struct EnemyTuningPreset {
 
     AttackParamPreset smash;
     float smashChargeTime = 0.6f;
-    float smashAttackTime = 0.25f;
-    float smashRecoveryTime = 1.0f;
+   /* float smashAttackTime = 0.25f;
+    float smashRecoveryTime = 1.0f;*/
     float smashAttackForwardOffset = 1.4f;
     float smashAttackHeightOffset = 0.8f;
 
     AttackParamPreset sweep;
     float sweepChargeTime = 0.5f;
-    float sweepAttackTime = 0.3f;
-    float sweepRecoveryTime = 1.0f;
+    /*float sweepAttackTime = 0.3f;
+    float sweepRecoveryTime = 1.0f;*/
     float sweepAttackSideOffset = 0.2f;
     float sweepAttackHeightOffset = 0.8f;
 
@@ -53,4 +53,14 @@ struct EnemyTuningPreset {
 
     AttackTimingParamPreset smashTiming;
     AttackTimingParamPreset sweepTiming;
+
+    int warpApproachChainMaxSteps = 2;
+    int warpEscapeChainMaxSteps = 2;
+    float approachChainContinueDistance = 5.0f;
+    float escapeChainContinueDistance = 4.5f;
+
+    float sweepWarpSmashMaxDistance = 5.0f;
+    float sweepWarpSmashChance = 0.45f;
+    float waveWarpSmashMinDistance = 4.5f;
+    float waveWarpSmashChance = 0.50f;
 };

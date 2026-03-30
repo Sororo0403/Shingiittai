@@ -62,7 +62,12 @@ void GameScene::Update() {
 
     player_.Update(input, ctx_->deltaTime);
 
-    enemy_.Update(player_.GetTransform().position, ctx_->deltaTime);
+        enemy_.Update(player_.GetTransform().position, ctx_->deltaTime,
+                  player_.GetSword().IsGuard());
+
+     // 敵の行動状態を取得してガード状態を判定
+    const ActionKind enemyActionKind = enemy_.GetActionKind();
+    const ActionStep enemyActionStep = enemy_.GetActionStep();
 
     // 敵ヒットクールダウンの更新
     if (enemyHitCooldown_ > 0.0f) {
@@ -103,9 +108,12 @@ void GameScene::Update() {
         dbgHitRightHand_ = hitRightHand;
         dbgHitBody_ = hitBody;
 
+        const bool isEnemyGuardHold = (enemyActionKind == ActionKind::Guard &&
+                                       enemyActionStep == ActionStep::Hold);
+
         if (enemyHitCooldown_ <= 0.0f) {
             // 左手ガード中は左手優先
-            if (enemy_.IsGuardActive() && hitLeftHand) {
+            if (isEnemyGuardHold && hitLeftHand) {
                 enemyHitCooldown_ = 0.2f;
             } else if (hitBody) {
                 enemy_.TakeDamage(10.0f);
@@ -115,9 +123,20 @@ void GameScene::Update() {
     }
 
     // ボスの攻撃判定とあたり判定
+    const bool isEnemySmashActive = (enemyActionKind == ActionKind::Smash &&
+                                     enemyActionStep == ActionStep::Active);
+
+    const bool isEnemySweepActive = (enemyActionKind == ActionKind::Sweep &&
+                                     enemyActionStep == ActionStep::Active);
+
+    const bool isEnemyMeleeActive = isEnemySmashActive || isEnemySweepActive;
+
+    const float enemyAttackDamage = enemy_.GetCurrentAttackDamage();
+    const float enemyAttackKnockback = enemy_.GetCurrentAttackKnockback();
+
     bool bossHitPlayer = false;
 
-    if (enemy_.IsAttackActive()) {
+    if (isEnemyMeleeActive) {
         auto enemyAttackBox = enemy_.GetAttackOBB();
         auto playerBox = player_.GetOBB();
 
@@ -136,25 +155,15 @@ void GameScene::Update() {
             dx /= len;
             dz /= len;
 
-            float damage = 0.0f;
-            float knockback = 0.0f;
-
-            if (enemy_.GetState() == EnemyState::SmashAttack) {
-                damage = enemy_.GetSmashDamage();
-                knockback = enemy_.GetSmashKnockback();
-            } else if (enemy_.GetState() == EnemyState::SweepAttack) {
-                damage = enemy_.GetSweepDamage();
-                knockback = enemy_.GetSweepKnockback();
-            }
-
             if (player_.GetSword().IsGuard()) {
                 dbgPlayerGuardedHit_ = true;
-                player_.AddKnockback(
-                    {dx * (knockback * 0.5f), 0.0f, dz * (knockback * 0.5f)});
+                player_.AddKnockback({dx * (enemyAttackKnockback * 0.5f), 0.0f,
+                                      dz * (enemyAttackKnockback * 0.5f)});
                 playerHitCooldown_ = 0.2f;
             } else {
-                player_.TakeDamage(damage);
-                player_.AddKnockback({dx * knockback, 0.0f, dz * knockback});
+                player_.TakeDamage(enemyAttackDamage);
+                player_.AddKnockback({dx * enemyAttackKnockback, 0.0f,
+                                      dz * enemyAttackKnockback});
                 playerHitCooldown_ = 0.4f;
             }
         }
@@ -281,9 +290,16 @@ void GameScene::Draw() {
         ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetRightHandOBB(),
             *currentCamera_);
 
-        if (enemy_.IsAttackActive()) {
+        const bool isEnemySmashActive =
+            (enemy_.GetActionKind() == ActionKind::Smash &&
+             enemy_.GetActionStep() == ActionStep::Active);
+        const bool isEnemySweepActive =
+            (enemy_.GetActionKind() == ActionKind::Sweep &&
+             enemy_.GetActionStep() == ActionStep::Active);
+
+        if (isEnemySmashActive || isEnemySweepActive) {
             ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetAttackOBB(),
-                *currentCamera_);
+                                     *currentCamera_);
         }
     }
 #endif // _DEBUG
@@ -297,74 +313,88 @@ void GameScene::Draw() {
     ImGui::Text("Hit Body     : %s", dbgHitBody_ ? "true" : "false");
     ImGui::Text("Cooldown     : %.2f", enemyHitCooldown_);
 
-    const char* stateName = "Unknown";
-    switch (enemy_.GetState()) {
-    case EnemyState::Idle:
-        stateName = "Idle";
+   const ActionKind enemyActionKind = enemy_.GetActionKind();
+    const ActionStep enemyActionStep = enemy_.GetActionStep();
+
+    const char *actionKindName = "None";
+    switch (enemyActionKind) {
+    case ActionKind::Smash:
+        actionKindName = "Smash";
         break;
-    case EnemyState::SmashCharge:
-        stateName = "SmashCharge";
+    case ActionKind::Sweep:
+        actionKindName = "Sweep";
         break;
-    case EnemyState::SmashAttack:
-        stateName = "SmashAttack";
+    case ActionKind::Shot:
+        actionKindName = "Shot";
         break;
-    case EnemyState::SmashRecovery:
-        stateName = "SmashRecovery";
+    case ActionKind::Wave:
+        actionKindName = "Wave";
         break;
-    case EnemyState::SweepCharge:
-        stateName = "SweepCharge";
+    case ActionKind::Warp:
+        actionKindName = "Warp";
         break;
-    case EnemyState::SweepAttack:
-        stateName = "SweepAttack";
+    case ActionKind::Guard:
+        actionKindName = "Guard";
         break;
-    case EnemyState::SweepRecovery:
-        stateName = "SweepRecovery";
-        break;
-    case EnemyState::ShotCharge:
-        stateName = "ShotCharge";
-        break;
-    case EnemyState::ShotFire:
-        stateName = "ShotFire";
-        break;
-    case EnemyState::ShotRecovery:
-        stateName = "ShotRecovery";
-        break;
-    case EnemyState::WarpStart:
-        stateName = "WarpStart";
-        break;
-    case EnemyState::WarpMove:
-        stateName = "WarpMove";
-        break;
-    case EnemyState::WarpEnd:
-        stateName = "WarpEnd";
-        break;
-    case EnemyState::WaveCharge:
-        stateName = "WaveCharge";
-        break;
-    case EnemyState::WaveFire:
-        stateName = "WaveFire";
-        break;
-    case EnemyState::WaveRecovery:
-        stateName = "WaveRecovery";
-        break;
-    case EnemyState::GuardMove:
-        stateName = "GuardMove";
-        break;
-    case EnemyState::GuardHold:
-        stateName = "GuardHold";
-        break;
-    case EnemyState::GuardRecovery:
-        stateName = "GuardRecovery";
+    default:
         break;
     }
 
-    ImGui::Text("EnemyState   : %s", stateName);
-    ImGui::Text("AttackActive : %s",
-        enemy_.IsAttackActive() ? "true" : "false");
+    const char *actionStepName = "None";
+    switch (enemyActionStep) {
+    case ActionStep::Charge:
+        actionStepName = "Charge";
+        break;
+    case ActionStep::Active:
+        actionStepName = "Active";
+        break;
+    case ActionStep::Recovery:
+        actionStepName = "Recovery";
+        break;
+    case ActionStep::Start:
+        actionStepName = "Start";
+        break;
+    case ActionStep::Move:
+        actionStepName = "Move";
+        break;
+    case ActionStep::Hold:
+        actionStepName = "Hold";
+        break;
+    case ActionStep::End:
+        actionStepName = "End";
+        break;
+    default:
+        break;
+    }
+
+    const bool isEnemySmashActive = (enemyActionKind == ActionKind::Smash &&
+                                     enemyActionStep == ActionStep::Active);
+
+    const bool isEnemySweepActive = (enemyActionKind == ActionKind::Sweep &&
+                                     enemyActionStep == ActionStep::Active);
+
+    const bool isEnemyAttackActive = isEnemySmashActive || isEnemySweepActive;
+
+    const bool isEnemyGuardHold = (enemyActionKind == ActionKind::Guard &&
+                                   enemyActionStep == ActionStep::Hold);
+
+    ImGui::Text("ActionKind   : %s", actionKindName);
+    ImGui::Text("ActionStep   : %s", actionStepName);
+    ImGui::Text("AttackActive : %s", isEnemyAttackActive ? "true" : "false");
+    ImGui::Text("GuardActive  : %s", isEnemyGuardHold ? "true" : "false");
+
     ImGui::Text("BossHitPlayer: %s", dbgBossHitPlayer_ ? "true" : "false");
     ImGui::Text("DistanceToPlayer : %.2f", enemy_.GetDistanceToPlayer());
     ImGui::Text("FacingYaw       : %.2f", enemy_.GetFacingYaw());
     ImGui::Text("LockedAttackYaw : %.2f", enemy_.GetLockedAttackYaw());
+    ImGui::Text("Stagnant        : %s",
+                enemy_.IsDistanceStagnant() ? "true" : "false");
+    ImGui::Text("StagnantTimer   : %.2f", enemy_.GetStagnantTimer());
+    ImGui::Text("LastDistance    : %.2f", enemy_.GetLastDistanceToPlayer());
+    ImGui::Text("StagDistThresh  : %.2f",
+                enemy_.GetStagnantDistanceThreshold());
+    ImGui::Text("StagTimeThresh  : %.2f", enemy_.GetStagnantTimeThreshold());
+    ImGui::Text("WarpBonus       : %d", enemy_.GetStagnantWarpBonus());
     ImGui::Text("BulletHitPlayer : %s", dbgBulletHitPlayer_ ? "true" : "false");
     ImGui::Text("AliveBullets    : %d", aliveBulletCount);
     auto warpPos = enemy_.GetWarpTargetPos();
@@ -388,8 +418,6 @@ void GameScene::Draw() {
         break;
     }
 
-    ImGui::Text("GuardActive     : %s",
-                enemy_.IsGuardActive() ? "true" : "false");
     ImGui::Text("GuardTarget     : %s", guardName);
     ImGui::Text("PlayerHP        : %.1f", player_.GetHP());
     ImGui::Text("PlayerHitCD     : %.2f", playerHitCooldown_);
@@ -563,6 +591,20 @@ void GameScene::Draw() {
                        100);
         ImGui::TreePop();
     }
+
+    ImGui::Separator();
+    ImGui::Text("Chain: Sweep -> Warp -> Smash");
+    ImGui::DragFloat("Sweep Warp Smash MaxDist",
+                     &enemy_.EditSweepWarpSmashMaxDistance(), 0.1f, 0.0f,
+                     20.0f);
+    ImGui::DragFloat("Sweep Warp Smash Chance",
+                     &enemy_.EditSweepWarpSmashChance(), 0.01f, 0.0f, 1.0f);
+
+    ImGui::Text("Chain: Wave -> Warp -> Smash");
+    ImGui::DragFloat("Wave Warp Smash MinDist",
+                     &enemy_.EditWaveWarpSmashMinDistance(), 0.1f, 0.0f, 20.0f);
+    ImGui::DragFloat("Wave Warp Smash Chance",
+                     &enemy_.EditWaveWarpSmashChance(), 0.01f, 0.0f, 1.0f);
 
     ImGui::End();
 #endif
