@@ -70,8 +70,8 @@ class Sword {
     bool isSlashMode_ = false;
     bool isGuard_ = false;
     bool isCounter_ = false;
-    bool isMouse = false;
-    bool isJoyCon = false;
+    bool isMouse_ = false;
+    bool isJoyCon_ = false;
 
     DirectX::XMFLOAT2 slashDir_{};
     DirectX::XMFLOAT4 orientation_{0, 0, 0, 1};

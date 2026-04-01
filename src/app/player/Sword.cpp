@@ -20,23 +20,43 @@ void Sword::Initialize(uint32_t modelId) {
 void Sword::Update(Input *input, float deltaTime, const XMFLOAT3 &playerPos,
                    const XMFLOAT4 &playerRotation, float playerArmLength,
                    float playerHandHeight) {
-    //swordJoyConController_.Update(input, deltaTime, tf_);
-    swordMouseController_.Update(input, deltaTime, tf_);
+    // ジョイコンがアクティブか
+    if (swordJoyConController_.IsActive(input)) {
+        isJoyCon_ = true;
+        isMouse_ = false;
+    }
+
+    // マウスがアクティブか
+    if (swordMouseController_.IsActive(input)) {
+        isMouse_ = true;
+        isJoyCon_ = false;
+    }
+
+    // コントローラーの更新処理
+    if (isJoyCon_) {
+        swordJoyConController_.Update(input, deltaTime, tf_);
+    } else if (isMouse_) {
+        swordMouseController_.Update(input, deltaTime, tf_);
+    }
+
+    // 各コントローラーのときの判定取得
+    if (isJoyCon_) {
+        isSlashMode_ = swordJoyConController_.GetIsSlashMode();
+        isGuard_ = swordJoyConController_.GetIsGuard();
+        isCounter_ = swordJoyConController_.GetCounter();
+        slashDir_ = swordJoyConController_.GetSlashDir();
+        orientation_ = swordJoyConController_.GetOrientation();
+    } else if (isMouse_) {
+        isSlashMode_ = swordMouseController_.GetIsSlashMode();
+        isGuard_ = swordMouseController_.GetIsGuard();
+        isCounter_ = swordMouseController_.GetCounter();
+        slashDir_ = swordMouseController_.GetSlashDir();
+        orientation_ = swordMouseController_.GetOrientation();
+    }
+
+    // プレイヤーの更新処理
     UpdateTransform(playerPos, playerRotation, playerArmLength,
                     playerHandHeight);
-
-
-    //isSlashMode_ = swordJoyConController_.GetIsSlashMode();
-    //isGuard_ = swordJoyConController_.GetIsGuard();
-    //isCounter_ = swordJoyConController_.GetCounter();
-    //slashDir_ = swordJoyConController_.GetSlashDir();
-    //orientation_ = swordJoyConController_.GetOrientation();
-
-    isSlashMode_ = swordMouseController_.GetIsSlashMode();
-    isGuard_ = swordMouseController_.GetIsGuard();
-    isCounter_ = swordMouseController_.GetCounter();
-    slashDir_ = swordMouseController_.GetSlashDir();
-    orientation_ = swordMouseController_.GetOrientation();
 }
 
 OBB Sword::GetOBB() const {
@@ -94,6 +114,8 @@ void Sword::ImGuiDraw() {
     ImGui::Text("isSlashMode_: %s", isSlashMode_ ? "true" : "false");
     ImGui::Text("isGuard_: %s", isGuard_ ? "true" : "false");
     ImGui::Text("counter_: %s", isCounter_ ? "true" : "false");
+    ImGui::Text("isMouse_: %s", isMouse_ ? "true" : "false");
+    ImGui::Text("isJoyCon_: %s", isJoyCon_ ? "true" : "false");
     ImGui::Text("slashDir_: %.1f, %.1f", slashDir_.x, slashDir_.y);
     ImGui::End();
 #endif

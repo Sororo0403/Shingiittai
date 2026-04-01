@@ -29,7 +29,7 @@ void SwordMouseController::UpdateOrientation(Input* input, float dt) {
     float dy = static_cast<float>(input->GetMouseDY());
 
     // 感度
-    const float sensitivity = 0.005f;
+    const float sensitivity = 0.003f;
 
     yaw_ += dx * sensitivity;
     pitch_ += dy * sensitivity;
