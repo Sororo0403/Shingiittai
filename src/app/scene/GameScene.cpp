@@ -21,7 +21,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
 
     camera_.Initialize(aspect);
     camera_.UpdateMatrices();
-
+    camera_.SetPerspectiveFovDeg(currentFovDeg_);
 #ifdef _DEBUG
     debugCamera_.Initialize(aspect);
     debugCamera_.UpdateMatrices();
@@ -45,6 +45,18 @@ void GameScene::Initialize(const SceneContext &ctx) {
 
     player_.Initialize(playerModel, swordModel);
     enemy_.Initialize(enemyModel);
+
+    // 一人称カメラ初期向き
+    cameraYaw_ = 0.0f;
+    cameraPitch_ = 0.0f;
+    isLockOn_ = false;
+    rushChargeAssistStrength_ = 4.0f;
+    rushChargeAssistMaxStep_ = 6.0f;
+    rushActiveAssistStrength_ = 5.0f;
+    rushActiveAssistMaxStep_ = 8.0f;
+    rushLeadDistance_ = 2.5f;
+    currentFovDeg_ = normalFovDeg_;
+    targetFovDeg_ = normalFovDeg_;
 
     uint32_t bulletModel = ctx_->model->Load(L"resources/model/bullet/bullet.obj");
     bullet_.Initialize(bulletModel);
@@ -347,6 +359,9 @@ void GameScene::Draw() {
     case ActionKind::Guard:
         actionKindName = "Guard";
         break;
+    case ActionKind::Rush:
+        actionKindName = "Rush";
+        break;
     default:
         break;
     }
@@ -398,6 +413,19 @@ void GameScene::Draw() {
     ImGui::Text("DistanceToPlayer : %.2f", enemy_.GetDistanceToPlayer());
     ImGui::Text("FacingYaw       : %.2f", enemy_.GetFacingYaw());
     ImGui::Text("LockedAttackYaw : %.2f", enemy_.GetLockedAttackYaw());
+    ImGui::Text("CameraYaw       : %.2f", cameraYaw_);
+    ImGui::Text("CameraPitch     : %.2f", cameraPitch_);
+    ImGui::Text("LockOn          : %s", isLockOn_ ? "true" : "false");
+    const bool isEnemyRushChargeDbg = (enemyActionKind == ActionKind::Rush &&
+                                       enemyActionStep == ActionStep::Charge);
+
+    const bool isEnemyRushActiveDbg = (enemyActionKind == ActionKind::Rush &&
+                                       enemyActionStep == ActionStep::Active);
+
+    ImGui::Text("RushChargeAssist: %s",
+                isEnemyRushChargeDbg ? "true" : "false");
+    ImGui::Text("RushActiveAssist: %s",
+                isEnemyRushActiveDbg ? "true" : "false");
     ImGui::Text("Stagnant        : %s",
                 enemy_.IsDistanceStagnant() ? "true" : "false");
     ImGui::Text("StagnantTimer   : %.2f", enemy_.GetStagnantTimer());
@@ -560,6 +588,36 @@ void GameScene::Draw() {
         ImGui::TreePop();
     }
 
+        if (ImGui::TreeNode("Rush")) {
+        auto &p = enemy_.EditRushParam();
+        ImGui::DragFloat("Rush Damage", &p.damage, 0.1f, 0.0f, 100.0f);
+        ImGui::DragFloat("Rush Knockback", &p.knockback, 0.1f, 0.0f, 30.0f);
+        ImGui::DragFloat3("Rush HitBox", &p.hitBoxSize.x, 0.05f, 0.1f, 10.0f);
+
+        ImGui::DragFloat("Rush Charge", &enemy_.EditRushChargeTime(), 0.01f,
+                         0.0f, 5.0f);
+        ImGui::DragFloat("Rush Speed", &enemy_.EditRushSpeed(), 0.05f, 0.0f,
+                         30.0f);
+        ImGui::DragFloat("Rush Move Duration", &enemy_.EditRushMoveDuration(),
+                         0.01f, 0.0f, 5.0f);
+
+        if (ImGui::TreeNode("Rush Timing")) {
+            auto &t = enemy_.EditRushTiming();
+            ImGui::DragFloat("Rush Total", &t.totalTime, 0.01f, 0.0f, 3.0f);
+            ImGui::DragFloat("Rush Active Start", &t.activeStartTime, 0.01f,
+                             0.0f, 3.0f);
+            ImGui::DragFloat("Rush Active End", &t.activeEndTime, 0.01f, 0.0f,
+                             3.0f);
+            ImGui::DragFloat("Rush Recovery Start", &t.recoveryStartTime, 0.01f,
+                             0.0f, 3.0f);
+            ImGui::DragFloat("Rush Tracking End", &t.trackingEndTime, 0.01f,
+                             0.0f, 2.0f);
+            ImGui::TreePop();
+        }
+
+        ImGui::TreePop();
+    }
+
     ImGui::Separator();
     ImGui::Text("=== Preset ===");
 
@@ -621,6 +679,48 @@ void GameScene::Draw() {
 #endif
 }
 
+//void GameScene::UpdateCamera(Input *input) {
+//#ifdef _DEBUG
+//    if (input->IsKeyTrigger(DIK_F11)) {
+//        if (currentCamera_ == &camera_) {
+//            currentCamera_ = &debugCamera_;
+//        } else {
+//            currentCamera_ = &camera_;
+//        }
+//    }
+//
+//    if (currentCamera_ == &debugCamera_) {
+//        debugCamera_.Update(*input, ctx_->deltaTime);
+//        currentCamera_->UpdateMatrices();
+//        return;
+//    }
+//#else
+//    (void)input;
+//#endif
+//}
+
+//void GameScene::UpdateBattleCamera() {
+//    auto &playerTf = player_.GetTransform();
+//    auto &enemyTf = enemy_.GetTransform();
+//
+//    XMFLOAT3 playerPos = playerTf.position;
+//    XMFLOAT3 enemyPos = enemyTf.position;
+//
+//    XMVECTOR playerPosV = XMLoadFloat3(&playerPos);
+//    XMVECTOR enemyPosV = XMLoadFloat3(&enemyPos);
+//
+//    XMVECTOR forward = XMVector3Normalize(enemyPosV - playerPosV);
+//
+//    XMVECTOR camPos = playerPosV - forward * kCameraDistance +
+//                      XMVectorSet(0, kCameraHeight, 0, 0);
+//
+//    XMFLOAT3 cameraPos;
+//    XMStoreFloat3(&cameraPos, camPos);
+//
+//    camera_.SetPosition(cameraPos);
+//    camera_.LookAt({enemyPos.x, kCameraHeight, enemyPos.z});
+//}
+
 void GameScene::UpdateCamera(Input *input) {
 #ifdef _DEBUG
     if (input->IsKeyTrigger(DIK_F11)) {
@@ -636,29 +736,189 @@ void GameScene::UpdateCamera(Input *input) {
         currentCamera_->UpdateMatrices();
         return;
     }
-#else
-    (void)input;
 #endif
+
+    // ロックオン切り替え
+    if (input->IsKeyTrigger(DIK_Q)) {
+        isLockOn_ = !isLockOn_;
+    }
+
+    float yawInput = 0.0f;
+    float pitchInput = 0.0f;
+
+#ifdef _DEBUG
+    // 仮の視点入力
+    if (input->IsKeyPress(DIK_LEFT)) {
+        yawInput -= 1.0f;
+    }
+    if (input->IsKeyPress(DIK_RIGHT)) {
+        yawInput += 1.0f;
+    }
+    if (input->IsKeyPress(DIK_UP)) {
+        pitchInput += 1.0f;
+    }
+    if (input->IsKeyPress(DIK_DOWN)) {
+        pitchInput -= 1.0f;
+    }
+#endif
+
+    cameraYaw_ += yawInput * cameraLookSensitivity_;
+    cameraPitch_ += pitchInput * cameraLookSensitivity_;
+
+    if (cameraPitch_ < cameraPitchMin_) {
+        cameraPitch_ = cameraPitchMin_;
+    }
+    if (cameraPitch_ > cameraPitchMax_) {
+        cameraPitch_ = cameraPitchMax_;
+    }
 }
 
 void GameScene::UpdateBattleCamera() {
-    auto &playerTf = player_.GetTransform();
-    auto &enemyTf = enemy_.GetTransform();
+    const auto &playerTf = player_.GetTransform();
+    const auto &enemyTf = enemy_.GetTransform();
 
-    XMFLOAT3 playerPos = playerTf.position;
-    XMFLOAT3 enemyPos = enemyTf.position;
+    const DirectX::XMFLOAT3 &playerPos = playerTf.position;
+    const DirectX::XMFLOAT3 &enemyPos = enemyTf.position;
 
-    XMVECTOR playerPosV = XMLoadFloat3(&playerPos);
-    XMVECTOR enemyPosV = XMLoadFloat3(&enemyPos);
+    // プレイヤー頭部位置にカメラを置く
+    DirectX::XMFLOAT3 cameraPos = {playerPos.x + fpCameraOffset_.x,
+                                   playerPos.y + fpCameraOffset_.y,
+                                   playerPos.z + fpCameraOffset_.z};
 
-    XMVECTOR forward = XMVector3Normalize(enemyPosV - playerPosV);
+    // 敵行動状態を取得
+    const ActionKind enemyActionKind = enemy_.GetActionKind();
+    const ActionStep enemyActionStep = enemy_.GetActionStep();
 
-    XMVECTOR camPos = playerPosV - forward * kCameraDistance +
-                      XMVectorSet(0, kCameraHeight, 0, 0);
+    const bool isEnemyRushCharge = (enemyActionKind == ActionKind::Rush &&
+                                    enemyActionStep == ActionStep::Charge);
 
-    XMFLOAT3 cameraPos;
-    XMStoreFloat3(&cameraPos, camPos);
+    const bool isEnemyRushActive = (enemyActionKind == ActionKind::Rush &&
+                                    enemyActionStep == ActionStep::Active);
+
+    const bool isEnemyWarpStart = (enemyActionKind == ActionKind::Warp &&
+                                   enemyActionStep == ActionStep::Start);
+
+    const bool isEnemyWarpMove = (enemyActionKind == ActionKind::Warp &&
+                                  enemyActionStep == ActionStep::Move);
+
+    const bool isEnemyWarpEnd = (enemyActionKind == ActionKind::Warp &&
+                                 enemyActionStep == ActionStep::End);
+
+    // =========================
+    // FOVターゲット決定
+    // =========================
+    targetFovDeg_ = normalFovDeg_;
+
+    if (isLockOn_) {
+        targetFovDeg_ = lockOnFovDeg_;
+    }
+
+    if (isEnemyRushCharge || isEnemyRushActive) {
+        targetFovDeg_ = rushFovDeg_;
+    }
+
+    if (isEnemyWarpStart || isEnemyWarpMove || isEnemyWarpEnd) {
+        targetFovDeg_ = warpFovDeg_;
+    }
+
+    // 線形補間で滑らかに変更
+    float fovAlpha = fovLerpSpeed_ * ctx_->deltaTime;
+    if (fovAlpha > 1.0f) {
+        fovAlpha = 1.0f;
+    }
+    currentFovDeg_ += (targetFovDeg_ - currentFovDeg_) * fovAlpha;
+
+    // 必要なら Camera 側に FOV setter がある前提
+    camera_.SetPerspectiveFovDeg(currentFovDeg_);
+
+    // =========================
+    // ロックオン中だけ yaw 補助
+    // =========================
+    if (isLockOn_) {
+        DirectX::XMFLOAT3 assistTarget = enemyPos;
+
+        float assistStrength = lockOnAssistStrength_;
+        float assistMaxStep = lockOnAssistMaxStep_;
+
+        // Rush Active 中は敵の進行方向の少し先を見る
+        if (isEnemyRushActive) {
+            float enemyYaw = enemy_.GetFacingYaw();
+            assistTarget.x += std::sinf(enemyYaw) * rushLeadDistance_;
+            assistTarget.z += std::cosf(enemyYaw) * rushLeadDistance_;
+
+            assistStrength = rushActiveAssistStrength_;
+            assistMaxStep = rushActiveAssistMaxStep_;
+        }
+        // Rush Charge 中は敵本体へ強めに寄せる
+        else if (isEnemyRushCharge) {
+            assistStrength = rushChargeAssistStrength_;
+            assistMaxStep = rushChargeAssistMaxStep_;
+        }
+        // Warp Start 中は消失前の位置を見失いにくくする
+        else if (isEnemyWarpStart) {
+            assistStrength = warpStartAssistStrength_;
+            assistMaxStep = warpStartAssistMaxStep_;
+        }
+        // Warp Move 中はカメラを無理に振り回さない
+        else if (isEnemyWarpMove) {
+            assistStrength = lockOnAssistStrength_ * 0.0f;
+            assistMaxStep = lockOnAssistMaxStep_ * 0.0f;
+        }
+        // Warp End 中は再出現位置へ再捕捉しやすくする
+        else if (isEnemyWarpEnd) {
+            assistStrength = warpEndAssistStrength_;
+            assistMaxStep = warpEndAssistMaxStep_;
+        }
+
+        float dx = assistTarget.x - cameraPos.x;
+        float dz = assistTarget.z - cameraPos.z;
+
+        float targetYaw = std::atan2f(dx, dz);
+        float diff = targetYaw - cameraYaw_;
+
+        while (diff > 3.14159265f) {
+            diff -= 6.28318530f;
+        }
+        while (diff < -3.14159265f) {
+            diff += 6.28318530f;
+        }
+
+        // 入力中は補助を弱める
+        float inputMagnitude = 0.0f;
+#ifdef _DEBUG
+        Input *input = ctx_->input;
+        if (input->IsKeyPress(DIK_LEFT) || input->IsKeyPress(DIK_RIGHT)) {
+            inputMagnitude = 1.0f;
+        }
+#endif
+
+        float assistScale = 1.0f;
+        if (inputMagnitude > 0.0f) {
+            assistScale = lockOnInputReduce_;
+        }
+
+        float maxStep = assistMaxStep * assistScale * ctx_->deltaTime;
+        float applied = diff * assistStrength * assistScale * ctx_->deltaTime;
+
+        if (applied > maxStep) {
+            applied = maxStep;
+        } else if (applied < -maxStep) {
+            applied = -maxStep;
+        }
+
+        cameraYaw_ += applied;
+    }
+
+    // yaw / pitch から forward を作る
+    float cosPitch = std::cosf(cameraPitch_);
+    DirectX::XMFLOAT3 forward = {std::sinf(cameraYaw_) * cosPitch,
+                                 std::sinf(cameraPitch_),
+                                 std::cosf(cameraYaw_) * cosPitch};
+
+    DirectX::XMFLOAT3 lookAt = {cameraPos.x + forward.x,
+                                cameraPos.y + forward.y,
+                                cameraPos.z + forward.z};
 
     camera_.SetPosition(cameraPos);
-    camera_.LookAt({enemyPos.x, kCameraHeight, enemyPos.z});
+    camera_.LookAt(lookAt);
 }

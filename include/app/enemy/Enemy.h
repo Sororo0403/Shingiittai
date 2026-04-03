@@ -1,9 +1,10 @@
 #pragma once
 #include "Camera.h"
+#include "EnemyActionData.h"
 #include "EnemyTuningPreset.h"
 #include "OBB.h"
-#include "Transform.h"
 #include "Player.h"
+#include "Transform.h"
 #include <cstdint>
 #include <vector>
 
@@ -37,8 +38,6 @@ enum class EnemyState {
     GuardRecovery
 };
 
-enum class ActionKind { None, Smash, Sweep, Shot, Wave, Warp, Guard };
-
 enum class ActionStep {
     None,
     Charge,
@@ -54,6 +53,7 @@ enum class WarpType { None, Approach, Escape };
 
 struct ActionState {
     ActionKind kind = ActionKind::None;
+    ActionId id = ActionId::None;
     ActionStep step = ActionStep::None;
 };
 
@@ -111,12 +111,6 @@ struct EnemyWave {
 
 enum class GuardTarget { None, Face, BodyCenter, BodyLeft };
 
-struct AttackParam {
-    float damage = 0.0f;
-    float knockback = 0.0f;
-    DirectX::XMFLOAT3 hitBoxSize = {1.0f, 1.0f, 1.0f};
-};
-
 struct AttackTimingParam {
     float totalTime = 1.0f;
     float trackingEndTime = 0.0f;
@@ -125,6 +119,11 @@ struct AttackTimingParam {
     float recoveryStartTime = 0.0f;
 };
 
+enum class SmashStyle { Normal, Delay };
+enum class SweepStyle { Normal, Double, Advance };
+enum class PostActionOption { None, BackWarp };
+enum class BackWarpFollowup { None, Shot, Wave, Rush };
+
 class Enemy {
   public:
     void Initialize(uint32_t modelId);
@@ -132,9 +131,6 @@ class Enemy {
                 bool playerGuarding);
     void Draw(ModelManager *modelManager, const Camera &camera);
     void TakeDamage(float damage);
-
-    // 薙ぎ払い用
-    void SweepAttack(const DirectX::XMFLOAT3 &playerPos);
 
     // Getter
     const Transform &GetTransform() const { return tf_; }
@@ -150,6 +146,7 @@ class Enemy {
 
     // 行動管理 getter
     ActionKind GetActionKind() const { return action_.kind; }
+    ActionId GetActionId() const { return action_.id; }
     ActionStep GetActionStep() const { return action_.step; }
 
     bool IsAttackActive() const { return isAttackActive_; }
@@ -186,11 +183,13 @@ class Enemy {
     float GetSweepDamage() const { return sweepParam_.damage; }
     float GetBulletDamage() const { return bulletParam_.damage; }
     float GetWaveDamage() const { return waveParam_.damage; }
+    float GetRushDamage() const { return rushParam_.damage; }
 
     float GetSmashKnockback() const { return smashParam_.knockback; }
     float GetSweepKnockback() const { return sweepParam_.knockback; }
     float GetBulletKnockback() const { return bulletParam_.knockback; }
     float GetWaveKnockback() const { return waveParam_.knockback; }
+    float GetRushKnockback() const { return rushParam_.knockback; }
 
     DirectX::XMFLOAT3 GetBulletHitBoxSize() const {
         return bulletParam_.hitBoxSize;
@@ -204,6 +203,9 @@ class Enemy {
     DirectX::XMFLOAT3 GetSweepAttackBoxSize() const {
         return sweepParam_.hitBoxSize;
     }
+    DirectX::XMFLOAT3 GetRushAttackBoxSize() const {
+        return rushParam_.hitBoxSize;
+    }
 
     float GetCurrentAttackDamage() const;
     float GetCurrentAttackKnockback() const;
@@ -213,14 +215,18 @@ class Enemy {
     const AttackParam &GetSweepParam() const { return sweepParam_; }
     const AttackParam &GetBulletParam() const { return bulletParam_; }
     const AttackParam &GetWaveParam() const { return waveParam_; }
+    const AttackParam &GetRushParam() const { return rushParam_; }
+
     const AttackTimingParam &GetSmashTiming() const { return smashTiming_; }
     const AttackTimingParam &GetSweepTiming() const { return sweepTiming_; }
+    const AttackTimingParam &GetRushTiming() const { return rushTiming_; }
 
     // ImGui調整用
     AttackParam &EditSmashParam() { return smashParam_; }
     AttackParam &EditSweepParam() { return sweepParam_; }
     AttackParam &EditBulletParam() { return bulletParam_; }
     AttackParam &EditWaveParam() { return waveParam_; }
+    AttackParam &EditRushParam() { return rushParam_; }
 
     float &EditNearAttackDistance() { return nearAttackDistance_; }
     float &EditFarAttackDistance() { return farAttackDistance_; }
@@ -239,9 +245,18 @@ class Enemy {
     float &EditWaveSpeed() { return waveSpeed_; }
     float &EditWaveMaxDistance() { return waveMaxDistance_; }
 
+    float &EditRushChargeTime() { return rushChargeTime_; }
+    float &EditRushSpeed() { return rushSpeed_; }
+    float &EditRushMoveDuration() { return rushMoveDuration_; }
+
     int &EditNearSmashWeight() { return nearSmashWeight_; }
     int &EditNearSweepWeight() { return nearSweepWeight_; }
     int &EditNearGuardWeight() { return nearGuardWeight_; }
+    int &EditNearRushWeight() { return nearRushWeight_; }
+
+    int &EditMidRushWeight() { return midRushWeight_; }
+    int &EditMidShotWeight() { return midShotWeight_; }
+    int &EditMidWaveWeight() { return midWaveWeight_; }
 
     int &EditFarShotWeight() { return farShotWeight_; }
     int &EditFarWarpWeight() { return farWarpWeight_; }
@@ -256,12 +271,14 @@ class Enemy {
 
     AttackTimingParam &EditSmashTiming() { return smashTiming_; }
     AttackTimingParam &EditSweepTiming() { return sweepTiming_; }
+    AttackTimingParam &EditRushTiming() { return rushTiming_; }
+
+        float &EditRushTurnSpeed() { return rushTurnSpeed_; }
+    float &EditRushStartCurveAngleDeg() { return rushStartCurveAngleDeg_; }
 
     EnemyTuningPreset CreateTuningPreset() const;
     void ApplyTuningPreset(const EnemyTuningPreset &preset);
     void ResetTuningPreset();
-
-    void SetIsHit(bool isHit);
 
   private:
     Transform tf_{};
@@ -310,6 +327,15 @@ class Enemy {
     bool isDistanceStagnant_ = false;
 
     //********************************
+    // 敵の連携用
+    //********************************
+    SmashStyle smashStyle_ = SmashStyle::Normal;
+    SweepStyle sweepStyle_ = SweepStyle::Normal;
+
+    PostActionOption postActionOption_ = PostActionOption::None;
+    BackWarpFollowup backWarpFollowup_ = BackWarpFollowup::None;
+
+    //********************************
     // 調整用パラメータ群
     //********************************
     float nearAttackDistance_ = 4.0f;
@@ -327,6 +353,8 @@ class Enemy {
     };
     float smashAttackForwardOffset_ = 1.4f;
     float smashAttackHeightOffset_ = 0.8f;
+    float delaySmashChance_ = 0.35f;
+    float delaySmashExtraChargeTime_ = 1.0f;
 
     // 薙ぎ払い
     AttackParam sweepParam_ = {10.0f, 4.0f, {3.2f, 1.2f, 1.4f}};
@@ -341,6 +369,10 @@ class Enemy {
     float sweepRecoveryTime_ = 1.0f;
     float sweepAttackSideOffset_ = 0.2f;
     float sweepAttackHeightOffset_ = 0.8f;
+    float doubleSweepChance_ = 0.30f;
+    float doubleSweepSecondDelay_ = 0.18f;
+    float doubleSweepSecondChargeScale_ = 0.55f;
+    bool isDoubleSweepSecondStage_ = false;
 
     // 弾
     AttackParam bulletParam_ = {5.0f, 2.5f, {0.4f, 0.4f, 0.4f}};
@@ -362,6 +394,27 @@ class Enemy {
     float waveSpawnForwardOffset_ = 1.5f;
     float waveSpawnHeightOffset_ = 0.0f;
 
+    // Rush
+    AttackParam rushParam_ = {12.0f, 5.0f, {1.2f, 1.4f, 2.2f}};
+    AttackTimingParam rushTiming_ = {
+        0.75f, // totalTime
+        0.20f, // trackingEndTime
+        0.08f, // activeStartTime
+        0.28f, // activeEndTime
+        0.38f  // recoveryStartTime
+    };
+    float rushChargeTime_ = 0.28f;
+    float rushSpeed_ = 8.5f;
+    float rushMoveDuration_ = 0.26f;
+    float rushAttackForwardOffset_ = 1.1f;
+    float rushAttackHeightOffset_ = 0.8f;
+
+    // 曲線Rush用
+    float rushTurnSpeed_ = 4.5f;
+    float rushStartCurveAngleDeg_ = 32.0f;
+    float rushCurrentYaw_ = 0.0f;
+    float rushCurveDir_ = 1.0f;
+
     // ワープ
     float warpStartTime_ = 0.2f;
     float warpEndTime_ = 0.2f;
@@ -380,6 +433,13 @@ class Enemy {
     int warpEscapeWeight_ = 10;
     float warpEscapeCooldown_ = 7.0f;
     float warpEscapeCooldownTimer_ = 0.0f;
+
+    float backWarpAfterSmashChance_ = 0.35f;
+    float backWarpAfterSweepChance_ = 0.30f;
+    float backWarpAfterWaveChance_ = 0.20f;
+
+    float backWarpShotChance_ = 0.55f;
+    float backWarpWaveChance_ = 0.45f;
 
     // Warp起点連携
     int warpApproachChainMaxSteps_ = 2;
@@ -406,9 +466,14 @@ class Enemy {
     float guardRecoveryTime_ = 0.35f;
 
     // 行動の重み
-    int nearSmashWeight_ = 40;
-    int nearSweepWeight_ = 35;
-    int nearGuardWeight_ = 25;
+    int nearSmashWeight_ = 30;
+    int nearSweepWeight_ = 25;
+    int nearGuardWeight_ = 5;
+    int nearRushWeight_ = 40;
+
+    int midRushWeight_ = 45;
+    int midShotWeight_ = 25;
+    int midWaveWeight_ = 30;
 
     int farShotWeight_ = 35;
     int farWarpWeight_ = 25;
@@ -434,6 +499,7 @@ class Enemy {
     void UpdateSweepByStep(float deltaTime);
     void UpdateShotByStep(float deltaTime);
     void UpdateWaveByStep(float deltaTime);
+    void UpdateRushByStep(float deltaTime);
     void UpdateWarpByStep(float deltaTime);
     void UpdateGuardByStep(float deltaTime);
 
@@ -448,6 +514,11 @@ class Enemy {
     void UpdateSweepCharge(float deltaTime);
     void UpdateSweepAttack(float deltaTime);
     void UpdateSweepRecovery(float deltaTime);
+
+    // Rush
+    void UpdateRushCharge(float deltaTime);
+    void UpdateRushAttack(float deltaTime);
+    void UpdateRushRecovery(float deltaTime);
 
     // 向き更新とロック
     void UpdateFacingToPlayer();
@@ -474,6 +545,7 @@ class Enemy {
     void DecideWarpFollowupFromContext();
     void SetupChainFromWarpContext();
     void BeginWarpFollowup();
+    void BeginBackWarpPostAction();
     void ResetWarpContext();
 
     // Chain
@@ -481,10 +553,12 @@ class Enemy {
     bool DecideNextChainAction(ActionKind finishedKind, ActionKind &outKind,
                                ActionStep &outStep) const;
     bool TryStartPostActionWarpChain(ActionKind finishedKind);
+    bool TryStartBackWarpPostAction(ActionKind finishedKind);
     void SetupSweepWarpSmashChain();
     void SetupWaveWarpSmashChain();
     void OverrideWarpFollowupByChain();
     void ResetChainContext();
+    void ResetPostActionState();
     void FinishCurrentAction();
 
     // Wave
@@ -503,8 +577,13 @@ class Enemy {
     void DecideGuardTarget();
 
     float GetCurrentActionTime() const;
+    float GetCurrentSmashChargeTime() const;
+    float GetCurrentSweepChargeTime() const;
+    bool TryBeginDoubleSweepSecondStage();
+
     OBB GetSmashAttackOBB() const;
     OBB GetSweepAttackOBB() const;
+    OBB GetRushAttackOBB() const;
     float GetVisualYaw() const;
 
     const AttackTimingParam *GetCurrentAttackTiming() const;
@@ -514,6 +593,8 @@ class Enemy {
     bool IsCurrentAttackInActiveWindow() const;
     bool IsCurrentAttackInRecoveryWindow() const;
     bool ShouldUseLockedAttackYaw() const;
+
+    ActionId MakeDefaultActionId(ActionKind kind) const;
 
     void BeginAction(ActionKind kind, ActionStep step);
     void ChangeActionStep(ActionStep step);

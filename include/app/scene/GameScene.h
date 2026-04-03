@@ -65,4 +65,42 @@ class GameScene : public BaseScene {
     bool dbgWaveHitPlayer_ = false;
     bool dbgPlayerGuardedHit_ = false;
     Bullet bullet_;
+
+        // 完全一人称カメラ用
+    DirectX::XMFLOAT3 fpCameraOffset_ = {0.0f, 1.55f, 0.0f};
+    float cameraYaw_ = 0.0f;
+    float cameraPitch_ = 0.0f;
+    float cameraPitchMin_ = -1.2f;
+    float cameraPitchMax_ = 1.0f;
+    float cameraLookSensitivity_ = 0.025f;
+
+        // ロックオン用
+    bool isLockOn_ = false;
+    float lockOnAssistStrength_ = 2.0f;
+    float lockOnAssistMaxStep_ = 3.5f;
+    float lockOnInputReduce_ = 0.25f;
+
+        // Rush時のカメラ補助
+    float rushChargeAssistStrength_ = 4.0f;
+    float rushChargeAssistMaxStep_ = 6.0f;
+
+    float rushActiveAssistStrength_ = 5.0f;
+    float rushActiveAssistMaxStep_ = 8.0f;
+    float rushLeadDistance_ = 2.5f;
+
+        // Warp時の再捕捉補助
+    float warpStartAssistStrength_ = 4.5f;
+    float warpStartAssistMaxStep_ = 7.0f;
+    float warpEndAssistStrength_ = 6.0f;
+    float warpEndAssistMaxStep_ = 10.0f;
+
+    // FOV制御
+    float currentFovDeg_ = 80.0f;
+    float targetFovDeg_ = 80.0f;
+    float normalFovDeg_ = 80.0f;
+    float lockOnFovDeg_ = 86.0f;
+    float rushFovDeg_ = 88.0f;
+    float warpFovDeg_ = 88.0f;
+    float fovLerpSpeed_ = 8.0f;
+
 };

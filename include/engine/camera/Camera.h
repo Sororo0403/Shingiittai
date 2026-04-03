@@ -23,6 +23,7 @@ class Camera {
     // Setter
     void SetPosition(const DirectX::XMFLOAT3 &pos) { position_ = pos; }
     void SetRotation(const DirectX::XMFLOAT3 &rot) { rotation_ = rot; }
+    void SetPerspectiveFovDeg(float fovDeg) { fovY_ = DirectX::XMConvertToRadians(fovDeg); }
 
     // Getter
     const DirectX::XMMATRIX &GetView() const { return view_; }

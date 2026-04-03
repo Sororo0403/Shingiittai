@@ -225,6 +225,21 @@ void Enemy::UpdateParts() {
             rightHandTf_.position.z += forwardZ * 0.4f;
         }
 
+    } else if (action_.kind == ActionKind::Rush) {
+        if (action_.step == ActionStep::Charge) {
+            rightHandTf_.position.y += 0.4f;
+            rightHandTf_.position.x += forwardX * 0.8f;
+            rightHandTf_.position.z += forwardZ * 0.8f;
+        } else if (action_.step == ActionStep::Active) {
+            rightHandTf_.position.y += 0.1f;
+            rightHandTf_.position.x += forwardX * 1.6f;
+            rightHandTf_.position.z += forwardZ * 1.6f;
+        } else if (action_.step == ActionStep::Recovery) {
+            rightHandTf_.position.y += 0.2f;
+            rightHandTf_.position.x += forwardX * 0.6f;
+            rightHandTf_.position.z += forwardZ * 0.6f;
+        }
+
     } else if (action_.kind == ActionKind::Warp) {
         if (action_.step == ActionStep::End) {
             rightHandTf_.position.y += 0.2f;
@@ -279,6 +294,8 @@ OBB Enemy::GetAttackOBB() const {
         return GetSmashAttackOBB();
     case ActionKind::Sweep:
         return GetSweepAttackOBB();
+    case ActionKind::Rush:
+        return GetRushAttackOBB();
     default:
         return OBB{};
     }
@@ -318,7 +335,28 @@ OBB Enemy::GetSweepAttackOBB() const {
     return MakeOBB(attackTf, GetCurrentAttackHitBoxSize());
 }
 
+OBB Enemy::GetRushAttackOBB() const {
+    float usedYaw = rushCurrentYaw_;
+
+    float forwardX = std::sinf(usedYaw);
+    float forwardZ = std::cosf(usedYaw);
+
+    Transform attackTf{};
+    attackTf.scale = {1.0f, 1.0f, 1.0f};
+    attackTf.rotation = {0.0f, 0.0f, 0.0f, 1.0f};
+    attackTf.position = bodyTf_.position;
+    attackTf.position.x += forwardX * rushAttackForwardOffset_;
+    attackTf.position.y += rushAttackHeightOffset_;
+    attackTf.position.z += forwardZ * rushAttackForwardOffset_;
+
+    return MakeOBB(attackTf, GetCurrentAttackHitBoxSize());
+}
+
 float Enemy::GetVisualYaw() const {
+    if (action_.kind == ActionKind::Rush) {
+        return rushCurrentYaw_;
+    }
+
     if (ShouldUseLockedAttackYaw()) {
         return lockedAttackYaw_;
     }
@@ -372,24 +410,76 @@ void Enemy::UpdateIdle(float deltaTime) {
 
     float distance = GetDistanceToPlayer();
 
+    // 近距離: Smash / Sweep / Guard / Rush
     if (distance <= nearAttackDistance_) {
-        int total = nearSmashWeight_ + nearSweepWeight_ + nearGuardWeight_;
+        int smashWeight = nearSmashWeight_;
+        int sweepWeight = nearSweepWeight_;
+        int guardWeight = nearGuardWeight_;
+        int rushWeight = nearRushWeight_;
+
+        if (lastActionKind_ == ActionKind::Smash) {
+            smashWeight /= 2;
+        } else if (lastActionKind_ == ActionKind::Sweep) {
+            sweepWeight /= 2;
+        } else if (lastActionKind_ == ActionKind::Guard) {
+            guardWeight /= 2;
+        } else if (lastActionKind_ == ActionKind::Rush) {
+            rushWeight /= 2;
+        }
+
+        int total = smashWeight + sweepWeight + guardWeight + rushWeight;
         if (total <= 0) {
             total = 1;
         }
 
         int r = std::rand() % total;
 
-        if (r < nearSmashWeight_) {
+        if (r < smashWeight) {
             BeginAction(ActionKind::Smash, ActionStep::Charge);
-        } else if (r < nearSmashWeight_ + nearSweepWeight_) {
+        } else if (r < smashWeight + sweepWeight) {
             BeginAction(ActionKind::Sweep, ActionStep::Charge);
-        } else {
+        } else if (r < smashWeight + sweepWeight + guardWeight) {
             BeginAction(ActionKind::Guard, ActionStep::Move);
             DecideGuardTarget();
+        } else {
+            BeginAction(ActionKind::Rush, ActionStep::Charge);
         }
 
-    } else if (distance > farAttackDistance_) {
+        // 中距離: Rush / Shot / Wave
+    } else if (distance <= farAttackDistance_) {
+        int rushWeight = midRushWeight_;
+        int shotWeight = midShotWeight_;
+        int waveWeight = midWaveWeight_;
+
+        if (lastActionKind_ == ActionKind::Rush) {
+            rushWeight /= 2;
+        } else if (lastActionKind_ == ActionKind::Shot) {
+            shotWeight /= 2;
+        } else if (lastActionKind_ == ActionKind::Wave) {
+            waveWeight /= 2;
+        }
+
+        if (playerGuarding_) {
+            waveWeight += 10;
+        }
+
+        int total = rushWeight + shotWeight + waveWeight;
+        if (total <= 0) {
+            total = 1;
+        }
+
+        int r = std::rand() % total;
+
+        if (r < rushWeight) {
+            BeginAction(ActionKind::Rush, ActionStep::Charge);
+        } else if (r < rushWeight + shotWeight) {
+            BeginAction(ActionKind::Shot, ActionStep::Charge);
+        } else {
+            BeginAction(ActionKind::Wave, ActionStep::Charge);
+        }
+
+        // 遠距離: Shot / Warp / Wave
+    } else {
         int shotWeight = farShotWeight_;
         int warpWeight = farWarpWeight_;
         int waveWeight = farWaveWeight_;
@@ -436,12 +526,14 @@ void Enemy::UpdateIdle(float deltaTime) {
 // 振り下ろし攻撃更新
 // ============================================================
 void Enemy::UpdateSmashCharge(float deltaTime) {
+    float currentChargeTime = GetCurrentSmashChargeTime();
+
     float trackingEnd = smashTiming_.trackingEndTime;
     if (trackingEnd < 0.0f) {
         trackingEnd = 0.0f;
     }
-    if (trackingEnd > smashChargeTime_) {
-        trackingEnd = smashChargeTime_;
+    if (trackingEnd > currentChargeTime) {
+        trackingEnd = currentChargeTime;
     }
 
     if (stateTimer_ < trackingEnd) {
@@ -451,7 +543,7 @@ void Enemy::UpdateSmashCharge(float deltaTime) {
         hasTrackingLocked_ = true;
     }
 
-    if (stateTimer_ >= smashChargeTime_) {
+    if (stateTimer_ >= currentChargeTime) {
         if (!hasTrackingLocked_) {
             LockCurrentFacing();
             hasTrackingLocked_ = true;
@@ -494,12 +586,14 @@ void Enemy::UpdateSmashRecovery(float deltaTime) {
 // 薙ぎ払い攻撃更新
 // ============================================================
 void Enemy::UpdateSweepCharge(float deltaTime) {
+    float currentChargeTime = GetCurrentSweepChargeTime();
+
     float trackingEnd = sweepTiming_.trackingEndTime;
     if (trackingEnd < 0.0f) {
         trackingEnd = 0.0f;
     }
-    if (trackingEnd > sweepChargeTime_) {
-        trackingEnd = sweepChargeTime_;
+    if (trackingEnd > currentChargeTime) {
+        trackingEnd = currentChargeTime;
     }
 
     if (stateTimer_ < trackingEnd) {
@@ -509,7 +603,7 @@ void Enemy::UpdateSweepCharge(float deltaTime) {
         hasTrackingLocked_ = true;
     }
 
-    if (stateTimer_ >= sweepChargeTime_) {
+    if (stateTimer_ >= currentChargeTime) {
         if (!hasTrackingLocked_) {
             LockCurrentFacing();
             hasTrackingLocked_ = true;
@@ -530,6 +624,122 @@ void Enemy::UpdateSweepAttack(float deltaTime) {
 }
 
 void Enemy::UpdateSweepRecovery(float deltaTime) {
+    UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_);
+
+    if (TryBeginDoubleSweepSecondStage()) {
+        return;
+    }
+
+    const AttackTimingParam *timing = GetCurrentAttackTiming();
+    if (!timing) {
+        EndAttack();
+        return;
+    }
+
+    float recoveryDuration = timing->totalTime - timing->recoveryStartTime;
+    if (recoveryDuration < 0.0f) {
+        recoveryDuration = 0.0f;
+    }
+
+    if (stateTimer_ >= recoveryDuration) {
+        FinishCurrentAction();
+    }
+}
+
+bool Enemy::TryBeginDoubleSweepSecondStage() {
+    if (action_.id != ActionId::DoubleSweep) {
+        return false;
+    }
+
+    if (isDoubleSweepSecondStage_) {
+        return false;
+    }
+
+    if (stateTimer_ < doubleSweepSecondDelay_) {
+        return false;
+    }
+
+    isDoubleSweepSecondStage_ = true;
+    hasTrackingLocked_ = false;
+    isAttackActive_ = false;
+    stateTimer_ = 0.0f;
+    action_.step = ActionStep::Charge;
+    return true;
+}
+
+// ============================================================
+// Rush更新
+// ============================================================
+void Enemy::UpdateRushCharge(float deltaTime) {
+    float trackingEnd = rushTiming_.trackingEndTime;
+    if (trackingEnd < 0.0f) {
+        trackingEnd = 0.0f;
+    }
+    if (trackingEnd > rushChargeTime_) {
+        trackingEnd = rushChargeTime_;
+    }
+
+    if (stateTimer_ < trackingEnd) {
+        UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_);
+    } else if (!hasTrackingLocked_) {
+        LockCurrentFacing();
+        hasTrackingLocked_ = true;
+    }
+
+    if (stateTimer_ >= rushChargeTime_) {
+        if (!hasTrackingLocked_) {
+            LockCurrentFacing();
+            hasTrackingLocked_ = true;
+        }
+
+        // 左右どちらかに少し振ってから入り込む
+        rushCurveDir_ = (std::rand() % 2 == 0) ? -1.0f : 1.0f;
+        float curveOffsetRad =
+            rushStartCurveAngleDeg_ * 3.14159265f / 180.0f * rushCurveDir_;
+        rushCurrentYaw_ = lockedAttackYaw_ + curveOffsetRad;
+
+        ChangeActionStep(ActionStep::Active);
+    }
+}
+
+void Enemy::UpdateRushAttack(float deltaTime) {
+    isAttackActive_ = IsCurrentAttackInActiveWindow();
+
+    if (stateTimer_ <= rushMoveDuration_) {
+        // 現在位置からプレイヤー方向を再計算
+        float dx = playerPos_.x - tf_.position.x;
+        float dz = playerPos_.z - tf_.position.z;
+        float targetYaw = std::atan2f(dx, dz);
+
+        // rushCurrentYaw_ を少しずつプレイヤー方向へ曲げる
+        float diff = NormalizeAngle(targetYaw - rushCurrentYaw_);
+        float maxTurn = rushTurnSpeed_ * deltaTime;
+
+        if (diff > maxTurn) {
+            diff = maxTurn;
+        } else if (diff < -maxTurn) {
+            diff = -maxTurn;
+        }
+
+        rushCurrentYaw_ = NormalizeAngle(rushCurrentYaw_ + diff);
+
+        // 曲げた向きで前進
+        float forwardX = std::sinf(rushCurrentYaw_);
+        float forwardZ = std::cosf(rushCurrentYaw_);
+
+        tf_.position.x += forwardX * rushSpeed_ * deltaTime;
+        tf_.position.z += forwardZ * rushSpeed_ * deltaTime;
+
+        // 見た目の向きも追従
+        facingYaw_ = rushCurrentYaw_;
+    }
+
+    if (IsCurrentAttackInRecoveryWindow()) {
+        ChangeActionStep(ActionStep::Recovery);
+    }
+}
+
+void Enemy::UpdateRushRecovery(float deltaTime) {
     UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_);
 
     const AttackTimingParam *timing = GetCurrentAttackTiming();
@@ -844,11 +1054,46 @@ void Enemy::OverrideWarpFollowupByChain() {
     }
 }
 
+void Enemy::ResetPostActionState() {
+    postActionOption_ = PostActionOption::None;
+    backWarpFollowup_ = BackWarpFollowup::None;
+}
+
+void Enemy::BeginBackWarpPostAction() {
+    ResetWarpContext();
+
+    warp_.type = WarpType::Escape;
+
+    if (!DecideWarpTargetFarFromPlayer(warp_.targetPos)) {
+        ResetPostActionState();
+        return;
+    }
+
+    warp_.hasValidTarget = true;
+
+    if (backWarpFollowup_ == BackWarpFollowup::Shot) {
+        warp_.followupKind = ActionKind::Shot;
+        warp_.followupStep = ActionStep::Charge;
+    } else if (backWarpFollowup_ == BackWarpFollowup::Wave) {
+        warp_.followupKind = ActionKind::Wave;
+        warp_.followupStep = ActionStep::Charge;
+    } else if (backWarpFollowup_ == BackWarpFollowup::Rush) {
+        warp_.followupKind = ActionKind::Rush;
+        warp_.followupStep = ActionStep::Charge;
+    } else {
+        warp_.followupKind = ActionKind::Shot;
+        warp_.followupStep = ActionStep::Charge;
+    }
+
+    BeginAction(ActionKind::Warp, ActionStep::Start);
+}
+
 void Enemy::BeginWarpFollowup() {
     ActionKind nextKind = warp_.followupKind;
     ActionStep nextStep = warp_.followupStep;
 
     if (nextKind == ActionKind::None || nextStep == ActionStep::None) {
+        ResetPostActionState();
         EndAttack();
         return;
     }
@@ -859,6 +1104,7 @@ void Enemy::BeginWarpFollowup() {
         }
     }
 
+    ResetPostActionState();
     BeginAction(nextKind, nextStep);
 }
 
@@ -895,12 +1141,17 @@ bool Enemy::DecideNextChainAction(ActionKind finishedKind, ActionKind &outKind,
 
     case ChainStarter::WarpEscape:
         if (finishedKind == ActionKind::Shot) {
-            if (playerGuarding_ || distance >= escapeChainContinueDistance_) {
-                outKind = ActionKind::Wave;
-                outStep = ActionStep::Charge;
-                return true;
-            }
+            outKind = ActionKind::Rush;
+            outStep = ActionStep::Charge;
+            return true;
         }
+
+        if (finishedKind == ActionKind::Wave) {
+            outKind = ActionKind::Rush;
+            outStep = ActionStep::Charge;
+            return true;
+        }
+
         return false;
 
     case ChainStarter::SweepWarpSmash:
@@ -972,6 +1223,42 @@ bool Enemy::TryStartPostActionWarpChain(ActionKind finishedKind) {
     return false;
 }
 
+bool Enemy::TryStartBackWarpPostAction(ActionKind finishedKind) {
+    float chance = 0.0f;
+
+    switch (finishedKind) {
+    case ActionKind::Smash:
+        chance = backWarpAfterSmashChance_;
+        break;
+    case ActionKind::Sweep:
+        chance = backWarpAfterSweepChance_;
+        break;
+    case ActionKind::Wave:
+        chance = backWarpAfterWaveChance_;
+        break;
+    default:
+        return false;
+    }
+
+    float r = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+    if (r >= chance) {
+        return false;
+    }
+
+    float followupRoll =
+        static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+
+    if (followupRoll < backWarpShotChance_) {
+        backWarpFollowup_ = BackWarpFollowup::Shot;
+    } else {
+        backWarpFollowup_ = BackWarpFollowup::Wave;
+    }
+
+    postActionOption_ = PostActionOption::BackWarp;
+    BeginBackWarpPostAction();
+    return true;
+}
+
 bool Enemy::TryContinueChain() {
     ActionKind finishedKind = action_.kind;
 
@@ -1002,7 +1289,13 @@ bool Enemy::TryContinueChain() {
 }
 
 void Enemy::FinishCurrentAction() {
+    ActionKind finishedKind = action_.kind;
+
     if (TryContinueChain()) {
+        return;
+    }
+
+    if (TryStartBackWarpPostAction(finishedKind)) {
         return;
     }
 
@@ -1169,12 +1462,28 @@ void Enemy::UpdateGuardRecovery(float deltaTime) {
 // ============================================================
 float Enemy::GetCurrentActionTime() const { return stateTimer_; }
 
+float Enemy::GetCurrentSmashChargeTime() const {
+    if (action_.id == ActionId::DelaySmash) {
+        return smashChargeTime_ + delaySmashExtraChargeTime_;
+    }
+    return smashChargeTime_;
+}
+
+float Enemy::GetCurrentSweepChargeTime() const {
+    if (action_.id == ActionId::DoubleSweep && isDoubleSweepSecondStage_) {
+        return sweepChargeTime_ * doubleSweepSecondChargeScale_;
+    }
+    return sweepChargeTime_;
+}
+
 const AttackTimingParam *Enemy::GetCurrentAttackTiming() const {
     switch (action_.kind) {
     case ActionKind::Smash:
         return &smashTiming_;
     case ActionKind::Sweep:
         return &sweepTiming_;
+    case ActionKind::Rush:
+        return &rushTiming_;
     default:
         return nullptr;
     }
@@ -1190,6 +1499,8 @@ AttackParam *Enemy::GetCurrentAttackParam() {
         return &bulletParam_;
     case ActionKind::Wave:
         return &waveParam_;
+    case ActionKind::Rush:
+        return &rushParam_;
     default:
         return nullptr;
     }
@@ -1205,6 +1516,8 @@ const AttackParam *Enemy::GetCurrentAttackParam() const {
         return &bulletParam_;
     case ActionKind::Wave:
         return &waveParam_;
+    case ActionKind::Rush:
+        return &rushParam_;
     default:
         return nullptr;
     }
@@ -1279,11 +1592,68 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     }
 
     action_.kind = kind;
+    action_.id = MakeDefaultActionId(kind);
+
+    if (kind == ActionKind::Smash) {
+        float r =
+            static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+        if (r < delaySmashChance_) {
+            action_.id = ActionId::DelaySmash;
+        }
+    }
+
+    if (kind == ActionKind::Sweep) {
+        float r =
+            static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+        if (r < doubleSweepChance_) {
+            action_.id = ActionId::DoubleSweep;
+        }
+    }
+
     action_.step = step;
 
     hasTrackingLocked_ = false;
     isAttackActive_ = false;
     stateTimer_ = 0.0f;
+    isDoubleSweepSecondStage_ = false;
+}
+
+ActionId Enemy::MakeDefaultActionId(ActionKind kind) const {
+    switch (kind) {
+    case ActionKind::Smash:
+        return ActionId::Smash;
+
+    case ActionKind::Sweep:
+        return ActionId::Sweep;
+
+    case ActionKind::Shot:
+        return ActionId::Shot;
+
+    case ActionKind::Wave:
+        return ActionId::Wave;
+
+    case ActionKind::Rush:
+        return ActionId::Rush;
+
+    case ActionKind::Warp:
+        return (warp_.type == WarpType::Escape) ? ActionId::WarpEscape
+                                                : ActionId::WarpApproach;
+
+    case ActionKind::Guard:
+        switch (guardTarget_) {
+        case GuardTarget::Face:
+            return ActionId::GuardFace;
+        case GuardTarget::BodyLeft:
+            return ActionId::GuardBodyLeft;
+        case GuardTarget::BodyCenter:
+            return ActionId::GuardBodyRight; // 仕様上は後でBodyRightへ整理予定
+        default:
+            return ActionId::None;
+        }
+
+    default:
+        return ActionId::None;
+    }
 }
 
 void Enemy::ChangeActionStep(ActionStep step) {
@@ -1294,15 +1664,19 @@ void Enemy::ChangeActionStep(ActionStep step) {
 
 void Enemy::EndAttack() {
     action_.kind = ActionKind::None;
+    action_.id = ActionId::None;
     action_.step = ActionStep::None;
 
     ResetWarpContext();
     ResetChainContext();
+    ResetPostActionState();
     isVisible_ = true;
 
     hasTrackingLocked_ = false;
     isAttackActive_ = false;
     stateTimer_ = 0.0f;
+    isDoubleSweepSecondStage_ = false;
+    rushCurrentYaw_ = facingYaw_;
 }
 
 // ============================================================
@@ -1312,6 +1686,7 @@ bool Enemy::ShouldUseLockedAttackYaw() const {
     switch (action_.kind) {
     case ActionKind::Smash:
     case ActionKind::Sweep:
+    case ActionKind::Rush:
         return true;
     default:
         return false;
@@ -1350,6 +1725,7 @@ void Enemy::ValidateTiming(AttackTimingParam &timing, float chargeTime) {
 void Enemy::ValidateAllTimings() {
     ValidateTiming(smashTiming_, smashChargeTime_);
     ValidateTiming(sweepTiming_, sweepChargeTime_);
+    ValidateTiming(rushTiming_, rushChargeTime_);
 }
 
 // ============================================================
@@ -1373,6 +1749,9 @@ void Enemy::UpdateByAction(float deltaTime) {
         break;
     case ActionKind::Wave:
         UpdateWaveByStep(deltaTime);
+        break;
+    case ActionKind::Rush:
+        UpdateRushByStep(deltaTime);
         break;
     case ActionKind::Warp:
         UpdateWarpByStep(deltaTime);
@@ -1447,6 +1826,23 @@ void Enemy::UpdateWaveByStep(float deltaTime) {
         break;
     case ActionStep::Recovery:
         UpdateWaveRecovery(deltaTime);
+        break;
+    default:
+        EndAttack();
+        break;
+    }
+}
+
+void Enemy::UpdateRushByStep(float deltaTime) {
+    switch (action_.step) {
+    case ActionStep::Charge:
+        UpdateRushCharge(deltaTime);
+        break;
+    case ActionStep::Active:
+        UpdateRushAttack(deltaTime);
+        break;
+    case ActionStep::Recovery:
+        UpdateRushRecovery(deltaTime);
         break;
     default:
         EndAttack();

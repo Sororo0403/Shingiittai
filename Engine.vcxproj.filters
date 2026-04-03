@@ -358,6 +358,9 @@
     <ClInclude Include="include\app\enemy\EnemyTuningPresetIO.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="include\app\enemy\EnemyActionData.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="resources\shaders\sprite\SpritePS.hlsl">
