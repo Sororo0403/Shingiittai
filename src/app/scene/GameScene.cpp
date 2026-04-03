@@ -95,7 +95,7 @@ void GameScene::Update() {
         }
     }
 
-      // 毎フレームいったんリセット
+    // 毎フレームいったんリセット
     dbgHitLeftHand_ = false;
     dbgHitRightHand_ = false;
     dbgHitBody_ = false;

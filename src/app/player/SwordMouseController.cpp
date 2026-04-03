@@ -6,10 +6,8 @@
 
 using namespace DirectX;
 
-void SwordMouseController::Update(
-    Input* input,
-    float dt,
-    const Transform& swordPos) {
+void SwordMouseController::Update(Input *input, float dt,
+                                  const Transform &swordPos) {
     UpdateOrientation(input, dt);
     UpdateGuard(input);
     UpdateCounter();
@@ -17,42 +15,44 @@ void SwordMouseController::Update(
     UpdateSlashDir(swordPos);
 }
 
-bool SwordMouseController::IsActive(Input* input) {
-    return std::abs(input->GetMouseDX()) > 3 || 
-           std::abs(input->GetMouseDY()) > 3 ||
-           input->IsMousePress(0) || 
+bool SwordMouseController::IsActive(Input *input) {
+    return std::abs(input->GetMouseDX()) > 3 ||
+           std::abs(input->GetMouseDY()) > 3 || input->IsMousePress(0) ||
            input->IsMousePress(1);
 }
 
-void SwordMouseController::UpdateOrientation(Input* input, float dt) {
-    float dx = static_cast<float>(input->GetMouseDX());
-    float dy = static_cast<float>(input->GetMouseDY());
+void SwordMouseController::UpdateOrientation(Input *input, float dt) {
+    if (!isGuard_) {
+        float dx = static_cast<float>(input->GetMouseDX());
+        float dy = static_cast<float>(input->GetMouseDY());
 
-    // 感度
-    const float sensitivity = 0.003f;
+        // 感度
+        const float sensitivity = 0.003f;
 
-    yaw_ += dx * sensitivity;
-    pitch_ += dy * sensitivity;
+        yaw_ += dx * sensitivity;
+        pitch_ += dy * sensitivity;
 
-    // 上下向きすぎ防止
-    pitch_ = std::clamp(pitch_, -1.2f, 1.2f);
+        // 上下向きすぎ防止
+        pitch_ = std::clamp(pitch_, -1.2f, 1.2f);
 
-    XMVECTOR qYaw = XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), yaw_);
+        XMVECTOR qYaw = XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), yaw_);
 
-    XMVECTOR qPitch = XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), pitch_);
+        XMVECTOR qPitch =
+            XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), pitch_);
 
-    XMVECTOR q = XMQuaternionMultiply(qPitch, qYaw);
-    q = XMQuaternionNormalize(q);
+        XMVECTOR q = XMQuaternionMultiply(qPitch, qYaw);
+        q = XMQuaternionNormalize(q);
 
-    XMStoreFloat4(&orientation_, q);
+        XMStoreFloat4(&orientation_, q);
 
-    float speed = std::sqrt(dx * dx + dy * dy);
-    mouseSpeed_ = (dt > 0.0f) ? speed / dt : 0.0f;
+        float speed = std::sqrt(dx * dx + dy * dy);
+        mouseSpeed_ = (dt > 0.0f) ? speed / dt : 0.0f;
 
-    mouseDelta_ = {dx, dy};
+        mouseDelta_ = {dx, dy};
+    }
 }
 
-void SwordMouseController::UpdateGuard(Input* input) {
+void SwordMouseController::UpdateGuard(Input *input) {
     isGuard_ = input->IsMousePress(1);
 }
 
@@ -79,7 +79,7 @@ void SwordMouseController::UpdateSlash(Input *input, float dt) {
     mouseSpeed_ = speed / dt;
 
     if (mouseSpeed_ > kSlashHold) {
-        if (!isSlashMode_) {
+        if (!isSlashMode_ && !isGuard_) {
             isSlashMode_ = true;
             slashTimer_ = 0.0f;
         }

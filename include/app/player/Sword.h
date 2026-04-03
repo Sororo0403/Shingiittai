@@ -1,8 +1,7 @@
 #pragma once
 #include "OBB.h"
 #include "Transform.h"
-#include "SwordJoyConController.h"
-#include "SwordMouseController.h"
+#include "IInputController.h"
 #include <DirectXMath.h>
 #include <cstdint>
 
@@ -59,22 +58,18 @@ class Sword {
                          float playerArmLength, float playerHandHeight);
 
     // メンバ変数
-    SwordJoyConController swordJoyConController_;
-    SwordMouseController swordMouseController_;
+    IInputController inputCtrl_;
     static constexpr float kSwordLength = 1.2f;
     DirectX::XMFLOAT3 size_{0.2f, 0.2f, 0.6f};
 
     uint32_t modelId_ = 0;
     Transform tf_;
-
     bool isSlashMode_ = false;
     bool isGuard_ = false;
     bool isCounter_ = false;
-    bool isMouse_ = false;
-    bool isJoyCon_ = false;
-
     DirectX::XMFLOAT2 slashDir_{};
     DirectX::XMFLOAT4 orientation_{0, 0, 0, 1};
+    ControllerType ctrlType_ = Mouse;
 
     // メンバ関数
     void ImGuiDraw();

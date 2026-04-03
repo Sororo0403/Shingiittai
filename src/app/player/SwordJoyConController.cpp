@@ -6,10 +6,8 @@
 
 using namespace DirectX;
 
-void SwordJoyConController::Update(
-    Input* input, 
-    float dt,
-    const Transform& swordPos) {
+void SwordJoyConController::Update(Input *input, float dt,
+                                   const Transform &swordPos) {
     UpdateOrientation(input, dt);
     UpdateGuard(input);
     UpdateCounter();
@@ -21,7 +19,7 @@ bool SwordJoyConController::IsActive(Input *input) {
     return angularVelocity_ > 30.0f || input->IsJsButtunPress(JSL_BUTTON_ZR);
 }
 
-void SwordJoyConController::UpdateOrientation(Input* input, float dt) {
+void SwordJoyConController::UpdateOrientation(Input *input, float dt) {
     XMVECTOR q = input->GetOrientation();
 
     q = XMQuaternionConjugate(q);
@@ -55,7 +53,7 @@ void SwordJoyConController::UpdateCounter() {
 
 void SwordJoyConController::UpdateSlash(float dt) {
     if (angularVelocity_ > kSlashHold) {
-        if (!isSlashMode_) {
+        if (!isSlashMode_ && !isGuard_) {
             isSlashMode_ = true;
             slashTimer_ = 0.0f;
         }
@@ -74,7 +72,7 @@ void SwordJoyConController::UpdateSlash(float dt) {
     }
 }
 
-void SwordJoyConController::UpdateSlashDir(const Transform& swordPos) {
+void SwordJoyConController::UpdateSlashDir(const Transform &swordPos) {
     if (!isSlashMode_)
         return;
 
