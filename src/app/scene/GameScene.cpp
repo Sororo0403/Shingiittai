@@ -20,11 +20,19 @@ void GameScene::Initialize(const SceneContext &ctx) {
                    static_cast<float>(ctx_->winApp->GetHeight());
 
     camera_.Initialize(aspect);
+    camera_.SetMode(CameraMode::LookAt);
     camera_.UpdateMatrices();
     camera_.SetPerspectiveFovDeg(currentFovDeg_);
 #ifdef _DEBUG
     debugCamera_.Initialize(aspect);
+    debugCamera_.SetMode(CameraMode::Free);
     debugCamera_.UpdateMatrices();
+
+    tripodCamera_.Initialize(aspect);
+    camera_.SetMode(CameraMode::LookAt);
+    tripodCamera_.SetPosition(tripodPos_);
+    tripodCamera_.LookAt(tripodTarget_);
+    tripodCamera_.UpdateMatrices();
 #endif
 
     currentCamera_ = &camera_;
@@ -58,7 +66,8 @@ void GameScene::Initialize(const SceneContext &ctx) {
     currentFovDeg_ = normalFovDeg_;
     targetFovDeg_ = normalFovDeg_;
 
-    uint32_t bulletModel = ctx_->model->Load(L"resources/model/bullet/bullet.obj");
+    uint32_t bulletModel =
+        ctx_->model->Load(L"resources/model/bullet/bullet.obj");
     bullet_.Initialize(bulletModel);
 }
 
@@ -84,10 +93,11 @@ void GameScene::Update() {
     auto swordBox = player_.GetSword().GetOBB();
     auto playerBox = player_.GetOBB();
 
-    //if (CollisionUtil::CheckOBB(swordBox, bulletBox) && player_.GetSword().GetSlashMode()) {
-    //    player_.GetSword().SetCounter(true);
-    //}
-    // // 敵の行動状態を取得してガード状態を判定
+    // if (CollisionUtil::CheckOBB(swordBox, bulletBox) &&
+    // player_.GetSword().GetSlashMode()) {
+    //     player_.GetSword().SetCounter(true);
+    // }
+    //  // 敵の行動状態を取得してガード状態を判定
     const ActionKind enemyActionKind = enemy_.GetActionKind();
     const ActionStep enemyActionStep = enemy_.GetActionStep();
 
@@ -107,7 +117,7 @@ void GameScene::Update() {
         }
     }
 
-      // 毎フレームいったんリセット
+    // 毎フレームいったんリセット
     dbgHitLeftHand_ = false;
     dbgHitRightHand_ = false;
     dbgHitBody_ = false;
@@ -116,7 +126,7 @@ void GameScene::Update() {
 
     // プレイヤーの攻撃判定とあたり判定
     if (player_.GetSword().IsSlashMode()) {
-        //auto swordBox = player_.GetSword().GetOBB();
+        // auto swordBox = player_.GetSword().GetOBB();
 
         auto bodyBox = enemy_.GetBodyOBB();
         auto leftHandBox = enemy_.GetLeftHandOBB();
@@ -192,7 +202,7 @@ void GameScene::Update() {
 
     dbgBossHitPlayer_ = bossHitPlayer;
 
-   dbgBulletHitPlayer_ = false;
+    dbgBulletHitPlayer_ = false;
 
     for (const auto &bullet : enemy_.GetBullets()) {
         if (!bullet.isAlive) {
@@ -279,9 +289,9 @@ void GameScene::Update() {
         }
     }
 }
-//#ifdef _DEBUG
-//    DebugDraw *debugDraw = ctx_->debugDraw;
-//#endif
+// #ifdef _DEBUG
+//     DebugDraw *debugDraw = ctx_->debugDraw;
+// #endif
 
 void GameScene::Draw() {
     ctx_->model->PreDraw();
@@ -289,7 +299,7 @@ void GameScene::Draw() {
     player_.Draw(ctx_->model, *currentCamera_);
     enemy_.Draw(ctx_->model, *currentCamera_);
     int aliveBulletCount = 0;
-    for (const auto& bullet : enemy_.GetBullets()) {
+    for (const auto &bullet : enemy_.GetBullets()) {
         if (bullet.isAlive) {
             aliveBulletCount++;
         }
@@ -303,14 +313,17 @@ void GameScene::Draw() {
     }
 #ifdef _DEBUG
     // 当たり判定描画
-    ctx_->debugDraw->DrawOBB(ctx_->model, player_.GetSword().GetOBB(), *currentCamera_);
+    ctx_->debugDraw->DrawOBB(ctx_->model, player_.GetSword().GetOBB(),
+                             *currentCamera_);
 
     // ボス部位
     if (enemy_.IsAlive()) {
-        ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetBodyOBB(), *currentCamera_);
-        ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetLeftHandOBB(), *currentCamera_);
+        ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetBodyOBB(),
+                                 *currentCamera_);
+        ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetLeftHandOBB(),
+                                 *currentCamera_);
         ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetRightHandOBB(),
-            *currentCamera_);
+                                 *currentCamera_);
 
         const bool isEnemySmashActive =
             (enemy_.GetActionKind() == ActionKind::Smash &&
@@ -323,7 +336,6 @@ void GameScene::Draw() {
             ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetAttackOBB(),
                                      *currentCamera_);
         }
-
     }
 #endif
 
@@ -336,7 +348,7 @@ void GameScene::Draw() {
     ImGui::Text("Hit Body     : %s", dbgHitBody_ ? "true" : "false");
     ImGui::Text("Cooldown     : %.2f", enemyHitCooldown_);
 
-   const ActionKind enemyActionKind = enemy_.GetActionKind();
+    const ActionKind enemyActionKind = enemy_.GetActionKind();
     const ActionStep enemyActionStep = enemy_.GetActionStep();
 
     const char *actionKindName = "None";
@@ -438,7 +450,8 @@ void GameScene::Draw() {
     ImGui::Text("AliveBullets    : %d", aliveBulletCount);
     auto warpPos = enemy_.GetWarpTargetPos();
     ImGui::Text("Visible         : %s", enemy_.IsVisible() ? "true" : "false");
-    ImGui::Text("WarpTarget      : (%.2f, %.2f, %.2f)", warpPos.x, warpPos.y, warpPos.z);
+    ImGui::Text("WarpTarget      : (%.2f, %.2f, %.2f)", warpPos.x, warpPos.y,
+                warpPos.z);
     ImGui::Text("WaveHitPlayer   : %s", dbgWaveHitPlayer_ ? "true" : "false");
     ImGui::Text("AliveWaves      : %d", aliveWaveCount);
     const char *guardName = "None";
@@ -488,17 +501,16 @@ void GameScene::Draw() {
         ImGui::DragFloat("Smash Knockback", &p.knockback, 0.1f, 0.0f, 30.0f);
         ImGui::DragFloat3("Smash HitBox", &p.hitBoxSize.x, 0.05f, 0.1f, 10.0f);
 
-       float &smashCharge = enemy_.EditSmashChargeTime();
+        float &smashCharge = enemy_.EditSmashChargeTime();
         ImGui::DragFloat("Smash Charge", &smashCharge, 0.01f, 0.0f, 5.0f);
 
-       /* ImGui::DragFloat("Smash Attack", &enemy_.EditSmashAttackTime(), 0.01f,
-                         0.0f, 5.0f);
-        ImGui::DragFloat("Smash Recovery", &enemy_.EditSmashRecoveryTime(),
-                         0.01f, 0.0f, 5.0f);
-        ImGui::DragFloat("Smash Active Start",
-                         &enemy_.EditSmashActiveStartTime(), 0.01f, 0.0f, 1.0f);
-        ImGui::DragFloat("Smash Active End", &enemy_.EditSmashActiveEndTime(),
-                         0.01f, 0.0f, 1.0f);*/
+        /* ImGui::DragFloat("Smash Attack", &enemy_.EditSmashAttackTime(),
+         0.01f, 0.0f, 5.0f); ImGui::DragFloat("Smash Recovery",
+         &enemy_.EditSmashRecoveryTime(), 0.01f, 0.0f, 5.0f);
+         ImGui::DragFloat("Smash Active Start",
+                          &enemy_.EditSmashActiveStartTime(), 0.01f,
+         0.0f, 1.0f); ImGui::DragFloat("Smash Active End",
+         &enemy_.EditSmashActiveEndTime(), 0.01f, 0.0f, 1.0f);*/
         if (ImGui::TreeNode("Smash Timing")) {
             auto &t = enemy_.EditSmashTiming();
             ImGui::DragFloat("Smash Total", &t.totalTime, 0.01f, 0.0f, 3.0f);
@@ -509,8 +521,8 @@ void GameScene::Draw() {
             ImGui::DragFloat("Smash Recovery Start", &t.recoveryStartTime,
                              0.01f, 0.0f, 3.0f);
 
-            ImGui::DragFloat("Smash Tracking End", &t.trackingEndTime,
-                             0.01f, 0.0f, 2.0f);
+            ImGui::DragFloat("Smash Tracking End", &t.trackingEndTime, 0.01f,
+                             0.0f, 2.0f);
 
             ImGui::TreePop();
         }
@@ -526,15 +538,13 @@ void GameScene::Draw() {
         float &sweepCharge = enemy_.EditSweepChargeTime();
         ImGui::DragFloat("Sweep Charge", &sweepCharge, 0.01f, 0.0f, 5.0f);
 
-
-       /* ImGui::DragFloat("Sweep Attack", &enemy_.EditSweepAttackTime(), 0.01f,
-                         0.0f, 5.0f);
-        ImGui::DragFloat("Sweep Recovery", &enemy_.EditSweepRecoveryTime(),
-                         0.01f, 0.0f, 5.0f);
-        ImGui::DragFloat("Sweep Active Start",
-                         &enemy_.EditSweepActiveStartTime(), 0.01f, 0.0f, 1.0f);
-        ImGui::DragFloat("Sweep Active End", &enemy_.EditSweepActiveEndTime(),
-                         0.01f, 0.0f, 1.0f);*/
+        /* ImGui::DragFloat("Sweep Attack", &enemy_.EditSweepAttackTime(),
+         0.01f, 0.0f, 5.0f); ImGui::DragFloat("Sweep Recovery",
+         &enemy_.EditSweepRecoveryTime(), 0.01f, 0.0f, 5.0f);
+         ImGui::DragFloat("Sweep Active Start",
+                          &enemy_.EditSweepActiveStartTime(), 0.01f,
+         0.0f, 1.0f); ImGui::DragFloat("Sweep Active End",
+         &enemy_.EditSweepActiveEndTime(), 0.01f, 0.0f, 1.0f);*/
         if (ImGui::TreeNode("Sweep Timing")) {
             auto &t = enemy_.EditSweepTiming();
             ImGui::DragFloat("Sweep Total", &t.totalTime, 0.01f, 0.0f, 3.0f);
@@ -544,9 +554,9 @@ void GameScene::Draw() {
                              3.0f);
             ImGui::DragFloat("Sweep Recovery Start", &t.recoveryStartTime,
                              0.01f, 0.0f, 3.0f);
-            
-            ImGui::DragFloat("Sweep Tracking End", &t.trackingEndTime,
-                             0.01f, 0.0f, 2.0f);
+
+            ImGui::DragFloat("Sweep Tracking End", &t.trackingEndTime, 0.01f,
+                             0.0f, 2.0f);
             ImGui::TreePop();
         }
         ImGui::TreePop();
@@ -588,7 +598,7 @@ void GameScene::Draw() {
         ImGui::TreePop();
     }
 
-        if (ImGui::TreeNode("Rush")) {
+    if (ImGui::TreeNode("Rush")) {
         auto &p = enemy_.EditRushParam();
         ImGui::DragFloat("Rush Damage", &p.damage, 0.1f, 0.0f, 100.0f);
         ImGui::DragFloat("Rush Knockback", &p.knockback, 0.1f, 0.0f, 30.0f);
@@ -676,67 +686,113 @@ void GameScene::Draw() {
                      &enemy_.EditWaveWarpSmashChance(), 0.01f, 0.0f, 1.0f);
 
     ImGui::End();
+
+    ImGui::Begin("Camera");
+
+    if (ImGui::Button("Normal")) {
+        currentCamera_ = &camera_;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Debug")) {
+        currentCamera_ = &debugCamera_;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Tripod")) {
+        currentCamera_ = &tripodCamera_;
+    }
+
+    if (ImGui::Button("Snap From Current")) {
+        tripodPos_ = currentCamera_->GetPosition();
+
+        // DebugCamera対策：forwardからtarget作る
+        DirectX::XMFLOAT3 rot = currentCamera_->GetRotation();
+
+        float cosPitch = std::cosf(rot.x);
+
+        DirectX::XMFLOAT3 forward = {std::sinf(rot.y) * cosPitch,
+                                     std::sinf(rot.x),
+                                     std::cosf(rot.y) * cosPitch};
+
+        tripodTarget_ = {tripodPos_.x + forward.x, tripodPos_.y + forward.y,
+                         tripodPos_.z + forward.z};
+    }
+
+    ImGui::End();
 #endif
 }
 
-//void GameScene::UpdateCamera(Input *input) {
-//#ifdef _DEBUG
-//    if (input->IsKeyTrigger(DIK_F11)) {
-//        if (currentCamera_ == &camera_) {
-//            currentCamera_ = &debugCamera_;
-//        } else {
-//            currentCamera_ = &camera_;
-//        }
-//    }
+// void GameScene::UpdateCamera(Input *input) {
+// #ifdef _DEBUG
+//     if (input->IsKeyTrigger(DIK_F11)) {
+//         if (currentCamera_ == &camera_) {
+//             currentCamera_ = &debugCamera_;
+//         } else {
+//             currentCamera_ = &camera_;
+//         }
+//     }
 //
-//    if (currentCamera_ == &debugCamera_) {
-//        debugCamera_.Update(*input, ctx_->deltaTime);
-//        currentCamera_->UpdateMatrices();
-//        return;
-//    }
-//#else
-//    (void)input;
-//#endif
-//}
+//     if (currentCamera_ == &debugCamera_) {
+//         debugCamera_.Update(*input, ctx_->deltaTime);
+//         currentCamera_->UpdateMatrices();
+//         return;
+//     }
+// #else
+//     (void)input;
+// #endif
+// }
 
-//void GameScene::UpdateBattleCamera() {
-//    auto &playerTf = player_.GetTransform();
-//    auto &enemyTf = enemy_.GetTransform();
+// void GameScene::UpdateBattleCamera() {
+//     auto &playerTf = player_.GetTransform();
+//     auto &enemyTf = enemy_.GetTransform();
 //
-//    XMFLOAT3 playerPos = playerTf.position;
-//    XMFLOAT3 enemyPos = enemyTf.position;
+//     XMFLOAT3 playerPos = playerTf.position;
+//     XMFLOAT3 enemyPos = enemyTf.position;
 //
-//    XMVECTOR playerPosV = XMLoadFloat3(&playerPos);
-//    XMVECTOR enemyPosV = XMLoadFloat3(&enemyPos);
+//     XMVECTOR playerPosV = XMLoadFloat3(&playerPos);
+//     XMVECTOR enemyPosV = XMLoadFloat3(&enemyPos);
 //
-//    XMVECTOR forward = XMVector3Normalize(enemyPosV - playerPosV);
+//     XMVECTOR forward = XMVector3Normalize(enemyPosV - playerPosV);
 //
-//    XMVECTOR camPos = playerPosV - forward * kCameraDistance +
-//                      XMVectorSet(0, kCameraHeight, 0, 0);
+//     XMVECTOR camPos = playerPosV - forward * kCameraDistance +
+//                       XMVectorSet(0, kCameraHeight, 0, 0);
 //
-//    XMFLOAT3 cameraPos;
-//    XMStoreFloat3(&cameraPos, camPos);
+//     XMFLOAT3 cameraPos;
+//     XMStoreFloat3(&cameraPos, camPos);
 //
-//    camera_.SetPosition(cameraPos);
-//    camera_.LookAt({enemyPos.x, kCameraHeight, enemyPos.z});
-//}
+//     camera_.SetPosition(cameraPos);
+//     camera_.LookAt({enemyPos.x, kCameraHeight, enemyPos.z});
+// }
 
 void GameScene::UpdateCamera(Input *input) {
 #ifdef _DEBUG
+    // 切り替え
     if (input->IsKeyTrigger(DIK_F11)) {
-        if (currentCamera_ == &camera_) {
-            currentCamera_ = &debugCamera_;
-        } else {
-            currentCamera_ = &camera_;
-        }
+        currentCamera_ = &debugCamera_;
+    }
+    if (input->IsKeyTrigger(DIK_F10)) {
+        currentCamera_ = &camera_;
+    }
+    if (input->IsKeyTrigger(DIK_F9)) {
+        currentCamera_ = &tripodCamera_;
     }
 
+    // DebugCamera
     if (currentCamera_ == &debugCamera_) {
         debugCamera_.Update(*input, ctx_->deltaTime);
-        currentCamera_->UpdateMatrices();
+        debugCamera_.UpdateMatrices();
+        return;
+    }
+
+    // TripodCamera（完全固定）
+    if (currentCamera_ == &tripodCamera_) {
+        tripodCamera_.SetPosition(tripodPos_);
+        tripodCamera_.LookAt(tripodTarget_);
+        tripodCamera_.UpdateMatrices();
         return;
     }
 #endif
+
+    // ===== 通常カメラ =====
 
     // ロックオン切り替え
     if (input->IsKeyTrigger(DIK_Q)) {
@@ -747,7 +803,6 @@ void GameScene::UpdateCamera(Input *input) {
     float pitchInput = 0.0f;
 
 #ifdef _DEBUG
-    // 仮の視点入力
     if (input->IsKeyPress(DIK_LEFT)) {
         yawInput -= 1.0f;
     }
@@ -771,6 +826,12 @@ void GameScene::UpdateCamera(Input *input) {
     if (cameraPitch_ > cameraPitchMax_) {
         cameraPitch_ = cameraPitchMax_;
     }
+
+    // ⭐ 最重要：ここでカメラ確定
+    UpdateBattleCamera();
+
+    // ⭐ 最重要：行列更新
+    camera_.UpdateMatrices();
 }
 
 void GameScene::UpdateBattleCamera() {

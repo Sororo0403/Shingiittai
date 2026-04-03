@@ -1,9 +1,9 @@
 #pragma once
 #include "BaseScene.h"
+#include "Bullet.h"
 #include "Camera.h"
 #include "Enemy.h"
 #include "Player.h"
-#include "Bullet.h"
 #include "Transform.h"
 #include <DirectXMath.h>
 #include <cstdint>
@@ -44,6 +44,14 @@ class GameScene : public BaseScene {
     Camera camera_;
 #ifdef _DEBUG
     DebugCamera debugCamera_;
+
+    // 三脚カメラ
+    Camera tripodCamera_;
+    bool useTripodCamera_ = false;
+
+    // 三脚カメラ設定
+    DirectX::XMFLOAT3 tripodPos_ = {0.0f, 2.0f, -5.0f};
+    DirectX::XMFLOAT3 tripodTarget_ = {0.0f, 1.0f, 0.0f};
 #endif
     Camera *currentCamera_ = nullptr;
 
@@ -66,7 +74,7 @@ class GameScene : public BaseScene {
     bool dbgPlayerGuardedHit_ = false;
     Bullet bullet_;
 
-        // 完全一人称カメラ用
+    // 完全一人称カメラ用
     DirectX::XMFLOAT3 fpCameraOffset_ = {0.0f, 1.55f, 0.0f};
     float cameraYaw_ = 0.0f;
     float cameraPitch_ = 0.0f;
@@ -74,13 +82,13 @@ class GameScene : public BaseScene {
     float cameraPitchMax_ = 1.0f;
     float cameraLookSensitivity_ = 0.025f;
 
-        // ロックオン用
+    // ロックオン用
     bool isLockOn_ = false;
     float lockOnAssistStrength_ = 2.0f;
     float lockOnAssistMaxStep_ = 3.5f;
     float lockOnInputReduce_ = 0.25f;
 
-        // Rush時のカメラ補助
+    // Rush時のカメラ補助
     float rushChargeAssistStrength_ = 4.0f;
     float rushChargeAssistMaxStep_ = 6.0f;
 
@@ -88,7 +96,7 @@ class GameScene : public BaseScene {
     float rushActiveAssistMaxStep_ = 8.0f;
     float rushLeadDistance_ = 2.5f;
 
-        // Warp時の再捕捉補助
+    // Warp時の再捕捉補助
     float warpStartAssistStrength_ = 4.5f;
     float warpStartAssistMaxStep_ = 7.0f;
     float warpEndAssistStrength_ = 6.0f;
@@ -102,5 +110,4 @@ class GameScene : public BaseScene {
     float rushFovDeg_ = 88.0f;
     float warpFovDeg_ = 88.0f;
     float fovLerpSpeed_ = 8.0f;
-
 };
