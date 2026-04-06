@@ -12,7 +12,7 @@ void SwordMouseController::Update(
     const Transform& swordPos) {
     UpdateOrientation(input, dt);
     UpdateGuard(input);
-    UpdateCounter();
+    UpdateCounter(input);
     UpdateSlash(input, dt);
     UpdateSlashDir(swordPos);
 }
@@ -56,14 +56,16 @@ void SwordMouseController::UpdateGuard(Input* input) {
     isGuard_ = input->IsMousePress(1);
 }
 
-void SwordMouseController::UpdateCounter() {
-    if (isCounter_) {
-        counterTimer_ -= 1;
+void SwordMouseController::UpdateCounter(Input *input) {
 
-        if (counterTimer_ <= 0) {
-            isCounter_ = false;
-            counterTimer_ = 300;
-        }
+    // 左クリックでカウンター構え
+    isCounter_ = input->IsMousePress(1);
+
+    // カウンター状態の簡易タイマー（既存ロジック維持）
+    if (isCounter_) {
+        counterTimer_ = 60; // 毎フレームリセット（適当な値でOK）
+    } else {
+        counterTimer_ = 0;
     }
 }
 

@@ -218,6 +218,33 @@
     <ClCompile Include="src\app\enemy\EnemyTuningPresetIO.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\app\enemy\EnemyCore.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\app\enemy\EnemyTactics.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\app\enemy\EnemyAction_Melee.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\app\enemy\EnemyAction_Ranged.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\app\enemy\EnemyAction_WarpGuard.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\app\enemy\EnemyPresentation.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\app\enemy\EnemyCombat.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\app\enemy\EnemyAdaptation.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\app\enemy\EnemyTuning.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\engine\core\WinApp.h">

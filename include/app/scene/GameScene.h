@@ -75,18 +75,58 @@ class GameScene : public BaseScene {
     Bullet bullet_;
 
     // 完全一人称カメラ用
-    DirectX::XMFLOAT3 fpCameraOffset_ = {0.0f, 1.55f, 0.0f};
+    /*DirectX::XMFLOAT3 fpCameraOffset_ = {0.0f, 1.55f, 0.0f};
     float cameraYaw_ = 0.0f;
     float cameraPitch_ = 0.0f;
     float cameraPitchMin_ = -1.2f;
     float cameraPitchMax_ = 1.0f;
+    float cameraLookSensitivity_ = 0.025f;*/
+    float cameraYaw_ = 0.0f;
+    float cameraPitch_ = 0.15f;
+    float cameraPitchMin_ = -0.35f;
+    float cameraPitchMax_ = 0.65f;
     float cameraLookSensitivity_ = 0.025f;
+    // プレイヤー基準の肩越しオフセット
+    float cameraDistance_ = 4.8f;    // 後方距離
+    float cameraHeight_ = 1.8f;      // 高さ
+    float cameraSideOffset_ = 0.65f; // 右肩寄せ
+    float cameraLookHeight_ = 1.35f; // 注視点の高さ
+
+    // 視線の補間
+    float cameraLookAhead_ = 2.0f; // 非ロック時の前方注視距離
 
     // ロックオン用
     bool isLockOn_ = false;
     float lockOnAssistStrength_ = 2.0f;
     float lockOnAssistMaxStep_ = 3.5f;
     float lockOnInputReduce_ = 0.25f;
+
+    // ロックオン時の戦闘カメラ構図
+    float lockOnCameraDistance_ = 6.2f;
+    float lockOnCameraHeight_ = 2.1f;
+    float lockOnCameraSideOffset_ = 0.35f;
+    float lockOnLookPlayerWeight_ = 0.35f;
+    float lockOnLookEnemyWeight_ = 0.65f;
+
+     // プレイヤーと敵の距離で少しだけ後ろに引く補正
+    float lockOnDistanceMin_ = 3.0f;
+    float lockOnDistanceMax_ = 12.0f;
+    float lockOnDistancePullBackMin_ = 0.0f;
+    float lockOnDistancePullBackMax_ = 1.8f;
+
+    // ロックオン時の円弧追従
+    float lockOnOrbitRadius_ = 5.8f;      // 基本半径
+    float lockOnOrbitHeight_ = 2.0f;      // 高さ
+    float lockOnOrbitSideBias_ = 0.35f;   // 肩寄せの残し量
+    float lockOnOrbitLerpSpeed_ = 10.0f;  // 円弧位置の追従速度
+    float lockOnOrbitPullBackMax_ = 1.6f; // 敵との距離で後ろに引く最大量
+
+    // 円弧追従で使う現在位置
+    DirectX::XMFLOAT3 lockOnOrbitCameraPos_ = {0.0f, 0.0f, 0.0f};
+
+    // ロックオン時の注視点補間
+    float lockOnLookAtLerpSpeed_ = 12.0f;
+    DirectX::XMFLOAT3 lockOnLookAt_ = {0.0f, 0.0f, 0.0f};
 
     // Rush時のカメラ補助
     float rushChargeAssistStrength_ = 4.0f;

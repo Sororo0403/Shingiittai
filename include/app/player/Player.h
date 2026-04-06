@@ -45,6 +45,18 @@ class Player {
 
     void AddKnockback(const DirectX::XMFLOAT3 &velocity);
 
+    const DirectX::XMFLOAT3 &GetVelocity() const { return velocity_; }
+
+    bool IsCounterStance() const { return sword_.IsCounterStance(); }
+    bool JustCountered() const { return sword_.JustCountered(); }
+    bool JustCounterFailed() const { return sword_.JustCounterFailed(); }
+    bool JustCounterEarly() const { return sword_.JustCounterEarly(); }
+    bool JustCounterLate() const { return sword_.JustCounterLate(); }
+
+    SwordCounterAxis GetCounterAxis() const { return sword_.GetCounterAxis(); }
+
+  public:
+
   private:
     // Update
     void UpdateMovement(Input *input, float deltaTime);
@@ -68,4 +80,8 @@ class Player {
     float hp_ = 100.0f;
     DirectX::XMFLOAT3 knockbackVelocity_ = {0.0f, 0.0f, 0.0f};
     float yaw_ = 0.0f;
+
+    DirectX::XMFLOAT3 velocity_ = {0.0f, 0.0f, 0.0f};
+    // カウンター成功通知
+    void NotifyCounterSuccess();
 };

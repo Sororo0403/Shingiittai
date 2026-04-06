@@ -15,6 +15,15 @@ void Sword::Initialize(uint32_t modelId) {
     tf_.position = {0, 0, 0};
     tf_.scale = {1, 1, 1};
     tf_.rotation = {0, 0, 0, 1};
+
+    prevIsCounter_ = false;
+    isCounterStance_ = false;
+    justCountered_ = false;
+    justCounterFailed_ = false;
+    justCounterEarly_ = false;
+    justCounterLate_ = false;
+    counterStateTimer_ = 0.0f;
+    counterAxis_ = SwordCounterAxis::None;
 }
 
 void Sword::Update(Input *input, float deltaTime, const XMFLOAT3 &playerPos,
@@ -37,6 +46,8 @@ void Sword::Update(Input *input, float deltaTime, const XMFLOAT3 &playerPos,
     isCounter_ = swordMouseController_.GetCounter();
     slashDir_ = swordMouseController_.GetSlashDir();
     orientation_ = swordMouseController_.GetOrientation();
+
+    UpdateCounterObservation(deltaTime);
 }
 
 OBB Sword::GetOBB() const {
@@ -88,6 +99,72 @@ void Sword::SetCounter(bool isCounter) {
     swordMouseController_.SetCounter(isCounter);
 }
 
+void Sword::UpdateCounterObservation(float deltaTime) {
+    // 1フレームだけ有効なフラグは先に落とす
+    justCountered_ = false;
+    justCounterFailed_ = false;
+    justCounterEarly_ = false;
+    justCounterLate_ = false;
+
+    isCounterStance_ = isCounter_;
+
+    // カウンター方向の暫定推定
+    // slashDir_ から雑に4方向へ割り当てる
+    // カウンター軸の暫定推定
+    // slashDir_ の絶対値比較で縦 / 横だけに分ける
+    if (isCounterStance_) {
+        if (std::fabs(slashDir_.y) >= std::fabs(slashDir_.x)) {
+            if (std::fabs(slashDir_.y) > 0.1f) {
+                counterAxis_ = SwordCounterAxis::Vertical;
+            } else {
+                counterAxis_ = SwordCounterAxis::None;
+            }
+        } else {
+            if (std::fabs(slashDir_.x) > 0.1f) {
+                counterAxis_ = SwordCounterAxis::Horizontal;
+            } else {
+                counterAxis_ = SwordCounterAxis::None;
+            }
+        }
+    } else {
+        counterAxis_ = SwordCounterAxis::None;
+    }
+
+    // カウンター入力中
+    if (isCounterStance_) {
+        if (!prevIsCounter_) {
+            counterStateTimer_ = 0.0f;
+        } else {
+            counterStateTimer_ += deltaTime;
+        }
+    } else {
+        // 前フレームまでカウンター姿勢だったなら、
+        // いったん「失敗して終わった」とみなす暫定実装
+        if (prevIsCounter_) {
+            justCounterFailed_ = true;
+
+            if (counterStateTimer_ < counterEarlyThreshold_) {
+                justCounterEarly_ = true;
+            } else if (counterStateTimer_ > counterLateThreshold_) {
+                justCounterLate_ = true;
+            }
+        }
+
+        counterStateTimer_ = 0.0f;
+    }
+
+    prevIsCounter_ = isCounterStance_;
+}
+
+void Sword::NotifyCounterSuccess() {
+    justCountered_ = true;
+
+    // 成功したら失敗系はリセット
+    justCounterFailed_ = false;
+    justCounterEarly_ = false;
+    justCounterLate_ = false;
+}
+
 void Sword::ImGuiDraw() {
 #ifndef IMGUI_DISABLED
     ImGui::Begin("Debug");
@@ -95,6 +172,25 @@ void Sword::ImGuiDraw() {
     ImGui::Text("isGuard_: %s", isGuard_ ? "true" : "false");
     ImGui::Text("counter_: %s", isCounter_ ? "true" : "false");
     ImGui::Text("slashDir_: %.1f, %.1f", slashDir_.x, slashDir_.y);
+    ImGui::Text("counterStance_: %s", isCounterStance_ ? "true" : "false");
+    ImGui::Text("justCountered_: %s", justCountered_ ? "true" : "false");
+    ImGui::Text("justCounterFailed_: %s",
+                justCounterFailed_ ? "true" : "false");
+    ImGui::Text("justCounterEarly_: %s", justCounterEarly_ ? "true" : "false");
+    ImGui::Text("justCounterLate_: %s", justCounterLate_ ? "true" : "false");
+    ImGui::Text("counterStateTimer_: %.2f", counterStateTimer_);
+    const char *counterAxisName = "None";
+    switch (counterAxis_) {
+    case SwordCounterAxis::Vertical:
+        counterAxisName = "Vertical";
+        break;
+    case SwordCounterAxis::Horizontal:
+        counterAxisName = "Horizontal";
+        break;
+    default:
+        break;
+    }
+    ImGui::Text("counterAxis_: %s", counterAxisName);
     ImGui::End();
 #endif
 }

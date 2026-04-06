@@ -61,14 +61,10 @@ struct WarpContext {
     WarpType type = WarpType::None;
     DirectX::XMFLOAT3 targetPos = {0.0f, 0.0f, 0.0f};
 
-    // ワープ後に直接つなぎたい行動
     ActionKind followupKind = ActionKind::None;
     ActionStep followupStep = ActionStep::None;
 
-    // ワープ中の判定制御
     bool collisionDisabled = false;
-
-    // ターゲット確定済みか
     bool hasValidTarget = false;
 };
 
@@ -82,14 +78,8 @@ enum class ChainStarter {
 
 struct ChainContext {
     bool active = false;
-
-    // 何を起点に始まった連携か
     ChainStarter starter = ChainStarter::None;
-
-    // 連携の現在段数
     int stepCount = 0;
-
-    // 最大段数
     int maxSteps = 0;
 };
 
@@ -109,7 +99,48 @@ struct EnemyWave {
     bool isAlive = false;
 };
 
-enum class GuardTarget { None, Face, BodyCenter, BodyLeft };
+// 仕様書に合わせて BodyCenter -> BodyRight に整理
+enum class GuardTarget { None, Face, BodyLeft, BodyRight };
+
+// プレイヤーのカウンター軸
+enum class CounterAxis { None, Vertical, Horizontal };
+
+// 攻撃をどう読ませるかの軸
+enum class CounterReadAxis {
+    None,
+    Vertical,
+    Horizontal,
+    ThrustLike,
+    Radial,
+    Projectile
+};
+
+// 上位戦術
+enum class TacticState {
+    Neutral,
+    Pressure,
+    CounterBait,
+    CounterPunish,
+    AntiGuard,
+    Chase,
+    Reset
+};
+
+// GameScene 側から渡す観測情報
+struct PlayerCombatObservation {
+    DirectX::XMFLOAT3 position = {0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT3 velocity = {0.0f, 0.0f, 0.0f};
+
+    bool isGuarding = false;
+    bool isCounterStance = false;
+    bool justCountered = false;
+    bool justCounterFailed = false;
+    bool justCounterEarly = false;
+    bool justCounterLate = false;
+    bool isAttacking = false;
+
+    CounterAxis counterAxis = CounterAxis::None;
+};
 
 struct AttackTimingParam {
     float totalTime = 1.0f;
@@ -124,15 +155,35 @@ enum class SweepStyle { Normal, Double, Advance };
 enum class PostActionOption { None, BackWarp };
 enum class BackWarpFollowup { None, Shot, Wave, Rush };
 
+enum class HoldBranchType { None, Active, Warp, Guard, Rush };
+
+enum class RecoveryBranchType { None, Recommit, DelayedSecond, EscapeFakeout };
+
+// マルギット風 学習・適応メモリ
+struct CounterAdaptMemory {
+    float counterStancePressure = 0.0f;
+    float earlyCount = 0.0f;
+    float lateCount = 0.0f;
+    float successCount = 0.0f;
+    float verticalBias = 0.0f;
+    float horizontalBias = 0.0f;
+    int consecutiveSuccess = 0;
+};
+
 class Enemy {
   public:
     void Initialize(uint32_t modelId);
+
+    // 既存互換
     void Update(const DirectX::XMFLOAT3 &playerPos, float deltaTime,
                 bool playerGuarding);
+
+    // 新版：観測情報ごと渡す
+    void Update(const PlayerCombatObservation &playerObs, float deltaTime);
+
     void Draw(ModelManager *modelManager, const Camera &camera);
     void TakeDamage(float damage);
 
-    // Getter
     const Transform &GetTransform() const { return tf_; }
     bool IsAlive() const { return hp_ > 0.0f; }
 
@@ -144,10 +195,10 @@ class Enemy {
     OBB GetLeftHandOBB() const;
     OBB GetRightHandOBB() const;
 
-    // 行動管理 getter
     ActionKind GetActionKind() const { return action_.kind; }
     ActionId GetActionId() const { return action_.id; }
     ActionStep GetActionStep() const { return action_.step; }
+    TacticState GetTacticState() const { return tactic_; }
 
     bool IsAttackActive() const { return isAttackActive_; }
     OBB GetAttackOBB() const;
@@ -221,7 +272,6 @@ class Enemy {
     const AttackTimingParam &GetSweepTiming() const { return sweepTiming_; }
     const AttackTimingParam &GetRushTiming() const { return rushTiming_; }
 
-    // ImGui調整用
     AttackParam &EditSmashParam() { return smashParam_; }
     AttackParam &EditSweepParam() { return sweepParam_; }
     AttackParam &EditBulletParam() { return bulletParam_; }
@@ -273,12 +323,24 @@ class Enemy {
     AttackTimingParam &EditSweepTiming() { return sweepTiming_; }
     AttackTimingParam &EditRushTiming() { return rushTiming_; }
 
-        float &EditRushTurnSpeed() { return rushTurnSpeed_; }
+    float &EditRushTurnSpeed() { return rushTurnSpeed_; }
     float &EditRushStartCurveAngleDeg() { return rushStartCurveAngleDeg_; }
+
+    float &EditSmashFeintChance() { return smashFeintChance_; }
+    float &EditSweepFeintChance() { return sweepFeintChance_; }
+    float &EditSmashHoldTimeMin() { return smashHoldTimeMin_; }
+    float &EditSmashHoldTimeMax() { return smashHoldTimeMax_; }
+    float &EditSweepHoldTimeMin() { return sweepHoldTimeMin_; }
+    float &EditSweepHoldTimeMax() { return sweepHoldTimeMax_; }
 
     EnemyTuningPreset CreateTuningPreset() const;
     void ApplyTuningPreset(const EnemyTuningPreset &preset);
     void ResetTuningPreset();
+
+    float GetCurrentActionTimePublic() const { return GetCurrentActionTime(); }
+    const AttackTimingParam *GetCurrentAttackTimingPublic() const {
+        return GetCurrentAttackTiming();
+    }
 
   private:
     Transform tf_{};
@@ -299,8 +361,10 @@ class Enemy {
     ActionKind lastActionKind_ = ActionKind::None;
 
     bool isAttackActive_ = false;
+
     DirectX::XMFLOAT3 playerPos_ = {0.0f, 0.0f, 0.0f};
     bool playerGuarding_ = false;
+    PlayerCombatObservation playerObs_{};
 
     float facingYaw_ = 0.0f;
     float lockedAttackYaw_ = 0.0f;
@@ -326,45 +390,90 @@ class Enemy {
     float stagnantTimer_ = 0.0f;
     bool isDistanceStagnant_ = false;
 
-    //********************************
-    // 敵の連携用
-    //********************************
     SmashStyle smashStyle_ = SmashStyle::Normal;
     SweepStyle sweepStyle_ = SweepStyle::Normal;
 
     PostActionOption postActionOption_ = PostActionOption::None;
     BackWarpFollowup backWarpFollowup_ = BackWarpFollowup::None;
 
-    //********************************
-    // 調整用パラメータ群
-    //********************************
-    float nearAttackDistance_ = 4.0f;
-    float farAttackDistance_ = 4.0f;
+    TacticState tactic_ = TacticState::Neutral;
 
-    // 振り下ろし
+    bool holdConfigured_ = false;
+    float currentHoldDuration_ = 0.0f;
+
+    HoldBranchType holdBranchType_ = HoldBranchType::None;
+
+    float holdBranchDecisionTime_ = 0.0f;
+    bool holdBranchDecided_ = false;
+
+    float smashHoldBranchWarpChance_ = 0.18f;
+    float smashHoldBranchGuardChance_ = 0.12f;
+    float smashHoldBranchRushChance_ = 0.10f;
+
+    float sweepHoldBranchWarpChance_ = 0.14f;
+    float sweepHoldBranchGuardChance_ = 0.10f;
+    float sweepHoldBranchRushChance_ = 0.16f;
+
+    // ============================================================
+    // Step2: Tell / FakeCommit / FreezeHold
+    // ============================================================
+    bool tellActive_ = false;
+    bool fakeCommitActive_ = false;
+    bool freezeHoldActive_ = false;
+
+    float tellDuration_ = 0.0f;
+    float fakeCommitDuration_ = 0.0f;
+    float freezeHoldDuration_ = 0.0f;
+
+    float smashTellTime_ = 0.12f;
+    float sweepTellTime_ = 0.10f;
+
+    float smashFakeCommitChance_ = 0.45f;
+    float sweepFakeCommitChance_ = 0.32f;
+
+    float smashFakeCommitTime_ = 0.10f;
+    float sweepFakeCommitTime_ = 0.08f;
+
+    float smashFreezeHoldTimeMin_ = 0.10f;
+    float smashFreezeHoldTimeMax_ = 0.18f;
+    float sweepFreezeHoldTimeMin_ = 0.08f;
+    float sweepFreezeHoldTimeMax_ = 0.14f;
+
+    // ============================================================
+    // Step3: Recovery -> Recommit / DelayedSecond / EscapeFakeout
+    // ============================================================
+    RecoveryBranchType recoveryBranchType_ = RecoveryBranchType::None;
+
+    float recommitChance_ = 0.18f;
+    float delayedSecondChance_ = 0.20f;
+    float escapeFakeoutChance_ = 0.16f;
+
+    float recommitDelayMin_ = 0.10f;
+    float recommitDelayMax_ = 0.20f;
+
+    float delayedSecondDelayMin_ = 0.16f;
+    float delayedSecondDelayMax_ = 0.28f;
+
+    ActionKind recoveryFollowupKind_ = ActionKind::None;
+    ActionStep recoveryFollowupStep_ = ActionStep::None;
+
+    float nearAttackDistance_ = 4.0f;
+    float farAttackDistance_ = 6.5f;
+
     AttackParam smashParam_ = {10.0f, 4.0f, {1.5f, 1.8f, 1.5f}};
     float smashChargeTime_ = 0.45f;
-    AttackTimingParam smashTiming_ = {
-        0.88f, // totalTime
-        0.28f, // trackingEndTime
-        0.04f, // activeStartTime
-        0.10f, // activeEndTime
-        0.18f  // recoveryStartTime
-    };
+    AttackTimingParam smashTiming_ = {0.88f, 0.28f, 0.04f, 0.10f, 0.18f};
     float smashAttackForwardOffset_ = 1.4f;
     float smashAttackHeightOffset_ = 0.8f;
     float delaySmashChance_ = 0.35f;
-    float delaySmashExtraChargeTime_ = 1.0f;
+    float delaySmashExtraChargeTime_ = 0.30f;
 
-    // 薙ぎ払い
+    float smashFeintChance_ = 0.45f;
+    float smashHoldTimeMin_ = 0.12f;
+    float smashHoldTimeMax_ = 0.40f;
+
     AttackParam sweepParam_ = {10.0f, 4.0f, {3.2f, 1.2f, 1.4f}};
-    AttackTimingParam sweepTiming_ = {
-        1.27f, // totalTime
-        0.36f, // trackingEndTime
-        0.12f, // activeStartTime
-        0.24f, // activeEndTime
-        0.32f  // recoveryStartTime
-    };
+    AttackTimingParam sweepTiming_ = {1.27f, 0.36f, 0.12f, 0.24f, 0.32f};
     float sweepChargeTime_ = 0.65f;
     float sweepRecoveryTime_ = 1.0f;
     float sweepAttackSideOffset_ = 0.2f;
@@ -374,7 +483,10 @@ class Enemy {
     float doubleSweepSecondChargeScale_ = 0.55f;
     bool isDoubleSweepSecondStage_ = false;
 
-    // 弾
+    float sweepFeintChance_ = 0.28f;
+    float sweepHoldTimeMin_ = 0.10f;
+    float sweepHoldTimeMax_ = 0.30f;
+
     AttackParam bulletParam_ = {5.0f, 2.5f, {0.4f, 0.4f, 0.4f}};
     float shotChargeTime_ = 0.6f;
     float shotRecoveryTime_ = 0.8f;
@@ -385,7 +497,6 @@ class Enemy {
     float bulletLifeTime_ = 2.0f;
     float bulletSpawnHeightOffset_ = 0.2f;
 
-    // 波状攻撃
     AttackParam waveParam_ = {8.0f, 3.0f, {1.2f, 0.6f, 1.6f}};
     float waveChargeTime_ = 0.6f;
     float waveRecoveryTime_ = 0.8f;
@@ -394,32 +505,22 @@ class Enemy {
     float waveSpawnForwardOffset_ = 1.5f;
     float waveSpawnHeightOffset_ = 0.0f;
 
-    // Rush
     AttackParam rushParam_ = {12.0f, 5.0f, {1.2f, 1.4f, 2.2f}};
-    AttackTimingParam rushTiming_ = {
-        0.75f, // totalTime
-        0.20f, // trackingEndTime
-        0.08f, // activeStartTime
-        0.28f, // activeEndTime
-        0.38f  // recoveryStartTime
-    };
+    AttackTimingParam rushTiming_ = {0.75f, 0.20f, 0.08f, 0.28f, 0.38f};
     float rushChargeTime_ = 0.28f;
     float rushSpeed_ = 8.5f;
     float rushMoveDuration_ = 0.26f;
     float rushAttackForwardOffset_ = 1.1f;
     float rushAttackHeightOffset_ = 0.8f;
 
-    // 曲線Rush用
     float rushTurnSpeed_ = 4.5f;
     float rushStartCurveAngleDeg_ = 32.0f;
     float rushCurrentYaw_ = 0.0f;
     float rushCurveDir_ = 1.0f;
 
-    // ワープ
     float warpStartTime_ = 0.2f;
     float warpEndTime_ = 0.2f;
 
-    // 接近ワープ
     float warpNearRadiusMin_ = 1.8f;
     float warpNearRadiusMax_ = 3.0f;
     int warpApproachWeight_ = 8;
@@ -427,7 +528,6 @@ class Enemy {
     float farDistanceWarpTimeThreshold_ = 2.0f;
     int farDistanceWarpBonus_ = 50;
 
-    // 離脱ワープ
     float warpFarRadiusMin_ = 5.0f;
     float warpFarRadiusMax_ = 7.5f;
     int warpEscapeWeight_ = 10;
@@ -441,31 +541,25 @@ class Enemy {
     float backWarpShotChance_ = 0.55f;
     float backWarpWaveChance_ = 0.45f;
 
-    // Warp起点連携
     int warpApproachChainMaxSteps_ = 2;
     int warpEscapeChainMaxSteps_ = 2;
     float approachChainContinueDistance_ = 5.0f;
     float escapeChainContinueDistance_ = 4.5f;
 
-    // Sweep -> Warp -> Smash
     float sweepWarpSmashMaxDistance_ = 5.0f;
     float sweepWarpSmashChance_ = 0.45f;
 
-    // Wave -> 接近Warp -> Smash
     float waveWarpSmashMinDistance_ = 4.5f;
     float waveWarpSmashChance_ = 0.50f;
 
-    // 近距離圧が続いたら離脱ワープを解禁
     float closePressureDistance_ = 3.0f;
     float closePressureTimeThreshold_ = 1.0f;
     float closePressureTimer_ = 0.0f;
 
-    // 左手ガード
     float guardMoveTime_ = 0.25f;
     float guardHoldTime_ = 0.7f;
     float guardRecoveryTime_ = 0.35f;
 
-    // 行動の重み
     int nearSmashWeight_ = 30;
     int nearSweepWeight_ = 25;
     int nearGuardWeight_ = 5;
@@ -479,7 +573,18 @@ class Enemy {
     int farWarpWeight_ = 25;
     int farWaveWeight_ = 40;
 
-    // 向き速度
+    int counterBaitSmashWeight_ = 45;
+    int counterBaitSweepWeight_ = 35;
+    int counterBaitGuardWeight_ = 20;
+
+    int counterPunishSmashWeight_ = 30;
+    int counterPunishSweepWeight_ = 20;
+    int counterPunishRushWeight_ = 50;
+
+    int antiGuardWaveBonus_ = 20;
+    int antiGuardShotBonus_ = 8;
+    int antiGuardRushBonus_ = 10;
+
     float chargeTurnSpeed_ = 6.0f;
     float recoveryTurnSpeed_ = 2.0f;
     float idleTurnSpeed_ = 8.0f;
@@ -488,6 +593,11 @@ class Enemy {
     float stagnantDistanceThreshold_ = 0.15f;
     float stagnantTimeThreshold_ = 1.2f;
     int stagnantWarpBonus_ = 5;
+
+    CounterAdaptMemory counterMemory_{};
+    float postCounterRhythmTimer_ = 0.0f;
+    bool forceEscapeWarpNext_ = false;
+    bool forceCounterBaitNext_ = false;
 
   private:
     void UpdateParts();
@@ -505,28 +615,34 @@ class Enemy {
 
     void UpdateIdle(float deltaTime);
 
-    // Smash
+    TacticState DecideTactic() const;
+    void BeginActionFromTactic(TacticState tactic);
+    void BeginPressureAction();
+    void BeginCounterBaitAction();
+    void BeginCounterPunishAction();
+    void BeginAntiGuardAction();
+    void BeginChaseAction();
+    void BeginResetAction();
+
     void UpdateSmashCharge(float deltaTime);
+    void UpdateSmashHold(float deltaTime);
     void UpdateSmashAttack(float deltaTime);
     void UpdateSmashRecovery(float deltaTime);
 
-    // Sweep
     void UpdateSweepCharge(float deltaTime);
+    void UpdateSweepHold(float deltaTime);
     void UpdateSweepAttack(float deltaTime);
     void UpdateSweepRecovery(float deltaTime);
 
-    // Rush
     void UpdateRushCharge(float deltaTime);
     void UpdateRushAttack(float deltaTime);
     void UpdateRushRecovery(float deltaTime);
 
-    // 向き更新とロック
     void UpdateFacingToPlayer();
     void LockCurrentFacing();
     void UpdateFacingToPlayerWithSpeed(float deltaTime, float turnSpeed);
     float NormalizeAngle(float angle) const;
 
-    // Shot
     void UpdateShotCharge(float deltaTime);
     void UpdateShotFire(float deltaTime);
     void UpdateShotRecovery(float deltaTime);
@@ -534,7 +650,6 @@ class Enemy {
     void SpawnBullet();
     void UpdateBullets(float deltaTime);
 
-    // Warp
     void UpdateWarpStart(float deltaTime);
     void UpdateWarpMove(float deltaTime);
     void UpdateWarpEnd(float deltaTime);
@@ -548,7 +663,6 @@ class Enemy {
     void BeginBackWarpPostAction();
     void ResetWarpContext();
 
-    // Chain
     bool TryContinueChain();
     bool DecideNextChainAction(ActionKind finishedKind, ActionKind &outKind,
                                ActionStep &outStep) const;
@@ -561,7 +675,6 @@ class Enemy {
     void ResetPostActionState();
     void FinishCurrentAction();
 
-    // Wave
     void UpdateWaveCharge(float deltaTime);
     void UpdateWaveFire(float deltaTime);
     void UpdateWaveRecovery(float deltaTime);
@@ -569,7 +682,6 @@ class Enemy {
     void SpawnWave();
     void UpdateWaves(float deltaTime);
 
-    // Guard
     void UpdateGuardMove(float deltaTime);
     void UpdateGuardHold(float deltaTime);
     void UpdateGuardRecovery(float deltaTime);
@@ -607,4 +719,36 @@ class Enemy {
 
     void ValidateTiming(AttackTimingParam &timing, float chargeTime);
     void ValidateAllTimings();
+
+    CounterReadAxis GetCounterReadAxis(ActionKind kind) const;
+    bool ShouldEnterSmashHold() const;
+    bool ShouldEnterSweepHold() const;
+    void EnterHold(float duration);
+
+    void DecideHoldBranch(ActionKind kind);
+    bool TryExecuteHoldBranch(ActionKind kind);
+
+    void EnterTell(ActionKind kind);
+    bool IsTellFinished() const;
+
+    bool ShouldDoFakeCommit(ActionKind kind) const;
+    void EnterFakeCommit(ActionKind kind);
+    bool IsFakeCommitFinished() const;
+
+    void EnterFreezeHold(ActionKind kind);
+    bool IsFreezeHoldFinished() const;
+
+    void ResetPreAttackPresentationState();
+
+    bool TryBranchFromRecovery(ActionKind finishedKind);
+    void ResetRecoveryBranchState();
+    bool IsCounterFailObserved() const;
+    float RandomRange(float minValue, float maxValue) const;
+
+    void UpdateCounterAdaptation(float deltaTime);
+    void RegisterCounterSuccessReaction();
+    float GetAdaptiveHoldChance(ActionKind kind) const;
+    float GetAdaptiveChargeOffset(ActionKind kind) const;
+    bool ShouldSnapReleaseFromRead() const;
+    ActionKind DecideAdaptiveCounterBaitAction() const;
 };

@@ -10,6 +10,8 @@ class Input;
 class ModelManager;
 class Camera;
 
+enum class SwordCounterAxis { None, Vertical, Horizontal };
+
 class Sword {
   public:
     /// <summary>
@@ -49,14 +51,26 @@ class Sword {
     bool IsSlashMode() const { return isSlashMode_; }
     bool IsGuard() const { return isGuard_; }
 
+    bool IsCounterStance() const { return isCounterStance_; }
+    bool JustCountered() const { return justCountered_; }
+    bool JustCounterFailed() const { return justCounterFailed_; }
+    bool JustCounterEarly() const { return justCounterEarly_; }
+    bool JustCounterLate() const { return justCounterLate_; }
+
+    SwordCounterAxis GetCounterAxis() const { return counterAxis_; }
+
     // Setter関数
     void SetCounter(bool isCounter);
+    void NotifyCounterSuccess();
 
   private:
     // メンバ関数
     void UpdateTransform(const DirectX::XMFLOAT3 &playerPos,
                          const DirectX::XMFLOAT4 &playerRotation,
                          float playerArmLength, float playerHandHeight);
+
+    void UpdateCounterObservation(float deltaTime);
+   
 
     // メンバ変数
     SwordJoyConController swordJoyConController_;
@@ -75,6 +89,22 @@ class Sword {
 
     DirectX::XMFLOAT2 slashDir_{};
     DirectX::XMFLOAT4 orientation_{0, 0, 0, 1};
+
+    bool prevIsCounter_ = false;
+
+    bool isCounterStance_ = false;
+    bool justCountered_ = false;
+    bool justCounterFailed_ = false;
+    bool justCounterEarly_ = false;
+    bool justCounterLate_ = false;
+
+    float counterStateTimer_ = 0.0f;
+
+    // 暫定しきい値
+    float counterEarlyThreshold_ = 0.10f;
+    float counterLateThreshold_ = 0.45f;
+
+    SwordCounterAxis counterAxis_ = SwordCounterAxis::None;
 
     // メンバ関数
     void ImGuiDraw();

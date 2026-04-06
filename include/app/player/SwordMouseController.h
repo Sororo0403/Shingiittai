@@ -23,7 +23,7 @@ class SwordMouseController {
     // メンバ関数
     void UpdateOrientation(Input *input, float dt);
     void UpdateGuard(Input *input);
-    void UpdateCounter();
+    void UpdateCounter(Input *input);
     void UpdateSlash(Input *input, float dt);
     void UpdateSlashDir(const Transform &swordPos);
 

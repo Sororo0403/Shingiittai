@@ -13,6 +13,34 @@
 
 using namespace DirectX;
 
+namespace {
+bool IsWithinCounterJustWindow(const Enemy &enemy) {
+    const AttackTimingParam *timing = enemy.GetCurrentAttackTimingPublic();
+    if (!timing) {
+        return false;
+    }
+
+    float t = enemy.GetCurrentActionTimePublic();
+
+    float activeStart = timing->activeStartTime;
+    float activeEnd = timing->activeEndTime;
+
+    if (activeEnd < activeStart) {
+        return false;
+    }
+
+    float activeLen = activeEnd - activeStart;
+    if (activeLen <= 0.0001f) {
+        return false;
+    }
+
+    float justStart = activeStart + activeLen * 0.30f;
+    float justEnd = activeStart + activeLen * 0.70f;
+
+    return (t >= justStart && t <= justEnd);
+}
+} // namespace
+
 void GameScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
 
@@ -66,6 +94,10 @@ void GameScene::Initialize(const SceneContext &ctx) {
     currentFovDeg_ = normalFovDeg_;
     targetFovDeg_ = normalFovDeg_;
 
+    // 肩越し三人称カメラ初期向き
+    lockOnOrbitCameraPos_ = {0.0f, 0.0f, 0.0f};
+    lockOnLookAt_ = {0.0f, 0.0f, 0.0f};
+
     uint32_t bulletModel =
         ctx_->model->Load(L"resources/model/bullet/bullet.obj");
     bullet_.Initialize(bulletModel);
@@ -82,11 +114,34 @@ void GameScene::Update() {
     }
 #endif
 
-    enemy_.Update(player_.GetTransform().position, ctx_->deltaTime,
-                  player_.GetSword().IsGuard());
-
-    // 当たり判定
+    // 先にプレイヤーを更新して、その結果をEnemyへ渡す
     player_.Update(input, ctx_->deltaTime, enemy_.GetTransform().position);
+
+    PlayerCombatObservation playerObs{};
+    playerObs.position = player_.GetTransform().position;
+    playerObs.velocity = player_.GetVelocity();
+    playerObs.isGuarding = player_.GetSword().IsGuard();
+    playerObs.isCounterStance = player_.IsCounterStance();
+    playerObs.justCountered = player_.JustCountered();
+    playerObs.justCounterFailed = player_.JustCounterFailed();
+    playerObs.justCounterEarly = player_.JustCounterEarly();
+    playerObs.justCounterLate = player_.JustCounterLate();
+
+    switch (player_.GetCounterAxis()) {
+    case SwordCounterAxis::Vertical:
+        playerObs.counterAxis = CounterAxis::Vertical;
+        break;
+
+    case SwordCounterAxis::Horizontal:
+        playerObs.counterAxis = CounterAxis::Horizontal;
+        break;
+
+    default:
+        playerObs.counterAxis = CounterAxis::None;
+        break;
+    }
+
+    enemy_.Update(playerObs, ctx_->deltaTime);
 
     UpdateBattleCamera();
 
@@ -166,6 +221,16 @@ void GameScene::Update() {
     const float enemyAttackDamage = enemy_.GetCurrentAttackDamage();
     const float enemyAttackKnockback = enemy_.GetCurrentAttackKnockback();
 
+    // カウンター成立条件
+    const bool isCounterAxisMatch =
+        (isEnemySmashActive &&
+         player_.GetCounterAxis() == SwordCounterAxis::Vertical) ||
+        (isEnemySweepActive &&
+         player_.GetCounterAxis() == SwordCounterAxis::Horizontal);
+
+    const bool canCounterThisHit =
+        player_.IsCounterStance() && isCounterAxisMatch;
+
     bool bossHitPlayer = false;
 
     if (isEnemyMeleeActive) {
@@ -186,12 +251,28 @@ void GameScene::Update() {
             dx /= len;
             dz /= len;
 
-            if (player_.GetSword().IsGuard()) {
+            // 1. カウンター成功
+            if (canCounterThisHit) {
+                player_.GetSword().NotifyCounterSuccess();
+
+                // 仮のカウンターダメージ
+                enemy_.TakeDamage(enemyAttackDamage);
+
+                // プレイヤーはこのヒットでダメージを受けない
+                playerHitCooldown_ = 0.2f;
+
+                // デバッグ上は「被弾扱い」にしない
+                bossHitPlayer = false;
+            }
+            // 2. ガード
+            else if (player_.GetSword().IsGuard()) {
                 dbgPlayerGuardedHit_ = true;
                 player_.AddKnockback({dx * (enemyAttackKnockback * 0.5f), 0.0f,
                                       dz * (enemyAttackKnockback * 0.5f)});
                 playerHitCooldown_ = 0.2f;
-            } else {
+            }
+            // 3. 通常被弾
+            else {
                 player_.TakeDamage(enemyAttackDamage);
                 player_.AddKnockback({dx * enemyAttackKnockback, 0.0f,
                                       dz * enemyAttackKnockback});
@@ -405,6 +486,33 @@ void GameScene::Draw() {
         break;
     }
 
+    const char *tacticName = "Neutral";
+    switch (enemy_.GetTacticState()) {
+    case TacticState::Neutral:
+        tacticName = "Neutral";
+        break;
+    case TacticState::Pressure:
+        tacticName = "Pressure";
+        break;
+    case TacticState::CounterBait:
+        tacticName = "CounterBait";
+        break;
+    case TacticState::CounterPunish:
+        tacticName = "CounterPunish";
+        break;
+    case TacticState::AntiGuard:
+        tacticName = "AntiGuard";
+        break;
+    case TacticState::Chase:
+        tacticName = "Chase";
+        break;
+    case TacticState::Reset:
+        tacticName = "Reset";
+        break;
+    }
+
+    ImGui::Text("TacticState  : %s", tacticName);
+
     const bool isEnemySmashActive = (enemyActionKind == ActionKind::Smash &&
                                      enemyActionStep == ActionStep::Active);
 
@@ -462,11 +570,11 @@ void GameScene::Draw() {
     case GuardTarget::Face:
         guardName = "Face";
         break;
-    case GuardTarget::BodyCenter:
-        guardName = "BodyCenter";
-        break;
     case GuardTarget::BodyLeft:
         guardName = "BodyLeft";
+        break;
+    case GuardTarget::BodyRight:
+        guardName = "BodyRight";
         break;
     }
 
@@ -477,6 +585,31 @@ void GameScene::Draw() {
                 dbgPlayerGuardedHit_ ? "true" : "false");
     ImGui::Text("PlayerGuard     : %s",
                 player_.GetSword().IsGuard() ? "true" : "false");
+
+    const bool dbgCounterJustWindow =
+        (enemy_.GetActionKind() == ActionKind::Smash ||
+         enemy_.GetActionKind() == ActionKind::Sweep) &&
+        (enemy_.GetActionStep() == ActionStep::Active) &&
+        IsWithinCounterJustWindow(enemy_);
+
+    ImGui::Text("CounterStance   : %s",
+                player_.IsCounterStance() ? "true" : "false");
+
+    const char *counterAxisName = "None";
+    switch (player_.GetCounterAxis()) {
+    case SwordCounterAxis::Vertical:
+        counterAxisName = "Vertical";
+        break;
+    case SwordCounterAxis::Horizontal:
+        counterAxisName = "Horizontal";
+        break;
+    default:
+        break;
+    }
+    ImGui::Text("CounterAxis     : %s", counterAxisName);
+    ImGui::Text("CounterJustWin  : %s",
+                dbgCounterJustWindow ? "true" : "false");
+    ImGui::Text("EnemyActionTime : %.3f", enemy_.GetCurrentActionTimePublic());
     ImGui::Text("SmashDamage     : %.2f", enemy_.GetSmashDamage());
     ImGui::Text("SweepDamage     : %.2f", enemy_.GetSweepDamage());
     ImGui::Text("BulletDamage    : %.2f", enemy_.GetBulletDamage());
@@ -841,11 +974,6 @@ void GameScene::UpdateBattleCamera() {
     const DirectX::XMFLOAT3 &playerPos = playerTf.position;
     const DirectX::XMFLOAT3 &enemyPos = enemyTf.position;
 
-    // プレイヤー頭部位置にカメラを置く
-    DirectX::XMFLOAT3 cameraPos = {playerPos.x + fpCameraOffset_.x,
-                                   playerPos.y + fpCameraOffset_.y,
-                                   playerPos.z + fpCameraOffset_.z};
-
     // 敵行動状態を取得
     const ActionKind enemyActionKind = enemy_.GetActionKind();
     const ActionStep enemyActionStep = enemy_.GetActionStep();
@@ -882,14 +1010,12 @@ void GameScene::UpdateBattleCamera() {
         targetFovDeg_ = warpFovDeg_;
     }
 
-    // 線形補間で滑らかに変更
     float fovAlpha = fovLerpSpeed_ * ctx_->deltaTime;
     if (fovAlpha > 1.0f) {
         fovAlpha = 1.0f;
     }
-    currentFovDeg_ += (targetFovDeg_ - currentFovDeg_) * fovAlpha;
 
-    // 必要なら Camera 側に FOV setter がある前提
+    currentFovDeg_ += (targetFovDeg_ - currentFovDeg_) * fovAlpha;
     camera_.SetPerspectiveFovDeg(currentFovDeg_);
 
     // =========================
@@ -901,7 +1027,6 @@ void GameScene::UpdateBattleCamera() {
         float assistStrength = lockOnAssistStrength_;
         float assistMaxStep = lockOnAssistMaxStep_;
 
-        // Rush Active 中は敵の進行方向の少し先を見る
         if (isEnemyRushActive) {
             float enemyYaw = enemy_.GetFacingYaw();
             assistTarget.x += std::sinf(enemyYaw) * rushLeadDistance_;
@@ -909,30 +1034,23 @@ void GameScene::UpdateBattleCamera() {
 
             assistStrength = rushActiveAssistStrength_;
             assistMaxStep = rushActiveAssistMaxStep_;
-        }
-        // Rush Charge 中は敵本体へ強めに寄せる
-        else if (isEnemyRushCharge) {
+        } else if (isEnemyRushCharge) {
             assistStrength = rushChargeAssistStrength_;
             assistMaxStep = rushChargeAssistMaxStep_;
-        }
-        // Warp Start 中は消失前の位置を見失いにくくする
-        else if (isEnemyWarpStart) {
+        } else if (isEnemyWarpStart) {
             assistStrength = warpStartAssistStrength_;
             assistMaxStep = warpStartAssistMaxStep_;
-        }
-        // Warp Move 中はカメラを無理に振り回さない
-        else if (isEnemyWarpMove) {
-            assistStrength = lockOnAssistStrength_ * 0.0f;
-            assistMaxStep = lockOnAssistMaxStep_ * 0.0f;
-        }
-        // Warp End 中は再出現位置へ再捕捉しやすくする
-        else if (isEnemyWarpEnd) {
+        } else if (isEnemyWarpMove) {
+            // ワープ移動中は無理に振り回さない
+            assistStrength = 0.0f;
+            assistMaxStep = 0.0f;
+        } else if (isEnemyWarpEnd) {
             assistStrength = warpEndAssistStrength_;
             assistMaxStep = warpEndAssistMaxStep_;
         }
 
-        float dx = assistTarget.x - cameraPos.x;
-        float dz = assistTarget.z - cameraPos.z;
+        float dx = assistTarget.x - playerPos.x;
+        float dz = assistTarget.z - playerPos.z;
 
         float targetYaw = std::atan2f(dx, dz);
         float diff = targetYaw - cameraYaw_;
@@ -944,7 +1062,6 @@ void GameScene::UpdateBattleCamera() {
             diff += 6.28318530f;
         }
 
-        // 入力中は補助を弱める
         float inputMagnitude = 0.0f;
 #ifdef _DEBUG
         Input *input = ctx_->input;
@@ -970,15 +1087,152 @@ void GameScene::UpdateBattleCamera() {
         cameraYaw_ += applied;
     }
 
-    // yaw / pitch から forward を作る
+    // =========================
+    // yaw / pitch から基準軸を作る
+    // =========================
     float cosPitch = std::cosf(cameraPitch_);
     DirectX::XMFLOAT3 forward = {std::sinf(cameraYaw_) * cosPitch,
                                  std::sinf(cameraPitch_),
                                  std::cosf(cameraYaw_) * cosPitch};
 
-    DirectX::XMFLOAT3 lookAt = {cameraPos.x + forward.x,
-                                cameraPos.y + forward.y,
-                                cameraPos.z + forward.z};
+    DirectX::XMFLOAT3 right = {std::cosf(cameraYaw_), 0.0f,
+                               -std::sinf(cameraYaw_)};
+
+    // =========================
+    // カメラ基準点
+    // =========================
+    DirectX::XMFLOAT3 cameraTargetBase = {
+        playerPos.x, playerPos.y + cameraLookHeight_, playerPos.z};
+
+    DirectX::XMFLOAT3 cameraPos{};
+
+    if (isLockOn_) {
+        // ---------------------------------
+        // ロックオン時: 敵とのライン基準で円弧追従
+        // ---------------------------------
+        float toEnemyX = enemyPos.x - playerPos.x;
+        float toEnemyZ = enemyPos.z - playerPos.z;
+        float distXZ = std::sqrt(toEnemyX * toEnemyX + toEnemyZ * toEnemyZ);
+
+        if (distXZ < 0.0001f) {
+            distXZ = 1.0f;
+        }
+
+        float invLen = 1.0f / distXZ;
+        float lineX = toEnemyX * invLen;
+        float lineZ = toEnemyZ * invLen;
+
+        // 敵方向ラインに対する右ベクトル
+        float orbitRightX = lineZ;
+        float orbitRightZ = -lineX;
+
+        // 敵との距離で少しだけ後ろに引く
+        float pullT = 0.0f;
+        {
+            float minD = 3.0f;
+            float maxD = 12.0f;
+            float range = maxD - minD;
+            if (range > 0.0001f) {
+                pullT = (distXZ - minD) / range;
+            }
+            if (pullT < 0.0f) {
+                pullT = 0.0f;
+            }
+            if (pullT > 1.0f) {
+                pullT = 1.0f;
+            }
+        }
+
+        float usedRadius = lockOnOrbitRadius_ + lockOnOrbitPullBackMax_ * pullT;
+
+        // cameraYaw_ と敵方向ラインとの差で、円弧上の左右位置を決める
+        float lineYaw = std::atan2f(lineX, lineZ);
+        float yawDiff = cameraYaw_ - lineYaw;
+
+        while (yawDiff > 3.14159265f) {
+            yawDiff -= 6.28318530f;
+        }
+        while (yawDiff < -3.14159265f) {
+            yawDiff += 6.28318530f;
+        }
+
+        // 真横まで回りすぎると見づらいので制限
+        const float maxOrbitAngle = 0.65f;
+        if (yawDiff > maxOrbitAngle) {
+            yawDiff = maxOrbitAngle;
+        } else if (yawDiff < -maxOrbitAngle) {
+            yawDiff = -maxOrbitAngle;
+        }
+
+        float sinA = std::sinf(yawDiff);
+        float cosA = std::cosf(yawDiff);
+
+        DirectX::XMFLOAT3 desiredCameraPos = {
+            cameraTargetBase.x - lineX * usedRadius * cosA +
+                orbitRightX * usedRadius * sinA +
+                orbitRightX * lockOnOrbitSideBias_,
+            cameraTargetBase.y + lockOnOrbitHeight_,
+            cameraTargetBase.z - lineZ * usedRadius * cosA +
+                orbitRightZ * usedRadius * sinA +
+                orbitRightZ * lockOnOrbitSideBias_};
+
+        float posAlpha = lockOnOrbitLerpSpeed_ * ctx_->deltaTime;
+        if (posAlpha > 1.0f) {
+            posAlpha = 1.0f;
+        }
+
+        lockOnOrbitCameraPos_.x +=
+            (desiredCameraPos.x - lockOnOrbitCameraPos_.x) * posAlpha;
+        lockOnOrbitCameraPos_.y +=
+            (desiredCameraPos.y - lockOnOrbitCameraPos_.y) * posAlpha;
+        lockOnOrbitCameraPos_.z +=
+            (desiredCameraPos.z - lockOnOrbitCameraPos_.z) * posAlpha;
+
+        cameraPos = lockOnOrbitCameraPos_;
+    } else {
+        // ---------------------------------
+        // 通常時: 肩越し三人称
+        // ---------------------------------
+        cameraPos = {cameraTargetBase.x - forward.x * cameraDistance_ +
+                         right.x * cameraSideOffset_,
+                     cameraTargetBase.y + cameraHeight_ -
+                         forward.y * cameraDistance_,
+                     cameraTargetBase.z - forward.z * cameraDistance_ +
+                         right.z * cameraSideOffset_};
+
+        // 非ロック時は円弧用現在値を同期
+        lockOnOrbitCameraPos_ = cameraPos;
+    }
+
+    // =========================
+    // 注視点
+    // =========================
+    DirectX::XMFLOAT3 lookAt{};
+
+    if (isLockOn_) {
+        DirectX::XMFLOAT3 desiredLookAt = {
+            playerPos.x * 0.35f + enemyPos.x * 0.65f,
+            (playerPos.y + cameraLookHeight_) * 0.45f +
+                (enemyPos.y + 1.2f) * 0.55f,
+            playerPos.z * 0.35f + enemyPos.z * 0.65f};
+
+        float lookAlpha = lockOnLookAtLerpSpeed_ * ctx_->deltaTime;
+        if (lookAlpha > 1.0f) {
+            lookAlpha = 1.0f;
+        }
+
+        lockOnLookAt_.x += (desiredLookAt.x - lockOnLookAt_.x) * lookAlpha;
+        lockOnLookAt_.y += (desiredLookAt.y - lockOnLookAt_.y) * lookAlpha;
+        lockOnLookAt_.z += (desiredLookAt.z - lockOnLookAt_.z) * lookAlpha;
+
+        lookAt = lockOnLookAt_;
+    } else {
+        lookAt = {cameraTargetBase.x + forward.x * cameraLookAhead_,
+                  cameraTargetBase.y + forward.y * cameraLookAhead_,
+                  cameraTargetBase.z + forward.z * cameraLookAhead_};
+
+        lockOnLookAt_ = lookAt;
+    }
 
     camera_.SetPosition(cameraPos);
     camera_.LookAt(lookAt);
