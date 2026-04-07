@@ -62,14 +62,13 @@ void GameScene::Update() {
 #endif
 
     enemy_.Update(player_.GetTransform().position, ctx_->deltaTime,
-                  player_.GetSword().IsGuard());
+                  player_.IsGuarding());
 
     // 当たり判定
     player_.Update(input, ctx_->deltaTime, enemy_.GetTransform().position);
 
     UpdateBattleCamera();
 
-    auto swordBox = player_.GetSword().GetOBB();
     auto playerBox = player_.GetOBB();
 
     //if (CollisionUtil::CheckOBB(swordBox, bulletBox) && player_.GetSword().GetSlashMode()) {
@@ -103,8 +102,12 @@ void GameScene::Update() {
     dbgPlayerGuardedHit_ = false;
 
     // プレイヤーの攻撃判定とあたり判定
-    if (player_.GetSword().IsSlashMode()) {
-        //auto swordBox = player_.GetSword().GetOBB();
+    for (const Sword *sword : player_.GetSwords()) {
+        if (!sword->IsSlashMode()) {
+            continue;
+        }
+
+        auto swordBox = sword->GetOBB();
 
         auto bodyBox = enemy_.GetBodyOBB();
         auto leftHandBox = enemy_.GetLeftHandOBB();
@@ -114,9 +117,9 @@ void GameScene::Update() {
         bool hitRightHand = CollisionUtil::CheckOBB(swordBox, rightHandBox);
         bool hitBody = CollisionUtil::CheckOBB(swordBox, bodyBox);
 
-        dbgHitLeftHand_ = hitLeftHand;
-        dbgHitRightHand_ = hitRightHand;
-        dbgHitBody_ = hitBody;
+        dbgHitLeftHand_ = dbgHitLeftHand_ || hitLeftHand;
+        dbgHitRightHand_ = dbgHitRightHand_ || hitRightHand;
+        dbgHitBody_ = dbgHitBody_ || hitBody;
 
         const bool isEnemyGuardHold = (enemyActionKind == ActionKind::Guard &&
                                        enemyActionStep == ActionStep::Hold);
@@ -129,6 +132,10 @@ void GameScene::Update() {
                 enemy_.TakeDamage(10.0f);
                 enemyHitCooldown_ = 0.2f;
             }
+        }
+
+        if (enemyHitCooldown_ > 0.0f) {
+            break;
         }
     }
 
@@ -164,7 +171,7 @@ void GameScene::Update() {
             dx /= len;
             dz /= len;
 
-            if (player_.GetSword().IsGuard()) {
+            if (player_.IsGuarding()) {
                 dbgPlayerGuardedHit_ = true;
                 player_.AddKnockback({dx * (enemyAttackKnockback * 0.5f), 0.0f,
                                       dz * (enemyAttackKnockback * 0.5f)});
@@ -206,7 +213,7 @@ void GameScene::Update() {
                 vx /= len;
                 vz /= len;
 
-                if (player_.GetSword().IsGuard()) {
+                if (player_.IsGuarding()) {
                     dbgPlayerGuardedHit_ = true;
                     player_.AddKnockback(
                         {vx * (enemy_.GetBulletKnockback() * 0.5f), 0.0f,
@@ -250,7 +257,7 @@ void GameScene::Update() {
                 vx /= len;
                 vz /= len;
 
-                if (player_.GetSword().IsGuard()) {
+                if (player_.IsGuarding()) {
                     dbgPlayerGuardedHit_ = true;
                     player_.AddKnockback(
                         {vx * (enemy_.GetWaveKnockback() * 0.5f), 0.0f,
@@ -291,7 +298,9 @@ void GameScene::Draw() {
     }
 #ifdef _DEBUG
     // 当たり判定描画
-    ctx_->debugDraw->DrawOBB(ctx_->model, player_.GetSword().GetOBB(), *currentCamera_);
+    for (const Sword *sword : player_.GetSwords()) {
+        ctx_->debugDraw->DrawOBB(ctx_->model, sword->GetOBB(), *currentCamera_);
+    }
 
     // ボス部位
     if (enemy_.IsAlive()) {
@@ -435,7 +444,7 @@ void GameScene::Draw() {
     ImGui::Text("PlayerGuarded   : %s",
                 dbgPlayerGuardedHit_ ? "true" : "false");
     ImGui::Text("PlayerGuard     : %s",
-                player_.GetSword().IsGuard() ? "true" : "false");
+                player_.IsGuarding() ? "true" : "false");
     ImGui::Text("SmashDamage     : %.2f", enemy_.GetSmashDamage());
     ImGui::Text("SweepDamage     : %.2f", enemy_.GetSweepDamage());
     ImGui::Text("BulletDamage    : %.2f", enemy_.GetBulletDamage());

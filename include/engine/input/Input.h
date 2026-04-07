@@ -12,6 +12,10 @@
 #define JSL_BUTTON_ZR 0x00800
 #endif
 
+#ifndef JSL_BUTTON_ZL
+#define JSL_BUTTON_ZL 0x00400
+#endif
+
 class Input {
   public:
     /// <summary>
@@ -41,9 +45,15 @@ class Input {
     bool IsKeyRelease(int dik) const;
     bool IsJsButtunPress(int buttunMask) const;
     bool IsJsButtunTrigger(int buttunMask) const;
+    bool IsJsButtunPress(bool useLeftJoyCon, int buttunMask) const;
+    bool IsJsButtunTrigger(bool useLeftJoyCon, int buttunMask) const;
+
+    bool IsJoyConConnected(bool useLeftJoyCon) const;
 
     DirectX::XMVECTOR GetOrientation() const;
     DirectX::XMVECTOR GetRawOrientation() const;
+    DirectX::XMVECTOR GetOrientation(bool useLeftJoyCon) const;
+    DirectX::XMVECTOR GetRawOrientation(bool useLeftJoyCon) const;
 
     long GetMouseDX() const { return mouseState_.lX; }
     long GetMouseDY() const { return mouseState_.lY; }
@@ -58,9 +68,35 @@ class Input {
     void UpdateKeyboard();
     void UpdateMouse();
     void UpdateJoyShock(float deltaTime);
+    void UpdateJoyShockState(size_t index, float deltaTime);
+    static constexpr size_t GetJoyConIndex(bool useLeftJoyCon) {
+        return useLeftJoyCon ? 0u : 1u;
+    }
+
+    struct JoyConState {
+        int handle = -1;
+        int buttonsNow = 0;
+        int buttonsPrev = 0;
+
+        MahonyFilter mahony;
+
+        DirectX::XMFLOAT4 orientation{0, 0, 0, 1};
+        DirectX::XMFLOAT4 baseOrientation{0, 0, 0, 1};
+        bool hasBaseOrientation = false;
+
+        bool isCalibrating = true;
+        float stillTimer = 0.0f;
+
+        DirectX::XMFLOAT3 gyroOffset{0, 0, 0};
+        DirectX::XMFLOAT3 gyroAccum{0, 0, 0};
+        int gyroSampleCount = 0;
+    };
 
   private:
     static constexpr BYTE kPressMask = 0x80;
+    static constexpr size_t kJoyConCount = 2;
+    static constexpr size_t kLeftJoyConIndex = 0;
+    static constexpr size_t kRightJoyConIndex = 1;
 
     static constexpr float kStillGyroThreshold = 20.0f;
     static constexpr float kStillGyroThresholdSq =
@@ -81,20 +117,5 @@ class Input {
     DIMOUSESTATE mousePrevState_{};
 
     // JoyShock
-    int jsHandle_ = -1;
-    int jsButtonsNow_ = 0;
-    int jsButtonsPrev_ = 0;
-
-    MahonyFilter mahony_;
-
-    DirectX::XMFLOAT4 orientation_{0, 0, 0, 1};
-    DirectX::XMFLOAT4 baseOrientation_{0, 0, 0, 1};
-    bool hasBaseOrientation_ = false;
-
-    bool isCalibrating_ = true;
-    float stillTimer_ = 0.0f;
-
-    DirectX::XMFLOAT3 gyroOffset_{0, 0, 0};
-    DirectX::XMFLOAT3 gyroAccum_{0, 0, 0};
-    int gyroSampleCount_ = 0;
+    std::array<JoyConState, kJoyConCount> joyCons_{};
 };

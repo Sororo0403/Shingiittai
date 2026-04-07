@@ -9,12 +9,15 @@
 
 using namespace DirectX;
 
-void Sword::Initialize(uint32_t modelId) {
+void Sword::Initialize(uint32_t modelId, SwordHand hand) {
     modelId_ = modelId;
+    hand_ = hand;
 
     tf_.position = {0, 0, 0};
     tf_.scale = {1, 1, 1};
     tf_.rotation = {0, 0, 0, 1};
+
+    swordJoyConController_.SetUseLeftJoyCon(hand_ == SwordHand::Left);
 }
 
 void Sword::Update(Input *input, float deltaTime, const XMFLOAT3 &playerPos,
@@ -27,7 +30,7 @@ void Sword::Update(Input *input, float deltaTime, const XMFLOAT3 &playerPos,
     }
 
     // マウスがアクティブか
-    if (swordMouseController_.IsActive(input)) {
+    if (hand_ == SwordHand::Right && swordMouseController_.IsActive(input)) {
         isMouse_ = true;
         isJoyCon_ = false;
     }
@@ -93,7 +96,10 @@ void Sword::UpdateTransform(const XMFLOAT3 &playerPos,
 
     XMVECTOR player = XMLoadFloat3(&playerPos);
 
-    XMVECTOR shoulderOffset = XMVectorSet(0, playerHandHeight, 0, 0);
+    const float handOffsetX =
+        (hand_ == SwordHand::Left) ? -kHandOffsetX : kHandOffsetX;
+    XMVECTOR shoulderOffset = XMVectorSet(handOffsetX, playerHandHeight, 0, 0);
+    shoulderOffset = XMVector3Rotate(shoulderOffset, playerRot);
     XMVECTOR shoulderPos = player + shoulderOffset;
 
     XMVECTOR armVec = XMVectorSet(0, 0, playerArmLength, 0);

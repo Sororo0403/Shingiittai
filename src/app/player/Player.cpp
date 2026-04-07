@@ -11,20 +11,24 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
     tf_.scale = {1, 1, 1};
     tf_.rotation = {0, 0, 0, 1};
 
-    sword_.Initialize(swordModelId);
+    leftSword_.Initialize(swordModelId, SwordHand::Left);
+    rightSword_.Initialize(swordModelId, SwordHand::Right);
 }
 
 void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget) {
     UpdateMovement(input, deltaTime);
     LookAt(lookTarget);
 
-    sword_.Update(input, deltaTime, tf_.position, tf_.rotation, kArmLength,
-                  kHandHeight);
+    leftSword_.Update(input, deltaTime, tf_.position, tf_.rotation, kArmLength,
+                      kHandHeight);
+    rightSword_.Update(input, deltaTime, tf_.position, tf_.rotation, kArmLength,
+                       kHandHeight);
 }
 
 void Player::Draw(ModelManager *modelManager, const Camera &camera) {
     modelManager->Draw(modelId_, tf_, camera);
-    sword_.Draw(modelManager, camera);
+    leftSword_.Draw(modelManager, camera);
+    rightSword_.Draw(modelManager, camera);
 }
 
 OBB Player::GetOBB() const {
@@ -93,4 +97,8 @@ void Player::AddKnockback(const DirectX::XMFLOAT3 &velocity) {
     knockbackVelocity_.x += velocity.x;
     knockbackVelocity_.y += velocity.y;
     knockbackVelocity_.z += velocity.z;
+}
+
+bool Player::IsGuarding() const {
+    return leftSword_.IsGuard() || rightSword_.IsGuard();
 }

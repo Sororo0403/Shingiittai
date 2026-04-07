@@ -10,13 +10,18 @@ class Input;
 class ModelManager;
 class Camera;
 
+enum class SwordHand : uint8_t {
+    Left,
+    Right,
+};
+
 class Sword {
   public:
     /// <summary>
     /// 初期化処理
     /// </summary>
     /// <param name="modelId"></param>
-    void Initialize(uint32_t modelId);
+    void Initialize(uint32_t modelId, SwordHand hand);
 
     /// <summary>
     /// 更新処理
@@ -62,10 +67,12 @@ class Sword {
     SwordJoyConController swordJoyConController_;
     SwordMouseController swordMouseController_;
     static constexpr float kSwordLength = 1.2f;
+    static constexpr float kHandOffsetX = 0.35f;
     DirectX::XMFLOAT3 size_{0.2f, 0.2f, 0.6f};
 
     uint32_t modelId_ = 0;
     Transform tf_;
+    SwordHand hand_ = SwordHand::Right;
 
     bool isSlashMode_ = false;
     bool isGuard_ = false;

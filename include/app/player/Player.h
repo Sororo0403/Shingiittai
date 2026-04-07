@@ -2,6 +2,7 @@
 #include "Camera.h"
 #include "Sword.h"
 #include "Transform.h"
+#include <array>
 #include <cstdint>
 
 class ModelManager;
@@ -33,10 +34,18 @@ class Player {
     void Draw(ModelManager *modelManager, const Camera &camera);
 
     // Getter
-    const Sword &GetSword() const { return sword_; }
+    const Sword &GetSword() const { return rightSword_; }
+    const Sword &GetLeftSword() const { return leftSword_; }
+    const Sword &GetRightSword() const { return rightSword_; }
+    std::array<const Sword *, 2> GetSwords() const {
+        return {&leftSword_, &rightSword_};
+    }
     OBB GetOBB() const;
     // 書き替え可能版
-    Sword &GetSword() { return sword_; }
+    Sword &GetSword() { return rightSword_; }
+    Sword &GetLeftSword() { return leftSword_; }
+    Sword &GetRightSword() { return rightSword_; }
+    bool IsGuarding() const;
     const Transform &GetTransform() const { return tf_; }
 
     // プレイヤーのHPを取得
@@ -60,7 +69,8 @@ class Player {
 
     DirectX::XMFLOAT3 size_ = {0.5f, 1.0f, 0.5f};
 
-    Sword sword_;
+    Sword leftSword_;
+    Sword rightSword_;
 
     float moveSpeed_ = 5.0f;
 

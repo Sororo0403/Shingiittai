@@ -6,6 +6,8 @@
 class Input;
 class SwordJoyConController {
 public:
+    void SetUseLeftJoyCon(bool useLeftJoyCon) { useLeftJoyCon_ = useLeftJoyCon; }
+
     void Update(Input *input, float dt, const Transform& swordPos);
 
     bool IsActive(Input *input);
@@ -44,4 +46,5 @@ private:
 
     DirectX::XMFLOAT2 prevPos_{};
     DirectX::XMFLOAT2 slashDir_{};
+    bool useLeftJoyCon_ = false;
 };

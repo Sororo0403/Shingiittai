@@ -18,11 +18,14 @@ void SwordJoyConController::Update(
 }
 
 bool SwordJoyConController::IsActive(Input *input) {
-    return angularVelocity_ > 30.0f || input->IsJsButtunPress(JSL_BUTTON_ZR);
+    const int guardButton = useLeftJoyCon_ ? JSL_BUTTON_ZL : JSL_BUTTON_ZR;
+    return input->IsJoyConConnected(useLeftJoyCon_) &&
+           (angularVelocity_ > 30.0f ||
+            input->IsJsButtunPress(useLeftJoyCon_, guardButton));
 }
 
 void SwordJoyConController::UpdateOrientation(Input* input, float dt) {
-    XMVECTOR q = input->GetOrientation();
+    XMVECTOR q = input->GetOrientation(useLeftJoyCon_);
 
     q = XMQuaternionConjugate(q);
     q = XMQuaternionNormalize(q);
@@ -39,7 +42,8 @@ void SwordJoyConController::UpdateOrientation(Input* input, float dt) {
 }
 
 void SwordJoyConController::UpdateGuard(Input *input) {
-    isGuard_ = input->IsJsButtunPress(JSL_BUTTON_ZR);
+    const int guardButton = useLeftJoyCon_ ? JSL_BUTTON_ZL : JSL_BUTTON_ZR;
+    isGuard_ = input->IsJsButtunPress(useLeftJoyCon_, guardButton);
 }
 
 void SwordJoyConController::UpdateCounter() {
