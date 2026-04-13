@@ -34,6 +34,10 @@ class GameScene : public BaseScene {
     // Update
     void UpdateCamera(Input *input);
     void UpdateBattleCamera();
+    bool ProjectWorldToScreen(const DirectX::XMFLOAT3 &worldPos,
+                              DirectX::XMFLOAT2 &outScreen) const;
+    void DrawWarpSmokePass();
+    void DrawWarpDistortionPass();
 
   private:
     static constexpr DirectX::XMFLOAT3 kCameraStartPos = {0.0f, 1.0f, 0.5f};
@@ -73,6 +77,7 @@ class GameScene : public BaseScene {
     bool dbgWaveHitPlayer_ = false;
     bool dbgPlayerGuardedHit_ = false;
     Bullet bullet_;
+    uint32_t warpSmokeSpriteId_ = 0;
 
     // 完全一人称カメラ用
     /*DirectX::XMFLOAT3 fpCameraOffset_ = {0.0f, 1.55f, 0.0f};
@@ -149,5 +154,22 @@ class GameScene : public BaseScene {
     float lockOnFovDeg_ = 86.0f;
     float rushFovDeg_ = 88.0f;
     float warpFovDeg_ = 88.0f;
+    float phaseTransitionFovDeg_ = 72.0f;
     float fovLerpSpeed_ = 8.0f;
+    float phaseTransitionFovLerpSpeed_ = 5.5f;
+    float phaseTransitionLookAtEnemyWeight_ = 0.82f;
+    float phaseTransitionLookAtHeight_ = 1.45f;
+    float phaseTransitionPushIn_ = 0.85f;
+
+    // Warp screen-space distortion
+    float warpDistortionRadiusPx_ = 116.0f;
+    float warpDistortionThicknessPx_ = 4.0f;
+    float warpDistortionLineLengthPx_ = 72.0f;
+    float warpDistortionAlpha_ = 0.34f;
+    float warpDistortionMoveAlphaBonus_ = 0.20f;
+    float warpDistortionJitterPx_ = 16.0f;
+    float warpDistortionPreviewOffsetPx_ = 46.0f;
+    float warpSmokeBaseSizePx_ = 132.0f;
+    float warpSmokeMoveStretchPx_ = 92.0f;
+    float warpSmokeAlpha_ = 0.34f;
 };

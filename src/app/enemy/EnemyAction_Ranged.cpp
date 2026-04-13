@@ -71,7 +71,7 @@ void Enemy::UpdateShotFire(float deltaTime) {
 }
 
 void Enemy::UpdateShotRecovery(float deltaTime) {
-    (void)deltaTime;
+    UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_ * 1.25f);
 
     if (stateTimer_ >= shotRecoveryTime_) {
         FinishCurrentAction();

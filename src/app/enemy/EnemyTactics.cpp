@@ -10,19 +10,28 @@
 // Idle更新
 // ============================================================
 void Enemy::UpdateIdle(float deltaTime) {
-    (void)deltaTime;
+    if (recoveryFollowupKind_ != ActionKind::None &&
+        recoveryFollowupStep_ != ActionStep::None) {
+        if (recoveryFollowupDelayTimer_ > 0.0f) {
+            recoveryFollowupDelayTimer_ -= deltaTime;
+            if (recoveryFollowupDelayTimer_ > 0.0f) {
+                return;
+            }
+            recoveryFollowupDelayTimer_ = 0.0f;
+        }
 
-    if (stateTimer_ < 0.35f) {
+        ActionKind nextKind = recoveryFollowupKind_;
+        ActionStep nextStep = recoveryFollowupStep_;
+        bool startRushFromShotCombo =
+            (nextKind == ActionKind::Rush && isMargitComboBTransition_);
+
+        ResetRecoveryBranchState();
+        rushFromShotCombo_ = startRushFromShotCombo;
+        BeginAction(nextKind, nextStep);
         return;
     }
 
-    if (recoveryFollowupKind_ != ActionKind::None &&
-        recoveryFollowupStep_ != ActionStep::None) {
-        ActionKind nextKind = recoveryFollowupKind_;
-        ActionStep nextStep = recoveryFollowupStep_;
-
-        ResetRecoveryBranchState();
-        BeginAction(nextKind, nextStep);
+    if (stateTimer_ < 0.35f) {
         return;
     }
 
@@ -32,6 +41,8 @@ void Enemy::UpdateIdle(float deltaTime) {
 
 TacticState Enemy::DecideTactic() const {
     float distance = GetDistanceToPlayer();
+    float phase2PressureDistanceMax =
+        farAttackDistance_ + phase2PressureMaxDistanceBonus_;
 
     if (forceEscapeWarpNext_) {
         return TacticState::Reset;
@@ -53,6 +64,20 @@ TacticState Enemy::DecideTactic() const {
 
     if (playerObs_.isGuarding) {
         return TacticState::AntiGuard;
+    }
+
+    if (phase_ == BossPhase::Phase2 && distance > nearAttackDistance_ &&
+        distance <= phase2PressureDistanceMax) {
+        if (lastActionKind_ == ActionKind::Shot ||
+            lastActionKind_ == ActionKind::Warp) {
+            return TacticState::Pressure;
+        }
+
+        float roll =
+            static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+        if (roll < phase2MidPressureTacticChance_) {
+            return TacticState::Pressure;
+        }
     }
 
     if (distance <= nearAttackDistance_) {
@@ -95,6 +120,8 @@ void Enemy::BeginActionFromTactic(TacticState tactic) {
 
 void Enemy::BeginPressureAction() {
     float distance = GetDistanceToPlayer();
+    float phase2PressureDistanceMax =
+        farAttackDistance_ + phase2PressureMaxDistanceBonus_;
 
     if (distance <= nearAttackDistance_) {
         float stalkChance = stalkNearEnterChance_;
@@ -124,6 +151,13 @@ void Enemy::BeginPressureAction() {
         int guardWeight = nearGuardWeight_;
         int rushWeight = nearRushWeight_;
 
+        if (phase_ == BossPhase::Phase2) {
+            smashWeight += phase2NearSmashBonus_;
+            sweepWeight += phase2NearSweepBonus_;
+            guardWeight -= phase2NearGuardPenalty_;
+            rushWeight += phase2NearRushBonus_;
+        }
+
         if (postCounterRhythmTimer_ > 0.0f) {
             smashWeight = static_cast<int>(smashWeight * 0.7f);
             sweepWeight = static_cast<int>(sweepWeight * 0.7f);
@@ -139,6 +173,10 @@ void Enemy::BeginPressureAction() {
             guardWeight /= 2;
         } else if (lastActionKind_ == ActionKind::Rush) {
             rushWeight /= 2;
+        }
+
+        if (guardWeight < 0) {
+            guardWeight = 0;
         }
 
         int total = smashWeight + sweepWeight + guardWeight + rushWeight;
@@ -161,6 +199,55 @@ void Enemy::BeginPressureAction() {
         } else {
             stalkRepeatCount_ = 0;
             BeginAction(ActionKind::Rush, ActionStep::Charge);
+        }
+        return;
+    }
+
+    if (phase_ == BossPhase::Phase2 && distance <= phase2PressureDistanceMax) {
+        int rushWeight = midRushWeight_ + phase2MidRushBonus_;
+        int shotWeight = midShotWeight_ + phase2MidShotBonus_ + 6;
+        int warpWeight = farWarpWeight_ + phase2FarWarpBonus_ + 10;
+        int waveWeight = (std::max)(8, midWaveWeight_ / 2);
+
+        if (lastActionKind_ == ActionKind::Shot) {
+            shotWeight /= 2;
+            rushWeight += 10;
+            warpWeight += 12;
+        } else if (lastActionKind_ == ActionKind::Warp) {
+            warpWeight /= 2;
+            rushWeight += 8;
+            shotWeight += 8;
+        } else if (lastActionKind_ == ActionKind::Rush) {
+            rushWeight /= 2;
+            shotWeight += 10;
+            warpWeight += 8;
+        }
+
+        if (playerObs_.isCounterStance) {
+            shotWeight += 6;
+            warpWeight += 8;
+        }
+
+        int total = rushWeight + shotWeight + warpWeight + waveWeight;
+        if (total <= 0) {
+            total = 1;
+        }
+
+        int r = std::rand() % total;
+        stalkRepeatCount_ = 0;
+
+        if (r < shotWeight) {
+            BeginAction(ActionKind::Shot, ActionStep::Charge);
+        } else if (r < shotWeight + warpWeight) {
+            if (PrepareWarpContext()) {
+                BeginAction(ActionKind::Warp, ActionStep::Start);
+            } else {
+                BeginAction(ActionKind::Rush, ActionStep::Charge);
+            }
+        } else if (r < shotWeight + warpWeight + rushWeight) {
+            BeginAction(ActionKind::Rush, ActionStep::Charge);
+        } else {
+            BeginAction(ActionKind::Wave, ActionStep::Charge);
         }
         return;
     }
@@ -203,6 +290,10 @@ void Enemy::BeginCounterBaitAction() {
     if (counterMemory_.successCount > 0.8f) {
         feintMeleeBonus += 10;
     }
+    if (phase_ == BossPhase::Phase2) {
+        feintMeleeBonus += phase2CounterBaitMeleeBonus_;
+        guardWeight = (std::max)(0, guardWeight - 6);
+    }
 
     ActionKind baitKind = DecideAdaptiveCounterBaitAction();
 
@@ -240,6 +331,12 @@ void Enemy::BeginCounterPunishAction() {
     int sweepWeight = counterPunishSweepWeight_;
     int rushWeight = counterPunishRushWeight_;
 
+    if (phase_ == BossPhase::Phase2) {
+        smashWeight += phase2CounterPunishSmashBonus_;
+        sweepWeight += phase2CounterPunishSweepBonus_;
+        rushWeight -= 8;
+    }
+
     if (distance <= nearAttackDistance_) {
         smashWeight += 10;
         sweepWeight += 5;
@@ -271,6 +368,11 @@ void Enemy::BeginAntiGuardAction() {
         int waveWeight = midWaveWeight_ + antiGuardWaveBonus_;
         int shotWeight = midShotWeight_ + antiGuardShotBonus_;
 
+        if (phase_ == BossPhase::Phase2) {
+            rushWeight += phase2MidRushBonus_;
+            shotWeight += phase2MidShotBonus_;
+        }
+
         int total = rushWeight + waveWeight + shotWeight;
         if (total <= 0) {
             total = 1;
@@ -291,6 +393,11 @@ void Enemy::BeginAntiGuardAction() {
     int shotWeight = farShotWeight_ + antiGuardShotBonus_;
     int waveWeight = farWaveWeight_ + antiGuardWaveBonus_;
     int warpWeight = farWarpWeight_;
+
+    if (phase_ == BossPhase::Phase2) {
+        shotWeight += phase2MidShotBonus_;
+        warpWeight += phase2FarWarpBonus_;
+    }
 
     int total = shotWeight + waveWeight + warpWeight;
     if (total <= 0) {
@@ -334,6 +441,11 @@ void Enemy::BeginChaseAction() {
     int shotWeight = farShotWeight_;
     int warpWeight = farWarpWeight_;
     int waveWeight = farWaveWeight_;
+
+    if (phase_ == BossPhase::Phase2) {
+        shotWeight += phase2MidShotBonus_;
+        warpWeight += phase2FarWarpBonus_;
+    }
 
     if (isDistanceStagnant_) {
         warpWeight += stagnantWarpBonus_;

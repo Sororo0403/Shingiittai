@@ -179,7 +179,14 @@ void Enemy::UpdateSmashAttack(float deltaTime) {
 }
 
 void Enemy::UpdateSmashRecovery(float deltaTime) {
-    UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_);
+    const bool isDelaySmashWhiff =
+        (action_.id == ActionId::DelaySmash && !currentActionConnected_ &&
+         !currentActionGuarded_);
+    float turnSpeed = recoveryTurnSpeed_;
+    if (isDelaySmashWhiff) {
+        turnSpeed *= punishWindowTurnSpeedScale_;
+    }
+    UpdateFacingToPlayerWithSpeed(deltaTime, turnSpeed);
 
     const AttackTimingParam *timing = GetCurrentAttackTiming();
     if (!timing) {
@@ -190,6 +197,10 @@ void Enemy::UpdateSmashRecovery(float deltaTime) {
     float recoveryDuration = timing->totalTime - timing->recoveryStartTime;
     if (recoveryDuration < 0.0f) {
         recoveryDuration = 0.0f;
+    }
+
+    if (isDelaySmashWhiff) {
+        recoveryDuration += delaySmashWhiffRecoveryBonus_;
     }
 
     if (stateTimer_ >= recoveryDuration) {
@@ -362,22 +373,52 @@ bool Enemy::TryBeginDoubleSweepSecondStage() {
 // Rush更新
 // ============================================================
 void Enemy::UpdateRushCharge(float deltaTime) {
+    float currentRushChargeTime = rushChargeTime_;
+    if (playerObs_.isGuarding) {
+        currentRushChargeTime += rushChargeGuardTimeBonus_;
+    }
+
     float trackingEnd = rushTiming_.trackingEndTime;
     if (trackingEnd < 0.0f) {
         trackingEnd = 0.0f;
     }
-    if (trackingEnd > rushChargeTime_) {
-        trackingEnd = rushChargeTime_;
+    if (trackingEnd > currentRushChargeTime) {
+        trackingEnd = currentRushChargeTime;
     }
 
     if (stateTimer_ < trackingEnd) {
-        UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_);
+        float turnScale = playerObs_.isGuarding ? rushChargeGuardTurnScale_
+                                                : rushChargeTrackingTurnScale_;
+        UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_ * turnScale);
     } else if (!hasTrackingLocked_) {
         LockCurrentFacing();
         hasTrackingLocked_ = true;
     }
 
-    if (stateTimer_ >= rushChargeTime_) {
+    float chargeRatio = currentRushChargeTime > 0.0001f
+                            ? stateTimer_ / currentRushChargeTime
+                            : 1.0f;
+    if (chargeRatio > 1.0f) {
+        chargeRatio = 1.0f;
+    }
+
+    if (chargeRatio >= 0.35f) {
+        float usedYaw = hasTrackingLocked_ ? lockedAttackYaw_ : facingYaw_;
+        float forwardX = std::sinf(usedYaw);
+        float forwardZ = std::cosf(usedYaw);
+        float creepScale = (chargeRatio - 0.35f) / 0.65f;
+        if (creepScale < 0.0f) {
+            creepScale = 0.0f;
+        }
+        if (creepScale > 1.0f) {
+            creepScale = 1.0f;
+        }
+
+        tf_.position.x += forwardX * rushChargeCreepSpeed_ * creepScale * deltaTime;
+        tf_.position.z += forwardZ * rushChargeCreepSpeed_ * creepScale * deltaTime;
+    }
+
+    if (stateTimer_ >= currentRushChargeTime) {
         if (!hasTrackingLocked_) {
             LockCurrentFacing();
             hasTrackingLocked_ = true;
@@ -400,8 +441,40 @@ void Enemy::UpdateRushAttack(float deltaTime) {
         float dz = playerPos_.z - tf_.position.z;
         float targetYaw = std::atan2f(dx, dz);
 
+        float progress =
+            (rushMoveDuration_ > 0.0001f) ? (stateTimer_ / rushMoveDuration_) : 1.0f;
+        if (progress < 0.0f) {
+            progress = 0.0f;
+        }
+        if (progress > 1.0f) {
+            progress = 1.0f;
+        }
+
+        float turnScale = 1.0f;
+        float speedScale = 1.0f;
+
+        if (progress < rushCurvePhaseRatio_) {
+            turnScale = rushCurveTurnScale_;
+            speedScale = rushCurveSpeedScale_;
+        } else if (progress < rushBrakeStartRatio_) {
+            turnScale = rushHomingTurnScale_;
+            speedScale = rushHomingSpeedScale_;
+        } else {
+            turnScale = rushBrakeTurnScale_;
+            speedScale = rushBrakeSpeedScale_;
+
+            float distToPlayer = std::sqrtf(dx * dx + dz * dz);
+            if (distToPlayer < rushBrakeDistance_) {
+                float nearScale = distToPlayer / rushBrakeDistance_;
+                if (nearScale < 0.20f) {
+                    nearScale = 0.20f;
+                }
+                speedScale *= nearScale;
+            }
+        }
+
         float diff = NormalizeAngle(targetYaw - rushCurrentYaw_);
-        float maxTurn = rushTurnSpeed_ * deltaTime;
+        float maxTurn = rushTurnSpeed_ * turnScale * deltaTime;
 
         if (diff > maxTurn) {
             diff = maxTurn;
@@ -414,8 +487,8 @@ void Enemy::UpdateRushAttack(float deltaTime) {
         float forwardX = std::sinf(rushCurrentYaw_);
         float forwardZ = std::cosf(rushCurrentYaw_);
 
-        tf_.position.x += forwardX * rushSpeed_ * deltaTime;
-        tf_.position.z += forwardZ * rushSpeed_ * deltaTime;
+        tf_.position.x += forwardX * rushSpeed_ * speedScale * deltaTime;
+        tf_.position.z += forwardZ * rushSpeed_ * speedScale * deltaTime;
 
         facingYaw_ = rushCurrentYaw_;
     }
@@ -426,7 +499,50 @@ void Enemy::UpdateRushAttack(float deltaTime) {
 }
 
 void Enemy::UpdateRushRecovery(float deltaTime) {
-    UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_);
+    if (!rushFollowupEvaluated_) {
+        rushFollowupEvaluated_ = true;
+        rushWillSweepFollowup_ = false;
+
+        float distance = GetDistanceToPlayer();
+        if (phase_ == BossPhase::Phase2 && distance >= rushSweepMinDistance_ &&
+            distance <= rushSweepMaxDistance_) {
+            float followupChance = rushSweepFollowupChance_;
+            followupChance += phase2RushSweepFollowupBonus_;
+            if (rushFromShotCombo_) {
+                followupChance += comboBRushSweepBonus_;
+            }
+
+            if (playerObs_.isGuarding) {
+                followupChance += 0.08f;
+            }
+            if (followupChance > 0.85f) {
+                followupChance = 0.85f;
+            }
+
+            float roll =
+                static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+            rushWillSweepFollowup_ = (roll < followupChance);
+        }
+    }
+
+    const bool isRushWhiffPunishable =
+        (!rushWillSweepFollowup_ && !currentActionConnected_ &&
+         !currentActionGuarded_);
+    float turnSpeed = recoveryTurnSpeed_;
+    if (isRushWhiffPunishable) {
+        turnSpeed *= punishWindowTurnSpeedScale_;
+    }
+    UpdateFacingToPlayerWithSpeed(deltaTime, turnSpeed);
+
+    if (rushWillSweepFollowup_ && stateTimer_ >= 0.06f) {
+        float followupDelay =
+            RandomRange(rushSweepFollowupDelayMin_, rushSweepFollowupDelayMax_);
+        EndAttack();
+        recoveryFollowupKind_ = ActionKind::Sweep;
+        recoveryFollowupStep_ = ActionStep::Charge;
+        recoveryFollowupDelayTimer_ = followupDelay;
+        return;
+    }
 
     const AttackTimingParam *timing = GetCurrentAttackTiming();
     if (!timing) {
@@ -437,6 +553,10 @@ void Enemy::UpdateRushRecovery(float deltaTime) {
     float recoveryDuration = timing->totalTime - timing->recoveryStartTime;
     if (recoveryDuration < 0.0f) {
         recoveryDuration = 0.0f;
+    }
+
+    if (isRushWhiffPunishable) {
+        recoveryDuration += rushWhiffRecoveryBonus_;
     }
 
     if (stateTimer_ >= recoveryDuration) {

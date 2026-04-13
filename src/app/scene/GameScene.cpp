@@ -3,9 +3,12 @@
 #include "DirectXCommon.h"
 #include "Input.h"
 #include "ModelManager.h"
+#include "SpriteManager.h"
 #include "TextureManager.h"
 #include "WinApp.h"
 #include "imgui.h"
+#include "imgui_internal.h"
+#include <cmath>
 #ifdef _DEBUG
 #include "DebugDraw.h"
 #include "EnemyTuningPresetIO.h"
@@ -74,6 +77,8 @@ void GameScene::Initialize(const SceneContext &ctx) {
     uint32_t playerModel = model->Load(L"resources/model/player/player.glb");
     uint32_t swordModel = model->Load(L"resources/model/player/sword.glb");
     uint32_t enemyModel = model->Load(L"resources/model/enemy/enemy.glb");
+    warpSmokeSpriteId_ =
+        ctx_->sprite->Create(L"resources/texture/effect/warp_smoke.png");
 
     dx->EndUpload();
 
@@ -267,12 +272,14 @@ void GameScene::Update() {
             // 2. ガード
             else if (player_.GetSword().IsGuard()) {
                 dbgPlayerGuardedHit_ = true;
+                enemy_.NotifyAttackGuarded();
                 player_.AddKnockback({dx * (enemyAttackKnockback * 0.5f), 0.0f,
                                       dz * (enemyAttackKnockback * 0.5f)});
                 playerHitCooldown_ = 0.2f;
             }
             // 3. 通常被弾
             else {
+                enemy_.NotifyAttackConnected();
                 player_.TakeDamage(enemyAttackDamage);
                 player_.AddKnockback({dx * enemyAttackKnockback, 0.0f,
                                       dz * enemyAttackKnockback});
@@ -285,7 +292,9 @@ void GameScene::Update() {
 
     dbgBulletHitPlayer_ = false;
 
-    for (const auto &bullet : enemy_.GetBullets()) {
+    const auto &bullets = enemy_.GetBullets();
+    for (size_t i = 0; i < bullets.size(); ++i) {
+        const auto &bullet = bullets[i];
         if (!bullet.isAlive) {
             continue;
         }
@@ -323,13 +332,17 @@ void GameScene::Update() {
                     playerHitCooldown_ = 0.3f;
                 }
             }
+
+            enemy_.ConsumeBullet(i);
             break;
         }
     }
 
     dbgWaveHitPlayer_ = false;
 
-    for (const auto &wave : enemy_.GetWaves()) {
+    const auto &waves = enemy_.GetWaves();
+    for (size_t i = 0; i < waves.size(); ++i) {
+        const auto &wave = waves[i];
         if (!wave.isAlive) {
             continue;
         }
@@ -366,6 +379,8 @@ void GameScene::Update() {
                     playerHitCooldown_ = 0.35f;
                 }
             }
+
+            enemy_.ConsumeWave(i);
             break;
         }
     }
@@ -421,6 +436,9 @@ void GameScene::Draw() {
 #endif
 
     ctx_->model->PostDraw();
+
+    DrawWarpSmokePass();
+    DrawWarpDistortionPass();
 
 #ifdef _DEBUG
     ImGui::Begin("HitInfo");
@@ -854,6 +872,278 @@ void GameScene::Draw() {
 #endif
 }
 
+bool GameScene::ProjectWorldToScreen(const XMFLOAT3 &worldPos,
+                                     XMFLOAT2 &outScreen) const {
+    if (currentCamera_ == nullptr || ctx_ == nullptr || ctx_->winApp == nullptr) {
+        return false;
+    }
+
+    XMMATRIX viewProj = currentCamera_->GetView() * currentCamera_->GetProj();
+    XMVECTOR pos = XMVectorSet(worldPos.x, worldPos.y, worldPos.z, 1.0f);
+    XMVECTOR clip = XMVector4Transform(pos, viewProj);
+    float w = XMVectorGetW(clip);
+    if (w <= 0.0001f) {
+        return false;
+    }
+
+    float invW = 1.0f / w;
+    float ndcX = XMVectorGetX(clip) * invW;
+    float ndcY = XMVectorGetY(clip) * invW;
+    float ndcZ = XMVectorGetZ(clip) * invW;
+    if (ndcZ < 0.0f || ndcZ > 1.0f) {
+        return false;
+    }
+
+    float width = static_cast<float>(ctx_->winApp->GetWidth());
+    float height = static_cast<float>(ctx_->winApp->GetHeight());
+    outScreen.x = (ndcX * 0.5f + 0.5f) * width;
+    outScreen.y = (-ndcY * 0.5f + 0.5f) * height;
+    return true;
+}
+
+void GameScene::DrawWarpSmokePass() {
+    if (enemy_.GetActionKind() != ActionKind::Warp || ctx_ == nullptr ||
+        ctx_->sprite == nullptr) {
+        return;
+    }
+
+    ActionStep warpStep = enemy_.GetActionStep();
+    float stepAlphaScale = 0.0f;
+    switch (warpStep) {
+    case ActionStep::Start:
+        stepAlphaScale = 0.95f;
+        break;
+    case ActionStep::Move:
+        stepAlphaScale = 1.15f;
+        break;
+    case ActionStep::End:
+        stepAlphaScale = 1.0f;
+        break;
+    default:
+        return;
+    }
+
+    XMFLOAT2 targetScreenF{};
+    if (!ProjectWorldToScreen(enemy_.GetWarpTargetPos(), targetScreenF)) {
+        return;
+    }
+
+    XMFLOAT2 sourceScreenF{};
+    bool hasSource =
+        ProjectWorldToScreen(enemy_.GetTransform().position, sourceScreenF);
+
+    SpriteManager *spriteMgr = ctx_->sprite;
+    Sprite &smoke = spriteMgr->GetSprite(warpSmokeSpriteId_);
+    float time = enemy_.GetCurrentActionTimePublic();
+
+    auto drawSmokeCluster = [&](const XMFLOAT2 &center, float sizeScale,
+                                float alphaScale, float travelBiasX,
+                                float travelBiasY, bool stretch) {
+        constexpr int kLayers = 4;
+        for (int i = 0; i < kLayers; ++i) {
+            float ratio = static_cast<float>(i) / static_cast<float>(kLayers - 1);
+            float angle = time * 2.8f + ratio * DirectX::XM_PIDIV2;
+            float driftX = std::cosf(angle) * (14.0f + 8.0f * ratio) + travelBiasX;
+            float driftY = std::sinf(angle * 1.3f) * (10.0f + 6.0f * ratio) +
+                           travelBiasY;
+            float sizeX = warpSmokeBaseSizePx_ * sizeScale *
+                          (1.0f + 0.20f * ratio);
+            float sizeY = warpSmokeBaseSizePx_ * sizeScale *
+                          (1.0f + 0.28f * ratio);
+            if (stretch) {
+                sizeY += warpSmokeMoveStretchPx_ * (0.55f + ratio * 0.45f);
+                sizeX *= 0.82f;
+            }
+
+            smoke.size = {sizeX, sizeY};
+            smoke.position = {center.x + driftX - sizeX * 0.5f,
+                              center.y + driftY - sizeY * 0.5f};
+            float alpha = warpSmokeAlpha_ * alphaScale * (1.0f - ratio * 0.16f);
+            smoke.color = {0.20f, 0.03f, 0.12f, alpha};
+            spriteMgr->Draw(warpSmokeSpriteId_);
+        }
+    };
+
+    spriteMgr->PreDraw();
+
+    if (warpStep == ActionStep::Start && hasSource) {
+        drawSmokeCluster(sourceScreenF, 0.95f, stepAlphaScale, 0.0f, -12.0f,
+                         false);
+    }
+
+    if (warpStep == ActionStep::Move && hasSource) {
+        XMFLOAT2 mid = {(sourceScreenF.x + targetScreenF.x) * 0.5f,
+                        (sourceScreenF.y + targetScreenF.y) * 0.5f};
+        float dirX = targetScreenF.x - sourceScreenF.x;
+        float dirY = targetScreenF.y - sourceScreenF.y;
+        float dirLen = std::sqrtf(dirX * dirX + dirY * dirY);
+        if (dirLen > 0.0001f) {
+            dirX /= dirLen;
+            dirY /= dirLen;
+        } else {
+            dirX = 0.0f;
+            dirY = -1.0f;
+        }
+
+        drawSmokeCluster(mid, 1.00f, stepAlphaScale, dirX * 18.0f,
+                         dirY * 10.0f, true);
+    }
+
+    drawSmokeCluster(targetScreenF, warpStep == ActionStep::Move ? 1.16f : 1.08f,
+                     stepAlphaScale * 1.08f, 0.0f, -18.0f, false);
+
+    spriteMgr->PostDraw();
+}
+
+void GameScene::DrawWarpDistortionPass() {
+    if (enemy_.GetActionKind() != ActionKind::Warp) {
+        return;
+    }
+
+    ImGuiContext *imguiCtx = ImGui::GetCurrentContext();
+    if (imguiCtx == nullptr || imguiCtx->Viewports.Size <= 0) {
+        return;
+    }
+
+    ActionStep warpStep = enemy_.GetActionStep();
+    float stepIntensity = 0.0f;
+    switch (warpStep) {
+    case ActionStep::Start:
+        stepIntensity = 0.72f;
+        break;
+    case ActionStep::Move:
+        stepIntensity = 1.0f;
+        break;
+    case ActionStep::End:
+        stepIntensity = 0.84f;
+        break;
+    default:
+        return;
+    }
+
+    XMFLOAT2 targetScreenF{};
+    if (!ProjectWorldToScreen(enemy_.GetWarpTargetPos(), targetScreenF)) {
+        return;
+    }
+    ImVec2 targetScreen(targetScreenF.x, targetScreenF.y);
+
+    XMFLOAT2 sourceScreenF{};
+    bool hasSource =
+        ProjectWorldToScreen(enemy_.GetTransform().position, sourceScreenF);
+    ImVec2 sourceScreen(sourceScreenF.x, sourceScreenF.y);
+
+    float time = enemy_.GetCurrentActionTimePublic();
+    float baseRadius = warpDistortionRadiusPx_ * (0.85f + 0.30f * stepIntensity);
+    float jitter = warpDistortionJitterPx_ * (0.80f + 0.40f * std::sinf(time * 20.0f));
+    float alpha = warpDistortionAlpha_ + warpDistortionMoveAlphaBonus_ *
+                                              (warpStep == ActionStep::Move ? 1.0f : 0.0f);
+
+    ImGuiViewport *mainViewport = ImGui::GetMainViewport();
+    if (mainViewport == nullptr) {
+        return;
+    }
+
+    ImDrawList *drawList = ImGui::GetBackgroundDrawList(mainViewport);
+    if (drawList == nullptr) {
+        return;
+    }
+    ImU32 bright = IM_COL32(255, 48, 108,
+                            static_cast<int>(255.0f * alpha));
+    ImU32 soft = IM_COL32(120, 22, 70,
+                          static_cast<int>(255.0f * (alpha * 0.82f)));
+    ImU32 slash = IM_COL32(255, 215, 235,
+                           static_cast<int>(255.0f * (alpha * 0.78f)));
+
+    auto drawDistortionAt = [&](const ImVec2 &center, float radiusScale,
+                                float rotationBias) {
+        constexpr int kSegments = 28;
+        ImVec2 points[kSegments + 1];
+        for (int i = 0; i <= kSegments; ++i) {
+            float ratio = static_cast<float>(i) / static_cast<float>(kSegments);
+            float angle = ratio * DirectX::XM_2PI + time * 6.0f + rotationBias;
+            float wave = std::sinf(angle * 3.0f + time * 17.0f) * jitter;
+            float radius = baseRadius * radiusScale + wave;
+            points[i] = ImVec2(center.x + std::cosf(angle) * radius,
+                               center.y + std::sinf(angle) * radius);
+        }
+
+        drawList->AddPolyline(points, kSegments + 1, soft, true,
+                              warpDistortionThicknessPx_);
+        drawList->AddCircle(center, baseRadius * radiusScale * 0.62f, bright, 24,
+                            warpDistortionThicknessPx_ * 0.7f);
+        drawList->AddCircle(center, baseRadius * radiusScale * 0.82f, bright, 28,
+                            warpDistortionThicknessPx_ * 0.42f);
+
+        for (int i = 0; i < 8; ++i) {
+            float ratio = static_cast<float>(i) / 8.0f;
+            float angle = ratio * DirectX::XM_2PI + time * 8.5f + rotationBias;
+            float inner = baseRadius * radiusScale * 0.42f;
+            float outer = inner + warpDistortionLineLengthPx_ *
+                                      (0.75f + 0.25f * std::sinf(time * 18.0f + i));
+            ImVec2 a(center.x + std::cosf(angle) * inner,
+                     center.y + std::sinf(angle) * inner);
+            ImVec2 b(center.x + std::cosf(angle) * outer,
+                     center.y + std::sinf(angle) * outer);
+            drawList->AddLine(a, b, bright, 1.6f);
+        }
+    };
+
+    if (warpStep == ActionStep::Start && hasSource) {
+        drawDistortionAt(sourceScreen, 0.88f, 0.0f);
+    }
+
+    if (warpStep == ActionStep::Move && hasSource) {
+        ImVec2 mid((sourceScreen.x + targetScreen.x) * 0.5f,
+                   (sourceScreen.y + targetScreen.y) * 0.5f);
+        drawDistortionAt(mid, 0.72f, 0.6f);
+        drawList->AddLine(sourceScreen, targetScreen, soft, 2.0f);
+    }
+
+    ImVec2 arrivalCenter = targetScreen;
+    arrivalCenter.y -= warpDistortionPreviewOffsetPx_ *
+                       (warpStep == ActionStep::Start ? 0.55f : 0.18f);
+    drawDistortionAt(arrivalCenter, warpStep == ActionStep::Move ? 1.12f : 1.0f,
+                     1.2f);
+
+    float dirX = 0.0f;
+    float dirY = -1.0f;
+    if (hasSource) {
+        dirX = targetScreen.x - sourceScreen.x;
+        dirY = targetScreen.y - sourceScreen.y;
+        float dirLen = std::sqrtf(dirX * dirX + dirY * dirY);
+        if (dirLen > 0.0001f) {
+            dirX /= dirLen;
+            dirY /= dirLen;
+        } else {
+            dirX = 0.0f;
+            dirY = -1.0f;
+        }
+    }
+
+    float perpX = -dirY;
+    float perpY = dirX;
+    float slashLen = baseRadius * (warpStep == ActionStep::Move ? 1.72f : 1.38f);
+    float branchLen = slashLen * 0.76f;
+    float branchOffset = baseRadius * 0.28f;
+
+    ImVec2 slashA(arrivalCenter.x - perpX * slashLen,
+                  arrivalCenter.y - perpY * slashLen);
+    ImVec2 slashB(arrivalCenter.x + perpX * slashLen,
+                  arrivalCenter.y + perpY * slashLen);
+    ImVec2 slashC(arrivalCenter.x - perpX * branchLen + dirX * branchOffset,
+                  arrivalCenter.y - perpY * branchLen + dirY * branchOffset);
+    ImVec2 slashD(arrivalCenter.x + perpX * branchLen + dirX * branchOffset,
+                  arrivalCenter.y + perpY * branchLen + dirY * branchOffset);
+    ImVec2 slashE(arrivalCenter.x - perpX * (branchLen * 0.58f) - dirX * branchOffset * 0.72f,
+                  arrivalCenter.y - perpY * (branchLen * 0.58f) - dirY * branchOffset * 0.72f);
+    ImVec2 slashF(arrivalCenter.x + perpX * (branchLen * 0.58f) - dirX * branchOffset * 0.72f,
+                  arrivalCenter.y + perpY * (branchLen * 0.58f) - dirY * branchOffset * 0.72f);
+
+    drawList->AddLine(slashA, slashB, slash, warpDistortionThicknessPx_ * 0.82f);
+    drawList->AddLine(slashC, slashD, bright, warpDistortionThicknessPx_ * 0.55f);
+    drawList->AddLine(slashE, slashF, soft, warpDistortionThicknessPx_ * 0.42f);
+}
+
 // void GameScene::UpdateCamera(Input *input) {
 // #ifdef _DEBUG
 //     if (input->IsKeyTrigger(DIK_F11)) {
@@ -992,6 +1282,8 @@ void GameScene::UpdateBattleCamera() {
 
     const bool isEnemyWarpEnd = (enemyActionKind == ActionKind::Warp &&
                                  enemyActionStep == ActionStep::End);
+    const bool isEnemyPhaseTransition = enemy_.IsPhaseTransitionActive();
+    const float enemyPhaseTransitionRatio = enemy_.GetPhaseTransitionRatio();
 
     // =========================
     // FOVターゲット決定
@@ -1010,7 +1302,13 @@ void GameScene::UpdateBattleCamera() {
         targetFovDeg_ = warpFovDeg_;
     }
 
-    float fovAlpha = fovLerpSpeed_ * ctx_->deltaTime;
+    if (isEnemyPhaseTransition) {
+        targetFovDeg_ = phaseTransitionFovDeg_;
+    }
+
+    float fovAlpha = (isEnemyPhaseTransition ? phaseTransitionFovLerpSpeed_
+                                             : fovLerpSpeed_) *
+                     ctx_->deltaTime;
     if (fovAlpha > 1.0f) {
         fovAlpha = 1.0f;
     }
@@ -1047,6 +1345,9 @@ void GameScene::UpdateBattleCamera() {
         } else if (isEnemyWarpEnd) {
             assistStrength = warpEndAssistStrength_;
             assistMaxStep = warpEndAssistMaxStep_;
+        } else if (isEnemyPhaseTransition) {
+            assistStrength = lockOnAssistStrength_ * 1.35f;
+            assistMaxStep = lockOnAssistMaxStep_ * 1.35f;
         }
 
         float dx = assistTarget.x - playerPos.x;
@@ -1144,6 +1445,9 @@ void GameScene::UpdateBattleCamera() {
         }
 
         float usedRadius = lockOnOrbitRadius_ + lockOnOrbitPullBackMax_ * pullT;
+        if (isEnemyPhaseTransition) {
+            usedRadius -= phaseTransitionPushIn_ * enemyPhaseTransitionRatio;
+        }
 
         // cameraYaw_ と敵方向ラインとの差で、円弧上の左右位置を決める
         float lineYaw = std::atan2f(lineX, lineZ);
@@ -1200,6 +1504,14 @@ void GameScene::UpdateBattleCamera() {
                      cameraTargetBase.z - forward.z * cameraDistance_ +
                          right.z * cameraSideOffset_};
 
+        if (isEnemyPhaseTransition) {
+            cameraPos.x += forward.x * phaseTransitionPushIn_ *
+                           enemyPhaseTransitionRatio;
+            cameraPos.y += 0.12f * enemyPhaseTransitionRatio;
+            cameraPos.z += forward.z * phaseTransitionPushIn_ *
+                           enemyPhaseTransitionRatio;
+        }
+
         // 非ロック時は円弧用現在値を同期
         lockOnOrbitCameraPos_ = cameraPos;
     }
@@ -1232,6 +1544,23 @@ void GameScene::UpdateBattleCamera() {
                   cameraTargetBase.z + forward.z * cameraLookAhead_};
 
         lockOnLookAt_ = lookAt;
+    }
+
+    if (isEnemyPhaseTransition) {
+        DirectX::XMFLOAT3 transitionLookAt = {
+            playerPos.x * (1.0f - phaseTransitionLookAtEnemyWeight_) +
+                enemyPos.x * phaseTransitionLookAtEnemyWeight_,
+            (playerPos.y + cameraLookHeight_) *
+                    (1.0f - phaseTransitionLookAtEnemyWeight_) +
+                (enemyPos.y + phaseTransitionLookAtHeight_) *
+                    phaseTransitionLookAtEnemyWeight_,
+            playerPos.z * (1.0f - phaseTransitionLookAtEnemyWeight_) +
+                enemyPos.z * phaseTransitionLookAtEnemyWeight_};
+
+        float blend = enemyPhaseTransitionRatio;
+        lookAt.x += (transitionLookAt.x - lookAt.x) * blend;
+        lookAt.y += (transitionLookAt.y - lookAt.y) * blend;
+        lookAt.z += (transitionLookAt.z - lookAt.z) * blend;
     }
 
     camera_.SetPosition(cameraPos);

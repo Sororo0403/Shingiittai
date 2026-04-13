@@ -43,16 +43,47 @@ void Enemy::UpdateGuardByStep(float deltaTime) {
 // ============================================================
 // ワープ処理
 // ============================================================
-bool Enemy::DecideWarpTargetNearPlayer(DirectX::XMFLOAT3 &outTarget) const {
-    float angle = (std::rand() % 360) * 3.14159265f / 180.0f;
+bool Enemy::DecideWarpTargetNearPlayer(DirectX::XMFLOAT3 &outTarget) {
+    float toEnemyX = tf_.position.x - playerPos_.x;
+    float toEnemyZ = tf_.position.z - playerPos_.z;
+    float len = std::sqrtf(toEnemyX * toEnemyX + toEnemyZ * toEnemyZ);
+    if (len <= 0.0001f) {
+        toEnemyX = std::sinf(facingYaw_);
+        toEnemyZ = std::cosf(facingYaw_);
+        len = 1.0f;
+    }
 
-    float t = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-    float radius =
-        warpNearRadiusMin_ + (warpNearRadiusMax_ - warpNearRadiusMin_) * t;
+    float frontX = toEnemyX / len;
+    float frontZ = toEnemyZ / len;
+    float rightX = frontZ;
+    float rightZ = -frontX;
+
+    WarpApproachSlot slot = WarpApproachSlot::FrontLeft;
+    int slotRoll = std::rand() % 100;
+    if (slotRoll < 38) {
+        slot = WarpApproachSlot::FrontLeft;
+    } else if (slotRoll < 76) {
+        slot = WarpApproachSlot::FrontRight;
+    } else {
+        slot = WarpApproachSlot::LongFront;
+    }
+    warp_.approachSlot = slot;
 
     outTarget = playerPos_;
-    outTarget.x += std::cosf(angle) * radius;
-    outTarget.z += std::sinf(angle) * radius;
+    if (slot == WarpApproachSlot::FrontLeft) {
+        outTarget.x += frontX * warpApproachForwardDistance_ -
+                       rightX * warpApproachSideDistance_;
+        outTarget.z += frontZ * warpApproachForwardDistance_ -
+                       rightZ * warpApproachSideDistance_;
+    } else if (slot == WarpApproachSlot::FrontRight) {
+        outTarget.x += frontX * warpApproachForwardDistance_ +
+                       rightX * warpApproachSideDistance_;
+        outTarget.z += frontZ * warpApproachForwardDistance_ +
+                       rightZ * warpApproachSideDistance_;
+    } else {
+        outTarget.x += frontX * warpApproachLongFrontDistance_;
+        outTarget.z += frontZ * warpApproachLongFrontDistance_;
+    }
     outTarget.y = tf_.position.y;
 
     return true;
@@ -132,7 +163,41 @@ bool Enemy::PrepareWarpContext() {
 
 void Enemy::DecideWarpFollowupFromContext() {
     if (warp_.type == WarpType::Approach) {
-        int total = nearSmashWeight_ + nearSweepWeight_;
+        int smashWeight = 0;
+        int sweepWeight = 0;
+        int rushWeight = 0;
+
+        switch (warp_.approachSlot) {
+        case WarpApproachSlot::FrontLeft:
+        case WarpApproachSlot::FrontRight:
+            sweepWeight = nearSweepWeight_ + 18;
+            smashWeight = nearSmashWeight_ / 2;
+            if (phase_ == BossPhase::Phase2) {
+                sweepWeight += phase2NearSweepBonus_;
+                rushWeight = nearRushWeight_ / 3;
+            }
+            break;
+
+        case WarpApproachSlot::LongFront:
+            smashWeight = nearSmashWeight_ + 8;
+            rushWeight = nearRushWeight_ + 10;
+            if (phase_ == BossPhase::Phase2) {
+                smashWeight += phase2NearSmashBonus_;
+                rushWeight += phase2NearRushBonus_ + 16;
+            }
+            break;
+
+        case WarpApproachSlot::None:
+        default:
+            smashWeight = nearSmashWeight_;
+            sweepWeight = nearSweepWeight_;
+            if (phase_ == BossPhase::Phase2) {
+                rushWeight = nearRushWeight_ + phase2NearRushBonus_;
+            }
+            break;
+        }
+
+        int total = smashWeight + sweepWeight + rushWeight;
         if (total <= 0) {
             warp_.followupKind = ActionKind::Smash;
             warp_.followupStep = ActionStep::Charge;
@@ -140,11 +205,14 @@ void Enemy::DecideWarpFollowupFromContext() {
         }
 
         int r = std::rand() % total;
-        if (r < nearSmashWeight_) {
+        if (r < smashWeight) {
             warp_.followupKind = ActionKind::Smash;
             warp_.followupStep = ActionStep::Charge;
-        } else {
+        } else if (r < smashWeight + sweepWeight) {
             warp_.followupKind = ActionKind::Sweep;
+            warp_.followupStep = ActionStep::Charge;
+        } else {
+            warp_.followupKind = ActionKind::Rush;
             warp_.followupStep = ActionStep::Charge;
         }
     } else if (warp_.type == WarpType::Escape) {
@@ -283,6 +351,12 @@ bool Enemy::DecideNextChainAction(ActionKind finishedKind, ActionKind &outKind,
     case ChainStarter::WarpApproach:
         if (distance > approachChainContinueDistance_) {
             return false;
+        }
+
+        if (phase_ == BossPhase::Phase2 && finishedKind == ActionKind::Rush) {
+            outKind = ActionKind::Sweep;
+            outStep = ActionStep::Charge;
+            return true;
         }
 
         if (finishedKind == ActionKind::Smash) {
@@ -435,7 +509,14 @@ bool Enemy::TryContinueChain() {
 }
 
 void Enemy::UpdateWarpStart(float deltaTime) {
-    (void)deltaTime;
+    if (!warp_.hasDeparturePos) {
+        warp_.departurePos = tf_.position;
+        warp_.hasDeparturePos = true;
+    }
+
+    if (warp_.type == WarpType::Approach) {
+        UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_ * 0.45f);
+    }
 
     isVisible_ = false;
     warp_.collisionDisabled = true;
@@ -466,6 +547,7 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
 
     isVisible_ = true;
     warp_.collisionDisabled = false;
+    UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_ * 0.55f);
 
     if (stateTimer_ >= warpEndTime_) {
         BeginWarpFollowup();

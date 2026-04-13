@@ -267,6 +267,9 @@ void Enemy::ResetRecoveryBranchState() {
     recoveryBranchType_ = RecoveryBranchType::None;
     recoveryFollowupKind_ = ActionKind::None;
     recoveryFollowupStep_ = ActionStep::None;
+    recoveryFollowupDelayTimer_ = 0.0f;
+    isMargitComboATransition_ = false;
+    isMargitComboBTransition_ = false;
 }
 
 bool Enemy::TryBranchFromRecovery(ActionKind finishedKind) {
@@ -274,13 +277,118 @@ bool Enemy::TryBranchFromRecovery(ActionKind finishedKind) {
 
     if (!(finishedKind == ActionKind::Smash ||
           finishedKind == ActionKind::Sweep ||
-          finishedKind == ActionKind::Rush)) {
+          finishedKind == ActionKind::Rush ||
+          finishedKind == ActionKind::Shot)) {
         return false;
+    }
+
+    if (finishedKind == ActionKind::Shot) {
+        float distance = GetDistanceToPlayer();
+        const bool canShotRush =
+            (distance >= shotRushMinDistance_ && distance <= shotRushMaxDistance_);
+        const bool canShotWarp =
+            (distance >= shotWarpMinDistance_ && distance <= shotWarpMaxDistance_);
+
+        if (canShotRush || canShotWarp) {
+            float shotRushChance = canShotRush ? shotRushFollowupChance_ : 0.0f;
+            float shotWarpChance = canShotWarp ? shotWarpFollowupChance_ : 0.0f;
+
+            if (phase_ == BossPhase::Phase2) {
+                shotRushChance += phase2ShotRushFollowupBonus_;
+                shotWarpChance += phase2ShotWarpFollowupBonus_;
+            }
+            if (playerObs_.isGuarding) {
+                shotRushChance += 0.10f;
+                shotWarpChance += 0.06f;
+            }
+            if (playerObs_.isCounterStance) {
+                shotRushChance -= 0.08f;
+                shotWarpChance += 0.08f;
+            }
+
+            if (shotRushChance < 0.0f) {
+                shotRushChance = 0.0f;
+            }
+            if (shotRushChance > 0.90f) {
+                shotRushChance = 0.90f;
+            }
+            if (shotWarpChance < 0.0f) {
+                shotWarpChance = 0.0f;
+            }
+            if (shotWarpChance > 0.80f) {
+                shotWarpChance = 0.80f;
+            }
+
+            float totalFollowupChance = shotRushChance + shotWarpChance;
+            if (totalFollowupChance > 0.95f) {
+                float scale = 0.95f / totalFollowupChance;
+                shotRushChance *= scale;
+                shotWarpChance *= scale;
+                totalFollowupChance = 0.95f;
+            }
+
+            float roll =
+                static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+            if (roll < shotRushChance) {
+                recoveryBranchType_ = RecoveryBranchType::Recommit;
+                recoveryFollowupKind_ = ActionKind::Rush;
+                recoveryFollowupStep_ = ActionStep::Charge;
+                recoveryFollowupDelayTimer_ =
+                    RandomRange(shotRushFollowupDelayMin_,
+                                shotRushFollowupDelayMax_);
+                isMargitComboBTransition_ = true;
+                return true;
+            }
+
+            if (roll < shotRushChance + shotWarpChance) {
+                ResetWarpContext();
+                warp_.type = WarpType::Approach;
+
+                if (!DecideWarpTargetNearPlayer(warp_.targetPos)) {
+                    ResetWarpContext();
+                    return false;
+                }
+
+                warp_.hasValidTarget = true;
+                DecideWarpFollowupFromContext();
+                SetupChainFromWarpContext();
+
+                recoveryBranchType_ = RecoveryBranchType::Recommit;
+                recoveryFollowupKind_ = ActionKind::Warp;
+                recoveryFollowupStep_ = ActionStep::Start;
+                recoveryFollowupDelayTimer_ =
+                    RandomRange(shotWarpFollowupDelayMin_,
+                                shotWarpFollowupDelayMax_);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    const bool shouldForceMargitComboA =
+        (phase_ == BossPhase::Phase2 && finishedKind == ActionKind::Smash &&
+         action_.id == ActionId::DelaySmash &&
+         (currentActionConnected_ || currentActionGuarded_));
+
+    if (shouldForceMargitComboA) {
+        recoveryBranchType_ = RecoveryBranchType::Recommit;
+        recoveryFollowupKind_ = ActionKind::Sweep;
+        recoveryFollowupStep_ = ActionStep::Charge;
+        recoveryFollowupDelayTimer_ = RandomRange(margitComboFollowupDelayMin_,
+                                                  margitComboFollowupDelayMax_);
+        isMargitComboATransition_ = true;
+        return true;
     }
 
     float recommitChance = recommitChance_;
     float delayedSecondChance = delayedSecondChance_;
     float fakeoutChance = escapeFakeoutChance_;
+
+    if (phase_ == BossPhase::Phase2) {
+        recommitChance += phase2RecommitBonus_;
+        delayedSecondChance += phase2DelayedSecondBonus_;
+    }
 
     if (playerObs_.isCounterStance) {
         delayedSecondChance += 0.08f;
@@ -323,7 +431,8 @@ bool Enemy::TryBranchFromRecovery(ActionKind finishedKind) {
         }
 
         recoveryFollowupStep_ = ActionStep::Charge;
-        stateTimer_ = -RandomRange(recommitDelayMin_, recommitDelayMax_);
+        recoveryFollowupDelayTimer_ =
+            RandomRange(recommitDelayMin_, recommitDelayMax_);
         return true;
     }
 
@@ -339,8 +448,8 @@ bool Enemy::TryBranchFromRecovery(ActionKind finishedKind) {
         }
 
         recoveryFollowupStep_ = ActionStep::Charge;
-        stateTimer_ =
-            -RandomRange(delayedSecondDelayMin_, delayedSecondDelayMax_);
+        recoveryFollowupDelayTimer_ =
+            RandomRange(delayedSecondDelayMin_, delayedSecondDelayMax_);
         return true;
     }
 
