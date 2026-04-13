@@ -106,6 +106,9 @@ ActionId Enemy::MakeDefaultActionId(ActionKind kind) const {
             return ActionId::None;
         }
 
+    case ActionKind::Stalk: // 追加
+        return ActionId::None;
+
     default:
         return ActionId::None;
     }

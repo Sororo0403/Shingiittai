@@ -223,6 +223,9 @@ void Enemy::UpdateByAction(float deltaTime) {
     case ActionKind::Guard:
         UpdateGuardByStep(deltaTime);
         break;
+    case ActionKind::Stalk: // 追加
+        UpdateStalkByStep(deltaTime);
+        break;
     default:
         UpdateIdle(deltaTime);
         break;
@@ -287,6 +290,20 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     isDoubleSweepSecondStage_ = false;
     ResetPreAttackPresentationState();
     ResetRecoveryBranchState();
+
+    // 追加：Stalk用初期化
+    if (kind == ActionKind::Stalk) {
+        stalkMoveDir_ = (std::rand() % 2 == 0) ? -1.0f : 1.0f;
+
+        int biasRand = std::rand() % 3;
+        if (biasRand == 0) {
+            stalkForwardBias_ = -1.0f;
+        } else if (biasRand == 1) {
+            stalkForwardBias_ = 0.0f;
+        } else {
+            stalkForwardBias_ = 1.0f;
+        }
+    }
 }
 
 void Enemy::ChangeActionStep(ActionStep step) {
@@ -329,6 +346,10 @@ void Enemy::EndAttack() {
 
     ResetPreAttackPresentationState();
     ResetRecoveryBranchState();
+
+    // 追加
+    stalkMoveDir_ = 1.0f;
+    stalkForwardBias_ = 0.0f;
 }
 
 void Enemy::FinishCurrentAction() {

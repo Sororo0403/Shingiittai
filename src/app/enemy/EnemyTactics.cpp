@@ -97,6 +97,28 @@ void Enemy::BeginPressureAction() {
     float distance = GetDistanceToPlayer();
 
     if (distance <= nearAttackDistance_) {
+        float stalkChance = stalkNearEnterChance_;
+
+        if (playerObs_.isCounterStance) {
+            stalkChance += 0.10f;
+        }
+        if (postCounterRhythmTimer_ > 0.0f) {
+            stalkChance += 0.12f;
+        }
+        if (lastActionKind_ == ActionKind::Stalk) {
+            stalkChance *= 0.45f;
+        }
+        if (stalkRepeatCount_ >= stalkRepeatLimit_) {
+            stalkChance = 0.0f;
+        }
+
+        float stalkRoll =
+            static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+        if (stalkRoll < stalkChance) {
+            BeginStalkAction();
+            return;
+        }
+
         int smashWeight = nearSmashWeight_;
         int sweepWeight = nearSweepWeight_;
         int guardWeight = nearGuardWeight_;
@@ -127,13 +149,17 @@ void Enemy::BeginPressureAction() {
         int r = std::rand() % total;
 
         if (r < smashWeight) {
+            stalkRepeatCount_ = 0;
             BeginAction(ActionKind::Smash, ActionStep::Charge);
         } else if (r < smashWeight + sweepWeight) {
+            stalkRepeatCount_ = 0;
             BeginAction(ActionKind::Sweep, ActionStep::Charge);
         } else if (r < smashWeight + sweepWeight + guardWeight) {
+            stalkRepeatCount_ = 0;
             DecideGuardTarget();
             BeginAction(ActionKind::Guard, ActionStep::Move);
         } else {
+            stalkRepeatCount_ = 0;
             BeginAction(ActionKind::Rush, ActionStep::Charge);
         }
         return;
@@ -147,6 +173,24 @@ void Enemy::BeginCounterBaitAction() {
 
     if (distance > farAttackDistance_) {
         BeginChaseAction();
+        return;
+    }
+
+    float stalkChance = stalkMidEnterChance_;
+    if (counterMemory_.counterStancePressure > 0.8f) {
+        stalkChance += 0.12f;
+    }
+    if (lastActionKind_ == ActionKind::Stalk) {
+        stalkChance *= 0.45f;
+    }
+    if (stalkRepeatCount_ >= stalkRepeatLimit_) {
+        stalkChance = 0.0f;
+    }
+
+    float stalkRoll =
+        static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+    if (stalkRoll < stalkChance) {
+        BeginStalkAction();
         return;
     }
 
@@ -169,6 +213,8 @@ void Enemy::BeginCounterBaitAction() {
     }
 
     int r = std::rand() % total;
+
+    stalkRepeatCount_ = 0;
 
     if (r < baitWeight) {
         BeginAction(baitKind, ActionStep::Charge);
@@ -266,6 +312,25 @@ void Enemy::BeginAntiGuardAction() {
 }
 
 void Enemy::BeginChaseAction() {
+    float distance = GetDistanceToPlayer();
+
+    if (distance <= farAttackDistance_) {
+        float stalkChance = stalkMidEnterChance_;
+        if (lastActionKind_ == ActionKind::Stalk) {
+            stalkChance *= 0.40f;
+        }
+        if (stalkRepeatCount_ >= stalkRepeatLimit_) {
+            stalkChance = 0.0f;
+        }
+
+        float stalkRoll =
+            static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+        if (stalkRoll < stalkChance) {
+            BeginStalkAction();
+            return;
+        }
+    }
+
     int shotWeight = farShotWeight_;
     int warpWeight = farWarpWeight_;
     int waveWeight = farWaveWeight_;
@@ -292,6 +357,8 @@ void Enemy::BeginChaseAction() {
     }
 
     int r = std::rand() % total;
+    stalkRepeatCount_ = 0;
+
     if (r < shotWeight) {
         BeginAction(ActionKind::Shot, ActionStep::Charge);
 
@@ -326,4 +393,55 @@ void Enemy::BeginResetAction() {
     } else {
         BeginAction(ActionKind::Guard, ActionStep::Move);
     }
+}
+
+void Enemy::UpdateStalkByStep(float deltaTime) {
+    switch (action_.step) {
+    case ActionStep::Move:
+        UpdateStalkMove(deltaTime);
+        break;
+    default:
+        EndAttack();
+        break;
+    }
+}
+
+void Enemy::UpdateStalkMove(float deltaTime) {
+    UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_ * 1.15f);
+
+    float usedYaw = facingYaw_;
+
+    float rightX = std::cosf(usedYaw);
+    float rightZ = -std::sinf(usedYaw);
+
+    float forwardX = std::sinf(usedYaw);
+    float forwardZ = std::cosf(usedYaw);
+
+    float moveX = 0.0f;
+    float moveZ = 0.0f;
+
+    moveX += rightX * stalkMoveDir_ * stalkStrafeRadiusWeight_;
+    moveZ += rightZ * stalkMoveDir_ * stalkStrafeRadiusWeight_;
+
+    moveX += forwardX * stalkForwardBias_ * stalkForwardAdjustWeight_;
+    moveZ += forwardZ * stalkForwardBias_ * stalkForwardAdjustWeight_;
+
+    float len = std::sqrtf(moveX * moveX + moveZ * moveZ);
+    if (len > 0.0001f) {
+        moveX /= len;
+        moveZ /= len;
+    }
+
+    tf_.position.x += moveX * stalkMoveSpeed_ * deltaTime;
+    tf_.position.z += moveZ * stalkMoveSpeed_ * deltaTime;
+
+    if (stateTimer_ >= currentHoldDuration_) {
+        EndAttack();
+    }
+}
+
+void Enemy::BeginStalkAction() {
+    EnterHold(RandomRange(stalkDurationMin_, stalkDurationMax_));
+    BeginAction(ActionKind::Stalk, ActionStep::Move);
+    stalkRepeatCount_++;
 }

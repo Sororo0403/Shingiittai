@@ -136,6 +136,12 @@ void Enemy::UpdateParts() {
             leftHandTf_.position.y += 0.3f;
             leftHandTf_.position.z += rightZ * 0.35f;
         }
+    } else if (action_.kind == ActionKind::Stalk) {
+        rightHandTf_.position.y += 0.35f;
+        leftHandTf_.position.y += 0.20f;
+
+        rightHandTf_.position.x += forwardX * 0.35f;
+        rightHandTf_.position.z += forwardZ * 0.35f;
     }
 }
 

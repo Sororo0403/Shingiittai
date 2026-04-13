@@ -599,6 +599,19 @@ class Enemy {
     bool forceEscapeWarpNext_ = false;
     bool forceCounterBaitNext_ = false;
 
+    float stalkDurationMin_ = 0.45f;
+    float stalkDurationMax_ = 1.10f;
+    float stalkMoveSpeed_ = 2.2f;
+    float stalkStrafeRadiusWeight_ = 0.75f;
+    float stalkForwardAdjustWeight_ = 0.35f;
+    float stalkNearEnterChance_ = 0.28f;
+    float stalkMidEnterChance_ = 0.18f;
+    int stalkRepeatLimit_ = 2;
+
+    int stalkRepeatCount_ = 0;
+    float stalkMoveDir_ = 1.0f;     // -1:left / +1:right
+    float stalkForwardBias_ = 0.0f; // -1:後退 / +1:前進
+
   private:
     void UpdateParts();
     OBB MakeOBB(const Transform &tf, const DirectX::XMFLOAT3 &size) const;
@@ -685,6 +698,10 @@ class Enemy {
     void UpdateGuardMove(float deltaTime);
     void UpdateGuardHold(float deltaTime);
     void UpdateGuardRecovery(float deltaTime);
+
+    void UpdateStalkByStep(float deltaTime);
+    void UpdateStalkMove(float deltaTime);
+    void BeginStalkAction();
 
     void DecideGuardTarget();
 

@@ -2,7 +2,17 @@
 #include <DirectXMath.h>
 #include <vector>
 
-enum class ActionKind { None, Smash, Sweep, Shot, Wave, Warp, Guard, Rush };
+enum class ActionKind {
+    None,
+    Smash,
+    Sweep,
+    Shot,
+    Wave,
+    Warp,
+    Guard,
+    Rush,
+    Stalk,
+};
 
 enum class ActionId {
     None,
