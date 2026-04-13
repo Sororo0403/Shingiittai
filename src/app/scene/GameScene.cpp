@@ -102,8 +102,12 @@ void GameScene::Update() {
     dbgPlayerGuardedHit_ = false;
 
     // プレイヤーの攻撃判定とあたり判定
-    for (const Sword *sword : player_.GetSwords()) {
-        if (!sword->IsSlashMode()) {
+    const auto swords = player_.GetSwords();
+    const auto swordSlashStates = player_.GetSwordSlashStates();
+
+    for (size_t i = 0; i < swords.size(); ++i) {
+        const Sword *sword = swords[i];
+        if (!swordSlashStates[i]) {
             continue;
         }
 

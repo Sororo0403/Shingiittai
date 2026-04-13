@@ -1,6 +1,9 @@
 #include "Player.h"
 #include "Input.h"
 #include "ModelManager.h"
+#include "SwordPose.h"
+#include "imgui.h"
+#include <cmath>
 
 using namespace DirectX;
 
@@ -11,24 +14,82 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
     tf_.scale = {1, 1, 1};
     tf_.rotation = {0, 0, 0, 1};
 
-    leftSword_.Initialize(swordModelId, SwordHand::Left);
-    rightSword_.Initialize(swordModelId, SwordHand::Right);
+    leftJoyCon_.Initialize(true);
+    rightJoyCon_.Initialize(false);
+
+    leftSword_.Initialize(swordModelId);
+    rightSword_.Initialize(swordModelId);
 }
 
 void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget) {
+    if (input->IsKeyTrigger(DIK_C)) {
+        leftJoyCon_.StartCalibration();
+        rightJoyCon_.StartCalibration();
+    }
+
+    if (input->IsKeyTrigger(DIK_R)) {
+        leftJoyCon_.SetBaseOrientation();
+        rightJoyCon_.SetBaseOrientation();
+    }
+
+    leftJoyCon_.Update(deltaTime);
+    rightJoyCon_.Update(deltaTime);
+
     UpdateMovement(input, deltaTime);
     LookAt(lookTarget);
 
-    leftSword_.Update(input, deltaTime, tf_.position, tf_.rotation, kArmLength,
-                      kHandHeight);
-    rightSword_.Update(input, deltaTime, tf_.position, tf_.rotation, kArmLength,
-                       kHandHeight);
+    if (leftJoyCon_.IsConnected()) {
+        leftSwordJoyConController_.Update(&leftJoyCon_, deltaTime,
+                                          leftSword_.GetTransform());
+    }
+
+    if (rightJoyCon_.IsConnected()) {
+        rightSwordJoyConController_.Update(&rightJoyCon_, deltaTime,
+                                           rightSword_.GetTransform());
+    } else if (swordMouseController_.IsActive(input)) {
+        swordMouseController_.Update(input, deltaTime, rightSword_.GetTransform());
+    }
+
+    const SwordPose leftPose = leftSwordJoyConController_.GetPose();
+    const SwordPose rightPose = rightJoyCon_.IsConnected()
+                                    ? rightSwordJoyConController_.GetPose()
+                                    : swordMouseController_.GetPose();
+
+    leftSword_.Update(BuildSwordTransform(leftPose, true));
+    rightSword_.Update(BuildSwordTransform(rightPose, false));
+
+    leftSwordSlashMode_ = leftPose.isSlashMode;
+    rightSwordSlashMode_ = rightPose.isSlashMode;
+    leftSwordSlashDir_ = leftPose.slashDir;
+    rightSwordSlashDir_ = rightPose.slashDir;
+    isGuarding_ = leftPose.isGuard || rightPose.isGuard;
 }
 
 void Player::Draw(ModelManager *modelManager, const Camera &camera) {
     modelManager->Draw(modelId_, tf_, camera);
     leftSword_.Draw(modelManager, camera);
     rightSword_.Draw(modelManager, camera);
+
+#ifndef IMGUI_DISABLED
+    ImGui::Begin("Player Combat");
+    ImGui::Text("Guarding: %s", isGuarding_ ? "true" : "false");
+    ImGui::Text("Left Slash : %s", leftSwordSlashMode_ ? "true" : "false");
+    ImGui::Text("Left Dir   : %.2f, %.2f", leftSwordSlashDir_.x,
+                leftSwordSlashDir_.y);
+    ImGui::Text("Left Conn  : %s", leftJoyCon_.IsConnected() ? "true" : "false");
+    ImGui::Text("Left Calib : %s", leftJoyCon_.IsCalibrating() ? "true" : "false");
+    ImGui::Text("Left Still : %.2f", leftJoyCon_.GetStillTimer());
+    ImGui::Text("Left CalTm : %.2f", leftJoyCon_.GetCalibrationTimer());
+    ImGui::Text("Right Slash: %s", rightSwordSlashMode_ ? "true" : "false");
+    ImGui::Text("Right Dir  : %.2f, %.2f", rightSwordSlashDir_.x,
+                rightSwordSlashDir_.y);
+    ImGui::Text("Right Conn : %s", rightJoyCon_.IsConnected() ? "true" : "false");
+    ImGui::Text("Right Calib: %s",
+                rightJoyCon_.IsCalibrating() ? "true" : "false");
+    ImGui::Text("Right Still: %.2f", rightJoyCon_.GetStillTimer());
+    ImGui::Text("Right CalTm: %.2f", rightJoyCon_.GetCalibrationTimer());
+    ImGui::End();
+#endif
 }
 
 OBB Player::GetOBB() const {
@@ -72,7 +133,6 @@ void Player::UpdateMovement(Input *input, float deltaTime) {
     tf_.position.y += knockbackVelocity_.y * deltaTime;
     tf_.position.z += knockbackVelocity_.z * deltaTime;
 
-    // 減衰
     knockbackVelocity_.x *= 0.85f;
     knockbackVelocity_.y *= 0.85f;
     knockbackVelocity_.z *= 0.85f;
@@ -85,7 +145,6 @@ void Player::UpdateMovement(Input *input, float deltaTime) {
         knockbackVelocity_.z = 0.0f;
 }
 
-// ダメージを受ける関数
 void Player::TakeDamage(float damage) {
     hp_ -= damage;
     if (hp_ < 0.0f) {
@@ -100,5 +159,26 @@ void Player::AddKnockback(const DirectX::XMFLOAT3 &velocity) {
 }
 
 bool Player::IsGuarding() const {
-    return leftSword_.IsGuard() || rightSword_.IsGuard();
+    return isGuarding_;
+}
+Transform Player::BuildSwordTransform(const SwordPose &pose, bool isLeft) const {
+    Transform swordTransform{};
+
+    XMVECTOR playerRot = XMQuaternionNormalize(XMLoadFloat4(&tf_.rotation));
+    XMVECTOR swordRot = XMQuaternionNormalize(XMLoadFloat4(&pose.orientation));
+    XMVECTOR finalRot = XMQuaternionMultiply(swordRot, playerRot);
+    XMStoreFloat4(&swordTransform.rotation, finalRot);
+
+    constexpr float kHandOffsetX = 0.35f;
+    const float handOffsetX = isLeft ? -kHandOffsetX : kHandOffsetX;
+
+    XMVECTOR playerPos = XMLoadFloat3(&tf_.position);
+    XMVECTOR shoulderOffset = XMVector3Rotate(
+        XMVectorSet(handOffsetX, kHandHeight, 0, 0), playerRot);
+    XMVECTOR shoulderPos = XMVectorAdd(playerPos, shoulderOffset);
+    XMVECTOR armVec =
+        XMVector3Rotate(XMVectorSet(0, 0, kArmLength, 0), finalRot);
+
+    XMStoreFloat3(&swordTransform.position, XMVectorAdd(shoulderPos, armVec));
+    return swordTransform;
 }

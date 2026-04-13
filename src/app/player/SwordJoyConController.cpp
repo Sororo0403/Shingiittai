@@ -1,100 +1,61 @@
 #include "SwordJoyConController.h"
-#include "Input.h"
 #include <algorithm>
 #include <cmath>
-#include <numbers>
 
 using namespace DirectX;
 
-void SwordJoyConController::Update(
-    Input* input, 
-    float dt,
-    const Transform& swordPos) {
-    UpdateOrientation(input, dt);
-    UpdateGuard(input);
-    UpdateCounter();
+SwordPose SwordJoyConController::GetPose() const {
+    SwordPose pose = state_.ToPose();
+    pose.isJoyCon = true;
+    return pose;
+}
+
+void SwordJoyConController::Update(JoyCon *joyCon, float dt,
+                                   const Transform &swordPos) {
+    UpdateOrientation(joyCon, dt);
+    UpdateGuard(joyCon);
+    state_.UpdateCounter();
     UpdateSlash(dt);
-    UpdateSlashDir(swordPos);
+    state_.UpdateSlashDir(swordPos);
 }
 
-bool SwordJoyConController::IsActive(Input *input) {
-    const int guardButton = useLeftJoyCon_ ? JSL_BUTTON_ZL : JSL_BUTTON_ZR;
-    return input->IsJoyConConnected(useLeftJoyCon_) &&
-           (angularVelocity_ > 30.0f ||
-            input->IsJsButtunPress(useLeftJoyCon_, guardButton));
+bool SwordJoyConController::IsActive(const JoyCon *joyCon) const {
+    if (joyCon == nullptr || !joyCon->IsConnected()) {
+        return false;
+    }
+
+    const int guardButton = joyCon->IsLeft() ? JSL_BUTTON_ZL : JSL_BUTTON_ZR;
+    return angularVelocity_ > 30.0f || joyCon->IsButtonPress(guardButton);
 }
 
-void SwordJoyConController::UpdateOrientation(Input* input, float dt) {
-    XMVECTOR q = input->GetOrientation(useLeftJoyCon_);
+void SwordJoyConController::UpdateOrientation(JoyCon *joyCon, float dt) {
+    if (joyCon == nullptr || !joyCon->IsConnected()) {
+        angularVelocity_ = 0.0f;
+        return;
+    }
 
-    q = XMQuaternionConjugate(q);
-    q = XMQuaternionNormalize(q);
-
+    XMVECTOR q = XMQuaternionNormalize(XMQuaternionConjugate(joyCon->GetOrientation()));
     float dot =
         XMVectorGetX(XMQuaternionDot(q, XMLoadFloat4(&prevOrientation_)));
     dot = std::clamp(dot, -1.0f, 1.0f);
 
-    float angleDiff = std::acos(dot) * 2.0f;
-    angularVelocity_ = XMConvertToDegrees(angleDiff) / dt;
+    const float angleDiff = std::acos(dot) * 2.0f;
+    angularVelocity_ = dt > 0.0f ? XMConvertToDegrees(angleDiff) / dt : 0.0f;
 
-    XMStoreFloat4(&orientation_, q);
+    XMStoreFloat4(&state_.orientation, q);
     XMStoreFloat4(&prevOrientation_, q);
 }
 
-void SwordJoyConController::UpdateGuard(Input *input) {
-    const int guardButton = useLeftJoyCon_ ? JSL_BUTTON_ZL : JSL_BUTTON_ZR;
-    isGuard_ = input->IsJsButtunPress(useLeftJoyCon_, guardButton);
-}
-
-void SwordJoyConController::UpdateCounter() {
-    if (isCounter_) {
-        counterTimer_ -= 1;
-
-        if (counterTimer_ <= 0) {
-            isCounter_ = false;
-            counterTimer_ = 300;
-        }
+void SwordJoyConController::UpdateGuard(JoyCon *joyCon) {
+    if (joyCon == nullptr || !joyCon->IsConnected()) {
+        state_.isGuard = false;
+        return;
     }
+
+    const int guardButton = joyCon->IsLeft() ? JSL_BUTTON_ZL : JSL_BUTTON_ZR;
+    state_.isGuard = joyCon->IsButtonPress(guardButton);
 }
 
 void SwordJoyConController::UpdateSlash(float dt) {
-    if (angularVelocity_ > kSlashHold) {
-        if (!isSlashMode_) {
-            isSlashMode_ = true;
-            slashTimer_ = 0.0f;
-        }
-    }
-
-    if (isSlashMode_) {
-        slashTimer_ += dt;
-
-        if (slashTimer_ > kTimeLimit) {
-            isSlashMode_ = false;
-        }
-
-        if (angularVelocity_ < kSlashHold * 0.5f && slashTimer_ > 0.1f) {
-            isSlashMode_ = false;
-        }
-    }
-}
-
-void SwordJoyConController::UpdateSlashDir(const Transform& swordPos) {
-    if (!isSlashMode_)
-        return;
-
-    XMFLOAT2 current = {swordPos.position.x, swordPos.position.y};
-
-    XMVECTOR currentV = XMLoadFloat2(&current);
-    XMVECTOR prevV = XMLoadFloat2(&prevPos_);
-
-    XMVECTOR delta = currentV - prevV;
-
-    float len = XMVectorGetX(XMVector2Length(delta));
-    if (len > 0.001f) {
-        delta = XMVector2Normalize(delta);
-        XMStoreFloat2(&slashDir_, delta);
-    }
-
-    prevPos_.x = swordPos.position.x;
-    prevPos_.y = swordPos.position.y;
+    state_.UpdateSlash(angularVelocity_, dt);
 }

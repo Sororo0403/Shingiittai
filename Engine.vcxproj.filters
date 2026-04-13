@@ -218,6 +218,9 @@
     <ClCompile Include="src\app\enemy\EnemyTuningPresetIO.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\engine\input\JoyCon.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\engine\core\WinApp.h">
@@ -356,6 +359,15 @@
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="include\app\enemy\EnemyTuningPresetIO.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\engine\input\JoyCon.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\app\player\SwordControllerState.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\app\player\SwordPose.h">
       <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>
