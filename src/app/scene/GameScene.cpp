@@ -70,11 +70,8 @@ void GameScene::Update() {
     UpdateBattleCamera();
 
     auto swordBox = player_.GetSword().GetOBB();
+    auto counterBox = player_.GetSword().GetCounterOBB();
     auto playerBox = player_.GetOBB();
-
-    //if (CollisionUtil::CheckOBB(swordBox, bulletBox) && player_.GetSword().GetSlashMode()) {
-    //    player_.GetSword().SetCounter(true);
-    //}
     // // 敵の行動状態を取得してガード状態を判定
     const ActionKind enemyActionKind = enemy_.GetActionKind();
     const ActionStep enemyActionStep = enemy_.GetActionStep();
@@ -166,6 +163,7 @@ void GameScene::Update() {
 
             if (player_.GetSword().IsGuard()) {
                 dbgPlayerGuardedHit_ = true;
+                player_.TakeDamage(enemyAttackDamage * kGuardDamageMultiplier);
                 player_.AddKnockback({dx * (enemyAttackKnockback * 0.5f), 0.0f,
                                       dz * (enemyAttackKnockback * 0.5f)});
                 playerHitCooldown_ = 0.2f;
@@ -180,9 +178,14 @@ void GameScene::Update() {
 
     dbgBossHitPlayer_ = bossHitPlayer;
 
-   dbgBulletHitPlayer_ = false;
+    dbgBulletHitPlayer_ = false;
 
-    for (const auto &bullet : enemy_.GetBullets()) {
+    const bool isPlayerGuarding = player_.GetSword().IsGuard();
+    const bool isPlayerCountering = player_.GetSword().IsSlashMode();
+    const auto enemyBodyBox = enemy_.GetBodyOBB();
+
+    for (size_t i = 0; i < enemy_.GetBullets().size(); ++i) {
+        const auto &bullet = enemy_.GetBullets()[i];
         if (!bullet.isAlive) {
             continue;
         }
@@ -191,6 +194,24 @@ void GameScene::Update() {
         bulletBox.center = bullet.position;
         bulletBox.size = enemy_.GetBulletHitBoxSize();
         bulletBox.rotation = player_.GetTransform().rotation;
+
+        if (!bullet.isReflected && isPlayerCountering &&
+            CollisionUtil::CheckOBB(bulletBox, counterBox)) {
+            enemy_.ReflectBullet(i, enemy_.GetTransform().position);
+            player_.GetSword().SetCounter(true);
+            dbgBulletHitPlayer_ = false;
+            continue;
+        }
+
+        if (bullet.isReflected) {
+            if (CollisionUtil::CheckOBB(bulletBox, enemyBodyBox) &&
+                enemyHitCooldown_ <= 0.0f) {
+                enemy_.TakeDamage(enemy_.GetBulletDamage());
+                enemy_.DestroyBullet(i);
+                enemyHitCooldown_ = 0.2f;
+            }
+            continue;
+        }
 
         if (CollisionUtil::CheckOBB(bulletBox, playerBox)) {
             dbgBulletHitPlayer_ = true;
@@ -206,17 +227,21 @@ void GameScene::Update() {
                 vx /= len;
                 vz /= len;
 
-                if (player_.GetSword().IsGuard()) {
+                if (isPlayerGuarding) {
                     dbgPlayerGuardedHit_ = true;
+                    player_.TakeDamage(enemy_.GetBulletDamage() *
+                                       kGuardDamageMultiplier);
                     player_.AddKnockback(
                         {vx * (enemy_.GetBulletKnockback() * 0.5f), 0.0f,
                          vz * (enemy_.GetBulletKnockback() * 0.5f)});
+                    enemy_.DestroyBullet(i);
                     playerHitCooldown_ = 0.15f;
                 } else {
                     player_.TakeDamage(enemy_.GetBulletDamage());
                     player_.AddKnockback({vx * enemy_.GetBulletKnockback(),
                                           0.0f,
                                           vz * enemy_.GetBulletKnockback()});
+                    enemy_.DestroyBullet(i);
                     playerHitCooldown_ = 0.3f;
                 }
             }
@@ -226,7 +251,8 @@ void GameScene::Update() {
 
     dbgWaveHitPlayer_ = false;
 
-    for (const auto &wave : enemy_.GetWaves()) {
+    for (size_t i = 0; i < enemy_.GetWaves().size(); ++i) {
+        const auto &wave = enemy_.GetWaves()[i];
         if (!wave.isAlive) {
             continue;
         }
@@ -235,6 +261,24 @@ void GameScene::Update() {
         waveBox.center = wave.position;
         waveBox.size = enemy_.GetWaveHitBoxSize();
         waveBox.rotation = player_.GetTransform().rotation;
+
+        if (!wave.isReflected && isPlayerCountering &&
+            CollisionUtil::CheckOBB(waveBox, counterBox)) {
+            enemy_.ReflectWave(i, enemy_.GetTransform().position);
+            player_.GetSword().SetCounter(true);
+            dbgWaveHitPlayer_ = false;
+            continue;
+        }
+
+        if (wave.isReflected) {
+            if (CollisionUtil::CheckOBB(waveBox, enemyBodyBox) &&
+                enemyHitCooldown_ <= 0.0f) {
+                enemy_.TakeDamage(enemy_.GetWaveDamage());
+                enemy_.DestroyWave(i);
+                enemyHitCooldown_ = 0.2f;
+            }
+            continue;
+        }
 
         if (CollisionUtil::CheckOBB(waveBox, playerBox)) {
             dbgWaveHitPlayer_ = true;
@@ -252,14 +296,18 @@ void GameScene::Update() {
 
                 if (player_.GetSword().IsGuard()) {
                     dbgPlayerGuardedHit_ = true;
+                    player_.TakeDamage(enemy_.GetWaveDamage() *
+                                       kGuardDamageMultiplier);
                     player_.AddKnockback(
                         {vx * (enemy_.GetWaveKnockback() * 0.5f), 0.0f,
                          vz * (enemy_.GetWaveKnockback() * 0.5f)});
+                    enemy_.DestroyWave(i);
                     playerHitCooldown_ = 0.15f;
                 } else {
                     player_.TakeDamage(enemy_.GetWaveDamage());
                     player_.AddKnockback({vx * enemy_.GetWaveKnockback(), 0.0f,
                                           vz * enemy_.GetWaveKnockback()});
+                    enemy_.DestroyWave(i);
                     playerHitCooldown_ = 0.35f;
                 }
             }

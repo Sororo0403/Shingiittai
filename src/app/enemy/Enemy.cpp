@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <cstdlib>
+#include <algorithm>
 
 // ============================================================
 // 初期化処理
@@ -133,6 +134,89 @@ void Enemy::TakeDamage(float damage) {
     if (hp_ < 0.0f) {
         hp_ = 0.0f;
     }
+}
+
+void Enemy::DestroyBullet(size_t index) {
+    if (index >= bullets_.size()) {
+        return;
+    }
+
+    bullets_[index].isAlive = false;
+    bullets_[index].lifeTime = 0.0f;
+}
+
+void Enemy::ReflectBullet(size_t index, const DirectX::XMFLOAT3 &targetPos) {
+    if (index >= bullets_.size()) {
+        return;
+    }
+
+    auto &bullet = bullets_[index];
+    if (!bullet.isAlive) {
+        return;
+    }
+
+    float speed = std::sqrtf(bullet.velocity.x * bullet.velocity.x +
+                             bullet.velocity.y * bullet.velocity.y +
+                             bullet.velocity.z * bullet.velocity.z);
+    if (speed < 0.0001f) {
+        speed = bulletSpeed_;
+    }
+
+    float dirX = targetPos.x - bullet.position.x;
+    float dirY = targetPos.y - bullet.position.y;
+    float dirZ = targetPos.z - bullet.position.z;
+    float len = std::sqrtf(dirX * dirX + dirY * dirY + dirZ * dirZ);
+    if (len < 0.0001f) {
+        dirX = 0.0f;
+        dirY = 0.0f;
+        dirZ = -1.0f;
+        len = 1.0f;
+    }
+
+    dirX /= len;
+    dirY /= len;
+    dirZ /= len;
+
+    bullet.velocity = {dirX * speed, dirY * speed, dirZ * speed};
+    bullet.isReflected = true;
+}
+
+void Enemy::DestroyWave(size_t index) {
+    if (index >= waves_.size()) {
+        return;
+    }
+
+    waves_[index].isAlive = false;
+}
+
+void Enemy::ReflectWave(size_t index, const DirectX::XMFLOAT3 &targetPos) {
+    if (index >= waves_.size()) {
+        return;
+    }
+
+    auto &wave = waves_[index];
+    if (!wave.isAlive) {
+        return;
+    }
+
+    float dirX = targetPos.x - wave.position.x;
+    float dirY = targetPos.y - wave.position.y;
+    float dirZ = targetPos.z - wave.position.z;
+    float len = std::sqrtf(dirX * dirX + dirY * dirY + dirZ * dirZ);
+    if (len < 0.0001f) {
+        dirX = 0.0f;
+        dirY = 0.0f;
+        dirZ = -1.0f;
+        len = 1.0f;
+    }
+
+    dirX /= len;
+    dirY /= len;
+    dirZ /= len;
+
+    wave.direction = {dirX, dirY, dirZ};
+    wave.traveledDistance = 0.0f;
+    wave.isReflected = true;
 }
 
 // ============================================================

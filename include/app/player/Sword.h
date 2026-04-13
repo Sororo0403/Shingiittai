@@ -43,6 +43,7 @@ class Sword {
     bool GetCounter() const { return isCounter_; }
     bool GetSlashMode() const { return isSlashMode_; }
     OBB GetOBB() const;
+    OBB GetCounterOBB() const;
 
     // 剣を振っているかの判定
     bool IsSlashMode() const { return isSlashMode_; }
@@ -61,6 +62,7 @@ class Sword {
     IInputController inputCtrl_;
     static constexpr float kSwordLength = 1.2f;
     DirectX::XMFLOAT3 size_{0.2f, 0.2f, 0.6f};
+    DirectX::XMFLOAT3 counterSize_{1.0f, 0.8f, 1.6f};
 
     uint32_t modelId_ = 0;
     Transform tf_;

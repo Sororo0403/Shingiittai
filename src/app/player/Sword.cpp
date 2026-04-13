@@ -53,6 +53,23 @@ OBB Sword::GetOBB() const {
     return box;
 }
 
+OBB Sword::GetCounterOBB() const {
+    OBB box;
+
+    XMVECTOR pos = XMLoadFloat3(&tf_.position);
+    XMVECTOR rot = XMLoadFloat4(&tf_.rotation);
+
+    XMVECTOR forward = XMVector3Rotate(XMVectorSet(0, 0, 1, 0), rot);
+    XMVECTOR center = pos + forward * 0.9f;
+
+    XMStoreFloat3(&box.center, center);
+
+    box.size = counterSize_;
+    box.rotation = tf_.rotation;
+
+    return box;
+}
+
 void Sword::Draw(ModelManager *modelManager, const Camera &camera) {
     modelManager->Draw(modelId_, tf_, camera);
     ImGuiDraw();
