@@ -121,7 +121,6 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\app\player\IInputController.cpp" />
     <ClCompile Include="src\app\enemy\EnemyTuningPresetIO.cpp" />
     <ClCompile Include="src\engine\model\MaterialManager.cpp" />
     <ClCompile Include="src\engine\model\Material.cpp" />
@@ -138,6 +137,7 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClCompile Include="src\app\scene\GameScene.cpp" />
     <ClCompile Include="src\engine\scene\SceneManager.cpp" />
     <ClCompile Include="src\engine\input\Input.cpp" />
+    <ClCompile Include="src\engine\input\JoyCon.cpp" />
     <ClCompile Include="src\engine\sound\SoundManager.cpp" />
     <ClCompile Include="src\engine\imgui\ImguiManager.cpp" />
     <ClCompile Include="src\engine\model\ModelManager.cpp" />
@@ -156,9 +156,10 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClCompile Include="src\app\player\SwordMouseController.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="include\app\player\IInputController.h" />
     <ClInclude Include="include\app\enemy\EnemyTuningPreset.h" />
     <ClInclude Include="include\app\enemy\EnemyTuningPresetIO.h" />
+    <ClInclude Include="include\app\player\SwordControllerState.h" />
+    <ClInclude Include="include\app\player\SwordPose.h" />
     <ClInclude Include="include\engine\camera\DebugCamera.h" />
     <ClInclude Include="include\engine\model\Animator.h" />
     <ClInclude Include="include\engine\model\AssimpLoader.h" />
@@ -196,6 +197,7 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClInclude Include="include\engine\sound\SoundManager.h" />
     <ClInclude Include="include\engine\sound\SoundVoiceCallback.h" />
     <ClInclude Include="include\engine\input\Input.h" />
+    <ClInclude Include="include\engine\input\JoyCon.h" />
     <ClInclude Include="include\engine\scene\SceneManager.h" />
     <ClInclude Include="include\app\player\Player.h" />
     <ClInclude Include="include\app\player\Sword.h" />
