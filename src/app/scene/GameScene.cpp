@@ -6,12 +6,26 @@
 #include "TextureManager.h"
 #include "WinApp.h"
 #include "imgui.h"
+#include <sstream>
+#ifdef _WIN32
+#include <Windows.h>
+#endif
 #ifdef _DEBUG
 #include "DebugDraw.h"
 #include "EnemyTuningPresetIO.h"
 #endif // _DEBUG
 
 using namespace DirectX;
+
+namespace {
+
+void DebugLog(const std::string &message) {
+#ifdef _WIN32
+    OutputDebugStringA((message + "\n").c_str());
+#endif
+}
+
+}
 
 void GameScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
@@ -37,7 +51,18 @@ void GameScene::Initialize(const SceneContext &ctx) {
 
     uint32_t playerModel = model->Load(L"resources/model/player/player.glb");
     uint32_t swordModel = model->Load(L"resources/model/player/sword.glb");
-    uint32_t enemyModel = model->Load(L"resources/model/enemy/enemy.glb");
+    uint32_t enemyModel = 0;
+    try {
+        enemyModel = model->Load(L"resources/model/boss/newBossModel.gltf");
+        DebugLog("[GameScene] enemy model loaded: resources/model/boss/newBossModel.gltf");
+    } catch (const std::exception &e) {
+        std::ostringstream oss;
+        oss << "[GameScene] bossBody load failed: " << e.what();
+        DebugLog(oss.str());
+
+        enemyModel = model->Load(L"resources/model/enemy/enemy.glb");
+        DebugLog("[GameScene] fallback enemy model loaded: resources/model/enemy/enemy.glb");
+    }
 
     dx->EndUpload();
 
@@ -45,12 +70,21 @@ void GameScene::Initialize(const SceneContext &ctx) {
 
     player_.Initialize(playerModel, swordModel);
     enemy_.Initialize(enemyModel);
+    enemyModelId_ = enemyModel;
+
+    if (Model *enemyModelData = model->GetModel(enemyModelId_)) {
+        if (!enemyModelData->animations.empty()) {
+            model->PlayAnimation(enemyModelId_, enemyModelData->currentAnimation,
+                                 true);
+        }
+    }
 
     uint32_t bulletModel = ctx_->model->Load(L"resources/model/bullet/bullet.obj");
     bullet_.Initialize(bulletModel);
 }
 
 void GameScene::Update() {
+    DebugLog("[GameScene] Update begin");
     Input *input = ctx_->input;
 
     UpdateCamera(input);
@@ -60,6 +94,8 @@ void GameScene::Update() {
         return;
     }
 #endif
+
+    ctx_->model->UpdateAnimation(enemyModelId_, ctx_->deltaTime);
 
     enemy_.Update(player_.GetTransform().position, ctx_->deltaTime,
                   player_.IsGuarding());
@@ -204,6 +240,8 @@ void GameScene::Update() {
                 playerHitCooldown_ = 0.4f;
             }
         }
+
+    DebugLog("[GameScene] Update end");
     }
 
     dbgBossHitPlayer_ = bossHitPlayer;
@@ -300,6 +338,7 @@ void GameScene::Update() {
 //#endif
 
 void GameScene::Draw() {
+    DebugLog("[GameScene] Draw begin");
     ctx_->model->PreDraw();
 
     player_.Draw(ctx_->model, *currentCamera_);
@@ -320,6 +359,9 @@ void GameScene::Draw() {
 #ifdef _DEBUG
     // 当たり判定描画
     for (const Sword *sword : player_.GetSwords()) {
+        if (sword == nullptr) {
+            continue;
+        }
         ctx_->debugDraw->DrawOBB(ctx_->model, sword->GetOBB(), *currentCamera_);
     }
 
@@ -652,6 +694,8 @@ void GameScene::Draw() {
 
     ImGui::End();
 #endif
+
+    DebugLog("[GameScene] Draw end");
 }
 
 void GameScene::UpdateCamera(Input *input) {

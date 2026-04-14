@@ -7,10 +7,25 @@
 #include "ShaderCompiler.h"
 #include "SrvManager.h"
 #include "TextureManager.h"
+#include <sstream>
+
+#ifdef _WIN32
+#include <Windows.h>
+#endif
 
 using namespace DirectX;
 using namespace DxUtils;
 using Microsoft::WRL::ComPtr;
+
+namespace {
+
+void DebugLog(const std::string &message) {
+#ifdef _WIN32
+    OutputDebugStringA((message + "\n").c_str());
+#endif
+}
+
+}
 
 struct ConstBufferData {
     XMFLOAT4X4 matWVP;
@@ -51,16 +66,12 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
     }
 
     auto cmd = dxCommon_->GetCommandList();
-    const Mesh &mesh = meshManager_->GetMesh(model.meshId);
 
-    const Material &material = materialManager_->GetMaterial(model.materialId);
-
-    bool transparent = material.color.w < 1.0f;
-
-    if (transparent) {
-        cmd->SetPipelineState(transparentPSO_.Get());
-    } else {
-        cmd->SetPipelineState(opaquePSO_.Get());
+    {
+        std::ostringstream oss;
+        oss << "[ModelRenderer] Draw begin subMeshes=" << model.subMeshes.size()
+            << " bones=" << model.bones.size();
+        DebugLog(oss.str());
     }
 
     XMVECTOR q = XMQuaternionNormalize(XMLoadFloat4(&transform.rotation));
@@ -73,14 +84,6 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
                             transform.position.z);
 
     XMMATRIX wvp = world * camera.GetView() * camera.GetProj();
-
-    auto *dst =
-        reinterpret_cast<ConstBufferData *>(mappedCB_ + cbStride_ * drawIndex_);
-
-    XMStoreFloat4x4(&dst->matWVP, XMMatrixTranspose(wvp));
-
-    D3D12_GPU_VIRTUAL_ADDRESS cbAddr =
-        constBuffer_->GetGPUVirtualAddress() + cbStride_ * drawIndex_;
 
     XMMATRIX id = XMMatrixTranspose(XMMatrixIdentity());
 
@@ -98,22 +101,69 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
         }
     }
 
-    cmd->SetGraphicsRootConstantBufferView(0, cbAddr);
-    cmd->SetGraphicsRootConstantBufferView(1,
-                                           boneBuffer_->GetGPUVirtualAddress());
+    auto drawSubMesh = [&](uint32_t meshId, uint32_t materialId,
+                           uint32_t textureId) {
+        if (drawIndex_ >= kMaxDraws) {
+            return;
+        }
 
-    cmd->SetGraphicsRootConstantBufferView(
-        2, materialManager_->GetGPUVirtualAddress(model.materialId));
+        {
+            std::ostringstream oss;
+            oss << "[ModelRenderer] DrawSubMesh meshId=" << meshId
+                << " materialId=" << materialId << " textureId=" << textureId;
+            DebugLog(oss.str());
+        }
 
-    cmd->SetGraphicsRootDescriptorTable(
-        3, textureManager_->GetGpuHandle(model.textureId));
+        auto *dst = reinterpret_cast<ConstBufferData *>(mappedCB_ +
+                                                        cbStride_ * drawIndex_);
 
-    cmd->IASetVertexBuffers(0, 1, &mesh.vbView);
-    cmd->IASetIndexBuffer(&mesh.ibView);
+        XMStoreFloat4x4(&dst->matWVP, XMMatrixTranspose(wvp));
 
-    cmd->DrawIndexedInstanced(mesh.indexCount, 1, 0, 0, 0);
+        D3D12_GPU_VIRTUAL_ADDRESS cbAddr =
+            constBuffer_->GetGPUVirtualAddress() + cbStride_ * drawIndex_;
 
-    drawIndex_++;
+        const Material &material = materialManager_->GetMaterial(materialId);
+
+        bool transparent = material.color.w < 1.0f;
+
+        if (transparent) {
+            cmd->SetPipelineState(transparentPSO_.Get());
+        } else {
+            cmd->SetPipelineState(opaquePSO_.Get());
+        }
+
+        const Mesh &mesh = meshManager_->GetMesh(meshId);
+
+        cmd->SetGraphicsRootConstantBufferView(0, cbAddr);
+        cmd->SetGraphicsRootConstantBufferView(
+            1, boneBuffer_->GetGPUVirtualAddress());
+
+        cmd->SetGraphicsRootConstantBufferView(
+            2, materialManager_->GetGPUVirtualAddress(materialId));
+
+        cmd->SetGraphicsRootDescriptorTable(3,
+                                            textureManager_->GetGpuHandle(textureId));
+
+        cmd->IASetVertexBuffers(0, 1, &mesh.vbView);
+        cmd->IASetIndexBuffer(&mesh.ibView);
+
+        cmd->DrawIndexedInstanced(mesh.indexCount, 1, 0, 0, 0);
+
+        drawIndex_++;
+    };
+
+    if (!model.subMeshes.empty()) {
+        for (const auto &subMesh : model.subMeshes) {
+            drawSubMesh(subMesh.meshId, subMesh.materialId, subMesh.textureId);
+            if (drawIndex_ >= kMaxDraws) {
+                break;
+            }
+        }
+    } else {
+        drawSubMesh(model.meshId, model.materialId, model.textureId);
+    }
+
+    DebugLog("[ModelRenderer] Draw end");
 }
 
 void ModelRenderer::PostDraw() {}

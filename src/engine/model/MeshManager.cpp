@@ -2,6 +2,21 @@
 #include "DirectXCommon.h"
 #include "DxHelpers.h"
 #include "DxUtils.h"
+#include <sstream>
+
+#ifdef _WIN32
+#include <Windows.h>
+#endif
+
+namespace {
+
+void DebugLog(const std::string &message) {
+#ifdef _WIN32
+    OutputDebugStringA((message + "\n").c_str());
+#endif
+}
+
+}
 
 using namespace DxUtils;
 using Microsoft::WRL::ComPtr;
@@ -12,6 +27,14 @@ uint32_t MeshManager::CreateMesh(const void *vertexData, uint32_t vertexStride,
                                  uint32_t vertexCount,
                                  const uint32_t *indexData,
                                  uint32_t indexCount) {
+    {
+        std::ostringstream oss;
+        oss << "[MeshManager] CreateMesh begin vtxCount=" << vertexCount
+            << " vtxStride=" << vertexStride << " idxCount=" << indexCount
+            << " vtxPtr=" << vertexData << " idxPtr=" << indexData;
+        DebugLog(oss.str());
+    }
+
     Mesh mesh{};
     mesh.indexCount = indexCount;
     mesh.vertexStride = vertexStride;
@@ -29,7 +52,9 @@ uint32_t MeshManager::CreateMesh(const void *vertexData, uint32_t vertexStride,
 
     void *vbMapped = nullptr;
     mesh.vertexBuffer->Map(0, nullptr, &vbMapped);
-    memcpy(vbMapped, vertexData, vbSize);
+    if (vbSize > 0 && vertexData) {
+        memcpy(vbMapped, vertexData, vbSize);
+    }
     mesh.vertexBuffer->Unmap(0, nullptr);
 
     mesh.vbView.BufferLocation = mesh.vertexBuffer->GetGPUVirtualAddress();
@@ -49,7 +74,9 @@ uint32_t MeshManager::CreateMesh(const void *vertexData, uint32_t vertexStride,
 
     void *ibMapped = nullptr;
     mesh.indexBuffer->Map(0, nullptr, &ibMapped);
-    memcpy(ibMapped, indexData, ibSize);
+    if (ibSize > 0 && indexData) {
+        memcpy(ibMapped, indexData, ibSize);
+    }
     mesh.indexBuffer->Unmap(0, nullptr);
 
     mesh.ibView.BufferLocation = mesh.indexBuffer->GetGPUVirtualAddress();
@@ -58,8 +85,16 @@ uint32_t MeshManager::CreateMesh(const void *vertexData, uint32_t vertexStride,
     mesh.ibView.SizeInBytes = ibSize;
 
     meshes_.push_back(mesh);
+    uint32_t meshId = static_cast<uint32_t>(meshes_.size() - 1);
 
-    return static_cast<uint32_t>(meshes_.size() - 1);
+    {
+        std::ostringstream oss;
+        oss << "[MeshManager] CreateMesh success meshId=" << meshId
+            << " vbSize=" << vbSize << " ibSize=" << ibSize;
+        DebugLog(oss.str());
+    }
+
+    return meshId;
 }
 
 const Mesh &MeshManager::GetMesh(uint32_t meshId) const {

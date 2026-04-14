@@ -34,10 +34,18 @@ struct AnimationClip {
     std::unordered_map<std::string, BoneAnimation> channels;
 };
 
+struct ModelSubMesh {
+    uint32_t meshId = 0;
+    uint32_t textureId = 0;
+    uint32_t materialId = 0;
+};
+
 struct Model {
     uint32_t meshId = 0;
     uint32_t textureId = 0;
     uint32_t materialId = 0;
+
+    std::vector<ModelSubMesh> subMeshes;
 
     std::vector<BoneInfo> bones;
     std::unordered_map<std::string, uint32_t> boneMap;

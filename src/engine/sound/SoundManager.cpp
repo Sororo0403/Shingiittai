@@ -3,6 +3,28 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
+
+#ifdef _WIN32
+#include <Windows.h>
+#endif
+
+namespace {
+
+void DebugLog(const std::string &message) {
+#ifdef _WIN32
+    OutputDebugStringA((message + "\n").c_str());
+#endif
+}
+
+void DebugLogW(const std::wstring &message) {
+#ifdef _WIN32
+    std::wstring withNewLine = message + L"\n";
+    OutputDebugStringW(withNewLine.c_str());
+#endif
+}
+
+}
 
 static uint32_t ReadU32(std::ifstream &f) {
     uint32_t v{};
@@ -32,15 +54,30 @@ void SoundManager::Initialize() {
 }
 
 uint32_t SoundManager::Load(const std::wstring &path) {
+    DebugLogW(L"[SoundManager] Load begin path='" + path + L"'");
+
     SoundResource res{};
     res.wav = LoadWavPcm16(path);
 
     sounds_.push_back(std::move(res));
-    return static_cast<uint32_t>(sounds_.size() - 1);
+    uint32_t soundId = static_cast<uint32_t>(sounds_.size() - 1);
+
+    {
+        std::ostringstream oss;
+        oss << "[SoundManager] Load success soundId=" << soundId
+            << " bytes=" << sounds_[soundId].wav.buffer.size();
+        DebugLog(oss.str());
+    }
+
+    return soundId;
 }
 
 void SoundManager::Play(uint32_t soundId) {
     if (soundId >= sounds_.size()) {
+        std::ostringstream oss;
+        oss << "[SoundManager] Play invalid soundId=" << soundId
+            << " size=" << sounds_.size();
+        DebugLog(oss.str());
         return;
     }
 
@@ -53,12 +90,27 @@ void SoundManager::Play(uint32_t soundId) {
         &voice, &wav.format, 0, XAUDIO2_DEFAULT_FREQ_RATIO, &voiceCallback_);
     assert(SUCCEEDED(hr));
 
+    {
+        std::ostringstream oss;
+        oss << "[SoundManager] Play created voice=" << voice
+            << " soundId=" << soundId;
+        DebugLog(oss.str());
+    }
+
     XAUDIO2_BUFFER buf{};
     buf.pAudioData = wav.buffer.data();
     buf.AudioBytes = static_cast<UINT32>(wav.buffer.size());
     buf.Flags = XAUDIO2_END_OF_STREAM;
 
     buf.pContext = voice;
+
+    {
+        std::ostringstream oss;
+        oss << "[SoundManager] Play submit bytes=" << buf.AudioBytes
+            << " pAudioData=" << static_cast<const void *>(buf.pAudioData)
+            << " pContext=" << buf.pContext;
+        DebugLog(oss.str());
+    }
 
     hr = voice->SubmitSourceBuffer(&buf);
     assert(SUCCEEDED(hr));

@@ -4,7 +4,29 @@
 #include "DxUtils.h"
 #include "SrvManager.h"
 #include "Texture.h"
+#include <sstream>
 #include <stdexcept>
+
+#ifdef _WIN32
+#include <Windows.h>
+#endif
+
+namespace {
+
+void DebugLog(const std::string &message) {
+#ifdef _WIN32
+    OutputDebugStringA((message + "\n").c_str());
+#endif
+}
+
+void DebugLogW(const std::wstring &message) {
+#ifdef _WIN32
+    std::wstring withNewLine = message + L"\n";
+    OutputDebugStringW(withNewLine.c_str());
+#endif
+}
+
+}
 
 using namespace DirectX;
 using namespace DxUtils;
@@ -17,6 +39,7 @@ void TextureManager::Initialize(DirectXCommon *dxCommon,
 }
 
 uint32_t TextureManager::Load(const std::wstring &filePath) {
+    DebugLogW(L"[TextureManager] Load begin path='" + filePath + L"'");
 
     ScratchImage scratch;
     TexMetadata metadata{};
@@ -30,10 +53,25 @@ uint32_t TextureManager::Load(const std::wstring &filePath) {
         throw std::runtime_error("scratch.GetImage failed");
     }
 
-    return CreateTexture(image, metadata);
+    uint32_t id = CreateTexture(image, metadata);
+
+    {
+        std::ostringstream oss;
+        oss << "[TextureManager] Load success textureId=" << id
+            << " size=" << metadata.width << "x" << metadata.height;
+        DebugLog(oss.str());
+    }
+
+    return id;
 }
 
 uint32_t TextureManager::LoadFromMemory(const uint8_t *data, size_t size) {
+    {
+        std::ostringstream oss;
+        oss << "[TextureManager] LoadFromMemory begin data=" << data
+            << " size=" << size;
+        DebugLog(oss.str());
+    }
 
     ScratchImage scratch;
     TexMetadata metadata{};
@@ -47,11 +85,27 @@ uint32_t TextureManager::LoadFromMemory(const uint8_t *data, size_t size) {
         throw std::runtime_error("scratch.GetImage failed");
     }
 
-    return CreateTexture(image, metadata);
+    uint32_t id = CreateTexture(image, metadata);
+
+    {
+        std::ostringstream oss;
+        oss << "[TextureManager] LoadFromMemory success textureId=" << id
+            << " size=" << metadata.width << "x" << metadata.height;
+        DebugLog(oss.str());
+    }
+
+    return id;
 }
 
 uint32_t TextureManager::CreateTexture(const Image *image,
                                        const TexMetadata &metadata) {
+    {
+        std::ostringstream oss;
+        oss << "[TextureManager] CreateTexture begin format=" << metadata.format
+            << " size=" << metadata.width << "x" << metadata.height
+            << " image=" << image;
+        DebugLog(oss.str());
+    }
 
     Texture texture;
 
@@ -116,13 +170,28 @@ uint32_t TextureManager::CreateTexture(const Image *image,
 
     textures_.push_back({std::move(texture), srvIndex});
 
-    return static_cast<uint32_t>(textures_.size() - 1);
+    uint32_t textureId = static_cast<uint32_t>(textures_.size() - 1);
+
+    {
+        std::ostringstream oss;
+        oss << "[TextureManager] CreateTexture success textureId=" << textureId
+            << " srvIndex=" << srvIndex;
+        DebugLog(oss.str());
+    }
+
+    return textureId;
 }
 
 void TextureManager::ReleaseUploadBuffers() { uploadBuffers_.clear(); }
 
 D3D12_GPU_DESCRIPTOR_HANDLE
 TextureManager::GetGpuHandle(uint32_t textureId) const {
+    if (textureId >= textures_.size()) {
+        std::ostringstream oss;
+        oss << "[TextureManager] GetGpuHandle invalid textureId=" << textureId
+            << " size=" << textures_.size();
+        DebugLog(oss.str());
+    }
     return srvManager_->GetGpuHandle(textures_.at(textureId).srvIndex);
 }
 
