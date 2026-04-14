@@ -66,4 +66,8 @@ class GameScene : public BaseScene {
     bool dbgWaveHitPlayer_ = false;
     bool dbgPlayerGuardedHit_ = false;
     Bullet bullet_;
+
+    float reflectDamage_ = 0.0f;
+    // 跳ね返した弾のダメージ倍数
+    float damageMultiplier_ = 2.0f;
 };

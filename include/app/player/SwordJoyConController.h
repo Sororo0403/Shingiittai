@@ -19,13 +19,16 @@ public:
     const DirectX::XMFLOAT4& GetOrientation() { return orientation_; }
 
     // Setter関数
-    void SetCounter(bool isCounter) { this->isCounter_ = isCounter; }
+    void SetCounter(bool isCounter) {
+        isCounter_ = isCounter;
+        counterTimer_ = 0.0f;
+    }
 
 private:
     // メンバ関数
     void UpdateOrientation(Input *input, float dt);
     void UpdateGuard(Input *input);
-    void UpdateCounter();
+    void UpdateCounter(float dt);
     void UpdateSlash(float dt);
     void UpdateSlashDir(const Transform& swordPos);
 
@@ -37,7 +40,7 @@ private:
     bool isSlashMode_ = false;
     bool isGuard_ = false;
     bool isCounter_ = false;
-    int counterTimer_ = 300;
+    float counterTimer_ = 0.0f;
     float slashTimer_ = 0.0f;
     const float kSlashHold = 720.0f;
     const float kTimeLimit = 1.0f;

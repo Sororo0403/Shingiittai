@@ -10,7 +10,7 @@ void SwordMouseController::Update(Input *input, float dt,
                                   const Transform &swordPos) {
     UpdateOrientation(input, dt);
     UpdateGuard(input);
-    UpdateCounter();
+    UpdateCounter(dt);
     UpdateSlash(input, dt);
     UpdateSlashDir(swordPos);
 }
@@ -56,14 +56,15 @@ void SwordMouseController::UpdateGuard(Input *input) {
     isGuard_ = input->IsMousePress(1);
 }
 
-void SwordMouseController::UpdateCounter() {
-    if (isCounter_) {
-        counterTimer_ -= 1;
+void SwordMouseController::UpdateCounter(float dt) {
+    if (!isCounter_) {
+        return;
+    }
 
-        if (counterTimer_ <= 0) {
-            isCounter_ = false;
-            counterTimer_ = 300;
-        }
+    counterTimer_ += dt;
+    if (counterTimer_ > kTimeLimit) {
+        isCounter_ = false;
+        counterTimer_ = 0.0f;
     }
 }
 

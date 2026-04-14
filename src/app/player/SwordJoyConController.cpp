@@ -10,7 +10,7 @@ void SwordJoyConController::Update(Input *input, float dt,
                                    const Transform &swordPos) {
     UpdateOrientation(input, dt);
     UpdateGuard(input);
-    UpdateCounter();
+    UpdateCounter(dt);
     UpdateSlash(dt);
     UpdateSlashDir(swordPos);
 }
@@ -40,14 +40,15 @@ void SwordJoyConController::UpdateGuard(Input *input) {
     isGuard_ = input->IsJsButtunPress(JSL_BUTTON_ZR);
 }
 
-void SwordJoyConController::UpdateCounter() {
-    if (isCounter_) {
-        counterTimer_ -= 1;
+void SwordJoyConController::UpdateCounter(float dt) {
+    if (!isCounter_) {
+        return;
+    }
 
-        if (counterTimer_ <= 0) {
-            isCounter_ = false;
-            counterTimer_ = 300;
-        }
+    counterTimer_ += dt;
+    if (counterTimer_ > kTimeLimit) {
+        isCounter_ = false;
+        counterTimer_ = 0.0f;
     }
 }
 

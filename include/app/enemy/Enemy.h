@@ -141,6 +141,7 @@ class Enemy {
     // Getter
     const Transform &GetTransform() const { return tf_; }
     bool IsAlive() const { return hp_ > 0.0f; }
+    float GetHP() const { return hp_; }
 
     const Transform &GetBodyTransform() const { return bodyTf_; }
     const Transform &GetLeftHandTransform() const { return leftHandTf_; }

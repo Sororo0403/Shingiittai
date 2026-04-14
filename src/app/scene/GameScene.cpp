@@ -206,7 +206,8 @@ void GameScene::Update() {
         if (bullet.isReflected) {
             if (CollisionUtil::CheckOBB(bulletBox, enemyBodyBox) &&
                 enemyHitCooldown_ <= 0.0f) {
-                enemy_.TakeDamage(enemy_.GetBulletDamage());
+                reflectDamage_ = enemy_.GetBulletDamage() * damageMultiplier_;
+                enemy_.TakeDamage(reflectDamage_);
                 enemy_.DestroyBullet(i);
                 enemyHitCooldown_ = 0.2f;
             }
@@ -273,7 +274,8 @@ void GameScene::Update() {
         if (wave.isReflected) {
             if (CollisionUtil::CheckOBB(waveBox, enemyBodyBox) &&
                 enemyHitCooldown_ <= 0.0f) {
-                enemy_.TakeDamage(enemy_.GetWaveDamage());
+                reflectDamage_ = enemy_.GetWaveDamage() * damageMultiplier_;
+                enemy_.TakeDamage(reflectDamage_);
                 enemy_.DestroyWave(i);
                 enemyHitCooldown_ = 0.2f;
             }
@@ -478,6 +480,7 @@ void GameScene::Draw() {
     }
 
     ImGui::Text("GuardTarget     : %s", guardName);
+    ImGui::Text("EnemyHP         : %.1f", enemy_.GetHP());
     ImGui::Text("PlayerHP        : %.1f", player_.GetHP());
     ImGui::Text("PlayerHitCD     : %.2f", playerHitCooldown_);
     ImGui::Text("PlayerGuarded   : %s",
@@ -490,6 +493,7 @@ void GameScene::Draw() {
     ImGui::Text("WaveDamage      : %.2f", enemy_.GetWaveDamage());
     ImGui::Text("BulletKB        : %.2f", enemy_.GetBulletKnockback());
     ImGui::Text("WaveKB          : %.2f", enemy_.GetWaveKnockback());
+    ImGui::Text("reflectDamage   : %.2f", reflectDamage_);
 
     ImGui::Separator();
     ImGui::Text("=== Enemy Tuning ===");

@@ -98,7 +98,10 @@ void Sword::UpdateTransform(const XMFLOAT3 &playerPos,
     XMStoreFloat3(&tf_.position, handPos);
 }
 
-void Sword::SetCounter(bool isCounter) { inputCtrl_.SetCounter(isCounter); }
+void Sword::SetCounter(bool isCounter) {
+    isCounter_ = isCounter;
+    inputCtrl_.SetCounter(isCounter);
+}
 
 void Sword::ImGuiDraw() {
 #ifndef IMGUI_DISABLED
