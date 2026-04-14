@@ -57,18 +57,19 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     spriteManager.Initialize(&dxCommon, &textureManager, &srvManager, width,
                              height);
 
+    dxCommon.BeginUpload();
+
 #ifdef _DEBUG
     // DebugDraw
     DebugDraw debugDraw;
-
-    dxCommon.BeginUpload();
-
     uint32_t boxModelId = modelManager.Load(L"resources/model/debug/box.glb");
+#endif // _DEBUG
 
     dxCommon.EndUpload();
 
     textureManager.ReleaseUploadBuffers();
 
+#ifdef _DEBUG
     debugDraw.Initialize(boxModelId);
 #endif // _DEBUG
 
@@ -87,11 +88,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     sceneCtx.texture = &textureManager;
     sceneCtx.dxCommon = &dxCommon;
 
+    sceneCtx.deltaTime = 0.0f;
+
 #ifdef _DEBUG
     sceneCtx.debugDraw = &debugDraw;
 #endif // _DEBUG
-
-    sceneCtx.deltaTime = 0.0f;
 
 #ifndef IMGUI_DISABLED
     sceneCtx.imgui = &imguiManager;

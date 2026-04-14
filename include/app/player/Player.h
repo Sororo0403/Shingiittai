@@ -52,6 +52,33 @@ class Player {
     void TakeDamage(float damage);
 
     void AddKnockback(const DirectX::XMFLOAT3 &velocity);
+    const DirectX::XMFLOAT3 &GetVelocity() const { return velocity_; }
+
+    bool IsCounterStance() const {
+        return leftSword_.IsCounterStance() || rightSword_.IsCounterStance();
+    }
+    bool JustCountered() const {
+        return leftSword_.JustCountered() || rightSword_.JustCountered();
+    }
+    bool JustCounterFailed() const {
+        return leftSword_.JustCounterFailed() || rightSword_.JustCounterFailed();
+    }
+    bool JustCounterEarly() const {
+        return leftSword_.JustCounterEarly() || rightSword_.JustCounterEarly();
+    }
+    bool JustCounterLate() const {
+        return leftSword_.JustCounterLate() || rightSword_.JustCounterLate();
+    }
+    SwordCounterAxis GetCounterAxis() const {
+        if (rightSword_.IsCounterStance()) {
+            return rightSword_.GetCounterAxis();
+        }
+        if (leftSword_.IsCounterStance()) {
+            return leftSword_.GetCounterAxis();
+        }
+        return SwordCounterAxis::None;
+    }
+    void NotifyCounterSuccess();
 
   private:
     Transform BuildSwordTransform(const SwordPose &pose, bool isLeft) const;
@@ -85,4 +112,5 @@ class Player {
     float hp_ = 100.0f;
     DirectX::XMFLOAT3 knockbackVelocity_ = {0.0f, 0.0f, 0.0f};
     float yaw_ = 0.0f;
+    DirectX::XMFLOAT3 velocity_ = {0.0f, 0.0f, 0.0f};
 };

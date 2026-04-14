@@ -121,6 +121,15 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\app\enemy\EnemyAction_Melee.cpp" />
+    <ClCompile Include="src\app\enemy\EnemyAction_Ranged.cpp" />
+    <ClCompile Include="src\app\enemy\EnemyAction_WarpGuard.cpp" />
+    <ClCompile Include="src\app\enemy\EnemyAdaptation.cpp" />
+    <ClCompile Include="src\app\enemy\EnemyCombat.cpp" />
+    <ClCompile Include="src\app\enemy\EnemyCore.cpp" />
+    <ClCompile Include="src\app\enemy\EnemyPresentation.cpp" />
+    <ClCompile Include="src\app\enemy\EnemyTactics.cpp" />
+    <ClCompile Include="src\app\enemy\EnemyTuning.cpp" />
     <ClCompile Include="src\app\enemy\EnemyTuningPresetIO.cpp" />
     <ClCompile Include="src\engine\model\MaterialManager.cpp" />
     <ClCompile Include="src\engine\model\Material.cpp" />
@@ -156,6 +165,7 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClCompile Include="src\app\player\SwordMouseController.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\app\enemy\EnemyActionData.h" />
     <ClInclude Include="include\app\enemy\EnemyTuningPreset.h" />
     <ClInclude Include="include\app\enemy\EnemyTuningPresetIO.h" />
     <ClInclude Include="include\app\player\SwordControllerState.h" />

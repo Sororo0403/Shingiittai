@@ -184,7 +184,11 @@ void SpriteRenderer::CreatePipelineState() {
     desc.SampleDesc.Count = 1;
     desc.SampleMask = UINT_MAX;
     desc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-    desc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+    D3D12_DEPTH_STENCIL_DESC depth =
+        CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+    depth.DepthEnable = FALSE;
+    depth.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+    desc.DepthStencilState = depth;
 
     D3D12_BLEND_DESC blend = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
     auto &rt = blend.RenderTarget[0];

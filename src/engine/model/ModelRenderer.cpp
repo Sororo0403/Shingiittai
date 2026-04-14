@@ -14,6 +14,10 @@ using Microsoft::WRL::ComPtr;
 
 struct ConstBufferData {
     XMFLOAT4X4 matWVP;
+    XMFLOAT4X4 matWorld;
+    XMFLOAT4 cameraPos;
+    XMFLOAT4 effectColor;
+    XMFLOAT4 effectParams;
 };
 
 void ModelRenderer::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
@@ -55,9 +59,11 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
 
     const Material &material = materialManager_->GetMaterial(model.materialId);
 
-    bool transparent = material.color.w < 1.0f;
+    bool transparent = material.color.w < 1.0f || currentEffect_.enabled;
 
-    if (transparent) {
+    if (currentEffect_.enabled && currentEffect_.additiveBlend) {
+        cmd->SetPipelineState(additivePSO_.Get());
+    } else if (transparent) {
         cmd->SetPipelineState(transparentPSO_.Get());
     } else {
         cmd->SetPipelineState(opaquePSO_.Get());
@@ -78,6 +84,16 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
         reinterpret_cast<ConstBufferData *>(mappedCB_ + cbStride_ * drawIndex_);
 
     XMStoreFloat4x4(&dst->matWVP, XMMatrixTranspose(wvp));
+    XMStoreFloat4x4(&dst->matWorld, XMMatrixTranspose(world));
+    dst->cameraPos = {camera.GetPosition().x, camera.GetPosition().y,
+                      camera.GetPosition().z, 1.0f};
+    dst->effectColor = currentEffect_.color;
+    dst->effectParams = {
+        currentEffect_.enabled ? currentEffect_.intensity : 0.0f,
+        currentEffect_.fresnelPower,
+        currentEffect_.noiseAmount,
+        currentEffect_.time,
+    };
 
     D3D12_GPU_VIRTUAL_ADDRESS cbAddr =
         constBuffer_->GetGPUVirtualAddress() + cbStride_ * drawIndex_;
@@ -238,6 +254,22 @@ void ModelRenderer::CreatePipelineState() {
     ThrowIfFailed(device->CreateGraphicsPipelineState(
                       &pso, IID_PPV_ARGS(&transparentPSO_)),
                   "CreateGraphicsPipelineState(Transparent) failed");
+
+    // 加算エフェクトPSO
+    blend.RenderTarget[0].BlendEnable = TRUE;
+    blend.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+    blend.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
+    blend.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+    blend.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+    blend.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ONE;
+    blend.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    blend.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+    pso.BlendState = blend;
+    pso.DepthStencilState = transparentDepth;
+
+    ThrowIfFailed(device->CreateGraphicsPipelineState(
+                      &pso, IID_PPV_ARGS(&additivePSO_)),
+                  "CreateGraphicsPipelineState(Additive) failed");
 }
 
 void ModelRenderer::CreateBoneBuffer() {

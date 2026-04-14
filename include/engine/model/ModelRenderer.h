@@ -12,6 +12,16 @@ class SrvManager;
 class MeshManager;
 class TextureManager;
 
+struct ModelDrawEffect {
+    bool enabled = false;
+    bool additiveBlend = false;
+    DirectX::XMFLOAT4 color = {1.0f, 0.2f, 0.7f, 0.65f};
+    float intensity = 0.0f;
+    float fresnelPower = 3.5f;
+    float noiseAmount = 0.0f;
+    float time = 0.0f;
+};
+
 class ModelRenderer {
   public:
     /// <summary>
@@ -34,6 +44,9 @@ class ModelRenderer {
     /// <param name="camera">描画に使用するカメラ</param>
     void Draw(const Model &model, const Transform &transform,
               const Camera &camera);
+
+    void SetDrawEffect(const ModelDrawEffect &effect) { currentEffect_ = effect; }
+    void ClearDrawEffect() { currentEffect_ = ModelDrawEffect{}; }
 
     /// <summary>
     /// 描画前処理
@@ -65,11 +78,13 @@ class ModelRenderer {
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> opaquePSO_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> transparentPSO_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> additivePSO_;
     Microsoft::WRL::ComPtr<ID3D12Resource> constBuffer_;
 
     uint32_t drawIndex_ = 0;
     uint32_t cbStride_ = 0;
     uint8_t *mappedCB_ = nullptr;
+    ModelDrawEffect currentEffect_{};
 
     Microsoft::WRL::ComPtr<ID3D12Resource> boneBuffer_;
     DirectX::XMFLOAT4X4 *mappedBones_ = nullptr;

@@ -13,6 +13,8 @@ struct ModelVSOutput
 {
     float4 pos : SV_POSITION;
     float2 uv : TEXCOORD;
+    float3 worldPos : TEXCOORD1;
+    float3 pseudoNormal : TEXCOORD2;
 };
 
 #endif // MODEL_HLSLI

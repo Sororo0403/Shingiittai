@@ -47,6 +47,12 @@ void ModelManager::Draw(uint32_t modelId, const Transform &transform,
     modelRenderer_.Draw(models_[modelId], transform, camera);
 }
 
+void ModelManager::SetDrawEffect(const ModelDrawEffect &effect) {
+    modelRenderer_.SetDrawEffect(effect);
+}
+
+void ModelManager::ClearDrawEffect() { modelRenderer_.ClearDrawEffect(); }
+
 void ModelManager::PreDraw() { modelRenderer_.PreDraw(); }
 
 void ModelManager::PostDraw() { modelRenderer_.PostDraw(); }

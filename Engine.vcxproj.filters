@@ -153,6 +153,15 @@
     <ClCompile Include="src\app\enemy\Bullet.cpp"><Filter>src\app\enemy</Filter></ClCompile>
     <ClCompile Include="src\app\player\SwordMouseController.cpp"><Filter>src\app\player</Filter></ClCompile>
     <ClCompile Include="src\app\player\SwordJoyConController.cpp"><Filter>src\app\player</Filter></ClCompile>
+    <ClCompile Include="src\app\enemy\EnemyAction_Melee.cpp"><Filter>src\app\enemy</Filter></ClCompile>
+    <ClCompile Include="src\app\enemy\EnemyAction_Ranged.cpp"><Filter>src\app\enemy</Filter></ClCompile>
+    <ClCompile Include="src\app\enemy\EnemyAction_WarpGuard.cpp"><Filter>src\app\enemy</Filter></ClCompile>
+    <ClCompile Include="src\app\enemy\EnemyAdaptation.cpp"><Filter>src\app\enemy</Filter></ClCompile>
+    <ClCompile Include="src\app\enemy\EnemyCombat.cpp"><Filter>src\app\enemy</Filter></ClCompile>
+    <ClCompile Include="src\app\enemy\EnemyCore.cpp"><Filter>src\app\enemy</Filter></ClCompile>
+    <ClCompile Include="src\app\enemy\EnemyPresentation.cpp"><Filter>src\app\enemy</Filter></ClCompile>
+    <ClCompile Include="src\app\enemy\EnemyTactics.cpp"><Filter>src\app\enemy</Filter></ClCompile>
+    <ClCompile Include="src\app\enemy\EnemyTuning.cpp"><Filter>src\app\enemy</Filter></ClCompile>
     <ClCompile Include="src\app\enemy\EnemyTuningPresetIO.cpp"><Filter>src\app\enemy</Filter></ClCompile>
     <ClCompile Include="src\engine\input\JoyCon.cpp"><Filter>src\engine\input</Filter></ClCompile>
   </ItemGroup>
@@ -201,6 +210,7 @@
     <ClInclude Include="include\app\enemy\Bullet.h"><Filter>include\app\enemy</Filter></ClInclude>
     <ClInclude Include="include\app\player\SwordMouseController.h"><Filter>include\app\player</Filter></ClInclude>
     <ClInclude Include="include\app\player\SwordJoyConController.h"><Filter>include\app\player</Filter></ClInclude>
+    <ClInclude Include="include\app\enemy\EnemyActionData.h"><Filter>include\app\enemy</Filter></ClInclude>
     <ClInclude Include="include\app\enemy\EnemyTuningPreset.h"><Filter>include\app\enemy</Filter></ClInclude>
     <ClInclude Include="include\app\enemy\EnemyTuningPresetIO.h"><Filter>include\app\enemy</Filter></ClInclude>
     <ClInclude Include="include\engine\input\JoyCon.h"><Filter>include\engine\input</Filter></ClInclude>

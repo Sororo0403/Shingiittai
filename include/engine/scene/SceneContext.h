@@ -7,7 +7,6 @@ class ModelManager;
 class SpriteManager;
 class TextureManager;
 class DirectXCommon;
-
 #ifdef _DEBUG
 class DebugDraw;
 #endif // _DEBUG
@@ -24,7 +23,6 @@ struct SceneContext {
     SpriteManager *sprite = nullptr;
     TextureManager *texture = nullptr;
     DirectXCommon *dxCommon = nullptr;
-
 #ifdef _DEBUG
     DebugDraw *debugDraw = nullptr;
 #endif // _DEBUG

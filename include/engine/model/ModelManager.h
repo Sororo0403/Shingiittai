@@ -41,6 +41,9 @@ class ModelManager {
     void Draw(uint32_t modelId, const Transform &transform,
               const Camera &camera);
 
+    void SetDrawEffect(const ModelDrawEffect &effect);
+    void ClearDrawEffect();
+
     /// <summary>
     /// モデル描画前の共通処理
     /// </summary>
