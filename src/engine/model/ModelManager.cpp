@@ -46,6 +46,7 @@ uint32_t ModelManager::Load(const std::wstring &path) {
     }
 
     Model model = assimpLoader_.Load(pathStr);
+    modelRenderer_.CreateSkinClusters(model);
 
     if (!model.animations.empty()) {
         model.currentAnimation = model.animations.begin()->first;
@@ -54,6 +55,9 @@ uint32_t ModelManager::Load(const std::wstring &path) {
         model.isPlaying = true;
         model.animationFinished = false;
     }
+
+    animator_.Update(model, 0.0f);
+    modelRenderer_.UpdateSkinClusters(model);
 
     models_.push_back(model);
     uint32_t modelId = static_cast<uint32_t>(models_.size() - 1);
@@ -93,6 +97,7 @@ void ModelManager::UpdateAnimation(uint32_t modelId, float deltaTime) {
     }
 
     animator_.Update(models_[modelId], deltaTime);
+    modelRenderer_.UpdateSkinClusters(models_[modelId]);
 }
 
 void ModelManager::PlayAnimation(uint32_t modelId,

@@ -53,8 +53,8 @@ void GameScene::Initialize(const SceneContext &ctx) {
     uint32_t swordModel = model->Load(L"resources/model/player/sword.glb");
     uint32_t enemyModel = 0;
     try {
-        enemyModel = model->Load(L"resources/model/boss/newBossModel.gltf");
-        DebugLog("[GameScene] enemy model loaded: resources/model/boss/newBossModel.gltf");
+        enemyModel = model->Load(L"resources/model/boss/boss.gltf");
+        DebugLog("[GameScene] enemy model loaded: resources/model/boss/sneakWalk.gltf");
     } catch (const std::exception &e) {
         std::ostringstream oss;
         oss << "[GameScene] bossBody load failed: " << e.what();
@@ -69,8 +69,16 @@ void GameScene::Initialize(const SceneContext &ctx) {
     texture->ReleaseUploadBuffers();
 
     player_.Initialize(playerModel, swordModel);
+    playerModelId_ = playerModel;
     enemy_.Initialize(enemyModel);
     enemyModelId_ = enemyModel;
+
+    if (Model *playerModelData = model->GetModel(playerModelId_)) {
+        if (!playerModelData->animations.empty()) {
+            model->PlayAnimation(playerModelId_, playerModelData->currentAnimation,
+                                 true);
+        }
+    }
 
     if (Model *enemyModelData = model->GetModel(enemyModelId_)) {
         if (!enemyModelData->animations.empty()) {
@@ -89,13 +97,14 @@ void GameScene::Update() {
 
     UpdateCamera(input);
 
+    ctx_->model->UpdateAnimation(playerModelId_, ctx_->deltaTime);
+    ctx_->model->UpdateAnimation(enemyModelId_, ctx_->deltaTime);
+
 #ifdef _DEBUG
     if (currentCamera_ == &debugCamera_) {
         return;
     }
 #endif
-
-    ctx_->model->UpdateAnimation(enemyModelId_, ctx_->deltaTime);
 
     enemy_.Update(player_.GetTransform().position, ctx_->deltaTime,
                   player_.IsGuarding());

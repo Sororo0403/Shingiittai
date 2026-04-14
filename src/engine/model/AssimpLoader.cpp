@@ -119,6 +119,9 @@ Model AssimpLoader::Load(const std::string &path) {
             continue;
         }
 
+        ModelSubMesh subMesh{};
+        subMesh.vertexCount = static_cast<uint32_t>(vertices.size());
+
         if (mesh->HasBones()) {
             for (unsigned int i = 0; i < mesh->mNumBones; i++) {
                 aiBone *bone = mesh->mBones[i];
@@ -139,12 +142,20 @@ Model AssimpLoader::Load(const std::string &path) {
 
                     BoneInfo info{};
                     info.name = boneName;
+                    // This project's existing animation path already uses Assimp's
+                    // node transforms as-is, so the inverse bind pose also needs to
+                    // stay in the same space. Converting it again here breaks the
+                    // palette and causes extreme scaling/shearing.
                     info.offsetMatrix = ToMatrix(bone->mOffsetMatrix);
 
                     model.bones.push_back(info);
                 } else {
                     boneIndex = it->second;
                 }
+
+                JointWeightData &jointWeightData = subMesh.skinClusterData[boneName];
+                jointWeightData.inverseBindPoseMatrix =
+                    model.bones[boneIndex].offsetMatrix;
 
                 for (unsigned int w = 0; w < bone->mNumWeights; w++) {
                     uint32_t vertexId = bone->mWeights[w].mVertexId;
@@ -154,25 +165,9 @@ Model AssimpLoader::Load(const std::string &path) {
                         continue;
                     }
 
-                    auto &v = vertices[vertexId];
-
-                    if (v.boneWeight.x == 0.0f) {
-                        v.boneIndex.x = boneIndex;
-                        v.boneWeight.x = weight;
-                    } else if (v.boneWeight.y == 0.0f) {
-                        v.boneIndex.y = boneIndex;
-                        v.boneWeight.y = weight;
-                    } else if (v.boneWeight.z == 0.0f) {
-                        v.boneIndex.z = boneIndex;
-                        v.boneWeight.z = weight;
-                    } else if (v.boneWeight.w == 0.0f) {
-                        v.boneIndex.w = boneIndex;
-                        v.boneWeight.w = weight;
-                    }
+                    jointWeightData.vertexWeights.push_back({weight, vertexId});
                 }
             }
-
-            NormalizeWeights(vertices);
         }
 
         aiMaterial *mat = nullptr;
@@ -248,7 +243,6 @@ Model AssimpLoader::Load(const std::string &path) {
 
         material.enableTexture = 1;
 
-        ModelSubMesh subMesh{};
         subMesh.meshId = meshId;
         subMesh.textureId = textureId;
         subMesh.materialId = materialManager_->CreateMaterial(material);
@@ -307,11 +301,11 @@ void AssimpLoader::BuildBoneHierarchy(const aiScene *scene, Model &model) {
         if (!node) {
             model.bones[i].parentIndex = -1;
             model.bones[i].localBindMatrix = ToMatrix(aiMatrix4x4());
+            model.bones[i].parentAdjustmentMatrix = ToMatrix(aiMatrix4x4());
             continue;
         }
 
-        model.bones[i].localBindMatrix = ToMatrix(node->mTransformation);
-
+        aiMatrix4x4 adjustment{};
         int parentIndex = -1;
         const aiNode *parent = node->mParent;
 
@@ -321,10 +315,15 @@ void AssimpLoader::BuildBoneHierarchy(const aiScene *scene, Model &model) {
                 parentIndex = static_cast<int>(it->second);
                 break;
             }
+
+            adjustment *= parent->mTransformation;
             parent = parent->mParent;
         }
 
         model.bones[i].parentIndex = parentIndex;
+        model.bones[i].parentAdjustmentMatrix = ToMatrix(adjustment);
+        model.bones[i].localBindMatrix =
+            ToMatrix(node->mTransformation * adjustment);
     }
 }
 
@@ -391,19 +390,5 @@ void AssimpLoader::LoadAnimation(const aiScene *scene, Model &model) {
         model.animationTime = 0.0f;
         model.isLoop = true;
         model.isPlaying = true;
-    }
-}
-
-void AssimpLoader::NormalizeWeights(std::vector<Vertex> &vertices) {
-    for (auto &v : vertices) {
-        float sum =
-            v.boneWeight.x + v.boneWeight.y + v.boneWeight.z + v.boneWeight.w;
-
-        if (sum > 0.00001f) {
-            v.boneWeight.x /= sum;
-            v.boneWeight.y /= sum;
-            v.boneWeight.z /= sum;
-            v.boneWeight.w /= sum;
-        }
     }
 }

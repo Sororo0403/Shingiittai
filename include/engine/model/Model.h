@@ -1,15 +1,56 @@
 #pragma once
 #include <DirectXMath.h>
+#include <array>
 #include <cstdint>
+#include <d3d12.h>
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <wrl.h>
+
+struct VertexWeightData {
+    float weight = 0.0f;
+    uint32_t vertexIndex = 0;
+};
+
+struct JointWeightData {
+    DirectX::XMFLOAT4X4 inverseBindPoseMatrix{};
+    std::vector<VertexWeightData> vertexWeights;
+};
+
+constexpr uint32_t kNumMaxInfluence = 4;
+
+struct VertexInfluence {
+    std::array<float, kNumMaxInfluence> weights{};
+    std::array<int32_t, kNumMaxInfluence> jointIndices{};
+};
+
+struct WellForGPU {
+    DirectX::XMFLOAT4X4 skeletonSpaceMatrix{};
+    DirectX::XMFLOAT4X4 skeletonSpaceInverseTransposeMatrix{};
+};
+
+struct SkinCluster {
+    std::vector<DirectX::XMFLOAT4X4> inverseBindPoseMatrices;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> influenceResource;
+    D3D12_VERTEX_BUFFER_VIEW influenceBufferView{};
+    VertexInfluence *mappedInfluence = nullptr;
+    uint32_t influenceCount = 0;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> paletteResource;
+    WellForGPU *mappedPalette = nullptr;
+    uint32_t paletteCount = 0;
+    D3D12_CPU_DESCRIPTOR_HANDLE paletteSrvCpuHandle{};
+    D3D12_GPU_DESCRIPTOR_HANDLE paletteSrvGpuHandle{};
+};
 
 struct BoneInfo {
     std::string name;
     int parentIndex = -1;
     DirectX::XMFLOAT4X4 offsetMatrix{};
     DirectX::XMFLOAT4X4 localBindMatrix{};
+    DirectX::XMFLOAT4X4 parentAdjustmentMatrix{};
 };
 
 struct AnimationKeyVec3 {
@@ -38,6 +79,10 @@ struct ModelSubMesh {
     uint32_t meshId = 0;
     uint32_t textureId = 0;
     uint32_t materialId = 0;
+    uint32_t vertexCount = 0;
+
+    std::unordered_map<std::string, JointWeightData> skinClusterData;
+    SkinCluster skinCluster;
 };
 
 struct Model {
@@ -52,6 +97,7 @@ struct Model {
 
     std::unordered_map<std::string, AnimationClip> animations;
 
+    std::vector<DirectX::XMFLOAT4X4> skeletonSpaceMatrices;
     std::vector<DirectX::XMFLOAT4X4> finalBoneMatrices;
 
     std::string currentAnimation = "";

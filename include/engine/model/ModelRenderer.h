@@ -35,6 +35,9 @@ class ModelRenderer {
     void Draw(const Model &model, const Transform &transform,
               const Camera &camera);
 
+    void CreateSkinClusters(Model &model);
+    void UpdateSkinClusters(Model &model);
+
     /// <summary>
     /// 描画前処理
     /// </summary>
@@ -50,11 +53,9 @@ class ModelRenderer {
     void CreateRootSignature();
     void CreatePipelineState();
     void CreateConstantBuffer();
-    void CreateBoneBuffer();
 
   private:
     static constexpr uint32_t kMaxDraws = 4096;
-    static constexpr uint32_t kMaxBones = 128;
 
     DirectXCommon *dxCommon_ = nullptr;
     SrvManager *srvManager_ = nullptr;
@@ -70,7 +71,4 @@ class ModelRenderer {
     uint32_t drawIndex_ = 0;
     uint32_t cbStride_ = 0;
     uint8_t *mappedCB_ = nullptr;
-
-    Microsoft::WRL::ComPtr<ID3D12Resource> boneBuffer_;
-    DirectX::XMFLOAT4X4 *mappedBones_ = nullptr;
 };

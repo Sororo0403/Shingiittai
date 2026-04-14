@@ -71,6 +71,7 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget) {
     leftSwordVisible_ = hasLeftJoyCon;
     rightSwordVisible_ = hasRightJoyCon || useMouseRightSword;
     isGuarding_ = leftPose.isGuard || rightPose.isGuard;
+
 }
 
 void Player::Draw(ModelManager *modelManager, const Camera &camera) {

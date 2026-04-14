@@ -50,6 +50,7 @@ class GameScene : public BaseScene {
     // Game
     Player player_;
     Enemy enemy_;
+    uint32_t playerModelId_ = 0;
     uint32_t enemyModelId_ = 0;
 
     float playerHitCooldown_ = 0.0f;

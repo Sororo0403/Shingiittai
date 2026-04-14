@@ -94,9 +94,7 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
     }
 
     if (isVisible_) {
-        modelManager->Draw(modelId_, bodyTf_, camera);
-        modelManager->Draw(modelId_, leftHandTf_, camera);
-        modelManager->Draw(modelId_, rightHandTf_, camera);
+        modelManager->Draw(modelId_, tf_, camera);
     }
 
     for (const auto &bullet : bullets_) {

@@ -53,8 +53,6 @@ class AssimpLoader {
     /// 各頂点のボーンウェイトを正規化して合計が1.0になるように調整
     /// </summary>
     /// <param name="vertices">正規化する頂点配列</param>
-    void NormalizeWeights(std::vector<Vertex> &vertices);
-
   private:
     TextureManager *textureManager_ = nullptr;
     MeshManager *meshManager_ = nullptr;
