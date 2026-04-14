@@ -66,5 +66,8 @@ class GameScene : public BaseScene {
     bool dbgBulletHitPlayer_ = false;
     bool dbgWaveHitPlayer_ = false;
     bool dbgPlayerGuardedHit_ = false;
+#ifdef _DEBUG
+    bool dbgFreezeEnemyMotion_ = true;
+#endif
     Bullet bullet_;
 };

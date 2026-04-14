@@ -13,7 +13,7 @@ void Enemy::Initialize(uint32_t modelId) {
 
     tf_.position = {0.0f, 0.0f, 10.0f};
     tf_.scale = {1.0f, 1.0f, 1.0f};
-    tf_.rotation = {0.0f, 0.0f, 0.0f, 1.0f};
+    tf_.rotation = {0.0f, 1.0f, 0.0f, 1.0f};
 
     UpdateParts();
     ValidateAllTimings();

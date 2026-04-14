@@ -25,7 +25,7 @@ void DebugLog(const std::string &message) {
 #endif
 }
 
-}
+} // namespace
 
 void GameScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
@@ -54,14 +54,16 @@ void GameScene::Initialize(const SceneContext &ctx) {
     uint32_t enemyModel = 0;
     try {
         enemyModel = model->Load(L"resources/model/boss/boss.gltf");
-        DebugLog("[GameScene] enemy model loaded: resources/model/boss/sneakWalk.gltf");
+        DebugLog("[GameScene] enemy model loaded: "
+                 "resources/model/boss/sneakWalk.gltf");
     } catch (const std::exception &e) {
         std::ostringstream oss;
         oss << "[GameScene] bossBody load failed: " << e.what();
         DebugLog(oss.str());
 
         enemyModel = model->Load(L"resources/model/enemy/enemy.glb");
-        DebugLog("[GameScene] fallback enemy model loaded: resources/model/enemy/enemy.glb");
+        DebugLog("[GameScene] fallback enemy model loaded: "
+                 "resources/model/enemy/enemy.glb");
     }
 
     dx->EndUpload();
@@ -75,25 +77,31 @@ void GameScene::Initialize(const SceneContext &ctx) {
 
     if (Model *playerModelData = model->GetModel(playerModelId_)) {
         if (!playerModelData->animations.empty()) {
-            model->PlayAnimation(playerModelId_, playerModelData->currentAnimation,
-                                 true);
+            model->PlayAnimation(playerModelId_,
+                                 playerModelData->currentAnimation, true);
         }
     }
 
     if (Model *enemyModelData = model->GetModel(enemyModelId_)) {
         if (!enemyModelData->animations.empty()) {
-            model->PlayAnimation(enemyModelId_, enemyModelData->currentAnimation,
-                                 true);
+            model->PlayAnimation(enemyModelId_,
+                                 enemyModelData->currentAnimation, true);
         }
     }
 
-    uint32_t bulletModel = ctx_->model->Load(L"resources/model/bullet/bullet.obj");
+    uint32_t bulletModel =
+        ctx_->model->Load(L"resources/model/bullet/bullet.obj");
     bullet_.Initialize(bulletModel);
 }
 
 void GameScene::Update() {
     DebugLog("[GameScene] Update begin");
     Input *input = ctx_->input;
+#ifdef _DEBUG
+    const bool freezeEnemyMotion = dbgFreezeEnemyMotion_;
+#else
+    const bool freezeEnemyMotion = false;
+#endif
 
     UpdateCamera(input);
 
@@ -106,8 +114,10 @@ void GameScene::Update() {
     }
 #endif
 
-    enemy_.Update(player_.GetTransform().position, ctx_->deltaTime,
-                  player_.IsGuarding());
+    if (!freezeEnemyMotion) {
+        enemy_.Update(player_.GetTransform().position, ctx_->deltaTime,
+                      player_.IsGuarding());
+    }
 
     // 当たり判定
     player_.Update(input, ctx_->deltaTime, enemy_.GetTransform().position);
@@ -116,10 +126,11 @@ void GameScene::Update() {
 
     auto playerBox = player_.GetOBB();
 
-    //if (CollisionUtil::CheckOBB(swordBox, bulletBox) && player_.GetSword().GetSlashMode()) {
-    //    player_.GetSword().SetCounter(true);
-    //}
-    // // 敵の行動状態を取得してガード状態を判定
+    // if (CollisionUtil::CheckOBB(swordBox, bulletBox) &&
+    // player_.GetSword().GetSlashMode()) {
+    //     player_.GetSword().SetCounter(true);
+    // }
+    //  // 敵の行動状態を取得してガード状態を判定
     const ActionKind enemyActionKind = enemy_.GetActionKind();
     const ActionStep enemyActionStep = enemy_.GetActionStep();
 
@@ -219,7 +230,7 @@ void GameScene::Update() {
 
     bool bossHitPlayer = false;
 
-    if (isEnemyMeleeActive) {
+    if (!freezeEnemyMotion && isEnemyMeleeActive) {
         auto enemyAttackBox = enemy_.GetAttackOBB();
 
         bossHitPlayer = CollisionUtil::CheckOBB(enemyAttackBox, playerBox);
@@ -250,12 +261,16 @@ void GameScene::Update() {
             }
         }
 
-    DebugLog("[GameScene] Update end");
+        DebugLog("[GameScene] Update end");
     }
 
     dbgBossHitPlayer_ = bossHitPlayer;
 
-   dbgBulletHitPlayer_ = false;
+    dbgBulletHitPlayer_ = false;
+
+    if (freezeEnemyMotion) {
+        return;
+    }
 
     for (const auto &bullet : enemy_.GetBullets()) {
         if (!bullet.isAlive) {
@@ -342,9 +357,9 @@ void GameScene::Update() {
         }
     }
 }
-//#ifdef _DEBUG
-//    DebugDraw *debugDraw = ctx_->debugDraw;
-//#endif
+// #ifdef _DEBUG
+//     DebugDraw *debugDraw = ctx_->debugDraw;
+// #endif
 
 void GameScene::Draw() {
     DebugLog("[GameScene] Draw begin");
@@ -353,7 +368,7 @@ void GameScene::Draw() {
     player_.Draw(ctx_->model, *currentCamera_);
     enemy_.Draw(ctx_->model, *currentCamera_);
     int aliveBulletCount = 0;
-    for (const auto& bullet : enemy_.GetBullets()) {
+    for (const auto &bullet : enemy_.GetBullets()) {
         if (bullet.isAlive) {
             aliveBulletCount++;
         }
@@ -371,15 +386,17 @@ void GameScene::Draw() {
         if (sword == nullptr) {
             continue;
         }
-        ctx_->debugDraw->DrawOBB(ctx_->model, sword->GetOBB(), *currentCamera_);
+        // ctx_->debugDraw->DrawOBB(ctx_->model, sword->GetOBB(),
+        // *currentCamera_);
     }
 
     // ボス部位
     if (enemy_.IsAlive()) {
-        ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetBodyOBB(), *currentCamera_);
-        ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetLeftHandOBB(), *currentCamera_);
-        ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetRightHandOBB(),
-            *currentCamera_);
+        // ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetBodyOBB(),
+        // *currentCamera_);
+        // ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetLeftHandOBB(),
+        // *currentCamera_); ctx_->debugDraw->DrawOBB(ctx_->model,
+        // enemy_.GetRightHandOBB(),            *currentCamera_);
 
         const bool isEnemySmashActive =
             (enemy_.GetActionKind() == ActionKind::Smash &&
@@ -389,10 +406,9 @@ void GameScene::Draw() {
              enemy_.GetActionStep() == ActionStep::Active);
 
         if (isEnemySmashActive || isEnemySweepActive) {
-            ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetAttackOBB(),
-                                     *currentCamera_);
+            //  ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetAttackOBB(),
+            //  *currentCamera_);
         }
-
     }
 #endif
 
@@ -400,12 +416,13 @@ void GameScene::Draw() {
 
 #ifdef _DEBUG
     ImGui::Begin("HitInfo");
+    ImGui::Checkbox("Freeze Enemy Motion", &dbgFreezeEnemyMotion_);
     ImGui::Text("Hit LeftHand : %s", dbgHitLeftHand_ ? "true" : "false");
     ImGui::Text("Hit RightHand: %s", dbgHitRightHand_ ? "true" : "false");
     ImGui::Text("Hit Body     : %s", dbgHitBody_ ? "true" : "false");
     ImGui::Text("Cooldown     : %.2f", enemyHitCooldown_);
 
-   const ActionKind enemyActionKind = enemy_.GetActionKind();
+    const ActionKind enemyActionKind = enemy_.GetActionKind();
     const ActionStep enemyActionStep = enemy_.GetActionStep();
 
     const char *actionKindName = "None";
@@ -491,7 +508,8 @@ void GameScene::Draw() {
     ImGui::Text("AliveBullets    : %d", aliveBulletCount);
     auto warpPos = enemy_.GetWarpTargetPos();
     ImGui::Text("Visible         : %s", enemy_.IsVisible() ? "true" : "false");
-    ImGui::Text("WarpTarget      : (%.2f, %.2f, %.2f)", warpPos.x, warpPos.y, warpPos.z);
+    ImGui::Text("WarpTarget      : (%.2f, %.2f, %.2f)", warpPos.x, warpPos.y,
+                warpPos.z);
     ImGui::Text("WaveHitPlayer   : %s", dbgWaveHitPlayer_ ? "true" : "false");
     ImGui::Text("AliveWaves      : %d", aliveWaveCount);
     const char *guardName = "None";
@@ -544,17 +562,16 @@ void GameScene::Draw() {
         ImGui::DragFloat("Smash Knockback", &p.knockback, 0.1f, 0.0f, 30.0f);
         ImGui::DragFloat3("Smash HitBox", &p.hitBoxSize.x, 0.05f, 0.1f, 10.0f);
 
-       float &smashCharge = enemy_.EditSmashChargeTime();
+        float &smashCharge = enemy_.EditSmashChargeTime();
         ImGui::DragFloat("Smash Charge", &smashCharge, 0.01f, 0.0f, 5.0f);
 
-       /* ImGui::DragFloat("Smash Attack", &enemy_.EditSmashAttackTime(), 0.01f,
-                         0.0f, 5.0f);
-        ImGui::DragFloat("Smash Recovery", &enemy_.EditSmashRecoveryTime(),
-                         0.01f, 0.0f, 5.0f);
-        ImGui::DragFloat("Smash Active Start",
-                         &enemy_.EditSmashActiveStartTime(), 0.01f, 0.0f, 1.0f);
-        ImGui::DragFloat("Smash Active End", &enemy_.EditSmashActiveEndTime(),
-                         0.01f, 0.0f, 1.0f);*/
+        /* ImGui::DragFloat("Smash Attack", &enemy_.EditSmashAttackTime(),
+         0.01f, 0.0f, 5.0f); ImGui::DragFloat("Smash Recovery",
+         &enemy_.EditSmashRecoveryTime(), 0.01f, 0.0f, 5.0f);
+         ImGui::DragFloat("Smash Active Start",
+                          &enemy_.EditSmashActiveStartTime(), 0.01f,
+         0.0f, 1.0f); ImGui::DragFloat("Smash Active End",
+         &enemy_.EditSmashActiveEndTime(), 0.01f, 0.0f, 1.0f);*/
         if (ImGui::TreeNode("Smash Timing")) {
             auto &t = enemy_.EditSmashTiming();
             ImGui::DragFloat("Smash Total", &t.totalTime, 0.01f, 0.0f, 3.0f);
@@ -565,8 +582,8 @@ void GameScene::Draw() {
             ImGui::DragFloat("Smash Recovery Start", &t.recoveryStartTime,
                              0.01f, 0.0f, 3.0f);
 
-            ImGui::DragFloat("Smash Tracking End", &t.trackingEndTime,
-                             0.01f, 0.0f, 2.0f);
+            ImGui::DragFloat("Smash Tracking End", &t.trackingEndTime, 0.01f,
+                             0.0f, 2.0f);
 
             ImGui::TreePop();
         }
@@ -582,15 +599,13 @@ void GameScene::Draw() {
         float &sweepCharge = enemy_.EditSweepChargeTime();
         ImGui::DragFloat("Sweep Charge", &sweepCharge, 0.01f, 0.0f, 5.0f);
 
-
-       /* ImGui::DragFloat("Sweep Attack", &enemy_.EditSweepAttackTime(), 0.01f,
-                         0.0f, 5.0f);
-        ImGui::DragFloat("Sweep Recovery", &enemy_.EditSweepRecoveryTime(),
-                         0.01f, 0.0f, 5.0f);
-        ImGui::DragFloat("Sweep Active Start",
-                         &enemy_.EditSweepActiveStartTime(), 0.01f, 0.0f, 1.0f);
-        ImGui::DragFloat("Sweep Active End", &enemy_.EditSweepActiveEndTime(),
-                         0.01f, 0.0f, 1.0f);*/
+        /* ImGui::DragFloat("Sweep Attack", &enemy_.EditSweepAttackTime(),
+         0.01f, 0.0f, 5.0f); ImGui::DragFloat("Sweep Recovery",
+         &enemy_.EditSweepRecoveryTime(), 0.01f, 0.0f, 5.0f);
+         ImGui::DragFloat("Sweep Active Start",
+                          &enemy_.EditSweepActiveStartTime(), 0.01f,
+         0.0f, 1.0f); ImGui::DragFloat("Sweep Active End",
+         &enemy_.EditSweepActiveEndTime(), 0.01f, 0.0f, 1.0f);*/
         if (ImGui::TreeNode("Sweep Timing")) {
             auto &t = enemy_.EditSweepTiming();
             ImGui::DragFloat("Sweep Total", &t.totalTime, 0.01f, 0.0f, 3.0f);
@@ -600,9 +615,9 @@ void GameScene::Draw() {
                              3.0f);
             ImGui::DragFloat("Sweep Recovery Start", &t.recoveryStartTime,
                              0.01f, 0.0f, 3.0f);
-            
-            ImGui::DragFloat("Sweep Tracking End", &t.trackingEndTime,
-                             0.01f, 0.0f, 2.0f);
+
+            ImGui::DragFloat("Sweep Tracking End", &t.trackingEndTime, 0.01f,
+                             0.0f, 2.0f);
             ImGui::TreePop();
         }
         ImGui::TreePop();
