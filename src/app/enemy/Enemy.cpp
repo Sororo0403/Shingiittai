@@ -247,6 +247,10 @@ void Enemy::UpdateParts() {
             leftHandTf_.position.x += (-rightX) * 0.2f;
             leftHandTf_.position.y += 0.3f;
             leftHandTf_.position.z += (-rightZ) * 0.2f;
+        } else if (guardTarget_ == GuardTarget::BodyRight) {
+            rightHandTf_.position.x += rightX * 0.2f;
+            rightHandTf_.position.y += 0.3f;
+            rightHandTf_.position.z += rightZ * 0.2f;
         }
     }
 }
@@ -1123,14 +1127,16 @@ void Enemy::UpdateWaves(float deltaTime) {
 // ガード処理
 // ============================================================
 void Enemy::DecideGuardTarget() {
-    int r = std::rand() % 3;
+    int r = std::rand() % 4;
 
     if (r == 0) {
         guardTarget_ = GuardTarget::Face;
     } else if (r == 1) {
         guardTarget_ = GuardTarget::BodyCenter;
-    } else {
+    } else if (r == 2) {
         guardTarget_ = GuardTarget::BodyLeft;
+    } else {
+        guardTarget_ = GuardTarget::BodyRight;
     }
 }
 

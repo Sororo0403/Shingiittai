@@ -107,7 +107,7 @@ void GameScene::Update() {
 
     for (size_t i = 0; i < swords.size(); ++i) {
         const Sword *sword = swords[i];
-        if (!swordSlashStates[i]) {
+        if (sword == nullptr || !swordSlashStates[i]) {
             continue;
         }
 
@@ -130,7 +130,24 @@ void GameScene::Update() {
 
         if (enemyHitCooldown_ <= 0.0f) {
             // 左手ガード中は左手優先
-            if (isEnemyGuardHold && hitLeftHand) {
+            bool hitGuardHand = false;
+            if (isEnemyGuardHold) {
+                switch (enemy_.GetGuardTarget()) {
+                case GuardTarget::Face:
+                case GuardTarget::BodyCenter:
+                case GuardTarget::BodyLeft:
+                    hitGuardHand = hitLeftHand;
+                    break;
+                case GuardTarget::BodyRight:
+                    hitGuardHand = hitRightHand;
+                    break;
+                case GuardTarget::None:
+                default:
+                    break;
+                }
+            }
+
+            if (hitGuardHand) {
                 enemyHitCooldown_ = 0.2f;
             } else if (hitBody) {
                 enemy_.TakeDamage(10.0f);
@@ -439,6 +456,9 @@ void GameScene::Draw() {
         break;
     case GuardTarget::BodyLeft:
         guardName = "BodyLeft";
+        break;
+    case GuardTarget::BodyRight:
+        guardName = "BodyRight";
         break;
     }
 

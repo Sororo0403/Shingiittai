@@ -19,6 +19,8 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
 
     leftSword_.Initialize(swordModelId);
     rightSword_.Initialize(swordModelId);
+    leftSword_.Update(BuildSwordTransform(MakeIdleSwordPose(true), true));
+    rightSword_.Update(BuildSwordTransform(MakeIdleSwordPose(false), false));
 }
 
 void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget) {
@@ -38,22 +40,26 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget) {
     UpdateMovement(input, deltaTime);
     LookAt(lookTarget);
 
-    if (leftJoyCon_.IsConnected()) {
+    const bool hasLeftJoyCon = leftJoyCon_.IsConnected();
+    const bool hasRightJoyCon = rightJoyCon_.IsConnected();
+    const bool useMouseRightSword = !hasLeftJoyCon && !hasRightJoyCon;
+
+    SwordPose leftPose = MakeIdleSwordPose(true);
+    if (hasLeftJoyCon) {
         leftSwordJoyConController_.Update(&leftJoyCon_, deltaTime,
                                           leftSword_.GetTransform());
+        leftPose = leftSwordJoyConController_.GetPose();
     }
 
-    if (rightJoyCon_.IsConnected()) {
+    SwordPose rightPose = MakeIdleSwordPose(false);
+    if (hasRightJoyCon) {
         rightSwordJoyConController_.Update(&rightJoyCon_, deltaTime,
                                            rightSword_.GetTransform());
-    } else if (swordMouseController_.IsActive(input)) {
+        rightPose = rightSwordJoyConController_.GetPose();
+    } else if (useMouseRightSword) {
         swordMouseController_.Update(input, deltaTime, rightSword_.GetTransform());
+        rightPose = swordMouseController_.GetPose();
     }
-
-    const SwordPose leftPose = leftSwordJoyConController_.GetPose();
-    const SwordPose rightPose = rightJoyCon_.IsConnected()
-                                    ? rightSwordJoyConController_.GetPose()
-                                    : swordMouseController_.GetPose();
 
     leftSword_.Update(BuildSwordTransform(leftPose, true));
     rightSword_.Update(BuildSwordTransform(rightPose, false));
@@ -62,13 +68,19 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget) {
     rightSwordSlashMode_ = rightPose.isSlashMode;
     leftSwordSlashDir_ = leftPose.slashDir;
     rightSwordSlashDir_ = rightPose.slashDir;
+    leftSwordVisible_ = hasLeftJoyCon;
+    rightSwordVisible_ = hasRightJoyCon || useMouseRightSword;
     isGuarding_ = leftPose.isGuard || rightPose.isGuard;
 }
 
 void Player::Draw(ModelManager *modelManager, const Camera &camera) {
     modelManager->Draw(modelId_, tf_, camera);
-    leftSword_.Draw(modelManager, camera);
-    rightSword_.Draw(modelManager, camera);
+    if (leftSwordVisible_) {
+        leftSword_.Draw(modelManager, camera);
+    }
+    if (rightSwordVisible_) {
+        rightSword_.Draw(modelManager, camera);
+    }
 
 #ifndef IMGUI_DISABLED
     ImGui::Begin("Player Combat");
@@ -181,4 +193,11 @@ Transform Player::BuildSwordTransform(const SwordPose &pose, bool isLeft) const 
 
     XMStoreFloat3(&swordTransform.position, XMVectorAdd(shoulderPos, armVec));
     return swordTransform;
+}
+
+SwordPose Player::MakeIdleSwordPose(bool isLeft) const {
+    (void)isLeft;
+    SwordPose pose{};
+    pose.orientation = {0, 0, 0, 1};
+    return pose;
 }

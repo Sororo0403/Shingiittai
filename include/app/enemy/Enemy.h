@@ -109,7 +109,7 @@ struct EnemyWave {
     bool isAlive = false;
 };
 
-enum class GuardTarget { None, Face, BodyCenter, BodyLeft };
+enum class GuardTarget { None, Face, BodyCenter, BodyLeft, BodyRight };
 
 struct AttackParam {
     float damage = 0.0f;

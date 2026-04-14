@@ -26,7 +26,8 @@ class Player {
     const Sword &GetLeftSword() const { return leftSword_; }
     const Sword &GetRightSword() const { return rightSword_; }
     std::array<const Sword *, kSwordCount> GetSwords() const {
-        return {&leftSword_, &rightSword_};
+        return {leftSwordVisible_ ? &leftSword_ : nullptr,
+                rightSwordVisible_ ? &rightSword_ : nullptr};
     }
     std::array<bool, kSwordCount> GetSwordSlashStates() const {
         return {leftSwordSlashMode_, rightSwordSlashMode_};
@@ -55,6 +56,7 @@ class Player {
 
   private:
     Transform BuildSwordTransform(const SwordPose &pose, bool isLeft) const;
+    SwordPose MakeIdleSwordPose(bool isLeft) const;
     void UpdateMovement(Input *input, float deltaTime);
     void LookAt(const DirectX::XMFLOAT3 &target);
 
@@ -78,6 +80,8 @@ class Player {
     bool rightSwordSlashMode_ = false;
     DirectX::XMFLOAT2 leftSwordSlashDir_{};
     DirectX::XMFLOAT2 rightSwordSlashDir_{};
+    bool leftSwordVisible_ = false;
+    bool rightSwordVisible_ = false;
     bool isGuarding_ = false;
 
     float moveSpeed_ = 5.0f;
