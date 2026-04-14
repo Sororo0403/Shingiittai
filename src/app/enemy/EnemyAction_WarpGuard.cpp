@@ -522,24 +522,53 @@ void Enemy::UpdateWarpStart(float deltaTime) {
     warp_.collisionDisabled = true;
 
     if (stateTimer_ >= warpStartTime_) {
+        warpTrailEmitTimer_ = 0.0f;
+        EmitWarpTrailGhost(warp_.departurePos, warpTrailScaleMax_);
         ChangeActionStep(ActionStep::Move);
     }
 }
 
 void Enemy::UpdateWarpMove(float deltaTime) {
-    (void)deltaTime;
-
     if (!warp_.hasValidTarget) {
         EndAttack();
         return;
     }
 
-    tf_.position = warp_.targetPos;
+    float t = 1.0f;
+    if (warpMoveTime_ > 0.0001f) {
+        t = stateTimer_ / warpMoveTime_;
+    }
+    if (t < 0.0f) {
+        t = 0.0f;
+    }
+    if (t > 1.0f) {
+        t = 1.0f;
+    }
+
+    // Fast-in / fast-out feels more like a violent blink than a simple lerp.
+    float eased = 1.0f - std::pow(1.0f - t, 2.6f);
+    tf_.position.x = warp_.departurePos.x +
+                     (warp_.targetPos.x - warp_.departurePos.x) * eased;
+    tf_.position.y = warp_.departurePos.y +
+                     (warp_.targetPos.y - warp_.departurePos.y) * eased;
+    tf_.position.z = warp_.departurePos.z +
+                     (warp_.targetPos.z - warp_.departurePos.z) * eased;
+
+    warpTrailEmitTimer_ += deltaTime;
+    while (warpTrailEmitTimer_ >= warpTrailInterval_) {
+        warpTrailEmitTimer_ -= warpTrailInterval_;
+        float scale =
+            warpTrailScaleMax_ - (warpTrailScaleMax_ - warpTrailScaleMin_) * t;
+        EmitWarpTrailGhost(tf_.position, scale);
+    }
 
     UpdateFacingToPlayer();
     LockCurrentFacing();
 
-    ChangeActionStep(ActionStep::End);
+    if (stateTimer_ >= warpMoveTime_) {
+        tf_.position = warp_.targetPos;
+        ChangeActionStep(ActionStep::End);
+    }
 }
 
 void Enemy::UpdateWarpEnd(float deltaTime) {

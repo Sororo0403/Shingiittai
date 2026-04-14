@@ -6,11 +6,13 @@
 #include "SpriteManager.h"
 #include "TextureManager.h"
 #include "WinApp.h"
+#ifdef _DEBUG
+#include "DebugDraw.h"
+#endif // _DEBUG
 #include "imgui.h"
 #include "imgui_internal.h"
 #include <cmath>
 #ifdef _DEBUG
-#include "DebugDraw.h"
 #include "EnemyTuningPresetIO.h"
 #endif // _DEBUG
 
@@ -433,8 +435,7 @@ void GameScene::Draw() {
                                      *currentCamera_);
         }
     }
-#endif
-
+#endif // _DEBUG
     ctx_->model->PostDraw();
 
     DrawWarpSmokePass();
@@ -924,13 +925,15 @@ void GameScene::DrawWarpSmokePass() {
     }
 
     XMFLOAT2 targetScreenF{};
-    if (!ProjectWorldToScreen(enemy_.GetWarpTargetPos(), targetScreenF)) {
-        return;
-    }
+    bool hasTarget = ProjectWorldToScreen(enemy_.GetWarpTargetPos(), targetScreenF);
 
     XMFLOAT2 sourceScreenF{};
-    bool hasSource =
-        ProjectWorldToScreen(enemy_.GetTransform().position, sourceScreenF);
+    bool hasSource = enemy_.HasWarpDeparturePos() &&
+                     ProjectWorldToScreen(enemy_.GetWarpDeparturePos(),
+                                          sourceScreenF);
+    if (!hasSource && !hasTarget) {
+        return;
+    }
 
     SpriteManager *spriteMgr = ctx_->sprite;
     Sprite &smoke = spriteMgr->GetSprite(warpSmokeSpriteId_);
@@ -938,20 +941,32 @@ void GameScene::DrawWarpSmokePass() {
 
     auto drawSmokeCluster = [&](const XMFLOAT2 &center, float sizeScale,
                                 float alphaScale, float travelBiasX,
-                                float travelBiasY, bool stretch) {
-        constexpr int kLayers = 4;
-        for (int i = 0; i < kLayers; ++i) {
-            float ratio = static_cast<float>(i) / static_cast<float>(kLayers - 1);
-            float angle = time * 2.8f + ratio * DirectX::XM_PIDIV2;
-            float driftX = std::cosf(angle) * (14.0f + 8.0f * ratio) + travelBiasX;
-            float driftY = std::sinf(angle * 1.3f) * (10.0f + 6.0f * ratio) +
-                           travelBiasY;
+                                float travelBiasY, bool stretch,
+                                const XMFLOAT4 &baseColor, int layers,
+                                float radialSpreadScale) {
+        for (int i = 0; i < layers; ++i) {
+            float ratio = (layers > 1)
+                              ? static_cast<float>(i) /
+                                    static_cast<float>(layers - 1)
+                              : 0.0f;
+            float angle =
+                time * (2.4f + radialSpreadScale * 0.45f) +
+                ratio * DirectX::XM_PIDIV2 * (1.6f + radialSpreadScale);
+            float driftX =
+                std::cosf(angle) *
+                    (14.0f + 10.0f * ratio) * radialSpreadScale +
+                travelBiasX;
+            float driftY =
+                std::sinf(angle * 1.3f) *
+                    (10.0f + 7.0f * ratio) * radialSpreadScale +
+                travelBiasY;
             float sizeX = warpSmokeBaseSizePx_ * sizeScale *
                           (1.0f + 0.20f * ratio);
             float sizeY = warpSmokeBaseSizePx_ * sizeScale *
                           (1.0f + 0.28f * ratio);
             if (stretch) {
-                sizeY += warpSmokeMoveStretchPx_ * (0.55f + ratio * 0.45f);
+                sizeY += warpSmokeMoveStretchPx_ * warpMoveSmokeStretchScale_ *
+                         (0.55f + ratio * 0.45f);
                 sizeX *= 0.82f;
             }
 
@@ -959,7 +974,8 @@ void GameScene::DrawWarpSmokePass() {
             smoke.position = {center.x + driftX - sizeX * 0.5f,
                               center.y + driftY - sizeY * 0.5f};
             float alpha = warpSmokeAlpha_ * alphaScale * (1.0f - ratio * 0.16f);
-            smoke.color = {0.20f, 0.03f, 0.12f, alpha};
+            smoke.color = {baseColor.x, baseColor.y, baseColor.z,
+                           baseColor.w * alpha};
             spriteMgr->Draw(warpSmokeSpriteId_);
         }
     };
@@ -967,8 +983,14 @@ void GameScene::DrawWarpSmokePass() {
     spriteMgr->PreDraw();
 
     if (warpStep == ActionStep::Start && hasSource) {
-        drawSmokeCluster(sourceScreenF, 0.95f, stepAlphaScale, 0.0f, -12.0f,
-                         false);
+        drawSmokeCluster(
+            sourceScreenF, warpSourceSmokeBloomScale_, stepAlphaScale,
+            0.0f, -10.0f, false,
+            {0.03f, 0.00f, 0.02f, warpSourceSmokeDarkAlpha_}, 6, 1.55f);
+        drawSmokeCluster(
+            sourceScreenF, warpSourceSmokeBloomScale_ * 0.78f,
+            stepAlphaScale * 1.08f, 0.0f, -16.0f, false,
+            {0.68f, 0.05f, 0.10f, warpSourceSmokeRedAlpha_}, 5, 1.15f);
     }
 
     if (warpStep == ActionStep::Move && hasSource) {
@@ -985,12 +1007,26 @@ void GameScene::DrawWarpSmokePass() {
             dirY = -1.0f;
         }
 
-        drawSmokeCluster(mid, 1.00f, stepAlphaScale, dirX * 18.0f,
-                         dirY * 10.0f, true);
+        drawSmokeCluster(mid, 0.90f, stepAlphaScale * warpMoveSmokeAlphaScale_,
+                         dirX * 18.0f, dirY * 10.0f, true,
+                         {0.12f, 0.01f, 0.05f, 0.72f}, 4, 1.0f);
+        drawSmokeCluster(
+            sourceScreenF, warpSourceSmokeBloomScale_ * 1.08f,
+            stepAlphaScale * 0.92f, -dirX * 6.0f,
+            -18.0f + dirY * warpSourceSmokeDriftPx_ * 0.18f, false,
+            {0.02f, 0.00f, 0.01f, warpSourceSmokeDarkAlpha_}, 7, 1.82f);
+        drawSmokeCluster(
+            sourceScreenF, warpSourceSmokeBloomScale_ * 0.82f,
+            stepAlphaScale * 0.88f, dirX * 8.0f,
+            -10.0f + dirY * warpSourceSmokeDriftPx_ * 0.10f, false,
+            {0.72f, 0.05f, 0.12f, warpSourceSmokeRedAlpha_}, 5, 1.22f);
     }
 
-    drawSmokeCluster(targetScreenF, warpStep == ActionStep::Move ? 1.16f : 1.08f,
-                     stepAlphaScale * 1.08f, 0.0f, -18.0f, false);
+    if (hasTarget) {
+        drawSmokeCluster(targetScreenF, warpArrivalSmokeScale_,
+                         stepAlphaScale * warpArrivalSmokeAlphaScale_, 0.0f,
+                         -14.0f, false, {0.34f, 0.04f, 0.09f, 0.62f}, 3, 0.72f);
+    }
 
     spriteMgr->PostDraw();
 }
@@ -1022,14 +1058,16 @@ void GameScene::DrawWarpDistortionPass() {
     }
 
     XMFLOAT2 targetScreenF{};
-    if (!ProjectWorldToScreen(enemy_.GetWarpTargetPos(), targetScreenF)) {
-        return;
-    }
+    bool hasTarget = ProjectWorldToScreen(enemy_.GetWarpTargetPos(), targetScreenF);
     ImVec2 targetScreen(targetScreenF.x, targetScreenF.y);
 
     XMFLOAT2 sourceScreenF{};
-    bool hasSource =
-        ProjectWorldToScreen(enemy_.GetTransform().position, sourceScreenF);
+    bool hasSource = enemy_.HasWarpDeparturePos() &&
+                     ProjectWorldToScreen(enemy_.GetWarpDeparturePos(),
+                                          sourceScreenF);
+    if (!hasSource && !hasTarget) {
+        return;
+    }
     ImVec2 sourceScreen(sourceScreenF.x, sourceScreenF.y);
 
     float time = enemy_.GetCurrentActionTimePublic();
@@ -1092,22 +1130,24 @@ void GameScene::DrawWarpDistortionPass() {
         drawDistortionAt(sourceScreen, 0.88f, 0.0f);
     }
 
-    if (warpStep == ActionStep::Move && hasSource) {
+    if (warpStep == ActionStep::Move && hasSource && hasTarget) {
         ImVec2 mid((sourceScreen.x + targetScreen.x) * 0.5f,
                    (sourceScreen.y + targetScreen.y) * 0.5f);
         drawDistortionAt(mid, 0.72f, 0.6f);
         drawList->AddLine(sourceScreen, targetScreen, soft, 2.0f);
     }
 
-    ImVec2 arrivalCenter = targetScreen;
-    arrivalCenter.y -= warpDistortionPreviewOffsetPx_ *
-                       (warpStep == ActionStep::Start ? 0.55f : 0.18f);
-    drawDistortionAt(arrivalCenter, warpStep == ActionStep::Move ? 1.12f : 1.0f,
-                     1.2f);
+    if (hasTarget) {
+        ImVec2 arrivalCenter = targetScreen;
+        arrivalCenter.y -= warpDistortionPreviewOffsetPx_ *
+                           (warpStep == ActionStep::Start ? 0.55f : 0.18f);
+        drawDistortionAt(arrivalCenter,
+                         warpStep == ActionStep::Move ? 1.12f : 1.0f, 1.2f);
+    }
 
     float dirX = 0.0f;
     float dirY = -1.0f;
-    if (hasSource) {
+    if (hasSource && hasTarget) {
         dirX = targetScreen.x - sourceScreen.x;
         dirY = targetScreen.y - sourceScreen.y;
         float dirLen = std::sqrtf(dirX * dirX + dirY * dirY);
@@ -1126,22 +1166,34 @@ void GameScene::DrawWarpDistortionPass() {
     float branchLen = slashLen * 0.76f;
     float branchOffset = baseRadius * 0.28f;
 
-    ImVec2 slashA(arrivalCenter.x - perpX * slashLen,
-                  arrivalCenter.y - perpY * slashLen);
-    ImVec2 slashB(arrivalCenter.x + perpX * slashLen,
-                  arrivalCenter.y + perpY * slashLen);
-    ImVec2 slashC(arrivalCenter.x - perpX * branchLen + dirX * branchOffset,
-                  arrivalCenter.y - perpY * branchLen + dirY * branchOffset);
-    ImVec2 slashD(arrivalCenter.x + perpX * branchLen + dirX * branchOffset,
-                  arrivalCenter.y + perpY * branchLen + dirY * branchOffset);
-    ImVec2 slashE(arrivalCenter.x - perpX * (branchLen * 0.58f) - dirX * branchOffset * 0.72f,
-                  arrivalCenter.y - perpY * (branchLen * 0.58f) - dirY * branchOffset * 0.72f);
-    ImVec2 slashF(arrivalCenter.x + perpX * (branchLen * 0.58f) - dirX * branchOffset * 0.72f,
-                  arrivalCenter.y + perpY * (branchLen * 0.58f) - dirY * branchOffset * 0.72f);
+    if (hasTarget) {
+        ImVec2 arrivalCenter = targetScreen;
+        arrivalCenter.y -= warpDistortionPreviewOffsetPx_ *
+                           (warpStep == ActionStep::Start ? 0.55f : 0.18f);
+        ImVec2 slashA(arrivalCenter.x - perpX * slashLen,
+                      arrivalCenter.y - perpY * slashLen);
+        ImVec2 slashB(arrivalCenter.x + perpX * slashLen,
+                      arrivalCenter.y + perpY * slashLen);
+        ImVec2 slashC(arrivalCenter.x - perpX * branchLen + dirX * branchOffset,
+                      arrivalCenter.y - perpY * branchLen + dirY * branchOffset);
+        ImVec2 slashD(arrivalCenter.x + perpX * branchLen + dirX * branchOffset,
+                      arrivalCenter.y + perpY * branchLen + dirY * branchOffset);
+        ImVec2 slashE(arrivalCenter.x - perpX * (branchLen * 0.58f) -
+                          dirX * branchOffset * 0.72f,
+                      arrivalCenter.y - perpY * (branchLen * 0.58f) -
+                          dirY * branchOffset * 0.72f);
+        ImVec2 slashF(arrivalCenter.x + perpX * (branchLen * 0.58f) -
+                          dirX * branchOffset * 0.72f,
+                      arrivalCenter.y + perpY * (branchLen * 0.58f) -
+                          dirY * branchOffset * 0.72f);
 
-    drawList->AddLine(slashA, slashB, slash, warpDistortionThicknessPx_ * 0.82f);
-    drawList->AddLine(slashC, slashD, bright, warpDistortionThicknessPx_ * 0.55f);
-    drawList->AddLine(slashE, slashF, soft, warpDistortionThicknessPx_ * 0.42f);
+        drawList->AddLine(slashA, slashB, slash,
+                          warpDistortionThicknessPx_ * 0.82f);
+        drawList->AddLine(slashC, slashD, bright,
+                          warpDistortionThicknessPx_ * 0.55f);
+        drawList->AddLine(slashE, slashF, soft,
+                          warpDistortionThicknessPx_ * 0.42f);
+    }
 }
 
 // void GameScene::UpdateCamera(Input *input) {

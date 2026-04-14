@@ -172,4 +172,12 @@ class GameScene : public BaseScene {
     float warpSmokeBaseSizePx_ = 132.0f;
     float warpSmokeMoveStretchPx_ = 92.0f;
     float warpSmokeAlpha_ = 0.34f;
+    float warpSourceSmokeBloomScale_ = 1.42f;
+    float warpSourceSmokeDriftPx_ = 30.0f;
+    float warpSourceSmokeDarkAlpha_ = 0.58f;
+    float warpSourceSmokeRedAlpha_ = 0.42f;
+    float warpArrivalSmokeScale_ = 0.76f;
+    float warpArrivalSmokeAlphaScale_ = 0.42f;
+    float warpMoveSmokeAlphaScale_ = 0.78f;
+    float warpMoveSmokeStretchScale_ = 0.78f;
 };

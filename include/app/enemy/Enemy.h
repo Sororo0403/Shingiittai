@@ -104,6 +104,13 @@ struct EnemyWave {
     bool isAlive = false;
 };
 
+struct WarpTrailGhost {
+    DirectX::XMFLOAT3 position = {0.0f, 0.0f, 0.0f};
+    float life = 0.0f;
+    float scale = 1.0f;
+    bool isActive = false;
+};
+
 // 仕様書に合わせて BodyCenter -> BodyRight に整理
 enum class GuardTarget { None, Face, BodyLeft, BodyRight };
 
@@ -248,6 +255,10 @@ class Enemy {
     const DirectX::XMFLOAT3 &GetWarpTargetPos() const {
         return warp_.targetPos;
     }
+    const DirectX::XMFLOAT3 &GetWarpDeparturePos() const {
+        return warp_.departurePos;
+    }
+    bool HasWarpDeparturePos() const { return warp_.hasDeparturePos; }
     WarpType GetWarpType() const { return warp_.type; }
     bool IsWarpCollisionDisabled() const { return warp_.collisionDisabled; }
 
@@ -610,6 +621,7 @@ class Enemy {
     float comboBRushSweepBonus_ = 0.28f;
 
     float warpStartTime_ = 0.2f;
+    float warpMoveTime_ = 0.10f;
     float warpEndTime_ = 0.2f;
     float warpDepartureEchoOffset_ = 0.28f;
     float warpArrivalEchoOffset_ = 0.22f;
@@ -622,6 +634,13 @@ class Enemy {
     float warpParticleHeight_ = 0.72f;
     float warpParticleScale_ = 0.10f;
     int warpParticleCount_ = 5;
+    float warpTrailLife_ = 0.06f;
+    float warpTrailInterval_ = 0.032f;
+    float warpTrailScaleMin_ = 0.52f;
+    float warpTrailScaleMax_ = 0.88f;
+    float warpTrailEmitTimer_ = 0.0f;
+    static constexpr int kWarpTrailGhostCount_ = 4;
+    WarpTrailGhost warpTrailGhosts_[kWarpTrailGhostCount_]{};
 
     float warpNearRadiusMin_ = 1.8f;
     float warpNearRadiusMax_ = 3.0f;
@@ -781,6 +800,9 @@ class Enemy {
     void UpdateWarpStart(float deltaTime);
     void UpdateWarpMove(float deltaTime);
     void UpdateWarpEnd(float deltaTime);
+    void UpdateWarpTrails(float deltaTime);
+    void EmitWarpTrailGhost(const DirectX::XMFLOAT3 &position, float scale);
+    void ResetWarpTrails();
 
     bool PrepareWarpContext();
     bool DecideWarpTargetNearPlayer(DirectX::XMFLOAT3 &outTarget);
