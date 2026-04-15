@@ -2,22 +2,7 @@
 #include "DirectXCommon.h"
 #include "DxHelpers.h"
 #include "DxUtils.h"
-#include <sstream>
 #include <stdexcept>
-
-#ifdef _WIN32
-#include <Windows.h>
-#endif
-
-namespace {
-
-void DebugLog(const std::string &message) {
-#ifdef _WIN32
-    OutputDebugStringA((message + "\n").c_str());
-#endif
-}
-
-}
 
 using namespace DirectX;
 using namespace DxUtils;
@@ -30,15 +15,6 @@ void MaterialManager::Initialize(DirectXCommon *dxCommon) {
 uint32_t MaterialManager::CreateMaterial(const Material &material) {
     if (!dxCommon_) {
         throw std::runtime_error("MaterialManager is not initialized");
-    }
-
-    {
-        std::ostringstream oss;
-        oss << "[MaterialManager] CreateMaterial begin color=("
-            << material.color.x << "," << material.color.y << ","
-            << material.color.z << "," << material.color.w
-            << ") enableTexture=" << material.enableTexture;
-        DebugLog(oss.str());
     }
 
     MaterialResource matRes;
@@ -64,13 +40,6 @@ uint32_t MaterialManager::CreateMaterial(const Material &material) {
 
     materials_.push_back(std::move(matRes));
     uint32_t materialId = static_cast<uint32_t>(materials_.size() - 1);
-
-    {
-        std::ostringstream oss;
-        oss << "[MaterialManager] CreateMaterial success materialId="
-            << materialId;
-        DebugLog(oss.str());
-    }
 
     return materialId;
 }

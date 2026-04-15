@@ -10,23 +10,12 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
-#include <sstream>
-
-#ifdef _WIN32
-#include <Windows.h>
-#endif
 
 using namespace DirectX;
 using namespace DxUtils;
 using Microsoft::WRL::ComPtr;
 
 namespace {
-
-void DebugLog(const std::string &message) {
-#ifdef _WIN32
-    OutputDebugStringA((message + "\n").c_str());
-#endif
-}
 
 XMFLOAT4X4 StoreMatrix(const XMMATRIX &matrix) {
     XMFLOAT4X4 result{};

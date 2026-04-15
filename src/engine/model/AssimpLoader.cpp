@@ -14,10 +14,6 @@
 #include <stdexcept>
 #include <vector>
 
-#ifdef _WIN32
-#include <Windows.h>
-#endif
-
 using namespace DirectX;
 
 namespace {
@@ -25,12 +21,6 @@ namespace {
 XMFLOAT4X4 ToMatrix(const aiMatrix4x4 &m) {
     return {m.a1, m.b1, m.c1, m.d1, m.a2, m.b2, m.c2, m.d2,
             m.a3, m.b3, m.c3, m.d3, m.a4, m.b4, m.c4, m.d4};
-}
-
-void DebugLog(const std::string &message) {
-#ifdef _WIN32
-    OutputDebugStringA((message + "\n").c_str());
-#endif
 }
 
 } // namespace
@@ -58,17 +48,7 @@ Model AssimpLoader::Load(const std::string &path) {
         std::ostringstream oss;
         oss << "[AssimpLoader] Load failed. path='" << path
             << "' error='" << importer.GetErrorString() << "'";
-        DebugLog(oss.str());
         throw std::runtime_error(oss.str());
-    }
-
-    {
-        std::ostringstream oss;
-        oss << "[AssimpLoader] Load success. path='" << path
-            << "' meshes=" << scene->mNumMeshes
-            << " materials=" << scene->mNumMaterials
-            << " animations=" << scene->mNumAnimations;
-        DebugLog(oss.str());
     }
 
     Model model{};
@@ -114,12 +94,6 @@ Model AssimpLoader::Load(const std::string &path) {
         }
 
         if (vertices.empty() || indices.empty()) {
-            std::ostringstream oss;
-            oss << "[AssimpLoader] Skip empty mesh. path='" << path
-                << "' meshIndex=" << meshIndex
-                << " vertices=" << vertices.size()
-                << " indices=" << indices.size();
-            DebugLog(oss.str());
             continue;
         }
 

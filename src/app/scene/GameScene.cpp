@@ -8,11 +8,7 @@
 #include "TextureManager.h"
 #include "WinApp.h"
 #include "imgui.h"
-#include <sstream>
 #include <string>
-#ifdef _WIN32
-#include <Windows.h>
-#endif
 #ifdef _DEBUG
 #include "DebugDraw.h"
 #endif // _DEBUG
@@ -172,12 +168,6 @@ bool IsWithinCounterJustWindow(const Enemy &enemy) {
 
     return (t >= justStart && t <= justEnd);
 }
-
-void DebugLog(const std::string &message) {
-#ifdef _WIN32
-    OutputDebugStringA((message + "\n").c_str());
-#endif
-}
 } // namespace
 
 void GameScene::Initialize(const SceneContext &ctx) {
@@ -219,16 +209,8 @@ void GameScene::Initialize(const SceneContext &ctx) {
         ctx_->sprite->Create(L"resources/texture/effect/warp_smoke.png");
     try {
         enemyModel = model->Load(L"resources/model/boss/boss.gltf");
-        DebugLog("[GameScene] enemy model loaded: "
-                 "resources/model/boss/sneakWalk.gltf");
-    } catch (const std::exception &e) {
-        std::ostringstream oss;
-        oss << "[GameScene] bossBody load failed: " << e.what();
-        DebugLog(oss.str());
-
+    } catch (const std::exception &) {
         enemyModel = model->Load(L"resources/model/enemy/enemy.glb");
-        DebugLog("[GameScene] fallback enemy model loaded: "
-                 "resources/model/enemy/enemy.glb");
     }
 
     dx->EndUpload();
@@ -284,7 +266,6 @@ void GameScene::Initialize(const SceneContext &ctx) {
 }
 
 void GameScene::Update() {
-    DebugLog("[GameScene] Update begin");
     Input *input = ctx_->input;
 #ifdef _DEBUG
     const bool freezeEnemyMotion = dbgFreezeEnemyMotion_;
@@ -509,7 +490,6 @@ void GameScene::Update() {
             }
         }
 
-        DebugLog("[GameScene] Update end");
     }
 
     dbgBossHitPlayer_ = bossHitPlayer;
@@ -666,7 +646,6 @@ void GameScene::SyncEnemyAnimation() {
 // #endif
 
 void GameScene::Draw() {
-    DebugLog("[GameScene] Draw begin");
     ctx_->model->PreDraw();
 
     player_.Draw(ctx_->model, *currentCamera_);
@@ -1216,7 +1195,6 @@ void GameScene::Draw() {
     ImGui::End();
 #endif
 
-    DebugLog("[GameScene] Draw end");
 }
 
 void GameScene::UpdateSceneLighting() {

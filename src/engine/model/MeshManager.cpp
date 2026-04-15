@@ -2,21 +2,6 @@
 #include "DirectXCommon.h"
 #include "DxHelpers.h"
 #include "DxUtils.h"
-#include <sstream>
-
-#ifdef _WIN32
-#include <Windows.h>
-#endif
-
-namespace {
-
-void DebugLog(const std::string &message) {
-#ifdef _WIN32
-    OutputDebugStringA((message + "\n").c_str());
-#endif
-}
-
-}
 
 using namespace DxUtils;
 using Microsoft::WRL::ComPtr;
@@ -27,14 +12,6 @@ uint32_t MeshManager::CreateMesh(const void *vertexData, uint32_t vertexStride,
                                  uint32_t vertexCount,
                                  const uint32_t *indexData,
                                  uint32_t indexCount) {
-    {
-        std::ostringstream oss;
-        oss << "[MeshManager] CreateMesh begin vtxCount=" << vertexCount
-            << " vtxStride=" << vertexStride << " idxCount=" << indexCount
-            << " vtxPtr=" << vertexData << " idxPtr=" << indexData;
-        DebugLog(oss.str());
-    }
-
     Mesh mesh{};
     mesh.indexCount = indexCount;
     mesh.vertexStride = vertexStride;
@@ -86,13 +63,6 @@ uint32_t MeshManager::CreateMesh(const void *vertexData, uint32_t vertexStride,
 
     meshes_.push_back(mesh);
     uint32_t meshId = static_cast<uint32_t>(meshes_.size() - 1);
-
-    {
-        std::ostringstream oss;
-        oss << "[MeshManager] CreateMesh success meshId=" << meshId
-            << " vbSize=" << vbSize << " ibSize=" << ibSize;
-        DebugLog(oss.str());
-    }
 
     return meshId;
 }
