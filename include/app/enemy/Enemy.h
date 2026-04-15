@@ -186,7 +186,7 @@ struct CounterAdaptMemory {
 
 class Enemy {
   public:
-    void Initialize(uint32_t modelId);
+    void Initialize(uint32_t modelId, uint32_t projectileModelId = 0);
 
     // 既存互換
     void Update(const DirectX::XMFLOAT3 &playerPos, float deltaTime,
@@ -382,11 +382,13 @@ class Enemy {
   private:
     Transform tf_{};
 
+    Transform visualTf_{};
     Transform bodyTf_{};
     Transform leftHandTf_{};
     Transform rightHandTf_{};
 
     uint32_t modelId_ = 0;
+    uint32_t projectileModelId_ = 0;
 
     DirectX::XMFLOAT3 bodySize_ = {0.8f, 1.4f, 0.6f};
     DirectX::XMFLOAT3 handSize_ = {0.45f, 0.45f, 0.45f};

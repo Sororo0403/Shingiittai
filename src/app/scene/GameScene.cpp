@@ -8,6 +8,7 @@
 #include "WinApp.h"
 #include "imgui.h"
 #include <sstream>
+#include <string>
 #ifdef _WIN32
 #include <Windows.h>
 #endif
@@ -23,6 +24,82 @@
 using namespace DirectX;
 
 namespace {
+const std::string kBossAnimIdle = "Action";
+const std::string kBossAnimMove = "Action.001";
+const std::string kBossAnimSweep =
+    "\xE6\xA8\xAA\xE8\x96\x99\xE3\x81\x8E\xE6\x89\x95\xE3\x81\x84";
+const std::string kBossAnimWave =
+    "\xE6\xB3\xA2\xE7\x8A\xB6\xE6\x94\xBB\xE6\x92\x83";
+const std::string kBossAnimSmash =
+    "\xE7\xB8\xA6\xE6\x8C\xAF\xE3\x82\x8A\xE4\xB8\x8B\xE3\x82\x8D\xE3\x81\x97";
+
+bool HasAnimation(const Model *model, const std::string &animationName) {
+    if (!model) {
+        return false;
+    }
+
+    return model->animations.find(animationName) != model->animations.end();
+}
+
+std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
+                               bool &outLoop) {
+    outLoop = true;
+
+    if (!model || model->animations.empty()) {
+        return {};
+    }
+
+    switch (enemy.GetActionKind()) {
+    case ActionKind::Smash:
+        outLoop = false;
+        if (HasAnimation(model, kBossAnimSmash)) {
+            return kBossAnimSmash;
+        }
+        break;
+
+    case ActionKind::Sweep:
+        outLoop = false;
+        if (HasAnimation(model, kBossAnimSweep)) {
+            return kBossAnimSweep;
+        }
+        break;
+
+    case ActionKind::Shot:
+    case ActionKind::Wave:
+        outLoop = false;
+        if (HasAnimation(model, kBossAnimWave)) {
+            return kBossAnimWave;
+        }
+        break;
+
+    case ActionKind::Rush:
+        if (HasAnimation(model, kBossAnimMove)) {
+            return kBossAnimMove;
+        }
+        break;
+
+    case ActionKind::Warp:
+    case ActionKind::Guard:
+    case ActionKind::Stalk:
+    case ActionKind::None:
+    default:
+        if (HasAnimation(model, kBossAnimIdle)) {
+            return kBossAnimIdle;
+        }
+        break;
+    }
+
+    if (HasAnimation(model, kBossAnimIdle)) {
+        return kBossAnimIdle;
+    }
+    if (HasAnimation(model, kBossAnimMove)) {
+        return kBossAnimMove;
+    }
+
+    return model->currentAnimation.empty() ? model->animations.begin()->first
+                                           : model->currentAnimation;
+}
+
 bool IsWithinCounterJustWindow(const Enemy &enemy) {
     const AttackTimingParam *timing = enemy.GetCurrentAttackTimingPublic();
     if (!timing) {
@@ -89,6 +166,8 @@ void GameScene::Initialize(const SceneContext &ctx) {
     uint32_t playerModel = model->Load(L"resources/model/player/player.glb");
     uint32_t swordModel = model->Load(L"resources/model/player/sword.glb");
     uint32_t enemyModel = 0;
+    uint32_t bulletModel =
+        ctx_->model->Load(L"resources/model/bullet/bullet.obj");
     warpSmokeSpriteId_ =
         ctx_->sprite->Create(L"resources/texture/effect/warp_smoke.png");
     try {
@@ -111,7 +190,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
 
     player_.Initialize(playerModel, swordModel);
     playerModelId_ = playerModel;
-    enemy_.Initialize(enemyModel);
+    enemy_.Initialize(enemyModel, bulletModel);
     enemyModelId_ = enemyModel;
 
     // 一人称カメラ初期向き
@@ -135,17 +214,9 @@ void GameScene::Initialize(const SceneContext &ctx) {
                                  playerModelData->currentAnimation, true);
         }
     }
-
-    if (Model *enemyModelData = model->GetModel(enemyModelId_)) {
-        if (!enemyModelData->animations.empty()) {
-            model->PlayAnimation(enemyModelId_,
-                                 enemyModelData->currentAnimation, true);
-        }
-    }
-
-    uint32_t bulletModel =
-        ctx_->model->Load(L"resources/model/bullet/bullet.obj");
     bullet_.Initialize(bulletModel);
+
+    SyncEnemyAnimation();
 }
 
 void GameScene::Update() {
@@ -160,8 +231,6 @@ void GameScene::Update() {
     UpdateCamera(input);
 
     ctx_->model->UpdateAnimation(playerModelId_, ctx_->deltaTime);
-    ctx_->model->UpdateAnimation(enemyModelId_, ctx_->deltaTime);
-
 #ifdef _DEBUG
     if (currentCamera_ == &debugCamera_) {
         return;
@@ -202,6 +271,9 @@ void GameScene::Update() {
     if (!freezeEnemyMotion) {
         enemy_.Update(playerObs, ctx_->deltaTime);
     }
+
+    SyncEnemyAnimation();
+    ctx_->model->UpdateAnimation(enemyModelId_, ctx_->deltaTime);
 
     UpdateBattleCamera();
 
@@ -472,6 +544,28 @@ void GameScene::Update() {
             break;
         }
     }
+}
+
+void GameScene::SyncEnemyAnimation() {
+    ModelManager *modelManager = ctx_->model;
+    Model *enemyModel = modelManager->GetModel(enemyModelId_);
+    if (!enemyModel || enemyModel->animations.empty()) {
+        return;
+    }
+
+    bool shouldLoop = true;
+    std::string nextAnimation = PickEnemyAnimation(enemyModel, enemy_, shouldLoop);
+    if (nextAnimation.empty()) {
+        return;
+    }
+
+    if (enemyAnimationName_ == nextAnimation && enemyAnimationLoop_ == shouldLoop) {
+        return;
+    }
+
+    modelManager->PlayAnimation(enemyModelId_, nextAnimation, shouldLoop);
+    enemyAnimationName_ = nextAnimation;
+    enemyAnimationLoop_ = shouldLoop;
 }
 // #ifdef _DEBUG
 //     DebugDraw *debugDraw = ctx_->debugDraw;

@@ -9,8 +9,9 @@
 // ============================================================
 // 初期化処理
 // ============================================================
-void Enemy::Initialize(uint32_t modelId) {
+void Enemy::Initialize(uint32_t modelId, uint32_t projectileModelId) {
     modelId_ = modelId;
+    projectileModelId_ = projectileModelId;
     hp_ = maxHp_;
     phase_ = BossPhase::Phase1;
     phaseTransitionActive_ = false;
@@ -21,6 +22,7 @@ void Enemy::Initialize(uint32_t modelId) {
     tf_.rotation = {0.0f, 0.0f, 0.0f, 1.0f};
     ResetWarpTrails();
 
+    visualTf_ = tf_;
     UpdateParts();
     ValidateAllTimings();
 }
@@ -226,6 +228,9 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         return;
     }
 
+    const uint32_t effectModelId =
+        (projectileModelId_ != 0) ? projectileModelId_ : modelId_;
+
     const bool isWarpMoveHidden =
         (action_.kind == ActionKind::Warp && action_.step == ActionStep::Move);
     ModelDrawEffect warpEffect{};
@@ -243,15 +248,12 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         modelManager->SetDrawEffect(warpEffect);
     }
 
-    auto drawEnemyParts = [&](const Transform &body, const Transform &left,
-                              const Transform &right) {
-        modelManager->Draw(modelId_, body, camera);
-        modelManager->Draw(modelId_, left, camera);
-        modelManager->Draw(modelId_, right, camera);
+    auto drawEnemyVisual = [&](const Transform &visual) {
+        modelManager->Draw(modelId_, visual, camera);
     };
 
     if (isVisible_ && !isWarpMoveHidden) {
-        drawEnemyParts(bodyTf_, leftHandTf_, rightHandTf_);
+        drawEnemyVisual(visualTf_);
     }
 
     if (action_.kind == ActionKind::Warp) {
@@ -261,25 +263,13 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
             }
 
             float alpha = trail.life / warpTrailLife_;
-            Transform trailBody = bodyTf_;
-            Transform trailLeft = leftHandTf_;
-            Transform trailRight = rightHandTf_;
+            Transform trailVisual = visualTf_;
+            trailVisual.position = trail.position;
+            trailVisual.scale.x *= 0.90f + 0.04f * alpha;
+            trailVisual.scale.y *= 0.95f + 0.08f * alpha;
+            trailVisual.scale.z *= 0.60f + 0.24f * alpha;
 
-            trailBody.position = trail.position;
-            trailLeft.position = trail.position;
-            trailRight.position = trail.position;
-
-            trailBody.scale.x *= 0.12f * trail.scale;
-            trailBody.scale.y *= (0.92f + 0.18f * alpha) * trail.scale;
-            trailBody.scale.z *= (1.45f + 1.10f * alpha) * trail.scale;
-            trailLeft.scale.x *= 0.08f * trail.scale;
-            trailLeft.scale.y *= 0.22f * trail.scale;
-            trailLeft.scale.z *= (0.72f + 0.42f * alpha) * trail.scale;
-            trailRight.scale.x *= 0.08f * trail.scale;
-            trailRight.scale.y *= 0.22f * trail.scale;
-            trailRight.scale.z *= (0.72f + 0.42f * alpha) * trail.scale;
-
-            drawEnemyParts(trailBody, trailLeft, trailRight);
+            drawEnemyVisual(trailVisual);
         }
     }
 
@@ -322,7 +312,7 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
                                (0.45f + 0.55f *
                                            std::sinf(angle * 1.7f + timeBias));
 
-                Transform particleTf = bodyTf_;
+                Transform particleTf = visualTf_;
                 particleTf.position = center;
                 particleTf.position.x += orbitX;
                 particleTf.position.y += height;
@@ -336,7 +326,7 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
                     warpParticleScale_ * (1.15f + 0.10f * warpPulse),
                     warpParticleScale_ * scalePulse,
                 };
-                modelManager->Draw(modelId_, particleTf, camera);
+                modelManager->Draw(effectModelId, particleTf, camera);
             }
         };
 
@@ -352,7 +342,7 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
                 float forwardOffset = spreadScale * (0.20f + ratio * 0.95f);
                 float sideOffset = warpParticleRadius_ * 0.55f * side;
 
-                Transform streakTf = bodyTf_;
+                Transform streakTf = visualTf_;
                 streakTf.position = center;
                 streakTf.position.x += pathDirX * forwardOffset +
                                        rightX * sideOffset;
@@ -364,7 +354,7 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
                     warpParticleScale_ * (0.72f + 0.25f * pulse),
                     warpParticleScale_ * (2.9f + 2.4f * spreadScale),
                 };
-                modelManager->Draw(modelId_, streakTf, camera);
+                modelManager->Draw(effectModelId, streakTf, camera);
             }
         };
 
@@ -372,13 +362,9 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
             warp_.hasDeparturePos) {
             for (int i = 0; i < 2; ++i) {
                 float t = static_cast<float>(i + 1) / 2.0f;
-                Transform echoBody = bodyTf_;
-                Transform echoLeft = leftHandTf_;
-                Transform echoRight = rightHandTf_;
+                Transform echoVisual = visualTf_;
 
-                echoBody.position = warp_.departurePos;
-                echoLeft.position = warp_.departurePos;
-                echoRight.position = warp_.departurePos;
+                echoVisual.position = warp_.departurePos;
 
                 float sideSign = 0.0f;
                 if (warp_.approachSlot == WarpApproachSlot::FrontLeft) {
@@ -390,28 +376,16 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
                 float sideOffset = warpDepartureEchoOffset_ * t * sideSign;
                 float backOffset = warpDepartureEchoOffset_ * (1.0f - t * 0.35f);
 
-                echoBody.position.x += (-forwardX) * backOffset + rightX * sideOffset;
-                echoBody.position.z += (-forwardZ) * backOffset + rightZ * sideOffset;
-                echoBody.position.y += 0.04f * t;
-                echoBody.scale.x *= 0.96f - 0.08f * t;
-                echoBody.scale.y *= 0.92f - 0.10f * t;
-                echoBody.scale.z *= 0.94f - 0.08f * t;
+                echoVisual.position.x +=
+                    (-forwardX) * backOffset + rightX * sideOffset;
+                echoVisual.position.z +=
+                    (-forwardZ) * backOffset + rightZ * sideOffset;
+                echoVisual.position.y += 0.04f * t;
+                echoVisual.scale.x *= 0.98f - 0.08f * t;
+                echoVisual.scale.y *= 0.94f - 0.08f * t;
+                echoVisual.scale.z *= 0.95f - 0.08f * t;
 
-                echoLeft.position.x += (-forwardX) * backOffset + rightX * sideOffset;
-                echoLeft.position.z += (-forwardZ) * backOffset + rightZ * sideOffset;
-                echoLeft.position.y += 0.04f * t;
-                echoLeft.scale.x *= 0.94f - 0.08f * t;
-                echoLeft.scale.y *= 0.94f - 0.08f * t;
-                echoLeft.scale.z *= 0.94f - 0.08f * t;
-
-                echoRight.position.x += (-forwardX) * backOffset + rightX * sideOffset;
-                echoRight.position.z += (-forwardZ) * backOffset + rightZ * sideOffset;
-                echoRight.position.y += 0.04f * t;
-                echoRight.scale.x *= 0.94f - 0.08f * t;
-                echoRight.scale.y *= 0.94f - 0.08f * t;
-                echoRight.scale.z *= 0.94f - 0.08f * t;
-
-                drawEnemyParts(echoBody, echoLeft, echoRight);
+                drawEnemyVisual(echoVisual);
             }
 
             drawWarpParticleCluster(warp_.departurePos, 0.0f);
@@ -428,9 +402,7 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
             for (int i = 0; i < 1; ++i) {
                 float t = 0.5f;
 
-                Transform ghostBody = bodyTf_;
-                Transform ghostLeft = leftHandTf_;
-                Transform ghostRight = rightHandTf_;
+                Transform ghostVisual = visualTf_;
 
                 DirectX::XMFLOAT3 ghostCenter{};
                 ghostCenter.x = warp_.departurePos.x +
@@ -441,35 +413,19 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
                 ghostCenter.z = warp_.departurePos.z +
                                 (warp_.targetPos.z - warp_.departurePos.z) * t;
 
-                ghostBody.position = ghostCenter;
-                ghostLeft.position = ghostCenter;
-                ghostRight.position = ghostCenter;
+                ghostVisual.position = ghostCenter;
 
                 float sideBlend = (t - 0.5f) * 2.0f;
-                ghostBody.position.x += rightX * warpDepartureEchoOffset_ * 0.30f *
-                                        sideBlend;
-                ghostBody.position.z += rightZ * warpDepartureEchoOffset_ * 0.30f *
-                                        sideBlend;
-                ghostLeft.position.x += rightX * warpDepartureEchoOffset_ * 0.30f *
-                                        sideBlend;
-                ghostLeft.position.z += rightZ * warpDepartureEchoOffset_ * 0.30f *
-                                        sideBlend;
-                ghostRight.position.x += rightX * warpDepartureEchoOffset_ * 0.30f *
-                                         sideBlend;
-                ghostRight.position.z += rightZ * warpDepartureEchoOffset_ * 0.30f *
-                                         sideBlend;
+                ghostVisual.position.x +=
+                    rightX * warpDepartureEchoOffset_ * 0.30f * sideBlend;
+                ghostVisual.position.z +=
+                    rightZ * warpDepartureEchoOffset_ * 0.30f * sideBlend;
 
-                ghostBody.scale.x *= warpMoveGhostScaleX_ * 0.78f;
-                ghostBody.scale.y *= warpMoveGhostScaleY_ * 0.92f;
-                ghostBody.scale.z *= warpMoveGhostScaleZ_ * 0.82f;
-                ghostLeft.scale.x *= warpMoveGhostScaleX_ * 0.62f;
-                ghostLeft.scale.y *= warpMoveGhostScaleY_ * 0.60f;
-                ghostLeft.scale.z *= warpMoveGhostScaleZ_ * 0.62f;
-                ghostRight.scale.x *= warpMoveGhostScaleX_ * 0.62f;
-                ghostRight.scale.y *= warpMoveGhostScaleY_ * 0.60f;
-                ghostRight.scale.z *= warpMoveGhostScaleZ_ * 0.62f;
+                ghostVisual.scale.x *= warpMoveGhostScaleX_ * 0.78f;
+                ghostVisual.scale.y *= warpMoveGhostScaleY_ * 0.92f;
+                ghostVisual.scale.z *= warpMoveGhostScaleZ_ * 0.82f;
 
-                drawEnemyParts(ghostBody, ghostLeft, ghostRight);
+                drawEnemyVisual(ghostVisual);
             }
             drawWarpParticleCluster(moveCenter, 1.7f);
             drawWarpStreakBurst(moveCenter, 0.92f, 1.2f);
@@ -480,56 +436,32 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
             warp_.hasValidTarget) {
             for (int i = 0; i < 2; ++i) {
                 float t = static_cast<float>(i + 1) / 2.0f;
-                Transform echoBody = bodyTf_;
-                Transform echoLeft = leftHandTf_;
-                Transform echoRight = rightHandTf_;
+                Transform echoVisual = visualTf_;
 
-                echoBody.position = warp_.targetPos;
-                echoLeft.position = warp_.targetPos;
-                echoRight.position = warp_.targetPos;
+                echoVisual.position = warp_.targetPos;
 
                 float sideOffset = warpArrivalEchoOffset_ * t;
                 float heightOffset =
                     warpArrivalPreviewHeight_ * (1.0f + 0.5f * warpPulse) * t;
 
                 if (warp_.approachSlot == WarpApproachSlot::FrontLeft) {
-                    echoBody.position.x += (-rightX) * sideOffset;
-                    echoBody.position.z += (-rightZ) * sideOffset;
-                    echoLeft.position.x += (-rightX) * sideOffset;
-                    echoLeft.position.z += (-rightZ) * sideOffset;
-                    echoRight.position.x += (-rightX) * sideOffset;
-                    echoRight.position.z += (-rightZ) * sideOffset;
+                    echoVisual.position.x += (-rightX) * sideOffset;
+                    echoVisual.position.z += (-rightZ) * sideOffset;
                 } else if (warp_.approachSlot == WarpApproachSlot::FrontRight) {
-                    echoBody.position.x += rightX * sideOffset;
-                    echoBody.position.z += rightZ * sideOffset;
-                    echoLeft.position.x += rightX * sideOffset;
-                    echoLeft.position.z += rightZ * sideOffset;
-                    echoRight.position.x += rightX * sideOffset;
-                    echoRight.position.z += rightZ * sideOffset;
+                    echoVisual.position.x += rightX * sideOffset;
+                    echoVisual.position.z += rightZ * sideOffset;
                 } else {
-                    echoBody.position.x += forwardX * sideOffset;
-                    echoBody.position.z += forwardZ * sideOffset;
-                    echoLeft.position.x += forwardX * sideOffset;
-                    echoLeft.position.z += forwardZ * sideOffset;
-                    echoRight.position.x += forwardX * sideOffset;
-                    echoRight.position.z += forwardZ * sideOffset;
+                    echoVisual.position.x += forwardX * sideOffset;
+                    echoVisual.position.z += forwardZ * sideOffset;
                 }
 
-                echoBody.position.y += heightOffset;
-                echoLeft.position.y += heightOffset;
-                echoRight.position.y += heightOffset;
+                echoVisual.position.y += heightOffset;
 
-                echoBody.scale.x *= previewScale - 0.24f * t;
-                echoBody.scale.y *= previewScale + 0.08f * (1.0f - t);
-                echoBody.scale.z *= previewScale - 0.12f * t;
-                echoLeft.scale.x *= 0.90f + 0.08f * warpPulse;
-                echoLeft.scale.y *= 0.90f + 0.08f * warpPulse;
-                echoLeft.scale.z *= 0.90f + 0.08f * warpPulse;
-                echoRight.scale.x *= 0.90f + 0.08f * warpPulse;
-                echoRight.scale.y *= 0.90f + 0.08f * warpPulse;
-                echoRight.scale.z *= 0.90f + 0.08f * warpPulse;
+                echoVisual.scale.x *= previewScale - 0.24f * t;
+                echoVisual.scale.y *= previewScale + 0.08f * (1.0f - t);
+                echoVisual.scale.z *= previewScale - 0.12f * t;
 
-                drawEnemyParts(echoBody, echoLeft, echoRight);
+                drawEnemyVisual(echoVisual);
             }
 
             drawWarpParticleCluster(warp_.targetPos, 3.1f);
@@ -550,7 +482,7 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         bulletTf.position = bullet.position;
         bulletTf.scale = {0.2f, 0.2f, 0.2f};
 
-        modelManager->Draw(modelId_, bulletTf, camera);
+        modelManager->Draw(effectModelId, bulletTf, camera);
     }
 
     for (const auto &wave : waves_) {
@@ -562,7 +494,7 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         waveTf.position = wave.position;
         waveTf.scale = {0.6f, 0.2f, 1.2f};
 
-        modelManager->Draw(modelId_, waveTf, camera);
+        modelManager->Draw(effectModelId, waveTf, camera);
     }
 }
 

@@ -7,6 +7,7 @@
 #include "Transform.h"
 #include <DirectXMath.h>
 #include <cstdint>
+#include <string>
 
 #ifdef _DEBUG
 #include "DebugCamera.h"
@@ -34,6 +35,7 @@ class GameScene : public BaseScene {
     // Update
     void UpdateCamera(Input *input);
     void UpdateBattleCamera();
+    void SyncEnemyAnimation();
     bool ProjectWorldToScreen(const DirectX::XMFLOAT3 &worldPos,
                               DirectX::XMFLOAT2 &outScreen) const;
     void DrawWarpSmokePass();
@@ -64,6 +66,8 @@ class GameScene : public BaseScene {
     Enemy enemy_;
     uint32_t playerModelId_ = 0;
     uint32_t enemyModelId_ = 0;
+    std::string enemyAnimationName_{};
+    bool enemyAnimationLoop_ = true;
 
     float playerHitCooldown_ = 0.0f;
 
