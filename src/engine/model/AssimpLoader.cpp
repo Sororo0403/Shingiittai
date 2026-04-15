@@ -176,47 +176,51 @@ Model AssimpLoader::Load(const std::string &path) {
 
         aiMaterial *mat = nullptr;
         uint32_t textureId = 0;
+        bool hasTexture = false;
 
         if (scene->HasMaterials() &&
             mesh->mMaterialIndex < scene->mNumMaterials) {
             mat = scene->mMaterials[mesh->mMaterialIndex];
 
-            aiString texPath;
-
-            if (mat && mat->GetTexture(aiTextureType_DIFFUSE, 0, &texPath) ==
-                           AI_SUCCESS) {
+            auto tryLoadTexture = [&](aiTextureType textureType) -> bool {
+                aiString texPath;
+                if (!mat || mat->GetTexture(textureType, 0, &texPath) !=
+                                AI_SUCCESS) {
+                    return false;
+                }
 
                 std::string texName = texPath.C_Str();
 
                 if (!texName.empty() && texName[0] == '*') {
                     int texIndex = std::atoi(texName.c_str() + 1);
-
-                    if (texIndex >= 0 &&
-                        texIndex < static_cast<int>(scene->mNumTextures)) {
-
-                        aiTexture *tex = scene->mTextures[texIndex];
-
-                        if (tex) {
-                            if (tex->mHeight == 0) {
-                                textureId = textureManager_->LoadFromMemory(
-                                    reinterpret_cast<uint8_t *>(tex->pcData),
-                                    tex->mWidth);
-
-                            } else {
-                                textureId = textureManager_->LoadFromMemory(
-                                    reinterpret_cast<uint8_t *>(tex->pcData),
-                                    tex->mWidth * tex->mHeight * 4);
-                            }
-                        }
+                    if (texIndex < 0 ||
+                        texIndex >= static_cast<int>(scene->mNumTextures)) {
+                        return false;
                     }
 
-                } else {
-                    std::filesystem::path modelPath(path);
-                    auto fullPath = modelPath.parent_path() / texName;
+                    aiTexture *tex = scene->mTextures[texIndex];
+                    if (!tex) {
+                        return false;
+                    }
 
-                    textureId = textureManager_->Load(fullPath.wstring());
+                    if (tex->mHeight == 0) {
+                        textureId = textureManager_->LoadFromMemory(
+                            reinterpret_cast<const uint8_t *>(tex->pcData),
+                            tex->mWidth);
+                        return true;
+                    }
+
+                    return false;
                 }
-            }
+
+                std::filesystem::path modelPath(path);
+                auto fullPath = modelPath.parent_path() / texName;
+                textureId = textureManager_->Load(fullPath.wstring());
+                return true;
+            };
+
+            hasTexture = tryLoadTexture(aiTextureType_BASE_COLOR) ||
+                         tryLoadTexture(aiTextureType_DIFFUSE);
         }
 
         uint32_t meshId = meshManager_->CreateMesh(
@@ -245,7 +249,7 @@ Model AssimpLoader::Load(const std::string &path) {
         XMStoreFloat4x4(&material.uvTransform,
                         XMMatrixTranspose(XMMatrixIdentity()));
 
-        material.enableTexture = 1;
+        material.enableTexture = hasTexture ? 1 : 0;
 
         subMesh.meshId = meshId;
         subMesh.textureId = textureId;

@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <d3d12.h>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include <wrl.h>
 
@@ -62,4 +63,5 @@ class TextureManager {
 
     std::vector<Entry> textures_;
     std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> uploadBuffers_;
+    std::unordered_map<std::wstring, uint32_t> filePathToTextureId_;
 };

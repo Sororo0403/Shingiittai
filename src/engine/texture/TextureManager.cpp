@@ -4,6 +4,10 @@
 #include "DxUtils.h"
 #include "SrvManager.h"
 #include "Texture.h"
+#include <algorithm>
+#include <cctype>
+#include <cwctype>
+#include <filesystem>
 #include <sstream>
 #include <stdexcept>
 
@@ -12,6 +16,18 @@
 #endif
 
 namespace {
+
+std::wstring NormalizePathKey(const std::wstring &path) {
+    std::filesystem::path fsPath(path);
+    std::wstring key = fsPath.lexically_normal().wstring();
+
+#ifdef _WIN32
+    std::transform(key.begin(), key.end(), key.begin(),
+                   [](wchar_t c) { return static_cast<wchar_t>(towlower(c)); });
+#endif
+
+    return key;
+}
 
 void DebugLog(const std::string &message) {
 #ifdef _WIN32
@@ -36,16 +52,50 @@ void TextureManager::Initialize(DirectXCommon *dxCommon,
                                 SrvManager *srvManager) {
     dxCommon_ = dxCommon;
     srvManager_ = srvManager;
+
+    textures_.clear();
+    uploadBuffers_.clear();
+    filePathToTextureId_.clear();
+
+    uint32_t whitePixel = 0xFFFFFFFF;
+    Image image{};
+    image.width = 1;
+    image.height = 1;
+    image.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    image.rowPitch = sizeof(uint32_t);
+    image.slicePitch = sizeof(uint32_t);
+    image.pixels = reinterpret_cast<uint8_t *>(&whitePixel);
+
+    TexMetadata metadata{};
+    metadata.width = 1;
+    metadata.height = 1;
+    metadata.depth = 1;
+    metadata.arraySize = 1;
+    metadata.mipLevels = 1;
+    metadata.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    metadata.dimension = TEX_DIMENSION_TEXTURE2D;
+
+    CreateTexture(&image, metadata);
 }
 
 uint32_t TextureManager::Load(const std::wstring &filePath) {
-    DebugLogW(L"[TextureManager] Load begin path='" + filePath + L"'");
+    const std::wstring pathKey = NormalizePathKey(filePath);
+
+    auto it = filePathToTextureId_.find(pathKey);
+    if (it != filePathToTextureId_.end()) {
+        std::ostringstream oss;
+        oss << "[TextureManager] Load cache hit textureId=" << it->second;
+        DebugLog(oss.str());
+        return it->second;
+    }
+
+    DebugLogW(L"[TextureManager] Load begin path='" + pathKey + L"'");
 
     ScratchImage scratch;
     TexMetadata metadata{};
 
     ThrowIfFailed(
-        LoadFromWICFile(filePath.c_str(), WIC_FLAGS_NONE, &metadata, scratch),
+        LoadFromWICFile(pathKey.c_str(), WIC_FLAGS_NONE, &metadata, scratch),
         "LoadFromWICFile failed");
 
     const Image *image = scratch.GetImage(0, 0, 0);
@@ -54,6 +104,7 @@ uint32_t TextureManager::Load(const std::wstring &filePath) {
     }
 
     uint32_t id = CreateTexture(image, metadata);
+    filePathToTextureId_[pathKey] = id;
 
     {
         std::ostringstream oss;
