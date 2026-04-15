@@ -155,6 +155,9 @@ void Enemy::ValidateAllTimings() {
 EnemyTuningPreset Enemy::CreateTuningPreset() const {
     EnemyTuningPreset p{};
 
+    p.enemyMaxHp = maxHp_;
+    p.phase2HealthRatioThreshold = phase2HealthRatioThreshold_;
+
     p.nearAttackDistance = nearAttackDistance_;
     p.farAttackDistance = farAttackDistance_;
 
@@ -208,6 +211,10 @@ EnemyTuningPreset Enemy::CreateTuningPreset() const {
     p.sweepTiming.activeEndTime = sweepTiming_.activeEndTime;
     p.sweepTiming.recoveryStartTime = sweepTiming_.recoveryStartTime;
 
+    p.warpStartTime = warpStartTime_;
+    p.warpMoveTime = warpMoveTime_;
+    p.warpEndTime = warpEndTime_;
+
     p.warpApproachChainMaxSteps = warpApproachChainMaxSteps_;
     p.warpEscapeChainMaxSteps = warpEscapeChainMaxSteps_;
     p.approachChainContinueDistance = approachChainContinueDistance_;
@@ -225,6 +232,20 @@ EnemyTuningPreset Enemy::CreateTuningPreset() const {
 // プリセット読込用：構造体 → 現在値
 // ============================================================
 void Enemy::ApplyTuningPreset(const EnemyTuningPreset &p) {
+    maxHp_ = p.enemyMaxHp;
+    if (maxHp_ < 1.0f) {
+        maxHp_ = 1.0f;
+    }
+    hp_ = maxHp_;
+
+    phase2HealthRatioThreshold_ = p.phase2HealthRatioThreshold;
+    if (phase2HealthRatioThreshold_ < 0.05f) {
+        phase2HealthRatioThreshold_ = 0.05f;
+    }
+    if (phase2HealthRatioThreshold_ > 0.95f) {
+        phase2HealthRatioThreshold_ = 0.95f;
+    }
+
     nearAttackDistance_ = p.nearAttackDistance;
     farAttackDistance_ = p.farAttackDistance;
 
@@ -251,6 +272,20 @@ void Enemy::ApplyTuningPreset(const EnemyTuningPreset &p) {
     sweepTiming_.activeEndTime = p.sweepTiming.activeEndTime;
     sweepTiming_.recoveryStartTime = p.sweepTiming.recoveryStartTime;
     sweepTiming_.trackingEndTime = p.sweepTiming.trackingEndTime;
+
+    warpStartTime_ = p.warpStartTime;
+    warpMoveTime_ = p.warpMoveTime;
+    warpEndTime_ = p.warpEndTime;
+
+    if (warpStartTime_ < 0.0f) {
+        warpStartTime_ = 0.0f;
+    }
+    if (warpMoveTime_ < 0.0f) {
+        warpMoveTime_ = 0.0f;
+    }
+    if (warpEndTime_ < 0.0f) {
+        warpEndTime_ = 0.0f;
+    }
 
     bulletParam_.damage = p.bullet.damage;
     bulletParam_.knockback = p.bullet.knockback;

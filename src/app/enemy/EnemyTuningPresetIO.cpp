@@ -1,6 +1,18 @@
 #include "EnemyTuningPresetIO.h"
 #include <fstream>
 
+namespace {
+template <class T> void ReadOptional(std::ifstream &ifs, T &value) {
+    T temp{};
+    if (ifs >> temp) {
+        value = temp;
+        return;
+    }
+
+    ifs.clear();
+}
+} // namespace
+
 namespace EnemyTuningPresetIO {
 
 bool Save(const std::string &path, const EnemyTuningPreset &p) {
@@ -58,6 +70,15 @@ bool Save(const std::string &path, const EnemyTuningPreset &p) {
     ofs << p.waveChargeTime << " " << p.waveRecoveryTime << " " << p.waveSpeed
         << " " << p.waveMaxDistance << " " << p.waveSpawnForwardOffset << " "
         << p.waveSpawnHeightOffset << "\n";
+
+    ofs << p.warpApproachChainMaxSteps << " " << p.warpEscapeChainMaxSteps << " "
+        << p.approachChainContinueDistance << " "
+        << p.escapeChainContinueDistance << "\n";
+    ofs << p.sweepWarpSmashMaxDistance << " " << p.sweepWarpSmashChance << " "
+        << p.waveWarpSmashMinDistance << " " << p.waveWarpSmashChance << "\n";
+    ofs << p.enemyMaxHp << " " << p.phase2HealthRatioThreshold << "\n";
+    ofs << p.warpStartTime << " " << p.warpMoveTime << " " << p.warpEndTime
+        << "\n";
     
 
     return true;
@@ -100,7 +121,24 @@ bool Load(const std::string &path, EnemyTuningPreset &p) {
         p.waveMaxDistance >> p.waveSpawnForwardOffset >>
         p.waveSpawnHeightOffset;
 
-    return !ifs.fail();
+    ReadOptional(ifs, p.warpApproachChainMaxSteps);
+    ReadOptional(ifs, p.warpEscapeChainMaxSteps);
+    ReadOptional(ifs, p.approachChainContinueDistance);
+    ReadOptional(ifs, p.escapeChainContinueDistance);
+
+    ReadOptional(ifs, p.sweepWarpSmashMaxDistance);
+    ReadOptional(ifs, p.sweepWarpSmashChance);
+    ReadOptional(ifs, p.waveWarpSmashMinDistance);
+    ReadOptional(ifs, p.waveWarpSmashChance);
+
+    ReadOptional(ifs, p.enemyMaxHp);
+    ReadOptional(ifs, p.phase2HealthRatioThreshold);
+
+    ReadOptional(ifs, p.warpStartTime);
+    ReadOptional(ifs, p.warpMoveTime);
+    ReadOptional(ifs, p.warpEndTime);
+
+    return true;
 }
 
 } // namespace EnemyTuningPresetIO

@@ -131,6 +131,7 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClCompile Include="src\app\enemy\EnemyTactics.cpp" />
     <ClCompile Include="src\app\enemy\EnemyTuning.cpp" />
     <ClCompile Include="src\app\enemy\EnemyTuningPresetIO.cpp" />
+    <ClCompile Include="src\app\player\PlayerTuningPresetIO.cpp" />
     <ClCompile Include="src\engine\model\MaterialManager.cpp" />
     <ClCompile Include="src\engine\model\Material.cpp" />
     <ClCompile Include="src\engine\camera\DebugCamera.cpp" />
@@ -168,6 +169,8 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClInclude Include="include\app\enemy\EnemyActionData.h" />
     <ClInclude Include="include\app\enemy\EnemyTuningPreset.h" />
     <ClInclude Include="include\app\enemy\EnemyTuningPresetIO.h" />
+    <ClInclude Include="include\app\player\PlayerTuningPreset.h" />
+    <ClInclude Include="include\app\player\PlayerTuningPresetIO.h" />
     <ClInclude Include="include\app\player\SwordControllerState.h" />
     <ClInclude Include="include\app\player\SwordPose.h" />
     <ClInclude Include="include\engine\camera\DebugCamera.h" />
@@ -259,6 +262,9 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="resources\player_tuning.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

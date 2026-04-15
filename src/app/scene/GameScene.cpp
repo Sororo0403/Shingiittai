@@ -3,6 +3,7 @@
 #include "DirectXCommon.h"
 #include "Input.h"
 #include "ModelManager.h"
+#include "PlayerTuningPresetIO.h"
 #include "SpriteManager.h"
 #include "TextureManager.h"
 #include "WinApp.h"
@@ -17,9 +18,7 @@
 #endif // _DEBUG
 #include "imgui_internal.h"
 #include <cmath>
-#ifdef _DEBUG
 #include "EnemyTuningPresetIO.h"
-#endif // _DEBUG
 
 using namespace DirectX;
 
@@ -192,6 +191,22 @@ void GameScene::Initialize(const SceneContext &ctx) {
     playerModelId_ = playerModel;
     enemy_.Initialize(enemyModel, bulletModel);
     enemyModelId_ = enemyModel;
+
+    {
+        PlayerTuningPreset playerPreset{};
+        if (PlayerTuningPresetIO::Load("resources/player_tuning.txt",
+                                       playerPreset)) {
+            player_.ApplyTuningPreset(playerPreset);
+        }
+    }
+
+    {
+        EnemyTuningPreset enemyPreset{};
+        if (EnemyTuningPresetIO::Load("resources/enemy_tuning.txt",
+                                      enemyPreset)) {
+            enemy_.ApplyTuningPreset(enemyPreset);
+        }
+    }
 
     // 一人称カメラ初期向き
     cameraYaw_ = 0.0f;
@@ -834,6 +849,10 @@ void GameScene::Draw() {
     ImGui::Text("=== Enemy Tuning ===");
 
     if (ImGui::TreeNode("Distance")) {
+        ImGui::DragFloat("Enemy MaxHP", &enemy_.EditEnemyMaxHp(), 1.0f, 1.0f,
+                         5000.0f);
+        ImGui::DragFloat("Phase2 HP Ratio", &enemy_.EditPhase2HealthRatioThreshold(),
+                         0.005f, 0.05f, 0.95f);
         ImGui::DragFloat("NearAttackDistance", &enemy_.EditNearAttackDistance(),
                          0.05f, 0.5f, 20.0f);
         ImGui::DragFloat("FarAttackDistance", &enemy_.EditFarAttackDistance(),
@@ -872,6 +891,16 @@ void GameScene::Draw() {
 
             ImGui::TreePop();
         }
+
+    if (ImGui::TreeNode("Warp")) {
+        ImGui::DragFloat("Warp Start Time", &enemy_.EditWarpStartTime(), 0.005f,
+                         0.0f, 2.0f);
+        ImGui::DragFloat("Warp Move Time", &enemy_.EditWarpMoveTime(), 0.005f,
+                         0.0f, 2.0f);
+        ImGui::DragFloat("Warp End Time", &enemy_.EditWarpEndTime(), 0.005f,
+                         0.0f, 2.0f);
+        ImGui::TreePop();
+    }
         ImGui::TreePop();
     }
 
@@ -977,7 +1006,7 @@ void GameScene::Draw() {
     ImGui::Separator();
     ImGui::Text("=== Preset ===");
 
-    static char presetPath[256] = "Resources/enemy_tuning.txt";
+    static char presetPath[256] = "resources/enemy_tuning.txt";
     ImGui::InputText("Preset Path", presetPath, sizeof(presetPath));
 
     if (ImGui::Button("Save Preset")) {
@@ -998,6 +1027,52 @@ void GameScene::Draw() {
 
     if (ImGui::Button("Reset Preset")) {
         enemy_.ResetTuningPreset();
+    }
+
+    ImGui::Separator();
+    ImGui::Text("=== Player Tuning ===");
+    if (ImGui::TreeNode("Player Parameters")) {
+        PlayerTuningPreset playerPreset = player_.CreateTuningPreset();
+        bool changed = false;
+        changed |= ImGui::DragFloat("Player MaxHP", &playerPreset.maxHp, 1.0f,
+                                    1.0f, 1000.0f);
+        changed |= ImGui::DragFloat("Player CurrentHP", &playerPreset.initialHp,
+                                    1.0f, 0.0f, 1000.0f);
+        changed |= ImGui::DragFloat("Player MoveSpeed", &playerPreset.moveSpeed,
+                                    0.05f, 0.0f, 30.0f);
+        changed |= ImGui::DragFloat("Player DamageScale",
+                                    &playerPreset.damageTakenScale, 0.01f, 0.0f,
+                                    5.0f);
+
+        if (changed) {
+            player_.ApplyTuningPreset(playerPreset);
+        }
+
+        static char playerPresetPath[256] = "resources/player_tuning.txt";
+        ImGui::InputText("Player Preset Path", playerPresetPath,
+                         sizeof(playerPresetPath));
+
+        if (ImGui::Button("Save Player Preset")) {
+            PlayerTuningPresetIO::Save(playerPresetPath,
+                                       player_.CreateTuningPreset());
+        }
+
+        ImGui::SameLine();
+
+        if (ImGui::Button("Load Player Preset")) {
+            PlayerTuningPreset loaded{};
+            if (PlayerTuningPresetIO::Load(playerPresetPath, loaded)) {
+                player_.ApplyTuningPreset(loaded);
+            }
+        }
+
+        ImGui::SameLine();
+
+        if (ImGui::Button("Reset Player Preset")) {
+            player_.ResetTuningPreset();
+        }
+
+        ImGui::TreePop();
     }
 
     if (ImGui::TreeNode("Action Weight")) {

@@ -16,6 +16,9 @@ struct AttackTimingParamPreset {
 };
 
 struct EnemyTuningPreset {
+    float enemyMaxHp = 1000.0f;
+    float phase2HealthRatioThreshold = 0.60f;
+
     float nearAttackDistance = 4.0f;
     float farAttackDistance = 4.0f;
 
@@ -53,6 +56,10 @@ struct EnemyTuningPreset {
 
     AttackTimingParamPreset smashTiming;
     AttackTimingParamPreset sweepTiming;
+
+    float warpStartTime = 0.2f;
+    float warpMoveTime = 0.10f;
+    float warpEndTime = 0.2f;
 
     int warpApproachChainMaxSteps = 2;
     int warpEscapeChainMaxSteps = 2;

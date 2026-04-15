@@ -1,6 +1,7 @@
 #pragma once
 #include "Camera.h"
 #include "JoyCon.h"
+#include "PlayerTuningPreset.h"
 #include "Sword.h"
 #include "SwordJoyConController.h"
 #include "SwordMouseController.h"
@@ -50,7 +51,12 @@ class Player {
     const Transform &GetTransform() const { return tf_; }
 
     float GetHP() const { return hp_; }
+    float GetMaxHP() const { return maxHp_; }
     void TakeDamage(float damage);
+
+    PlayerTuningPreset CreateTuningPreset() const;
+    void ApplyTuningPreset(const PlayerTuningPreset &preset);
+    void ResetTuningPreset();
 
     void AddKnockback(const DirectX::XMFLOAT3 &velocity);
     const DirectX::XMFLOAT3 &GetVelocity() const { return velocity_; }
@@ -113,7 +119,9 @@ class Player {
 
     float moveSpeed_ = 5.0f;
 
+    float maxHp_ = 100.0f;
     float hp_ = 100.0f;
+    float damageTakenScale_ = 1.0f;
     DirectX::XMFLOAT3 knockbackVelocity_ = {0.0f, 0.0f, 0.0f};
     float yaw_ = 0.0f;
     DirectX::XMFLOAT3 velocity_ = {0.0f, 0.0f, 0.0f};

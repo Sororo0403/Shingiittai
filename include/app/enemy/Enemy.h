@@ -317,6 +317,8 @@ class Enemy {
 
     float &EditNearAttackDistance() { return nearAttackDistance_; }
     float &EditFarAttackDistance() { return farAttackDistance_; }
+    float &EditEnemyMaxHp() { return maxHp_; }
+    float &EditPhase2HealthRatioThreshold() { return phase2HealthRatioThreshold_; }
 
     float &EditSmashChargeTime() { return smashChargeTime_; }
     float &EditSweepChargeTime() { return sweepChargeTime_; }
@@ -355,6 +357,10 @@ class Enemy {
     float &EditSweepWarpSmashChance() { return sweepWarpSmashChance_; }
     float &EditWaveWarpSmashMinDistance() { return waveWarpSmashMinDistance_; }
     float &EditWaveWarpSmashChance() { return waveWarpSmashChance_; }
+
+    float &EditWarpStartTime() { return warpStartTime_; }
+    float &EditWarpMoveTime() { return warpMoveTime_; }
+    float &EditWarpEndTime() { return warpEndTime_; }
 
     AttackTimingParam &EditSmashTiming() { return smashTiming_; }
     AttackTimingParam &EditSweepTiming() { return sweepTiming_; }

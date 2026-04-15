@@ -3,6 +3,7 @@
 #include "ModelManager.h"
 #include "SwordPose.h"
 #include "imgui.h"
+#include <algorithm>
 #include <cmath>
 
 using namespace DirectX;
@@ -19,6 +20,7 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
 
     leftSword_.Initialize(swordModelId);
     rightSword_.Initialize(swordModelId);
+    hp_ = maxHp_;
     velocity_ = {0.0f, 0.0f, 0.0f};
     leftSword_.Update(BuildSwordTransform(MakeIdleSwordPose(true), true),
                       MakeIdleSwordPose(true), 0.0f);
@@ -184,11 +186,41 @@ void Player::UpdateMovement(Input *input, float deltaTime, float cameraYaw) {
 }
 
 void Player::TakeDamage(float damage) {
-    hp_ -= damage;
+    hp_ -= damage * damageTakenScale_;
     if (hp_ < 0.0f) {
         hp_ = 0.0f;
     }
 }
+
+PlayerTuningPreset Player::CreateTuningPreset() const {
+    PlayerTuningPreset p{};
+    p.maxHp = maxHp_;
+    p.initialHp = hp_;
+    p.moveSpeed = moveSpeed_;
+    p.damageTakenScale = damageTakenScale_;
+    return p;
+}
+
+void Player::ApplyTuningPreset(const PlayerTuningPreset &preset) {
+    maxHp_ = preset.maxHp;
+    if (maxHp_ < 1.0f) {
+        maxHp_ = 1.0f;
+    }
+
+    moveSpeed_ = preset.moveSpeed;
+    if (moveSpeed_ < 0.0f) {
+        moveSpeed_ = 0.0f;
+    }
+
+    damageTakenScale_ = preset.damageTakenScale;
+    if (damageTakenScale_ < 0.0f) {
+        damageTakenScale_ = 0.0f;
+    }
+
+    hp_ = std::clamp(preset.initialHp, 0.0f, maxHp_);
+}
+
+void Player::ResetTuningPreset() { ApplyTuningPreset(PlayerTuningPreset{}); }
 
 void Player::AddKnockback(const DirectX::XMFLOAT3 &velocity) {
     knockbackVelocity_.x += velocity.x;
