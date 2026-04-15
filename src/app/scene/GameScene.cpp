@@ -31,6 +31,54 @@ const std::string kBossAnimWave =
     "\xE6\xB3\xA2\xE7\x8A\xB6\xE6\x94\xBB\xE6\x92\x83";
 const std::string kBossAnimSmash =
     "\xE7\xB8\xA6\xE6\x8C\xAF\xE3\x82\x8A\xE4\xB8\x8B\xE3\x82\x8D\xE3\x81\x97";
+bool HasAnimation(const Model *model, const std::string &animationName);
+
+std::string PickEnemyIntroAnimation(const Model *model, const Enemy &enemy,
+                                    bool &outLoop) {
+    outLoop = false;
+
+    if (!model || model->animations.empty()) {
+        return {};
+    }
+
+    switch (enemy.GetIntroPhase()) {
+    case IntroPhase::SecondSlash:
+        if (HasAnimation(model, kBossAnimSmash)) {
+            return kBossAnimSmash;
+        }
+        if (HasAnimation(model, kBossAnimSweep)) {
+            return kBossAnimSweep;
+        }
+        break;
+
+    case IntroPhase::SpinSlash:
+        if (HasAnimation(model, kBossAnimSweep)) {
+            return kBossAnimSweep;
+        }
+        if (HasAnimation(model, kBossAnimSmash)) {
+            return kBossAnimSmash;
+        }
+        break;
+
+    case IntroPhase::Settle:
+        if (HasAnimation(model, kBossAnimSweep)) {
+            return kBossAnimSweep;
+        }
+        if (HasAnimation(model, kBossAnimSmash)) {
+            return kBossAnimSmash;
+        }
+        break;
+    }
+
+    if (HasAnimation(model, kBossAnimIdle)) {
+        outLoop = true;
+        return kBossAnimIdle;
+    }
+
+    outLoop = true;
+    return model->currentAnimation.empty() ? model->animations.begin()->first
+                                           : model->currentAnimation;
+}
 
 bool HasAnimation(const Model *model, const std::string &animationName) {
     if (!model) {
@@ -576,6 +624,33 @@ void GameScene::SyncEnemyAnimation() {
     std::string nextAnimation = PickEnemyAnimation(enemyModel, enemy_, shouldLoop);
     if (nextAnimation.empty()) {
         return;
+    }
+
+    if (enemy_.IsIntroActive()) {
+        bool introLoop = false;
+        std::string introAnimation =
+            PickEnemyIntroAnimation(enemyModel, enemy_, introLoop);
+        if (!introAnimation.empty()) {
+            IntroPhase introPhase = enemy_.GetIntroPhase();
+            const bool forceRestart =
+                (enemyIntroPhase_ != introPhase &&
+                 (introPhase == IntroPhase::SecondSlash ||
+                  introPhase == IntroPhase::SpinSlash));
+            if (!enemyIntroAnimationStarted_ || forceRestart ||
+                enemyAnimationName_ != introAnimation ||
+                enemyAnimationLoop_ != introLoop) {
+                modelManager->PlayAnimation(enemyModelId_, introAnimation,
+                                            introLoop);
+                enemyAnimationName_ = introAnimation;
+                enemyAnimationLoop_ = introLoop;
+                enemyIntroAnimationStarted_ = true;
+            }
+            enemyIntroPhase_ = introPhase;
+            return;
+        }
+    } else {
+        enemyIntroAnimationStarted_ = false;
+        enemyIntroPhase_ = IntroPhase::SecondSlash;
     }
 
     if (enemyAnimationName_ == nextAnimation && enemyAnimationLoop_ == shouldLoop) {
@@ -1666,6 +1741,8 @@ void GameScene::UpdateBattleCamera() {
 
     const bool isEnemyWarpEnd = (enemyActionKind == ActionKind::Warp &&
                                  enemyActionStep == ActionStep::End);
+    const bool isEnemyIntro = enemy_.IsIntroActive();
+    const float enemyIntroRatio = enemy_.GetIntroRatio();
     const bool isEnemyPhaseTransition = enemy_.IsPhaseTransitionActive();
     const float enemyPhaseTransitionRatio = enemy_.GetPhaseTransitionRatio();
 
@@ -1686,13 +1763,22 @@ void GameScene::UpdateBattleCamera() {
         targetFovDeg_ = warpFovDeg_;
     }
 
+    if (isEnemyIntro) {
+        targetFovDeg_ = enemyIntroFovDeg_;
+    }
+
     if (isEnemyPhaseTransition) {
         targetFovDeg_ = phaseTransitionFovDeg_;
     }
 
-    float fovAlpha = (isEnemyPhaseTransition ? phaseTransitionFovLerpSpeed_
-                                             : fovLerpSpeed_) *
-                     ctx_->deltaTime;
+    float usedFovLerpSpeed = fovLerpSpeed_;
+    if (isEnemyIntro) {
+        usedFovLerpSpeed = enemyIntroFovLerpSpeed_;
+    }
+    if (isEnemyPhaseTransition) {
+        usedFovLerpSpeed = phaseTransitionFovLerpSpeed_;
+    }
+    float fovAlpha = usedFovLerpSpeed * ctx_->deltaTime;
     if (fovAlpha > 1.0f) {
         fovAlpha = 1.0f;
     }
@@ -1703,13 +1789,16 @@ void GameScene::UpdateBattleCamera() {
     // =========================
     // ロックオン中だけ yaw 補助
     // =========================
-    if (isLockOn_) {
+    if (isLockOn_ || isEnemyIntro) {
         DirectX::XMFLOAT3 assistTarget = enemyPos;
 
         float assistStrength = lockOnAssistStrength_;
         float assistMaxStep = lockOnAssistMaxStep_;
 
-        if (isEnemyRushActive) {
+        if (isEnemyIntro) {
+            assistStrength = lockOnAssistStrength_ * 1.55f;
+            assistMaxStep = lockOnAssistMaxStep_ * 1.55f;
+        } else if (isEnemyRushActive) {
             float enemyYaw = enemy_.GetFacingYaw();
             assistTarget.x += std::sinf(enemyYaw) * rushLeadDistance_;
             assistTarget.z += std::cosf(enemyYaw) * rushLeadDistance_;
@@ -1829,6 +1918,9 @@ void GameScene::UpdateBattleCamera() {
         }
 
         float usedRadius = lockOnOrbitRadius_ + lockOnOrbitPullBackMax_ * pullT;
+        if (isEnemyIntro) {
+            usedRadius -= enemyIntroPushIn_ * enemyIntroRatio;
+        }
         if (isEnemyPhaseTransition) {
             usedRadius -= phaseTransitionPushIn_ * enemyPhaseTransitionRatio;
         }
@@ -1905,6 +1997,11 @@ void GameScene::UpdateBattleCamera() {
                      cameraTargetBase.z - forward.z * dynamicDistance +
                          right.z * cameraSideOffset_};
 
+        if (isEnemyIntro) {
+            cameraPos.x += forward.x * enemyIntroPushIn_ * enemyIntroRatio;
+            cameraPos.y += 0.18f * enemyIntroRatio;
+            cameraPos.z += forward.z * enemyIntroPushIn_ * enemyIntroRatio;
+        }
         if (isEnemyPhaseTransition) {
             cameraPos.x += forward.x * phaseTransitionPushIn_ *
                            enemyPhaseTransitionRatio;
@@ -1949,6 +2046,23 @@ void GameScene::UpdateBattleCamera() {
         lockOnLookAt_ = lookAt;
     }
 
+    if (isEnemyIntro) {
+        DirectX::XMFLOAT3 introLookAt = {
+            playerPos.x * (1.0f - enemyIntroLookAtEnemyWeight_) +
+                enemyPos.x * enemyIntroLookAtEnemyWeight_,
+            (playerPos.y + cameraLookHeight_) *
+                    (1.0f - enemyIntroLookAtEnemyWeight_) +
+                (enemyPos.y + enemyIntroLookAtHeight_) *
+                    enemyIntroLookAtEnemyWeight_,
+            playerPos.z * (1.0f - enemyIntroLookAtEnemyWeight_) +
+                enemyPos.z * enemyIntroLookAtEnemyWeight_};
+
+        float blend = enemyIntroRatio;
+        lookAt.x += (introLookAt.x - lookAt.x) * blend;
+        lookAt.y += (introLookAt.y - lookAt.y) * blend;
+        lookAt.z += (introLookAt.z - lookAt.z) * blend;
+    }
+
     if (isEnemyPhaseTransition) {
         DirectX::XMFLOAT3 transitionLookAt = {
             playerPos.x * (1.0f - phaseTransitionLookAtEnemyWeight_) +
@@ -1964,6 +2078,26 @@ void GameScene::UpdateBattleCamera() {
         lookAt.x += (transitionLookAt.x - lookAt.x) * blend;
         lookAt.y += (transitionLookAt.y - lookAt.y) * blend;
         lookAt.z += (transitionLookAt.z - lookAt.z) * blend;
+    }
+
+    if (isEnemyIntro) {
+        float enemyYaw = enemy_.GetFacingYaw();
+        float frontX = std::sinf(enemyYaw);
+        float frontZ = std::cosf(enemyYaw);
+        float rightX = std::cosf(enemyYaw);
+        float rightZ = -std::sinf(enemyYaw);
+        float introSide =
+            (enemy_.GetIntroPhase() == IntroPhase::SpinSlash) ? 0.42f : 0.16f;
+        float introDistance = 10.2f - 0.35f * enemyIntroRatio;
+
+        cameraPos = {
+            enemyPos.x + frontX * introDistance + rightX * introSide,
+            enemyPos.y + 2.12f + 0.10f * enemyIntroRatio,
+            enemyPos.z + frontZ * introDistance + rightZ * introSide};
+
+        lookAt = {enemyPos.x, enemyPos.y + enemyIntroLookAtHeight_ + 0.18f,
+                  enemyPos.z};
+        cameraYaw_ = std::atan2f(enemyPos.x - cameraPos.x, enemyPos.z - cameraPos.z);
     }
 
     camera_.SetPosition(cameraPos);

@@ -6,6 +6,18 @@
 #include <cmath>
 #include <cstdlib>
 
+namespace {
+float Saturate(float value) {
+    if (value < 0.0f) {
+        return 0.0f;
+    }
+    if (value > 1.0f) {
+        return 1.0f;
+    }
+    return value;
+}
+} // namespace
+
 // ============================================================
 // 初期化処理
 // ============================================================
@@ -14,6 +26,8 @@ void Enemy::Initialize(uint32_t modelId, uint32_t projectileModelId) {
     projectileModelId_ = projectileModelId;
     hp_ = maxHp_;
     phase_ = BossPhase::Phase1;
+    introActive_ = true;
+    introTimer_ = 0.0f;
     phaseTransitionActive_ = false;
     phaseTransitionTimer_ = 0.0f;
 
@@ -51,6 +65,28 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
     playerGuarding_ = playerObs.isGuarding;
     UpdateBossPhase();
     UpdateWarpTrails(deltaTime);
+
+    if (introActive_) {
+        const float introTotalDuration =
+            introSecondSlashDuration_ + introSpinSlashDuration_ +
+            introSettleDuration_;
+        introTimer_ += deltaTime;
+        introTimer_ = Saturate(introTimer_ / introTotalDuration) *
+                      introTotalDuration;
+
+        isAttackActive_ = false;
+        isGuardActive_ = false;
+        UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_ * 0.55f);
+        UpdateParts();
+
+        if (introTimer_ >= introTotalDuration) {
+            introActive_ = false;
+            introTimer_ = 0.0f;
+            stateTimer_ = -0.10f;
+            UpdateParts();
+        }
+        return;
+    }
 
     if (isDying_) {
         deathTimer_ += deltaTime;
@@ -502,7 +538,7 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
 // 被ダメージ処理
 // ============================================================
 void Enemy::TakeDamage(float damage) {
-    if (deathFinished_ || isDying_) {
+    if (deathFinished_ || isDying_ || introActive_) {
         return;
     }
 

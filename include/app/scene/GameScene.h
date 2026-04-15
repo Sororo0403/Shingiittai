@@ -50,6 +50,8 @@ class GameScene : public BaseScene {
     uint32_t enemyModelId_ = 0;
     std::string enemyAnimationName_{};
     bool enemyAnimationLoop_ = true;
+    bool enemyIntroAnimationStarted_ = false;
+    IntroPhase enemyIntroPhase_ = IntroPhase::SecondSlash;
 
     float playerHitCooldown_ = 0.0f;
     float enemyHitCooldown_ = 0.0f;
@@ -122,11 +124,16 @@ class GameScene : public BaseScene {
     float rushFovDeg_ = 80.0f;
     float warpFovDeg_ = 79.0f;
     float phaseTransitionFovDeg_ = 68.0f;
+    float enemyIntroFovDeg_ = 64.0f;
     float fovLerpSpeed_ = 6.5f;
     float phaseTransitionFovLerpSpeed_ = 5.5f;
+    float enemyIntroFovLerpSpeed_ = 3.4f;
     float phaseTransitionLookAtEnemyWeight_ = 0.82f;
     float phaseTransitionLookAtHeight_ = 1.45f;
     float phaseTransitionPushIn_ = 0.85f;
+    float enemyIntroPushIn_ = 1.55f;
+    float enemyIntroLookAtEnemyWeight_ = 0.90f;
+    float enemyIntroLookAtHeight_ = 1.55f;
 
     float warpDistortionRadiusPx_ = 116.0f;
     float warpDistortionThicknessPx_ = 4.0f;

@@ -139,6 +139,7 @@ enum class TacticState {
 };
 
 enum class BossPhase { Phase1, Phase2 };
+enum class IntroPhase { SecondSlash, SpinSlash, Settle };
 
 // GameScene 側から渡す観測情報
 struct PlayerCombatObservation {
@@ -218,6 +219,31 @@ class Enemy {
     ActionStep GetActionStep() const { return action_.step; }
     TacticState GetTacticState() const { return tactic_; }
     BossPhase GetBossPhase() const { return phase_; }
+    bool IsIntroActive() const { return introActive_; }
+    IntroPhase GetIntroPhase() const {
+        if (introTimer_ < introSecondSlashDuration_) {
+            return IntroPhase::SecondSlash;
+        }
+        if (introTimer_ < introSecondSlashDuration_ + introSpinSlashDuration_) {
+            return IntroPhase::SpinSlash;
+        }
+        return IntroPhase::Settle;
+    }
+    float GetIntroRatio() const {
+        float totalDuration = introSecondSlashDuration_ +
+                              introSpinSlashDuration_ + introSettleDuration_;
+        if (totalDuration <= 0.0001f) {
+            return 1.0f;
+        }
+        float t = introTimer_ / totalDuration;
+        if (t < 0.0f) {
+            t = 0.0f;
+        }
+        if (t > 1.0f) {
+            t = 1.0f;
+        }
+        return t;
+    }
     bool IsPhaseTransitionActive() const { return phaseTransitionActive_; }
     float GetPhaseTransitionRatio() const {
         if (phaseTransitionDuration_ <= 0.0001f) {
@@ -318,7 +344,9 @@ class Enemy {
     float &EditNearAttackDistance() { return nearAttackDistance_; }
     float &EditFarAttackDistance() { return farAttackDistance_; }
     float &EditEnemyMaxHp() { return maxHp_; }
-    float &EditPhase2HealthRatioThreshold() { return phase2HealthRatioThreshold_; }
+    float &EditPhase2HealthRatioThreshold() {
+        return phase2HealthRatioThreshold_;
+    }
 
     float &EditSmashChargeTime() { return smashChargeTime_; }
     float &EditSweepChargeTime() { return sweepChargeTime_; }
@@ -454,6 +482,20 @@ class Enemy {
     TacticState tactic_ = TacticState::Neutral;
     BossPhase phase_ = BossPhase::Phase1;
     float phase2HealthRatioThreshold_ = 0.60f;
+    bool introActive_ = true;
+    float introTimer_ = 0.0f;
+    float introSecondSlashDuration_ = 1.60f;
+    float introSpinSlashDuration_ = 1.05f;
+    float introSettleDuration_ = 2.0f;
+    float introSpinTurns_ = 1.0f;
+    float introSlashLunge_ = 0.34f;
+    float introSpinLunge_ = 0.42f;
+    float introSpinLift_ = 0.18f;
+    float introPoseLean_ = 0.26f;
+    float introImpactSquash_ = 0.14f;
+    float introHandLift_ = 0.95f;
+    float introBodyScaleBoost_ = 0.18f;
+    float introVisualScaleBoost_ = 0.12f;
     bool phaseTransitionActive_ = false;
     float phaseTransitionTimer_ = 0.0f;
     float phaseTransitionDuration_ = 0.90f;
