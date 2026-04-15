@@ -1,9 +1,8 @@
 #include "PlayerTuningPresetIO.h"
 #include <fstream>
 
-namespace PlayerTuningPresetIO {
-
-bool Save(const std::string &path, const PlayerTuningPreset &p) {
+bool PlayerTuningPresetIO::Save(const std::string &path,
+                                const PlayerTuningPreset &p) {
     std::ofstream ofs(path);
     if (!ofs.is_open()) {
         return false;
@@ -17,7 +16,8 @@ bool Save(const std::string &path, const PlayerTuningPreset &p) {
     return true;
 }
 
-bool Load(const std::string &path, PlayerTuningPreset &p) {
+bool PlayerTuningPresetIO::Load(const std::string &path,
+                                PlayerTuningPreset &p) {
     std::ifstream ifs(path);
     if (!ifs.is_open()) {
         return false;
@@ -30,5 +30,3 @@ bool Load(const std::string &path, PlayerTuningPreset &p) {
 
     return !ifs.fail();
 }
-
-} // namespace PlayerTuningPresetIO

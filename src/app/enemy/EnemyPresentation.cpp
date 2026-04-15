@@ -6,8 +6,7 @@
 #include <cmath>
 #include <cstdlib>
 
-namespace {
-float Saturate(float value) {
+static float Saturate(float value) {
     if (value < 0.0f) {
         return 0.0f;
     }
@@ -17,19 +16,18 @@ float Saturate(float value) {
     return value;
 }
 
-float EaseOutCubic(float t) {
+static float EaseOutCubic(float t) {
     float u = 1.0f - Saturate(t);
     return 1.0f - u * u * u;
 }
 
-float EaseOutBack(float t) {
+static float EaseOutBack(float t) {
     t = Saturate(t);
     const float c1 = 1.70158f;
     const float c3 = c1 + 1.0f;
     float u = t - 1.0f;
     return 1.0f + c3 * u * u * u + c1 * u * u;
 }
-} // namespace
 
 // ============================================================
 // 各部位Transform更新処理

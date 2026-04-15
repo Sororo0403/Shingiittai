@@ -3,9 +3,7 @@
 
 using namespace DirectX;
 
-namespace {
-bool gJoyShockInitialized = false;
-}
+static bool gJoyShockInitialized = false;
 
 void JoyCon::Initialize(bool useLeftJoyCon) {
     useLeftJoyCon_ = useLeftJoyCon;

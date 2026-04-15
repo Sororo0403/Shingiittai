@@ -6,8 +6,7 @@
 #include <cmath>
 #include <cstdlib>
 
-namespace {
-float Saturate(float value) {
+static float Saturate(float value) {
     if (value < 0.0f) {
         return 0.0f;
     }
@@ -16,7 +15,6 @@ float Saturate(float value) {
     }
     return value;
 }
-} // namespace
 
 // ============================================================
 // 初期化処理

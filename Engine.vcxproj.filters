@@ -251,6 +251,12 @@
     <ClCompile Include="src\app\player\PlayerTuningPresetIO.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\engine\graphics\DxUtils.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\graphics\ShaderCompiler.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\engine\core\WinApp.h">
@@ -431,6 +437,7 @@
     <None Include="resources\shaders\model\Model.hlsli">
       <Filter>shaders\model</Filter>
     </None>
+    <None Include=".github\copilot-instructions.md" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="resources\player_tuning.txt" />

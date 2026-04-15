@@ -132,6 +132,8 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClCompile Include="src\app\enemy\EnemyTuning.cpp" />
     <ClCompile Include="src\app\enemy\EnemyTuningPresetIO.cpp" />
     <ClCompile Include="src\app\player\PlayerTuningPresetIO.cpp" />
+    <ClCompile Include="src\engine\graphics\DxUtils.cpp" />
+    <ClCompile Include="src\engine\graphics\ShaderCompiler.cpp" />
     <ClCompile Include="src\engine\model\MaterialManager.cpp" />
     <ClCompile Include="src\engine\model\Material.cpp" />
     <ClCompile Include="src\engine\camera\DebugCamera.cpp" />
@@ -254,6 +256,7 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <None Include=".github\copilot-instructions.md" />
     <None Include="resources\shaders\model\Model.hlsli">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>

@@ -18,19 +18,18 @@
 
 using namespace DirectX;
 
-namespace {
-const std::string kBossAnimIdle = "Action";
-const std::string kBossAnimMove = "Action.001";
-const std::string kBossAnimSweep =
+static const std::string kBossAnimIdle = "Action";
+static const std::string kBossAnimMove = "Action.001";
+static const std::string kBossAnimSweep =
     "\xE6\xA8\xAA\xE8\x96\x99\xE3\x81\x8E\xE6\x89\x95\xE3\x81\x84";
-const std::string kBossAnimWave =
+static const std::string kBossAnimWave =
     "\xE6\xB3\xA2\xE7\x8A\xB6\xE6\x94\xBB\xE6\x92\x83";
-const std::string kBossAnimSmash =
+static const std::string kBossAnimSmash =
     "\xE7\xB8\xA6\xE6\x8C\xAF\xE3\x82\x8A\xE4\xB8\x8B\xE3\x82\x8D\xE3\x81\x97";
-bool HasAnimation(const Model *model, const std::string &animationName);
+static bool HasAnimation(const Model *model, const std::string &animationName);
 
-std::string PickEnemyIntroAnimation(const Model *model, const Enemy &enemy,
-                                    bool &outLoop) {
+static std::string PickEnemyIntroAnimation(const Model *model, const Enemy &enemy,
+                                           bool &outLoop) {
     outLoop = false;
 
     if (!model || model->animations.empty()) {
@@ -76,7 +75,7 @@ std::string PickEnemyIntroAnimation(const Model *model, const Enemy &enemy,
                                            : model->currentAnimation;
 }
 
-bool HasAnimation(const Model *model, const std::string &animationName) {
+static bool HasAnimation(const Model *model, const std::string &animationName) {
     if (!model) {
         return false;
     }
@@ -84,8 +83,8 @@ bool HasAnimation(const Model *model, const std::string &animationName) {
     return model->animations.find(animationName) != model->animations.end();
 }
 
-std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
-                               bool &outLoop) {
+static std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
+                                      bool &outLoop) {
     outLoop = true;
 
     if (!model || model->animations.empty()) {
@@ -143,7 +142,7 @@ std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
                                            : model->currentAnimation;
 }
 
-bool IsWithinCounterJustWindow(const Enemy &enemy) {
+static bool IsWithinCounterJustWindow(const Enemy &enemy) {
     const AttackTimingParam *timing = enemy.GetCurrentAttackTimingPublic();
     if (!timing) {
         return false;
@@ -168,7 +167,6 @@ bool IsWithinCounterJustWindow(const Enemy &enemy) {
 
     return (t >= justStart && t <= justEnd);
 }
-} // namespace
 
 void GameScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);

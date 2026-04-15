@@ -10,9 +10,7 @@
 #include <filesystem>
 #include <stdexcept>
 
-namespace {
-
-std::wstring NormalizePathKey(const std::wstring &path) {
+static std::wstring NormalizePathKey(const std::wstring &path) {
     std::filesystem::path fsPath(path);
     std::wstring key = fsPath.lexically_normal().wstring();
 
@@ -22,8 +20,6 @@ std::wstring NormalizePathKey(const std::wstring &path) {
 #endif
 
     return key;
-}
-
 }
 
 using namespace DirectX;

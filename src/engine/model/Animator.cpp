@@ -4,9 +4,7 @@
 
 using namespace DirectX;
 
-namespace {
-
-XMFLOAT3 LerpVec3(const XMFLOAT3 &a, const XMFLOAT3 &b, float t) {
+static XMFLOAT3 LerpVec3(const XMFLOAT3 &a, const XMFLOAT3 &b, float t) {
     return {
         a.x + (b.x - a.x) * t,
         a.y + (b.y - a.y) * t,
@@ -14,14 +12,12 @@ XMFLOAT3 LerpVec3(const XMFLOAT3 &a, const XMFLOAT3 &b, float t) {
     };
 }
 
-float SafeInv(float x) {
+static float SafeInv(float x) {
     if (std::fabs(x) < 0.000001f) {
         return 0.0f;
     }
     return 1.0f / x;
 }
-
-} // namespace
 
 void Animator::Play(Model &model, const std::string &animationName, bool loop) {
     auto it = model.animations.find(animationName);

@@ -1,21 +1,9 @@
 #include "EnemyTuningPresetIO.h"
 #include <fstream>
+#include <type_traits>
 
-namespace {
-template <class T> void ReadOptional(std::ifstream &ifs, T &value) {
-    T temp{};
-    if (ifs >> temp) {
-        value = temp;
-        return;
-    }
-
-    ifs.clear();
-}
-} // namespace
-
-namespace EnemyTuningPresetIO {
-
-bool Save(const std::string &path, const EnemyTuningPreset &p) {
+bool EnemyTuningPresetIO::Save(const std::string &path,
+                               const EnemyTuningPreset &p) {
     std::ofstream ofs(path);
     if (!ofs.is_open()) {
         return false;
@@ -84,11 +72,22 @@ bool Save(const std::string &path, const EnemyTuningPreset &p) {
     return true;
 }
 
-bool Load(const std::string &path, EnemyTuningPreset &p) {
+bool EnemyTuningPresetIO::Load(const std::string &path, EnemyTuningPreset &p) {
     std::ifstream ifs(path);
     if (!ifs.is_open()) {
         return false;
     }
+
+    auto readOptional = [&ifs](auto &value) {
+        using ValueType = std::decay_t<decltype(value)>;
+        ValueType temp{};
+        if (ifs >> temp) {
+            value = temp;
+            return;
+        }
+
+        ifs.clear();
+    };
 
     ifs >> p.nearAttackDistance;
     ifs >> p.farAttackDistance;
@@ -121,24 +120,22 @@ bool Load(const std::string &path, EnemyTuningPreset &p) {
         p.waveMaxDistance >> p.waveSpawnForwardOffset >>
         p.waveSpawnHeightOffset;
 
-    ReadOptional(ifs, p.warpApproachChainMaxSteps);
-    ReadOptional(ifs, p.warpEscapeChainMaxSteps);
-    ReadOptional(ifs, p.approachChainContinueDistance);
-    ReadOptional(ifs, p.escapeChainContinueDistance);
+    readOptional(p.warpApproachChainMaxSteps);
+    readOptional(p.warpEscapeChainMaxSteps);
+    readOptional(p.approachChainContinueDistance);
+    readOptional(p.escapeChainContinueDistance);
 
-    ReadOptional(ifs, p.sweepWarpSmashMaxDistance);
-    ReadOptional(ifs, p.sweepWarpSmashChance);
-    ReadOptional(ifs, p.waveWarpSmashMinDistance);
-    ReadOptional(ifs, p.waveWarpSmashChance);
+    readOptional(p.sweepWarpSmashMaxDistance);
+    readOptional(p.sweepWarpSmashChance);
+    readOptional(p.waveWarpSmashMinDistance);
+    readOptional(p.waveWarpSmashChance);
 
-    ReadOptional(ifs, p.enemyMaxHp);
-    ReadOptional(ifs, p.phase2HealthRatioThreshold);
+    readOptional(p.enemyMaxHp);
+    readOptional(p.phase2HealthRatioThreshold);
 
-    ReadOptional(ifs, p.warpStartTime);
-    ReadOptional(ifs, p.warpMoveTime);
-    ReadOptional(ifs, p.warpEndTime);
+    readOptional(p.warpStartTime);
+    readOptional(p.warpMoveTime);
+    readOptional(p.warpEndTime);
 
     return true;
 }
-
-} // namespace EnemyTuningPresetIO

@@ -34,33 +34,31 @@
 
 using namespace DirectX;
 
-namespace {
-
-const tinygltf::Accessor &GetAccessor(const tinygltf::Model &model, int index) {
+static const tinygltf::Accessor &GetAccessor(const tinygltf::Model &model, int index) {
     if (index < 0 || index >= static_cast<int>(model.accessors.size())) {
         throw std::runtime_error("invalid accessor index");
     }
     return model.accessors[index];
 }
 
-const tinygltf::BufferView &GetBufferView(const tinygltf::Model &model,
-                                          int index) {
+static const tinygltf::BufferView &GetBufferView(const tinygltf::Model &model,
+                                                 int index) {
     if (index < 0 || index >= static_cast<int>(model.bufferViews.size())) {
         throw std::runtime_error("invalid bufferView index");
     }
     return model.bufferViews[index];
 }
 
-const tinygltf::Buffer &GetBuffer(const tinygltf::Model &model, int index) {
+static const tinygltf::Buffer &GetBuffer(const tinygltf::Model &model, int index) {
     if (index < 0 || index >= static_cast<int>(model.buffers.size())) {
         throw std::runtime_error("invalid buffer index");
     }
     return model.buffers[index];
 }
 
-const unsigned char *GetAccessorDataPtr(const tinygltf::Model &model,
-                                        const tinygltf::Accessor &accessor,
-                                        const tinygltf::BufferView &view) {
+static const unsigned char *GetAccessorDataPtr(const tinygltf::Model &model,
+                                               const tinygltf::Accessor &accessor,
+                                               const tinygltf::BufferView &view) {
     const tinygltf::Buffer &buffer = GetBuffer(model, view.buffer);
     const size_t offset = view.byteOffset + accessor.byteOffset;
     if (offset >= buffer.data.size()) {
@@ -69,8 +67,8 @@ const unsigned char *GetAccessorDataPtr(const tinygltf::Model &model,
     return buffer.data.data() + offset;
 }
 
-size_t GetAccessorStride(const tinygltf::Accessor &accessor,
-                         const tinygltf::BufferView &view) {
+static size_t GetAccessorStride(const tinygltf::Accessor &accessor,
+                                const tinygltf::BufferView &view) {
     const int stride = accessor.ByteStride(view);
     if (stride > 0) {
         return static_cast<size_t>(stride);
@@ -80,13 +78,13 @@ size_t GetAccessorStride(const tinygltf::Accessor &accessor,
            tinygltf::GetComponentSizeInBytes(accessor.componentType);
 }
 
-float ReadFloat(const unsigned char *p) {
+static float ReadFloat(const unsigned char *p) {
     float value = 0.0f;
     std::memcpy(&value, p, sizeof(float));
     return value;
 }
 
-uint32_t ReadIndex(const unsigned char *p, int componentType) {
+static uint32_t ReadIndex(const unsigned char *p, int componentType) {
     switch (componentType) {
     case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:
         return static_cast<uint32_t>(*reinterpret_cast<const uint8_t *>(p));
@@ -99,7 +97,7 @@ uint32_t ReadIndex(const unsigned char *p, int componentType) {
     }
 }
 
-std::string GetNodeName(const tinygltf::Model &model, int nodeIndex) {
+static std::string GetNodeName(const tinygltf::Model &model, int nodeIndex) {
     if (nodeIndex < 0 || nodeIndex >= static_cast<int>(model.nodes.size())) {
         return "";
     }
@@ -111,7 +109,7 @@ std::string GetNodeName(const tinygltf::Model &model, int nodeIndex) {
     return "Node_" + std::to_string(nodeIndex);
 }
 
-XMMATRIX MakeNodeLocalMatrix(const tinygltf::Node &node) {
+static XMMATRIX MakeNodeLocalMatrix(const tinygltf::Node &node) {
     if (node.matrix.size() == 16) {
         XMFLOAT4X4 m = {
             static_cast<float>(node.matrix[0]),
@@ -159,8 +157,8 @@ XMMATRIX MakeNodeLocalMatrix(const tinygltf::Node &node) {
            XMMatrixTranslation(t.x, t.y, t.z);
 }
 
-void DecomposeMatrix(const XMMATRIX &matrix, XMFLOAT3 &scale,
-                     XMFLOAT4 &rotation, XMFLOAT3 &translation) {
+static void DecomposeMatrix(const XMMATRIX &matrix, XMFLOAT3 &scale,
+                            XMFLOAT4 &rotation, XMFLOAT3 &translation) {
     XMVECTOR scaleV = XMVectorSet(1.0f, 1.0f, 1.0f, 0.0f);
     XMVECTOR rotationV = XMQuaternionIdentity();
     XMVECTOR translationV = XMVectorZero();
@@ -170,13 +168,13 @@ void DecomposeMatrix(const XMMATRIX &matrix, XMFLOAT3 &scale,
     XMStoreFloat3(&translation, translationV);
 }
 
-XMFLOAT4X4 ToFloat4x4(const XMMATRIX &matrix) {
+static XMFLOAT4X4 ToFloat4x4(const XMMATRIX &matrix) {
     XMFLOAT4X4 out{};
     XMStoreFloat4x4(&out, matrix);
     return out;
 }
 
-XMFLOAT4X4 ReadMat4AsRowMajor(const unsigned char *p) {
+static XMFLOAT4X4 ReadMat4AsRowMajor(const unsigned char *p) {
     float values[16]{};
     std::memcpy(values, p, sizeof(values));
     XMFLOAT4X4 m = {
@@ -188,7 +186,7 @@ XMFLOAT4X4 ReadMat4AsRowMajor(const unsigned char *p) {
     return ToFloat4x4(XMMatrixTranspose(XMLoadFloat4x4(&m)));
 }
 
-void NormalizeWeights(Vertex &v) {
+static void NormalizeWeights(Vertex &v) {
     const float sum =
         v.boneWeight.x + v.boneWeight.y + v.boneWeight.z + v.boneWeight.w;
     if (sum > 0.000001f) {
@@ -199,8 +197,8 @@ void NormalizeWeights(Vertex &v) {
     }
 }
 
-void BuildGlobalNodeMatrices(const std::vector<NodeInfo> &nodes,
-                             std::vector<XMMATRIX> &globalMatrices) {
+static void BuildGlobalNodeMatrices(const std::vector<NodeInfo> &nodes,
+                                    std::vector<XMMATRIX> &globalMatrices) {
     globalMatrices.resize(nodes.size());
     for (size_t i = 0; i < nodes.size(); i++) {
         const XMMATRIX local =
@@ -221,12 +219,10 @@ void BuildGlobalNodeMatrices(const std::vector<NodeInfo> &nodes,
     }
 }
 
-size_t GetAnimationOutputIndex(const tinygltf::AnimationSampler &sampler,
-                               size_t keyIndex) {
+static size_t GetAnimationOutputIndex(const tinygltf::AnimationSampler &sampler,
+                                      size_t keyIndex) {
     return sampler.interpolation == "CUBICSPLINE" ? keyIndex * 3 + 1 : keyIndex;
 }
-
-} // namespace
 
 void TinyGltfLoader::Initialize(TextureManager *textureManager,
                                 MeshManager *meshManager,

@@ -15,15 +15,13 @@ using namespace DirectX;
 using namespace DxUtils;
 using Microsoft::WRL::ComPtr;
 
-namespace {
-
-XMFLOAT4X4 StoreMatrix(const XMMATRIX &matrix) {
+static XMFLOAT4X4 StoreMatrix(const XMMATRIX &matrix) {
     XMFLOAT4X4 result{};
     XMStoreFloat4x4(&result, matrix);
     return result;
 }
 
-void NormalizeInfluence(VertexInfluence &influence) {
+static void NormalizeInfluence(VertexInfluence &influence) {
     float totalWeight = 0.0f;
     for (float weight : influence.weights) {
         totalWeight += weight;
@@ -37,8 +35,6 @@ void NormalizeInfluence(VertexInfluence &influence) {
         weight /= totalWeight;
     }
 }
-
-} // namespace
 
 struct ConstBufferData {
     XMFLOAT4X4 matWVP;

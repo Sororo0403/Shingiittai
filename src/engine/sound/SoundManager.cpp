@@ -4,17 +4,6 @@
 #include <filesystem>
 #include <fstream>
 
-static uint32_t ReadU32(std::ifstream &f) {
-    uint32_t v{};
-    f.read(reinterpret_cast<char *>(&v), 4);
-    return v;
-}
-static uint16_t ReadU16(std::ifstream &f) {
-    uint16_t v{};
-    f.read(reinterpret_cast<char *>(&v), 2);
-    return v;
-}
-
 SoundManager::~SoundManager() {
     if (masterVoice_) {
         masterVoice_->DestroyVoice();
@@ -72,11 +61,22 @@ WavData SoundManager::LoadWavPcm16(const std::wstring &path) {
     std::ifstream f(std::filesystem::path(path), std::ios::binary);
     assert(f && "Failed to open wav file");
 
+    auto readU32 = [&f]() {
+        uint32_t v{};
+        f.read(reinterpret_cast<char *>(&v), 4);
+        return v;
+    };
+    auto readU16 = [&f]() {
+        uint16_t v{};
+        f.read(reinterpret_cast<char *>(&v), 2);
+        return v;
+    };
+
     char riff[4]{};
     f.read(riff, 4);
     assert(std::memcmp(riff, "RIFF", 4) == 0);
 
-    ReadU32(f);
+    readU32();
 
     char wave[4]{};
     f.read(wave, 4);
@@ -92,17 +92,17 @@ WavData SoundManager::LoadWavPcm16(const std::wstring &path) {
         if (!f)
             break;
 
-        uint32_t chunkSize = ReadU32(f);
+        uint32_t chunkSize = readU32();
         if (!f)
             break;
 
         if (std::memcmp(chunkId, "fmt ", 4) == 0) {
-            uint16_t wFormatTag = ReadU16(f);
-            uint16_t nChannels = ReadU16(f);
-            uint32_t nSamplesPerSec = ReadU32(f);
-            uint32_t nAvgBytesPerSec = ReadU32(f);
-            uint16_t nBlockAlign = ReadU16(f);
-            uint16_t wBitsPerSample = ReadU16(f);
+            uint16_t wFormatTag = readU16();
+            uint16_t nChannels = readU16();
+            uint32_t nSamplesPerSec = readU32();
+            uint32_t nAvgBytesPerSec = readU32();
+            uint16_t nBlockAlign = readU16();
+            uint16_t wBitsPerSample = readU16();
 
             // PCM 16bit のみ対応
             assert(wFormatTag == WAVE_FORMAT_PCM);
