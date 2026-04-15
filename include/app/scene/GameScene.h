@@ -22,6 +22,7 @@ class GameScene : public BaseScene {
   private:
     void UpdateCamera(Input *input);
     void UpdateBattleCamera();
+    void UpdateSceneLighting();
     void SyncEnemyAnimation();
     bool ProjectWorldToScreen(const DirectX::XMFLOAT3 &worldPos,
                               DirectX::XMFLOAT2 &outScreen) const;
@@ -145,4 +146,5 @@ class GameScene : public BaseScene {
     float warpArrivalSmokeAlphaScale_ = 0.42f;
     float warpMoveSmokeAlphaScale_ = 0.78f;
     float warpMoveSmokeStretchScale_ = 0.78f;
+    float sceneLightTime_ = 0.0f;
 };

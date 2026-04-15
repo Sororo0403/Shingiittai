@@ -89,6 +89,10 @@ void ModelManager::SetDrawEffect(const ModelDrawEffect &effect) {
 
 void ModelManager::ClearDrawEffect() { modelRenderer_.ClearDrawEffect(); }
 
+void ModelManager::SetSceneLighting(const SceneLighting &lighting) {
+    modelRenderer_.SetSceneLighting(lighting);
+}
+
 void ModelManager::PreDraw() { modelRenderer_.PreDraw(); }
 
 void ModelManager::PostDraw() { modelRenderer_.PostDraw(); }

@@ -43,6 +43,7 @@ class ModelManager {
 
     void SetDrawEffect(const ModelDrawEffect &effect);
     void ClearDrawEffect();
+    void SetSceneLighting(const SceneLighting &lighting);
 
     /// <summary>
     /// モデル描画前の共通処理

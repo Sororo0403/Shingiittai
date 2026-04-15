@@ -57,6 +57,16 @@ struct ConstBufferData {
     XMFLOAT4 cameraPos;
     XMFLOAT4 effectColor;
     XMFLOAT4 effectParams;
+    XMFLOAT4 keyLightDirection;
+    XMFLOAT4 keyLightColor;
+    XMFLOAT4 fillLightDirection;
+    XMFLOAT4 fillLightColor;
+    XMFLOAT4 ambientColor;
+    XMFLOAT4 pointLight0PositionRange;
+    XMFLOAT4 pointLight0ColorIntensity;
+    XMFLOAT4 pointLight1PositionRange;
+    XMFLOAT4 pointLight1ColorIntensity;
+    XMFLOAT4 lightingParams;
 };
 
 void ModelRenderer::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
@@ -123,6 +133,30 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
             currentEffect_.noiseAmount,
             currentEffect_.time,
         };
+        dst->keyLightDirection = {
+            currentLighting_.keyLightDirection.x,
+            currentLighting_.keyLightDirection.y,
+            currentLighting_.keyLightDirection.z,
+            0.0f,
+        };
+        dst->keyLightColor = currentLighting_.keyLightColor;
+        dst->fillLightDirection = {
+            currentLighting_.fillLightDirection.x,
+            currentLighting_.fillLightDirection.y,
+            currentLighting_.fillLightDirection.z,
+            0.0f,
+        };
+        dst->fillLightColor = currentLighting_.fillLightColor;
+        dst->ambientColor = currentLighting_.ambientColor;
+        dst->pointLight0PositionRange =
+            currentLighting_.pointLight0PositionRange;
+        dst->pointLight0ColorIntensity =
+            currentLighting_.pointLight0ColorIntensity;
+        dst->pointLight1PositionRange =
+            currentLighting_.pointLight1PositionRange;
+        dst->pointLight1ColorIntensity =
+            currentLighting_.pointLight1ColorIntensity;
+        dst->lightingParams = currentLighting_.lightingParams;
 
         D3D12_GPU_VIRTUAL_ADDRESS cbAddr =
             constBuffer_->GetGPUVirtualAddress() + cbStride_ * drawIndex_;
@@ -400,6 +434,9 @@ void ModelRenderer::CreatePipelineState() {
 
     D3D12_INPUT_ELEMENT_DESC layout[] = {
         {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
+         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
+         D3D12_APPEND_ALIGNED_ELEMENT,
          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
         {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,
          D3D12_APPEND_ALIGNED_ELEMENT,
