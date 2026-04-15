@@ -15,24 +15,11 @@
 
 class GameScene : public BaseScene {
   public:
-    /// <summary>
-    /// 初期化処理
-    /// </summary>
-    /// <param name="ctx">シーンコンテキスト</param>
     void Initialize(const SceneContext &ctx) override;
-
-    /// <summary>
-    /// 更新処理
-    /// </summary>
     void Update() override;
-
-    /// <summary>
-    /// 描画処理
-    /// </summary>
     void Draw() override;
 
   private:
-    // Update
     void UpdateCamera(Input *input);
     void UpdateBattleCamera();
     void SyncEnemyAnimation();
@@ -46,22 +33,16 @@ class GameScene : public BaseScene {
     static constexpr float kCameraDistance = 3.5f;
     static constexpr float kCameraHeight = 1.2f;
 
-    // Camera
     Camera camera_;
 #ifdef _DEBUG
     DebugCamera debugCamera_;
-
-    // 三脚カメラ
     Camera tripodCamera_;
     bool useTripodCamera_ = false;
-
-    // 三脚カメラ設定
     DirectX::XMFLOAT3 tripodPos_ = {0.0f, 2.0f, -5.0f};
     DirectX::XMFLOAT3 tripodTarget_ = {0.0f, 1.0f, 0.0f};
 #endif
     Camera *currentCamera_ = nullptr;
 
-    // Game
     Player player_;
     Enemy enemy_;
     uint32_t playerModelId_ = 0;
@@ -70,11 +51,8 @@ class GameScene : public BaseScene {
     bool enemyAnimationLoop_ = true;
 
     float playerHitCooldown_ = 0.0f;
-
-    // ヒットクールダウンタイマー
     float enemyHitCooldown_ = 0.0f;
 
-    // デバッグ用ヒット表示
     bool dbgHitLeftHand_ = false;
     bool dbgHitRightHand_ = false;
     bool dbgHitBody_ = false;
@@ -88,89 +66,67 @@ class GameScene : public BaseScene {
     Bullet bullet_;
     uint32_t warpSmokeSpriteId_ = 0;
 
-    // 完全一人称カメラ用
-    /*DirectX::XMFLOAT3 fpCameraOffset_ = {0.0f, 1.55f, 0.0f};
     float cameraYaw_ = 0.0f;
-    float cameraPitch_ = 0.0f;
-    float cameraPitchMin_ = -1.2f;
-    float cameraPitchMax_ = 1.0f;
-    float cameraLookSensitivity_ = 0.025f;*/
-    float cameraYaw_ = 0.0f;
-    float cameraPitch_ = 0.15f;
-    float cameraPitchMin_ = -0.35f;
-    float cameraPitchMax_ = 0.65f;
-    float cameraLookSensitivity_ = 0.025f;
-    // プレイヤー基準の肩越しオフセット
-    float cameraDistance_ = 4.8f;    // 後方距離
-    float cameraHeight_ = 1.8f;      // 高さ
-    float cameraSideOffset_ = 0.65f; // 右肩寄せ
-    float cameraLookHeight_ = 1.35f; // 注視点の高さ
+    float cameraPitch_ = 0.22f;
+    float cameraPitchMin_ = -0.20f;
+    float cameraPitchMax_ = 0.55f;
+    float cameraLookSensitivity_ = 0.022f;
+    float cameraDistance_ = 6.4f;
+    float cameraHeight_ = 2.3f;
+    float cameraSideOffset_ = 0.10f;
+    float cameraLookHeight_ = 1.55f;
+    float cameraLookAhead_ = 2.7f;
 
-    // 視線の補間
-    float cameraLookAhead_ = 2.0f; // 非ロック時の前方注視距離
-
-    // ロックオン用
     bool isLockOn_ = false;
-    float lockOnAssistStrength_ = 2.0f;
-    float lockOnAssistMaxStep_ = 3.5f;
-    float lockOnInputReduce_ = 0.25f;
+    float lockOnAssistStrength_ = 3.6f;
+    float lockOnAssistMaxStep_ = 4.8f;
+    float lockOnInputReduce_ = 0.45f;
 
-    // ロックオン時の戦闘カメラ構図
-    float lockOnCameraDistance_ = 6.2f;
-    float lockOnCameraHeight_ = 2.1f;
-    float lockOnCameraSideOffset_ = 0.35f;
-    float lockOnLookPlayerWeight_ = 0.35f;
-    float lockOnLookEnemyWeight_ = 0.65f;
+    float lockOnCameraDistance_ = 7.4f;
+    float lockOnCameraHeight_ = 2.5f;
+    float lockOnCameraSideOffset_ = 0.08f;
+    float lockOnLookPlayerWeight_ = 0.48f;
+    float lockOnLookEnemyWeight_ = 0.52f;
 
-     // プレイヤーと敵の距離で少しだけ後ろに引く補正
-    float lockOnDistanceMin_ = 3.0f;
-    float lockOnDistanceMax_ = 12.0f;
+    float lockOnDistanceMin_ = 2.5f;
+    float lockOnDistanceMax_ = 11.0f;
     float lockOnDistancePullBackMin_ = 0.0f;
     float lockOnDistancePullBackMax_ = 1.8f;
 
-    // ロックオン時の円弧追従
-    float lockOnOrbitRadius_ = 5.8f;      // 基本半径
-    float lockOnOrbitHeight_ = 2.0f;      // 高さ
-    float lockOnOrbitSideBias_ = 0.35f;   // 肩寄せの残し量
-    float lockOnOrbitLerpSpeed_ = 10.0f;  // 円弧位置の追従速度
-    float lockOnOrbitPullBackMax_ = 1.6f; // 敵との距離で後ろに引く最大量
-
-    // 円弧追従で使う現在位置
+    float lockOnOrbitRadius_ = 6.8f;
+    float lockOnOrbitHeight_ = 2.4f;
+    float lockOnOrbitSideBias_ = 0.05f;
+    float lockOnOrbitLerpSpeed_ = 7.5f;
+    float lockOnOrbitPullBackMax_ = 2.3f;
     DirectX::XMFLOAT3 lockOnOrbitCameraPos_ = {0.0f, 0.0f, 0.0f};
 
-    // ロックオン時の注視点補間
-    float lockOnLookAtLerpSpeed_ = 12.0f;
+    float lockOnLookAtLerpSpeed_ = 9.0f;
     DirectX::XMFLOAT3 lockOnLookAt_ = {0.0f, 0.0f, 0.0f};
 
-    // Rush時のカメラ補助
-    float rushChargeAssistStrength_ = 4.0f;
-    float rushChargeAssistMaxStep_ = 6.0f;
+    float rushChargeAssistStrength_ = 4.8f;
+    float rushChargeAssistMaxStep_ = 7.0f;
+    float rushActiveAssistStrength_ = 5.8f;
+    float rushActiveAssistMaxStep_ = 8.5f;
+    float rushLeadDistance_ = 1.6f;
 
-    float rushActiveAssistStrength_ = 5.0f;
-    float rushActiveAssistMaxStep_ = 8.0f;
-    float rushLeadDistance_ = 2.5f;
-
-    // Warp時の再捕捉補助
     float warpStartAssistStrength_ = 4.5f;
     float warpStartAssistMaxStep_ = 7.0f;
     float warpEndAssistStrength_ = 6.0f;
     float warpEndAssistMaxStep_ = 10.0f;
 
-    // FOV制御
-    float currentFovDeg_ = 80.0f;
-    float targetFovDeg_ = 80.0f;
-    float normalFovDeg_ = 80.0f;
-    float lockOnFovDeg_ = 86.0f;
-    float rushFovDeg_ = 88.0f;
-    float warpFovDeg_ = 88.0f;
-    float phaseTransitionFovDeg_ = 72.0f;
-    float fovLerpSpeed_ = 8.0f;
+    float currentFovDeg_ = 74.0f;
+    float targetFovDeg_ = 74.0f;
+    float normalFovDeg_ = 74.0f;
+    float lockOnFovDeg_ = 78.0f;
+    float rushFovDeg_ = 80.0f;
+    float warpFovDeg_ = 79.0f;
+    float phaseTransitionFovDeg_ = 68.0f;
+    float fovLerpSpeed_ = 6.5f;
     float phaseTransitionFovLerpSpeed_ = 5.5f;
     float phaseTransitionLookAtEnemyWeight_ = 0.82f;
     float phaseTransitionLookAtHeight_ = 1.45f;
     float phaseTransitionPushIn_ = 0.85f;
 
-    // Warp screen-space distortion
     float warpDistortionRadiusPx_ = 116.0f;
     float warpDistortionThicknessPx_ = 4.0f;
     float warpDistortionLineLengthPx_ = 72.0f;

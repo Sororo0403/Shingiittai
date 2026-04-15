@@ -26,7 +26,8 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
                        MakeIdleSwordPose(false), 0.0f);
 }
 
-void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget) {
+void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
+                    float cameraYaw) {
     if (input->IsKeyTrigger(DIK_C)) {
         leftJoyCon_.StartCalibration();
         rightJoyCon_.StartCalibration();
@@ -40,7 +41,7 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget) {
     leftJoyCon_.Update(deltaTime);
     rightJoyCon_.Update(deltaTime);
 
-    UpdateMovement(input, deltaTime);
+    UpdateMovement(input, deltaTime, cameraYaw);
     LookAt(lookTarget);
 
     const bool hasLeftJoyCon = leftJoyCon_.IsConnected();
@@ -130,22 +131,34 @@ void Player::LookAt(const XMFLOAT3 &target) {
     XMStoreFloat4(&tf_.rotation, q);
 }
 
-void Player::UpdateMovement(Input *input, float deltaTime) {
-    float moveX = 0.0f;
-    float moveZ = 0.0f;
+void Player::UpdateMovement(Input *input, float deltaTime, float cameraYaw) {
+    float inputX = 0.0f;
+    float inputZ = 0.0f;
 
     if (input->IsKeyPress(DIK_W))
-        moveZ += 1.0f;
+        inputZ += 1.0f;
     if (input->IsKeyPress(DIK_S))
-        moveZ -= 1.0f;
+        inputZ -= 1.0f;
     if (input->IsKeyPress(DIK_A))
-        moveX -= 1.0f;
+        inputX -= 1.0f;
     if (input->IsKeyPress(DIK_D))
-        moveX += 1.0f;
+        inputX += 1.0f;
 
-    velocity_.x = moveX * moveSpeed_;
+    float moveLenSq = inputX * inputX + inputZ * inputZ;
+    if (moveLenSq > 1.0f) {
+        float invLen = 1.0f / std::sqrt(moveLenSq);
+        inputX *= invLen;
+        inputZ *= invLen;
+    }
+
+    float sinYaw = std::sinf(cameraYaw);
+    float cosYaw = std::cosf(cameraYaw);
+    float worldMoveX = sinYaw * inputZ + cosYaw * inputX;
+    float worldMoveZ = cosYaw * inputZ - sinYaw * inputX;
+
+    velocity_.x = worldMoveX * moveSpeed_;
     velocity_.y = 0.0f;
-    velocity_.z = moveZ * moveSpeed_;
+    velocity_.z = worldMoveZ * moveSpeed_;
 
     tf_.position.x += velocity_.x * deltaTime;
     tf_.position.z += velocity_.z * deltaTime;

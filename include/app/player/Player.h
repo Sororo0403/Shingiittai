@@ -18,7 +18,7 @@ class Player {
     void Initialize(uint32_t playerModelId, uint32_t swordModelId);
 
     void Update(Input *input, float deltaTime,
-                const DirectX::XMFLOAT3 &lookTarget);
+                const DirectX::XMFLOAT3 &lookTarget, float cameraYaw);
 
     void Draw(ModelManager *modelManager, const Camera &camera);
 
@@ -84,7 +84,7 @@ class Player {
   private:
     Transform BuildSwordTransform(const SwordPose &pose, bool isLeft) const;
     SwordPose MakeIdleSwordPose(bool isLeft) const;
-    void UpdateMovement(Input *input, float deltaTime);
+    void UpdateMovement(Input *input, float deltaTime, float cameraYaw);
     void LookAt(const DirectX::XMFLOAT3 &target);
 
   private:

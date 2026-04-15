@@ -239,7 +239,8 @@ void GameScene::Update() {
 
     // 当たり判定
     // 先にプレイヤーを更新して、その結果をEnemyへ渡す
-    player_.Update(input, ctx_->deltaTime, enemy_.GetTransform().position);
+    player_.Update(input, ctx_->deltaTime, enemy_.GetTransform().position,
+                   cameraYaw_);
 
     const auto playerSlashStates = player_.GetSwordSlashStates();
 
@@ -1674,8 +1675,8 @@ void GameScene::UpdateBattleCamera() {
         // 敵との距離で少しだけ後ろに引く
         float pullT = 0.0f;
         {
-            float minD = 3.0f;
-            float maxD = 12.0f;
+            float minD = lockOnDistanceMin_;
+            float maxD = lockOnDistanceMax_;
             float range = maxD - minD;
             if (range > 0.0001f) {
                 pullT = (distXZ - minD) / range;
@@ -1715,12 +1716,20 @@ void GameScene::UpdateBattleCamera() {
         float sinA = std::sinf(yawDiff);
         float cosA = std::cosf(yawDiff);
 
+        DirectX::XMFLOAT3 pairCenter = {
+            playerPos.x * lockOnLookPlayerWeight_ +
+                enemyPos.x * lockOnLookEnemyWeight_,
+            (playerPos.y + cameraLookHeight_) * 0.55f +
+                (enemyPos.y + 1.35f) * 0.45f,
+            playerPos.z * lockOnLookPlayerWeight_ +
+                enemyPos.z * lockOnLookEnemyWeight_};
+
         DirectX::XMFLOAT3 desiredCameraPos = {
-            cameraTargetBase.x - lineX * usedRadius * cosA +
+            pairCenter.x - lineX * usedRadius * cosA +
                 orbitRightX * usedRadius * sinA +
                 orbitRightX * lockOnOrbitSideBias_,
-            cameraTargetBase.y + lockOnOrbitHeight_,
-            cameraTargetBase.z - lineZ * usedRadius * cosA +
+            pairCenter.y + lockOnOrbitHeight_ + 0.20f * pullT,
+            pairCenter.z - lineZ * usedRadius * cosA +
                 orbitRightZ * usedRadius * sinA +
                 orbitRightZ * lockOnOrbitSideBias_};
 
@@ -1741,11 +1750,20 @@ void GameScene::UpdateBattleCamera() {
         // ---------------------------------
         // 通常時: 肩越し三人称
         // ---------------------------------
-        cameraPos = {cameraTargetBase.x - forward.x * cameraDistance_ +
+        float dx = enemyPos.x - playerPos.x;
+        float dz = enemyPos.z - playerPos.z;
+        float enemyDistanceXZ = std::sqrt(dx * dx + dz * dz);
+        float dynamicDistance = cameraDistance_;
+        if (enemyDistanceXZ > 5.0f) {
+            dynamicDistance +=
+                (std::min)(1.1f, (enemyDistanceXZ - 5.0f) * 0.18f);
+        }
+
+        cameraPos = {cameraTargetBase.x - forward.x * dynamicDistance +
                          right.x * cameraSideOffset_,
                      cameraTargetBase.y + cameraHeight_ -
-                         forward.y * cameraDistance_,
-                     cameraTargetBase.z - forward.z * cameraDistance_ +
+                         forward.y * dynamicDistance,
+                     cameraTargetBase.z - forward.z * dynamicDistance +
                          right.z * cameraSideOffset_};
 
         if (isEnemyPhaseTransition) {
@@ -1767,10 +1785,12 @@ void GameScene::UpdateBattleCamera() {
 
     if (isLockOn_) {
         DirectX::XMFLOAT3 desiredLookAt = {
-            playerPos.x * 0.35f + enemyPos.x * 0.65f,
-            (playerPos.y + cameraLookHeight_) * 0.45f +
-                (enemyPos.y + 1.2f) * 0.55f,
-            playerPos.z * 0.35f + enemyPos.z * 0.65f};
+            playerPos.x * lockOnLookPlayerWeight_ +
+                enemyPos.x * lockOnLookEnemyWeight_,
+            (playerPos.y + cameraLookHeight_) * 0.52f +
+                (enemyPos.y + 1.30f) * 0.48f,
+            playerPos.z * lockOnLookPlayerWeight_ +
+                enemyPos.z * lockOnLookEnemyWeight_};
 
         float lookAlpha = lockOnLookAtLerpSpeed_ * ctx_->deltaTime;
         if (lookAlpha > 1.0f) {
