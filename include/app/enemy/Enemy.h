@@ -112,7 +112,7 @@ struct WarpTrailGhost {
 };
 
 // 仕様書に合わせて BodyCenter -> BodyRight に整理
-enum class GuardTarget { None, Face, BodyLeft, BodyRight };
+enum class GuardTarget { None, Face, BodyCenter, BodyLeft, BodyRight };
 
 // プレイヤーのカウンター軸
 enum class CounterAxis { None, Vertical, Horizontal };

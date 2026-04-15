@@ -1,4 +1,3 @@
-#define MAX_BONES 128
 #include "Model.hlsli"
 
 cbuffer Transform : register(b0)
@@ -10,10 +9,13 @@ cbuffer Transform : register(b0)
     float4 effectParams;
 };
 
-cbuffer Skinning : register(b1)
+struct Well
 {
-    float4x4 boneMatrices[MAX_BONES];
+    float4x4 skeletonSpaceMatrix;
+    float4x4 skeletonSpaceInverseTransposeMatrix;
 };
+
+StructuredBuffer<Well> gMatrixPalette : register(t1);
 
 ModelVSOutput main(ModelVSInput input)
 {
@@ -22,25 +24,20 @@ ModelVSOutput main(ModelVSInput input)
     float4 localPos = float4(input.pos, 1.0f);
 
     float weightSum =
-        input.boneWeight.x +
-        input.boneWeight.y +
-        input.boneWeight.z +
-        input.boneWeight.w;
+        input.weight.x +
+        input.weight.y +
+        input.weight.z +
+        input.weight.w;
 
     float4 skinnedPos = localPos;
 
     if (weightSum > 0.0001f)
     {
-        uint i0 = min(input.boneIndex.x, (uint) (MAX_BONES - 1));
-        uint i1 = min(input.boneIndex.y, (uint) (MAX_BONES - 1));
-        uint i2 = min(input.boneIndex.z, (uint) (MAX_BONES - 1));
-        uint i3 = min(input.boneIndex.w, (uint) (MAX_BONES - 1));
-
         skinnedPos =
-            mul(localPos, boneMatrices[i0]) * input.boneWeight.x +
-            mul(localPos, boneMatrices[i1]) * input.boneWeight.y +
-            mul(localPos, boneMatrices[i2]) * input.boneWeight.z +
-            mul(localPos, boneMatrices[i3]) * input.boneWeight.w;
+            mul(localPos, gMatrixPalette[input.index.x].skeletonSpaceMatrix) * input.weight.x +
+            mul(localPos, gMatrixPalette[input.index.y].skeletonSpaceMatrix) * input.weight.y +
+            mul(localPos, gMatrixPalette[input.index.z].skeletonSpaceMatrix) * input.weight.z +
+            mul(localPos, gMatrixPalette[input.index.w].skeletonSpaceMatrix) * input.weight.w;
     }
 
     float4 worldPos = mul(skinnedPos, matWorld);

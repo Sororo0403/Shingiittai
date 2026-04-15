@@ -125,13 +125,23 @@ XMMATRIX Animator::MakeAnimatedLocalMatrix(const BoneInfo &bone,
 
     XMVECTOR q = XMQuaternionNormalize(XMLoadFloat4(&rot));
 
-    return XMMatrixScaling(scl.x, scl.y, scl.z) *
-           XMMatrixRotationQuaternion(q) *
-           XMMatrixTranslation(pos.x, pos.y, pos.z);
+    XMMATRIX animatedLocal =
+        XMMatrixScaling(scl.x, scl.y, scl.z) *
+        XMMatrixRotationQuaternion(q) *
+        XMMatrixTranslation(pos.x, pos.y, pos.z);
+
+    // Preserve transforms that exist between this bone and its nearest bone
+    // parent (for example the imported Armature root scale on Mixamo glTFs).
+    XMMATRIX adjustment = XMLoadFloat4x4(&bone.parentAdjustmentMatrix);
+    return animatedLocal * adjustment;
 }
 
 void Animator::ApplyBindPose(Model &model) {
     const size_t boneCount = model.bones.size();
+
+    if (model.skeletonSpaceMatrices.size() != boneCount) {
+        model.skeletonSpaceMatrices.resize(boneCount);
+    }
 
     if (model.finalBoneMatrices.size() != boneCount) {
         model.finalBoneMatrices.resize(boneCount);
@@ -152,6 +162,8 @@ void Animator::ApplyBindPose(Model &model) {
         } else {
             globalMatrices[i] = localMatrices[i] * globalMatrices[parent];
         }
+
+        XMStoreFloat4x4(&model.skeletonSpaceMatrices[i], globalMatrices[i]);
     }
 
     for (size_t i = 0; i < boneCount; i++) {
@@ -167,6 +179,10 @@ void Animator::Update(Model &model, float deltaTime) {
     }
 
     const size_t boneCount = model.bones.size();
+
+    if (model.skeletonSpaceMatrices.size() != boneCount) {
+        model.skeletonSpaceMatrices.resize(boneCount);
+    }
 
     if (model.finalBoneMatrices.size() != boneCount) {
         model.finalBoneMatrices.resize(boneCount);
@@ -222,6 +238,8 @@ void Animator::Update(Model &model, float deltaTime) {
         } else {
             globalMatrices[i] = localMatrices[i] * globalMatrices[parent];
         }
+
+        XMStoreFloat4x4(&model.skeletonSpaceMatrices[i], globalMatrices[i]);
     }
 
     for (size_t i = 0; i < boneCount; i++) {

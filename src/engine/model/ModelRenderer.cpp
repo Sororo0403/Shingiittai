@@ -7,10 +7,49 @@
 #include "ShaderCompiler.h"
 #include "SrvManager.h"
 #include "TextureManager.h"
+#include <algorithm>
+#include <array>
+#include <cstring>
+#include <sstream>
+
+#ifdef _WIN32
+#include <Windows.h>
+#endif
 
 using namespace DirectX;
 using namespace DxUtils;
 using Microsoft::WRL::ComPtr;
+
+namespace {
+
+void DebugLog(const std::string &message) {
+#ifdef _WIN32
+    OutputDebugStringA((message + "\n").c_str());
+#endif
+}
+
+XMFLOAT4X4 StoreMatrix(const XMMATRIX &matrix) {
+    XMFLOAT4X4 result{};
+    XMStoreFloat4x4(&result, matrix);
+    return result;
+}
+
+void NormalizeInfluence(VertexInfluence &influence) {
+    float totalWeight = 0.0f;
+    for (float weight : influence.weights) {
+        totalWeight += weight;
+    }
+
+    if (totalWeight <= 0.00001f) {
+        return;
+    }
+
+    for (float &weight : influence.weights) {
+        weight /= totalWeight;
+    }
+}
+
+} // namespace
 
 struct ConstBufferData {
     XMFLOAT4X4 matWVP;
@@ -33,7 +72,6 @@ void ModelRenderer::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
     CreateRootSignature();
     CreatePipelineState();
     CreateConstantBuffer();
-    CreateBoneBuffer();
 }
 
 void ModelRenderer::PreDraw() {
@@ -55,19 +93,6 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
     }
 
     auto cmd = dxCommon_->GetCommandList();
-    const Mesh &mesh = meshManager_->GetMesh(model.meshId);
-
-    const Material &material = materialManager_->GetMaterial(model.materialId);
-
-    bool transparent = material.color.w < 1.0f || currentEffect_.enabled;
-
-    if (currentEffect_.enabled && currentEffect_.additiveBlend) {
-        cmd->SetPipelineState(additivePSO_.Get());
-    } else if (transparent) {
-        cmd->SetPipelineState(transparentPSO_.Get());
-    } else {
-        cmd->SetPipelineState(opaquePSO_.Get());
-    }
 
     XMVECTOR q = XMQuaternionNormalize(XMLoadFloat4(&transform.rotation));
 
@@ -80,59 +105,239 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
 
     XMMATRIX wvp = world * camera.GetView() * camera.GetProj();
 
-    auto *dst =
-        reinterpret_cast<ConstBufferData *>(mappedCB_ + cbStride_ * drawIndex_);
+    auto drawSubMesh = [&](const ModelSubMesh &subMesh) {
+        if (drawIndex_ >= kMaxDraws) {
+            return;
+        }
 
-    XMStoreFloat4x4(&dst->matWVP, XMMatrixTranspose(wvp));
-    XMStoreFloat4x4(&dst->matWorld, XMMatrixTranspose(world));
-    dst->cameraPos = {camera.GetPosition().x, camera.GetPosition().y,
-                      camera.GetPosition().z, 1.0f};
-    dst->effectColor = currentEffect_.color;
-    dst->effectParams = {
-        currentEffect_.enabled ? currentEffect_.intensity : 0.0f,
-        currentEffect_.fresnelPower,
-        currentEffect_.noiseAmount,
-        currentEffect_.time,
+        auto *dst = reinterpret_cast<ConstBufferData *>(mappedCB_ +
+                                                        cbStride_ * drawIndex_);
+        XMStoreFloat4x4(&dst->matWVP, XMMatrixTranspose(wvp));
+        XMStoreFloat4x4(&dst->matWorld, XMMatrixTranspose(world));
+        dst->cameraPos = {camera.GetPosition().x, camera.GetPosition().y,
+                          camera.GetPosition().z, 1.0f};
+        dst->effectColor = currentEffect_.color;
+        dst->effectParams = {
+            currentEffect_.enabled ? currentEffect_.intensity : 0.0f,
+            currentEffect_.fresnelPower,
+            currentEffect_.noiseAmount,
+            currentEffect_.time,
+        };
+
+        D3D12_GPU_VIRTUAL_ADDRESS cbAddr =
+            constBuffer_->GetGPUVirtualAddress() + cbStride_ * drawIndex_;
+
+        const Material &material =
+            materialManager_->GetMaterial(subMesh.materialId);
+
+        if (currentEffect_.enabled && currentEffect_.additiveBlend) {
+            cmd->SetPipelineState(additivePSO_.Get());
+        } else if (material.color.w < 1.0f || currentEffect_.enabled) {
+            cmd->SetPipelineState(transparentPSO_.Get());
+        } else {
+            cmd->SetPipelineState(opaquePSO_.Get());
+        }
+
+        const Mesh &mesh = meshManager_->GetMesh(subMesh.meshId);
+        std::array<D3D12_VERTEX_BUFFER_VIEW, 2> vertexBufferViews = {
+            mesh.vbView, subMesh.skinCluster.influenceBufferView};
+
+        cmd->SetGraphicsRootConstantBufferView(0, cbAddr);
+        cmd->SetGraphicsRootConstantBufferView(
+            1, materialManager_->GetGPUVirtualAddress(subMesh.materialId));
+        cmd->SetGraphicsRootDescriptorTable(
+            2, textureManager_->GetGpuHandle(subMesh.textureId));
+        cmd->SetGraphicsRootDescriptorTable(3,
+                                            subMesh.skinCluster.paletteSrvGpuHandle);
+
+        cmd->IASetVertexBuffers(0, static_cast<UINT>(vertexBufferViews.size()),
+                                vertexBufferViews.data());
+        cmd->IASetIndexBuffer(&mesh.ibView);
+        cmd->DrawIndexedInstanced(mesh.indexCount, 1, 0, 0, 0);
+
+        drawIndex_++;
     };
 
-    D3D12_GPU_VIRTUAL_ADDRESS cbAddr =
-        constBuffer_->GetGPUVirtualAddress() + cbStride_ * drawIndex_;
-
-    XMMATRIX id = XMMatrixTranspose(XMMatrixIdentity());
-
-    for (int i = 0; i < kMaxBones; i++) {
-        XMStoreFloat4x4(&mappedBones_[i], id);
-    }
-
-    if (!model.finalBoneMatrices.empty()) {
-        for (size_t i = 0; i < model.finalBoneMatrices.size() && i < kMaxBones;
-             i++) {
-
-            XMMATRIX m = XMLoadFloat4x4(&model.finalBoneMatrices[i]);
-            m = XMMatrixTranspose(m);
-            XMStoreFloat4x4(&mappedBones_[i], m);
+    if (!model.subMeshes.empty()) {
+        for (const auto &subMesh : model.subMeshes) {
+            drawSubMesh(subMesh);
+            if (drawIndex_ >= kMaxDraws) {
+                break;
+            }
         }
     }
-
-    cmd->SetGraphicsRootConstantBufferView(0, cbAddr);
-    cmd->SetGraphicsRootConstantBufferView(1,
-                                           boneBuffer_->GetGPUVirtualAddress());
-
-    cmd->SetGraphicsRootConstantBufferView(
-        2, materialManager_->GetGPUVirtualAddress(model.materialId));
-
-    cmd->SetGraphicsRootDescriptorTable(
-        3, textureManager_->GetGpuHandle(model.textureId));
-
-    cmd->IASetVertexBuffers(0, 1, &mesh.vbView);
-    cmd->IASetIndexBuffer(&mesh.ibView);
-
-    cmd->DrawIndexedInstanced(mesh.indexCount, 1, 0, 0, 0);
-
-    drawIndex_++;
 }
 
 void ModelRenderer::PostDraw() {}
+
+void ModelRenderer::CreateSkinClusters(Model &model) {
+    auto *device = dxCommon_->GetDevice();
+
+    for (auto &subMesh : model.subMeshes) {
+        SkinCluster &skinCluster = subMesh.skinCluster;
+
+        const uint32_t jointCount =
+            std::max<uint32_t>(1, static_cast<uint32_t>(model.bones.size()));
+
+        skinCluster.inverseBindPoseMatrices.assign(
+            jointCount, StoreMatrix(XMMatrixIdentity()));
+
+        if (subMesh.vertexCount > 0) {
+            const UINT influenceBufferSize =
+                static_cast<UINT>(sizeof(VertexInfluence) * subMesh.vertexCount);
+
+            CD3DX12_HEAP_PROPERTIES uploadHeap(D3D12_HEAP_TYPE_UPLOAD);
+            auto influenceDesc =
+                CD3DX12_RESOURCE_DESC::Buffer(influenceBufferSize);
+
+            ThrowIfFailed(device->CreateCommittedResource(
+                              &uploadHeap, D3D12_HEAP_FLAG_NONE, &influenceDesc,
+                              D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                              IID_PPV_ARGS(&skinCluster.influenceResource)),
+                          "CreateCommittedResource(InfluenceBuffer) failed");
+
+            ThrowIfFailed(skinCluster.influenceResource->Map(
+                              0, nullptr,
+                              reinterpret_cast<void **>(&skinCluster.mappedInfluence)),
+                          "InfluenceBuffer Map failed");
+
+            skinCluster.influenceCount = subMesh.vertexCount;
+            std::memset(skinCluster.mappedInfluence, 0,
+                        sizeof(VertexInfluence) * skinCluster.influenceCount);
+
+            skinCluster.influenceBufferView.BufferLocation =
+                skinCluster.influenceResource->GetGPUVirtualAddress();
+            skinCluster.influenceBufferView.SizeInBytes = influenceBufferSize;
+            skinCluster.influenceBufferView.StrideInBytes =
+                sizeof(VertexInfluence);
+        }
+
+        for (const auto &[jointName, jointWeightData] : subMesh.skinClusterData) {
+            const auto jointIt = model.boneMap.find(jointName);
+            if (jointIt == model.boneMap.end()) {
+                continue;
+            }
+
+            const uint32_t jointIndex = jointIt->second;
+            if (jointIndex >= skinCluster.inverseBindPoseMatrices.size()) {
+                continue;
+            }
+
+            skinCluster.inverseBindPoseMatrices[jointIndex] =
+                jointWeightData.inverseBindPoseMatrix;
+
+            for (const VertexWeightData &vertexWeight :
+                 jointWeightData.vertexWeights) {
+                if (vertexWeight.vertexIndex >= skinCluster.influenceCount) {
+                    continue;
+                }
+
+                VertexInfluence &influence =
+                    skinCluster.mappedInfluence[vertexWeight.vertexIndex];
+
+                for (uint32_t influenceIndex = 0;
+                     influenceIndex < kNumMaxInfluence; ++influenceIndex) {
+                    if (influence.weights[influenceIndex] == 0.0f) {
+                        influence.weights[influenceIndex] = vertexWeight.weight;
+                        influence.jointIndices[influenceIndex] =
+                            static_cast<int32_t>(jointIndex);
+                        break;
+                    }
+                }
+            }
+        }
+
+        for (uint32_t vertexIndex = 0; vertexIndex < skinCluster.influenceCount;
+             ++vertexIndex) {
+            NormalizeInfluence(skinCluster.mappedInfluence[vertexIndex]);
+        }
+
+        const UINT paletteBufferSize =
+            static_cast<UINT>(sizeof(WellForGPU) * jointCount);
+
+        CD3DX12_HEAP_PROPERTIES uploadHeap(D3D12_HEAP_TYPE_UPLOAD);
+        auto paletteDesc = CD3DX12_RESOURCE_DESC::Buffer(paletteBufferSize);
+
+        ThrowIfFailed(device->CreateCommittedResource(
+                          &uploadHeap, D3D12_HEAP_FLAG_NONE, &paletteDesc,
+                          D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                          IID_PPV_ARGS(&skinCluster.paletteResource)),
+                      "CreateCommittedResource(PaletteBuffer) failed");
+
+        ThrowIfFailed(skinCluster.paletteResource->Map(
+                          0, nullptr,
+                          reinterpret_cast<void **>(&skinCluster.mappedPalette)),
+                      "PaletteBuffer Map failed");
+
+        skinCluster.paletteCount = jointCount;
+        for (uint32_t jointIndex = 0; jointIndex < jointCount; ++jointIndex) {
+            skinCluster.mappedPalette[jointIndex].skeletonSpaceMatrix =
+                StoreMatrix(XMMatrixTranspose(XMMatrixIdentity()));
+            skinCluster.mappedPalette[jointIndex]
+                .skeletonSpaceInverseTransposeMatrix =
+                StoreMatrix(XMMatrixTranspose(XMMatrixIdentity()));
+        }
+
+        const UINT srvIndex = srvManager_->Allocate();
+        skinCluster.paletteSrvCpuHandle = srvManager_->GetCpuHandle(srvIndex);
+        skinCluster.paletteSrvGpuHandle = srvManager_->GetGpuHandle(srvIndex);
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+        srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+        srvDesc.Shader4ComponentMapping =
+            D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+        srvDesc.Buffer.FirstElement = 0;
+        srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+        srvDesc.Buffer.NumElements = jointCount;
+        srvDesc.Buffer.StructureByteStride = sizeof(WellForGPU);
+
+        device->CreateShaderResourceView(skinCluster.paletteResource.Get(),
+                                         &srvDesc,
+                                         skinCluster.paletteSrvCpuHandle);
+    }
+
+    UpdateSkinClusters(model);
+}
+
+void ModelRenderer::UpdateSkinClusters(Model &model) {
+    for (auto &subMesh : model.subMeshes) {
+        SkinCluster &skinCluster = subMesh.skinCluster;
+        if (!skinCluster.mappedPalette || skinCluster.paletteCount == 0) {
+            continue;
+        }
+
+        if (model.bones.empty() || model.skeletonSpaceMatrices.empty()) {
+            skinCluster.mappedPalette[0].skeletonSpaceMatrix =
+                StoreMatrix(XMMatrixTranspose(XMMatrixIdentity()));
+            skinCluster.mappedPalette[0].skeletonSpaceInverseTransposeMatrix =
+                StoreMatrix(XMMatrixTranspose(XMMatrixIdentity()));
+            continue;
+        }
+
+        const uint32_t jointCount = std::min<uint32_t>(
+            skinCluster.paletteCount,
+            static_cast<uint32_t>(model.skeletonSpaceMatrices.size()));
+
+        for (uint32_t jointIndex = 0; jointIndex < jointCount; ++jointIndex) {
+            XMMATRIX inverseBindPose =
+                XMLoadFloat4x4(&skinCluster.inverseBindPoseMatrices[jointIndex]);
+            XMMATRIX skeletonSpace =
+                XMLoadFloat4x4(&model.skeletonSpaceMatrices[jointIndex]);
+            XMMATRIX skinningMatrix = inverseBindPose * skeletonSpace;
+            XMMATRIX skinningInverseTranspose =
+                XMMatrixTranspose(XMMatrixInverse(nullptr, skinningMatrix));
+
+            XMStoreFloat4x4(
+                &skinCluster.mappedPalette[jointIndex].skeletonSpaceMatrix,
+                XMMatrixTranspose(skinningMatrix));
+            XMStoreFloat4x4(
+                &skinCluster.mappedPalette[jointIndex]
+                     .skeletonSpaceInverseTransposeMatrix,
+                XMMatrixTranspose(skinningInverseTranspose));
+        }
+    }
+}
 
 void ModelRenderer::CreateConstantBuffer() {
     cbStride_ = Align256(sizeof(ConstBufferData));
@@ -156,12 +361,15 @@ void ModelRenderer::CreateRootSignature() {
     CD3DX12_ROOT_PARAMETER params[4];
 
     params[0].InitAsConstantBufferView(0);
-    params[1].InitAsConstantBufferView(1);
-    params[2].InitAsConstantBufferView(2);
+    params[1].InitAsConstantBufferView(2);
 
-    CD3DX12_DESCRIPTOR_RANGE range;
-    range.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
-    params[3].InitAsDescriptorTable(1, &range);
+    CD3DX12_DESCRIPTOR_RANGE textureRange;
+    textureRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+    params[2].InitAsDescriptorTable(1, &textureRange);
+
+    CD3DX12_DESCRIPTOR_RANGE matrixPaletteRange;
+    matrixPaletteRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1);
+    params[3].InitAsDescriptorTable(1, &matrixPaletteRange);
 
     CD3DX12_STATIC_SAMPLER_DESC sampler(0, D3D12_FILTER_MIN_MAG_MIP_LINEAR);
 
@@ -196,10 +404,9 @@ void ModelRenderer::CreatePipelineState() {
         {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,
          D3D12_APPEND_ALIGNED_ELEMENT,
          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-        {"BONEINDEX", 0, DXGI_FORMAT_R32G32B32A32_UINT, 0,
-         D3D12_APPEND_ALIGNED_ELEMENT,
+        {"WEIGHT", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 0,
          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-        {"BONEWEIGHT", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
+        {"INDEX", 0, DXGI_FORMAT_R32G32B32A32_SINT, 1,
          D3D12_APPEND_ALIGNED_ELEMENT,
          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
     };
@@ -217,7 +424,6 @@ void ModelRenderer::CreatePipelineState() {
     pso.SampleMask = UINT_MAX;
     pso.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 
-    // 不透明PSO
     D3D12_BLEND_DESC blend = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
     blend.RenderTarget[0].BlendEnable = FALSE;
     pso.BlendState = blend;
@@ -233,7 +439,6 @@ void ModelRenderer::CreatePipelineState() {
         device->CreateGraphicsPipelineState(&pso, IID_PPV_ARGS(&opaquePSO_)),
         "CreateGraphicsPipelineState(Opaque) failed");
 
-    // 透明PSO
     blend.RenderTarget[0].BlendEnable = TRUE;
     blend.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
     blend.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
@@ -270,21 +475,4 @@ void ModelRenderer::CreatePipelineState() {
     ThrowIfFailed(device->CreateGraphicsPipelineState(
                       &pso, IID_PPV_ARGS(&additivePSO_)),
                   "CreateGraphicsPipelineState(Additive) failed");
-}
-
-void ModelRenderer::CreateBoneBuffer() {
-    UINT size = Align256(sizeof(XMFLOAT4X4) * kMaxBones);
-
-    CD3DX12_HEAP_PROPERTIES heap(D3D12_HEAP_TYPE_UPLOAD);
-    auto desc = CD3DX12_RESOURCE_DESC::Buffer(size);
-
-    ThrowIfFailed(dxCommon_->GetDevice()->CreateCommittedResource(
-                      &heap, D3D12_HEAP_FLAG_NONE, &desc,
-                      D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-                      IID_PPV_ARGS(&boneBuffer_)),
-                  "CreateCommittedResource(BoneBuffer) failed");
-
-    ThrowIfFailed(
-        boneBuffer_->Map(0, nullptr, reinterpret_cast<void **>(&mappedBones_)),
-        "BoneBuffer Map failed");
 }

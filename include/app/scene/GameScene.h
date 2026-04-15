@@ -62,6 +62,8 @@ class GameScene : public BaseScene {
     // Game
     Player player_;
     Enemy enemy_;
+    uint32_t playerModelId_ = 0;
+    uint32_t enemyModelId_ = 0;
 
     float playerHitCooldown_ = 0.0f;
 
@@ -76,6 +78,9 @@ class GameScene : public BaseScene {
     bool dbgBulletHitPlayer_ = false;
     bool dbgWaveHitPlayer_ = false;
     bool dbgPlayerGuardedHit_ = false;
+#ifdef _DEBUG
+    bool dbgFreezeEnemyMotion_ = false;
+#endif
     Bullet bullet_;
     uint32_t warpSmokeSpriteId_ = 0;
 

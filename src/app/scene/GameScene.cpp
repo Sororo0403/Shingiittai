@@ -6,10 +6,14 @@
 #include "SpriteManager.h"
 #include "TextureManager.h"
 #include "WinApp.h"
+#include "imgui.h"
+#include <sstream>
+#ifdef _WIN32
+#include <Windows.h>
+#endif
 #ifdef _DEBUG
 #include "DebugDraw.h"
 #endif // _DEBUG
-#include "imgui.h"
 #include "imgui_internal.h"
 #include <cmath>
 #ifdef _DEBUG
@@ -43,6 +47,12 @@ bool IsWithinCounterJustWindow(const Enemy &enemy) {
     float justEnd = activeStart + activeLen * 0.70f;
 
     return (t >= justStart && t <= justEnd);
+}
+
+void DebugLog(const std::string &message) {
+#ifdef _WIN32
+    OutputDebugStringA((message + "\n").c_str());
+#endif
 }
 } // namespace
 
@@ -78,16 +88,31 @@ void GameScene::Initialize(const SceneContext &ctx) {
 
     uint32_t playerModel = model->Load(L"resources/model/player/player.glb");
     uint32_t swordModel = model->Load(L"resources/model/player/sword.glb");
-    uint32_t enemyModel = model->Load(L"resources/model/enemy/enemy.glb");
+    uint32_t enemyModel = 0;
     warpSmokeSpriteId_ =
         ctx_->sprite->Create(L"resources/texture/effect/warp_smoke.png");
+    try {
+        enemyModel = model->Load(L"resources/model/boss/boss.gltf");
+        DebugLog("[GameScene] enemy model loaded: "
+                 "resources/model/boss/sneakWalk.gltf");
+    } catch (const std::exception &e) {
+        std::ostringstream oss;
+        oss << "[GameScene] bossBody load failed: " << e.what();
+        DebugLog(oss.str());
+
+        enemyModel = model->Load(L"resources/model/enemy/enemy.glb");
+        DebugLog("[GameScene] fallback enemy model loaded: "
+                 "resources/model/enemy/enemy.glb");
+    }
 
     dx->EndUpload();
 
     texture->ReleaseUploadBuffers();
 
     player_.Initialize(playerModel, swordModel);
+    playerModelId_ = playerModel;
     enemy_.Initialize(enemyModel);
+    enemyModelId_ = enemyModel;
 
     // 一人称カメラ初期向き
     cameraYaw_ = 0.0f;
@@ -104,6 +129,19 @@ void GameScene::Initialize(const SceneContext &ctx) {
     // 肩越し三人称カメラ初期向き
     lockOnOrbitCameraPos_ = {0.0f, 0.0f, 0.0f};
     lockOnLookAt_ = {0.0f, 0.0f, 0.0f};
+    if (Model *playerModelData = model->GetModel(playerModelId_)) {
+        if (!playerModelData->animations.empty()) {
+            model->PlayAnimation(playerModelId_,
+                                 playerModelData->currentAnimation, true);
+        }
+    }
+
+    if (Model *enemyModelData = model->GetModel(enemyModelId_)) {
+        if (!enemyModelData->animations.empty()) {
+            model->PlayAnimation(enemyModelId_,
+                                 enemyModelData->currentAnimation, true);
+        }
+    }
 
     uint32_t bulletModel =
         ctx_->model->Load(L"resources/model/bullet/bullet.obj");
@@ -111,9 +149,18 @@ void GameScene::Initialize(const SceneContext &ctx) {
 }
 
 void GameScene::Update() {
+    DebugLog("[GameScene] Update begin");
     Input *input = ctx_->input;
+#ifdef _DEBUG
+    const bool freezeEnemyMotion = dbgFreezeEnemyMotion_;
+#else
+    const bool freezeEnemyMotion = false;
+#endif
 
     UpdateCamera(input);
+
+    ctx_->model->UpdateAnimation(playerModelId_, ctx_->deltaTime);
+    ctx_->model->UpdateAnimation(enemyModelId_, ctx_->deltaTime);
 
 #ifdef _DEBUG
     if (currentCamera_ == &debugCamera_) {
@@ -152,7 +199,9 @@ void GameScene::Update() {
         break;
     }
 
-    enemy_.Update(playerObs, ctx_->deltaTime);
+    if (!freezeEnemyMotion) {
+        enemy_.Update(playerObs, ctx_->deltaTime);
+    }
 
     UpdateBattleCamera();
 
@@ -195,7 +244,7 @@ void GameScene::Update() {
 
     for (size_t i = 0; i < swords.size(); ++i) {
         const Sword *sword = swords[i];
-        if (!swordSlashStates[i]) {
+        if (sword == nullptr || !swordSlashStates[i]) {
             continue;
         }
 
@@ -218,7 +267,24 @@ void GameScene::Update() {
 
         if (enemyHitCooldown_ <= 0.0f) {
             // 左手ガード中は左手優先
-            if (isEnemyGuardHold && hitLeftHand) {
+            bool hitGuardHand = false;
+            if (isEnemyGuardHold) {
+                switch (enemy_.GetGuardTarget()) {
+                case GuardTarget::Face:
+                case GuardTarget::BodyCenter:
+                case GuardTarget::BodyLeft:
+                    hitGuardHand = hitLeftHand;
+                    break;
+                case GuardTarget::BodyRight:
+                    hitGuardHand = hitRightHand;
+                    break;
+                case GuardTarget::None:
+                default:
+                    break;
+                }
+            }
+
+            if (hitGuardHand) {
                 enemyHitCooldown_ = 0.2f;
             } else if (hitBody) {
                 enemy_.TakeDamage(10.0f);
@@ -255,7 +321,7 @@ void GameScene::Update() {
 
     bool bossHitPlayer = false;
 
-    if (isEnemyMeleeActive) {
+    if (!freezeEnemyMotion && isEnemyMeleeActive) {
         auto enemyAttackBox = enemy_.GetAttackOBB();
 
         bossHitPlayer = CollisionUtil::CheckOBB(enemyAttackBox, playerBox);
@@ -303,11 +369,16 @@ void GameScene::Update() {
                 playerHitCooldown_ = 0.4f;
             }
         }
+
+        DebugLog("[GameScene] Update end");
     }
 
     dbgBossHitPlayer_ = bossHitPlayer;
 
     dbgBulletHitPlayer_ = false;
+    if (freezeEnemyMotion) {
+        return;
+    }
 
     const auto &bullets = enemy_.GetBullets();
     for (size_t i = 0; i < bullets.size(); ++i) {
@@ -407,6 +478,7 @@ void GameScene::Update() {
 // #endif
 
 void GameScene::Draw() {
+    DebugLog("[GameScene] Draw begin");
     ctx_->model->PreDraw();
 
     player_.Draw(ctx_->model, *currentCamera_);
@@ -427,7 +499,11 @@ void GameScene::Draw() {
 #ifdef _DEBUG
     // 当たり判定描画
     for (const Sword *sword : player_.GetSwords()) {
-        ctx_->debugDraw->DrawOBB(ctx_->model, sword->GetOBB(), *currentCamera_);
+        if (sword == nullptr) {
+            continue;
+        }
+        // ctx_->debugDraw->DrawOBB(ctx_->model, sword->GetOBB(),
+        // *currentCamera_);
     }
 
     // ボス部位
@@ -447,8 +523,8 @@ void GameScene::Draw() {
              enemy_.GetActionStep() == ActionStep::Active);
 
         if (isEnemySmashActive || isEnemySweepActive) {
-            ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetAttackOBB(),
-                                     *currentCamera_);
+            //  ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetAttackOBB(),
+            //  *currentCamera_);
         }
     }
 #endif // _DEBUG
@@ -459,6 +535,7 @@ void GameScene::Draw() {
 
 #ifdef _DEBUG
     ImGui::Begin("HitInfo");
+    ImGui::Checkbox("Freeze Enemy Motion", &dbgFreezeEnemyMotion_);
     ImGui::Text("Hit LeftHand : %s", dbgHitLeftHand_ ? "true" : "false");
     ImGui::Text("Hit RightHand: %s", dbgHitRightHand_ ? "true" : "false");
     ImGui::Text("Hit Body     : %s", dbgHitBody_ ? "true" : "false");
@@ -604,6 +681,9 @@ void GameScene::Draw() {
         break;
     case GuardTarget::Face:
         guardName = "Face";
+        break;
+    case GuardTarget::BodyCenter:
+        guardName = "BodyCenter";
         break;
     case GuardTarget::BodyLeft:
         guardName = "BodyLeft";
@@ -887,6 +967,8 @@ void GameScene::Draw() {
 
     ImGui::End();
 #endif
+
+    DebugLog("[GameScene] Draw end");
 }
 
 bool GameScene::ProjectWorldToScreen(const XMFLOAT3 &worldPos,

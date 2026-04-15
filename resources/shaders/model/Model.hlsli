@@ -5,8 +5,8 @@ struct ModelVSInput
 {
     float3 pos : POSITION;
     float2 uv : TEXCOORD;
-    uint4 boneIndex : BONEINDEX;
-    float4 boneWeight : BONEWEIGHT;
+    float4 weight : WEIGHT;
+    int4 index : INDEX;
 };
 
 struct ModelVSOutput

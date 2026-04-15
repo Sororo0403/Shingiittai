@@ -1,10 +1,19 @@
 #pragma once
 #include <xaudio2.h>
 
+#ifdef _WIN32
+#include <Windows.h>
+#endif
+
 class SoundVoiceCallback : public IXAudio2VoiceCallback {
   public:
     // バッファ再生終了時に呼ばれる
     void STDMETHODCALLTYPE OnBufferEnd(void *context) override {
+#ifdef _WIN32
+        if (!context) {
+            OutputDebugStringA("[SoundVoiceCallback] OnBufferEnd context=nullptr\n");
+        }
+#endif
         auto *voice = reinterpret_cast<IXAudio2SourceVoice *>(context);
         if (voice) {
             voice->DestroyVoice();

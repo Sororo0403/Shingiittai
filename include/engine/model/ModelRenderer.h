@@ -47,6 +47,8 @@ class ModelRenderer {
 
     void SetDrawEffect(const ModelDrawEffect &effect) { currentEffect_ = effect; }
     void ClearDrawEffect() { currentEffect_ = ModelDrawEffect{}; }
+    void CreateSkinClusters(Model &model);
+    void UpdateSkinClusters(Model &model);
 
     /// <summary>
     /// 描画前処理
@@ -63,11 +65,9 @@ class ModelRenderer {
     void CreateRootSignature();
     void CreatePipelineState();
     void CreateConstantBuffer();
-    void CreateBoneBuffer();
 
   private:
     static constexpr uint32_t kMaxDraws = 4096;
-    static constexpr uint32_t kMaxBones = 128;
 
     DirectXCommon *dxCommon_ = nullptr;
     SrvManager *srvManager_ = nullptr;
@@ -85,7 +85,4 @@ class ModelRenderer {
     uint32_t cbStride_ = 0;
     uint8_t *mappedCB_ = nullptr;
     ModelDrawEffect currentEffect_{};
-
-    Microsoft::WRL::ComPtr<ID3D12Resource> boneBuffer_;
-    DirectX::XMFLOAT4X4 *mappedBones_ = nullptr;
 };
