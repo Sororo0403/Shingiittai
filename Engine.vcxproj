@@ -131,6 +131,7 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClCompile Include="src\app\enemy\EnemyTactics.cpp" />
     <ClCompile Include="src\app\enemy\EnemyTuning.cpp" />
     <ClCompile Include="src\app\enemy\EnemyTuningPresetIO.cpp" />
+    <ClCompile Include="src\engine\graphics\WarpPostEffectRenderer.cpp" />
     <ClCompile Include="src\engine\model\MaterialManager.cpp" />
     <ClCompile Include="src\engine\model\Material.cpp" />
     <ClCompile Include="src\engine\camera\DebugCamera.cpp" />
@@ -168,9 +169,11 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClInclude Include="include\app\enemy\EnemyActionData.h" />
     <ClInclude Include="include\app\enemy\EnemyTuningPreset.h" />
     <ClInclude Include="include\app\enemy\EnemyTuningPresetIO.h" />
+    <ClInclude Include="include\app\enemy\WarpPostEffect.h" />
     <ClInclude Include="include\app\player\SwordControllerState.h" />
     <ClInclude Include="include\app\player\SwordPose.h" />
     <ClInclude Include="include\engine\camera\DebugCamera.h" />
+    <ClInclude Include="include\engine\graphics\WarpPostEffectRenderer.h" />
     <ClInclude Include="include\engine\model\Animator.h" />
     <ClInclude Include="include\engine\model\AssimpLoader.h" />
     <ClInclude Include="include\app\enemy\Bullet.h" />
@@ -240,6 +243,18 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="resources\shaders\warp\Fullscreen.VS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="resources\shaders\warp\WarpPostEffect.PS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>

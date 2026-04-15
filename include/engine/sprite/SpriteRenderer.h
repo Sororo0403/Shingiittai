@@ -38,6 +38,13 @@ class SpriteRenderer {
     void PostDraw();
 
   private:
+    enum class PipelineKind : uint32_t {
+        Alpha = 0,
+        Modulate = 1,
+        DarkSmoke = 2,
+        Count,
+    };
+
     // Create
     void CreateRootSignature();
     void CreatePipelineState();
@@ -53,7 +60,8 @@ class SpriteRenderer {
     SrvManager *srvManager_ = nullptr;
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState>
+        pipelineStates_[static_cast<uint32_t>(PipelineKind::Count)];
 
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
     D3D12_VERTEX_BUFFER_VIEW vbView_{};
@@ -61,4 +69,5 @@ class SpriteRenderer {
     Microsoft::WRL::ComPtr<ID3D12Resource> constBuffer_;
 
     DirectX::XMFLOAT4X4 matProjection_{};
+    PipelineKind activePipelineKind_ = PipelineKind::Alpha;
 };

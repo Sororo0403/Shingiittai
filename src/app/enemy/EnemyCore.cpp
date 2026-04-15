@@ -230,14 +230,27 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         (action_.kind == ActionKind::Warp && action_.step == ActionStep::Move);
     ModelDrawEffect warpEffect{};
 
-    if (action_.kind == ActionKind::Warp) {
+       if (action_.kind == ActionKind::Warp) {
         warpEffect.enabled = true;
         warpEffect.additiveBlend = true;
-        warpEffect.color = {0.70f, 0.04f, 0.22f, 0.82f};
-        warpEffect.intensity =
-            (action_.step == ActionStep::Move) ? 2.05f : 1.70f;
-        warpEffect.fresnelPower = 4.6f;
-        warpEffect.noiseAmount = 0.88f;
+
+        // メルゼナ風：本体発光は抑えて、赤粒 burst を主役にする
+        warpEffect.color = {0.28f, 0.02f, 0.08f, 0.42f};
+
+        if (action_.step == ActionStep::Move) {
+            warpEffect.intensity = 0.78f;
+            warpEffect.fresnelPower = 2.8f;
+            warpEffect.noiseAmount = 0.42f;
+        } else if (action_.step == ActionStep::End) {
+            warpEffect.intensity = 0.95f;
+            warpEffect.fresnelPower = 3.1f;
+            warpEffect.noiseAmount = 0.48f;
+        } else { // Start
+            warpEffect.intensity = 0.88f;
+            warpEffect.fresnelPower = 3.0f;
+            warpEffect.noiseAmount = 0.45f;
+        }
+
         warpEffect.time = stateTimer_;
 
         modelManager->SetDrawEffect(warpEffect);
@@ -285,12 +298,11 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
 
     if (action_.kind == ActionKind::Warp) {
         float warpPulse = 0.5f + 0.5f * std::sinf(stateTimer_ * 28.0f);
-        float previewScale =
-            warpArrivalPreviewScale_ + 0.10f * warpPulse;
+        float previewScale = warpArrivalPreviewScale_ + 0.10f * warpPulse;
 
         float usedYaw = facingYaw_;
-        if (warp_.type == WarpType::Approach && warp_.approachSlot !=
-                                               WarpApproachSlot::LongFront) {
+        if (warp_.type == WarpType::Approach &&
+            warp_.approachSlot != WarpApproachSlot::LongFront) {
             usedYaw = lockedAttackYaw_;
         }
 
@@ -298,6 +310,7 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         float forwardZ = std::cosf(usedYaw);
         float rightX = std::cosf(usedYaw);
         float rightZ = -std::sinf(usedYaw);
+
         const float pathDx = warp_.targetPos.x - warp_.departurePos.x;
         const float pathDz = warp_.targetPos.z - warp_.departurePos.z;
         float pathLen = std::sqrtf(pathDx * pathDx + pathDz * pathDz);
@@ -318,9 +331,9 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
                     warpParticleRadius_ * (0.75f + 0.25f * warpPulse);
                 float orbitX = std::cosf(angle) * radius;
                 float orbitZ = std::sinf(angle) * radius;
-                float height = warpParticleHeight_ *
-                               (0.45f + 0.55f *
-                                           std::sinf(angle * 1.7f + timeBias));
+                float height =
+                    warpParticleHeight_ *
+                    (0.45f + 0.55f * std::sinf(angle * 1.7f + timeBias));
 
                 Transform particleTf = bodyTf_;
                 particleTf.position = center;
@@ -328,9 +341,9 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
                 particleTf.position.y += height;
                 particleTf.position.z += orbitZ;
 
-                float scalePulse = 0.85f + 0.25f *
-                                               std::sinf(angle * 2.1f +
-                                                         stateTimer_ * 14.0f);
+                float scalePulse =
+                    0.85f +
+                    0.25f * std::sinf(angle * 2.1f + stateTimer_ * 14.0f);
                 particleTf.scale = {
                     warpParticleScale_ * scalePulse,
                     warpParticleScale_ * (1.15f + 0.10f * warpPulse),
@@ -346,19 +359,20 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
                 float ratio = static_cast<float>(i) /
                               static_cast<float>(warpParticleCount_ + 1);
                 float side = (ratio - 0.5f) * 2.0f;
-                float pulse = 0.65f + 0.35f *
-                                          std::sinf(stateTimer_ * 16.0f +
-                                                    timeBias + ratio * 9.0f);
+                float pulse =
+                    0.65f + 0.35f * std::sinf(stateTimer_ * 16.0f + timeBias +
+                                              ratio * 9.0f);
                 float forwardOffset = spreadScale * (0.20f + ratio * 0.95f);
                 float sideOffset = warpParticleRadius_ * 0.55f * side;
 
                 Transform streakTf = bodyTf_;
                 streakTf.position = center;
-                streakTf.position.x += pathDirX * forwardOffset +
-                                       rightX * sideOffset;
-                streakTf.position.z += pathDirZ * forwardOffset +
-                                       rightZ * sideOffset;
-                streakTf.position.y += warpParticleHeight_ * (0.16f + ratio * 0.4f);
+                streakTf.position.x +=
+                    pathDirX * forwardOffset + rightX * sideOffset;
+                streakTf.position.z +=
+                    pathDirZ * forwardOffset + rightZ * sideOffset;
+                streakTf.position.y +=
+                    warpParticleHeight_ * (0.16f + ratio * 0.4f);
                 streakTf.scale = {
                     warpParticleScale_ * (0.16f + 0.05f * pulse),
                     warpParticleScale_ * (0.72f + 0.25f * pulse),
@@ -368,7 +382,8 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
             }
         };
 
-        if ((action_.step == ActionStep::Start || action_.step == ActionStep::Move) &&
+        if ((action_.step == ActionStep::Start ||
+             action_.step == ActionStep::Move) &&
             warp_.hasDeparturePos) {
             for (int i = 0; i < 2; ++i) {
                 float t = static_cast<float>(i + 1) / 2.0f;
@@ -388,24 +403,31 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
                 }
 
                 float sideOffset = warpDepartureEchoOffset_ * t * sideSign;
-                float backOffset = warpDepartureEchoOffset_ * (1.0f - t * 0.35f);
+                float backOffset =
+                    warpDepartureEchoOffset_ * (1.0f - t * 0.35f);
 
-                echoBody.position.x += (-forwardX) * backOffset + rightX * sideOffset;
-                echoBody.position.z += (-forwardZ) * backOffset + rightZ * sideOffset;
+                echoBody.position.x +=
+                    (-forwardX) * backOffset + rightX * sideOffset;
+                echoBody.position.z +=
+                    (-forwardZ) * backOffset + rightZ * sideOffset;
                 echoBody.position.y += 0.04f * t;
                 echoBody.scale.x *= 0.96f - 0.08f * t;
                 echoBody.scale.y *= 0.92f - 0.10f * t;
                 echoBody.scale.z *= 0.94f - 0.08f * t;
 
-                echoLeft.position.x += (-forwardX) * backOffset + rightX * sideOffset;
-                echoLeft.position.z += (-forwardZ) * backOffset + rightZ * sideOffset;
+                echoLeft.position.x +=
+                    (-forwardX) * backOffset + rightX * sideOffset;
+                echoLeft.position.z +=
+                    (-forwardZ) * backOffset + rightZ * sideOffset;
                 echoLeft.position.y += 0.04f * t;
                 echoLeft.scale.x *= 0.94f - 0.08f * t;
                 echoLeft.scale.y *= 0.94f - 0.08f * t;
                 echoLeft.scale.z *= 0.94f - 0.08f * t;
 
-                echoRight.position.x += (-forwardX) * backOffset + rightX * sideOffset;
-                echoRight.position.z += (-forwardZ) * backOffset + rightZ * sideOffset;
+                echoRight.position.x +=
+                    (-forwardX) * backOffset + rightX * sideOffset;
+                echoRight.position.z +=
+                    (-forwardZ) * backOffset + rightZ * sideOffset;
                 echoRight.position.y += 0.04f * t;
                 echoRight.scale.x *= 0.94f - 0.08f * t;
                 echoRight.scale.y *= 0.94f - 0.08f * t;
@@ -425,6 +447,7 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
             moveCenter.y =
                 (warp_.departurePos.y + warp_.targetPos.y) * 0.5f + 0.08f;
             moveCenter.z = (warp_.departurePos.z + warp_.targetPos.z) * 0.5f;
+
             for (int i = 0; i < 1; ++i) {
                 float t = 0.5f;
 
@@ -436,8 +459,7 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
                 ghostCenter.x = warp_.departurePos.x +
                                 (warp_.targetPos.x - warp_.departurePos.x) * t;
                 ghostCenter.y = warp_.departurePos.y +
-                                (warp_.targetPos.y - warp_.departurePos.y) * t +
-                                0.06f * (1.0f - std::fabs(0.5f - t));
+                                (warp_.targetPos.y - warp_.departurePos.y) * t;
                 ghostCenter.z = warp_.departurePos.z +
                                 (warp_.targetPos.z - warp_.departurePos.z) * t;
 
@@ -446,36 +468,41 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
                 ghostRight.position = ghostCenter;
 
                 float sideBlend = (t - 0.5f) * 2.0f;
-                ghostBody.position.x += rightX * warpDepartureEchoOffset_ * 0.30f *
-                                        sideBlend;
-                ghostBody.position.z += rightZ * warpDepartureEchoOffset_ * 0.30f *
-                                        sideBlend;
-                ghostLeft.position.x += rightX * warpDepartureEchoOffset_ * 0.30f *
-                                        sideBlend;
-                ghostLeft.position.z += rightZ * warpDepartureEchoOffset_ * 0.30f *
-                                        sideBlend;
-                ghostRight.position.x += rightX * warpDepartureEchoOffset_ * 0.30f *
-                                         sideBlend;
-                ghostRight.position.z += rightZ * warpDepartureEchoOffset_ * 0.30f *
-                                         sideBlend;
+                ghostBody.position.x +=
+                    rightX * warpDepartureEchoOffset_ * 0.30f * sideBlend;
+                ghostBody.position.z +=
+                    rightZ * warpDepartureEchoOffset_ * 0.30f * sideBlend;
+                ghostLeft.position.x +=
+                    rightX * warpDepartureEchoOffset_ * 0.30f * sideBlend;
+                ghostLeft.position.z +=
+                    rightZ * warpDepartureEchoOffset_ * 0.30f * sideBlend;
+                ghostRight.position.x +=
+                    rightX * warpDepartureEchoOffset_ * 0.30f * sideBlend;
+                ghostRight.position.z +=
+                    rightZ * warpDepartureEchoOffset_ * 0.30f * sideBlend;
 
-                ghostBody.scale.x *= warpMoveGhostScaleX_ * 0.78f;
-                ghostBody.scale.y *= warpMoveGhostScaleY_ * 0.92f;
-                ghostBody.scale.z *= warpMoveGhostScaleZ_ * 0.82f;
-                ghostLeft.scale.x *= warpMoveGhostScaleX_ * 0.62f;
-                ghostLeft.scale.y *= warpMoveGhostScaleY_ * 0.60f;
-                ghostLeft.scale.z *= warpMoveGhostScaleZ_ * 0.62f;
-                ghostRight.scale.x *= warpMoveGhostScaleX_ * 0.62f;
-                ghostRight.scale.y *= warpMoveGhostScaleY_ * 0.60f;
-                ghostRight.scale.z *= warpMoveGhostScaleZ_ * 0.62f;
+                // メルゼナ風：Move中は黒い影が滑る感じに寄せる
+                ghostBody.scale.x *= warpMoveGhostScaleX_ * 0.70f;
+                ghostBody.scale.y *= warpMoveGhostScaleY_ * 0.78f;
+                ghostBody.scale.z *= warpMoveGhostScaleZ_ * 0.72f;
+
+                ghostLeft.scale.x *= warpMoveGhostScaleX_ * 0.50f;
+                ghostLeft.scale.y *= warpMoveGhostScaleY_ * 0.48f;
+                ghostLeft.scale.z *= warpMoveGhostScaleZ_ * 0.50f;
+
+                ghostRight.scale.x *= warpMoveGhostScaleX_ * 0.50f;
+                ghostRight.scale.y *= warpMoveGhostScaleY_ * 0.48f;
+                ghostRight.scale.z *= warpMoveGhostScaleZ_ * 0.50f;
 
                 drawEnemyParts(ghostBody, ghostLeft, ghostRight);
             }
+
             drawWarpParticleCluster(moveCenter, 1.7f);
             drawWarpStreakBurst(moveCenter, 0.92f, 1.2f);
         }
 
-        if ((action_.step == ActionStep::Start || action_.step == ActionStep::Move ||
+               if ((action_.step == ActionStep::Start ||
+             action_.step == ActionStep::Move ||
              action_.step == ActionStep::End) &&
             warp_.hasValidTarget) {
             for (int i = 0; i < 2; ++i) {
@@ -489,8 +516,7 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
                 echoRight.position = warp_.targetPos;
 
                 float sideOffset = warpArrivalEchoOffset_ * t;
-                float heightOffset =
-                    warpArrivalPreviewHeight_ * (1.0f + 0.5f * warpPulse) * t;
+                float heightOffset = 0.0f;
 
                 if (warp_.approachSlot == WarpApproachSlot::FrontLeft) {
                     echoBody.position.x += (-rightX) * sideOffset;
@@ -519,21 +545,86 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
                 echoLeft.position.y += heightOffset;
                 echoRight.position.y += heightOffset;
 
-                echoBody.scale.x *= previewScale - 0.24f * t;
-                echoBody.scale.y *= previewScale + 0.08f * (1.0f - t);
-                echoBody.scale.z *= previewScale - 0.12f * t;
-                echoLeft.scale.x *= 0.90f + 0.08f * warpPulse;
-                echoLeft.scale.y *= 0.90f + 0.08f * warpPulse;
-                echoLeft.scale.z *= 0.90f + 0.08f * warpPulse;
-                echoRight.scale.x *= 0.90f + 0.08f * warpPulse;
-                echoRight.scale.y *= 0.90f + 0.08f * warpPulse;
-                echoRight.scale.z *= 0.90f + 0.08f * warpPulse;
+                // メルゼナ風：arrival preview は少し縮めて黒い塊っぽく
+                echoBody.scale.x *= (previewScale - 0.24f * t) * 0.92f;
+                echoBody.scale.y *= (previewScale + 0.08f * (1.0f - t)) * 0.86f;
+                echoBody.scale.z *= (previewScale - 0.12f * t) * 0.92f;
+
+                echoLeft.scale.x *= (0.90f + 0.08f * warpPulse) * 0.88f;
+                echoLeft.scale.y *= (0.90f + 0.08f * warpPulse) * 0.82f;
+                echoLeft.scale.z *= (0.90f + 0.08f * warpPulse) * 0.88f;
+
+                echoRight.scale.x *= (0.90f + 0.08f * warpPulse) * 0.88f;
+                echoRight.scale.y *= (0.90f + 0.08f * warpPulse) * 0.82f;
+                echoRight.scale.z *= (0.90f + 0.08f * warpPulse) * 0.88f;
 
                 drawEnemyParts(echoBody, echoLeft, echoRight);
             }
 
             drawWarpParticleCluster(warp_.targetPos, 3.1f);
             drawWarpStreakBurst(warp_.targetPos, 0.58f, 2.4f);
+
+            // =========================================================
+            // メルゼナ風：arrival 側だけ赤粒 burst
+            // End で強く、Start/Move では弱めに出す
+            // =========================================================
+            // =========================================================
+            // メルゼナ風：arrival 側だけ赤粒 burst（強化版）
+            // =========================================================
+            {
+                float burstScale = 0.0f;
+                if (action_.step == ActionStep::End) {
+                    burstScale = 1.0f;
+                } else if (action_.step == ActionStep::Move) {
+                    burstScale = 0.30f;
+                } else { // Start
+                    burstScale = 0.18f;
+                }
+
+                int burstCount = 12;
+                if (action_.step == ActionStep::End) {
+                    burstCount = 32;
+                }
+
+                for (int i = 0; i < burstCount; ++i) {
+                    float ratio =
+                        static_cast<float>(i) / static_cast<float>(burstCount);
+
+                    float angle =
+                        stateTimer_ * 18.0f + ratio * 6.2831853f +
+                        2.1f * std::sinf(ratio * 13.0f + stateTimer_ * 7.0f);
+
+                    float radius = (warpParticleRadius_ * 0.42f +
+                                    0.24f * std::sinf(stateTimer_ * 28.0f +
+                                                      ratio * 17.0f)) *
+                                   burstScale;
+
+                    float outward =
+                        0.18f + ratio * 1.35f +
+                        0.14f * std::sinf(stateTimer_ * 22.0f + ratio * 19.0f);
+
+                    Transform redTf = bodyTf_;
+                    redTf.position = warp_.targetPos;
+                    redTf.position.x += std::cosf(angle) * radius * outward;
+                    redTf.position.z += std::sinf(angle) * radius * outward;
+                    redTf.position.y +=
+                        0.10f + 0.34f * ratio +
+                        0.09f * std::sinf(angle * 2.6f + stateTimer_ * 18.0f);
+
+                    float pulseScale =
+                        0.16f +
+                        0.10f * std::sinf(stateTimer_ * 30.0f + ratio * 23.0f);
+
+                    redTf.scale = {
+                        warpParticleScale_ * (0.18f + pulseScale) * burstScale,
+                        warpParticleScale_ * (0.30f + pulseScale * 1.60f) *
+                            burstScale,
+                        warpParticleScale_ * (0.18f + pulseScale) * burstScale,
+                    };
+
+                    modelManager->Draw(modelId_, redTf, camera);
+                }
+            }
         }
     }
 

@@ -10,7 +10,7 @@
 #include "TextureManager.h"
 #include "WinApp.h"
 #include <memory>
-
+#include "WarpPostEffectRenderer.h"
 #ifdef _DEBUG
 #include "DebugDraw.h"
 #endif // _DEBUG
@@ -35,6 +35,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     // SrvManager
     SrvManager srvManager;
     srvManager.Initialize(&dxCommon, 512);
+    dxCommon.RegisterSceneColorSRV(&srvManager);
+
+    WarpPostEffectRenderer warpPostEffectRenderer;
+    warpPostEffectRenderer.Initialize(&dxCommon, &srvManager);
+    WarpPostEffectParamGPU warpPostParam{};
 
     // Input
     Input input;
@@ -87,6 +92,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     sceneCtx.sprite = &spriteManager;
     sceneCtx.texture = &textureManager;
     sceneCtx.dxCommon = &dxCommon;
+    sceneCtx.warpPostEffectParam = &warpPostParam;
 
     sceneCtx.deltaTime = 0.0f;
 
@@ -130,7 +136,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
         // Scene 更新
         sceneManager.Update();
 
-        // 描画
+               // 描画
         dxCommon.BeginFrame();
 
 #ifndef IMGUI_DISABLED
@@ -138,7 +144,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
         imguiManager.Begin(cmdList);
 #endif // IMGUI_DISABLED
 
+        dxCommon.BeginScenePass();
         sceneManager.Draw();
+        dxCommon.EndScenePass();
+
+        dxCommon.BeginBackBufferPass();
+
+        warpPostEffectRenderer.Draw(warpPostParam,
+                                    dxCommon.GetSceneSrvGpuHandle(&srvManager));
 
 #ifndef IMGUI_DISABLED
         imguiManager.End(cmdList);

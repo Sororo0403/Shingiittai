@@ -78,6 +78,7 @@ class GameScene : public BaseScene {
     bool dbgPlayerGuardedHit_ = false;
     Bullet bullet_;
     uint32_t warpSmokeSpriteId_ = 0;
+    uint32_t warpSmokeDarkSpriteId_ = 0;
 
     // 完全一人称カメラ用
     /*DirectX::XMFLOAT3 fpCameraOffset_ = {0.0f, 1.55f, 0.0f};
@@ -178,6 +179,14 @@ class GameScene : public BaseScene {
     float warpSourceSmokeRedAlpha_ = 0.42f;
     float warpArrivalSmokeScale_ = 0.76f;
     float warpArrivalSmokeAlphaScale_ = 0.42f;
+    float warpArrivalSmokeDenseScale_ = 1.58f;
+    float warpArrivalSmokeDarkAlpha_ = 1.08f;
+    float warpArrivalSmokeOffsetXPx_ = 54.0f;
+    float warpArrivalSmokeOffsetYPx_ = 112.0f;
+    float warpArrivalSmokeClusterRadiusPx_ = 74.0f;
     float warpMoveSmokeAlphaScale_ = 0.78f;
     float warpMoveSmokeStretchScale_ = 0.78f;
+    float warpArrivalBurstBillboardSizePx_ = 18.0f;
+    float warpArrivalBurstBillboardSpreadPx_ = 54.0f;
+    float warpArrivalBurstBillboardAlpha_ = 0.52f;
 };

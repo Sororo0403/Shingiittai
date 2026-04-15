@@ -1,5 +1,5 @@
 #pragma once
-
+struct WarpPostEffectParamGPU;
 class Input;
 class WinApp;
 class SoundManager;
@@ -32,4 +32,6 @@ struct SceneContext {
 #ifndef IMGUI_DISABLED
     ImguiManager *imgui = nullptr;
 #endif // IMGUI_DISABLED
+
+    WarpPostEffectParamGPU *warpPostEffectParam = nullptr;
 };

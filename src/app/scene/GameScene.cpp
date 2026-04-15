@@ -6,6 +6,7 @@
 #include "SpriteManager.h"
 #include "TextureManager.h"
 #include "WinApp.h"
+#include "WarpPostEffectRenderer.h"
 #ifdef _DEBUG
 #include "DebugDraw.h"
 #endif // _DEBUG
@@ -81,6 +82,8 @@ void GameScene::Initialize(const SceneContext &ctx) {
     uint32_t enemyModel = model->Load(L"resources/model/enemy/enemy.glb");
     warpSmokeSpriteId_ =
         ctx_->sprite->Create(L"resources/texture/effect/warp_smoke.png");
+    warpSmokeDarkSpriteId_ =
+        ctx_->sprite->Create(L"resources/texture/effect/warp_smoke_dark.png");
 
     dx->EndUpload();
 
@@ -399,6 +402,90 @@ void GameScene::Update() {
 
             enemy_.ConsumeWave(i);
             break;
+        }
+    }
+
+    // =========================
+    // Warp Post Effect Param 更新
+    // =========================
+    if (ctx_ != nullptr && ctx_->warpPostEffectParam != nullptr) {
+        WarpPostEffectParamGPU *warpParam = ctx_->warpPostEffectParam;
+
+        // 毎フレーム時間は進める
+        warpParam->time += ctx_->deltaTime;
+
+        // デフォルトは無効
+        warpParam->center = {0.5f, 0.5f};
+        warpParam->radius = 0.0f;
+        warpParam->strength = 0.0f;
+        warpParam->center2 = {0.5f, 0.5f};
+        warpParam->radius2 = 0.0f;
+        warpParam->strength2 = 0.0f;
+        warpParam->enabled = 0.0f;
+
+        if (enemy_.GetActionKind() == ActionKind::Warp) {
+            const float width = static_cast<float>(ctx_->winApp->GetWidth());
+            const float height = static_cast<float>(ctx_->winApp->GetHeight());
+
+            bool hasAnyCenter = false;
+
+            // ワープ先
+            {
+                DirectX::XMFLOAT2 targetScreen{};
+                if (ProjectWorldToScreen(enemy_.GetWarpTargetPos(),
+                                         targetScreen)) {
+                    warpParam->center = {targetScreen.x / width,
+                                         targetScreen.y / height};
+                    hasAnyCenter = true;
+                }
+            }
+
+            // ワープ元
+            if (enemy_.HasWarpDeparturePos()) {
+                DirectX::XMFLOAT2 sourceScreen{};
+                if (ProjectWorldToScreen(enemy_.GetWarpDeparturePos(),
+                                         sourceScreen)) {
+                    warpParam->center2 = {sourceScreen.x / width,
+                                          sourceScreen.y / height};
+                }
+            }
+
+            if (hasAnyCenter) {
+                warpParam->enabled = 1.0f;
+
+                                switch (enemy_.GetActionStep()) {
+                case ActionStep::Start:
+                    // 消える前は局所的に弱く
+                    warpParam->radius = 0.045f;
+                    warpParam->strength = 0.006f;
+
+                    warpParam->radius2 = 0.070f;
+                    warpParam->strength2 = 0.010f;
+                    break;
+
+                case ActionStep::Move:
+                    // 移動中は画面歪みを主役にしない
+                    warpParam->radius = 0.030f;
+                    warpParam->strength = 0.002f;
+
+                    warpParam->radius2 = 0.045f;
+                    warpParam->strength2 = 0.004f;
+                    break;
+
+                case ActionStep::End:
+                    // 到着時だけ少し強く
+                    warpParam->radius = 0.090f;
+                    warpParam->strength = 0.016f;
+
+                    warpParam->radius2 = 0.020f;
+                    warpParam->strength2 = 0.002f;
+                    break;
+
+                default:
+                    warpParam->enabled = 0.0f;
+                    break;
+                }
+            }
         }
     }
 }
@@ -953,13 +1040,16 @@ void GameScene::DrawWarpSmokePass() {
 
     SpriteManager *spriteMgr = ctx_->sprite;
     Sprite &smoke = spriteMgr->GetSprite(warpSmokeSpriteId_);
+    Sprite &darkSmoke = spriteMgr->GetSprite(warpSmokeDarkSpriteId_);
     float time = enemy_.GetCurrentActionTimePublic();
 
     auto drawSmokeCluster = [&](const XMFLOAT2 &center, float sizeScale,
                                 float alphaScale, float travelBiasX,
                                 float travelBiasY, bool stretch,
                                 const XMFLOAT4 &baseColor, int layers,
-                                float radialSpreadScale) {
+                                float radialSpreadScale,
+                                SpriteBlendMode blendMode,
+                                bool useDarkTexture = false) {
         for (int i = 0; i < layers; ++i) {
             float ratio = (layers > 1)
                               ? static_cast<float>(i) /
@@ -986,27 +1076,196 @@ void GameScene::DrawWarpSmokePass() {
                 sizeX *= 0.82f;
             }
 
-            smoke.size = {sizeX, sizeY};
-            smoke.position = {center.x + driftX - sizeX * 0.5f,
-                              center.y + driftY - sizeY * 0.5f};
-            float alpha = warpSmokeAlpha_ * alphaScale * (1.0f - ratio * 0.16f);
-            smoke.color = {baseColor.x, baseColor.y, baseColor.z,
-                           baseColor.w * alpha};
+            Sprite &targetSprite =
+                (useDarkTexture || blendMode == SpriteBlendMode::Modulate)
+                    ? darkSmoke
+                    : smoke;
+            const uint32_t targetSpriteId =
+                (useDarkTexture || blendMode == SpriteBlendMode::Modulate)
+                    ? warpSmokeDarkSpriteId_
+                    : warpSmokeSpriteId_;
+
+            targetSprite.size = {sizeX, sizeY};
+            targetSprite.position = {center.x + driftX - sizeX * 0.5f,
+                                     center.y + driftY - sizeY * 0.5f};
+            targetSprite.blendMode = blendMode;
+            float alpha = 0.0f;
+            if (blendMode == SpriteBlendMode::Modulate) {
+                alpha = alphaScale * (1.0f - ratio * 0.08f) * baseColor.w;
+                alpha *= 1.55f;
+                if (alpha > 1.0f) {
+                    alpha = 1.0f;
+                }
+            } else {
+                alpha = warpSmokeAlpha_ * alphaScale * (1.0f - ratio * 0.16f) *
+                        baseColor.w;
+            }
+            targetSprite.color = {baseColor.x, baseColor.y, baseColor.z, alpha};
+            spriteMgr->Draw(targetSpriteId);
+        }
+    };
+
+    auto drawBurstBillboards = [&](const XMFLOAT2 &center, float intensity,
+                                   float verticalBias) {
+        constexpr int kBurstSprites = 16;
+        for (int i = 0; i < kBurstSprites; ++i) {
+            float ratio = static_cast<float>(i) /
+                          static_cast<float>(kBurstSprites - 1);
+            float angle = time * (3.2f + ratio * 1.1f) +
+                          ratio * DirectX::XM_2PI * 1.18f;
+            float spread =
+                warpArrivalBurstBillboardSpreadPx_ *
+                (0.18f + 0.64f * ratio) * (0.82f + intensity * 0.22f);
+            float driftX =
+                std::cosf(angle) * spread +
+                std::cosf(angle * 1.8f + 0.6f) * spread * 0.08f;
+            float driftY =
+                std::sinf(angle * 1.1f) * spread * 0.16f - verticalBias -
+                (0.32f + ratio * 0.30f) * spread;
+            float size =
+                warpArrivalBurstBillboardSizePx_ *
+                (0.46f + (1.0f - ratio) * 0.44f) *
+                (0.90f + 0.18f * std::sinf(time * 18.0f + ratio * 9.0f)) *
+                (0.84f + intensity * 0.18f);
+            float alpha =
+                warpArrivalBurstBillboardAlpha_ * intensity *
+                (0.92f - ratio * 0.46f) *
+                (0.84f + 0.10f * std::sinf(time * 14.0f + ratio * 11.0f));
+
+            smoke.size = {size, size};
+            smoke.position = {center.x + driftX - size * 0.5f,
+                              center.y + driftY - size * 0.5f};
+            smoke.blendMode = SpriteBlendMode::Alpha;
+
+            if ((i % 5) == 0) {
+                smoke.color = {1.0f, 0.76f, 0.82f, alpha * 0.52f};
+            } else if ((i % 3) == 0) {
+                smoke.color = {0.96f, 0.16f, 0.22f, alpha * 0.74f};
+            } else {
+                smoke.color = {0.82f, 0.03f, 0.08f, alpha * 0.88f};
+            }
             spriteMgr->Draw(warpSmokeSpriteId_);
+        }
+    };
+
+    auto drawArrivalDebugMarker = [&](const XMFLOAT2 &center) {
+        smoke.blendMode = SpriteBlendMode::Alpha;
+
+        smoke.size = {320.0f, 320.0f};
+        smoke.position = {center.x - smoke.size.x * 0.5f,
+                          center.y - smoke.size.y * 0.5f};
+        smoke.color = {0.10f, 1.00f, 0.25f, 0.38f};
+        spriteMgr->Draw(warpSmokeSpriteId_);
+
+        smoke.size = {168.0f, 168.0f};
+        smoke.position = {center.x - smoke.size.x * 0.5f,
+                          center.y - smoke.size.y * 0.5f};
+        smoke.color = {1.00f, 1.00f, 1.00f, 0.46f};
+        spriteMgr->Draw(warpSmokeSpriteId_);
+
+        smoke.size = {48.0f, 48.0f};
+        smoke.position = {center.x - smoke.size.x * 0.5f,
+                          center.y - smoke.size.y * 0.5f};
+        smoke.color = {1.00f, 0.10f, 0.10f, 0.92f};
+        spriteMgr->Draw(warpSmokeSpriteId_);
+    };
+
+    auto drawStepDebugMarker = [&](const XMFLOAT2 &center, ActionStep step) {
+        smoke.blendMode = SpriteBlendMode::Alpha;
+
+        XMFLOAT4 outerColor{};
+        XMFLOAT4 innerColor{};
+        XMFLOAT4 coreColor{};
+        switch (step) {
+        case ActionStep::Start:
+            outerColor = {0.10f, 0.90f, 1.00f, 0.28f};
+            innerColor = {0.82f, 1.00f, 1.00f, 0.42f};
+            coreColor = {0.10f, 0.90f, 1.00f, 0.95f};
+            break;
+        case ActionStep::Move:
+            outerColor = {1.00f, 0.85f, 0.10f, 0.28f};
+            innerColor = {1.00f, 1.00f, 0.82f, 0.42f};
+            coreColor = {1.00f, 0.85f, 0.10f, 0.95f};
+            break;
+        case ActionStep::End:
+            outerColor = {0.10f, 1.00f, 0.25f, 0.28f};
+            innerColor = {0.90f, 1.00f, 0.90f, 0.42f};
+            coreColor = {1.00f, 0.10f, 0.10f, 0.95f};
+            break;
+        default:
+            return;
+        }
+
+        smoke.size = {280.0f, 280.0f};
+        smoke.position = {center.x - smoke.size.x * 0.5f,
+                          center.y - smoke.size.y * 0.5f};
+        smoke.color = outerColor;
+        spriteMgr->Draw(warpSmokeSpriteId_);
+
+        smoke.size = {140.0f, 140.0f};
+        smoke.position = {center.x - smoke.size.x * 0.5f,
+                          center.y - smoke.size.y * 0.5f};
+        smoke.color = innerColor;
+        spriteMgr->Draw(warpSmokeSpriteId_);
+
+        smoke.size = {40.0f, 40.0f};
+        smoke.position = {center.x - smoke.size.x * 0.5f,
+                          center.y - smoke.size.y * 0.5f};
+        smoke.color = coreColor;
+        spriteMgr->Draw(warpSmokeSpriteId_);
+    };
+
+    auto drawArrivalSmokeMass = [&](const XMFLOAT2 &center, float intensity) {
+        struct SmokeBlob {
+            XMFLOAT2 offset;
+            XMFLOAT2 size;
+            float alpha;
+        };
+
+        constexpr SmokeBlob kBlobs[] = {
+            {{-58.0f, -22.0f}, {278.0f, 226.0f}, 0.64f},
+            {{64.0f, -26.0f}, {270.0f, 220.0f}, 0.62f},
+            {{-12.0f, -94.0f}, {232.0f, 188.0f}, 0.46f},
+            {{-116.0f, -72.0f}, {196.0f, 160.0f}, 0.34f},
+            {{118.0f, -80.0f}, {190.0f, 154.0f}, 0.32f},
+        };
+
+        const float sizeBoost = 1.02f + intensity * 0.32f;
+
+        for (const auto &blob : kBlobs) {
+            darkSmoke.blendMode = SpriteBlendMode::DarkSmoke;
+            darkSmoke.size = {blob.size.x * sizeBoost * 1.26f,
+                              blob.size.y * sizeBoost * 1.26f};
+            darkSmoke.position = {center.x + blob.offset.x - darkSmoke.size.x * 0.5f,
+                                  center.y + blob.offset.y - darkSmoke.size.y * 0.5f};
+            darkSmoke.color = {0.56f, 0.48f, 0.54f,
+                               blob.alpha * warpArrivalSmokeDarkAlpha_ *
+                                   (1.22f + intensity * 0.16f)};
+            spriteMgr->Draw(warpSmokeDarkSpriteId_);
+
+            darkSmoke.size = {darkSmoke.size.x * 0.84f, darkSmoke.size.y * 0.84f};
+            darkSmoke.position = {center.x + blob.offset.x - darkSmoke.size.x * 0.5f,
+                                  center.y + blob.offset.y - darkSmoke.size.y * 0.5f};
+            darkSmoke.color = {0.34f, 0.24f, 0.30f,
+                               blob.alpha * 0.72f * (1.02f + intensity * 0.10f)};
+            spriteMgr->Draw(warpSmokeDarkSpriteId_);
         }
     };
 
     spriteMgr->PreDraw();
 
     if (warpStep == ActionStep::Start && hasSource) {
-        drawSmokeCluster(
-            sourceScreenF, warpSourceSmokeBloomScale_, stepAlphaScale,
-            0.0f, -10.0f, false,
-            {0.03f, 0.00f, 0.02f, warpSourceSmokeDarkAlpha_}, 6, 1.55f);
-        drawSmokeCluster(
-            sourceScreenF, warpSourceSmokeBloomScale_ * 0.78f,
-            stepAlphaScale * 1.08f, 0.0f, -16.0f, false,
-            {0.68f, 0.05f, 0.10f, warpSourceSmokeRedAlpha_}, 5, 1.15f);
+        // 黒煙を主役にする
+        drawSmokeCluster(sourceScreenF, warpSourceSmokeBloomScale_ * 1.08f,
+                         stepAlphaScale * 1.05f, 0.0f, -8.0f, false,
+                         {0.01f, 0.00f, 0.01f, 0.95f}, 7, 1.45f,
+                         SpriteBlendMode::Modulate);
+
+        // 赤粒っぽいアクセント
+        drawSmokeCluster(sourceScreenF, warpSourceSmokeBloomScale_ * 0.42f,
+                         stepAlphaScale * 0.90f, 0.0f, -12.0f, false,
+                         {0.85f, 0.08f, 0.12f, 0.42f}, 3, 0.65f,
+                         SpriteBlendMode::Alpha);
     }
 
     if (warpStep == ActionStep::Move && hasSource) {
@@ -1023,25 +1282,53 @@ void GameScene::DrawWarpSmokePass() {
             dirY = -1.0f;
         }
 
-        drawSmokeCluster(mid, 0.90f, stepAlphaScale * warpMoveSmokeAlphaScale_,
-                         dirX * 18.0f, dirY * 10.0f, true,
-                         {0.12f, 0.01f, 0.05f, 0.72f}, 4, 1.0f);
-        drawSmokeCluster(
-            sourceScreenF, warpSourceSmokeBloomScale_ * 1.08f,
-            stepAlphaScale * 0.92f, -dirX * 6.0f,
-            -18.0f + dirY * warpSourceSmokeDriftPx_ * 0.18f, false,
-            {0.02f, 0.00f, 0.01f, warpSourceSmokeDarkAlpha_}, 7, 1.82f);
-        drawSmokeCluster(
-            sourceScreenF, warpSourceSmokeBloomScale_ * 0.82f,
-            stepAlphaScale * 0.88f, dirX * 8.0f,
-            -10.0f + dirY * warpSourceSmokeDriftPx_ * 0.10f, false,
-            {0.72f, 0.05f, 0.12f, warpSourceSmokeRedAlpha_}, 5, 1.22f);
+               // Move 中は中央の長い煙を弱める
+        drawSmokeCluster(mid, 0.52f, stepAlphaScale * 0.40f, dirX * 6.0f,
+                         dirY * 4.0f, true, {0.03f, 0.00f, 0.02f, 0.28f}, 2,
+                         0.60f, SpriteBlendMode::Modulate);
+
+        // departure 側に黒い残り香
+        drawSmokeCluster(sourceScreenF, warpSourceSmokeBloomScale_ * 1.15f,
+                         stepAlphaScale * 0.95f, -dirX * 4.0f,
+                         -10.0f + dirY * 4.0f, false,
+                         {0.01f, 0.00f, 0.01f, 0.92f}, 7, 1.55f,
+                         SpriteBlendMode::Modulate);
+
+        // 赤粒は少量だけ
+        drawSmokeCluster(sourceScreenF, warpSourceSmokeBloomScale_ * 0.36f,
+                         stepAlphaScale * 0.78f, dirX * 4.0f, -6.0f, false,
+                         {0.90f, 0.10f, 0.14f, 0.34f}, 2, 0.55f,
+                         SpriteBlendMode::Alpha);
     }
 
     if (hasTarget) {
-        drawSmokeCluster(targetScreenF, warpArrivalSmokeScale_,
-                         stepAlphaScale * warpArrivalSmokeAlphaScale_, 0.0f,
-                         -14.0f, false, {0.34f, 0.04f, 0.09f, 0.62f}, 3, 0.72f);
+        // arrival 側は黒煙をもう一段濃く・広くする
+        
+
+        // 中央寄りにさらに暗い芯を足す
+        
+
+        // 赤粒は少しだけ小さく・密度低めにして黒煙の中に浮かせる
+        
+
+        float burstIntensity = stepAlphaScale *
+                               (warpStep == ActionStep::Move ? 1.08f : 0.94f);
+        XMFLOAT2 arrivalCenter = targetScreenF;
+        drawStepDebugMarker(arrivalCenter, warpStep);
+        if (warpStep == ActionStep::End) {
+            arrivalCenter.x += 10.0f;
+            arrivalCenter.y -= 18.0f;
+            drawArrivalDebugMarker(arrivalCenter);
+        } else {
+            arrivalCenter.x += 34.0f;
+            arrivalCenter.y -= 52.0f;
+            drawArrivalSmokeMass(arrivalCenter, stepAlphaScale * 1.28f);
+            drawBurstBillboards(arrivalCenter, burstIntensity * 0.14f, 38.0f);
+            drawSmokeCluster(arrivalCenter, warpArrivalSmokeScale_ * 0.18f,
+                             stepAlphaScale * 0.03f, 0.0f, -24.0f, false,
+                             {0.88f, 0.05f, 0.10f, 0.02f}, 2, 0.20f,
+                             SpriteBlendMode::Alpha);
+        }
     }
 
     spriteMgr->PostDraw();
@@ -1150,7 +1437,7 @@ void GameScene::DrawWarpDistortionPass() {
         ImVec2 mid((sourceScreen.x + targetScreen.x) * 0.5f,
                    (sourceScreen.y + targetScreen.y) * 0.5f);
         drawDistortionAt(mid, 0.72f, 0.6f);
-        drawList->AddLine(sourceScreen, targetScreen, soft, 2.0f);
+        drawList->AddLine(sourceScreen, targetScreen, soft, 0.8f);
     }
 
     if (hasTarget) {
@@ -1178,7 +1465,8 @@ void GameScene::DrawWarpDistortionPass() {
 
     float perpX = -dirY;
     float perpY = dirX;
-    float slashLen = baseRadius * (warpStep == ActionStep::Move ? 1.72f : 1.38f);
+    float slashLen =
+        baseRadius * (warpStep == ActionStep::Move ? 0.92f : 1.10f);
     float branchLen = slashLen * 0.76f;
     float branchOffset = baseRadius * 0.28f;
 
