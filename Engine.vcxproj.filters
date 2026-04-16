@@ -18,6 +18,9 @@
     <Filter Include="shaders\model">
       <UniqueIdentifier>{d1e2f888-21f4-448d-a52c-00081f843af2}</UniqueIdentifier>
     </Filter>
+    <Filter Include="shaders\postprocess">
+      <UniqueIdentifier>{2ff985f2-e9d0-4ab1-b9aa-9946dfd639de}</UniqueIdentifier>
+    </Filter>
     <Filter Include="include\engine">
       <UniqueIdentifier>{388d3241-1174-4a44-a817-7a1649db88f7}</UniqueIdentifier>
     </Filter>
@@ -257,6 +260,9 @@
     <ClCompile Include="src\engine\graphics\ShaderCompiler.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\engine\graphics\VignetteRenderer.cpp">
+      <Filter>src\engine\graphics</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\engine\core\WinApp.h">
@@ -415,6 +421,9 @@
     <ClInclude Include="include\app\player\PlayerTuningPresetIO.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="include\engine\graphics\VignetteRenderer.h">
+      <Filter>include\engine\graphics</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="resources\shaders\sprite\SpritePS.hlsl">
@@ -428,6 +437,12 @@
     </FxCompile>
     <FxCompile Include="resources\shaders\model\ModelVS.hlsl">
       <Filter>shaders\model</Filter>
+    </FxCompile>
+    <FxCompile Include="resources\shaders\postprocess\VignettePS.hlsl">
+      <Filter>shaders\postprocess</Filter>
+    </FxCompile>
+    <FxCompile Include="resources\shaders\postprocess\VignetteVS.hlsl">
+      <Filter>shaders\postprocess</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>

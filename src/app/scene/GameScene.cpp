@@ -7,12 +7,14 @@
 #include "SpriteManager.h"
 #include "TextureManager.h"
 #include "WinApp.h"
-#include "imgui.h"
 #include <string>
 #ifdef _DEBUG
 #include "DebugDraw.h"
 #endif // _DEBUG
+#ifndef IMGUI_DISABLED
+#include "imgui.h"
 #include "imgui_internal.h"
+#endif
 #include <cmath>
 #include "EnemyTuningPresetIO.h"
 
@@ -275,6 +277,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
     counterCinematicActive_ = false;
     enemyAnimationFrozen_ = false;
     counterVignetteAlpha_ = 0.0f;
+    counterVignetteRenderer_.Initialize(ctx_->dxCommon);
 }
 
 void GameScene::Update() {
@@ -291,6 +294,9 @@ void GameScene::Update() {
 #else
     const bool freezeEnemyMotion = false;
 #endif
+    if (input->IsKeyTrigger(DIK_F1)) {
+        dbgTriggerCounterRequested_ = true;
+    }
 
     UpdateCamera(input);
 
@@ -369,13 +375,11 @@ void GameScene::Update() {
         startCounterCinematicThisFrame = true;
     };
 
-#ifdef _DEBUG
     if (dbgTriggerCounterRequested_) {
         dbgTriggerCounterRequested_ = false;
         triggerSuccessfulCounter(
             (std::max)(enemy_.GetCurrentAttackDamage(), 1.0f), 0.2f);
     }
-#endif
 
     // 敵ヒットクールダウンの更新
     if (enemyHitCooldown_ > 0.0f) {
@@ -729,50 +733,29 @@ void GameScene::SetEnemyAnimationFrozen(bool frozen) {
 }
 
 void GameScene::UpdateCounterVignette(float deltaTime) {
-    (void)deltaTime;
-    counterVignetteAlpha_ = counterCinematicActive_ ? 1.0f : 0.0f;
+    const float targetAlpha = counterCinematicActive_ ? 1.0f : 0.0f;
+    float step = counterVignetteFadeSpeed_ * deltaTime;
+    if (step > 1.0f) {
+        step = 1.0f;
+    }
+    counterVignetteAlpha_ += (targetAlpha - counterVignetteAlpha_) * step;
+    counterVignetteAlpha_ =
+        std::clamp(counterVignetteAlpha_, 0.0f, 1.0f);
 }
 
-void GameScene::DrawCounterVignette() const {
+void GameScene::DrawCounterVignette() {
     if (counterVignetteAlpha_ <= 0.001f || ctx_ == nullptr ||
-        ctx_->winApp == nullptr) {
+        ctx_->dxCommon == nullptr) {
         return;
     }
 
-    ImGuiViewport *mainViewport = ImGui::GetMainViewport();
-    if (mainViewport == nullptr) {
-        return;
-    }
-
-    ImDrawList *drawList = ImGui::GetForegroundDrawList(mainViewport);
-    if (drawList == nullptr) {
-        return;
-    }
-
-    const ImVec2 viewportPos = mainViewport->Pos;
-    const ImVec2 viewportSize = mainViewport->Size;
-    const float width = viewportSize.x;
-    const float height = viewportSize.y;
-    const float left = viewportPos.x;
-    const float top = viewportPos.y;
-    const float right = left + width;
-    const float bottom = top + height;
-    const float edgeX = width * 0.28f;
-    const float edgeY = height * 0.25f;
-    const int edgeAlpha =
-        static_cast<int>(170.0f * std::clamp(counterVignetteAlpha_, 0.0f, 1.0f));
-
-    const ImU32 edge = IM_COL32(15, 0, 0, edgeAlpha);
-    const ImU32 fade = IM_COL32(15, 0, 0, 0);
-
-    drawList->AddRectFilledMultiColor({left, top}, {right, top + edgeY}, edge,
-                                      edge, fade, fade);
-    drawList->AddRectFilledMultiColor({left, bottom - edgeY}, {right, bottom},
-                                      fade, fade, edge, edge);
-    drawList->AddRectFilledMultiColor({left, top}, {left + edgeX, bottom}, edge,
-                                      fade, fade, edge);
-    drawList->AddRectFilledMultiColor({right - edgeX, top}, {right, bottom},
-                                      fade, edge, edge, fade);
+    VignetteParams params{};
+    params.color = {0.06f, 0.0f, 0.0f};
+    params.intensity = counterVignetteAlpha_ * 0.78f;
+    params.innerRadius = 0.34f;
+    params.power = 1.9f;
+    params.roundness = 1.25f;
+    counterVignetteRenderer_.Draw(params);
 }
 
 void GameScene::SyncEnemyAnimation() {
@@ -1656,6 +1639,9 @@ void GameScene::DrawWarpSmokePass() {
 }
 
 void GameScene::DrawWarpDistortionPass() {
+#ifdef IMGUI_DISABLED
+    return;
+#else
     if (enemy_.GetActionKind() != ActionKind::Warp) {
         return;
     }
@@ -1818,6 +1804,7 @@ void GameScene::DrawWarpDistortionPass() {
         drawList->AddLine(slashE, slashF, soft,
                           warpDistortionThicknessPx_ * 0.42f);
     }
+#endif
 }
 
 // void GameScene::UpdateCamera(Input *input) {

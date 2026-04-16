@@ -5,6 +5,7 @@
 #include "Enemy.h"
 #include "Player.h"
 #include "Transform.h"
+#include "VignetteRenderer.h"
 #include <DirectXMath.h>
 #include <cstdint>
 #include <string>
@@ -27,7 +28,7 @@ class GameScene : public BaseScene {
     void SetEnemyAnimationFrozen(bool frozen);
     float ComputeGameplayTimeScale() const;
     void UpdateCounterVignette(float deltaTime);
-    void DrawCounterVignette() const;
+    void DrawCounterVignette();
     bool ProjectWorldToScreen(const DirectX::XMFLOAT3 &worldPos,
                               DirectX::XMFLOAT2 &outScreen) const;
     void DrawWarpSmokePass();
@@ -67,9 +68,9 @@ class GameScene : public BaseScene {
     bool dbgBulletHitPlayer_ = false;
     bool dbgWaveHitPlayer_ = false;
     bool dbgPlayerGuardedHit_ = false;
+    bool dbgTriggerCounterRequested_ = false;
 #ifdef _DEBUG
     bool dbgFreezeEnemyMotion_ = false;
-    bool dbgTriggerCounterRequested_ = false;
 #endif
     Bullet bullet_;
     uint32_t warpSmokeSpriteId_ = 0;
@@ -165,4 +166,5 @@ class GameScene : public BaseScene {
     float counterTimeScale_ = 0.05f;
     float counterVignetteAlpha_ = 0.0f;
     float counterVignetteFadeSpeed_ = 4.5f;
+    VignetteRenderer counterVignetteRenderer_;
 };
