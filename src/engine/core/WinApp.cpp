@@ -47,8 +47,8 @@ void WinApp::Initialize(HINSTANCE hInstance, int nCmdShow, int width,
         throw std::runtime_error("AdjustWindowRectEx failed");
     }
     hwnd_ = CreateWindowEx(
-        windowExStyle, kClassName, title.c_str(), windowStyle, CW_USEDEFAULT,
-        CW_USEDEFAULT, windowRect.right - windowRect.left,
+        windowExStyle, kClassName, title.c_str(), windowStyle, 100,
+        50, windowRect.right - windowRect.left,
         windowRect.bottom - windowRect.top, nullptr, nullptr, hInstance,
         nullptr);
 
