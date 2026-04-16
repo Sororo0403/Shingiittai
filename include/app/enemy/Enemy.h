@@ -203,6 +203,8 @@ class Enemy {
     void NotifyAttackConnected();
     void NotifyAttackGuarded();
     bool NotifyCountered();
+    void SkipIntro();
+    void RestartIntro();
 
     const Transform &GetTransform() const { return tf_; }
     bool IsAlive() const { return !deathFinished_; }

@@ -29,6 +29,7 @@ class GameScene : public BaseScene {
     float ComputeGameplayTimeScale() const;
     void UpdateCounterVignette(float deltaTime);
     void DrawCounterVignette();
+    void DrawDemoPlayIndicator();
     bool ProjectWorldToScreen(const DirectX::XMFLOAT3 &worldPos,
                               DirectX::XMFLOAT2 &outScreen) const;
     void DrawWarpSmokePass();
@@ -162,9 +163,15 @@ class GameScene : public BaseScene {
     float sceneLightTime_ = 0.0f;
 
     bool counterCinematicActive_ = false;
+    bool hasGameStarted_ = false;
+    bool demoIntroSkipped_ = false;
     bool enemyAnimationFrozen_ = false;
     float counterTimeScale_ = 0.05f;
     float counterVignetteAlpha_ = 0.0f;
-    float counterVignetteFadeSpeed_ = 4.5f;
+    float counterVignetteFadeSpeed_ = 8.0f;
+    float demoPlayEffectTime_ = 0.0f;
+    float counterCameraShakeX_ = 0.035f;
+    float counterCameraShakeY_ = 0.020f;
+    float counterCameraShakeFrequency_ = 18.0f;
     VignetteRenderer counterVignetteRenderer_;
 };

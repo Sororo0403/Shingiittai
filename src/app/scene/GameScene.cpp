@@ -275,8 +275,11 @@ void GameScene::Initialize(const SceneContext &ctx) {
     SyncEnemyAnimation();
     UpdateSceneLighting();
     counterCinematicActive_ = false;
+    hasGameStarted_ = false;
+    demoIntroSkipped_ = false;
     enemyAnimationFrozen_ = false;
     counterVignetteAlpha_ = 0.0f;
+    demoPlayEffectTime_ = 0.0f;
     counterVignetteRenderer_.Initialize(ctx_->dxCommon);
 }
 
@@ -294,11 +297,100 @@ void GameScene::Update() {
 #else
     const bool freezeEnemyMotion = false;
 #endif
-    if (input->IsKeyTrigger(DIK_F1)) {
+
+    if (input != nullptr && input->IsKeyTrigger(DIK_F1)) {
         dbgTriggerCounterRequested_ = true;
     }
 
     UpdateCamera(input);
+
+    if (!hasGameStarted_) {
+        demoPlayEffectTime_ += baseDeltaTime;
+        if (!demoIntroSkipped_) {
+            enemy_.SkipIntro();
+            demoIntroSkipped_ = true;
+            SyncEnemyAnimation();
+        }
+
+        if (input != nullptr && input->IsKeyTrigger(DIK_SPACE)) {
+            hasGameStarted_ = true;
+            enemy_.RestartIntro();
+            counterCinematicActive_ = false;
+            SetEnemyAnimationFrozen(false);
+            enemyAnimationName_.clear();
+            enemyAnimationLoop_ = true;
+            enemyIntroAnimationStarted_ = false;
+            enemyIntroPhase_ = IntroPhase::SecondSlash;
+            SyncEnemyAnimation();
+            return;
+        } else {
+            sceneLightTime_ += baseDeltaTime;
+            UpdateSceneLighting();
+
+            ctx_->model->UpdateAnimation(playerModelId_, baseDeltaTime);
+
+            PlayerCombatObservation playerObs{};
+            playerObs.position = player_.GetTransform().position;
+            playerObs.velocity = player_.GetVelocity();
+            playerObs.isGuarding = false;
+            playerObs.isCounterStance = false;
+            playerObs.justCountered = false;
+            playerObs.justCounterFailed = false;
+            playerObs.justCounterEarly = false;
+            playerObs.justCounterLate = false;
+            playerObs.isAttacking = false;
+            playerObs.counterAxis = CounterAxis::None;
+
+            if (!freezeEnemyMotion) {
+                enemy_.Update(playerObs, gameplayDeltaTime);
+            }
+
+            SyncEnemyAnimation();
+            SetEnemyAnimationFrozen(false);
+            if (!enemyAnimationFrozen_) {
+                ctx_->model->UpdateAnimation(enemyModelId_, gameplayDeltaTime);
+            }
+
+            UpdateBattleCamera();
+            counterCinematicActive_ = false;
+            UpdateCounterVignette(baseDeltaTime);
+            return;
+        }
+    }
+
+    if (enemy_.IsIntroActive()) {
+        sceneLightTime_ += baseDeltaTime;
+        UpdateSceneLighting();
+
+        ctx_->model->UpdateAnimation(playerModelId_, baseDeltaTime);
+
+        PlayerCombatObservation playerObs{};
+        playerObs.position = player_.GetTransform().position;
+        playerObs.velocity = player_.GetVelocity();
+        playerObs.isGuarding = false;
+        playerObs.isCounterStance = false;
+        playerObs.justCountered = false;
+        playerObs.justCounterFailed = false;
+        playerObs.justCounterEarly = false;
+        playerObs.justCounterLate = false;
+        playerObs.isAttacking = false;
+        playerObs.counterAxis = CounterAxis::None;
+
+        if (!freezeEnemyMotion) {
+            enemy_.Update(playerObs, gameplayDeltaTime);
+        }
+
+        SyncEnemyAnimation();
+        SetEnemyAnimationFrozen(false);
+        if (!enemyAnimationFrozen_) {
+            ctx_->model->UpdateAnimation(enemyModelId_, gameplayDeltaTime);
+        }
+
+        UpdateBattleCamera();
+        counterCinematicActive_ = false;
+        UpdateCounterVignette(baseDeltaTime);
+        return;
+    }
 
     ctx_->model->UpdateAnimation(playerModelId_, playerDeltaTime);
 #ifdef _DEBUG
@@ -758,6 +850,22 @@ void GameScene::DrawCounterVignette() {
     counterVignetteRenderer_.Draw(params);
 }
 
+void GameScene::DrawDemoPlayIndicator() {
+    if (hasGameStarted_ || ctx_ == nullptr || ctx_->dxCommon == nullptr) {
+        return;
+    }
+
+    const float pulse = 0.5f + 0.5f * std::sinf(demoPlayEffectTime_ * 2.6f);
+
+    VignetteParams params{};
+    params.color = {0.02f, 0.05f, 0.10f};
+    params.intensity = 0.28f + pulse * 0.24f;
+    params.innerRadius = 0.28f;
+    params.power = 1.7f;
+    params.roundness = 1.15f;
+    counterVignetteRenderer_.Draw(params);
+}
+
 void GameScene::SyncEnemyAnimation() {
     ModelManager *modelManager = ctx_->model;
     Model *enemyModel = modelManager->GetModel(enemyModelId_);
@@ -921,6 +1029,7 @@ void GameScene::Draw() {
 
     DrawWarpSmokePass();
     DrawWarpDistortionPass();
+    DrawDemoPlayIndicator();
     DrawCounterVignette();
 
 #ifdef _DEBUG

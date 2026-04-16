@@ -39,6 +39,21 @@ void Enemy::Initialize(uint32_t modelId, uint32_t projectileModelId) {
     ValidateAllTimings();
 }
 
+void Enemy::SkipIntro() {
+    introActive_ = false;
+    introTimer_ = 0.0f;
+    stateTimer_ = -0.10f;
+}
+
+void Enemy::RestartIntro() {
+    introActive_ = true;
+    introTimer_ = 0.0f;
+    stateTimer_ = 0.0f;
+    action_.kind = ActionKind::None;
+    action_.id = ActionId::None;
+    action_.step = ActionStep::None;
+}
+
 // ============================================================
 // 毎フレーム更新処理（旧互換）
 // ============================================================
