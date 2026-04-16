@@ -116,6 +116,8 @@ class Player {
     bool leftSwordVisible_ = false;
     bool rightSwordVisible_ = false;
     bool isGuarding_ = false;
+    float postSlashRecoveryTimer_ = 0.0f;
+    static constexpr float kPostSlashRecoveryDuration = 0.25f;
 
     float moveSpeed_ = 5.0f;
 

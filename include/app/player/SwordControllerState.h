@@ -65,7 +65,7 @@ struct SwordControllerState {
         return pose;
     }
 
-    static constexpr int kCounterFrames = 300;
+    static constexpr int kCounterFrames = 24;
     static constexpr float kSlashThreshold = 720.0f;
     static constexpr float kSlashTimeLimit = 1.0f;
 

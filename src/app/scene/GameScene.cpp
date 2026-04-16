@@ -523,7 +523,11 @@ void GameScene::Update() {
                 vx /= len;
                 vz /= len;
 
-                if (player_.IsGuarding()) {
+                if (player_.IsCounterStance()) {
+                    player_.NotifyCounterSuccess();
+                    enemy_.TakeDamage(enemy_.GetBulletDamage() * 2.0f);
+                    playerHitCooldown_ = 0.12f;
+                } else if (player_.IsGuarding()) {
                     dbgPlayerGuardedHit_ = true;
                     player_.AddKnockback(
                         {vx * (enemy_.GetBulletKnockback() * 0.5f), 0.0f,
@@ -571,7 +575,11 @@ void GameScene::Update() {
                 vx /= len;
                 vz /= len;
 
-                if (player_.IsGuarding()) {
+                if (player_.IsCounterStance()) {
+                    player_.NotifyCounterSuccess();
+                    enemy_.TakeDamage(enemy_.GetWaveDamage() * 2.0f);
+                    playerHitCooldown_ = 0.12f;
+                } else if (player_.IsGuarding()) {
                     dbgPlayerGuardedHit_ = true;
                     player_.AddKnockback(
                         {vx * (enemy_.GetWaveKnockback() * 0.5f), 0.0f,

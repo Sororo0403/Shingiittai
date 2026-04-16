@@ -14,6 +14,7 @@ class Sword {
     void Initialize(uint32_t modelId);
     void Update(const Transform &transform, const SwordPose &pose,
                 float deltaTime);
+    void SetRecoveryReaction(float reaction);
 
     void Draw(ModelManager *modelManager, const Camera &camera);
 
@@ -65,4 +66,5 @@ class Sword {
     float counterLateThreshold_ = 0.45f;
 
     SwordCounterAxis counterAxis_ = SwordCounterAxis::None;
+    float recoveryReaction_ = 0.0f;
 };

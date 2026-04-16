@@ -22,6 +22,7 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
     rightSword_.Initialize(swordModelId);
     hp_ = maxHp_;
     velocity_ = {0.0f, 0.0f, 0.0f};
+    postSlashRecoveryTimer_ = 0.0f;
     leftSword_.Update(BuildSwordTransform(MakeIdleSwordPose(true), true),
                       MakeIdleSwordPose(true), 0.0f);
     rightSword_.Update(BuildSwordTransform(MakeIdleSwordPose(false), false),
@@ -67,9 +68,40 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
         rightPose = swordMouseController_.GetPose();
     }
 
+    if (postSlashRecoveryTimer_ > 0.0f) {
+        postSlashRecoveryTimer_ -= deltaTime;
+        if (postSlashRecoveryTimer_ < 0.0f) {
+            postSlashRecoveryTimer_ = 0.0f;
+        }
+    }
+
+    const bool isInPostSlashRecovery = postSlashRecoveryTimer_ > 0.0f;
+    if (isInPostSlashRecovery) {
+        leftPose.isSlashMode = false;
+        rightPose.isSlashMode = false;
+        leftPose.isGuard = false;
+        rightPose.isGuard = false;
+        leftPose.isCounter = false;
+        rightPose.isCounter = false;
+    }
+
+    const float recoveryRatio =
+        (kPostSlashRecoveryDuration > 0.0f)
+            ? std::clamp(postSlashRecoveryTimer_ / kPostSlashRecoveryDuration,
+                         0.0f, 1.0f)
+            : 0.0f;
+    leftSword_.SetRecoveryReaction(recoveryRatio);
+    rightSword_.SetRecoveryReaction(recoveryRatio);
+
     leftSword_.Update(BuildSwordTransform(leftPose, true), leftPose, deltaTime);
     rightSword_.Update(BuildSwordTransform(rightPose, false), rightPose,
                        deltaTime);
+
+    if (postSlashRecoveryTimer_ <= 0.0f && JustCounterFailed()) {
+        postSlashRecoveryTimer_ = kPostSlashRecoveryDuration;
+        leftSword_.SetRecoveryReaction(1.0f);
+        rightSword_.SetRecoveryReaction(1.0f);
+    }
 
     leftSwordSlashMode_ = leftPose.isSlashMode;
     rightSwordSlashMode_ = rightPose.isSlashMode;
@@ -82,12 +114,40 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
 }
 
 void Player::Draw(ModelManager *modelManager, const Camera &camera) {
-    modelManager->Draw(modelId_, tf_, camera);
+    const bool isInPostSlashRecovery = postSlashRecoveryTimer_ > 0.0f;
+    const float recoveryRatio =
+        (kPostSlashRecoveryDuration > 0.0f)
+            ? std::clamp(postSlashRecoveryTimer_ / kPostSlashRecoveryDuration,
+                         0.0f, 1.0f)
+            : 0.0f;
+
+    Transform playerVisual = tf_;
+    if (isInPostSlashRecovery) {
+        const float phase = (1.0f - recoveryRatio) * 64.0f;
+        const float shake = 0.035f * recoveryRatio;
+        playerVisual.position.x += std::sinf(phase) * shake;
+        playerVisual.position.z += std::cosf(phase * 1.37f) * shake;
+
+        ModelDrawEffect recoveryEffect{};
+        recoveryEffect.enabled = true;
+        recoveryEffect.color = {1.0f, 0.25f, 0.25f, 0.75f};
+        recoveryEffect.intensity = 0.55f + 0.60f * recoveryRatio;
+        recoveryEffect.fresnelPower = 3.4f;
+        recoveryEffect.noiseAmount = 0.35f * recoveryRatio;
+        recoveryEffect.time = phase;
+        modelManager->SetDrawEffect(recoveryEffect);
+    }
+
+    modelManager->Draw(modelId_, playerVisual, camera);
     if (leftSwordVisible_) {
         leftSword_.Draw(modelManager, camera);
     }
     if (rightSwordVisible_) {
         rightSword_.Draw(modelManager, camera);
+    }
+
+    if (isInPostSlashRecovery) {
+        modelManager->ClearDrawEffect();
     }
 
 #ifndef IMGUI_DISABLED
@@ -108,6 +168,7 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera) {
                 rightJoyCon_.IsCalibrating() ? "true" : "false");
     ImGui::Text("Right Still: %.2f", rightJoyCon_.GetStillTimer());
     ImGui::Text("Right CalTm: %.2f", rightJoyCon_.GetCalibrationTimer());
+    ImGui::Text("Recovery : %.2f", postSlashRecoveryTimer_);
     ImGui::End();
 #endif
 }

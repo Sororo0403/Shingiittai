@@ -23,6 +23,7 @@ class SwordMouseController {
   private:
     void UpdateOrientation(Input *input, float dt);
     void UpdateGuard(Input *input);
+    void UpdateCounterFromGuardMotion();
     void UpdateSlash(Input *input, float dt);
 
     SwordControllerState state_{};
@@ -30,6 +31,8 @@ class SwordMouseController {
     float mouseSpeed_ = 0.0f;
     float yaw_ = 0.0f;
     float pitch_ = 0.0f;
+    bool prevCounterMotionActive_ = false;
+    float counterSwingThreshold_ = 820.0f;
 
     DirectX::XMFLOAT2 mouseDelta_{};
 };

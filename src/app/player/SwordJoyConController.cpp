@@ -14,8 +14,14 @@ void SwordJoyConController::Update(JoyCon *joyCon, float dt,
                                    const Transform &swordPos) {
     UpdateOrientation(joyCon, dt);
     UpdateGuard(joyCon);
+    UpdateCounterFromGuardMotion();
     state_.UpdateCounter();
-    UpdateSlash(dt);
+    if (state_.isCounter) {
+        state_.isSlashMode = false;
+        state_.slashTimer = 0.0f;
+    } else {
+        UpdateSlash(dt);
+    }
     state_.UpdateSlashDir(swordPos);
 }
 
@@ -55,6 +61,25 @@ void SwordJoyConController::UpdateGuard(JoyCon *joyCon) {
 
     const int guardButton = joyCon->IsLeft() ? JSL_BUTTON_ZL : JSL_BUTTON_ZR;
     state_.isGuard = joyCon->IsButtonPress(guardButton);
+}
+
+void SwordJoyConController::UpdateCounterFromGuardMotion() {
+    const bool counterMotionActive =
+        state_.isGuard && angularVelocity_ >= counterSwingThreshold_;
+
+    if (counterMotionActive && !prevCounterMotionActive_) {
+        state_.isCounter = true;
+        state_.counterTimer = SwordControllerState::kCounterFrames;
+        state_.isSlashMode = false;
+        state_.slashTimer = 0.0f;
+    }
+
+    if (!state_.isGuard) {
+        prevCounterMotionActive_ = false;
+        return;
+    }
+
+    prevCounterMotionActive_ = counterMotionActive;
 }
 
 void SwordJoyConController::UpdateSlash(float dt) {

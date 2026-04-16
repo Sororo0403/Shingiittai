@@ -15,8 +15,14 @@ void SwordMouseController::Update(Input *input, float dt,
                                   const Transform &swordPos) {
     UpdateOrientation(input, dt);
     UpdateGuard(input);
+    UpdateCounterFromGuardMotion();
     state_.UpdateCounter();
-    UpdateSlash(input, dt);
+    if (state_.isCounter) {
+        state_.isSlashMode = false;
+        state_.slashTimer = 0.0f;
+    } else {
+        UpdateSlash(input, dt);
+    }
     state_.UpdateSlashDir(swordPos);
 }
 
@@ -48,6 +54,25 @@ void SwordMouseController::UpdateOrientation(Input *input, float dt) {
 
 void SwordMouseController::UpdateGuard(Input *input) {
     state_.isGuard = input->IsMousePress(1);
+}
+
+void SwordMouseController::UpdateCounterFromGuardMotion() {
+    const bool counterMotionActive =
+        state_.isGuard && mouseSpeed_ >= counterSwingThreshold_;
+
+    if (counterMotionActive && !prevCounterMotionActive_) {
+        state_.isCounter = true;
+        state_.counterTimer = SwordControllerState::kCounterFrames;
+        state_.isSlashMode = false;
+        state_.slashTimer = 0.0f;
+    }
+
+    if (!state_.isGuard) {
+        prevCounterMotionActive_ = false;
+        return;
+    }
+
+    prevCounterMotionActive_ = counterMotionActive;
 }
 
 void SwordMouseController::UpdateSlash(Input *input, float dt) {
