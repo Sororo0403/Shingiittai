@@ -22,6 +22,10 @@ void Enemy::UpdateIdle(float deltaTime) {
 
         ActionKind nextKind = recoveryFollowupKind_;
         ActionStep nextStep = recoveryFollowupStep_;
+        if (nextKind == ActionKind::Warp && IsWarpSuspendedForPresentation()) {
+            nextKind = ActionKind::Rush;
+            nextStep = ActionStep::Charge;
+        }
         bool startRushFromShotCombo =
             (nextKind == ActionKind::Rush && isMargitComboBTransition_);
 
@@ -487,6 +491,11 @@ void Enemy::BeginChaseAction() {
 }
 
 void Enemy::BeginResetAction() {
+    if (IsWarpSuspendedForPresentation()) {
+        BeginAction(ActionKind::Guard, ActionStep::Move);
+        return;
+    }
+
     if (forceEscapeWarpNext_) {
         ResetWarpContext();
         warp_.type = WarpType::Escape;

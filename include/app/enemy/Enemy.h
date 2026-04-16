@@ -679,6 +679,7 @@ class Enemy {
     float warpStartTime_ = 0.2f;
     float warpMoveTime_ = 0.10f;
     float warpEndTime_ = 0.2f;
+    bool suspendWarpForPresentation_ = true;
     float warpDepartureEchoOffset_ = 0.28f;
     float warpArrivalEchoOffset_ = 0.22f;
     float warpArrivalPreviewHeight_ = 0.10f;
@@ -861,6 +862,7 @@ class Enemy {
     void ResetWarpTrails();
 
     bool PrepareWarpContext();
+    bool IsWarpSuspendedForPresentation() const;
     bool DecideWarpTargetNearPlayer(DirectX::XMFLOAT3 &outTarget);
     bool DecideWarpTargetFarFromPlayer(DirectX::XMFLOAT3 &outTarget) const;
     void DecideWarpFollowupFromContext();

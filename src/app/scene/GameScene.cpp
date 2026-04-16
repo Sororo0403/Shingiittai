@@ -252,7 +252,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
     // 一人称カメラ初期向き
     cameraYaw_ = 0.0f;
     cameraPitch_ = 0.0f;
-    isLockOn_ = false;
+    isLockOn_ = true;
     rushChargeAssistStrength_ = 4.0f;
     rushChargeAssistMaxStep_ = 6.0f;
     rushActiveAssistStrength_ = 5.0f;
@@ -262,8 +262,17 @@ void GameScene::Initialize(const SceneContext &ctx) {
     targetFovDeg_ = normalFovDeg_;
 
     // 肩越し三人称カメラ初期向き
-    lockOnOrbitCameraPos_ = {0.0f, 0.0f, 0.0f};
-    lockOnLookAt_ = {0.0f, 0.0f, 0.0f};
+    const DirectX::XMFLOAT3 &playerPos = player_.GetTransform().position;
+    const DirectX::XMFLOAT3 &enemyPos = enemy_.GetTransform().position;
+    lockOnOrbitCameraPos_ = {playerPos.x, playerPos.y + lockOnOrbitHeight_,
+                             playerPos.z - lockOnOrbitRadius_};
+    lockOnLookAt_ = {
+        playerPos.x * lockOnLookPlayerWeight_ +
+            enemyPos.x * lockOnLookEnemyWeight_,
+        (playerPos.y + cameraLookHeight_) * 0.52f +
+            (enemyPos.y + 1.30f) * 0.48f,
+        playerPos.z * lockOnLookPlayerWeight_ +
+            enemyPos.z * lockOnLookEnemyWeight_};
     if (Model *playerModelData = model->GetModel(playerModelId_)) {
         if (!playerModelData->animations.empty()) {
             model->PlayAnimation(playerModelId_,

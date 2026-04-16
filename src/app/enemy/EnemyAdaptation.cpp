@@ -70,6 +70,7 @@ float Enemy::RandomRange(float minValue, float maxValue) const {
 void Enemy::DecideHoldBranch(ActionKind kind) {
     holdBranchType_ = HoldBranchType::Active;
     holdBranchDecided_ = true;
+    const bool warpSuspended = IsWarpSuspendedForPresentation();
 
     float warpChance = 0.0f;
     float guardChance = 0.0f;
@@ -87,19 +88,30 @@ void Enemy::DecideHoldBranch(ActionKind kind) {
         return;
     }
 
-    if (playerObs_.isCounterStance) {
+    if (warpSuspended) {
+        warpChance = 0.0f;
+    }
+
+    if (playerObs_.isCounterStance && !warpSuspended) {
         warpChance += 0.10f;
+    }
+    if (playerObs_.isCounterStance) {
         guardChance += 0.06f;
         rushChance += 0.08f;
     }
 
-    if (playerObs_.justCounterEarly || counterMemory_.earlyCount > 0.6f) {
+    if (!warpSuspended &&
+        (playerObs_.justCounterEarly || counterMemory_.earlyCount > 0.6f)) {
         warpChance += 0.08f;
+    }
+    if (playerObs_.justCounterEarly || counterMemory_.earlyCount > 0.6f) {
         guardChance += 0.05f;
     }
 
-    if (postCounterRhythmTimer_ > 0.0f) {
+    if (postCounterRhythmTimer_ > 0.0f && !warpSuspended) {
         warpChance += 0.10f;
+    }
+    if (postCounterRhythmTimer_ > 0.0f) {
         rushChance += 0.06f;
     }
 
@@ -287,6 +299,7 @@ bool Enemy::TryBranchFromRecovery(ActionKind finishedKind) {
         const bool canShotRush =
             (distance >= shotRushMinDistance_ && distance <= shotRushMaxDistance_);
         const bool canShotWarp =
+            !IsWarpSuspendedForPresentation() &&
             (distance >= shotWarpMinDistance_ && distance <= shotWarpMaxDistance_);
 
         if (canShotRush || canShotWarp) {
@@ -383,7 +396,8 @@ bool Enemy::TryBranchFromRecovery(ActionKind finishedKind) {
 
     float recommitChance = recommitChance_;
     float delayedSecondChance = delayedSecondChance_;
-    float fakeoutChance = escapeFakeoutChance_;
+    float fakeoutChance =
+        IsWarpSuspendedForPresentation() ? 0.0f : escapeFakeoutChance_;
 
     if (phase_ == BossPhase::Phase2) {
         recommitChance += phase2RecommitBonus_;

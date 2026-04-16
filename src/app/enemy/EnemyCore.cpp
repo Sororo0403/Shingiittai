@@ -247,6 +247,24 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         return;
     }
 
+    float hitFlash = 0.0f;
+    if (hitReactionDuration_ > 0.0001f) {
+        hitFlash = std::clamp(hitReactionTimer_ / hitReactionDuration_, 0.0f,
+                              1.0f);
+    }
+    const bool isHitFlashing = hitFlash > 0.0f;
+
+    ModelDrawEffect hitEffect{};
+    if (isHitFlashing) {
+        hitEffect.enabled = true;
+        hitEffect.additiveBlend = false;
+        hitEffect.color = {1.00f, 0.22f, 0.22f, 0.92f};
+        hitEffect.intensity = 0.75f + 0.85f * hitFlash;
+        hitEffect.fresnelPower = 2.6f;
+        hitEffect.noiseAmount = 0.10f;
+        hitEffect.time = stateTimer_;
+    }
+
     const uint32_t effectModelId =
         (projectileModelId_ != 0) ? projectileModelId_ : modelId_;
 
@@ -264,7 +282,15 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         warpEffect.noiseAmount = 0.88f;
         warpEffect.time = stateTimer_;
 
+        if (isHitFlashing) {
+            warpEffect.color = {1.00f, 0.18f, 0.28f, 0.92f};
+            warpEffect.intensity += 0.75f * hitFlash;
+            warpEffect.noiseAmount += 0.10f * hitFlash;
+        }
+
         modelManager->SetDrawEffect(warpEffect);
+    } else if (isHitFlashing) {
+        modelManager->SetDrawEffect(hitEffect);
     }
 
     auto drawEnemyVisual = [&](const Transform &visual) {
@@ -488,7 +514,7 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         }
     }
 
-    if (action_.kind == ActionKind::Warp) {
+    if (action_.kind == ActionKind::Warp || isHitFlashing) {
         modelManager->ClearDrawEffect();
     }
 

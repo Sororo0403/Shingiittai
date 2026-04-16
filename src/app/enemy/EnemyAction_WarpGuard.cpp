@@ -40,6 +40,10 @@ void Enemy::UpdateGuardByStep(float deltaTime) {
     }
 }
 
+bool Enemy::IsWarpSuspendedForPresentation() const {
+    return suspendWarpForPresentation_;
+}
+
 // ============================================================
 // ワープ処理
 // ============================================================
@@ -105,6 +109,11 @@ bool Enemy::DecideWarpTargetFarFromPlayer(DirectX::XMFLOAT3 &outTarget) const {
 }
 
 bool Enemy::PrepareWarpContext() {
+    if (IsWarpSuspendedForPresentation()) {
+        ResetWarpContext();
+        return false;
+    }
+
     ResetWarpContext();
 
     int approachWeight = warpApproachWeight_;
@@ -284,6 +293,11 @@ void Enemy::ResetPostActionState() {
 }
 
 void Enemy::BeginBackWarpPostAction() {
+    if (IsWarpSuspendedForPresentation()) {
+        ResetPostActionState();
+        return;
+    }
+
     ResetWarpContext();
 
     warp_.type = WarpType::Escape;
@@ -394,6 +408,10 @@ bool Enemy::DecideNextChainAction(ActionKind finishedKind, ActionKind &outKind,
 }
 
 bool Enemy::TryStartPostActionWarpChain(ActionKind finishedKind) {
+    if (IsWarpSuspendedForPresentation()) {
+        return false;
+    }
+
     float distance = GetDistanceToPlayer();
 
     if (finishedKind == ActionKind::Sweep) {
@@ -446,6 +464,10 @@ bool Enemy::TryStartPostActionWarpChain(ActionKind finishedKind) {
 }
 
 bool Enemy::TryStartBackWarpPostAction(ActionKind finishedKind) {
+    if (IsWarpSuspendedForPresentation()) {
+        return false;
+    }
+
     float chance = 0.0f;
 
     switch (finishedKind) {

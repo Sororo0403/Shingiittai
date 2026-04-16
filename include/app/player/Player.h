@@ -91,6 +91,7 @@ class Player {
     Transform BuildSwordTransform(const SwordPose &pose, bool isLeft) const;
     SwordPose MakeIdleSwordPose(bool isLeft) const;
     void UpdateMovement(Input *input, float deltaTime, float cameraYaw);
+    void KeepDistanceFromTarget(const DirectX::XMFLOAT3 &target);
     void LookAt(const DirectX::XMFLOAT3 &target);
 
   private:
@@ -120,6 +121,7 @@ class Player {
     static constexpr float kPostSlashRecoveryDuration = 0.25f;
 
     float moveSpeed_ = 5.0f;
+    float minTargetDistance_ = 2.7f;
 
     float maxHp_ = 100.0f;
     float hp_ = 100.0f;

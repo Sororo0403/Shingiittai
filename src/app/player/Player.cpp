@@ -8,6 +8,10 @@
 
 using namespace DirectX;
 
+namespace {
+constexpr float kPlayerVisualScaleMultiplier = 3.0f;
+}
+
 void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
     modelId_ = playerModelId;
 
@@ -45,6 +49,7 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     rightJoyCon_.Update(deltaTime);
 
     UpdateMovement(input, deltaTime, cameraYaw);
+    KeepDistanceFromTarget(lookTarget);
     LookAt(lookTarget);
 
     const bool hasLeftJoyCon = leftJoyCon_.IsConnected();
@@ -122,6 +127,9 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera) {
             : 0.0f;
 
     Transform playerVisual = tf_;
+    playerVisual.scale.x *= kPlayerVisualScaleMultiplier;
+    playerVisual.scale.y *= kPlayerVisualScaleMultiplier;
+    playerVisual.scale.z *= kPlayerVisualScaleMultiplier;
     if (isInPostSlashRecovery) {
         const float phase = (1.0f - recoveryRatio) * 64.0f;
         const float shake = 0.035f * recoveryRatio;
@@ -192,6 +200,37 @@ void Player::LookAt(const XMFLOAT3 &target) {
 
     XMVECTOR q = XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), yaw_);
     XMStoreFloat4(&tf_.rotation, q);
+}
+
+void Player::KeepDistanceFromTarget(const DirectX::XMFLOAT3 &target) {
+    float dx = tf_.position.x - target.x;
+    float dz = tf_.position.z - target.z;
+    float distSq = dx * dx + dz * dz;
+    float minDistSq = minTargetDistance_ * minTargetDistance_;
+
+    if (distSq >= minDistSq) {
+        return;
+    }
+
+    float dist = std::sqrtf(distSq);
+    if (dist < 0.0001f) {
+        float fallbackYaw = yaw_ + 3.14159265f;
+        dx = std::sinf(fallbackYaw);
+        dz = std::cosf(fallbackYaw);
+        dist = 1.0f;
+    }
+
+    float invDist = 1.0f / dist;
+    float nx = dx * invDist;
+    float nz = dz * invDist;
+
+    tf_.position.x = target.x + nx * minTargetDistance_;
+    tf_.position.z = target.z + nz * minTargetDistance_;
+
+    velocity_.x = 0.0f;
+    velocity_.z = 0.0f;
+    knockbackVelocity_.x = 0.0f;
+    knockbackVelocity_.z = 0.0f;
 }
 
 void Player::UpdateMovement(Input *input, float deltaTime, float cameraYaw) {

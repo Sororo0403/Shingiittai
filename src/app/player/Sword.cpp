@@ -7,6 +7,10 @@
 
 using namespace DirectX;
 
+namespace {
+constexpr float kSwordVisualScaleMultiplier = 3.0f;
+}
+
 void Sword::Initialize(uint32_t modelId) {
     modelId_ = modelId;
 
@@ -44,19 +48,30 @@ void Sword::SetRecoveryReaction(float reaction) {
 OBB Sword::GetOBB() const {
     OBB box;
 
+    float hitBoxDepth = size_.z;
+    float forwardOffset = kSwordLength * 0.5f;
+    if (isSlashMode_) {
+        hitBoxDepth += kSlashHitDepthExtension;
+        forwardOffset += kSlashHitDepthExtension * 0.5f;
+    }
+
     XMVECTOR pos = XMLoadFloat3(&tf_.position);
     XMVECTOR rot = XMLoadFloat4(&tf_.rotation);
     XMVECTOR forward = XMVector3Rotate(XMVectorSet(0, 0, 1, 0), rot);
-    XMVECTOR center = pos + forward * (kSwordLength * 0.5f);
+    XMVECTOR center = pos + forward * forwardOffset;
 
     XMStoreFloat3(&box.center, center);
     box.size = size_;
+    box.size.z = hitBoxDepth;
     box.rotation = tf_.rotation;
     return box;
 }
 
 void Sword::Draw(ModelManager *modelManager, const Camera &camera) {
     Transform drawTransform = tf_;
+    drawTransform.scale.x *= kSwordVisualScaleMultiplier;
+    drawTransform.scale.y *= kSwordVisualScaleMultiplier;
+    drawTransform.scale.z *= kSwordVisualScaleMultiplier;
     if (recoveryReaction_ > 0.0f) {
         const float phase = (1.0f - recoveryReaction_) * 36.0f;
         const float pulse = std::sinf(phase);
