@@ -40,13 +40,28 @@ void WinApp::Initialize(HINSTANCE hInstance, int nCmdShow, int width,
     }
 
     // ウィンドウ生成
-    hwnd_ = CreateWindowEx(0, kClassName, title.c_str(), WS_OVERLAPPEDWINDOW,
-                           CW_USEDEFAULT, CW_USEDEFAULT, width, height, nullptr,
-                           nullptr, hInstance, nullptr);
+    DWORD windowStyle = WS_OVERLAPPEDWINDOW;
+    DWORD windowExStyle = 0;
+    RECT windowRect{0, 0, width, height};
+    if (!AdjustWindowRectEx(&windowRect, windowStyle, FALSE, windowExStyle)) {
+        throw std::runtime_error("AdjustWindowRectEx failed");
+    }
+    hwnd_ = CreateWindowEx(
+        windowExStyle, kClassName, title.c_str(), windowStyle, CW_USEDEFAULT,
+        CW_USEDEFAULT, windowRect.right - windowRect.left,
+        windowRect.bottom - windowRect.top, nullptr, nullptr, hInstance,
+        nullptr);
 
     if (!hwnd_) {
         throw std::runtime_error("CreateWindowEx failed");
     }
+
+    RECT clientRect{};
+    if (!GetClientRect(hwnd_, &clientRect)) {
+        throw std::runtime_error("GetClientRect failed");
+    }
+    width_ = clientRect.right - clientRect.left;
+    height_ = clientRect.bottom - clientRect.top;
 
     ShowWindow(hwnd_, nCmdShow);
 }

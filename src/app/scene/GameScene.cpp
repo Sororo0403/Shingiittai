@@ -142,6 +142,17 @@ static std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
                                            : model->currentAnimation;
 }
 
+static const char *GetCounterAxisName(SwordCounterAxis axis) {
+    switch (axis) {
+    case SwordCounterAxis::Vertical:
+        return "Vertical";
+    case SwordCounterAxis::Horizontal:
+        return "Horizontal";
+    default:
+        return "None";
+    }
+}
+
 static bool IsWithinCounterJustWindow(const Enemy &enemy) {
     const AttackTimingParam *timing = enemy.GetCurrentAttackTimingPublic();
     if (!timing) {
@@ -261,10 +272,20 @@ void GameScene::Initialize(const SceneContext &ctx) {
 
     SyncEnemyAnimation();
     UpdateSceneLighting();
+    counterCinematicActive_ = false;
+    enemyAnimationFrozen_ = false;
+    counterVignetteAlpha_ = 0.0f;
 }
 
 void GameScene::Update() {
     Input *input = ctx_->input;
+    const float baseDeltaTime = ctx_->deltaTime;
+    const float gameplayDeltaTime = baseDeltaTime * ComputeGameplayTimeScale();
+    const float playerDeltaTime =
+        counterCinematicActive_ ? baseDeltaTime : gameplayDeltaTime;
+    const float enemyDeltaTime =
+        counterCinematicActive_ ? (baseDeltaTime * counterTimeScale_)
+                               : gameplayDeltaTime;
 #ifdef _DEBUG
     const bool freezeEnemyMotion = dbgFreezeEnemyMotion_;
 #else
@@ -273,7 +294,7 @@ void GameScene::Update() {
 
     UpdateCamera(input);
 
-    ctx_->model->UpdateAnimation(playerModelId_, ctx_->deltaTime);
+    ctx_->model->UpdateAnimation(playerModelId_, playerDeltaTime);
 #ifdef _DEBUG
     if (currentCamera_ == &debugCamera_) {
         return;
@@ -282,9 +303,9 @@ void GameScene::Update() {
 
     // 当たり判定
     // 先にプレイヤーを更新して、その結果をEnemyへ渡す
-    player_.Update(input, ctx_->deltaTime, enemy_.GetTransform().position,
+    player_.Update(input, playerDeltaTime, enemy_.GetTransform().position,
                    cameraYaw_);
-    sceneLightTime_ += ctx_->deltaTime;
+    sceneLightTime_ += baseDeltaTime;
 
     const auto playerSlashStates = player_.GetSwordSlashStates();
 
@@ -314,12 +335,15 @@ void GameScene::Update() {
     }
 
     if (!freezeEnemyMotion) {
-        enemy_.Update(playerObs, ctx_->deltaTime);
+        enemy_.Update(playerObs, enemyDeltaTime);
     }
     UpdateSceneLighting();
 
     SyncEnemyAnimation();
-    ctx_->model->UpdateAnimation(enemyModelId_, ctx_->deltaTime);
+    SetEnemyAnimationFrozen(counterCinematicActive_);
+    if (!enemyAnimationFrozen_) {
+        ctx_->model->UpdateAnimation(enemyModelId_, enemyDeltaTime);
+    }
 
     UpdateBattleCamera();
 
@@ -332,10 +356,30 @@ void GameScene::Update() {
     //  // 敵の行動状態を取得してガード状態を判定
     const ActionKind enemyActionKind = enemy_.GetActionKind();
     const ActionStep enemyActionStep = enemy_.GetActionStep();
+    bool startCounterCinematicThisFrame = false;
+    bool stopCounterCinematicThisFrame = false;
+    bool forceSyncEnemyAnimationThisFrame = false;
+    auto triggerSuccessfulCounter = [&](float enemyDamage, float hitCooldown) {
+        player_.NotifyCounterSuccess();
+        if (enemy_.NotifyCountered()) {
+            forceSyncEnemyAnimationThisFrame = true;
+        }
+        enemy_.TakeDamage(enemyDamage);
+        playerHitCooldown_ = hitCooldown;
+        startCounterCinematicThisFrame = true;
+    };
+
+#ifdef _DEBUG
+    if (dbgTriggerCounterRequested_) {
+        dbgTriggerCounterRequested_ = false;
+        triggerSuccessfulCounter(
+            (std::max)(enemy_.GetCurrentAttackDamage(), 1.0f), 0.2f);
+    }
+#endif
 
     // 敵ヒットクールダウンの更新
     if (enemyHitCooldown_ > 0.0f) {
-        enemyHitCooldown_ -= ctx_->deltaTime;
+        enemyHitCooldown_ -= gameplayDeltaTime;
         if (enemyHitCooldown_ < 0.0f) {
             enemyHitCooldown_ = 0.0f;
         }
@@ -343,7 +387,7 @@ void GameScene::Update() {
 
     // プレイヤーのヒットクールダウン更新
     if (playerHitCooldown_ > 0.0f) {
-        playerHitCooldown_ -= ctx_->deltaTime;
+        playerHitCooldown_ -= gameplayDeltaTime;
         if (playerHitCooldown_ < 0.0f) {
             playerHitCooldown_ = 0.0f;
         }
@@ -407,6 +451,9 @@ void GameScene::Update() {
             } else if (hitBody) {
                 enemy_.TakeDamage(10.0f);
                 enemyHitCooldown_ = 0.2f;
+                if (counterCinematicActive_) {
+                    stopCounterCinematicThisFrame = true;
+                }
             }
         }
 
@@ -416,22 +463,35 @@ void GameScene::Update() {
     }
 
     // ボスの攻撃判定とあたり判定
-    const bool isEnemySmashActive = (enemyActionKind == ActionKind::Smash &&
-                                     enemyActionStep == ActionStep::Active);
+    const bool isEnemySmashCounterWindow =
+        (enemyActionKind == ActionKind::Smash &&
+         enemyActionStep == ActionStep::Active);
 
-    const bool isEnemySweepActive = (enemyActionKind == ActionKind::Sweep &&
-                                     enemyActionStep == ActionStep::Active);
+    const bool isEnemySweepCounterWindow =
+        (enemyActionKind == ActionKind::Sweep &&
+         enemyActionStep == ActionStep::Active);
 
-    const bool isEnemyMeleeActive = isEnemySmashActive || isEnemySweepActive;
+    const bool isEnemySmashMeleeWindow =
+        (enemyActionKind == ActionKind::Smash &&
+         (enemyActionStep == ActionStep::Active ||
+          enemyActionStep == ActionStep::Recovery));
+
+    const bool isEnemySweepMeleeWindow =
+        (enemyActionKind == ActionKind::Sweep &&
+         (enemyActionStep == ActionStep::Active ||
+          enemyActionStep == ActionStep::Recovery));
+
+    const bool isEnemyMeleeActive =
+        isEnemySmashMeleeWindow || isEnemySweepMeleeWindow;
 
     const float enemyAttackDamage = enemy_.GetCurrentAttackDamage();
     const float enemyAttackKnockback = enemy_.GetCurrentAttackKnockback();
 
     // カウンター成立条件
     const bool isCounterAxisMatch =
-        (isEnemySmashActive &&
+        (isEnemySmashCounterWindow &&
          player_.GetCounterAxis() == SwordCounterAxis::Vertical) ||
-        (isEnemySweepActive &&
+        (isEnemySweepCounterWindow &&
          player_.GetCounterAxis() == SwordCounterAxis::Horizontal);
 
     const bool canCounterThisHit =
@@ -460,12 +520,17 @@ void GameScene::Update() {
             // 1. カウンター成功
             if (canCounterThisHit) {
                 player_.NotifyCounterSuccess();
+                if (enemy_.NotifyCountered()) {
+                    forceSyncEnemyAnimationThisFrame = true;
+                }
 
                 // 仮のカウンターダメージ
                 enemy_.TakeDamage(enemyAttackDamage);
 
                 // プレイヤーはこのヒットでダメージを受けない
                 playerHitCooldown_ = 0.2f;
+
+                startCounterCinematicThisFrame = true;
 
                 // デバッグ上は「被弾扱い」にしない
                 bossHitPlayer = false;
@@ -494,6 +559,13 @@ void GameScene::Update() {
 
     dbgBulletHitPlayer_ = false;
     if (freezeEnemyMotion) {
+        if (startCounterCinematicThisFrame) {
+            counterCinematicActive_ = true;
+        }
+        if (stopCounterCinematicThisFrame) {
+            counterCinematicActive_ = false;
+        }
+        UpdateCounterVignette(baseDeltaTime);
         return;
     }
 
@@ -525,6 +597,9 @@ void GameScene::Update() {
 
                 if (player_.IsCounterStance()) {
                     player_.NotifyCounterSuccess();
+                    if (enemy_.NotifyCountered()) {
+                        forceSyncEnemyAnimationThisFrame = true;
+                    }
                     enemy_.TakeDamage(enemy_.GetBulletDamage() * 2.0f);
                     playerHitCooldown_ = 0.12f;
                 } else if (player_.IsGuarding()) {
@@ -577,6 +652,9 @@ void GameScene::Update() {
 
                 if (player_.IsCounterStance()) {
                     player_.NotifyCounterSuccess();
+                    if (enemy_.NotifyCountered()) {
+                        forceSyncEnemyAnimationThisFrame = true;
+                    }
                     enemy_.TakeDamage(enemy_.GetWaveDamage() * 2.0f);
                     playerHitCooldown_ = 0.12f;
                 } else if (player_.IsGuarding()) {
@@ -597,6 +675,104 @@ void GameScene::Update() {
             break;
         }
     }
+
+    if (startCounterCinematicThisFrame) {
+        counterCinematicActive_ = true;
+        SetEnemyAnimationFrozen(true);
+    }
+    if (stopCounterCinematicThisFrame) {
+        counterCinematicActive_ = false;
+        SetEnemyAnimationFrozen(false);
+    }
+    if (forceSyncEnemyAnimationThisFrame) {
+        SyncEnemyAnimation();
+        SetEnemyAnimationFrozen(true);
+    }
+    UpdateCounterVignette(baseDeltaTime);
+}
+
+float GameScene::ComputeGameplayTimeScale() const {
+    return 1.0f;
+}
+
+void GameScene::SetEnemyAnimationFrozen(bool frozen) {
+    if (ctx_ == nullptr || ctx_->model == nullptr) {
+        enemyAnimationFrozen_ = frozen;
+        return;
+    }
+
+    Model *enemyModel = ctx_->model->GetModel(enemyModelId_);
+    if (enemyModel == nullptr) {
+        enemyAnimationFrozen_ = frozen;
+        return;
+    }
+
+    if (frozen) {
+        if (HasAnimation(enemyModel, kBossAnimIdle)) {
+            ctx_->model->PlayAnimation(enemyModelId_, kBossAnimIdle, true);
+            ctx_->model->UpdateAnimation(enemyModelId_, 0.0f);
+            enemyAnimationName_ = kBossAnimIdle;
+            enemyAnimationLoop_ = true;
+        }
+        enemyModel->isPlaying = false;
+        enemyModel->animationTime = 0.0f;
+        enemyModel->animationFinished = false;
+        enemyAnimationFrozen_ = true;
+        return;
+    }
+
+    if (enemyAnimationFrozen_ && !enemyModel->animationFinished &&
+        !enemyModel->currentAnimation.empty()) {
+        enemyModel->isPlaying = true;
+    }
+    enemyAnimationFrozen_ = false;
+}
+
+void GameScene::UpdateCounterVignette(float deltaTime) {
+    (void)deltaTime;
+    counterVignetteAlpha_ = counterCinematicActive_ ? 1.0f : 0.0f;
+}
+
+void GameScene::DrawCounterVignette() const {
+    if (counterVignetteAlpha_ <= 0.001f || ctx_ == nullptr ||
+        ctx_->winApp == nullptr) {
+        return;
+    }
+
+    ImGuiViewport *mainViewport = ImGui::GetMainViewport();
+    if (mainViewport == nullptr) {
+        return;
+    }
+
+    ImDrawList *drawList = ImGui::GetForegroundDrawList(mainViewport);
+    if (drawList == nullptr) {
+        return;
+    }
+
+    const ImVec2 viewportPos = mainViewport->Pos;
+    const ImVec2 viewportSize = mainViewport->Size;
+    const float width = viewportSize.x;
+    const float height = viewportSize.y;
+    const float left = viewportPos.x;
+    const float top = viewportPos.y;
+    const float right = left + width;
+    const float bottom = top + height;
+    const float edgeX = width * 0.28f;
+    const float edgeY = height * 0.25f;
+    const int edgeAlpha =
+        static_cast<int>(170.0f * std::clamp(counterVignetteAlpha_, 0.0f, 1.0f));
+
+    const ImU32 edge = IM_COL32(15, 0, 0, edgeAlpha);
+    const ImU32 fade = IM_COL32(15, 0, 0, 0);
+
+    drawList->AddRectFilledMultiColor({left, top}, {right, top + edgeY}, edge,
+                                      edge, fade, fade);
+    drawList->AddRectFilledMultiColor({left, bottom - edgeY}, {right, bottom},
+                                      fade, fade, edge, edge);
+    drawList->AddRectFilledMultiColor({left, top}, {left + edgeX, bottom}, edge,
+                                      fade, fade, edge);
+    drawList->AddRectFilledMultiColor({right - edgeX, top}, {right, bottom},
+                                      fade, edge, edge, fade);
 }
 
 void GameScene::SyncEnemyAnimation() {
@@ -627,6 +803,7 @@ void GameScene::SyncEnemyAnimation() {
                 enemyAnimationLoop_ != introLoop) {
                 modelManager->PlayAnimation(enemyModelId_, introAnimation,
                                             introLoop);
+                modelManager->UpdateAnimation(enemyModelId_, 0.0f);
                 enemyAnimationName_ = introAnimation;
                 enemyAnimationLoop_ = introLoop;
                 enemyIntroAnimationStarted_ = true;
@@ -644,6 +821,7 @@ void GameScene::SyncEnemyAnimation() {
     }
 
     modelManager->PlayAnimation(enemyModelId_, nextAnimation, shouldLoop);
+    modelManager->UpdateAnimation(enemyModelId_, 0.0f);
     enemyAnimationName_ = nextAnimation;
     enemyAnimationLoop_ = shouldLoop;
 }
@@ -671,18 +849,36 @@ void GameScene::Draw() {
     }
 #ifdef _DEBUG
     // 当たり判定描画
+    ModelDrawEffect hitBoxEffect{};
+    hitBoxEffect.enabled = true;
+    hitBoxEffect.intensity = 0.45f;
+    hitBoxEffect.fresnelPower = 2.8f;
+    hitBoxEffect.noiseAmount = 0.06f;
+    hitBoxEffect.time = sceneLightTime_ * 5.0f;
+
+    // プレイヤー本体
+    hitBoxEffect.color = {0.20f, 0.95f, 0.28f, 0.45f};
+    ctx_->model->SetDrawEffect(hitBoxEffect);
+    ctx_->debugDraw->DrawOBB(ctx_->model, player_.GetOBB(), *currentCamera_);
+
+    // プレイヤー剣
+    hitBoxEffect.color = {0.20f, 0.85f, 1.00f, 0.42f};
+    ctx_->model->SetDrawEffect(hitBoxEffect);
     for (const Sword *sword : player_.GetSwords()) {
         if (sword == nullptr) {
             continue;
         }
-        // ctx_->debugDraw->DrawOBB(ctx_->model, sword->GetOBB(),
-        // *currentCamera_);
+        ctx_->debugDraw->DrawOBB(ctx_->model, sword->GetOBB(), *currentCamera_);
     }
 
     // ボス部位
     if (enemy_.IsAlive()) {
+        hitBoxEffect.color = {1.00f, 0.28f, 0.20f, 0.40f};
+        ctx_->model->SetDrawEffect(hitBoxEffect);
         ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetBodyOBB(),
                                  *currentCamera_);
+        hitBoxEffect.color = {1.00f, 0.45f, 0.25f, 0.35f};
+        ctx_->model->SetDrawEffect(hitBoxEffect);
         ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetLeftHandOBB(),
                                  *currentCamera_);
         ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetRightHandOBB(),
@@ -690,32 +886,79 @@ void GameScene::Draw() {
 
         const bool isEnemySmashActive =
             (enemy_.GetActionKind() == ActionKind::Smash &&
-             enemy_.GetActionStep() == ActionStep::Active);
+             (enemy_.GetActionStep() == ActionStep::Active ||
+              enemy_.GetActionStep() == ActionStep::Recovery));
         const bool isEnemySweepActive =
             (enemy_.GetActionKind() == ActionKind::Sweep &&
-             enemy_.GetActionStep() == ActionStep::Active);
+             (enemy_.GetActionStep() == ActionStep::Active ||
+              enemy_.GetActionStep() == ActionStep::Recovery));
 
         if (isEnemySmashActive || isEnemySweepActive) {
-            //  ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetAttackOBB(),
-            //  *currentCamera_);
+            hitBoxEffect.color = {1.00f, 1.00f, 0.15f, 0.52f};
+            hitBoxEffect.intensity = 0.62f;
+            ctx_->model->SetDrawEffect(hitBoxEffect);
+            ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetAttackOBB(),
+                                     *currentCamera_);
+            hitBoxEffect.intensity = 0.45f;
+        }
+
+        // 弾ヒット判定
+        hitBoxEffect.color = {0.95f, 0.20f, 1.00f, 0.34f};
+        ctx_->model->SetDrawEffect(hitBoxEffect);
+        for (const auto &bullet : enemy_.GetBullets()) {
+            if (!bullet.isAlive) {
+                continue;
+            }
+
+            OBB bulletBox{};
+            bulletBox.center = bullet.position;
+            bulletBox.size = enemy_.GetBulletHitBoxSize();
+            bulletBox.rotation = player_.GetTransform().rotation;
+            ctx_->debugDraw->DrawOBB(ctx_->model, bulletBox, *currentCamera_);
+        }
+
+        // 波動ヒット判定
+        hitBoxEffect.color = {0.25f, 0.65f, 1.00f, 0.34f};
+        ctx_->model->SetDrawEffect(hitBoxEffect);
+        for (const auto &wave : enemy_.GetWaves()) {
+            if (!wave.isAlive) {
+                continue;
+            }
+
+            OBB waveBox{};
+            waveBox.center = wave.position;
+            waveBox.size = enemy_.GetWaveHitBoxSize();
+            waveBox.rotation = player_.GetTransform().rotation;
+            ctx_->debugDraw->DrawOBB(ctx_->model, waveBox, *currentCamera_);
         }
     }
+    ctx_->model->ClearDrawEffect();
 #endif // _DEBUG
     ctx_->model->PostDraw();
 
     DrawWarpSmokePass();
     DrawWarpDistortionPass();
+    DrawCounterVignette();
 
 #ifdef _DEBUG
     ImGui::Begin("HitInfo");
     ImGui::Checkbox("Freeze Enemy Motion", &dbgFreezeEnemyMotion_);
+    const ActionKind dbgEnemyActionKind = enemy_.GetActionKind();
+    const ActionStep dbgEnemyActionStep = enemy_.GetActionStep();
+    if (ImGui::Button("Trigger Counter")) {
+        dbgTriggerCounterRequested_ = true;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Stop Counter Cinematic")) {
+        counterCinematicActive_ = false;
+    }
     ImGui::Text("Hit LeftHand : %s", dbgHitLeftHand_ ? "true" : "false");
     ImGui::Text("Hit RightHand: %s", dbgHitRightHand_ ? "true" : "false");
     ImGui::Text("Hit Body     : %s", dbgHitBody_ ? "true" : "false");
     ImGui::Text("Cooldown     : %.2f", enemyHitCooldown_);
 
-    const ActionKind enemyActionKind = enemy_.GetActionKind();
-    const ActionStep enemyActionStep = enemy_.GetActionStep();
+    const ActionKind enemyActionKind = dbgEnemyActionKind;
+    const ActionStep enemyActionStep = dbgEnemyActionStep;
 
     const char *actionKindName = "None";
     switch (enemyActionKind) {
@@ -883,17 +1126,7 @@ void GameScene::Draw() {
     ImGui::Text("CounterStance   : %s",
                 player_.IsCounterStance() ? "true" : "false");
 
-    const char *counterAxisName = "None";
-    switch (player_.GetCounterAxis()) {
-    case SwordCounterAxis::Vertical:
-        counterAxisName = "Vertical";
-        break;
-    case SwordCounterAxis::Horizontal:
-        counterAxisName = "Horizontal";
-        break;
-    default:
-        break;
-    }
+    const char *counterAxisName = GetCounterAxisName(player_.GetCounterAxis());
     ImGui::Text("CounterAxis     : %s", counterAxisName);
     ImGui::Text("CounterJustWin  : %s",
                 dbgCounterJustWindow ? "true" : "false");

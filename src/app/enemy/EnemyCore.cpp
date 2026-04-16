@@ -63,6 +63,12 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
     playerGuarding_ = playerObs.isGuarding;
     UpdateBossPhase();
     UpdateWarpTrails(deltaTime);
+    if (counterRecoilTimer_ > 0.0f) {
+        counterRecoilTimer_ -= deltaTime;
+        if (counterRecoilTimer_ < 0.0f) {
+            counterRecoilTimer_ = 0.0f;
+        }
+    }
 
     if (introActive_) {
         const float introTotalDuration =
@@ -206,44 +212,8 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
     // ------------------------------------------------------------
     // カウンター成功リアクション
     // ------------------------------------------------------------
-    if (playerObs_.justCountered) {
-        RegisterCounterSuccessReaction();
-
-        const bool isCounterBreakableAction =
-            (action_.kind == ActionKind::Smash) ||
-            (action_.kind == ActionKind::Sweep) ||
-            (action_.kind == ActionKind::Rush);
-
-        if (isCounterBreakableAction) {
-            float dx = tf_.position.x - playerPos_.x;
-            float dz = tf_.position.z - playerPos_.z;
-            float len = std::sqrtf(dx * dx + dz * dz);
-            if (len < 0.0001f) {
-                len = 1.0f;
-            }
-
-            dx /= len;
-            dz /= len;
-
-            const float counterPushBack = 0.9f;
-            tf_.position.x += dx * counterPushBack;
-            tf_.position.z += dz * counterPushBack;
-
-            EndAttack();
-            ResetChainContext();
-            ResetPostActionState();
-
-            stateTimer_ = -0.20f;
-
-            tactic_ = TacticState::Reset;
-            closePressureTimer_ = 0.0f;
-            stagnantTimer_ = 0.0f;
-            isDistanceStagnant_ = false;
-
-            UpdateFacingToPlayer();
-            UpdateParts();
-            return;
-        }
+    if (playerObs_.justCountered && ApplyCounterBreakReaction()) {
+        return;
     }
 
     UpdateByAction(deltaTime);
@@ -628,6 +598,52 @@ void Enemy::ConsumeWave(size_t index) {
 void Enemy::NotifyAttackConnected() { currentActionConnected_ = true; }
 
 void Enemy::NotifyAttackGuarded() { currentActionGuarded_ = true; }
+
+bool Enemy::NotifyCountered() { return ApplyCounterBreakReaction(); }
+
+bool Enemy::ApplyCounterBreakReaction() {
+    RegisterCounterSuccessReaction();
+
+    const bool isCounterBreakableAction =
+        (action_.kind == ActionKind::Smash) || (action_.kind == ActionKind::Sweep) ||
+        (action_.kind == ActionKind::Rush);
+
+    if (!isCounterBreakableAction) {
+        return false;
+    }
+
+    float dx = tf_.position.x - playerPos_.x;
+    float dz = tf_.position.z - playerPos_.z;
+    float len = std::sqrtf(dx * dx + dz * dz);
+    if (len < 0.0001f) {
+        len = 1.0f;
+    }
+
+    dx /= len;
+    dz /= len;
+
+    const float counterPushBack = 0.9f;
+    tf_.position.x += dx * counterPushBack;
+    tf_.position.z += dz * counterPushBack;
+
+    EndAttack();
+    BeginAction(ActionKind::Guard, ActionStep::Hold);
+    guardTarget_ = GuardTarget::Face;
+    counterRecoilTimer_ = counterRecoilDuration_;
+    ResetChainContext();
+    ResetPostActionState();
+
+    stateTimer_ = 0.0f;
+
+    tactic_ = TacticState::Reset;
+    closePressureTimer_ = 0.0f;
+    stagnantTimer_ = 0.0f;
+    isDistanceStagnant_ = false;
+
+    UpdateFacingToPlayer();
+    UpdateParts();
+    return true;
+}
 
 // ============================================================
 // action ベース更新

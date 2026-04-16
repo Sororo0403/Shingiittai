@@ -24,6 +24,10 @@ class GameScene : public BaseScene {
     void UpdateBattleCamera();
     void UpdateSceneLighting();
     void SyncEnemyAnimation();
+    void SetEnemyAnimationFrozen(bool frozen);
+    float ComputeGameplayTimeScale() const;
+    void UpdateCounterVignette(float deltaTime);
+    void DrawCounterVignette() const;
     bool ProjectWorldToScreen(const DirectX::XMFLOAT3 &worldPos,
                               DirectX::XMFLOAT2 &outScreen) const;
     void DrawWarpSmokePass();
@@ -65,6 +69,7 @@ class GameScene : public BaseScene {
     bool dbgPlayerGuardedHit_ = false;
 #ifdef _DEBUG
     bool dbgFreezeEnemyMotion_ = false;
+    bool dbgTriggerCounterRequested_ = false;
 #endif
     Bullet bullet_;
     uint32_t warpSmokeSpriteId_ = 0;
@@ -154,4 +159,10 @@ class GameScene : public BaseScene {
     float warpMoveSmokeAlphaScale_ = 0.78f;
     float warpMoveSmokeStretchScale_ = 0.78f;
     float sceneLightTime_ = 0.0f;
+
+    bool counterCinematicActive_ = false;
+    bool enemyAnimationFrozen_ = false;
+    float counterTimeScale_ = 0.05f;
+    float counterVignetteAlpha_ = 0.0f;
+    float counterVignetteFadeSpeed_ = 4.5f;
 };

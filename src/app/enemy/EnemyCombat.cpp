@@ -46,14 +46,16 @@ OBB Enemy::GetSmashAttackOBB() const {
 
     float forwardX = std::sinf(usedYaw);
     float forwardZ = std::cosf(usedYaw);
+    float rightX = std::cosf(usedYaw);
+    float rightZ = -std::sinf(usedYaw);
 
     Transform attackTf{};
     attackTf.scale = {1.0f, 1.0f, 1.0f};
-    attackTf.rotation = {0.0f, 0.0f, 0.0f, 1.0f};
-    attackTf.position = bodyTf_.position;
-    attackTf.position.x += forwardX * smashAttackForwardOffset_;
-    attackTf.position.y += smashAttackHeightOffset_;
-    attackTf.position.z += forwardZ * smashAttackForwardOffset_;
+    attackTf.rotation = rightHandTf_.rotation;
+    attackTf.position = rightHandTf_.position;
+    attackTf.position.x += forwardX * 0.50f + rightX * 0.08f;
+    attackTf.position.y += 0.05f;
+    attackTf.position.z += forwardZ * 0.50f + rightZ * 0.08f;
 
     return MakeOBB(attackTf, GetCurrentAttackHitBoxSize());
 }
@@ -61,16 +63,22 @@ OBB Enemy::GetSmashAttackOBB() const {
 OBB Enemy::GetSweepAttackOBB() const {
     float usedYaw = ShouldUseLockedAttackYaw() ? lockedAttackYaw_ : facingYaw_;
 
+    float forwardX = std::sinf(usedYaw);
+    float forwardZ = std::cosf(usedYaw);
     float rightX = std::cosf(usedYaw);
     float rightZ = -std::sinf(usedYaw);
+    float handDirX = rightHandTf_.position.x - bodyTf_.position.x;
+    float handDirZ = rightHandTf_.position.z - bodyTf_.position.z;
+    float sideDot = handDirX * rightX + handDirZ * rightZ;
+    float sideSign = (sideDot >= 0.0f) ? 1.0f : -1.0f;
 
     Transform attackTf{};
     attackTf.scale = {1.0f, 1.0f, 1.0f};
-    attackTf.rotation = {0.0f, 0.0f, 0.0f, 1.0f};
-    attackTf.position = bodyTf_.position;
-    attackTf.position.x += rightX * sweepAttackSideOffset_;
-    attackTf.position.y += sweepAttackHeightOffset_;
-    attackTf.position.z += rightZ * sweepAttackSideOffset_;
+    attackTf.rotation = rightHandTf_.rotation;
+    attackTf.position = rightHandTf_.position;
+    attackTf.position.x += rightX * (0.28f * sideSign) + forwardX * 0.24f;
+    attackTf.position.y += 0.04f;
+    attackTf.position.z += rightZ * (0.28f * sideSign) + forwardZ * 0.24f;
 
     return MakeOBB(attackTf, GetCurrentAttackHitBoxSize());
 }

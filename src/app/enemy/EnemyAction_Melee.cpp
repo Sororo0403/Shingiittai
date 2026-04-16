@@ -171,9 +171,15 @@ void Enemy::UpdateSmashHold(float deltaTime) {
 void Enemy::UpdateSmashAttack(float deltaTime) {
     (void)deltaTime;
 
-    isAttackActive_ = IsCurrentAttackInActiveWindow();
+    const AttackTimingParam *timing = GetCurrentAttackTiming();
+    if (!timing) {
+        EndAttack();
+        return;
+    }
 
-    if (IsCurrentAttackInRecoveryWindow()) {
+    isAttackActive_ = true;
+
+    if (stateTimer_ >= timing->totalTime) {
         ChangeActionStep(ActionStep::Recovery);
     }
 }
@@ -316,9 +322,15 @@ void Enemy::UpdateSweepHold(float deltaTime) {
 void Enemy::UpdateSweepAttack(float deltaTime) {
     (void)deltaTime;
 
-    isAttackActive_ = IsCurrentAttackInActiveWindow();
+    const AttackTimingParam *timing = GetCurrentAttackTiming();
+    if (!timing) {
+        EndAttack();
+        return;
+    }
 
-    if (IsCurrentAttackInRecoveryWindow()) {
+    isAttackActive_ = true;
+
+    if (stateTimer_ >= timing->totalTime) {
         ChangeActionStep(ActionStep::Recovery);
     }
 }

@@ -202,6 +202,7 @@ class Enemy {
     void ConsumeWave(size_t index);
     void NotifyAttackConnected();
     void NotifyAttackGuarded();
+    bool NotifyCountered();
 
     const Transform &GetTransform() const { return tf_; }
     bool IsAlive() const { return !deathFinished_; }
@@ -434,6 +435,9 @@ class Enemy {
     float hitReactionTimer_ = 0.0f;
     float hitReactionDuration_ = 0.12f;
     float hitReactionMoveSpeed_ = 3.5f;
+    float counterRecoilTimer_ = 0.0f;
+    float counterRecoilDuration_ = 0.85f;
+    float counterRecoilPitchRad_ = 0.12f;
     float deathTimer_ = 0.0f;
     float deathDuration_ = 0.75f;
     float deathSinkDistance_ = 2.2f;
@@ -952,6 +956,7 @@ class Enemy {
 
     void UpdateCounterAdaptation(float deltaTime);
     void RegisterCounterSuccessReaction();
+    bool ApplyCounterBreakReaction();
     float GetAdaptiveHoldChance(ActionKind kind) const;
     float GetAdaptiveChargeOffset(ActionKind kind) const;
     bool ShouldSnapReleaseFromRead() const;

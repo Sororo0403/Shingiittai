@@ -178,6 +178,22 @@ void Enemy::UpdateParts() {
         visualPitch -= 0.12f * hitT;
     }
 
+    if (counterRecoilTimer_ > 0.0f) {
+        float recoilProgress = counterRecoilDuration_ > 0.0001f
+                                   ? 1.0f - (counterRecoilTimer_ /
+                                             counterRecoilDuration_)
+                                   : 1.0f;
+        recoilProgress = Saturate(recoilProgress);
+        float recoil = recoilProgress * recoilProgress;
+
+        bodyTf_.position.y += 0.015f * recoil;
+        visualTf_.position.x += (-forwardX) * 0.045f * recoil;
+        visualTf_.position.z += (-forwardZ) * 0.045f * recoil;
+        visualPitch += counterRecoilPitchRad_ * recoil;
+    }
+
+    const bool suppressActionPresentation = (counterRecoilTimer_ > 0.0f);
+
     if (tellActive_) {
         bodyTf_.scale.x += 0.10f * pulse;
         bodyTf_.scale.z += 0.10f * pulse;
@@ -265,7 +281,8 @@ void Enemy::UpdateParts() {
         visualRoll += 0.10f * phasePulse;
     }
 
-    if (action_.kind == ActionKind::None && isMargitComboATransition_) {
+    if (!suppressActionPresentation && action_.kind == ActionKind::None &&
+        isMargitComboATransition_) {
         bodyTf_.position.y -= 0.08f;
         bodyTf_.position.x += rightX * 0.22f;
         bodyTf_.position.z += rightZ * 0.22f;
@@ -288,7 +305,8 @@ void Enemy::UpdateParts() {
         leftHandTf_.position.y += 0.14f;
     }
 
-    if (action_.kind == ActionKind::None && isMargitComboBTransition_) {
+    if (!suppressActionPresentation && action_.kind == ActionKind::None &&
+        isMargitComboBTransition_) {
         bodyTf_.position.y -= 0.12f;
         bodyTf_.position.x += forwardX * 0.10f;
         bodyTf_.position.z += forwardZ * 0.10f;
@@ -311,7 +329,7 @@ void Enemy::UpdateParts() {
         leftHandTf_.position.z += (-forwardZ) * 0.10f;
     }
 
-    if (action_.kind == ActionKind::Smash) {
+    if (!suppressActionPresentation && action_.kind == ActionKind::Smash) {
         if (action_.step == ActionStep::Charge ||
             action_.step == ActionStep::Hold) {
             bodyTf_.position.y -= 0.10f;
@@ -366,7 +384,8 @@ void Enemy::UpdateParts() {
             visualPitch += 0.10f;
         }
 
-    } else if (action_.kind == ActionKind::Sweep) {
+    } else if (!suppressActionPresentation &&
+               action_.kind == ActionKind::Sweep) {
         if (action_.step == ActionStep::Charge ||
             action_.step == ActionStep::Hold) {
             bodyTf_.position.x += rightX * 0.12f;
@@ -398,7 +417,7 @@ void Enemy::UpdateParts() {
             visualRoll += 0.10f;
         }
 
-    } else if (action_.kind == ActionKind::Shot) {
+    } else if (!suppressActionPresentation && action_.kind == ActionKind::Shot) {
         if (action_.step == ActionStep::Charge) {
             bodyTf_.scale.x -= 0.04f;
             bodyTf_.scale.z -= 0.04f;
@@ -429,7 +448,7 @@ void Enemy::UpdateParts() {
             visualPitch += 0.06f;
         }
 
-    } else if (action_.kind == ActionKind::Wave) {
+    } else if (!suppressActionPresentation && action_.kind == ActionKind::Wave) {
         if (action_.step == ActionStep::Charge) {
             rightHandTf_.position.y += 0.8f;
             rightHandTf_.position.x += forwardX * 0.6f;
@@ -456,7 +475,7 @@ void Enemy::UpdateParts() {
             visualPitch += 0.06f;
         }
 
-    } else if (action_.kind == ActionKind::Rush) {
+    } else if (!suppressActionPresentation && action_.kind == ActionKind::Rush) {
         if (action_.step == ActionStep::Charge) {
             bodyTf_.position.y -= 0.18f;
             bodyTf_.scale.y -= 0.10f;
@@ -518,7 +537,7 @@ void Enemy::UpdateParts() {
             visualPitch += 0.10f;
         }
 
-    } else if (action_.kind == ActionKind::Warp) {
+    } else if (!suppressActionPresentation && action_.kind == ActionKind::Warp) {
         if (action_.step == ActionStep::Start) {
             if (warp_.type == WarpType::Approach) {
                 if (warp_.approachSlot == WarpApproachSlot::FrontLeft) {
@@ -566,7 +585,7 @@ void Enemy::UpdateParts() {
             }
         }
 
-    } else if (action_.kind == ActionKind::Guard) {
+    } else if (!suppressActionPresentation && action_.kind == ActionKind::Guard) {
         if (guardTarget_ == GuardTarget::Face) {
             leftHandTf_.position.x += forwardX * 0.6f;
             leftHandTf_.position.y += 0.9f;
@@ -582,7 +601,7 @@ void Enemy::UpdateParts() {
             leftHandTf_.position.y += 0.3f;
             leftHandTf_.position.z += rightZ * 0.35f;
         }
-    } else if (action_.kind == ActionKind::Stalk) {
+    } else if (!suppressActionPresentation && action_.kind == ActionKind::Stalk) {
         rightHandTf_.position.y += 0.35f;
         leftHandTf_.position.y += 0.20f;
 
