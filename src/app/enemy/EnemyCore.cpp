@@ -627,6 +627,35 @@ void Enemy::ConsumeBullet(size_t index) {
     bullets_[index].lifeTime = 0.0f;
 }
 
+void Enemy::DestroyBullet(size_t index) { ConsumeBullet(index); }
+
+void Enemy::ReflectBullet(size_t index, const DirectX::XMFLOAT3 &targetPos) {
+    if (index >= bullets_.size()) {
+        return;
+    }
+
+    auto &bullet = bullets_[index];
+    if (!bullet.isAlive) {
+        return;
+    }
+
+    float dirX = targetPos.x - bullet.position.x;
+    float dirY = targetPos.y - bullet.position.y;
+    float dirZ = targetPos.z - bullet.position.z;
+    float len = std::sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
+    if (len <= 0.0001f) {
+        len = 1.0f;
+    }
+
+    dirX /= len;
+    dirY /= len;
+    dirZ /= len;
+
+    bullet.velocity = {dirX * bulletSpeed_, dirY * bulletSpeed_,
+                       dirZ * bulletSpeed_};
+    bullet.isReflected = true;
+}
+
 void Enemy::ConsumeWave(size_t index) {
     if (index >= waves_.size()) {
         return;
@@ -634,6 +663,34 @@ void Enemy::ConsumeWave(size_t index) {
 
     waves_[index].isAlive = false;
     waves_[index].traveledDistance = waves_[index].maxDistance;
+}
+
+void Enemy::DestroyWave(size_t index) { ConsumeWave(index); }
+
+void Enemy::ReflectWave(size_t index, const DirectX::XMFLOAT3 &targetPos) {
+    if (index >= waves_.size()) {
+        return;
+    }
+
+    auto &wave = waves_[index];
+    if (!wave.isAlive) {
+        return;
+    }
+
+    float dirX = targetPos.x - wave.position.x;
+    float dirZ = targetPos.z - wave.position.z;
+    float len = std::sqrt(dirX * dirX + dirZ * dirZ);
+    if (len <= 0.0001f) {
+        len = 1.0f;
+    }
+
+    dirX /= len;
+    dirZ /= len;
+
+    wave.direction = {dirX, 0.0f, dirZ};
+    wave.speed = waveSpeed_;
+    wave.traveledDistance = 0.0f;
+    wave.isReflected = true;
 }
 
 void Enemy::NotifyAttackConnected() { currentActionConnected_ = true; }

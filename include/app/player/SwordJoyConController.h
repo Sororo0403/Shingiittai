@@ -3,8 +3,8 @@
 #include "SwordControllerState.h"
 #include "SwordPose.h"
 #include <DirectXMath.h>
-#include <cstdint>
 #include <Transform.h>
+#include <cstdint>
 
 class SwordJoyConController {
   public:

@@ -39,6 +39,7 @@ class GameScene : public BaseScene {
     static constexpr DirectX::XMFLOAT3 kCameraStartPos = {0.0f, 1.0f, 0.5f};
     static constexpr float kCameraDistance = 3.5f;
     static constexpr float kCameraHeight = 1.2f;
+    static constexpr float kGuardDamageMultiplier = 0.25f;
 
     Camera camera_;
 #ifdef _DEBUG
@@ -174,4 +175,7 @@ class GameScene : public BaseScene {
     float counterCameraShakeY_ = 0.020f;
     float counterCameraShakeFrequency_ = 18.0f;
     VignetteRenderer counterVignetteRenderer_;
+
+    float reflectDamage_ = 0.0f;
+    float damageMultiplier_ = 2.0f;
 };

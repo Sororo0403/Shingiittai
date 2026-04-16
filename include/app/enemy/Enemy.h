@@ -93,6 +93,7 @@ struct EnemyBullet {
     DirectX::XMFLOAT3 velocity = {0.0f, 0.0f, 0.0f};
     float lifeTime = 0.0f;
     bool isAlive = false;
+    bool isReflected = false;
 };
 
 struct EnemyWave {
@@ -102,6 +103,7 @@ struct EnemyWave {
     float traveledDistance = 0.0f;
     float maxDistance = 0.0f;
     bool isAlive = false;
+    bool isReflected = false;
 };
 
 struct WarpTrailGhost {
@@ -208,6 +210,7 @@ class Enemy {
 
     const Transform &GetTransform() const { return tf_; }
     bool IsAlive() const { return !deathFinished_; }
+    float GetHP() const { return hp_; }
 
     const Transform &GetBodyTransform() const { return bodyTf_; }
     const Transform &GetLeftHandTransform() const { return leftHandTf_; }
@@ -279,6 +282,8 @@ class Enemy {
     int GetStagnantWarpBonus() const { return stagnantWarpBonus_; }
 
     const std::vector<EnemyBullet> &GetBullets() const { return bullets_; }
+    void DestroyBullet(size_t index);
+    void ReflectBullet(size_t index, const DirectX::XMFLOAT3 &targetPos);
 
     bool IsVisible() const { return isVisible_; }
     const DirectX::XMFLOAT3 &GetWarpTargetPos() const {
@@ -292,6 +297,8 @@ class Enemy {
     bool IsWarpCollisionDisabled() const { return warp_.collisionDisabled; }
 
     const std::vector<EnemyWave> &GetWaves() const { return waves_; }
+    void DestroyWave(size_t index);
+    void ReflectWave(size_t index, const DirectX::XMFLOAT3 &targetPos);
 
     bool IsGuardActive() const { return isGuardActive_; }
     GuardTarget GetGuardTarget() const { return guardTarget_; }

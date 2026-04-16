@@ -249,7 +249,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
         }
     }
 
-    // 一人称カメラ初期向き
+    // 荳莠ｺ遘ｰ繧ｫ繝｡繝ｩ蛻晄悄蜷代″
     cameraYaw_ = 0.0f;
     cameraPitch_ = 0.0f;
     isLockOn_ = true;
@@ -261,7 +261,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
     currentFovDeg_ = normalFovDeg_;
     targetFovDeg_ = normalFovDeg_;
 
-    // 肩越し三人称カメラ初期向き
+    // 閧ｩ雜翫＠荳我ｺｺ遘ｰ繧ｫ繝｡繝ｩ蛻晄悄蜷代″
     const DirectX::XMFLOAT3 &playerPos = player_.GetTransform().position;
     const DirectX::XMFLOAT3 &enemyPos = enemy_.GetTransform().position;
     lockOnOrbitCameraPos_ = {playerPos.x, playerPos.y + lockOnOrbitHeight_,
@@ -408,8 +408,8 @@ void GameScene::Update() {
     }
 #endif
 
-    // 当たり判定
-    // 先にプレイヤーを更新して、その結果をEnemyへ渡す
+    // 蠖薙◆繧雁愛螳・
+    // 蜈医↓繝励Ξ繧､繝､繝ｼ繧呈峩譁ｰ縺励※縲√◎縺ｮ邨先棡繧脱nemy縺ｸ貂｡縺・
     player_.Update(input, playerDeltaTime, enemy_.GetTransform().position,
                    cameraYaw_);
     sceneLightTime_ += baseDeltaTime;
@@ -454,13 +454,11 @@ void GameScene::Update() {
 
     UpdateBattleCamera();
 
+    auto counterBox = player_.GetSword().GetCounterOBB();
     auto playerBox = player_.GetOBB();
-
-    // if (CollisionUtil::CheckOBB(swordBox, bulletBox) &&
-    // player_.GetSword().GetSlashMode()) {
-    //     player_.GetSword().SetCounter(true);
-    // }
-    //  // 敵の行動状態を取得してガード状態を判定
+    const bool isPlayerGuarding = player_.IsGuarding();
+    const bool isPlayerCountering = player_.GetSword().IsSlashMode();
+    const auto enemyBodyBox = enemy_.GetBodyOBB();
     const ActionKind enemyActionKind = enemy_.GetActionKind();
     const ActionStep enemyActionStep = enemy_.GetActionStep();
     bool startCounterCinematicThisFrame = false;
@@ -482,7 +480,6 @@ void GameScene::Update() {
             (std::max)(enemy_.GetCurrentAttackDamage(), 1.0f), 0.2f);
     }
 
-    // 敵ヒットクールダウンの更新
     if (enemyHitCooldown_ > 0.0f) {
         enemyHitCooldown_ -= gameplayDeltaTime;
         if (enemyHitCooldown_ < 0.0f) {
@@ -490,7 +487,6 @@ void GameScene::Update() {
         }
     }
 
-    // プレイヤーのヒットクールダウン更新
     if (playerHitCooldown_ > 0.0f) {
         playerHitCooldown_ -= gameplayDeltaTime;
         if (playerHitCooldown_ < 0.0f) {
@@ -498,14 +494,12 @@ void GameScene::Update() {
         }
     }
 
-    // 毎フレームいったんリセット
     dbgHitLeftHand_ = false;
     dbgHitRightHand_ = false;
     dbgHitBody_ = false;
     dbgWaveHitPlayer_ = false;
     dbgPlayerGuardedHit_ = false;
 
-    // プレイヤーの攻撃判定とあたり判定
     const auto swords = player_.GetSwords();
     const auto swordSlashStates = player_.GetSwordSlashStates();
 
@@ -515,15 +509,14 @@ void GameScene::Update() {
             continue;
         }
 
-        auto swordBox = sword->GetOBB();
-
+        auto swordHitBox = sword->GetOBB();
         auto bodyBox = enemy_.GetBodyOBB();
         auto leftHandBox = enemy_.GetLeftHandOBB();
         auto rightHandBox = enemy_.GetRightHandOBB();
 
-        bool hitLeftHand = CollisionUtil::CheckOBB(swordBox, leftHandBox);
-        bool hitRightHand = CollisionUtil::CheckOBB(swordBox, rightHandBox);
-        bool hitBody = CollisionUtil::CheckOBB(swordBox, bodyBox);
+        bool hitLeftHand = CollisionUtil::CheckOBB(swordHitBox, leftHandBox);
+        bool hitRightHand = CollisionUtil::CheckOBB(swordHitBox, rightHandBox);
+        bool hitBody = CollisionUtil::CheckOBB(swordHitBox, bodyBox);
 
         dbgHitLeftHand_ = dbgHitLeftHand_ || hitLeftHand;
         dbgHitRightHand_ = dbgHitRightHand_ || hitRightHand;
@@ -533,7 +526,6 @@ void GameScene::Update() {
                                        enemyActionStep == ActionStep::Hold);
 
         if (enemyHitCooldown_ <= 0.0f) {
-            // 左手ガード中は左手優先
             bool hitGuardHand = false;
             if (isEnemyGuardHold) {
                 switch (enemy_.GetGuardTarget()) {
@@ -567,38 +559,30 @@ void GameScene::Update() {
         }
     }
 
-    // ボスの攻撃判定とあたり判定
     const bool isEnemySmashCounterWindow =
         (enemyActionKind == ActionKind::Smash &&
          enemyActionStep == ActionStep::Active);
-
     const bool isEnemySweepCounterWindow =
         (enemyActionKind == ActionKind::Sweep &&
          enemyActionStep == ActionStep::Active);
-
     const bool isEnemySmashMeleeWindow =
         (enemyActionKind == ActionKind::Smash &&
          (enemyActionStep == ActionStep::Active ||
           enemyActionStep == ActionStep::Recovery));
-
     const bool isEnemySweepMeleeWindow =
         (enemyActionKind == ActionKind::Sweep &&
          (enemyActionStep == ActionStep::Active ||
           enemyActionStep == ActionStep::Recovery));
-
     const bool isEnemyMeleeActive =
         isEnemySmashMeleeWindow || isEnemySweepMeleeWindow;
 
     const float enemyAttackDamage = enemy_.GetCurrentAttackDamage();
     const float enemyAttackKnockback = enemy_.GetCurrentAttackKnockback();
-
-    // カウンター成立条件
     const bool isCounterAxisMatch =
         (isEnemySmashCounterWindow &&
          player_.GetCounterAxis() == SwordCounterAxis::Vertical) ||
         (isEnemySweepCounterWindow &&
          player_.GetCounterAxis() == SwordCounterAxis::Horizontal);
-
     const bool canCounterThisHit =
         player_.IsCounterStance() && isCounterAxisMatch;
 
@@ -606,7 +590,6 @@ void GameScene::Update() {
 
     if (!freezeEnemyMotion && isEnemyMeleeActive) {
         auto enemyAttackBox = enemy_.GetAttackOBB();
-
         bossHitPlayer = CollisionUtil::CheckOBB(enemyAttackBox, playerBox);
 
         if (bossHitPlayer && playerHitCooldown_ <= 0.0f) {
@@ -622,34 +605,17 @@ void GameScene::Update() {
             dx /= len;
             dz /= len;
 
-            // 1. カウンター成功
             if (canCounterThisHit) {
-                player_.NotifyCounterSuccess();
-                if (enemy_.NotifyCountered()) {
-                    forceSyncEnemyAnimationThisFrame = true;
-                }
-
-                // 仮のカウンターダメージ
-                enemy_.TakeDamage(enemyAttackDamage);
-
-                // プレイヤーはこのヒットでダメージを受けない
-                playerHitCooldown_ = 0.2f;
-
-                startCounterCinematicThisFrame = true;
-
-                // デバッグ上は「被弾扱い」にしない
+                triggerSuccessfulCounter(enemyAttackDamage, 0.2f);
                 bossHitPlayer = false;
-            }
-            // 2. ガード
-            else if (player_.IsGuarding()) {
+            } else if (isPlayerGuarding) {
                 dbgPlayerGuardedHit_ = true;
                 enemy_.NotifyAttackGuarded();
+                player_.TakeDamage(enemyAttackDamage * kGuardDamageMultiplier);
                 player_.AddKnockback({dx * (enemyAttackKnockback * 0.5f), 0.0f,
                                       dz * (enemyAttackKnockback * 0.5f)});
                 playerHitCooldown_ = 0.2f;
-            }
-            // 3. 通常被弾
-            else {
+            } else {
                 enemy_.NotifyAttackConnected();
                 player_.TakeDamage(enemyAttackDamage);
                 player_.AddKnockback({dx * enemyAttackKnockback, 0.0f,
@@ -657,18 +623,19 @@ void GameScene::Update() {
                 playerHitCooldown_ = 0.4f;
             }
         }
-
     }
 
     dbgBossHitPlayer_ = bossHitPlayer;
-
     dbgBulletHitPlayer_ = false;
+
     if (freezeEnemyMotion) {
         if (startCounterCinematicThisFrame) {
             counterCinematicActive_ = true;
+            SetEnemyAnimationFrozen(true);
         }
         if (stopCounterCinematicThisFrame) {
             counterCinematicActive_ = false;
+            SetEnemyAnimationFrozen(false);
         }
         UpdateCounterVignette(baseDeltaTime);
         return;
@@ -686,6 +653,24 @@ void GameScene::Update() {
         bulletBox.size = enemy_.GetBulletHitBoxSize();
         bulletBox.rotation = player_.GetTransform().rotation;
 
+        if (!bullet.isReflected && isPlayerCountering &&
+            CollisionUtil::CheckOBB(bulletBox, counterBox)) {
+            enemy_.ReflectBullet(i, enemy_.GetTransform().position);
+            dbgBulletHitPlayer_ = false;
+            continue;
+        }
+
+        if (bullet.isReflected) {
+            if (CollisionUtil::CheckOBB(bulletBox, enemyBodyBox) &&
+                enemyHitCooldown_ <= 0.0f) {
+                reflectDamage_ = enemy_.GetBulletDamage() * damageMultiplier_;
+                enemy_.TakeDamage(reflectDamage_);
+                enemy_.DestroyBullet(i);
+                enemyHitCooldown_ = 0.2f;
+            }
+            continue;
+        }
+
         if (CollisionUtil::CheckOBB(bulletBox, playerBox)) {
             dbgBulletHitPlayer_ = true;
 
@@ -701,23 +686,23 @@ void GameScene::Update() {
                 vz /= len;
 
                 if (player_.IsCounterStance()) {
-                    player_.NotifyCounterSuccess();
-                    if (enemy_.NotifyCountered()) {
-                        forceSyncEnemyAnimationThisFrame = true;
-                    }
-                    enemy_.TakeDamage(enemy_.GetBulletDamage() * 2.0f);
-                    playerHitCooldown_ = 0.12f;
-                } else if (player_.IsGuarding()) {
+                    triggerSuccessfulCounter(enemy_.GetBulletDamage() * 2.0f,
+                                             0.12f);
+                } else if (isPlayerGuarding) {
                     dbgPlayerGuardedHit_ = true;
+                    player_.TakeDamage(enemy_.GetBulletDamage() *
+                                       kGuardDamageMultiplier);
                     player_.AddKnockback(
                         {vx * (enemy_.GetBulletKnockback() * 0.5f), 0.0f,
                          vz * (enemy_.GetBulletKnockback() * 0.5f)});
+                    enemy_.DestroyBullet(i);
                     playerHitCooldown_ = 0.15f;
                 } else {
                     player_.TakeDamage(enemy_.GetBulletDamage());
                     player_.AddKnockback({vx * enemy_.GetBulletKnockback(),
                                           0.0f,
                                           vz * enemy_.GetBulletKnockback()});
+                    enemy_.DestroyBullet(i);
                     playerHitCooldown_ = 0.3f;
                 }
             }
@@ -741,6 +726,24 @@ void GameScene::Update() {
         waveBox.size = enemy_.GetWaveHitBoxSize();
         waveBox.rotation = player_.GetTransform().rotation;
 
+        if (!wave.isReflected && isPlayerCountering &&
+            CollisionUtil::CheckOBB(waveBox, counterBox)) {
+            enemy_.ReflectWave(i, enemy_.GetTransform().position);
+            dbgWaveHitPlayer_ = false;
+            continue;
+        }
+
+        if (wave.isReflected) {
+            if (CollisionUtil::CheckOBB(waveBox, enemyBodyBox) &&
+                enemyHitCooldown_ <= 0.0f) {
+                reflectDamage_ = enemy_.GetWaveDamage() * damageMultiplier_;
+                enemy_.TakeDamage(reflectDamage_);
+                enemy_.DestroyWave(i);
+                enemyHitCooldown_ = 0.2f;
+            }
+            continue;
+        }
+
         if (CollisionUtil::CheckOBB(waveBox, playerBox)) {
             dbgWaveHitPlayer_ = true;
 
@@ -756,22 +759,22 @@ void GameScene::Update() {
                 vz /= len;
 
                 if (player_.IsCounterStance()) {
-                    player_.NotifyCounterSuccess();
-                    if (enemy_.NotifyCountered()) {
-                        forceSyncEnemyAnimationThisFrame = true;
-                    }
-                    enemy_.TakeDamage(enemy_.GetWaveDamage() * 2.0f);
-                    playerHitCooldown_ = 0.12f;
-                } else if (player_.IsGuarding()) {
+                    triggerSuccessfulCounter(enemy_.GetWaveDamage() * 2.0f,
+                                             0.12f);
+                } else if (isPlayerGuarding) {
                     dbgPlayerGuardedHit_ = true;
+                    player_.TakeDamage(enemy_.GetWaveDamage() *
+                                       kGuardDamageMultiplier);
                     player_.AddKnockback(
                         {vx * (enemy_.GetWaveKnockback() * 0.5f), 0.0f,
                          vz * (enemy_.GetWaveKnockback() * 0.5f)});
+                    enemy_.DestroyWave(i);
                     playerHitCooldown_ = 0.15f;
                 } else {
                     player_.TakeDamage(enemy_.GetWaveDamage());
                     player_.AddKnockback({vx * enemy_.GetWaveKnockback(), 0.0f,
                                           vz * enemy_.GetWaveKnockback()});
+                    enemy_.DestroyWave(i);
                     playerHitCooldown_ = 0.35f;
                 }
             }
@@ -948,7 +951,7 @@ void GameScene::Draw() {
         }
     }
 #ifdef _DEBUG
-    // 当たり判定描画
+    // 蠖薙◆繧雁愛螳壽緒逕ｻ
     ModelDrawEffect hitBoxEffect{};
     hitBoxEffect.enabled = true;
     hitBoxEffect.intensity = 0.45f;
@@ -956,12 +959,12 @@ void GameScene::Draw() {
     hitBoxEffect.noiseAmount = 0.06f;
     hitBoxEffect.time = sceneLightTime_ * 5.0f;
 
-    // プレイヤー本体
+    // 繝励Ξ繧､繝､繝ｼ譛ｬ菴・
     hitBoxEffect.color = {0.20f, 0.95f, 0.28f, 0.45f};
     ctx_->model->SetDrawEffect(hitBoxEffect);
     ctx_->debugDraw->DrawOBB(ctx_->model, player_.GetOBB(), *currentCamera_);
 
-    // プレイヤー剣
+    // 繝励Ξ繧､繝､繝ｼ蜑｣
     hitBoxEffect.color = {0.20f, 0.85f, 1.00f, 0.42f};
     ctx_->model->SetDrawEffect(hitBoxEffect);
     for (const Sword *sword : player_.GetSwords()) {
@@ -971,7 +974,7 @@ void GameScene::Draw() {
         ctx_->debugDraw->DrawOBB(ctx_->model, sword->GetOBB(), *currentCamera_);
     }
 
-    // ボス部位
+    // 繝懊せ驛ｨ菴・
     if (enemy_.IsAlive()) {
         hitBoxEffect.color = {1.00f, 0.28f, 0.20f, 0.40f};
         ctx_->model->SetDrawEffect(hitBoxEffect);
@@ -1002,7 +1005,7 @@ void GameScene::Draw() {
             hitBoxEffect.intensity = 0.45f;
         }
 
-        // 弾ヒット判定
+        // 蠑ｾ繝偵ャ繝亥愛螳・
         hitBoxEffect.color = {0.95f, 0.20f, 1.00f, 0.34f};
         ctx_->model->SetDrawEffect(hitBoxEffect);
         for (const auto &bullet : enemy_.GetBullets()) {
@@ -1017,7 +1020,7 @@ void GameScene::Draw() {
             ctx_->debugDraw->DrawOBB(ctx_->model, bulletBox, *currentCamera_);
         }
 
-        // 波動ヒット判定
+        // 豕｢蜍輔ヲ繝・ヨ蛻､螳・
         hitBoxEffect.color = {0.25f, 0.65f, 1.00f, 0.34f};
         ctx_->model->SetDrawEffect(hitBoxEffect);
         for (const auto &wave : enemy_.GetWaves()) {
@@ -1211,6 +1214,7 @@ void GameScene::Draw() {
     }
 
     ImGui::Text("GuardTarget     : %s", guardName);
+    ImGui::Text("EnemyHP         : %.1f", enemy_.GetHP());
     ImGui::Text("PlayerHP        : %.1f", player_.GetHP());
     ImGui::Text("PlayerHitCD     : %.2f", playerHitCooldown_);
     ImGui::Text("PlayerGuarded   : %s",
@@ -1238,6 +1242,7 @@ void GameScene::Draw() {
     ImGui::Text("WaveDamage      : %.2f", enemy_.GetWaveDamage());
     ImGui::Text("BulletKB        : %.2f", enemy_.GetBulletKnockback());
     ImGui::Text("WaveKB          : %.2f", enemy_.GetWaveKnockback());
+    ImGui::Text("reflectDamage   : %.2f", reflectDamage_);
 
     ImGui::Separator();
     ImGui::Text("=== Enemy Tuning ===");
@@ -1519,7 +1524,7 @@ void GameScene::Draw() {
     if (ImGui::Button("Snap From Current")) {
         tripodPos_ = currentCamera_->GetPosition();
 
-        // DebugCamera対策：forwardからtarget作る
+        // DebugCamera蟇ｾ遲厄ｼ喃orward縺九ｉtarget菴懊ｋ
         DirectX::XMFLOAT3 rot = currentCamera_->GetRotation();
 
         float cosPitch = std::cosf(rot.x);
@@ -1969,7 +1974,7 @@ void GameScene::DrawWarpDistortionPass() {
 
 void GameScene::UpdateCamera(Input *input) {
 #ifdef _DEBUG
-    // 切り替え
+    // 蛻・ｊ譖ｿ縺・
     if (input->IsKeyTrigger(DIK_F11)) {
         currentCamera_ = &debugCamera_;
     }
@@ -1987,7 +1992,7 @@ void GameScene::UpdateCamera(Input *input) {
         return;
     }
 
-    // TripodCamera（完全固定）
+    // TripodCamera・亥ｮ悟・蝗ｺ螳夲ｼ・
     if (currentCamera_ == &tripodCamera_) {
         tripodCamera_.SetPosition(tripodPos_);
         tripodCamera_.LookAt(tripodTarget_);
@@ -1996,9 +2001,9 @@ void GameScene::UpdateCamera(Input *input) {
     }
 #endif
 
-    // ===== 通常カメラ =====
+    // ===== 騾壼ｸｸ繧ｫ繝｡繝ｩ =====
 
-    // ロックオン切り替え
+    // 繝ｭ繝・け繧ｪ繝ｳ蛻・ｊ譖ｿ縺・
     if (input->IsKeyTrigger(DIK_Q)) {
         isLockOn_ = !isLockOn_;
     }
@@ -2031,10 +2036,10 @@ void GameScene::UpdateCamera(Input *input) {
         cameraPitch_ = cameraPitchMax_;
     }
 
-    // ⭐ 最重要：ここでカメラ確定
+    // 箝・譛驥崎ｦ・ｼ壹％縺薙〒繧ｫ繝｡繝ｩ遒ｺ螳・
     UpdateBattleCamera();
 
-    // ⭐ 最重要：行列更新
+    // 箝・譛驥崎ｦ・ｼ夊｡悟・譖ｴ譁ｰ
     camera_.UpdateMatrices();
 }
 
@@ -2045,7 +2050,7 @@ void GameScene::UpdateBattleCamera() {
     const DirectX::XMFLOAT3 &playerPos = playerTf.position;
     const DirectX::XMFLOAT3 &enemyPos = enemyTf.position;
 
-    // 敵行動状態を取得
+    // 謨ｵ陦悟虚迥ｶ諷九ｒ蜿門ｾ・
     const ActionKind enemyActionKind = enemy_.GetActionKind();
     const ActionStep enemyActionStep = enemy_.GetActionStep();
 
@@ -2069,7 +2074,7 @@ void GameScene::UpdateBattleCamera() {
     const float enemyPhaseTransitionRatio = enemy_.GetPhaseTransitionRatio();
 
     // =========================
-    // FOVターゲット決定
+    // FOV繧ｿ繝ｼ繧ｲ繝・ヨ豎ｺ螳・
     // =========================
     targetFovDeg_ = normalFovDeg_;
 
@@ -2109,7 +2114,7 @@ void GameScene::UpdateBattleCamera() {
     camera_.SetPerspectiveFovDeg(currentFovDeg_);
 
     // =========================
-    // ロックオン中だけ yaw 補助
+    // 繝ｭ繝・け繧ｪ繝ｳ荳ｭ縺縺・yaw 陬懷勧
     // =========================
     if (isLockOn_ || isEnemyIntro) {
         DirectX::XMFLOAT3 assistTarget = enemyPos;
@@ -2134,7 +2139,7 @@ void GameScene::UpdateBattleCamera() {
             assistStrength = warpStartAssistStrength_;
             assistMaxStep = warpStartAssistMaxStep_;
         } else if (isEnemyWarpMove) {
-            // ワープ移動中は無理に振り回さない
+            // 繝ｯ繝ｼ繝礼ｧｻ蜍穂ｸｭ縺ｯ辟｡逅・↓謖ｯ繧雁屓縺輔↑縺・
             assistStrength = 0.0f;
             assistMaxStep = 0.0f;
         } else if (isEnemyWarpEnd) {
@@ -2184,7 +2189,7 @@ void GameScene::UpdateBattleCamera() {
     }
 
     // =========================
-    // yaw / pitch から基準軸を作る
+    // yaw / pitch 縺九ｉ蝓ｺ貅冶ｻｸ繧剃ｽ懊ｋ
     // =========================
     float cosPitch = std::cosf(cameraPitch_);
     DirectX::XMFLOAT3 forward = {std::sinf(cameraYaw_) * cosPitch,
@@ -2195,7 +2200,7 @@ void GameScene::UpdateBattleCamera() {
                                -std::sinf(cameraYaw_)};
 
     // =========================
-    // カメラ基準点
+    // 繧ｫ繝｡繝ｩ蝓ｺ貅也せ
     // =========================
     DirectX::XMFLOAT3 cameraTargetBase = {
         playerPos.x, playerPos.y + cameraLookHeight_, playerPos.z};
@@ -2204,7 +2209,7 @@ void GameScene::UpdateBattleCamera() {
 
     if (isLockOn_) {
         // ---------------------------------
-        // ロックオン時: 敵とのライン基準で円弧追従
+        // 繝ｭ繝・け繧ｪ繝ｳ譎・ 謨ｵ縺ｨ縺ｮ繝ｩ繧､繝ｳ蝓ｺ貅悶〒蜀・ｼｧ霑ｽ蠕・
         // ---------------------------------
         float toEnemyX = enemyPos.x - playerPos.x;
         float toEnemyZ = enemyPos.z - playerPos.z;
@@ -2218,11 +2223,11 @@ void GameScene::UpdateBattleCamera() {
         float lineX = toEnemyX * invLen;
         float lineZ = toEnemyZ * invLen;
 
-        // 敵方向ラインに対する右ベクトル
+        // 謨ｵ譁ｹ蜷代Λ繧､繝ｳ縺ｫ蟇ｾ縺吶ｋ蜿ｳ繝吶け繝医Ν
         float orbitRightX = lineZ;
         float orbitRightZ = -lineX;
 
-        // 敵との距離で少しだけ後ろに引く
+        // 謨ｵ縺ｨ縺ｮ霍晞屬縺ｧ蟆代＠縺縺大ｾ後ｍ縺ｫ蠑輔￥
         float pullT = 0.0f;
         {
             float minD = lockOnDistanceMin_;
@@ -2247,7 +2252,7 @@ void GameScene::UpdateBattleCamera() {
             usedRadius -= phaseTransitionPushIn_ * enemyPhaseTransitionRatio;
         }
 
-        // cameraYaw_ と敵方向ラインとの差で、円弧上の左右位置を決める
+        // cameraYaw_ 縺ｨ謨ｵ譁ｹ蜷代Λ繧､繝ｳ縺ｨ縺ｮ蟾ｮ縺ｧ縲∝・蠑ｧ荳翫・蟾ｦ蜿ｳ菴咲ｽｮ繧呈ｱｺ繧√ｋ
         float lineYaw = std::atan2f(lineX, lineZ);
         float yawDiff = cameraYaw_ - lineYaw;
 
@@ -2258,7 +2263,7 @@ void GameScene::UpdateBattleCamera() {
             yawDiff += 6.28318530f;
         }
 
-        // 真横まで回りすぎると見づらいので制限
+        // 逵滓ｨｪ縺ｾ縺ｧ蝗槭ｊ縺吶℃繧九→隕九▼繧峨＞縺ｮ縺ｧ蛻ｶ髯・
         const float maxOrbitAngle = 0.65f;
         if (yawDiff > maxOrbitAngle) {
             yawDiff = maxOrbitAngle;
@@ -2301,7 +2306,7 @@ void GameScene::UpdateBattleCamera() {
         cameraPos = lockOnOrbitCameraPos_;
     } else {
         // ---------------------------------
-        // 通常時: 肩越し三人称
+        // 騾壼ｸｸ譎・ 閧ｩ雜翫＠荳我ｺｺ遘ｰ
         // ---------------------------------
         float dx = enemyPos.x - playerPos.x;
         float dz = enemyPos.z - playerPos.z;
@@ -2332,12 +2337,12 @@ void GameScene::UpdateBattleCamera() {
                            enemyPhaseTransitionRatio;
         }
 
-        // 非ロック時は円弧用現在値を同期
+        // 髱槭Ο繝・け譎ゅ・蜀・ｼｧ逕ｨ迴ｾ蝨ｨ蛟､繧貞酔譛・
         lockOnOrbitCameraPos_ = cameraPos;
     }
 
     // =========================
-    // 注視点
+    // 豕ｨ隕也せ
     // =========================
     DirectX::XMFLOAT3 lookAt{};
 
