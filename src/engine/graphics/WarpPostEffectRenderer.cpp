@@ -35,6 +35,11 @@ void WarpPostEffectRenderer::Draw(const WarpPostEffectParamGPU &param,
     mappedCB_->radius2 = param.radius2;
     mappedCB_->strength2 = param.strength2;
     mappedCB_->enabled = param.enabled;
+    mappedCB_->slashStart = param.slashStart;
+    mappedCB_->slashEnd = param.slashEnd;
+    mappedCB_->slashThickness = param.slashThickness;
+    mappedCB_->slashStrength = param.slashStrength;
+    mappedCB_->slashEnabled = param.slashEnabled;
 
     cmd->SetPipelineState(pipelineState_.Get());
     cmd->SetGraphicsRootSignature(rootSignature_.Get());
@@ -72,6 +77,11 @@ void WarpPostEffectRenderer::CreateConstantBuffer() {
     mappedCB_->radius2 = 0.0f;
     mappedCB_->strength2 = 0.0f;
     mappedCB_->enabled = 0.0f;
+    mappedCB_->slashStart = {0.5f, 0.5f};
+    mappedCB_->slashEnd = {0.5f, 0.5f};
+    mappedCB_->slashThickness = 0.0f;
+    mappedCB_->slashStrength = 0.0f;
+    mappedCB_->slashEnabled = 0.0f;
 }
 
 void WarpPostEffectRenderer::CreateRootSignature() {

@@ -493,3 +493,36 @@ float Enemy::GetVisualYaw() const {
     }
     return facingYaw_;
 }
+
+void Enemy::UpdatePresentationEvents() {
+    ActionStep currentWarpStep = ActionStep::None;
+    if (action_.kind == ActionKind::Warp) {
+        currentWarpStep = action_.step;
+    }
+
+    if (currentWarpStep == ActionStep::Start &&
+        prevPresentationWarpStep_ != ActionStep::Start) {
+        EnemyElectricRingSpawnRequest req{};
+        req.worldPos =
+            warp_.hasDeparturePos ? warp_.departurePos : tf_.position;
+        req.isWarpEnd = false;
+        electricRingSpawnRequests_.push_back(req);
+    }
+
+    if (currentWarpStep == ActionStep::End &&
+        prevPresentationWarpStep_ != ActionStep::End) {
+        EnemyElectricRingSpawnRequest req{};
+        req.worldPos = warp_.targetPos;
+        req.isWarpEnd = true;
+        electricRingSpawnRequests_.push_back(req);
+    }
+
+    prevPresentationWarpStep_ = currentWarpStep;
+}
+
+std::vector<EnemyElectricRingSpawnRequest>
+Enemy::ConsumeElectricRingSpawnRequests() {
+    std::vector<EnemyElectricRingSpawnRequest> out = electricRingSpawnRequests_;
+    electricRingSpawnRequests_.clear();
+    return out;
+}

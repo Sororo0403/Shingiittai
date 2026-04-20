@@ -7,11 +7,16 @@
 #include "TextureManager.h"
 #include "WinApp.h"
 #include "WarpPostEffectRenderer.h"
+#include "ElectricRingEffectRenderer.h"
+#include "GpuSlashParticleSystem.h"
+#include "SlashEffectRenderer.h"
+#include "SwordTrailRenderer.h"
 #ifdef _DEBUG
 #include "DebugDraw.h"
 #endif // _DEBUG
 #include "imgui.h"
 #include "imgui_internal.h"
+#include <algorithm>
 #include <cmath>
 #ifdef _DEBUG
 #include "EnemyTuningPresetIO.h"
@@ -44,6 +49,24 @@ bool IsWithinCounterJustWindow(const Enemy &enemy) {
     float justEnd = activeStart + activeLen * 0.70f;
 
     return (t >= justStart && t <= justEnd);
+}
+
+float Clamp01(float value) {
+    return std::clamp(value, 0.0f, 1.0f);
+}
+
+float EaseOutCubic(float t) {
+    t = Clamp01(t);
+    float inv = 1.0f - t;
+    return 1.0f - inv * inv * inv;
+}
+
+ImU32 ToImColor(const XMFLOAT4 &color, float alphaScale = 1.0f) {
+    int r = static_cast<int>(Clamp01(color.x) * 255.0f);
+    int g = static_cast<int>(Clamp01(color.y) * 255.0f);
+    int b = static_cast<int>(Clamp01(color.z) * 255.0f);
+    int a = static_cast<int>(Clamp01(color.w * alphaScale) * 255.0f);
+    return IM_COL32(r, g, b, a);
 }
 } // namespace
 
@@ -111,6 +134,11 @@ void GameScene::Initialize(const SceneContext &ctx) {
     uint32_t bulletModel =
         ctx_->model->Load(L"resources/model/bullet/bullet.obj");
     bullet_.Initialize(bulletModel);
+
+    activeElectricRing_ = {};
+    if (ctx_ != nullptr && ctx_->electricRingParam != nullptr) {
+        ctx_->electricRingParam->enabled = 0.0f;
+    }
 }
 
 void GameScene::Update() {
@@ -156,6 +184,24 @@ void GameScene::Update() {
     }
 
     enemy_.Update(playerObs, ctx_->deltaTime);
+
+    UpdateEnemySlashEffects();
+
+    UpdateEnemySwordTrail();
+
+    enemy_.UpdatePresentationEvents();
+
+    {
+        auto requests = enemy_.ConsumeElectricRingSpawnRequests();
+        for (const auto &req : requests) {
+            SpawnElectricRing(req.worldPos, req.isWarpEnd);
+        }
+    }
+
+    UpdateElectricRing();
+
+    UpdateMagnetismic();
+    UpdateMagnetismic();
 
     UpdateBattleCamera();
 
@@ -422,6 +468,34 @@ void GameScene::Update() {
         warpParam->radius2 = 0.0f;
         warpParam->strength2 = 0.0f;
         warpParam->enabled = 0.0f;
+        warpParam->slashStart = {0.5f, 0.5f};
+        warpParam->slashEnd = {0.5f, 0.5f};
+        warpParam->slashThickness = 0.0f;
+        warpParam->slashStrength = 0.0f;
+        warpParam->slashEnabled = 0.0f;
+
+        XMFLOAT2 slashStartScreen{};
+        XMFLOAT2 slashEndScreen{};
+        float slashPhaseAlpha = 0.0f;
+        float slashActionTime = 0.0f;
+        ActionKind slashActionKind = ActionKind::None;
+        if (ComputeEnemySlashScreenEffect(slashStartScreen, slashEndScreen,
+                                          slashPhaseAlpha, slashActionTime,
+                                          slashActionKind)) {
+            const float width = static_cast<float>(ctx_->winApp->GetWidth());
+            const float height = static_cast<float>(ctx_->winApp->GetHeight());
+            warpParam->slashStart = {slashStartScreen.x / width,
+                                     slashStartScreen.y / height};
+            warpParam->slashEnd = {slashEndScreen.x / width,
+                                   slashEndScreen.y / height};
+            warpParam->slashThickness =
+                enemySlashDistortionThicknessUv_ *
+                (slashActionKind == ActionKind::Sweep ? 1.18f : 1.0f) *
+                (0.72f + slashPhaseAlpha * 0.55f);
+            warpParam->slashStrength =
+                enemySlashDistortionStrength_ * (0.58f + slashPhaseAlpha * 0.88f);
+            warpParam->slashEnabled = 1.0f;
+        }
 
         if (enemy_.GetActionKind() == ActionKind::Warp) {
             const float width = static_cast<float>(ctx_->winApp->GetWidth());
@@ -453,32 +527,32 @@ void GameScene::Update() {
             if (hasAnyCenter) {
                 warpParam->enabled = 1.0f;
 
-                                switch (enemy_.GetActionStep()) {
+                switch (enemy_.GetActionStep()) {
                 case ActionStep::Start:
                     // 消える前は局所的に弱く
-                    warpParam->radius = 0.045f;
-                    warpParam->strength = 0.006f;
+                    warpParam->radius = 0.085f;
+                    warpParam->strength = 0.010f;
 
-                    warpParam->radius2 = 0.070f;
-                    warpParam->strength2 = 0.010f;
+                    warpParam->radius2 = 0.110f;
+                    warpParam->strength2 = 0.014f;
                     break;
 
                 case ActionStep::Move:
                     // 移動中は画面歪みを主役にしない
-                    warpParam->radius = 0.030f;
-                    warpParam->strength = 0.002f;
+                    warpParam->radius = 0.060f;
+                    warpParam->strength = 0.004f;
 
-                    warpParam->radius2 = 0.045f;
-                    warpParam->strength2 = 0.004f;
+                    warpParam->radius2 = 0.085f;
+                    warpParam->strength2 = 0.007f;
                     break;
 
                 case ActionStep::End:
                     // 到着時だけ少し強く
-                    warpParam->radius = 0.090f;
-                    warpParam->strength = 0.016f;
+                    warpParam->radius = 0.135f;
+                    warpParam->strength = 0.022f;
 
-                    warpParam->radius2 = 0.020f;
-                    warpParam->strength2 = 0.002f;
+                    warpParam->radius2 = 0.040f;
+                    warpParam->strength2 = 0.004f;
                     break;
 
                 default:
@@ -486,6 +560,7 @@ void GameScene::Update() {
                     break;
                 }
             }
+
         }
     }
 }
@@ -540,7 +615,29 @@ void GameScene::Draw() {
     }
 #endif // _DEBUG
     ctx_->model->PostDraw();
+    DrawMagnetismic();
+      if (ctx_->swordTrailRenderer != nullptr) {
+        ctx_->swordTrailRenderer->Draw(*currentCamera_);
+    }
 
+     {
+        DirectX::XMFLOAT3 slashStartWorld{};
+        DirectX::XMFLOAT3 slashEndWorld{};
+        float phaseAlpha = 0.0f;
+        float actionTime = 0.0f;
+        ActionKind actionKind = ActionKind::None;
+
+        if (ComputeEnemySlashWorldEffect(slashStartWorld, slashEndWorld,
+                                         phaseAlpha, actionTime, actionKind)) {
+            const bool isSweep = (actionKind == ActionKind::Sweep);
+          
+            ctx_->slashEffectRenderer->DrawEnemySlash(
+                *currentCamera_, slashStartWorld, slashEndWorld, phaseAlpha,
+                actionTime, isSweep);
+        }
+    }
+
+    ctx_->gpuSlashParticleSystem->Render(*currentCamera_, ctx_->deltaTime);
     DrawWarpSmokePass();
     DrawWarpDistortionPass();
 
@@ -1005,6 +1102,485 @@ bool GameScene::ProjectWorldToScreen(const XMFLOAT3 &worldPos,
     return true;
 }
 
+bool GameScene::ComputeEnemySlashScreenEffect(XMFLOAT2 &outStart,
+                                              XMFLOAT2 &outEnd,
+                                              float &outPhaseAlpha,
+                                              float &outActionTime,
+                                              ActionKind &outActionKind) const {
+    outStart = {};
+    outEnd = {};
+    outPhaseAlpha = 0.0f;
+    outActionTime = 0.0f;
+    outActionKind = ActionKind::None;
+
+    const ActionKind actionKind = enemy_.GetActionKind();
+    const ActionStep actionStep = enemy_.GetActionStep();
+    const bool isEnemySlashAction =
+        (actionKind == ActionKind::Smash || actionKind == ActionKind::Sweep) &&
+        (actionStep == ActionStep::Charge || actionStep == ActionStep::Hold ||
+         actionStep == ActionStep::Active || actionStep == ActionStep::Recovery);
+    if (!isEnemySlashAction) {
+        return false;
+    }
+
+    XMFLOAT3 slashStartWorld = enemy_.GetRightHandTransform().position;
+    XMFLOAT3 slashEndWorld = enemy_.GetAttackOBB().center;
+
+    const float yaw =
+        (actionStep == ActionStep::Charge || actionStep == ActionStep::Hold)
+            ? enemy_.GetFacingYaw()
+            : enemy_.GetLockedAttackYaw();
+    const float forwardX = std::sinf(yaw);
+    const float forwardZ = std::cosf(yaw);
+    const float rightX = std::cosf(yaw);
+    const float rightZ = -std::sinf(yaw);
+
+    if (actionKind == ActionKind::Smash) {
+        slashStartWorld.x += -forwardX * 0.35f;
+        slashStartWorld.y += 0.95f;
+        slashStartWorld.z += -forwardZ * 0.35f;
+
+        slashEndWorld.x += forwardX * 0.55f;
+        slashEndWorld.y -= 0.55f;
+        slashEndWorld.z += forwardZ * 0.55f;
+    } else {
+        const XMFLOAT3 attackCenter = enemy_.GetAttackOBB().center;
+        const float sweepHalfWidth = enemy_.GetSweepAttackBoxSize().x * 0.55f;
+        slashStartWorld = {attackCenter.x - rightX * sweepHalfWidth,
+                           attackCenter.y + 0.28f,
+                           attackCenter.z - rightZ * sweepHalfWidth};
+        slashEndWorld = {attackCenter.x + rightX * sweepHalfWidth,
+                         attackCenter.y - 0.18f,
+                         attackCenter.z + rightZ * sweepHalfWidth};
+    }
+
+    if (!ProjectWorldToScreen(slashStartWorld, outStart) ||
+        !ProjectWorldToScreen(slashEndWorld, outEnd)) {
+        return false;
+    }
+
+    const AttackTimingParam *timing = enemy_.GetCurrentAttackTimingPublic();
+    const float actionTime = enemy_.GetCurrentActionTimePublic();
+    float phaseAlpha = 0.0f;
+    if (actionStep == ActionStep::Charge || actionStep == ActionStep::Hold) {
+        const float previewT =
+            (timing != nullptr && timing->activeStartTime > 0.0001f)
+                ? actionTime / timing->activeStartTime
+                : 1.0f;
+        phaseAlpha =
+            enemySlashChargePreviewAlpha_ * (0.35f + 0.65f * EaseOutCubic(previewT));
+    } else if (actionStep == ActionStep::Active) {
+        float activeT = 0.0f;
+        if (timing != nullptr && timing->activeEndTime > timing->activeStartTime) {
+            activeT = (actionTime - timing->activeStartTime) /
+                      (timing->activeEndTime - timing->activeStartTime);
+        }
+        phaseAlpha = enemySlashActiveAlpha_ * (1.0f - 0.22f * Clamp01(activeT));
+    } else {
+        float recoveryT = 0.0f;
+        if (timing != nullptr && timing->totalTime > timing->recoveryStartTime) {
+            recoveryT = (actionTime - timing->recoveryStartTime) /
+                        (timing->totalTime - timing->recoveryStartTime);
+        }
+        phaseAlpha =
+            enemySlashRecoveryAlpha_ * (1.0f - EaseOutCubic(recoveryT));
+    }
+
+    if (phaseAlpha <= 0.01f) {
+        return false;
+    }
+
+    outPhaseAlpha = phaseAlpha;
+    outActionTime = actionTime;
+    outActionKind = actionKind;
+    return true;
+}
+
+bool GameScene::ComputeEnemySlashWorldEffect(XMFLOAT3 &outStart,
+                                             XMFLOAT3 &outEnd,
+                                             float &outPhaseAlpha,
+                                             float &outActionTime,
+                                             ActionKind &outActionKind) const {
+    outStart = {};
+    outEnd = {};
+    outPhaseAlpha = 0.0f;
+    outActionTime = 0.0f;
+    outActionKind = ActionKind::None;
+
+    const ActionKind actionKind = enemy_.GetActionKind();
+    const ActionStep actionStep = enemy_.GetActionStep();
+    const bool isEnemySlashAction =
+        (actionKind == ActionKind::Smash || actionKind == ActionKind::Sweep) &&
+        (actionStep == ActionStep::Charge || actionStep == ActionStep::Hold ||
+         actionStep == ActionStep::Active ||
+         actionStep == ActionStep::Recovery);
+
+    if (!isEnemySlashAction) {
+        return false;
+    }
+
+    XMFLOAT3 slashStartWorld = enemy_.GetRightHandTransform().position;
+    XMFLOAT3 slashEndWorld = enemy_.GetAttackOBB().center;
+
+    const float yaw =
+        (actionStep == ActionStep::Charge || actionStep == ActionStep::Hold)
+            ? enemy_.GetFacingYaw()
+            : enemy_.GetLockedAttackYaw();
+
+    const float forwardX = std::sinf(yaw);
+    const float forwardZ = std::cosf(yaw);
+    const float rightX = std::cosf(yaw);
+    const float rightZ = -std::sinf(yaw);
+
+    if (actionKind == ActionKind::Smash) {
+        slashStartWorld.x += -forwardX * 0.35f;
+        slashStartWorld.y += 0.95f;
+        slashStartWorld.z += -forwardZ * 0.35f;
+
+        slashEndWorld.x += forwardX * 0.55f;
+        slashEndWorld.y -= 0.55f;
+        slashEndWorld.z += forwardZ * 0.55f;
+    } else {
+        const XMFLOAT3 attackCenter = enemy_.GetAttackOBB().center;
+        const float sweepHalfWidth = enemy_.GetSweepAttackBoxSize().x * 0.55f;
+
+        slashStartWorld = {attackCenter.x - rightX * sweepHalfWidth,
+                           attackCenter.y + 0.28f,
+                           attackCenter.z - rightZ * sweepHalfWidth};
+
+        slashEndWorld = {attackCenter.x + rightX * sweepHalfWidth,
+                         attackCenter.y - 0.18f,
+                         attackCenter.z + rightZ * sweepHalfWidth};
+    }
+
+    const AttackTimingParam *timing = enemy_.GetCurrentAttackTimingPublic();
+    const float actionTime = enemy_.GetCurrentActionTimePublic();
+
+    float phaseAlpha = 0.0f;
+    if (actionStep == ActionStep::Charge || actionStep == ActionStep::Hold) {
+        const float previewT =
+            (timing != nullptr && timing->activeStartTime > 0.0001f)
+                ? actionTime / timing->activeStartTime
+                : 1.0f;
+        phaseAlpha = enemySlashChargePreviewAlpha_ *
+                     (0.35f + 0.65f * EaseOutCubic(previewT));
+    } else if (actionStep == ActionStep::Active) {
+        float activeT = 0.0f;
+        if (timing != nullptr &&
+            timing->activeEndTime > timing->activeStartTime) {
+            activeT = (actionTime - timing->activeStartTime) /
+                      (timing->activeEndTime - timing->activeStartTime);
+        }
+        phaseAlpha = enemySlashActiveAlpha_ * (1.0f - 0.22f * Clamp01(activeT));
+    } else {
+        float recoveryT = 0.0f;
+        if (timing != nullptr &&
+            timing->totalTime > timing->recoveryStartTime) {
+            recoveryT = (actionTime - timing->recoveryStartTime) /
+                        (timing->totalTime - timing->recoveryStartTime);
+        }
+        phaseAlpha =
+            enemySlashRecoveryAlpha_ * (1.0f - EaseOutCubic(recoveryT));
+    }
+
+    if (phaseAlpha <= 0.01f) {
+        return false;
+    }
+
+    outStart = slashStartWorld;
+    outEnd = slashEndWorld;
+    outPhaseAlpha = phaseAlpha;
+    outActionTime = actionTime;
+    outActionKind = actionKind;
+    return true;
+}
+
+void GameScene::DrawEnemySlashPass() {
+    ImGuiContext *imguiCtx = ImGui::GetCurrentContext();
+    if (imguiCtx == nullptr || imguiCtx->Viewports.Size <= 0) {
+        return;
+    }
+
+    ImGuiViewport *mainViewport = ImGui::GetMainViewport();
+    if (mainViewport == nullptr) {
+        return;
+    }
+
+    ImDrawList *drawList = ImGui::GetBackgroundDrawList(mainViewport);
+    if (drawList == nullptr) {
+        return;
+    }
+
+    XMFLOAT2 slashStartScreenF{};
+    XMFLOAT2 slashEndScreenF{};
+    float phaseAlpha = 0.0f;
+    float actionTime = 0.0f;
+    ActionKind actionKind = ActionKind::None;
+    if (!ComputeEnemySlashScreenEffect(slashStartScreenF, slashEndScreenF,
+                                       phaseAlpha, actionTime, actionKind)) {
+        return;
+    }
+
+    ImVec2 start(slashStartScreenF.x, slashStartScreenF.y);
+    ImVec2 end(slashEndScreenF.x, slashEndScreenF.y);
+    float dx = end.x - start.x;
+    float dy = end.y - start.y;
+    float length = std::sqrtf(dx * dx + dy * dy);
+    if (length <= 0.0001f) {
+        return;
+    }
+
+    float invLen = 1.0f / length;
+    float dirX = dx * invLen;
+    float dirY = dy * invLen;
+    float perpX = -dirY;
+    float perpY = dirX;
+
+    float sweepCurve = (actionKind == ActionKind::Sweep) ? 52.0f : 30.0f;
+    float pulse = 0.84f + 0.16f * std::sinf(actionTime * 36.0f);
+    float curveOffset = sweepCurve * pulse;
+    ImVec2 control((start.x + end.x) * 0.5f + perpX * curveOffset,
+                   (start.y + end.y) * 0.5f + perpY * curveOffset);
+
+    constexpr int kSlashSegments = 18;
+    ImVec2 path[kSlashSegments + 1];
+    const float outerThickness =
+        enemySlashOuterThicknessPx_ *
+        (actionKind == ActionKind::Sweep ? 1.15f : 1.0f) *
+        (0.86f + phaseAlpha * 0.28f);
+    const float coreThickness =
+        enemySlashCoreThicknessPx_ * (0.82f + phaseAlpha * 0.24f);
+    float widths[kSlashSegments + 1];
+    for (int i = 0; i <= kSlashSegments; ++i) {
+        float t = static_cast<float>(i) / static_cast<float>(kSlashSegments);
+        float inv = 1.0f - t;
+        path[i].x = inv * inv * start.x + 2.0f * inv * t * control.x + t * t * end.x;
+        path[i].y = inv * inv * start.y + 2.0f * inv * t * control.y + t * t * end.y;
+        float tipTaper = 1.0f - std::fabs(t - 0.52f) * 1.35f;
+        tipTaper = Clamp01(tipTaper);
+        widths[i] = outerThickness * (0.25f + 0.75f * tipTaper);
+    }
+
+    XMFLOAT4 shadowColor = {0.03f, 0.01f, 0.02f, phaseAlpha * 0.96f};
+    XMFLOAT4 darkRimColor = {0.17f, 0.01f, 0.04f, phaseAlpha * 0.82f};
+    XMFLOAT4 hotColor = {0.96f, 0.12f, 0.30f, phaseAlpha * 0.68f};
+    XMFLOAT4 coreColor = {1.00f, 0.95f, 0.97f, phaseAlpha * 0.94f};
+    XMFLOAT4 bloomColor = {0.74f, 0.58f, 1.00f, phaseAlpha * 0.44f};
+
+    ImVec2 ribbon[(kSlashSegments + 1) * 2];
+    for (int i = 0; i <= kSlashSegments; ++i) {
+        int prevIndex = (i == 0) ? i : i - 1;
+        int nextIndex = (i == kSlashSegments) ? i : i + 1;
+        float tangentX = path[nextIndex].x - path[prevIndex].x;
+        float tangentY = path[nextIndex].y - path[prevIndex].y;
+        float tangentLen =
+            std::sqrtf(tangentX * tangentX + tangentY * tangentY);
+        if (tangentLen <= 0.0001f) {
+            tangentX = dirX;
+            tangentY = dirY;
+            tangentLen = 1.0f;
+        }
+        tangentX /= tangentLen;
+        tangentY /= tangentLen;
+        float normalX = -tangentY;
+        float normalY = tangentX;
+        float width = widths[i];
+        ribbon[i] = ImVec2(path[i].x + normalX * width,
+                           path[i].y + normalY * width);
+        ribbon[(kSlashSegments + 1) * 2 - 1 - i] =
+            ImVec2(path[i].x - normalX * width * 0.65f,
+                   path[i].y - normalY * width * 0.65f);
+    }
+
+    ImVec2 echoPath[kSlashSegments + 1];
+    for (int i = 0; i <= kSlashSegments; ++i) {
+        echoPath[i] = ImVec2(path[i].x + perpX * enemySlashEchoOffsetPx_,
+                             path[i].y + perpY * enemySlashEchoOffsetPx_);
+    }
+
+    drawList->AddConvexPolyFilled(ribbon, (kSlashSegments + 1) * 2,
+                                  ToImColor(shadowColor, 0.46f));
+    drawList->AddPolyline(path, kSlashSegments + 1, ToImColor(bloomColor, 0.80f),
+                          false, outerThickness * 1.55f);
+    drawList->AddPolyline(echoPath, kSlashSegments + 1,
+                          ToImColor(shadowColor, 0.55f), false,
+                          outerThickness * 1.05f);
+    drawList->AddPolyline(path, kSlashSegments + 1, ToImColor(shadowColor), false,
+                          outerThickness);
+    drawList->AddPolyline(path, kSlashSegments + 1, ToImColor(darkRimColor), false,
+                          outerThickness * 0.72f);
+    drawList->AddPolyline(path, kSlashSegments + 1, ToImColor(hotColor), false,
+                          outerThickness * 0.34f);
+    drawList->AddPolyline(path, kSlashSegments + 1, ToImColor(coreColor), false,
+                          coreThickness);
+
+    const ImVec2 impact = path[kSlashSegments];
+    const float branchScale = (actionKind == ActionKind::Sweep) ? 0.82f : 0.68f;
+    const float branchLen = length * branchScale * 0.22f;
+    const float branchForward = length * 0.08f;
+
+    ImVec2 branchA0(impact.x - perpX * branchLen, impact.y - perpY * branchLen);
+    ImVec2 branchA1(impact.x + perpX * branchLen + dirX * branchForward,
+                    impact.y + perpY * branchLen + dirY * branchForward);
+    ImVec2 branchB0(impact.x + perpX * branchLen * 0.52f - dirX * branchForward * 0.7f,
+                    impact.y + perpY * branchLen * 0.52f - dirY * branchForward * 0.7f);
+    ImVec2 branchB1(impact.x - perpX * branchLen * 0.78f + dirX * branchForward * 0.5f,
+                    impact.y - perpY * branchLen * 0.78f + dirY * branchForward * 0.5f);
+
+    drawList->AddLine(branchA0, branchA1, ToImColor(darkRimColor), outerThickness * 0.22f);
+    drawList->AddLine(branchA0, branchA1, ToImColor(coreColor), coreThickness * 0.46f);
+    drawList->AddLine(branchB0, branchB1, ToImColor(hotColor), coreThickness * 0.38f);
+
+    constexpr int kInkSpikeCount = 5;
+    for (int i = 0; i < kInkSpikeCount; ++i) {
+        float ratio = static_cast<float>(i) / static_cast<float>(kInkSpikeCount - 1);
+        int pathIndex = static_cast<int>(ratio * static_cast<float>(kSlashSegments));
+        float spikeScale = (0.45f + 0.55f * (1.0f - ratio)) *
+                           (actionKind == ActionKind::Sweep ? 1.22f : 1.0f);
+        float spikeLen = length * 0.12f * spikeScale;
+        float sweepBias = std::sinf(actionTime * 18.0f + ratio * 7.0f) * 18.0f;
+        ImVec2 spikeStart(path[pathIndex].x + dirX * (ratio * 22.0f),
+                          path[pathIndex].y + dirY * (ratio * 22.0f));
+        ImVec2 spikeEnd(spikeStart.x - perpX * (spikeLen + sweepBias),
+                        spikeStart.y - perpY * (spikeLen + sweepBias));
+        drawList->AddLine(spikeStart, spikeEnd, ToImColor(shadowColor, 0.92f),
+                          outerThickness * (0.18f + 0.12f * spikeScale));
+    }
+
+    constexpr int kSparkCount = 12;
+    for (int i = 0; i < kSparkCount; ++i) {
+        float ratio = static_cast<float>(i) / static_cast<float>(kSparkCount);
+        float angle = actionTime * 16.0f + ratio * DirectX::XM_2PI * 1.17f;
+        float sparkLen =
+            enemySlashSparkSpreadPx_ * (0.28f + 0.72f * (1.0f - ratio)) *
+            (0.84f + 0.18f * pulse);
+        float offset = enemySlashSparkSpreadPx_ * 0.20f * ratio;
+        ImVec2 sparkStart(
+            impact.x + dirX * offset + std::cosf(angle) * 8.0f,
+            impact.y + dirY * offset + std::sinf(angle * 1.2f) * 8.0f);
+        ImVec2 sparkEnd(
+            sparkStart.x + std::cosf(angle) * sparkLen + perpX * sparkLen * 0.12f,
+            sparkStart.y + std::sinf(angle) * sparkLen + perpY * sparkLen * 0.12f);
+
+        drawList->AddLine(sparkStart, sparkEnd, ToImColor(hotColor, 0.82f - ratio * 0.3f),
+                          1.2f + (1.0f - ratio) * 1.8f);
+    }
+
+    ImVec2 flashQuad[4] = {
+        ImVec2(impact.x - perpX * (28.0f + phaseAlpha * 20.0f) - dirX * 4.0f,
+               impact.y - perpY * (28.0f + phaseAlpha * 20.0f) - dirY * 4.0f),
+        ImVec2(impact.x + dirX * (44.0f + phaseAlpha * 22.0f),
+               impact.y + dirY * (44.0f + phaseAlpha * 22.0f)),
+        ImVec2(impact.x + perpX * (16.0f + phaseAlpha * 10.0f) - dirX * 6.0f,
+               impact.y + perpY * (16.0f + phaseAlpha * 10.0f) - dirY * 6.0f),
+        ImVec2(impact.x - dirX * (18.0f + phaseAlpha * 8.0f),
+               impact.y - dirY * (18.0f + phaseAlpha * 8.0f))};
+    drawList->AddConvexPolyFilled(flashQuad, 4, ToImColor(coreColor, 0.78f));
+    drawList->AddLine(ImVec2(impact.x - perpX * 42.0f, impact.y - perpY * 42.0f),
+                      ImVec2(impact.x + perpX * 42.0f, impact.y + perpY * 42.0f),
+                      ToImColor(shadowColor, 0.88f), 3.2f);
+
+    drawList->AddCircleFilled(impact, 11.0f + phaseAlpha * 8.0f,
+                              ToImColor(coreColor, 0.68f));
+    drawList->AddCircleFilled(impact, 21.0f + phaseAlpha * 12.0f,
+                              ToImColor(hotColor, 0.26f));
+    drawList->AddCircleFilled(impact, 34.0f + phaseAlpha * 16.0f,
+                              ToImColor(bloomColor, 0.14f));
+}
+
+void GameScene::UpdateEnemySlashEffects() {
+    const ActionKind actionKind = enemy_.GetActionKind();
+    const ActionStep actionStep = enemy_.GetActionStep();
+
+    const bool isSlashActive =
+        (actionKind == ActionKind::Smash || actionKind == ActionKind::Sweep) &&
+        (actionStep == ActionStep::Active);
+
+    if (isSlashActive && !enemySlashActiveLatched_) {
+        DirectX::XMFLOAT3 slashStartWorld{};
+        DirectX::XMFLOAT3 slashEndWorld{};
+        float phaseAlpha = 0.0f;
+        float actionTime = 0.0f;
+        ActionKind worldActionKind = ActionKind::None;
+
+        if (ComputeEnemySlashWorldEffect(slashStartWorld, slashEndWorld,
+                                         phaseAlpha, actionTime,
+                                         worldActionKind)) {
+            const bool isSweep = (worldActionKind == ActionKind::Sweep);
+            const uint32_t count = isSweep ? enemySlashParticleCountSweep_
+                                           : enemySlashParticleCountSmash_;
+
+            ctx_->gpuSlashParticleSystem->EmitSlashBurst(
+                slashStartWorld, slashEndWorld, count,
+                enemySlashParticleEmitScale_, isSweep);
+        }
+    }
+
+    enemySlashActiveLatched_ = isSlashActive;
+    prevEnemyActionKind_ = actionKind;
+    prevEnemyActionStep_ = actionStep;
+}
+
+void GameScene::UpdateEnemySwordTrail() {
+    if (ctx_ == nullptr || ctx_->swordTrailRenderer == nullptr) {
+        return;
+    }
+
+    ctx_->swordTrailRenderer->SetEnabled(enemySwordTrailEnabled_);
+    ctx_->swordTrailRenderer->BeginFrame(ctx_->deltaTime);
+
+    const ActionKind actionKind = enemy_.GetActionKind();
+    const ActionStep actionStep = enemy_.GetActionStep();
+
+    const bool isTrailAction =
+        (actionKind == ActionKind::Smash || actionKind == ActionKind::Sweep) &&
+        (actionStep == ActionStep::Charge || actionStep == ActionStep::Active);
+
+    if (isTrailAction) {
+        DirectX::XMFLOAT3 baseWorld = enemy_.GetRightHandTransform().position;
+        DirectX::XMFLOAT3 tipWorld = enemy_.GetAttackOBB().center;
+
+        const float yaw = (actionStep == ActionStep::Charge)
+                              ? enemy_.GetFacingYaw()
+                              : enemy_.GetLockedAttackYaw();
+
+        const float forwardX = std::sinf(yaw);
+        const float forwardZ = std::cosf(yaw);
+        const float rightX = std::cosf(yaw);
+        const float rightZ = -std::sinf(yaw);
+
+        if (actionKind == ActionKind::Smash) {
+            baseWorld.x += -forwardX * 0.18f;
+            baseWorld.y += 0.70f;
+            baseWorld.z += -forwardZ * 0.18f;
+
+            tipWorld.x += forwardX * 0.42f;
+            tipWorld.y -= 0.38f;
+            tipWorld.z += forwardZ * 0.42f;
+        } else {
+            const DirectX::XMFLOAT3 attackCenter = enemy_.GetAttackOBB().center;
+            const float sweepHalfWidth =
+                enemy_.GetSweepAttackBoxSize().x * 0.52f;
+
+            baseWorld = {attackCenter.x - rightX * sweepHalfWidth,
+                         attackCenter.y + 0.16f,
+                         attackCenter.z - rightZ * sweepHalfWidth};
+
+            tipWorld = {attackCenter.x + rightX * sweepHalfWidth,
+                        attackCenter.y - 0.10f,
+                        attackCenter.z + rightZ * sweepHalfWidth};
+        }
+
+        const float width = (actionKind == ActionKind::Sweep)
+                                ? enemySwordTrailWidth_ * 1.10f
+                                : enemySwordTrailWidth_ * 0.82f;
+
+        ctx_->swordTrailRenderer->AddPoint(baseWorld, tipWorld, width);
+    }
+
+    ctx_->swordTrailRenderer->EndFrame();
+}
+
 void GameScene::DrawWarpSmokePass() {
     if (enemy_.GetActionKind() != ActionKind::Warp || ctx_ == nullptr ||
         ctx_->sprite == nullptr) {
@@ -1430,20 +2006,24 @@ void GameScene::DrawWarpDistortionPass() {
     };
 
     if (warpStep == ActionStep::Start && hasSource) {
-        drawDistortionAt(sourceScreen, 0.88f, 0.0f);
+        ImVec2 sourceFoot = sourceScreen;
+        sourceFoot.y += warpDistortionFootOffsetPx_;
+        drawDistortionAt(sourceFoot, 0.88f, 0.0f);
     }
 
     if (warpStep == ActionStep::Move && hasSource && hasTarget) {
         ImVec2 mid((sourceScreen.x + targetScreen.x) * 0.5f,
-                   (sourceScreen.y + targetScreen.y) * 0.5f);
+                   (sourceScreen.y + targetScreen.y) * 0.5f +
+                       warpDistortionFootOffsetPx_ * 0.78f);
         drawDistortionAt(mid, 0.72f, 0.6f);
         drawList->AddLine(sourceScreen, targetScreen, soft, 0.8f);
     }
 
     if (hasTarget) {
         ImVec2 arrivalCenter = targetScreen;
-        arrivalCenter.y -= warpDistortionPreviewOffsetPx_ *
-                           (warpStep == ActionStep::Start ? 0.55f : 0.18f);
+        arrivalCenter.y += warpDistortionFootOffsetPx_ -
+                           warpDistortionPreviewOffsetPx_ *
+                               (warpStep == ActionStep::Start ? 0.55f : 0.18f);
         drawDistortionAt(arrivalCenter,
                          warpStep == ActionStep::Move ? 1.12f : 1.0f, 1.2f);
     }
@@ -1921,4 +2501,116 @@ void GameScene::UpdateBattleCamera() {
 
     camera_.SetPosition(cameraPos);
     camera_.LookAt(lookAt);
+}
+
+////////////////////////////
+//lightring
+///////////////////////////
+void GameScene::SpawnElectricRing(const XMFLOAT3 &worldPos, bool isWarpEnd) {
+    activeElectricRing_ = {};
+    activeElectricRing_.active = true;
+    activeElectricRing_.worldPos = worldPos;
+    activeElectricRing_.worldPos.y += 1.1f;
+    activeElectricRing_.time = 0.0f;
+
+    if (!isWarpEnd) {
+        // ワープ開始
+        activeElectricRing_.lifeTime = 0.45f;
+        activeElectricRing_.startRadius = 0.01f;
+        activeElectricRing_.endRadius = 0.18f;
+        activeElectricRing_.ringWidth = 0.012f;
+        activeElectricRing_.distortionWidth = 0.040f;
+        activeElectricRing_.distortionStrength = 0.022f;
+        activeElectricRing_.swirlStrength = 0.008f;
+        activeElectricRing_.cloudScale = 3.8f;
+        activeElectricRing_.cloudIntensity = 1.10f;
+        activeElectricRing_.brightness = 1.80f;
+        activeElectricRing_.haloIntensity = 0.80f;
+    } else {
+        // ワープ終了
+        activeElectricRing_.lifeTime = 0.65f;
+        activeElectricRing_.startRadius = 0.02f;
+        activeElectricRing_.endRadius = 0.28f;
+        activeElectricRing_.ringWidth = 0.015f;
+        activeElectricRing_.distortionWidth = 0.045f;
+        activeElectricRing_.distortionStrength = 0.018f;
+        activeElectricRing_.swirlStrength = 0.006f;
+        activeElectricRing_.cloudScale = 3.5f;
+        activeElectricRing_.cloudIntensity = 1.40f;
+        activeElectricRing_.brightness = 2.40f;
+        activeElectricRing_.haloIntensity = 1.00f;
+    }
+}
+
+void GameScene::UpdateElectricRing() {
+    if (ctx_ == nullptr || ctx_->electricRingParam == nullptr ||
+        ctx_->winApp == nullptr || currentCamera_ == nullptr) {
+        return;
+    }
+
+    ElectricRingParamGPU &gpu = *ctx_->electricRingParam;
+
+    if (!activeElectricRing_.active) {
+        gpu.enabled = 0.0f;
+        return;
+    }
+
+    activeElectricRing_.time += ctx_->deltaTime;
+    if (activeElectricRing_.time >= activeElectricRing_.lifeTime) {
+        activeElectricRing_.active = false;
+        gpu.enabled = 0.0f;
+        return;
+    }
+
+    XMMATRIX viewProj = currentCamera_->GetView() * currentCamera_->GetProj();
+    XMVECTOR pos = XMVectorSet(activeElectricRing_.worldPos.x,
+                               activeElectricRing_.worldPos.y,
+                               activeElectricRing_.worldPos.z, 1.0f);
+    XMVECTOR clip = XMVector4Transform(pos, viewProj);
+
+    float w = XMVectorGetW(clip);
+    if (w <= 0.0001f) {
+        gpu.enabled = 0.0f;
+        return;
+    }
+
+    float invW = 1.0f / w;
+    float ndcX = XMVectorGetX(clip) * invW;
+    float ndcY = XMVectorGetY(clip) * invW;
+    float ndcZ = XMVectorGetZ(clip) * invW;
+
+    if (ndcZ < 0.0f || ndcZ > 1.0f) {
+        gpu.enabled = 0.0f;
+        return;
+    }
+
+    float t = activeElectricRing_.time / activeElectricRing_.lifeTime;
+    t = std::clamp(t, 0.0f, 1.0f);
+    float ease = 1.0f - std::pow(1.0f - t, 3.0f);
+
+    float aspect = static_cast<float>(ctx_->winApp->GetWidth()) /
+                   static_cast<float>(ctx_->winApp->GetHeight());
+
+    gpu.center = {ndcX * 0.5f + 0.5f, -ndcY * 0.5f + 0.5f};
+    gpu.radius =
+        activeElectricRing_.startRadius +
+        (activeElectricRing_.endRadius - activeElectricRing_.startRadius) *
+            ease;
+    gpu.time = activeElectricRing_.time;
+
+    gpu.ringWidth = activeElectricRing_.ringWidth;
+    gpu.distortionWidth = activeElectricRing_.distortionWidth;
+    gpu.distortionStrength =
+        activeElectricRing_.distortionStrength * (1.0f - t * 0.75f);
+    gpu.swirlStrength = activeElectricRing_.swirlStrength;
+
+    gpu.cloudScale = activeElectricRing_.cloudScale;
+    gpu.cloudIntensity = activeElectricRing_.cloudIntensity;
+    gpu.brightness = activeElectricRing_.brightness * (1.0f - t * 0.35f);
+    gpu.haloIntensity = activeElectricRing_.haloIntensity;
+
+    gpu.aspectInvAspect = {aspect, 1.0f / aspect};
+    gpu.innerFade = 0.85f;
+    gpu.outerFade = 1.0f;
+    gpu.enabled = 1.0f;
 }

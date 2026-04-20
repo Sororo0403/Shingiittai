@@ -16,6 +16,12 @@ struct WarpPostEffectParamGPU {
     float radius2 = 0.0f;
     float strength2 = 0.0f;
     float enabled = 0.0f;
+
+    DirectX::XMFLOAT2 slashStart = {0.5f, 0.5f};
+    DirectX::XMFLOAT2 slashEnd = {0.5f, 0.5f};
+    float slashThickness = 0.0f;
+    float slashStrength = 0.0f;
+    float slashEnabled = 0.0f;
 };
 
 class WarpPostEffectRenderer {
@@ -41,7 +47,12 @@ class WarpPostEffectRenderer {
         float strength2;
         float enabled;
 
-        float padding[3];
+        DirectX::XMFLOAT2 slashStart;
+        DirectX::XMFLOAT2 slashEnd;
+        float slashThickness;
+        float slashStrength;
+        float slashEnabled;
+        float padding[2];
     };
 
     DirectXCommon *dxCommon_ = nullptr;

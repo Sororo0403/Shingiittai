@@ -251,6 +251,24 @@
     <ClCompile Include="src\engine\graphics\WarpPostEffectRenderer.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\engine\graphics\ElectricRingEffectRenderer.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\graphics\SlashEffectRenderer.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\particle\GpuSlashParticleSystem.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\graphics\SwordTrailRenderer.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\graphics\MagnetismicRenderer.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\app\scene\GameScene.Magnetismic.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\engine\core\WinApp.h">
@@ -409,6 +427,24 @@
     <ClInclude Include="include\engine\graphics\WarpPostEffectRenderer.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="include\engine\graphics\ElectricRingEffectRenderer.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\app\enemy\EnemyPresentation.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\engine\graphics\SlashEffectRenderer.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\engine\particle\GpuSlashParticleSystem.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\engine\graphics\SwordTrailRenderer.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\engine\graphics\MagnetismicRenderer.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="resources\shaders\sprite\SpritePS.hlsl">
@@ -425,6 +461,18 @@
     </FxCompile>
     <FxCompile Include="resources\shaders\warp\WarpPostEffect.PS.hlsl" />
     <FxCompile Include="resources\shaders\warp\Fullscreen.VS.hlsl" />
+    <FxCompile Include="resources\shaders\warp\DistortionPS.hlsl" />
+    <FxCompile Include="resources\shaders\warp\PlasmaRingPS.hlsl" />
+    <FxCompile Include="resources\shaders\slash\Slash.VS.hlsl" />
+    <FxCompile Include="resources\shaders\slash\Slash.PS.hlsl" />
+    <FxCompile Include="resources\shaders\slash\SlashParticleEmit.CS.hlsl" />
+    <FxCompile Include="resources\shaders\slash\SlashParticleUpdate.CS.hlsl" />
+    <FxCompile Include="resources\shaders\slash\SlashParticleDraw.VS.hlsl" />
+    <FxCompile Include="resources\shaders\slash\SlashParticleDraw.PS.hlsl" />
+    <FxCompile Include="resources\shaders\trail\SwordTrail.VS.hlsl" />
+    <FxCompile Include="resources\shaders\trail\SwordTrail.PS.hlsl" />
+    <FxCompile Include="resources\shaders\warp\Magnetismic.VS.hlsl" />
+    <FxCompile Include="resources\shaders\warp\Magnetismic.PS.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="resources\shaders\sprite\Sprite.hlsli">

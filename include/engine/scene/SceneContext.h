@@ -1,5 +1,10 @@
 #pragma once
 struct WarpPostEffectParamGPU;
+struct ElectricRingParamGPU;
+class SlashEffectRenderer;
+class GpuSlashParticleSystem;
+class SwordTrailRenderer;
+class MagnetismicRenderer;
 class Input;
 class WinApp;
 class SoundManager;
@@ -34,4 +39,9 @@ struct SceneContext {
 #endif // IMGUI_DISABLED
 
     WarpPostEffectParamGPU *warpPostEffectParam = nullptr;
+    ElectricRingParamGPU *electricRingParam = nullptr;
+    SlashEffectRenderer *slashEffectRenderer = nullptr;
+    GpuSlashParticleSystem *gpuSlashParticleSystem = nullptr;
+    SwordTrailRenderer *swordTrailRenderer = nullptr;
+    MagnetismicRenderer *magnetismicRenderer = nullptr;
 };

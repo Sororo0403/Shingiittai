@@ -36,8 +36,27 @@ class GameScene : public BaseScene {
     void UpdateBattleCamera();
     bool ProjectWorldToScreen(const DirectX::XMFLOAT3 &worldPos,
                               DirectX::XMFLOAT2 &outScreen) const;
+    bool ComputeEnemySlashScreenEffect(DirectX::XMFLOAT2 &outStart,
+                                       DirectX::XMFLOAT2 &outEnd,
+                                       float &outPhaseAlpha,
+                                       float &outActionTime,
+                                       ActionKind &outActionKind) const;
+    bool ComputeEnemySlashWorldEffect(DirectX::XMFLOAT3 &outStart,
+                                      DirectX::XMFLOAT3 &outEnd,
+                                      float &outPhaseAlpha,
+                                      float &outActionTime,
+                                      ActionKind &outActionKind) const;
+    void UpdateEnemySlashEffects();
+    void DrawEnemySlashPass();
     void DrawWarpSmokePass();
     void DrawWarpDistortionPass();
+
+    void SpawnElectricRing(const DirectX::XMFLOAT3 &worldPos, bool isWarpEnd);
+    void UpdateElectricRing();
+
+    void UpdateEnemySwordTrail();
+    void UpdateMagnetismic();
+    void DrawMagnetismic();
 
   private:
     static constexpr DirectX::XMFLOAT3 kCameraStartPos = {0.0f, 1.0f, 0.5f};
@@ -163,13 +182,14 @@ class GameScene : public BaseScene {
     float phaseTransitionPushIn_ = 0.85f;
 
     // Warp screen-space distortion
-    float warpDistortionRadiusPx_ = 116.0f;
+    float warpDistortionRadiusPx_ = 184.0f;
     float warpDistortionThicknessPx_ = 4.0f;
     float warpDistortionLineLengthPx_ = 72.0f;
     float warpDistortionAlpha_ = 0.34f;
     float warpDistortionMoveAlphaBonus_ = 0.20f;
     float warpDistortionJitterPx_ = 16.0f;
     float warpDistortionPreviewOffsetPx_ = 46.0f;
+    float warpDistortionFootOffsetPx_ = 0.0f;
     float warpSmokeBaseSizePx_ = 132.0f;
     float warpSmokeMoveStretchPx_ = 92.0f;
     float warpSmokeAlpha_ = 0.34f;
@@ -189,4 +209,63 @@ class GameScene : public BaseScene {
     float warpArrivalBurstBillboardSizePx_ = 18.0f;
     float warpArrivalBurstBillboardSpreadPx_ = 54.0f;
     float warpArrivalBurstBillboardAlpha_ = 0.52f;
+
+    // Enemy slash presentation
+    float enemySlashCoreThicknessPx_ = 8.0f;
+    float enemySlashOuterThicknessPx_ = 18.0f;
+    float enemySlashEchoOffsetPx_ = 14.0f;
+    float enemySlashSparkSpreadPx_ = 70.0f;
+    float enemySlashDistortionThicknessUv_ = 0.038f;
+    float enemySlashDistortionStrength_ = 0.012f;
+    float enemySlashChargePreviewAlpha_ = 0.22f;
+    float enemySlashActiveAlpha_ = 0.92f;
+    float enemySlashRecoveryAlpha_ = 0.36f;
+    float warpArrivalFlashLengthPx_ = 172.0f;
+    float warpArrivalFlashThicknessPx_ = 6.0f;
+    float warpArrivalFlashGlowThicknessPx_ = 18.0f;
+
+    struct ActiveElectricRing {
+        bool active = false;
+        DirectX::XMFLOAT3 worldPos = {0.0f, 0.0f, 0.0f};
+        float time = 0.0f;
+        float lifeTime = 0.0f;
+
+        float startRadius = 0.02f;
+        float endRadius = 0.28f;
+
+        float ringWidth = 0.015f;
+        float distortionWidth = 0.045f;
+        float distortionStrength = 0.018f;
+        float swirlStrength = 0.006f;
+
+        float cloudScale = 3.5f;
+        float cloudIntensity = 1.4f;
+        float brightness = 2.4f;
+        float haloIntensity = 1.0f;
+    };
+
+    ActiveElectricRing activeElectricRing_{};
+
+    // slash effect
+    ActionKind prevEnemyActionKind_ = ActionKind::None;
+    ActionStep prevEnemyActionStep_ = ActionStep::None;
+    bool enemySlashActiveLatched_ = false;
+
+    float enemySlashParticleEmitScale_ = 1.0f;
+    uint32_t enemySlashParticleCountSmash_ = 52;
+    uint32_t enemySlashParticleCountSweep_ = 84;
+
+    bool enemySwordTrailEnabled_ = true;
+    float enemySwordTrailWidth_ = 1.0f;
+
+    bool magnetismicEnabled_ = true;
+    bool magnetismicOnlyWarp_ = true;
+
+    float magnetismicTime_ = 0.0f;
+    float magnetismicBaseSize_ = 2.85f;
+    float magnetismicWarpBonusSize_ = 0.65f;
+    float magnetismicYOffset_ = 1.20f;
+    float magnetismicAlphaScale_ = 1.0f;
+
+    
 };
