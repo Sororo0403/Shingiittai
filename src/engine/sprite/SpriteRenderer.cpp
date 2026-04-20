@@ -36,34 +36,63 @@ void SpriteRenderer::Initialize(DirectXCommon *dxCommon,
 
 void SpriteRenderer::Draw(const Sprite &sprite) {
     auto cmd = dxCommon_->GetCommandList();
-
-    // 頂点生成
     float l = sprite.position.x;
     float t = sprite.position.y;
     float r = sprite.position.x + sprite.size.x;
     float b = sprite.position.y + sprite.size.y;
 
-    SpriteVertex vertices[6] = {
-        {{l, t, 0.0f}, {0.0f, 0.0f}, sprite.color},
-        {{r, t, 0.0f}, {1.0f, 0.0f}, sprite.color},
-        {{l, b, 0.0f}, {0.0f, 1.0f}, sprite.color},
+    auto drawPass = [&](PipelineKind pipelineKind, const XMFLOAT4 &color) {
+        if (activePipelineKind_ != pipelineKind) {
+            activePipelineKind_ = pipelineKind;
+            cmd->SetPipelineState(
+                pipelineStates_[static_cast<uint32_t>(activePipelineKind_)]
+                    .Get());
+        }
 
-        {{l, b, 0.0f}, {0.0f, 1.0f}, sprite.color},
-        {{r, t, 0.0f}, {1.0f, 0.0f}, sprite.color},
-        {{r, b, 0.0f}, {1.0f, 1.0f}, sprite.color},
+        SpriteVertex vertices[6] = {
+            {{l, t, 0.0f}, {0.0f, 0.0f}, color},
+            {{r, t, 0.0f}, {1.0f, 0.0f}, color},
+            {{l, b, 0.0f}, {0.0f, 1.0f}, color},
+
+            {{l, b, 0.0f}, {0.0f, 1.0f}, color},
+            {{r, t, 0.0f}, {1.0f, 0.0f}, color},
+            {{r, b, 0.0f}, {1.0f, 1.0f}, color},
+        };
+
+        SpriteVertex *mapped = nullptr;
+        vertexBuffer_->Map(0, nullptr, reinterpret_cast<void **>(&mapped));
+        memcpy(mapped, vertices, sizeof(vertices));
+        vertexBuffer_->Unmap(0, nullptr);
+
+        cmd->SetGraphicsRootDescriptorTable(
+            1, textureManager_->GetGpuHandle(sprite.textureId));
+        cmd->DrawInstanced(6, 1, 0, 0);
     };
 
-    // VB 更新
-    SpriteVertex *mapped = nullptr;
-    vertexBuffer_->Map(0, nullptr, reinterpret_cast<void **>(&mapped));
-    memcpy(mapped, vertices, sizeof(vertices));
-    vertexBuffer_->Unmap(0, nullptr);
-
-    // テクスチャ
-    cmd->SetGraphicsRootDescriptorTable(
-        1, textureManager_->GetGpuHandle(sprite.textureId));
-
-    cmd->DrawInstanced(6, 1, 0, 0);
+    switch (sprite.blendMode) {
+    case SpriteBlendMode::Modulate:
+        drawPass(PipelineKind::Modulate, sprite.color);
+        break;
+    case SpriteBlendMode::DarkSmoke: {
+        // DarkSmoke is a composite: first darken the background, then add
+        // a softer tinted haze on top so the cloud remains visible.
+        const XMFLOAT4 darkenColor = {sprite.color.x * 0.60f,
+                                      sprite.color.y * 0.60f,
+                                      sprite.color.z * 0.60f,
+                                      sprite.color.w * 1.10f};
+        const XMFLOAT4 tintColor = {sprite.color.x,
+                                    sprite.color.y,
+                                    sprite.color.z,
+                                    sprite.color.w * 0.64f};
+        drawPass(PipelineKind::Modulate, darkenColor);
+        drawPass(PipelineKind::Alpha, tintColor);
+        break;
+    }
+    case SpriteBlendMode::Alpha:
+    default:
+        drawPass(PipelineKind::Alpha, sprite.color);
+        break;
+    }
 }
 
 void SpriteRenderer::PreDraw() {
@@ -72,7 +101,9 @@ void SpriteRenderer::PreDraw() {
     ID3D12DescriptorHeap *heaps[] = {srvManager_->GetHeap()};
     cmd->SetDescriptorHeaps(1, heaps);
 
-    cmd->SetPipelineState(pipelineState_.Get());
+    activePipelineKind_ = PipelineKind::Alpha;
+    cmd->SetPipelineState(
+        pipelineStates_[static_cast<uint32_t>(activePipelineKind_)].Get());
     cmd->SetGraphicsRootSignature(rootSignature_.Get());
 
     cmd->SetGraphicsRootConstantBufferView(
@@ -161,8 +192,15 @@ void SpriteRenderer::CreateRootSignature() {
 void SpriteRenderer::CreatePipelineState() {
     auto vs = ShaderCompiler::Compile(L"resources/shaders/sprite/SpriteVS.hlsl",
                                       "main", "vs_5_0");
-    auto ps = ShaderCompiler::Compile(L"resources/shaders/sprite/SpritePS.hlsl",
-                                      "main", "ps_5_0");
+    auto psAlpha =
+        ShaderCompiler::Compile(L"resources/shaders/sprite/SpritePS.hlsl",
+                                "main", "ps_5_0");
+    auto psModulate =
+        ShaderCompiler::Compile(L"resources/shaders/sprite/SpritePS.hlsl",
+                                "mainModulate", "ps_5_0");
+    auto psDarkSmoke =
+        ShaderCompiler::Compile(L"resources/shaders/sprite/SpritePS.hlsl",
+                                "mainDarkSmoke", "ps_5_0");
 
     D3D12_INPUT_ELEMENT_DESC layout[] = {
         {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
@@ -176,7 +214,6 @@ void SpriteRenderer::CreatePipelineState() {
     D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
     desc.pRootSignature = rootSignature_.Get();
     desc.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
-    desc.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
     desc.InputLayout = {layout, _countof(layout)};
     desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     desc.NumRenderTargets = 1;
@@ -202,7 +239,34 @@ void SpriteRenderer::CreatePipelineState() {
     rt.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
     desc.BlendState = blend;
 
+    desc.PS = {psAlpha->GetBufferPointer(), psAlpha->GetBufferSize()};
     ThrowIfFailed(dxCommon_->GetDevice()->CreateGraphicsPipelineState(
-                      &desc, IID_PPV_ARGS(&pipelineState_)),
-                  "CreateGraphicsPipelineState failed");
+                      &desc,
+                      IID_PPV_ARGS(&pipelineStates_[static_cast<uint32_t>(
+                          PipelineKind::Alpha)])),
+                  "Create alpha sprite pipeline failed");
+
+    rt.SrcBlend = D3D12_BLEND_ZERO;
+    rt.DestBlend = D3D12_BLEND_SRC_COLOR;
+    rt.SrcBlendAlpha = D3D12_BLEND_ZERO;
+    rt.DestBlendAlpha = D3D12_BLEND_ONE;
+    desc.BlendState = blend;
+    desc.PS = {psModulate->GetBufferPointer(), psModulate->GetBufferSize()};
+    ThrowIfFailed(dxCommon_->GetDevice()->CreateGraphicsPipelineState(
+                      &desc,
+                      IID_PPV_ARGS(&pipelineStates_[static_cast<uint32_t>(
+                          PipelineKind::Modulate)])),
+                  "Create modulate sprite pipeline failed");
+
+    rt.SrcBlend = D3D12_BLEND_ONE;
+    rt.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+    rt.SrcBlendAlpha = D3D12_BLEND_ONE;
+    rt.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+    desc.BlendState = blend;
+    desc.PS = {psDarkSmoke->GetBufferPointer(), psDarkSmoke->GetBufferSize()};
+    ThrowIfFailed(dxCommon_->GetDevice()->CreateGraphicsPipelineState(
+                      &desc,
+                      IID_PPV_ARGS(&pipelineStates_[static_cast<uint32_t>(
+                          PipelineKind::DarkSmoke)])),
+                  "Create dark smoke sprite pipeline failed");
 }

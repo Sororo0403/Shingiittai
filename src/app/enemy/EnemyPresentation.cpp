@@ -432,6 +432,28 @@ void Enemy::UpdateParts() {
                     rightHandTf_.position.z += forwardZ * 0.28f;
                 }
             }
+
+            // メルゼナ風：消える前に少し締まる
+            bodyTf_.scale.x *= 0.96f;
+            bodyTf_.scale.y *= 0.92f;
+            bodyTf_.scale.z *= 0.96f;
+
+        } else if (action_.step == ActionStep::Move) {
+            // メルゼナ風：Move中は本体感を落として影が滑る感じ
+            bodyTf_.scale.x *= 0.88f;
+            bodyTf_.scale.y *= 0.80f;
+            bodyTf_.scale.z *= 0.88f;
+
+            leftHandTf_.scale.x *= 0.82f;
+            leftHandTf_.scale.y *= 0.76f;
+            leftHandTf_.scale.z *= 0.82f;
+
+            rightHandTf_.scale.x *= 0.82f;
+            rightHandTf_.scale.y *= 0.76f;
+            rightHandTf_.scale.z *= 0.82f;
+
+            bodyTf_.position.y -= 0.01f;
+
         } else if (action_.step == ActionStep::End) {
             rightHandTf_.position.y += 0.2f;
             rightHandTf_.position.x += forwardX * 0.3f;
@@ -456,6 +478,19 @@ void Enemy::UpdateParts() {
                     rightHandTf_.position.z += forwardZ * 0.35f;
                 }
             }
+
+            // メルゼナ風：arrivalで本体が少し戻ってくる
+            bodyTf_.scale.x *= 1.03f;
+            bodyTf_.scale.y *= 1.02f;
+            bodyTf_.scale.z *= 1.03f;
+
+            leftHandTf_.scale.x *= 1.02f;
+            leftHandTf_.scale.y *= 1.01f;
+            leftHandTf_.scale.z *= 1.02f;
+
+            rightHandTf_.scale.x *= 1.02f;
+            rightHandTf_.scale.y *= 1.01f;
+            rightHandTf_.scale.z *= 1.02f;
         }
     } else if (!suppressActionPresentation && action_.kind == ActionKind::Stalk) {
         rightHandTf_.position.y += 0.35f;
@@ -575,4 +610,37 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         waveTf.scale = {0.6f, 0.2f, 1.2f};
         modelManager->Draw(effectModelId, waveTf, camera);
     }
+}
+
+void Enemy::UpdatePresentationEvents() {
+    ActionStep currentWarpStep = ActionStep::None;
+    if (action_.kind == ActionKind::Warp) {
+        currentWarpStep = action_.step;
+    }
+
+    if (currentWarpStep == ActionStep::Start &&
+        prevPresentationWarpStep_ != ActionStep::Start) {
+        EnemyElectricRingSpawnRequest req{};
+        req.worldPos =
+            warp_.hasDeparturePos ? warp_.departurePos : tf_.position;
+        req.isWarpEnd = false;
+        electricRingSpawnRequests_.push_back(req);
+    }
+
+    if (currentWarpStep == ActionStep::End &&
+        prevPresentationWarpStep_ != ActionStep::End) {
+        EnemyElectricRingSpawnRequest req{};
+        req.worldPos = warp_.targetPos;
+        req.isWarpEnd = true;
+        electricRingSpawnRequests_.push_back(req);
+    }
+
+    prevPresentationWarpStep_ = currentWarpStep;
+}
+
+std::vector<EnemyElectricRingSpawnRequest>
+Enemy::ConsumeElectricRingSpawnRequests() {
+    std::vector<EnemyElectricRingSpawnRequest> out = electricRingSpawnRequests_;
+    electricRingSpawnRequests_.clear();
+    return out;
 }

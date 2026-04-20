@@ -1,6 +1,7 @@
 #pragma once
 #include "Camera.h"
 #include "EnemyActionData.h"
+#include "EnemyPresentation.h"
 #include "EnemyTuningPreset.h"
 #include "OBB.h"
 #include "Player.h"
@@ -564,6 +565,10 @@ class Enemy {
         return GetCurrentAttackTiming();
     }
 
+    void UpdatePresentationEvents();
+    std::vector<EnemyElectricRingSpawnRequest>
+    ConsumeElectricRingSpawnRequests();
+
   private:
     Transform tf_{};
 
@@ -615,6 +620,9 @@ class Enemy {
     bool &isVisible_ = runtime_.isVisible;
 
     std::vector<EnemyWave> &waves_ = runtime_.waves;
+
+    ActionStep prevPresentationWarpStep_ = ActionStep::None;
+    std::vector<EnemyElectricRingSpawnRequest> electricRingSpawnRequests_{};
 
     int &farActionIndex_ = runtime_.farActionIndex;
     int &nearActionIndex_ = runtime_.nearActionIndex;
