@@ -246,7 +246,9 @@ void GameScene::Initialize(const SceneContext &ctx) {
 
     {
         EnemyTuningPreset enemyPreset{};
-        if (EnemyTuningPresetIO::Load("resources/enemy_tuning.txt",
+        if (EnemyTuningPresetIO::Load("resources/enemy_tuning.csv",
+                                      enemyPreset) ||
+            EnemyTuningPresetIO::Load("resources/enemy_tuning.txt",
                                       enemyPreset)) {
             enemy_.ApplyTuningPreset(enemyPreset);
         }
@@ -1421,7 +1423,7 @@ void GameScene::Draw() {
     ImGui::Separator();
     ImGui::Text("=== Preset ===");
 
-    static char presetPath[256] = "resources/enemy_tuning.txt";
+    static char presetPath[256] = "resources/enemy_tuning.csv";
     ImGui::InputText("Preset Path", presetPath, sizeof(presetPath));
 
     if (ImGui::Button("Save Preset")) {

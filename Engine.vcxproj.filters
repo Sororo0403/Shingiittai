@@ -179,9 +179,6 @@
     <ClCompile Include="src\app\player\Player.cpp">
       <Filter>src\app\player</Filter>
     </ClCompile>
-    <ClCompile Include="src\app\enemy\Enemy.cpp">
-      <Filter>src\app\enemy</Filter>
-    </ClCompile>
     <ClCompile Include="src\app\player\Sword.cpp">
       <Filter>src\app\player</Filter>
     </ClCompile>
@@ -218,31 +215,34 @@
     <ClCompile Include="src\app\player\SwordJoyConController.cpp">
       <Filter>src\app\player</Filter>
     </ClCompile>
-    <ClCompile Include="src\app\enemy\EnemyAction_Melee.cpp">
-      <Filter>src\app\enemy</Filter>
-    </ClCompile>
-    <ClCompile Include="src\app\enemy\EnemyAction_Ranged.cpp">
-      <Filter>src\app\enemy</Filter>
-    </ClCompile>
-    <ClCompile Include="src\app\enemy\EnemyAction_WarpGuard.cpp">
-      <Filter>src\app\enemy</Filter>
-    </ClCompile>
     <ClCompile Include="src\app\enemy\EnemyCombat.cpp">
       <Filter>src\app\enemy</Filter>
     </ClCompile>
     <ClCompile Include="src\app\enemy\EnemyCore.cpp">
       <Filter>src\app\enemy</Filter>
     </ClCompile>
+    <ClCompile Include="src\app\enemy\EnemyDecision.cpp">
+      <Filter>src\app\enemy</Filter>
+    </ClCompile>
+    <ClCompile Include="src\app\enemy\EnemyMelee.cpp">
+      <Filter>src\app\enemy</Filter>
+    </ClCompile>
+    <ClCompile Include="src\app\enemy\EnemyMovement.cpp">
+      <Filter>src\app\enemy</Filter>
+    </ClCompile>
     <ClCompile Include="src\app\enemy\EnemyPresentation.cpp">
       <Filter>src\app\enemy</Filter>
     </ClCompile>
-    <ClCompile Include="src\app\enemy\EnemyTactics.cpp">
+    <ClCompile Include="src\app\enemy\EnemyRanged.cpp">
       <Filter>src\app\enemy</Filter>
     </ClCompile>
     <ClCompile Include="src\app\enemy\EnemyTuning.cpp">
       <Filter>src\app\enemy</Filter>
     </ClCompile>
     <ClCompile Include="src\app\enemy\EnemyTuningPresetIO.cpp">
+      <Filter>src\app\enemy</Filter>
+    </ClCompile>
+    <ClCompile Include="src\app\enemy\EnemyWarp.cpp">
       <Filter>src\app\enemy</Filter>
     </ClCompile>
     <ClCompile Include="src\engine\input\JoyCon.cpp">
@@ -259,6 +259,9 @@
     </ClCompile>
     <ClCompile Include="src\engine\graphics\VignetteRenderer.cpp">
       <Filter>src\engine\graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="src\app\scene\EnemyMotionDebugScene.cpp">
+      <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -421,6 +424,9 @@
     <ClInclude Include="include\engine\graphics\VignetteRenderer.h">
       <Filter>include\engine\graphics</Filter>
     </ClInclude>
+    <ClInclude Include="include\app\scene\EnemyMotionDebugScene.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="resources\shaders\sprite\SpritePS.hlsl">
@@ -450,8 +456,5 @@
       <Filter>shaders\model</Filter>
     </None>
     <None Include=".github\copilot-instructions.md" />
-  </ItemGroup>
-  <ItemGroup>
-    <Text Include="resources\player_tuning.txt" />
   </ItemGroup>
 </Project>

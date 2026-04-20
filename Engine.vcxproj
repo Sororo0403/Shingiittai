@@ -121,13 +121,14 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\app\enemy\EnemyAction_Melee.cpp" />
-    <ClCompile Include="src\app\enemy\EnemyAction_Ranged.cpp" />
-    <ClCompile Include="src\app\enemy\EnemyAction_WarpGuard.cpp" />
+    <ClCompile Include="src\app\enemy\EnemyMelee.cpp" />
+    <ClCompile Include="src\app\enemy\EnemyRanged.cpp" />
+    <ClCompile Include="src\app\enemy\EnemyWarp.cpp" />
     <ClCompile Include="src\app\enemy\EnemyCombat.cpp" />
     <ClCompile Include="src\app\enemy\EnemyCore.cpp" />
+    <ClCompile Include="src\app\enemy\EnemyDecision.cpp" />
+    <ClCompile Include="src\app\enemy\EnemyMovement.cpp" />
     <ClCompile Include="src\app\enemy\EnemyPresentation.cpp" />
-    <ClCompile Include="src\app\enemy\EnemyTactics.cpp" />
     <ClCompile Include="src\app\enemy\EnemyTuning.cpp" />
     <ClCompile Include="src\app\enemy\EnemyTuningPresetIO.cpp" />
     <ClCompile Include="src\app\player\PlayerTuningPresetIO.cpp" />
@@ -142,7 +143,6 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClCompile Include="src\app\enemy\Bullet.cpp" />
     <ClCompile Include="src\engine\collision\DebugDraw.cpp" />
     <ClCompile Include="src\engine\collision\CollisionUtil.cpp" />
-    <ClCompile Include="src\app\enemy\Enemy.cpp" />
     <ClCompile Include="src\app\player\Player.cpp" />
     <ClCompile Include="src\engine\input\MahonyFilter.cpp" />
     <ClCompile Include="src\engine\particle\BaseParticleSystem.cpp" />
@@ -272,6 +272,11 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
   </ItemGroup>
   <ItemGroup>
     <None Include=".github\copilot-instructions.md" />
+    <None Include="resources\player_tuning.csv">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
+    <Text Include="resources\player_tuning.txt" />
     <None Include="resources\shaders\model\Model.hlsli">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
@@ -280,9 +285,6 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </None>
-  </ItemGroup>
-  <ItemGroup>
-    <Text Include="resources\player_tuning.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -8,9 +8,9 @@ enum class ActionKind {
     Sweep,
     Shot,
     Wave,
+    Rush,
     Warp,
     Guard,
-    Rush,
     Stalk,
 };
 
@@ -26,15 +26,15 @@ enum class ActionId {
 
     Shot,
     Wave,
+    Rush,
 
     WarpApproach,
     WarpEscape,
 
     GuardFace,
+    GuardBodyCenter,
     GuardBodyLeft,
     GuardBodyRight,
-
-    Rush
 };
 
 struct AttackParam {

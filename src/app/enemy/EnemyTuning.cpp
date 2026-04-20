@@ -1,25 +1,14 @@
 #include "Enemy.h"
-#include "ModelManager.h"
-#include "imgui.h"
 
-#include <algorithm>
-#include <cmath>
-#include <cstdlib>
-
-// ============================================================
-// アクションタイムの管理
-// ============================================================
 float Enemy::GetCurrentActionTime() const { return stateTimer_; }
 
 float Enemy::GetCurrentSmashChargeTime() const {
     float result = config_.attacks.smash.melee.base.chargeTime;
-
     if (action_.id == ActionId::DelaySmash) {
         result += config_.attacks.smash.delayExtraChargeTime;
     }
 
     result += GetAdaptiveChargeOffset(ActionKind::Smash);
-
     if (result < 0.05f) {
         result = 0.05f;
     }
@@ -28,13 +17,11 @@ float Enemy::GetCurrentSmashChargeTime() const {
 
 float Enemy::GetCurrentSweepChargeTime() const {
     float result = config_.attacks.sweep.melee.base.chargeTime;
-
     if (action_.id == ActionId::DoubleSweep && isDoubleSweepSecondStage_) {
         result *= config_.attacks.sweep.secondChargeScale;
     }
 
     result += GetAdaptiveChargeOffset(ActionKind::Sweep);
-
     if (result < 0.05f) {
         result = 0.05f;
     }
@@ -43,92 +30,52 @@ float Enemy::GetCurrentSweepChargeTime() const {
 
 bool Enemy::HasReachedTrackingEnd() const {
     const AttackTimingParam *timing = GetCurrentAttackTiming();
-    if (!timing) {
-        return false;
-    }
-    return GetCurrentActionTime() >= timing->trackingEndTime;
+    return timing ? GetCurrentActionTime() >= timing->trackingEndTime : false;
 }
 
 bool Enemy::HasReachedHitStart() const {
     const AttackTimingParam *timing = GetCurrentAttackTiming();
-    if (!timing) {
-        return false;
-    }
-    return GetCurrentActionTime() >= timing->activeStartTime;
+    return timing ? GetCurrentActionTime() >= timing->activeStartTime : false;
 }
 
 bool Enemy::HasReachedHitEnd() const {
     const AttackTimingParam *timing = GetCurrentAttackTiming();
-    if (!timing) {
-        return false;
-    }
-    return GetCurrentActionTime() > timing->activeEndTime;
+    return timing ? GetCurrentActionTime() > timing->activeEndTime : false;
 }
 
 bool Enemy::HasReachedRecoveryStart() const {
     const AttackTimingParam *timing = GetCurrentAttackTiming();
-    if (!timing) {
-        return false;
-    }
-    return GetCurrentActionTime() >= timing->recoveryStartTime;
+    return timing ? GetCurrentActionTime() >= timing->recoveryStartTime : false;
 }
 
 ActionId Enemy::MakeDefaultActionId(ActionKind kind) const {
     switch (kind) {
     case ActionKind::Smash:
         return ActionId::Smash;
-
     case ActionKind::Sweep:
         return ActionId::Sweep;
-
     case ActionKind::Shot:
         return ActionId::Shot;
-
     case ActionKind::Wave:
         return ActionId::Wave;
-
-    case ActionKind::Rush:
-        return ActionId::Rush;
-
     case ActionKind::Warp:
         return (warp_.type == WarpType::Escape) ? ActionId::WarpEscape
                                                 : ActionId::WarpApproach;
-
-    case ActionKind::Guard:
-        switch (guardTarget_) {
-        case GuardTarget::Face:
-            return ActionId::GuardFace;
-        case GuardTarget::BodyLeft:
-            return ActionId::GuardBodyLeft;
-        case GuardTarget::BodyRight:
-            return ActionId::GuardBodyRight;
-        default:
-            return ActionId::None;
-        }
-
-    case ActionKind::Stalk: // 追加
-        return ActionId::None;
-
     default:
         return ActionId::None;
     }
 }
 
-// ============================================================
-// Timing検証
-// ============================================================
 void Enemy::ValidateTiming(AttackTimingParam &timing, float chargeTime) {
     if (timing.totalTime < 0.0f) {
         timing.totalTime = 0.0f;
     }
-
     if (timing.trackingEndTime < 0.0f) {
         timing.trackingEndTime = 0.0f;
     }
     if (timing.trackingEndTime > chargeTime) {
         timing.trackingEndTime = chargeTime;
     }
-
     if (timing.activeStartTime < 0.0f) {
         timing.activeStartTime = 0.0f;
     }
@@ -148,19 +95,13 @@ void Enemy::ValidateAllTimings() {
                    config_.attacks.smash.melee.base.chargeTime);
     ValidateTiming(config_.attacks.sweep.melee.base.timing,
                    config_.attacks.sweep.melee.base.chargeTime);
-    ValidateTiming(config_.attacks.rush.base.timing,
-                   config_.attacks.rush.base.chargeTime);
 }
 
-// ============================================================
-// プリセット保存用：現在値 → 構造体
-// ============================================================
 EnemyTuningPreset Enemy::CreateTuningPreset() const {
     EnemyTuningPreset p{};
 
     p.enemyMaxHp = config_.core.maxHp;
     p.phase2HealthRatioThreshold = config_.core.phase2HealthRatioThreshold;
-
     p.nearAttackDistance = config_.core.nearAttackDistance;
     p.farAttackDistance = config_.core.farAttackDistance;
 
@@ -170,7 +111,15 @@ EnemyTuningPreset Enemy::CreateTuningPreset() const {
     p.smashChargeTime = config_.attacks.smash.melee.base.chargeTime;
     p.smashAttackForwardOffset = config_.attacks.smash.attackForwardOffset;
     p.smashAttackHeightOffset = config_.attacks.smash.attackHeightOffset;
-    p.smashTiming.trackingEndTime = config_.attacks.smash.melee.base.timing.trackingEndTime;
+    p.smashTiming.totalTime = config_.attacks.smash.melee.base.timing.totalTime;
+    p.smashTiming.trackingEndTime =
+        config_.attacks.smash.melee.base.timing.trackingEndTime;
+    p.smashTiming.activeStartTime =
+        config_.attacks.smash.melee.base.timing.activeStartTime;
+    p.smashTiming.activeEndTime =
+        config_.attacks.smash.melee.base.timing.activeEndTime;
+    p.smashTiming.recoveryStartTime =
+        config_.attacks.smash.melee.base.timing.recoveryStartTime;
 
     p.sweep.damage = config_.attacks.sweep.melee.base.attack.damage;
     p.sweep.knockback = config_.attacks.sweep.melee.base.attack.knockback;
@@ -178,7 +127,15 @@ EnemyTuningPreset Enemy::CreateTuningPreset() const {
     p.sweepChargeTime = config_.attacks.sweep.melee.base.chargeTime;
     p.sweepAttackSideOffset = config_.attacks.sweep.attackSideOffset;
     p.sweepAttackHeightOffset = config_.attacks.sweep.attackHeightOffset;
-    p.sweepTiming.trackingEndTime = config_.attacks.sweep.melee.base.timing.trackingEndTime;
+    p.sweepTiming.totalTime = config_.attacks.sweep.melee.base.timing.totalTime;
+    p.sweepTiming.trackingEndTime =
+        config_.attacks.sweep.melee.base.timing.trackingEndTime;
+    p.sweepTiming.activeStartTime =
+        config_.attacks.sweep.melee.base.timing.activeStartTime;
+    p.sweepTiming.activeEndTime =
+        config_.attacks.sweep.melee.base.timing.activeEndTime;
+    p.sweepTiming.recoveryStartTime =
+        config_.attacks.sweep.melee.base.timing.recoveryStartTime;
 
     p.bullet.damage = config_.attacks.shot.attack.damage;
     p.bullet.knockback = config_.attacks.shot.attack.knockback;
@@ -202,27 +159,13 @@ EnemyTuningPreset Enemy::CreateTuningPreset() const {
     p.waveSpawnForwardOffset = config_.attacks.wave.spawnForwardOffset;
     p.waveSpawnHeightOffset = config_.attacks.wave.spawnHeightOffset;
 
-    p.smashTiming.totalTime = config_.attacks.smash.melee.base.timing.totalTime;
-    p.smashTiming.trackingEndTime = config_.attacks.smash.melee.base.timing.trackingEndTime;
-    p.smashTiming.activeStartTime = config_.attacks.smash.melee.base.timing.activeStartTime;
-    p.smashTiming.activeEndTime = config_.attacks.smash.melee.base.timing.activeEndTime;
-    p.smashTiming.recoveryStartTime = config_.attacks.smash.melee.base.timing.recoveryStartTime;
-
-    p.sweepTiming.totalTime = config_.attacks.sweep.melee.base.timing.totalTime;
-    p.sweepTiming.trackingEndTime = config_.attacks.sweep.melee.base.timing.trackingEndTime;
-    p.sweepTiming.activeStartTime = config_.attacks.sweep.melee.base.timing.activeStartTime;
-    p.sweepTiming.activeEndTime = config_.attacks.sweep.melee.base.timing.activeEndTime;
-    p.sweepTiming.recoveryStartTime = config_.attacks.sweep.melee.base.timing.recoveryStartTime;
-
     p.warpStartTime = config_.warp.startTime;
     p.warpMoveTime = config_.warp.moveTime;
     p.warpEndTime = config_.warp.endTime;
-
     p.warpApproachChainMaxSteps = config_.chain.warpApproachMaxSteps;
     p.warpEscapeChainMaxSteps = config_.chain.warpEscapeMaxSteps;
     p.approachChainContinueDistance = config_.chain.approachContinueDistance;
     p.escapeChainContinueDistance = config_.chain.escapeContinueDistance;
-
     p.sweepWarpSmashMaxDistance = config_.chain.sweepWarpSmashMaxDistance;
     p.sweepWarpSmashChance = config_.chain.sweepWarpSmashChance;
     p.waveWarpSmashMinDistance = config_.chain.waveWarpSmashMinDistance;
@@ -231,14 +174,8 @@ EnemyTuningPreset Enemy::CreateTuningPreset() const {
     return p;
 }
 
-// ============================================================
-// プリセット読込用：構造体 → 現在値
-// ============================================================
 void Enemy::ApplyTuningPreset(const EnemyTuningPreset &p) {
-    config_.core.maxHp = p.enemyMaxHp;
-    if (config_.core.maxHp < 1.0f) {
-        config_.core.maxHp = 1.0f;
-    }
+    config_.core.maxHp = (p.enemyMaxHp < 1.0f) ? 1.0f : p.enemyMaxHp;
     hp_ = config_.core.maxHp;
 
     config_.core.phase2HealthRatioThreshold = p.phase2HealthRatioThreshold;
@@ -259,10 +196,14 @@ void Enemy::ApplyTuningPreset(const EnemyTuningPreset &p) {
     config_.attacks.smash.attackForwardOffset = p.smashAttackForwardOffset;
     config_.attacks.smash.attackHeightOffset = p.smashAttackHeightOffset;
     config_.attacks.smash.melee.base.timing.totalTime = p.smashTiming.totalTime;
-    config_.attacks.smash.melee.base.timing.activeStartTime = p.smashTiming.activeStartTime;
-    config_.attacks.smash.melee.base.timing.activeEndTime = p.smashTiming.activeEndTime;
-    config_.attacks.smash.melee.base.timing.recoveryStartTime = p.smashTiming.recoveryStartTime;
-    config_.attacks.smash.melee.base.timing.trackingEndTime = p.smashTiming.trackingEndTime;
+    config_.attacks.smash.melee.base.timing.activeStartTime =
+        p.smashTiming.activeStartTime;
+    config_.attacks.smash.melee.base.timing.activeEndTime =
+        p.smashTiming.activeEndTime;
+    config_.attacks.smash.melee.base.timing.recoveryStartTime =
+        p.smashTiming.recoveryStartTime;
+    config_.attacks.smash.melee.base.timing.trackingEndTime =
+        p.smashTiming.trackingEndTime;
 
     config_.attacks.sweep.melee.base.attack.damage = p.sweep.damage;
     config_.attacks.sweep.melee.base.attack.knockback = p.sweep.knockback;
@@ -271,24 +212,14 @@ void Enemy::ApplyTuningPreset(const EnemyTuningPreset &p) {
     config_.attacks.sweep.attackSideOffset = p.sweepAttackSideOffset;
     config_.attacks.sweep.attackHeightOffset = p.sweepAttackHeightOffset;
     config_.attacks.sweep.melee.base.timing.totalTime = p.sweepTiming.totalTime;
-    config_.attacks.sweep.melee.base.timing.activeStartTime = p.sweepTiming.activeStartTime;
-    config_.attacks.sweep.melee.base.timing.activeEndTime = p.sweepTiming.activeEndTime;
-    config_.attacks.sweep.melee.base.timing.recoveryStartTime = p.sweepTiming.recoveryStartTime;
-    config_.attacks.sweep.melee.base.timing.trackingEndTime = p.sweepTiming.trackingEndTime;
-
-    config_.warp.startTime = p.warpStartTime;
-    config_.warp.moveTime = p.warpMoveTime;
-    config_.warp.endTime = p.warpEndTime;
-
-    if (config_.warp.startTime < 0.0f) {
-        config_.warp.startTime = 0.0f;
-    }
-    if (config_.warp.moveTime < 0.0f) {
-        config_.warp.moveTime = 0.0f;
-    }
-    if (config_.warp.endTime < 0.0f) {
-        config_.warp.endTime = 0.0f;
-    }
+    config_.attacks.sweep.melee.base.timing.activeStartTime =
+        p.sweepTiming.activeStartTime;
+    config_.attacks.sweep.melee.base.timing.activeEndTime =
+        p.sweepTiming.activeEndTime;
+    config_.attacks.sweep.melee.base.timing.recoveryStartTime =
+        p.sweepTiming.recoveryStartTime;
+    config_.attacks.sweep.melee.base.timing.trackingEndTime =
+        p.sweepTiming.trackingEndTime;
 
     config_.attacks.shot.attack.damage = p.bullet.damage;
     config_.attacks.shot.attack.knockback = p.bullet.knockback;
@@ -312,11 +243,14 @@ void Enemy::ApplyTuningPreset(const EnemyTuningPreset &p) {
     config_.attacks.wave.spawnForwardOffset = p.waveSpawnForwardOffset;
     config_.attacks.wave.spawnHeightOffset = p.waveSpawnHeightOffset;
 
+    config_.warp.startTime = (p.warpStartTime < 0.0f) ? 0.0f : p.warpStartTime;
+    config_.warp.moveTime = (p.warpMoveTime < 0.0f) ? 0.0f : p.warpMoveTime;
+    config_.warp.endTime = (p.warpEndTime < 0.0f) ? 0.0f : p.warpEndTime;
+
     config_.chain.warpApproachMaxSteps = p.warpApproachChainMaxSteps;
     config_.chain.warpEscapeMaxSteps = p.warpEscapeChainMaxSteps;
     config_.chain.approachContinueDistance = p.approachChainContinueDistance;
     config_.chain.escapeContinueDistance = p.escapeChainContinueDistance;
-
     config_.chain.sweepWarpSmashMaxDistance = p.sweepWarpSmashMaxDistance;
     config_.chain.sweepWarpSmashChance = p.sweepWarpSmashChance;
     config_.chain.waveWarpSmashMinDistance = p.waveWarpSmashMinDistance;
@@ -329,7 +263,4 @@ void Enemy::ApplyTuningPreset(const EnemyTuningPreset &p) {
     ValidateAllTimings();
 }
 
-// ============================================================
-// プリセット初期化
-// ============================================================
 void Enemy::ResetTuningPreset() { ApplyTuningPreset(EnemyTuningPreset{}); }

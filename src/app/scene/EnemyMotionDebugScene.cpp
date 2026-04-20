@@ -172,7 +172,8 @@ void EnemyMotionDebugScene::Initialize(const SceneContext &ctx) {
     enemy_.DebugResetState();
 
     EnemyTuningPreset enemyPreset{};
-    if (EnemyTuningPresetIO::Load("resources/enemy_tuning.txt", enemyPreset)) {
+    if (EnemyTuningPresetIO::Load("resources/enemy_tuning.csv", enemyPreset) ||
+        EnemyTuningPresetIO::Load("resources/enemy_tuning.txt", enemyPreset)) {
         enemy_.ApplyTuningPreset(enemyPreset);
         enemy_.DebugResetState();
     }
