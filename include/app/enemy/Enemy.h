@@ -23,7 +23,7 @@ enum class ActionStep {
 };
 
 enum class WarpType { None, Approach, Escape };
-enum class WarpApproachSlot { None, FrontLeft, FrontRight, LongFront };
+enum class WarpApproachSlot { None, BackLeft, BackRight, DirectBack };
 
 // Enemy combat is driven by a two-part FSM:
 // - ActionKind decides which behavior is currently running.
@@ -105,18 +105,14 @@ enum class CounterReadAxis {
 
 // 上位戦術
 enum class TacticState {
-    Neutral,
-    Pressure,
-    CounterBait,
-    CounterPunish,
-    AntiGuard,
-    Chase,
-    Reset
+    Warp,
+    Melee,
+    Ranged,
+    DistanceAdjust
 };
 
 enum class BossPhase { Phase1, Phase2 };
 enum class IntroPhase { SecondSlash, SpinSlash, Settle };
-enum class GuardTarget { None, Face, BodyCenter, BodyLeft, BodyRight };
 
 // GameScene 側から渡す観測情報
 struct PlayerCombatObservation {
@@ -306,7 +302,7 @@ struct EnemyRuntimeState {
     SweepStyle sweepStyle = SweepStyle::Normal;
 
     PostActionOption postActionOption = PostActionOption::None;
-    TacticState tactic = TacticState::Neutral;
+    TacticState tactic = TacticState::DistanceAdjust;
     BossPhase phase = BossPhase::Phase1;
     bool introActive = true;
     float introTimer = 0.0f;
@@ -372,6 +368,7 @@ class Enemy {
     void RestartIntro();
     void DebugResetState();
     bool DebugStartAction(ActionKind kind);
+    bool DebugTriggerWarpBackstab(const PlayerCombatObservation &playerObs);
     void DebugSetBossPhase(BossPhase phase);
 
     const Transform &GetTransform() const { return tf_; }
@@ -453,7 +450,6 @@ class Enemy {
     void ReflectBullet(size_t index, const DirectX::XMFLOAT3 &targetPos);
 
     bool IsVisible() const { return runtime_.isVisible; }
-    GuardTarget GetGuardTarget() const { return guardTarget_; }
     const DirectX::XMFLOAT3 &GetWarpTargetPos() const {
         return runtime_.warp.targetPos;
     }
@@ -507,7 +503,6 @@ class Enemy {
     AttackParam &EditSweepParam() { return config_.attacks.sweep.melee.base.attack; }
     AttackParam &EditBulletParam() { return config_.attacks.shot.attack; }
     AttackParam &EditWaveParam() { return config_.attacks.wave.attack; }
-    AttackParam &EditRushParam() { return rushParam_; }
 
     float &EditNearAttackDistance() { return config_.core.nearAttackDistance; }
     float &EditFarAttackDistance() { return config_.core.farAttackDistance; }
@@ -529,13 +524,9 @@ class Enemy {
     float &EditWaveRecoveryTime() { return config_.attacks.wave.recoveryTime; }
     float &EditWaveSpeed() { return config_.attacks.wave.speed; }
     float &EditWaveMaxDistance() { return config_.attacks.wave.maxDistance; }
-    float &EditRushChargeTime() { return rushChargeTime_; }
-    float &EditRushSpeed() { return rushSpeed_; }
-    float &EditRushMoveDuration() { return rushMoveDuration_; }
 
     int &EditNearSmashWeight() { return nearSmashWeight_; }
     int &EditNearSweepWeight() { return nearSweepWeight_; }
-    int &EditNearGuardWeight() { return nearGuardWeight_; }
     int &EditMidShotWeight() { return midShotWeight_; }
     int &EditMidWaveWeight() { return midWaveWeight_; }
 
@@ -556,7 +547,6 @@ class Enemy {
 
     AttackTimingParam &EditSmashTiming() { return config_.attacks.smash.melee.base.timing; }
     AttackTimingParam &EditSweepTiming() { return config_.attacks.sweep.melee.base.timing; }
-    AttackTimingParam &EditRushTiming() { return rushTiming_; }
 
     float &EditSmashFeintChance() { return config_.attacks.smash.melee.feintChance; }
     float &EditSweepFeintChance() { return config_.attacks.sweep.melee.feintChance; }
@@ -640,12 +630,6 @@ class Enemy {
     TacticState &tactic_ = runtime_.tactic;
     BossPhase &phase_ = runtime_.phase;
     EnemyConfig config_{};
-    GuardTarget guardTarget_ = GuardTarget::None;
-    AttackParam rushParam_{};
-    AttackTimingParam rushTiming_{};
-    float rushChargeTime_ = 0.0f;
-    float rushSpeed_ = 0.0f;
-    float rushMoveDuration_ = 0.0f;
     bool &introActive_ = runtime_.introActive;
     float &introTimer_ = runtime_.introTimer;
     float introSecondSlashDuration_ = 1.60f;
@@ -782,7 +766,6 @@ class Enemy {
 
     int nearSmashWeight_ = 30;
     int nearSweepWeight_ = 25;
-    int nearGuardWeight_ = 0;
     int phase2NearSmashBonus_ = 8;
     int phase2NearSweepBonus_ = 14;
 
@@ -847,6 +830,7 @@ class Enemy {
     void BeginPressureAction();
     void BeginChaseAction();
     void BeginResetAction();
+    bool TryBeginWarpBehindMeleeSkill(bool force);
 
     void UpdateSmashCharge(float deltaTime);
     void UpdateSmashHold(float deltaTime);

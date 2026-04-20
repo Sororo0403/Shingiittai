@@ -71,6 +71,7 @@ class GameScene : public BaseScene {
     bool dbgWaveHitPlayer_ = false;
     bool dbgPlayerGuardedHit_ = false;
     bool dbgTriggerCounterRequested_ = false;
+    bool dbgTriggerWarpBackstabRequested_ = false;
 #ifdef _DEBUG
     bool dbgFreezeEnemyMotion_ = false;
 #endif

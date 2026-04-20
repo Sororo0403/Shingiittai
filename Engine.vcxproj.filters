@@ -248,20 +248,20 @@
     <ClCompile Include="src\engine\input\JoyCon.cpp">
       <Filter>src\engine\input</Filter>
     </ClCompile>
-    <ClCompile Include="src\app\player\PlayerTuningPresetIO.cpp">
-      <Filter>src</Filter>
-    </ClCompile>
-    <ClCompile Include="src\engine\graphics\DxUtils.cpp">
-      <Filter>src</Filter>
-    </ClCompile>
-    <ClCompile Include="src\engine\graphics\ShaderCompiler.cpp">
-      <Filter>src</Filter>
-    </ClCompile>
     <ClCompile Include="src\engine\graphics\VignetteRenderer.cpp">
       <Filter>src\engine\graphics</Filter>
     </ClCompile>
+    <ClCompile Include="src\engine\graphics\DxUtils.cpp">
+      <Filter>src\engine\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\app\player\PlayerTuningPresetIO.cpp">
+      <Filter>src\app\player</Filter>
+    </ClCompile>
+    <ClCompile Include="src\engine\graphics\ShaderCompiler.cpp">
+      <Filter>src\engine\graphics</Filter>
+    </ClCompile>
     <ClCompile Include="src\app\scene\EnemyMotionDebugScene.cpp">
-      <Filter>src</Filter>
+      <Filter>src\app\scene</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -415,17 +415,17 @@
     <ClInclude Include="include\app\player\SwordPose.h">
       <Filter>include\app\player</Filter>
     </ClInclude>
-    <ClInclude Include="include\app\player\PlayerTuningPreset.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="include\app\player\PlayerTuningPresetIO.h">
-      <Filter>include</Filter>
-    </ClInclude>
     <ClInclude Include="include\engine\graphics\VignetteRenderer.h">
       <Filter>include\engine\graphics</Filter>
     </ClInclude>
     <ClInclude Include="include\app\scene\EnemyMotionDebugScene.h">
-      <Filter>include</Filter>
+      <Filter>include\app\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="include\app\player\PlayerTuningPreset.h">
+      <Filter>include\app\player</Filter>
+    </ClInclude>
+    <ClInclude Include="include\app\player\PlayerTuningPresetIO.h">
+      <Filter>include\app\player</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -455,6 +455,5 @@
     <None Include="resources\shaders\model\Model.hlsli">
       <Filter>shaders\model</Filter>
     </None>
-    <None Include=".github\copilot-instructions.md" />
   </ItemGroup>
 </Project>

@@ -98,13 +98,7 @@ static std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
             return kBossAnimWave;
         }
         break;
-    case ActionKind::Rush:
-        if (HasAnimation(model, kBossAnimMove)) {
-            return kBossAnimMove;
-        }
-        break;
     case ActionKind::Warp:
-    case ActionKind::Guard:
     case ActionKind::Stalk:
     case ActionKind::None:
     default:
@@ -437,12 +431,6 @@ void EnemyMotionDebugScene::DrawDebugUi() {
         SyncEnemyAnimation();
     }
     ImGui::SameLine();
-    if (ImGui::Button("Rush")) {
-        lockIdle_ = false;
-        enemy_.DebugStartAction(ActionKind::Rush);
-        SyncEnemyAnimation();
-    }
-
     if (ImGui::Button("Shot")) {
         lockIdle_ = false;
         enemy_.DebugStartAction(ActionKind::Shot);
@@ -461,12 +449,6 @@ void EnemyMotionDebugScene::DrawDebugUi() {
         SyncEnemyAnimation();
     }
 
-    if (ImGui::Button("Guard")) {
-        lockIdle_ = false;
-        enemy_.DebugStartAction(ActionKind::Guard);
-        SyncEnemyAnimation();
-    }
-    ImGui::SameLine();
     if (ImGui::Button("Stalk")) {
         lockIdle_ = false;
         enemy_.DebugStartAction(ActionKind::Stalk);
@@ -516,10 +498,6 @@ const char *EnemyMotionDebugScene::GetActionKindName(ActionKind kind) const {
         return "Wave";
     case ActionKind::Warp:
         return "Warp";
-    case ActionKind::Guard:
-        return "Guard";
-    case ActionKind::Rush:
-        return "Rush";
     case ActionKind::Stalk:
         return "Stalk";
     case ActionKind::None:

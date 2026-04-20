@@ -119,14 +119,7 @@ static std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
         }
         break;
 
-    case ActionKind::Rush:
-        if (HasAnimation(model, kBossAnimMove)) {
-            return kBossAnimMove;
-        }
-        break;
-
     case ActionKind::Warp:
-    case ActionKind::Guard:
     case ActionKind::Stalk:
     case ActionKind::None:
     default:
@@ -315,6 +308,9 @@ void GameScene::Update() {
     if (input != nullptr && input->IsKeyTrigger(DIK_F1)) {
         dbgTriggerCounterRequested_ = true;
     }
+    if (input != nullptr && input->IsKeyTrigger(DIK_F2)) {
+        dbgTriggerWarpBackstabRequested_ = true;
+    }
 #ifdef _DEBUG
     if (input != nullptr && input->IsKeyTrigger(DIK_F8) &&
         sceneManager_ != nullptr) {
@@ -453,6 +449,12 @@ void GameScene::Update() {
         break;
     }
 
+    if (dbgTriggerWarpBackstabRequested_ && !freezeEnemyMotion) {
+        dbgTriggerWarpBackstabRequested_ = false;
+        enemy_.DebugTriggerWarpBackstab(playerObs);
+        SyncEnemyAnimation();
+    }
+
     if (!freezeEnemyMotion) {
         enemy_.Update(playerObs, enemyDeltaTime);
     }
@@ -534,30 +536,8 @@ void GameScene::Update() {
         dbgHitRightHand_ = dbgHitRightHand_ || hitRightHand;
         dbgHitBody_ = dbgHitBody_ || hitBody;
 
-        const bool isEnemyGuardHold = (enemyActionKind == ActionKind::Guard &&
-                                       enemyActionStep == ActionStep::Hold);
-
         if (enemyHitCooldown_ <= 0.0f) {
-            bool hitGuardHand = false;
-            if (isEnemyGuardHold) {
-                switch (enemy_.GetGuardTarget()) {
-                case GuardTarget::Face:
-                case GuardTarget::BodyCenter:
-                case GuardTarget::BodyLeft:
-                    hitGuardHand = hitLeftHand;
-                    break;
-                case GuardTarget::BodyRight:
-                    hitGuardHand = hitRightHand;
-                    break;
-                case GuardTarget::None:
-                default:
-                    break;
-                }
-            }
-
-            if (hitGuardHand) {
-                enemyHitCooldown_ = 0.2f;
-            } else if (hitBody) {
+            if (hitBody) {
                 enemy_.TakeDamage(10.0f);
                 enemyHitCooldown_ = 0.2f;
                 if (counterCinematicActive_) {
@@ -1099,11 +1079,8 @@ void GameScene::Draw() {
     case ActionKind::Warp:
         actionKindName = "Warp";
         break;
-    case ActionKind::Guard:
-        actionKindName = "Guard";
-        break;
-    case ActionKind::Rush:
-        actionKindName = "Rush";
+    case ActionKind::Stalk:
+        actionKindName = "Stalk";
         break;
     default:
         break;
@@ -1136,28 +1113,19 @@ void GameScene::Draw() {
         break;
     }
 
-    const char *tacticName = "Neutral";
+    const char *tacticName = "DistanceAdjust";
     switch (enemy_.GetTacticState()) {
-    case TacticState::Neutral:
-        tacticName = "Neutral";
+    case TacticState::Warp:
+        tacticName = "Warp";
         break;
-    case TacticState::Pressure:
-        tacticName = "Pressure";
+    case TacticState::Melee:
+        tacticName = "Melee";
         break;
-    case TacticState::CounterBait:
-        tacticName = "CounterBait";
+    case TacticState::Ranged:
+        tacticName = "Ranged";
         break;
-    case TacticState::CounterPunish:
-        tacticName = "CounterPunish";
-        break;
-    case TacticState::AntiGuard:
-        tacticName = "AntiGuard";
-        break;
-    case TacticState::Chase:
-        tacticName = "Chase";
-        break;
-    case TacticState::Reset:
-        tacticName = "Reset";
+    case TacticState::DistanceAdjust:
+        tacticName = "DistanceAdjust";
         break;
     }
 
@@ -1171,13 +1139,9 @@ void GameScene::Draw() {
 
     const bool isEnemyAttackActive = isEnemySmashActive || isEnemySweepActive;
 
-    const bool isEnemyGuardHold = (enemyActionKind == ActionKind::Guard &&
-                                   enemyActionStep == ActionStep::Hold);
-
     ImGui::Text("ActionKind   : %s", actionKindName);
     ImGui::Text("ActionStep   : %s", actionStepName);
     ImGui::Text("AttackActive : %s", isEnemyAttackActive ? "true" : "false");
-    ImGui::Text("GuardActive  : %s", isEnemyGuardHold ? "true" : "false");
 
     ImGui::Text("BossHitPlayer: %s", dbgBossHitPlayer_ ? "true" : "false");
     ImGui::Text("DistanceToPlayer : %.2f", enemy_.GetDistanceToPlayer());
@@ -1186,16 +1150,6 @@ void GameScene::Draw() {
     ImGui::Text("CameraYaw       : %.2f", cameraYaw_);
     ImGui::Text("CameraPitch     : %.2f", cameraPitch_);
     ImGui::Text("LockOn          : %s", isLockOn_ ? "true" : "false");
-    const bool isEnemyRushChargeDbg = (enemyActionKind == ActionKind::Rush &&
-                                       enemyActionStep == ActionStep::Charge);
-
-    const bool isEnemyRushActiveDbg = (enemyActionKind == ActionKind::Rush &&
-                                       enemyActionStep == ActionStep::Active);
-
-    ImGui::Text("RushChargeAssist: %s",
-                isEnemyRushChargeDbg ? "true" : "false");
-    ImGui::Text("RushActiveAssist: %s",
-                isEnemyRushActiveDbg ? "true" : "false");
     ImGui::Text("Stagnant        : %s",
                 enemy_.IsDistanceStagnant() ? "true" : "false");
     ImGui::Text("StagnantTimer   : %.2f", enemy_.GetStagnantTimer());
@@ -1212,26 +1166,6 @@ void GameScene::Draw() {
                 warpPos.z);
     ImGui::Text("WaveHitPlayer   : %s", dbgWaveHitPlayer_ ? "true" : "false");
     ImGui::Text("AliveWaves      : %d", aliveWaveCount);
-    const char *guardName = "None";
-    switch (enemy_.GetGuardTarget()) {
-    case GuardTarget::None:
-        guardName = "None";
-        break;
-    case GuardTarget::Face:
-        guardName = "Face";
-        break;
-    case GuardTarget::BodyCenter:
-        guardName = "BodyCenter";
-        break;
-    case GuardTarget::BodyLeft:
-        guardName = "BodyLeft";
-        break;
-    case GuardTarget::BodyRight:
-        guardName = "BodyRight";
-        break;
-    }
-
-    ImGui::Text("GuardTarget     : %s", guardName);
     ImGui::Text("EnemyHP         : %.1f", enemy_.GetHP());
     ImGui::Text("PlayerHP        : %.1f", player_.GetHP());
     ImGui::Text("PlayerHitCD     : %.2f", playerHitCooldown_);
@@ -1390,36 +1324,6 @@ void GameScene::Draw() {
         ImGui::TreePop();
     }
 
-    if (ImGui::TreeNode("Rush")) {
-        auto &p = enemy_.EditRushParam();
-        ImGui::DragFloat("Rush Damage", &p.damage, 0.1f, 0.0f, 100.0f);
-        ImGui::DragFloat("Rush Knockback", &p.knockback, 0.1f, 0.0f, 30.0f);
-        ImGui::DragFloat3("Rush HitBox", &p.hitBoxSize.x, 0.05f, 0.1f, 10.0f);
-
-        ImGui::DragFloat("Rush Charge", &enemy_.EditRushChargeTime(), 0.01f,
-                         0.0f, 5.0f);
-        ImGui::DragFloat("Rush Speed", &enemy_.EditRushSpeed(), 0.05f, 0.0f,
-                         30.0f);
-        ImGui::DragFloat("Rush Move Duration", &enemy_.EditRushMoveDuration(),
-                         0.01f, 0.0f, 5.0f);
-
-        if (ImGui::TreeNode("Rush Timing")) {
-            auto &t = enemy_.EditRushTiming();
-            ImGui::DragFloat("Rush Total", &t.totalTime, 0.01f, 0.0f, 3.0f);
-            ImGui::DragFloat("Rush Active Start", &t.activeStartTime, 0.01f,
-                             0.0f, 3.0f);
-            ImGui::DragFloat("Rush Active End", &t.activeEndTime, 0.01f, 0.0f,
-                             3.0f);
-            ImGui::DragFloat("Rush Recovery Start", &t.recoveryStartTime, 0.01f,
-                             0.0f, 3.0f);
-            ImGui::DragFloat("Rush Tracking End", &t.trackingEndTime, 0.01f,
-                             0.0f, 2.0f);
-            ImGui::TreePop();
-        }
-
-        ImGui::TreePop();
-    }
-
     ImGui::Separator();
     ImGui::Text("=== Preset ===");
 
@@ -1497,9 +1401,6 @@ void GameScene::Draw() {
                        0, 100);
         ImGui::DragInt("Near Sweep Weight", &enemy_.EditNearSweepWeight(), 1.0f,
                        0, 100);
-        ImGui::DragInt("Near Guard Weight", &enemy_.EditNearGuardWeight(), 1.0f,
-                       0, 100);
-
         ImGui::DragInt("Far Shot Weight", &enemy_.EditFarShotWeight(), 1.0f, 0,
                        100);
         ImGui::DragInt("Far Warp Weight", &enemy_.EditFarWarpWeight(), 1.0f, 0,
@@ -2071,12 +1972,6 @@ void GameScene::UpdateBattleCamera() {
     const ActionKind enemyActionKind = enemy_.GetActionKind();
     const ActionStep enemyActionStep = enemy_.GetActionStep();
 
-    const bool isEnemyRushCharge = (enemyActionKind == ActionKind::Rush &&
-                                    enemyActionStep == ActionStep::Charge);
-
-    const bool isEnemyRushActive = (enemyActionKind == ActionKind::Rush &&
-                                    enemyActionStep == ActionStep::Active);
-
     const bool isEnemyWarpStart = (enemyActionKind == ActionKind::Warp &&
                                    enemyActionStep == ActionStep::Start);
 
@@ -2097,10 +1992,6 @@ void GameScene::UpdateBattleCamera() {
 
     if (isLockOn_) {
         targetFovDeg_ = lockOnFovDeg_;
-    }
-
-    if (isEnemyRushCharge || isEnemyRushActive) {
-        targetFovDeg_ = rushFovDeg_;
     }
 
     if (isEnemyWarpStart || isEnemyWarpMove || isEnemyWarpEnd) {
@@ -2142,16 +2033,6 @@ void GameScene::UpdateBattleCamera() {
         if (isEnemyIntro) {
             assistStrength = lockOnAssistStrength_ * 1.55f;
             assistMaxStep = lockOnAssistMaxStep_ * 1.55f;
-        } else if (isEnemyRushActive) {
-            float enemyYaw = enemy_.GetFacingYaw();
-            assistTarget.x += std::sinf(enemyYaw) * rushLeadDistance_;
-            assistTarget.z += std::cosf(enemyYaw) * rushLeadDistance_;
-
-            assistStrength = rushActiveAssistStrength_;
-            assistMaxStep = rushActiveAssistMaxStep_;
-        } else if (isEnemyRushCharge) {
-            assistStrength = rushChargeAssistStrength_;
-            assistMaxStep = rushChargeAssistMaxStep_;
         } else if (isEnemyWarpStart) {
             assistStrength = warpStartAssistStrength_;
             assistMaxStep = warpStartAssistMaxStep_;

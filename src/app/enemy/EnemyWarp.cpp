@@ -25,43 +25,57 @@ bool Enemy::IsWarpSuspendedForPresentation() const {
 }
 
 bool Enemy::DecideWarpTargetNearPlayer(DirectX::XMFLOAT3 &outTarget) {
-    float toEnemyX = tf_.position.x - playerPos_.x;
-    float toEnemyZ = tf_.position.z - playerPos_.z;
-    float length = std::sqrt(toEnemyX * toEnemyX + toEnemyZ * toEnemyZ);
-    if (length <= 0.0001f) {
-        toEnemyX = std::sin(facingYaw_);
-        toEnemyZ = std::cos(facingYaw_);
-        length = 1.0f;
+    float playerForwardX = playerObs_.velocity.x;
+    float playerForwardZ = playerObs_.velocity.z;
+    float playerForwardLength =
+        std::sqrt(playerForwardX * playerForwardX + playerForwardZ * playerForwardZ);
+
+    if (playerForwardLength <= 0.0001f) {
+        playerForwardX = playerPos_.x - tf_.position.x;
+        playerForwardZ = playerPos_.z - tf_.position.z;
+        playerForwardLength =
+            std::sqrt(playerForwardX * playerForwardX + playerForwardZ * playerForwardZ);
     }
 
-    const float frontX = toEnemyX / length;
-    const float frontZ = toEnemyZ / length;
-    const float rightX = frontZ;
-    const float rightZ = -frontX;
+    if (playerForwardLength <= 0.0001f) {
+        playerForwardX = std::sin(facingYaw_);
+        playerForwardZ = std::cos(facingYaw_);
+        playerForwardLength = 1.0f;
+    }
 
-    int slotRoll = std::rand() % 100;
-    if (slotRoll < 38) {
-        warp_.approachSlot = WarpApproachSlot::FrontLeft;
-    } else if (slotRoll < 76) {
-        warp_.approachSlot = WarpApproachSlot::FrontRight;
-    } else {
-        warp_.approachSlot = WarpApproachSlot::LongFront;
+    playerForwardX /= playerForwardLength;
+    playerForwardZ /= playerForwardLength;
+
+    const float backX = -playerForwardX;
+    const float backZ = -playerForwardZ;
+    const float rightX = playerForwardZ;
+    const float rightZ = -playerForwardX;
+
+    if (warp_.approachSlot == WarpApproachSlot::None) {
+        int slotRoll = std::rand() % 100;
+        if (slotRoll < 42) {
+            warp_.approachSlot = WarpApproachSlot::BackLeft;
+        } else if (slotRoll < 84) {
+            warp_.approachSlot = WarpApproachSlot::BackRight;
+        } else {
+            warp_.approachSlot = WarpApproachSlot::DirectBack;
+        }
     }
 
     outTarget = playerPos_;
-    if (warp_.approachSlot == WarpApproachSlot::FrontLeft) {
-        outTarget.x += frontX * warpApproachForwardDistance_ -
+    if (warp_.approachSlot == WarpApproachSlot::BackLeft) {
+        outTarget.x += backX * warpApproachForwardDistance_ -
                        rightX * warpApproachSideDistance_;
-        outTarget.z += frontZ * warpApproachForwardDistance_ -
+        outTarget.z += backZ * warpApproachForwardDistance_ -
                        rightZ * warpApproachSideDistance_;
-    } else if (warp_.approachSlot == WarpApproachSlot::FrontRight) {
-        outTarget.x += frontX * warpApproachForwardDistance_ +
+    } else if (warp_.approachSlot == WarpApproachSlot::BackRight) {
+        outTarget.x += backX * warpApproachForwardDistance_ +
                        rightX * warpApproachSideDistance_;
-        outTarget.z += frontZ * warpApproachForwardDistance_ +
+        outTarget.z += backZ * warpApproachForwardDistance_ +
                        rightZ * warpApproachSideDistance_;
     } else {
-        outTarget.x += frontX * warpApproachLongFrontDistance_;
-        outTarget.z += frontZ * warpApproachLongFrontDistance_;
+        outTarget.x += backX * warpApproachLongFrontDistance_;
+        outTarget.z += backZ * warpApproachLongFrontDistance_;
     }
     outTarget.y = tf_.position.y;
     return true;
@@ -96,6 +110,8 @@ bool Enemy::PrepareWarpContext() {
     }
 
     warp_.hasValidTarget = true;
+    warp_.followupKind = SelectNearPressureAction();
+    warp_.followupStep = ActionStep::Charge;
     return true;
 }
 
@@ -223,7 +239,15 @@ void Enemy::UpdateWarpStart(float deltaTime) {
     isVisible_ = false;
     warp_.collisionDisabled = true;
 
-    if (stateTimer_ >= config_.warp.startTime) {
+    float startTime = config_.warp.startTime;
+    if (action_.id == ActionId::WarpBackstab) {
+        startTime *= 0.55f;
+        if (startTime < 0.08f) {
+            startTime = 0.08f;
+        }
+    }
+
+    if (stateTimer_ >= startTime) {
         warpTrailEmitTimer_ = 0.0f;
         EmitWarpTrailGhost(warp_.departurePos, warpTrailScaleMax_);
         ChangeActionStep(ActionStep::Move);
@@ -276,7 +300,18 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
         return;
     }
 
+    const ActionKind followupKind = warp_.followupKind;
+    const ActionStep followupStep = warp_.followupStep;
+    const WarpType warpType = warp_.type;
+
     EndAttack();
+    if (warpType == WarpType::Approach && followupKind != ActionKind::None &&
+        followupStep != ActionStep::None) {
+        tactic_ = TacticState::Melee;
+        BeginAction(followupKind, followupStep);
+        return;
+    }
+
     tactic_ = DecideTactic();
     BeginActionFromTactic(tactic_);
 }

@@ -67,7 +67,7 @@ void Enemy::DebugResetState() {
     shotsRemaining_ = 0;
     shotIntervalTimer_ = 0.0f;
 
-    tactic_ = TacticState::Neutral;
+    tactic_ = TacticState::DistanceAdjust;
     EndAttack();
     stateTimer_ = -0.10f;
     UpdateParts();
@@ -81,6 +81,19 @@ bool Enemy::DebugStartAction(ActionKind kind) {
     const bool started = TryBeginTacticAction(kind);
     UpdateParts();
     return started;
+}
+
+bool Enemy::DebugTriggerWarpBackstab(const PlayerCombatObservation &playerObs) {
+    if (deathFinished_ || isDying_ || introActive_ || phaseTransitionActive_) {
+        return false;
+    }
+
+    runtime_.playerObs = playerObs;
+    runtime_.playerPos = playerObs.position;
+    runtime_.playerGuarding = playerObs.isGuarding;
+
+    EndAttack();
+    return TryBeginWarpBehindMeleeSkill(true);
 }
 
 void Enemy::DebugSetBossPhase(BossPhase phase) {
@@ -446,7 +459,7 @@ void Enemy::FinishCurrentAction() {
 
             EndAttack();
             if (nextKind == ActionKind::Smash || nextKind == ActionKind::Sweep) {
-                tactic_ = TacticState::Pressure;
+                tactic_ = TacticState::Melee;
             }
 
             recoveryFollowupKind_ = nextKind;

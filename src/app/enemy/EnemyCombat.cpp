@@ -214,9 +214,7 @@ bool Enemy::ApplyCounterBreakReaction() {
     ResetPostActionState();
     stateTimer_ = 0.0f;
 
-    tactic_ = (GetDistanceToPlayer() > config_.core.farAttackDistance)
-                  ? TacticState::Chase
-                  : TacticState::Neutral;
+    tactic_ = DecideTactic();
     closePressureTimer_ = 0.0f;
     stagnantTimer_ = 0.0f;
     isDistanceStagnant_ = false;

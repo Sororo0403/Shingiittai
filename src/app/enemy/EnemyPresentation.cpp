@@ -415,17 +415,17 @@ void Enemy::UpdateParts() {
     } else if (!suppressActionPresentation && action_.kind == ActionKind::Warp) {
         if (action_.step == ActionStep::Start) {
             if (warp_.type == WarpType::Approach) {
-                if (warp_.approachSlot == WarpApproachSlot::FrontLeft) {
+                if (warp_.approachSlot == WarpApproachSlot::BackLeft) {
                     bodyTf_.position.x += (-rightX) * 0.16f;
                     bodyTf_.position.z += (-rightZ) * 0.16f;
                     rightHandTf_.position.x += (-rightX) * 0.32f;
                     rightHandTf_.position.z += (-rightZ) * 0.32f;
-                } else if (warp_.approachSlot == WarpApproachSlot::FrontRight) {
+                } else if (warp_.approachSlot == WarpApproachSlot::BackRight) {
                     bodyTf_.position.x += rightX * 0.16f;
                     bodyTf_.position.z += rightZ * 0.16f;
                     rightHandTf_.position.x += rightX * 0.32f;
                     rightHandTf_.position.z += rightZ * 0.32f;
-                } else if (warp_.approachSlot == WarpApproachSlot::LongFront) {
+                } else if (warp_.approachSlot == WarpApproachSlot::DirectBack) {
                     bodyTf_.position.y -= 0.10f;
                     bodyTf_.scale.z += 0.10f;
                     rightHandTf_.position.x += forwardX * 0.28f;
@@ -438,17 +438,17 @@ void Enemy::UpdateParts() {
             rightHandTf_.position.z += forwardZ * 0.3f;
 
             if (warp_.type == WarpType::Approach) {
-                if (warp_.approachSlot == WarpApproachSlot::FrontLeft) {
+                if (warp_.approachSlot == WarpApproachSlot::BackLeft) {
                     bodyTf_.position.x += (-rightX) * 0.18f;
                     bodyTf_.position.z += (-rightZ) * 0.18f;
                     rightHandTf_.position.x += (-rightX) * 0.28f;
                     rightHandTf_.position.z += (-rightZ) * 0.28f;
-                } else if (warp_.approachSlot == WarpApproachSlot::FrontRight) {
+                } else if (warp_.approachSlot == WarpApproachSlot::BackRight) {
                     bodyTf_.position.x += rightX * 0.18f;
                     bodyTf_.position.z += rightZ * 0.18f;
                     rightHandTf_.position.x += rightX * 0.28f;
                     rightHandTf_.position.z += rightZ * 0.28f;
-                } else if (warp_.approachSlot == WarpApproachSlot::LongFront) {
+                } else if (warp_.approachSlot == WarpApproachSlot::DirectBack) {
                     bodyTf_.position.y -= 0.08f;
                     bodyTf_.position.x += forwardX * 0.12f;
                     bodyTf_.position.z += forwardZ * 0.12f;
