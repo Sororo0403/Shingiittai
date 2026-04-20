@@ -1,8 +1,10 @@
 #include "GameScene.h"
 #include "CollisionUtil.h"
 #include "DirectXCommon.h"
+#include "EnemyMotionDebugScene.h"
 #include "Input.h"
 #include "ModelManager.h"
+#include "SceneManager.h"
 #include "PlayerTuningPresetIO.h"
 #include "SpriteManager.h"
 #include "TextureManager.h"
@@ -16,6 +18,7 @@
 #include "imgui_internal.h"
 #endif
 #include <cmath>
+#include <memory>
 #include "EnemyTuningPresetIO.h"
 
 using namespace DirectX;
@@ -310,6 +313,13 @@ void GameScene::Update() {
     if (input != nullptr && input->IsKeyTrigger(DIK_F1)) {
         dbgTriggerCounterRequested_ = true;
     }
+#ifdef _DEBUG
+    if (input != nullptr && input->IsKeyTrigger(DIK_F8) &&
+        sceneManager_ != nullptr) {
+        sceneManager_->ChangeScene(std::make_unique<EnemyMotionDebugScene>());
+        return;
+    }
+#endif
 
     UpdateCamera(input);
 
@@ -1047,6 +1057,12 @@ void GameScene::Draw() {
 #ifdef _DEBUG
     ImGui::Begin("HitInfo");
     ImGui::Checkbox("Freeze Enemy Motion", &dbgFreezeEnemyMotion_);
+    if (sceneManager_ != nullptr &&
+        ImGui::Button("Open Motion Debug Scene (F8)")) {
+        sceneManager_->ChangeScene(std::make_unique<EnemyMotionDebugScene>());
+        ImGui::End();
+        return;
+    }
     const ActionKind dbgEnemyActionKind = enemy_.GetActionKind();
     const ActionStep dbgEnemyActionStep = enemy_.GetActionStep();
     if (ImGui::Button("Trigger Counter")) {
@@ -1491,7 +1507,6 @@ void GameScene::Draw() {
         ImGui::TreePop();
     }
 
-    ImGui::Separator();
     ImGui::Text("Chain: Sweep -> Warp -> Smash");
     ImGui::DragFloat("Sweep Warp Smash MaxDist",
                      &enemy_.EditSweepWarpSmashMaxDistance(), 0.1f, 0.0f,

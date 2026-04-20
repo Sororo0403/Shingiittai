@@ -22,12 +22,12 @@ static float Saturate(float value) {
 void Enemy::Initialize(uint32_t modelId, uint32_t projectileModelId) {
     modelId_ = modelId;
     projectileModelId_ = projectileModelId;
-    hp_ = maxHp_;
-    phase_ = BossPhase::Phase1;
-    introActive_ = true;
-    introTimer_ = 0.0f;
-    phaseTransitionActive_ = false;
-    phaseTransitionTimer_ = 0.0f;
+    runtime_.hp = config_.core.maxHp;
+    runtime_.phase = BossPhase::Phase1;
+    runtime_.introActive = true;
+    runtime_.introTimer = 0.0f;
+    runtime_.phaseTransitionActive = false;
+    runtime_.phaseTransitionTimer = 0.0f;
 
     tf_.position = {0.0f, 0.0f, 10.0f};
     tf_.scale = {1.0f, 1.0f, 1.0f};
@@ -40,18 +40,63 @@ void Enemy::Initialize(uint32_t modelId, uint32_t projectileModelId) {
 }
 
 void Enemy::SkipIntro() {
-    introActive_ = false;
-    introTimer_ = 0.0f;
-    stateTimer_ = -0.10f;
+    runtime_.introActive = false;
+    runtime_.introTimer = 0.0f;
+    runtime_.stateTimer = -0.10f;
 }
 
 void Enemy::RestartIntro() {
-    introActive_ = true;
+    runtime_.introActive = true;
+    runtime_.introTimer = 0.0f;
+    runtime_.stateTimer = 0.0f;
+    runtime_.action.kind = ActionKind::None;
+    runtime_.action.id = ActionId::None;
+    runtime_.action.step = ActionStep::None;
+}
+
+void Enemy::DebugResetState() {
+    isDying_ = false;
+    deathFinished_ = false;
+    deathTimer_ = 0.0f;
+    deathStartY_ = tf_.position.y;
+    hp_ = config_.core.maxHp;
+
+    introActive_ = false;
     introTimer_ = 0.0f;
-    stateTimer_ = 0.0f;
-    action_.kind = ActionKind::None;
-    action_.id = ActionId::None;
-    action_.step = ActionStep::None;
+    phaseTransitionActive_ = false;
+    phaseTransitionTimer_ = 0.0f;
+
+    bullets_.clear();
+    waves_.clear();
+    shotsRemaining_ = 0;
+    shotIntervalTimer_ = 0.0f;
+
+    tactic_ = TacticState::Neutral;
+    EndAttack();
+    stateTimer_ = -0.10f;
+    UpdateParts();
+}
+
+bool Enemy::DebugStartAction(ActionKind kind) {
+    DebugResetState();
+    if (kind == ActionKind::None) {
+        return true;
+    }
+    const bool started = TryBeginTacticAction(kind);
+    UpdateParts();
+    return started;
+}
+
+void Enemy::DebugSetBossPhase(BossPhase phase) {
+    phase_ = phase;
+    phaseTransitionActive_ = false;
+    phaseTransitionTimer_ = 0.0f;
+    if (phase == BossPhase::Phase1) {
+        hp_ = config_.core.maxHp;
+    } else {
+        hp_ = config_.core.maxHp * config_.core.phase2HealthRatioThreshold * 0.5f;
+    }
+    UpdateParts();
 }
 
 // ============================================================
@@ -73,9 +118,9 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
         return;
     }
 
-    playerObs_ = playerObs;
-    playerPos_ = playerObs.position;
-    playerGuarding_ = playerObs.isGuarding;
+    runtime_.playerObs = playerObs;
+    runtime_.playerPos = playerObs.position;
+    runtime_.playerGuarding = playerObs.isGuarding;
     UpdateBossPhase();
     UpdateWarpTrails(deltaTime);
     if (counterRecoilTimer_ > 0.0f) {
@@ -85,37 +130,37 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
         }
     }
 
-    if (introActive_) {
+    if (runtime_.introActive) {
         const float introTotalDuration =
             introSecondSlashDuration_ + introSpinSlashDuration_ +
             introSettleDuration_;
-        introTimer_ += deltaTime;
-        introTimer_ = Saturate(introTimer_ / introTotalDuration) *
+        runtime_.introTimer += deltaTime;
+        runtime_.introTimer = Saturate(runtime_.introTimer / introTotalDuration) *
                       introTotalDuration;
 
-        isAttackActive_ = false;
-        isGuardActive_ = false;
+        runtime_.isAttackActive = false;
+        runtime_.isGuardActive = false;
         UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_ * 0.55f);
         UpdateParts();
 
-        if (introTimer_ >= introTotalDuration) {
-            introActive_ = false;
-            introTimer_ = 0.0f;
-            stateTimer_ = -0.10f;
+        if (runtime_.introTimer >= introTotalDuration) {
+            runtime_.introActive = false;
+            runtime_.introTimer = 0.0f;
+            runtime_.stateTimer = -0.10f;
             UpdateParts();
         }
         return;
     }
 
-    if (isDying_) {
-        deathTimer_ += deltaTime;
+    if (runtime_.isDying) {
+        runtime_.deathTimer += deltaTime;
 
-        float t = deathTimer_ / deathDuration_;
+        float t = runtime_.deathTimer / deathDuration_;
         if (t > 1.0f) {
             t = 1.0f;
         }
 
-        tf_.position.y = deathStartY_ - deathSinkDistance_ * t;
+        tf_.position.y = runtime_.deathStartY - deathSinkDistance_ * t;
         tf_.scale.x = 1.0f - 0.25f * t;
         tf_.scale.y = 1.0f - 0.55f * t;
         tf_.scale.z = 1.0f - 0.25f * t;
@@ -124,39 +169,41 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
         UpdateWaves(deltaTime);
         UpdateParts();
 
-        if (deathTimer_ >= deathDuration_) {
-            deathFinished_ = true;
+        if (runtime_.deathTimer >= deathDuration_) {
+            runtime_.deathFinished = true;
         }
         return;
     }
 
-    if (phaseTransitionActive_) {
-        phaseTransitionTimer_ += deltaTime;
-        isAttackActive_ = false;
-        isGuardActive_ = false;
+    if (runtime_.phaseTransitionActive) {
+        runtime_.phaseTransitionTimer += deltaTime;
+        runtime_.isAttackActive = false;
+        runtime_.isGuardActive = false;
 
         UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_ * 0.35f);
         UpdateBullets(deltaTime);
         UpdateWaves(deltaTime);
         UpdateParts();
 
-        if (phaseTransitionTimer_ >= phaseTransitionDuration_) {
-            phaseTransitionActive_ = false;
-            phaseTransitionTimer_ = 0.0f;
-            stateTimer_ = 0.0f;
+        if (runtime_.phaseTransitionTimer >= phaseTransitionDuration_) {
+            runtime_.phaseTransitionActive = false;
+            runtime_.phaseTransitionTimer = 0.0f;
+            runtime_.stateTimer = 0.0f;
         }
         return;
     }
 
     float currentDistance = GetDistanceToPlayer();
-    float distanceDelta = std::fabs(currentDistance - lastDistanceToPlayer_);
+    float distanceDelta =
+        std::fabs(currentDistance - runtime_.lastDistanceToPlayer);
 
     if (distanceDelta < stagnantDistanceThreshold_) {
-        stagnantTimer_ += deltaTime;
+        runtime_.stagnantTimer += deltaTime;
     } else {
-        stagnantTimer_ = 0.0f;
+        runtime_.stagnantTimer = 0.0f;
     }
-    isDistanceStagnant_ = (stagnantTimer_ >= stagnantTimeThreshold_);
+    runtime_.isDistanceStagnant =
+        (runtime_.stagnantTimer >= stagnantTimeThreshold_);
 
     if (currentDistance <= closePressureDistance_) {
         closePressureTimer_ += deltaTime;
@@ -170,7 +217,7 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
         }
     }
 
-    if (currentDistance > farAttackDistance_) {
+    if (currentDistance > config_.core.farAttackDistance) {
         farDistanceTimer_ += deltaTime;
     } else {
         farDistanceTimer_ = 0.0f;
@@ -183,32 +230,32 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
         }
     }
 
-    lastDistanceToPlayer_ = currentDistance;
+    runtime_.lastDistanceToPlayer = currentDistance;
 
-    if (action_.kind == ActionKind::None) {
+    if (runtime_.action.kind == ActionKind::None) {
         UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_);
     }
 
-    stateTimer_ += deltaTime;
+    runtime_.stateTimer += deltaTime;
 
-    isAttackActive_ = false;
-    isGuardActive_ = false;
+    runtime_.isAttackActive = false;
+    runtime_.isGuardActive = false;
 
     UpdateCounterAdaptation(deltaTime);
 
-    if (hitReactionTimer_ > 0.0f) {
-        stateTimer_ -= deltaTime;
-        if (stateTimer_ < 0.0f) {
-            stateTimer_ = 0.0f;
+    if (runtime_.hitReactionTimer > 0.0f) {
+        runtime_.stateTimer -= deltaTime;
+        if (runtime_.stateTimer < 0.0f) {
+            runtime_.stateTimer = 0.0f;
         }
 
-        hitReactionTimer_ -= deltaTime;
-        if (hitReactionTimer_ < 0.0f) {
-            hitReactionTimer_ = 0.0f;
+        runtime_.hitReactionTimer -= deltaTime;
+        if (runtime_.hitReactionTimer < 0.0f) {
+            runtime_.hitReactionTimer = 0.0f;
         }
 
-        float dx = tf_.position.x - playerPos_.x;
-        float dz = tf_.position.z - playerPos_.z;
+        float dx = tf_.position.x - runtime_.playerPos.x;
+        float dz = tf_.position.z - runtime_.playerPos.z;
         float len = std::sqrtf(dx * dx + dz * dz);
         if (len > 0.0001f) {
             dx /= len;
@@ -227,7 +274,7 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
     // ------------------------------------------------------------
     // カウンター成功リアクション
     // ------------------------------------------------------------
-    if (playerObs_.justCountered && ApplyCounterBreakReaction()) {
+    if (runtime_.playerObs.justCountered && ApplyCounterBreakReaction()) {
         return;
     }
 
@@ -243,13 +290,13 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
 // 描画処理
 // ============================================================
 void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
-    if (deathFinished_) {
+    if (runtime_.deathFinished) {
         return;
     }
 
     float hitFlash = 0.0f;
     if (hitReactionDuration_ > 0.0001f) {
-        hitFlash = std::clamp(hitReactionTimer_ / hitReactionDuration_, 0.0f,
+        hitFlash = std::clamp(runtime_.hitReactionTimer / hitReactionDuration_, 0.0f,
                               1.0f);
     }
     const bool isHitFlashing = hitFlash > 0.0f;
@@ -262,7 +309,7 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         hitEffect.intensity = 0.75f + 0.85f * hitFlash;
         hitEffect.fresnelPower = 2.6f;
         hitEffect.noiseAmount = 0.10f;
-        hitEffect.time = stateTimer_;
+        hitEffect.time = runtime_.stateTimer;
     }
 
     const uint32_t effectModelId =
@@ -651,8 +698,9 @@ void Enemy::ReflectBullet(size_t index, const DirectX::XMFLOAT3 &targetPos) {
     dirY /= len;
     dirZ /= len;
 
-    bullet.velocity = {dirX * bulletSpeed_, dirY * bulletSpeed_,
-                       dirZ * bulletSpeed_};
+    bullet.velocity = {dirX * config_.attacks.shot.bulletSpeed,
+                       dirY * config_.attacks.shot.bulletSpeed,
+                       dirZ * config_.attacks.shot.bulletSpeed};
     bullet.isReflected = true;
 }
 
@@ -688,7 +736,7 @@ void Enemy::ReflectWave(size_t index, const DirectX::XMFLOAT3 &targetPos) {
     dirZ /= len;
 
     wave.direction = {dirX, 0.0f, dirZ};
-    wave.speed = waveSpeed_;
+    wave.speed = config_.attacks.wave.speed;
     wave.traveledDistance = 0.0f;
     wave.isReflected = true;
 }
@@ -752,6 +800,8 @@ void Enemy::UpdateByAction(float deltaTime) {
         return;
     }
 
+    // Once tactics have chosen an action, each action owns its own local step
+    // transitions until it finishes or branches to a follow-up.
     switch (action_.kind) {
     case ActionKind::Smash:
         UpdateSmashByStep(deltaTime);
@@ -812,7 +862,7 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
         float r =
             static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
 
-        float useDelayChance = delaySmashChance_;
+        float useDelayChance = config_.attacks.smash.delayChance;
         if (tactic_ == TacticState::CounterBait || playerObs_.isCounterStance) {
             useDelayChance += 0.20f;
         }
@@ -829,7 +879,7 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
         float r =
             static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
 
-        float useDoubleChance = doubleSweepChance_;
+        float useDoubleChance = config_.attacks.sweep.doubleChance;
         if (tactic_ == TacticState::CounterPunish || IsCounterFailObserved()) {
             useDoubleChance += 0.20f;
         }
@@ -867,6 +917,41 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
             stalkForwardBias_ = 1.0f;
         }
     }
+}
+
+bool Enemy::TryBeginTacticAction(ActionKind kind) {
+    switch (kind) {
+    case ActionKind::Smash:
+    case ActionKind::Sweep:
+    case ActionKind::Shot:
+    case ActionKind::Wave:
+    case ActionKind::Rush:
+        BeginAction(kind, ActionStep::Charge);
+        return true;
+    case ActionKind::Warp:
+        if (!PrepareWarpContext()) {
+            return false;
+        }
+        BeginAction(kind, ActionStep::Start);
+        return true;
+    case ActionKind::Guard:
+        DecideGuardTarget();
+        BeginAction(kind, ActionStep::Move);
+        return true;
+    case ActionKind::Stalk:
+        BeginStalkAction();
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool Enemy::TryBeginTacticActionOrFallback(ActionKind preferred,
+                                           ActionKind fallback) {
+    if (TryBeginTacticAction(preferred)) {
+        return true;
+    }
+    return TryBeginTacticAction(fallback);
 }
 
 void Enemy::ChangeActionStep(ActionStep step) {
@@ -956,12 +1041,12 @@ void Enemy::FinishCurrentAction() {
 }
 
 void Enemy::UpdateBossPhase() {
-    if (phase_ == BossPhase::Phase2 || maxHp_ <= 0.0f) {
+    if (phase_ == BossPhase::Phase2 || config_.core.maxHp <= 0.0f) {
         return;
     }
 
-    float hpRatio = hp_ / maxHp_;
-    if (hpRatio <= phase2HealthRatioThreshold_) {
+    float hpRatio = hp_ / config_.core.maxHp;
+    if (hpRatio <= config_.core.phase2HealthRatioThreshold) {
         EndAttack();
         phase_ = BossPhase::Phase2;
         phaseTransitionActive_ = true;

@@ -69,7 +69,7 @@ void Enemy::UpdateRushByStep(float deltaTime) {
 void Enemy::UpdateSmashCharge(float deltaTime) {
     float currentChargeTime = GetCurrentSmashChargeTime();
 
-    float trackingEnd = smashTiming_.trackingEndTime;
+    float trackingEnd = config_.attacks.smash.melee.base.timing.trackingEndTime;
     if (trackingEnd < 0.0f) {
         trackingEnd = 0.0f;
     }
@@ -106,7 +106,8 @@ void Enemy::UpdateSmashCharge(float deltaTime) {
         }
 
         if (ShouldEnterSmashHold()) {
-            EnterHold(RandomRange(smashHoldTimeMin_, smashHoldTimeMax_));
+            EnterHold(RandomRange(config_.attacks.smash.melee.holdTime.min,
+                                  config_.attacks.smash.melee.holdTime.max));
 
             if (ShouldDoFakeCommit(ActionKind::Smash)) {
                 EnterFakeCommit(ActionKind::Smash);
@@ -220,7 +221,7 @@ void Enemy::UpdateSmashRecovery(float deltaTime) {
 void Enemy::UpdateSweepCharge(float deltaTime) {
     float currentChargeTime = GetCurrentSweepChargeTime();
 
-    float trackingEnd = sweepTiming_.trackingEndTime;
+    float trackingEnd = config_.attacks.sweep.melee.base.timing.trackingEndTime;
     if (trackingEnd < 0.0f) {
         trackingEnd = 0.0f;
     }
@@ -257,7 +258,8 @@ void Enemy::UpdateSweepCharge(float deltaTime) {
         }
 
         if (ShouldEnterSweepHold()) {
-            EnterHold(RandomRange(sweepHoldTimeMin_, sweepHoldTimeMax_));
+            EnterHold(RandomRange(config_.attacks.sweep.melee.holdTime.min,
+                                  config_.attacks.sweep.melee.holdTime.max));
 
             if (ShouldDoFakeCommit(ActionKind::Sweep)) {
                 EnterFakeCommit(ActionKind::Sweep);
@@ -367,7 +369,7 @@ bool Enemy::TryBeginDoubleSweepSecondStage() {
         return false;
     }
 
-    if (stateTimer_ < doubleSweepSecondDelay_) {
+    if (stateTimer_ < config_.attacks.sweep.secondDelay) {
         return false;
     }
 
@@ -385,12 +387,12 @@ bool Enemy::TryBeginDoubleSweepSecondStage() {
 // Rush更新
 // ============================================================
 void Enemy::UpdateRushCharge(float deltaTime) {
-    float currentRushChargeTime = rushChargeTime_;
+    float currentRushChargeTime = config_.attacks.rush.base.chargeTime;
     if (playerObs_.isGuarding) {
         currentRushChargeTime += rushChargeGuardTimeBonus_;
     }
 
-    float trackingEnd = rushTiming_.trackingEndTime;
+    float trackingEnd = config_.attacks.rush.base.timing.trackingEndTime;
     if (trackingEnd < 0.0f) {
         trackingEnd = 0.0f;
     }
@@ -448,13 +450,15 @@ void Enemy::UpdateRushCharge(float deltaTime) {
 void Enemy::UpdateRushAttack(float deltaTime) {
     isAttackActive_ = IsCurrentAttackInActiveWindow();
 
-    if (stateTimer_ <= rushMoveDuration_) {
+    if (stateTimer_ <= config_.attacks.rush.moveDuration) {
         float dx = playerPos_.x - tf_.position.x;
         float dz = playerPos_.z - tf_.position.z;
         float targetYaw = std::atan2f(dx, dz);
 
         float progress =
-            (rushMoveDuration_ > 0.0001f) ? (stateTimer_ / rushMoveDuration_) : 1.0f;
+            (config_.attacks.rush.moveDuration > 0.0001f)
+                ? (stateTimer_ / config_.attacks.rush.moveDuration)
+                : 1.0f;
         if (progress < 0.0f) {
             progress = 0.0f;
         }
@@ -499,8 +503,10 @@ void Enemy::UpdateRushAttack(float deltaTime) {
         float forwardX = std::sinf(rushCurrentYaw_);
         float forwardZ = std::cosf(rushCurrentYaw_);
 
-        tf_.position.x += forwardX * rushSpeed_ * speedScale * deltaTime;
-        tf_.position.z += forwardZ * rushSpeed_ * speedScale * deltaTime;
+        tf_.position.x +=
+            forwardX * config_.attacks.rush.speed * speedScale * deltaTime;
+        tf_.position.z +=
+            forwardZ * config_.attacks.rush.speed * speedScale * deltaTime;
 
         facingYaw_ = rushCurrentYaw_;
     }

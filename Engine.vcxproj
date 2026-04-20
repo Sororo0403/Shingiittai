@@ -124,7 +124,6 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClCompile Include="src\app\enemy\EnemyAction_Melee.cpp" />
     <ClCompile Include="src\app\enemy\EnemyAction_Ranged.cpp" />
     <ClCompile Include="src\app\enemy\EnemyAction_WarpGuard.cpp" />
-    <ClCompile Include="src\app\enemy\EnemyAdaptation.cpp" />
     <ClCompile Include="src\app\enemy\EnemyCombat.cpp" />
     <ClCompile Include="src\app\enemy\EnemyCore.cpp" />
     <ClCompile Include="src\app\enemy\EnemyPresentation.cpp" />
@@ -147,6 +146,7 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClCompile Include="src\app\player\Player.cpp" />
     <ClCompile Include="src\engine\input\MahonyFilter.cpp" />
     <ClCompile Include="src\engine\particle\BaseParticleSystem.cpp" />
+    <ClCompile Include="src\app\scene\EnemyMotionDebugScene.cpp" />
     <ClCompile Include="src\app\scene\GameScene.cpp" />
     <ClCompile Include="src\engine\scene\SceneManager.cpp" />
     <ClCompile Include="src\engine\input\Input.cpp" />
@@ -187,6 +187,7 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClInclude Include="include\engine\collision\OBB.h" />
     <ClInclude Include="include\engine\input\MahonyFilter.h" />
     <ClInclude Include="include\engine\particle\BaseParticleSystem.h" />
+    <ClInclude Include="include\app\scene\EnemyMotionDebugScene.h" />
     <ClInclude Include="include\app\scene\GameScene.h" />
     <ClInclude Include="include\engine\model\Transform.h" />
     <ClInclude Include="include\engine\particle\Particle.h" />

@@ -250,12 +250,12 @@ void Enemy::SetupChainFromWarpContext() {
         chain_.active = true;
         chain_.starter = ChainStarter::WarpApproach;
         chain_.stepCount = 0;
-        chain_.maxSteps = warpApproachChainMaxSteps_;
+        chain_.maxSteps = config_.chain.warpApproachMaxSteps;
     } else if (warp_.type == WarpType::Escape) {
         chain_.active = true;
         chain_.starter = ChainStarter::WarpEscape;
         chain_.stepCount = 0;
-        chain_.maxSteps = warpEscapeChainMaxSteps_;
+        chain_.maxSteps = config_.chain.warpEscapeMaxSteps;
     }
 }
 
@@ -363,7 +363,7 @@ bool Enemy::DecideNextChainAction(ActionKind finishedKind, ActionKind &outKind,
 
     switch (chain_.starter) {
     case ChainStarter::WarpApproach:
-        if (distance > approachChainContinueDistance_) {
+        if (distance > config_.chain.approachContinueDistance) {
             return false;
         }
 
@@ -415,10 +415,10 @@ bool Enemy::TryStartPostActionWarpChain(ActionKind finishedKind) {
     float distance = GetDistanceToPlayer();
 
     if (finishedKind == ActionKind::Sweep) {
-        if (distance <= sweepWarpSmashMaxDistance_) {
+        if (distance <= config_.chain.sweepWarpSmashMaxDistance) {
             float r =
                 static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-            if (r < sweepWarpSmashChance_) {
+            if (r < config_.chain.sweepWarpSmashChance) {
                 SetupSweepWarpSmashChain();
 
                 warp_.type = WarpType::Approach;
@@ -438,10 +438,10 @@ bool Enemy::TryStartPostActionWarpChain(ActionKind finishedKind) {
     }
 
     if (finishedKind == ActionKind::Wave) {
-        if (distance >= waveWarpSmashMinDistance_) {
+        if (distance >= config_.chain.waveWarpSmashMinDistance) {
             float r =
                 static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-            if (r < waveWarpSmashChance_) {
+            if (r < config_.chain.waveWarpSmashChance) {
                 SetupWaveWarpSmashChain();
 
                 warp_.type = WarpType::Approach;
@@ -543,7 +543,7 @@ void Enemy::UpdateWarpStart(float deltaTime) {
     isVisible_ = false;
     warp_.collisionDisabled = true;
 
-    if (stateTimer_ >= warpStartTime_) {
+    if (stateTimer_ >= config_.warp.startTime) {
         warpTrailEmitTimer_ = 0.0f;
         EmitWarpTrailGhost(warp_.departurePos, warpTrailScaleMax_);
         ChangeActionStep(ActionStep::Move);
@@ -557,8 +557,8 @@ void Enemy::UpdateWarpMove(float deltaTime) {
     }
 
     float t = 1.0f;
-    if (warpMoveTime_ > 0.0001f) {
-        t = stateTimer_ / warpMoveTime_;
+    if (config_.warp.moveTime > 0.0001f) {
+        t = stateTimer_ / config_.warp.moveTime;
     }
     if (t < 0.0f) {
         t = 0.0f;
@@ -587,7 +587,7 @@ void Enemy::UpdateWarpMove(float deltaTime) {
     UpdateFacingToPlayer();
     LockCurrentFacing();
 
-    if (stateTimer_ >= warpMoveTime_) {
+    if (stateTimer_ >= config_.warp.moveTime) {
         tf_.position = warp_.targetPos;
         ChangeActionStep(ActionStep::End);
     }
@@ -600,7 +600,7 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
     warp_.collisionDisabled = false;
     UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_ * 0.55f);
 
-    if (stateTimer_ >= warpEndTime_) {
+    if (stateTimer_ >= config_.warp.endTime) {
         BeginWarpFollowup();
     }
 }

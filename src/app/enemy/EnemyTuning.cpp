@@ -12,10 +12,10 @@
 float Enemy::GetCurrentActionTime() const { return stateTimer_; }
 
 float Enemy::GetCurrentSmashChargeTime() const {
-    float result = smashChargeTime_;
+    float result = config_.attacks.smash.melee.base.chargeTime;
 
     if (action_.id == ActionId::DelaySmash) {
-        result += delaySmashExtraChargeTime_;
+        result += config_.attacks.smash.delayExtraChargeTime;
     }
 
     result += GetAdaptiveChargeOffset(ActionKind::Smash);
@@ -27,10 +27,10 @@ float Enemy::GetCurrentSmashChargeTime() const {
 }
 
 float Enemy::GetCurrentSweepChargeTime() const {
-    float result = sweepChargeTime_;
+    float result = config_.attacks.sweep.melee.base.chargeTime;
 
     if (action_.id == ActionId::DoubleSweep && isDoubleSweepSecondStage_) {
-        result *= doubleSweepSecondChargeScale_;
+        result *= config_.attacks.sweep.secondChargeScale;
     }
 
     result += GetAdaptiveChargeOffset(ActionKind::Sweep);
@@ -144,9 +144,12 @@ void Enemy::ValidateTiming(AttackTimingParam &timing, float chargeTime) {
 }
 
 void Enemy::ValidateAllTimings() {
-    ValidateTiming(smashTiming_, smashChargeTime_);
-    ValidateTiming(sweepTiming_, sweepChargeTime_);
-    ValidateTiming(rushTiming_, rushChargeTime_);
+    ValidateTiming(config_.attacks.smash.melee.base.timing,
+                   config_.attacks.smash.melee.base.chargeTime);
+    ValidateTiming(config_.attacks.sweep.melee.base.timing,
+                   config_.attacks.sweep.melee.base.chargeTime);
+    ValidateTiming(config_.attacks.rush.base.timing,
+                   config_.attacks.rush.base.chargeTime);
 }
 
 // ============================================================
@@ -155,75 +158,75 @@ void Enemy::ValidateAllTimings() {
 EnemyTuningPreset Enemy::CreateTuningPreset() const {
     EnemyTuningPreset p{};
 
-    p.enemyMaxHp = maxHp_;
-    p.phase2HealthRatioThreshold = phase2HealthRatioThreshold_;
+    p.enemyMaxHp = config_.core.maxHp;
+    p.phase2HealthRatioThreshold = config_.core.phase2HealthRatioThreshold;
 
-    p.nearAttackDistance = nearAttackDistance_;
-    p.farAttackDistance = farAttackDistance_;
+    p.nearAttackDistance = config_.core.nearAttackDistance;
+    p.farAttackDistance = config_.core.farAttackDistance;
 
-    p.smash.damage = smashParam_.damage;
-    p.smash.knockback = smashParam_.knockback;
-    p.smash.hitBoxSize = smashParam_.hitBoxSize;
-    p.smashChargeTime = smashChargeTime_;
-    p.smashAttackForwardOffset = smashAttackForwardOffset_;
-    p.smashAttackHeightOffset = smashAttackHeightOffset_;
-    p.smashTiming.trackingEndTime = smashTiming_.trackingEndTime;
+    p.smash.damage = config_.attacks.smash.melee.base.attack.damage;
+    p.smash.knockback = config_.attacks.smash.melee.base.attack.knockback;
+    p.smash.hitBoxSize = config_.attacks.smash.melee.base.attack.hitBoxSize;
+    p.smashChargeTime = config_.attacks.smash.melee.base.chargeTime;
+    p.smashAttackForwardOffset = config_.attacks.smash.attackForwardOffset;
+    p.smashAttackHeightOffset = config_.attacks.smash.attackHeightOffset;
+    p.smashTiming.trackingEndTime = config_.attacks.smash.melee.base.timing.trackingEndTime;
 
-    p.sweep.damage = sweepParam_.damage;
-    p.sweep.knockback = sweepParam_.knockback;
-    p.sweep.hitBoxSize = sweepParam_.hitBoxSize;
-    p.sweepChargeTime = sweepChargeTime_;
-    p.sweepAttackSideOffset = sweepAttackSideOffset_;
-    p.sweepAttackHeightOffset = sweepAttackHeightOffset_;
-    p.sweepTiming.trackingEndTime = sweepTiming_.trackingEndTime;
+    p.sweep.damage = config_.attacks.sweep.melee.base.attack.damage;
+    p.sweep.knockback = config_.attacks.sweep.melee.base.attack.knockback;
+    p.sweep.hitBoxSize = config_.attacks.sweep.melee.base.attack.hitBoxSize;
+    p.sweepChargeTime = config_.attacks.sweep.melee.base.chargeTime;
+    p.sweepAttackSideOffset = config_.attacks.sweep.attackSideOffset;
+    p.sweepAttackHeightOffset = config_.attacks.sweep.attackHeightOffset;
+    p.sweepTiming.trackingEndTime = config_.attacks.sweep.melee.base.timing.trackingEndTime;
 
-    p.bullet.damage = bulletParam_.damage;
-    p.bullet.knockback = bulletParam_.knockback;
-    p.bullet.hitBoxSize = bulletParam_.hitBoxSize;
-    p.shotChargeTime = shotChargeTime_;
-    p.shotRecoveryTime = shotRecoveryTime_;
-    p.shotInterval = shotInterval_;
-    p.shotMinCount = shotMinCount_;
-    p.shotMaxCount = shotMaxCount_;
-    p.bulletSpeed = bulletSpeed_;
-    p.bulletLifeTime = bulletLifeTime_;
-    p.bulletSpawnHeightOffset = bulletSpawnHeightOffset_;
+    p.bullet.damage = config_.attacks.shot.attack.damage;
+    p.bullet.knockback = config_.attacks.shot.attack.knockback;
+    p.bullet.hitBoxSize = config_.attacks.shot.attack.hitBoxSize;
+    p.shotChargeTime = config_.attacks.shot.chargeTime;
+    p.shotRecoveryTime = config_.attacks.shot.recoveryTime;
+    p.shotInterval = config_.attacks.shot.interval;
+    p.shotMinCount = config_.attacks.shot.minCount;
+    p.shotMaxCount = config_.attacks.shot.maxCount;
+    p.bulletSpeed = config_.attacks.shot.bulletSpeed;
+    p.bulletLifeTime = config_.attacks.shot.bulletLifeTime;
+    p.bulletSpawnHeightOffset = config_.attacks.shot.spawnHeightOffset;
 
-    p.wave.damage = waveParam_.damage;
-    p.wave.knockback = waveParam_.knockback;
-    p.wave.hitBoxSize = waveParam_.hitBoxSize;
-    p.waveChargeTime = waveChargeTime_;
-    p.waveRecoveryTime = waveRecoveryTime_;
-    p.waveSpeed = waveSpeed_;
-    p.waveMaxDistance = waveMaxDistance_;
-    p.waveSpawnForwardOffset = waveSpawnForwardOffset_;
-    p.waveSpawnHeightOffset = waveSpawnHeightOffset_;
+    p.wave.damage = config_.attacks.wave.attack.damage;
+    p.wave.knockback = config_.attacks.wave.attack.knockback;
+    p.wave.hitBoxSize = config_.attacks.wave.attack.hitBoxSize;
+    p.waveChargeTime = config_.attacks.wave.chargeTime;
+    p.waveRecoveryTime = config_.attacks.wave.recoveryTime;
+    p.waveSpeed = config_.attacks.wave.speed;
+    p.waveMaxDistance = config_.attacks.wave.maxDistance;
+    p.waveSpawnForwardOffset = config_.attacks.wave.spawnForwardOffset;
+    p.waveSpawnHeightOffset = config_.attacks.wave.spawnHeightOffset;
 
-    p.smashTiming.totalTime = smashTiming_.totalTime;
-    p.smashTiming.trackingEndTime = smashTiming_.trackingEndTime;
-    p.smashTiming.activeStartTime = smashTiming_.activeStartTime;
-    p.smashTiming.activeEndTime = smashTiming_.activeEndTime;
-    p.smashTiming.recoveryStartTime = smashTiming_.recoveryStartTime;
+    p.smashTiming.totalTime = config_.attacks.smash.melee.base.timing.totalTime;
+    p.smashTiming.trackingEndTime = config_.attacks.smash.melee.base.timing.trackingEndTime;
+    p.smashTiming.activeStartTime = config_.attacks.smash.melee.base.timing.activeStartTime;
+    p.smashTiming.activeEndTime = config_.attacks.smash.melee.base.timing.activeEndTime;
+    p.smashTiming.recoveryStartTime = config_.attacks.smash.melee.base.timing.recoveryStartTime;
 
-    p.sweepTiming.totalTime = sweepTiming_.totalTime;
-    p.sweepTiming.trackingEndTime = sweepTiming_.trackingEndTime;
-    p.sweepTiming.activeStartTime = sweepTiming_.activeStartTime;
-    p.sweepTiming.activeEndTime = sweepTiming_.activeEndTime;
-    p.sweepTiming.recoveryStartTime = sweepTiming_.recoveryStartTime;
+    p.sweepTiming.totalTime = config_.attacks.sweep.melee.base.timing.totalTime;
+    p.sweepTiming.trackingEndTime = config_.attacks.sweep.melee.base.timing.trackingEndTime;
+    p.sweepTiming.activeStartTime = config_.attacks.sweep.melee.base.timing.activeStartTime;
+    p.sweepTiming.activeEndTime = config_.attacks.sweep.melee.base.timing.activeEndTime;
+    p.sweepTiming.recoveryStartTime = config_.attacks.sweep.melee.base.timing.recoveryStartTime;
 
-    p.warpStartTime = warpStartTime_;
-    p.warpMoveTime = warpMoveTime_;
-    p.warpEndTime = warpEndTime_;
+    p.warpStartTime = config_.warp.startTime;
+    p.warpMoveTime = config_.warp.moveTime;
+    p.warpEndTime = config_.warp.endTime;
 
-    p.warpApproachChainMaxSteps = warpApproachChainMaxSteps_;
-    p.warpEscapeChainMaxSteps = warpEscapeChainMaxSteps_;
-    p.approachChainContinueDistance = approachChainContinueDistance_;
-    p.escapeChainContinueDistance = escapeChainContinueDistance_;
+    p.warpApproachChainMaxSteps = config_.chain.warpApproachMaxSteps;
+    p.warpEscapeChainMaxSteps = config_.chain.warpEscapeMaxSteps;
+    p.approachChainContinueDistance = config_.chain.approachContinueDistance;
+    p.escapeChainContinueDistance = config_.chain.escapeContinueDistance;
 
-    p.sweepWarpSmashMaxDistance = sweepWarpSmashMaxDistance_;
-    p.sweepWarpSmashChance = sweepWarpSmashChance_;
-    p.waveWarpSmashMinDistance = waveWarpSmashMinDistance_;
-    p.waveWarpSmashChance = waveWarpSmashChance_;
+    p.sweepWarpSmashMaxDistance = config_.chain.sweepWarpSmashMaxDistance;
+    p.sweepWarpSmashChance = config_.chain.sweepWarpSmashChance;
+    p.waveWarpSmashMinDistance = config_.chain.waveWarpSmashMinDistance;
+    p.waveWarpSmashChance = config_.chain.waveWarpSmashChance;
 
     return p;
 }
@@ -232,95 +235,95 @@ EnemyTuningPreset Enemy::CreateTuningPreset() const {
 // プリセット読込用：構造体 → 現在値
 // ============================================================
 void Enemy::ApplyTuningPreset(const EnemyTuningPreset &p) {
-    maxHp_ = p.enemyMaxHp;
-    if (maxHp_ < 1.0f) {
-        maxHp_ = 1.0f;
+    config_.core.maxHp = p.enemyMaxHp;
+    if (config_.core.maxHp < 1.0f) {
+        config_.core.maxHp = 1.0f;
     }
-    hp_ = maxHp_;
+    hp_ = config_.core.maxHp;
 
-    phase2HealthRatioThreshold_ = p.phase2HealthRatioThreshold;
-    if (phase2HealthRatioThreshold_ < 0.05f) {
-        phase2HealthRatioThreshold_ = 0.05f;
+    config_.core.phase2HealthRatioThreshold = p.phase2HealthRatioThreshold;
+    if (config_.core.phase2HealthRatioThreshold < 0.05f) {
+        config_.core.phase2HealthRatioThreshold = 0.05f;
     }
-    if (phase2HealthRatioThreshold_ > 0.95f) {
-        phase2HealthRatioThreshold_ = 0.95f;
-    }
-
-    nearAttackDistance_ = p.nearAttackDistance;
-    farAttackDistance_ = p.farAttackDistance;
-
-    smashParam_.damage = p.smash.damage;
-    smashParam_.knockback = p.smash.knockback;
-    smashParam_.hitBoxSize = p.smash.hitBoxSize;
-    smashChargeTime_ = p.smashChargeTime;
-    smashAttackForwardOffset_ = p.smashAttackForwardOffset;
-    smashAttackHeightOffset_ = p.smashAttackHeightOffset;
-    smashTiming_.totalTime = p.smashTiming.totalTime;
-    smashTiming_.activeStartTime = p.smashTiming.activeStartTime;
-    smashTiming_.activeEndTime = p.smashTiming.activeEndTime;
-    smashTiming_.recoveryStartTime = p.smashTiming.recoveryStartTime;
-    smashTiming_.trackingEndTime = p.smashTiming.trackingEndTime;
-
-    sweepParam_.damage = p.sweep.damage;
-    sweepParam_.knockback = p.sweep.knockback;
-    sweepParam_.hitBoxSize = p.sweep.hitBoxSize;
-    sweepChargeTime_ = p.sweepChargeTime;
-    sweepAttackSideOffset_ = p.sweepAttackSideOffset;
-    sweepAttackHeightOffset_ = p.sweepAttackHeightOffset;
-    sweepTiming_.totalTime = p.sweepTiming.totalTime;
-    sweepTiming_.activeStartTime = p.sweepTiming.activeStartTime;
-    sweepTiming_.activeEndTime = p.sweepTiming.activeEndTime;
-    sweepTiming_.recoveryStartTime = p.sweepTiming.recoveryStartTime;
-    sweepTiming_.trackingEndTime = p.sweepTiming.trackingEndTime;
-
-    warpStartTime_ = p.warpStartTime;
-    warpMoveTime_ = p.warpMoveTime;
-    warpEndTime_ = p.warpEndTime;
-
-    if (warpStartTime_ < 0.0f) {
-        warpStartTime_ = 0.0f;
-    }
-    if (warpMoveTime_ < 0.0f) {
-        warpMoveTime_ = 0.0f;
-    }
-    if (warpEndTime_ < 0.0f) {
-        warpEndTime_ = 0.0f;
+    if (config_.core.phase2HealthRatioThreshold > 0.95f) {
+        config_.core.phase2HealthRatioThreshold = 0.95f;
     }
 
-    bulletParam_.damage = p.bullet.damage;
-    bulletParam_.knockback = p.bullet.knockback;
-    bulletParam_.hitBoxSize = p.bullet.hitBoxSize;
-    shotChargeTime_ = p.shotChargeTime;
-    shotRecoveryTime_ = p.shotRecoveryTime;
-    shotInterval_ = p.shotInterval;
-    shotMinCount_ = p.shotMinCount;
-    shotMaxCount_ = p.shotMaxCount;
-    bulletSpeed_ = p.bulletSpeed;
-    bulletLifeTime_ = p.bulletLifeTime;
-    bulletSpawnHeightOffset_ = p.bulletSpawnHeightOffset;
+    config_.core.nearAttackDistance = p.nearAttackDistance;
+    config_.core.farAttackDistance = p.farAttackDistance;
 
-    waveParam_.damage = p.wave.damage;
-    waveParam_.knockback = p.wave.knockback;
-    waveParam_.hitBoxSize = p.wave.hitBoxSize;
-    waveChargeTime_ = p.waveChargeTime;
-    waveRecoveryTime_ = p.waveRecoveryTime;
-    waveSpeed_ = p.waveSpeed;
-    waveMaxDistance_ = p.waveMaxDistance;
-    waveSpawnForwardOffset_ = p.waveSpawnForwardOffset;
-    waveSpawnHeightOffset_ = p.waveSpawnHeightOffset;
+    config_.attacks.smash.melee.base.attack.damage = p.smash.damage;
+    config_.attacks.smash.melee.base.attack.knockback = p.smash.knockback;
+    config_.attacks.smash.melee.base.attack.hitBoxSize = p.smash.hitBoxSize;
+    config_.attacks.smash.melee.base.chargeTime = p.smashChargeTime;
+    config_.attacks.smash.attackForwardOffset = p.smashAttackForwardOffset;
+    config_.attacks.smash.attackHeightOffset = p.smashAttackHeightOffset;
+    config_.attacks.smash.melee.base.timing.totalTime = p.smashTiming.totalTime;
+    config_.attacks.smash.melee.base.timing.activeStartTime = p.smashTiming.activeStartTime;
+    config_.attacks.smash.melee.base.timing.activeEndTime = p.smashTiming.activeEndTime;
+    config_.attacks.smash.melee.base.timing.recoveryStartTime = p.smashTiming.recoveryStartTime;
+    config_.attacks.smash.melee.base.timing.trackingEndTime = p.smashTiming.trackingEndTime;
 
-    warpApproachChainMaxSteps_ = p.warpApproachChainMaxSteps;
-    warpEscapeChainMaxSteps_ = p.warpEscapeChainMaxSteps;
-    approachChainContinueDistance_ = p.approachChainContinueDistance;
-    escapeChainContinueDistance_ = p.escapeChainContinueDistance;
+    config_.attacks.sweep.melee.base.attack.damage = p.sweep.damage;
+    config_.attacks.sweep.melee.base.attack.knockback = p.sweep.knockback;
+    config_.attacks.sweep.melee.base.attack.hitBoxSize = p.sweep.hitBoxSize;
+    config_.attacks.sweep.melee.base.chargeTime = p.sweepChargeTime;
+    config_.attacks.sweep.attackSideOffset = p.sweepAttackSideOffset;
+    config_.attacks.sweep.attackHeightOffset = p.sweepAttackHeightOffset;
+    config_.attacks.sweep.melee.base.timing.totalTime = p.sweepTiming.totalTime;
+    config_.attacks.sweep.melee.base.timing.activeStartTime = p.sweepTiming.activeStartTime;
+    config_.attacks.sweep.melee.base.timing.activeEndTime = p.sweepTiming.activeEndTime;
+    config_.attacks.sweep.melee.base.timing.recoveryStartTime = p.sweepTiming.recoveryStartTime;
+    config_.attacks.sweep.melee.base.timing.trackingEndTime = p.sweepTiming.trackingEndTime;
 
-    sweepWarpSmashMaxDistance_ = p.sweepWarpSmashMaxDistance;
-    sweepWarpSmashChance_ = p.sweepWarpSmashChance;
-    waveWarpSmashMinDistance_ = p.waveWarpSmashMinDistance;
-    waveWarpSmashChance_ = p.waveWarpSmashChance;
+    config_.warp.startTime = p.warpStartTime;
+    config_.warp.moveTime = p.warpMoveTime;
+    config_.warp.endTime = p.warpEndTime;
 
-    if (nearAttackDistance_ > farAttackDistance_) {
-        farAttackDistance_ = nearAttackDistance_;
+    if (config_.warp.startTime < 0.0f) {
+        config_.warp.startTime = 0.0f;
+    }
+    if (config_.warp.moveTime < 0.0f) {
+        config_.warp.moveTime = 0.0f;
+    }
+    if (config_.warp.endTime < 0.0f) {
+        config_.warp.endTime = 0.0f;
+    }
+
+    config_.attacks.shot.attack.damage = p.bullet.damage;
+    config_.attacks.shot.attack.knockback = p.bullet.knockback;
+    config_.attacks.shot.attack.hitBoxSize = p.bullet.hitBoxSize;
+    config_.attacks.shot.chargeTime = p.shotChargeTime;
+    config_.attacks.shot.recoveryTime = p.shotRecoveryTime;
+    config_.attacks.shot.interval = p.shotInterval;
+    config_.attacks.shot.minCount = p.shotMinCount;
+    config_.attacks.shot.maxCount = p.shotMaxCount;
+    config_.attacks.shot.bulletSpeed = p.bulletSpeed;
+    config_.attacks.shot.bulletLifeTime = p.bulletLifeTime;
+    config_.attacks.shot.spawnHeightOffset = p.bulletSpawnHeightOffset;
+
+    config_.attacks.wave.attack.damage = p.wave.damage;
+    config_.attacks.wave.attack.knockback = p.wave.knockback;
+    config_.attacks.wave.attack.hitBoxSize = p.wave.hitBoxSize;
+    config_.attacks.wave.chargeTime = p.waveChargeTime;
+    config_.attacks.wave.recoveryTime = p.waveRecoveryTime;
+    config_.attacks.wave.speed = p.waveSpeed;
+    config_.attacks.wave.maxDistance = p.waveMaxDistance;
+    config_.attacks.wave.spawnForwardOffset = p.waveSpawnForwardOffset;
+    config_.attacks.wave.spawnHeightOffset = p.waveSpawnHeightOffset;
+
+    config_.chain.warpApproachMaxSteps = p.warpApproachChainMaxSteps;
+    config_.chain.warpEscapeMaxSteps = p.warpEscapeChainMaxSteps;
+    config_.chain.approachContinueDistance = p.approachChainContinueDistance;
+    config_.chain.escapeContinueDistance = p.escapeChainContinueDistance;
+
+    config_.chain.sweepWarpSmashMaxDistance = p.sweepWarpSmashMaxDistance;
+    config_.chain.sweepWarpSmashChance = p.sweepWarpSmashChance;
+    config_.chain.waveWarpSmashMinDistance = p.waveWarpSmashMinDistance;
+    config_.chain.waveWarpSmashChance = p.waveWarpSmashChance;
+
+    if (config_.core.nearAttackDistance > config_.core.farAttackDistance) {
+        config_.core.farAttackDistance = config_.core.nearAttackDistance;
     }
 
     ValidateAllTimings();

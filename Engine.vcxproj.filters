@@ -227,9 +227,6 @@
     <ClCompile Include="src\app\enemy\EnemyAction_WarpGuard.cpp">
       <Filter>src\app\enemy</Filter>
     </ClCompile>
-    <ClCompile Include="src\app\enemy\EnemyAdaptation.cpp">
-      <Filter>src\app\enemy</Filter>
-    </ClCompile>
     <ClCompile Include="src\app\enemy\EnemyCombat.cpp">
       <Filter>src\app\enemy</Filter>
     </ClCompile>

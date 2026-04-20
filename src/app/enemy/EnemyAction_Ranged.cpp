@@ -46,11 +46,13 @@ void Enemy::UpdateWaveByStep(float deltaTime) {
 void Enemy::UpdateShotCharge(float deltaTime) {
     UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_);
 
-    if (stateTimer_ >= shotChargeTime_) {
+    if (stateTimer_ >= config_.attacks.shot.chargeTime) {
         ChangeActionStep(ActionStep::Active);
 
         shotsRemaining_ =
-            shotMinCount_ + (std::rand() % (shotMaxCount_ - shotMinCount_ + 1));
+            config_.attacks.shot.minCount +
+            (std::rand() % (config_.attacks.shot.maxCount -
+                            config_.attacks.shot.minCount + 1));
 
         shotIntervalTimer_ = 0.0f;
     }
@@ -59,7 +61,8 @@ void Enemy::UpdateShotCharge(float deltaTime) {
 void Enemy::UpdateShotFire(float deltaTime) {
     shotIntervalTimer_ += deltaTime;
 
-    if (shotsRemaining_ > 0 && shotIntervalTimer_ >= shotInterval_) {
+    if (shotsRemaining_ > 0 &&
+        shotIntervalTimer_ >= config_.attacks.shot.interval) {
         SpawnBullet();
         shotsRemaining_--;
         shotIntervalTimer_ = 0.0f;
@@ -73,7 +76,7 @@ void Enemy::UpdateShotFire(float deltaTime) {
 void Enemy::UpdateShotRecovery(float deltaTime) {
     UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_ * 1.25f);
 
-    if (stateTimer_ >= shotRecoveryTime_) {
+    if (stateTimer_ >= config_.attacks.shot.recoveryTime) {
         FinishCurrentAction();
     }
 }
@@ -98,11 +101,12 @@ void Enemy::SpawnBullet() {
     dirZ /= len;
 
     bullet.position = rightHandTf_.position;
-    bullet.position.y += bulletSpawnHeightOffset_;
+    bullet.position.y += config_.attacks.shot.spawnHeightOffset;
 
-    bullet.velocity = {dirX * bulletSpeed_, dirY * bulletSpeed_,
-                       dirZ * bulletSpeed_};
-    bullet.lifeTime = bulletLifeTime_;
+    bullet.velocity = {dirX * config_.attacks.shot.bulletSpeed,
+                       dirY * config_.attacks.shot.bulletSpeed,
+                       dirZ * config_.attacks.shot.bulletSpeed};
+    bullet.lifeTime = config_.attacks.shot.bulletLifeTime;
     bullet.isAlive = true;
 
     bullets_.push_back(bullet);
@@ -131,7 +135,7 @@ void Enemy::UpdateBullets(float deltaTime) {
 void Enemy::UpdateWaveCharge(float deltaTime) {
     UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_);
 
-    if (stateTimer_ >= waveChargeTime_) {
+    if (stateTimer_ >= config_.attacks.wave.chargeTime) {
         LockCurrentFacing();
         ChangeActionStep(ActionStep::Active);
     }
@@ -147,7 +151,7 @@ void Enemy::UpdateWaveFire(float deltaTime) {
 void Enemy::UpdateWaveRecovery(float deltaTime) {
     (void)deltaTime;
 
-    if (stateTimer_ >= waveRecoveryTime_) {
+    if (stateTimer_ >= config_.attacks.wave.recoveryTime) {
         FinishCurrentAction();
     }
 }
@@ -163,14 +167,14 @@ void Enemy::SpawnWave() {
     float forwardZ = std::cosf(usedYaw);
 
     wave.position = bodyTf_.position;
-    wave.position.y = tf_.position.y + waveSpawnHeightOffset_;
-    wave.position.x += forwardX * waveSpawnForwardOffset_;
-    wave.position.z += forwardZ * waveSpawnForwardOffset_;
+    wave.position.y = tf_.position.y + config_.attacks.wave.spawnHeightOffset;
+    wave.position.x += forwardX * config_.attacks.wave.spawnForwardOffset;
+    wave.position.z += forwardZ * config_.attacks.wave.spawnForwardOffset;
 
     wave.direction = {forwardX, 0.0f, forwardZ};
-    wave.speed = waveSpeed_;
+    wave.speed = config_.attacks.wave.speed;
     wave.traveledDistance = 0.0f;
-    wave.maxDistance = waveMaxDistance_;
+    wave.maxDistance = config_.attacks.wave.maxDistance;
     wave.isAlive = true;
 
     waves_.push_back(wave);

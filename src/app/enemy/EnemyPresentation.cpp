@@ -37,17 +37,19 @@ void Enemy::UpdateParts() {
     float visualYaw = usedYaw;
     float visualPitch = 0.0f;
     float visualRoll = 0.0f;
-    float pulse = 0.5f + 0.5f * std::sinf(stateTimer_ * 18.0f);
-    float phasePulse = 0.5f + 0.5f * std::sinf(phaseTransitionTimer_ * 16.0f);
+    float pulse = 0.5f + 0.5f * std::sinf(runtime_.stateTimer * 18.0f);
+    float phasePulse =
+        0.5f + 0.5f * std::sinf(runtime_.phaseTransitionTimer * 16.0f);
     const bool isDelaySmashWhiffPunish =
-        (action_.kind == ActionKind::Smash &&
-         action_.step == ActionStep::Recovery &&
-         action_.id == ActionId::DelaySmash && !currentActionConnected_ &&
-         !currentActionGuarded_);
+        (runtime_.action.kind == ActionKind::Smash &&
+         runtime_.action.step == ActionStep::Recovery &&
+         runtime_.action.id == ActionId::DelaySmash &&
+         !runtime_.currentActionConnected && !runtime_.currentActionGuarded);
     const bool isRushWhiffPunish =
-        (action_.kind == ActionKind::Rush &&
-         action_.step == ActionStep::Recovery && !rushWillSweepFollowup_ &&
-         !currentActionConnected_ && !currentActionGuarded_);
+        (runtime_.action.kind == ActionKind::Rush &&
+         runtime_.action.step == ActionStep::Recovery &&
+         !runtime_.rushWillSweepFollowup && !runtime_.currentActionConnected &&
+         !runtime_.currentActionGuarded);
 
     float forwardX = std::sinf(usedYaw);
     float forwardZ = std::cosf(usedYaw);
@@ -84,7 +86,7 @@ void Enemy::UpdateParts() {
 
         if (introPhase == IntroPhase::SecondSlash) {
             float t = introSecondSlashDuration_ > 0.0001f
-                          ? introTimer_ / introSecondSlashDuration_
+                          ? runtime_.introTimer / introSecondSlashDuration_
                           : 1.0f;
             t = Saturate(t);
             float slashT = EaseOutCubic(t);
@@ -108,7 +110,7 @@ void Enemy::UpdateParts() {
             visualRoll -= 0.06f * (1.0f - t);
         } else if (introPhase == IntroPhase::SpinSlash) {
             float phaseTime =
-                introTimer_ - introSecondSlashDuration_;
+                runtime_.introTimer - introSecondSlashDuration_;
             float t = introSpinSlashDuration_ > 0.0001f
                           ? phaseTime / introSpinSlashDuration_
                           : 1.0f;
@@ -137,7 +139,8 @@ void Enemy::UpdateParts() {
             visualRoll += 0.16f * std::sinf(t * 6.28318530f);
         } else {
             float phaseTime =
-                introTimer_ - (introSecondSlashDuration_ + introSpinSlashDuration_);
+                runtime_.introTimer -
+                (introSecondSlashDuration_ + introSpinSlashDuration_);
             float t = introSettleDuration_ > 0.0001f
                           ? phaseTime / introSettleDuration_
                           : 1.0f;
@@ -194,7 +197,7 @@ void Enemy::UpdateParts() {
 
     const bool suppressActionPresentation = (counterRecoilTimer_ > 0.0f);
 
-    if (tellActive_) {
+    if (runtime_.tellActive) {
         bodyTf_.scale.x += 0.10f * pulse;
         bodyTf_.scale.z += 0.10f * pulse;
         bodyTf_.scale.y -= 0.06f * pulse;
@@ -209,7 +212,7 @@ void Enemy::UpdateParts() {
         visualTf_.scale.z += 0.02f * pulse;
     }
 
-    if (fakeCommitActive_) {
+    if (runtime_.fakeCommitActive) {
         rightHandTf_.position.y += 0.28f * pulse;
         rightHandTf_.position.x += forwardX * 0.24f * pulse;
         rightHandTf_.position.z += forwardZ * 0.24f * pulse;
@@ -218,7 +221,7 @@ void Enemy::UpdateParts() {
         rightHandTf_.scale.z += 0.10f * pulse;
     }
 
-    if (freezeHoldActive_) {
+    if (runtime_.freezeHoldActive) {
         bodyTf_.position.y -= 0.05f;
         bodyTf_.scale.x += 0.06f;
         bodyTf_.scale.z += 0.06f;
@@ -230,7 +233,7 @@ void Enemy::UpdateParts() {
         visualPitch -= 0.08f;
     }
 
-    if (phase_ == BossPhase::Phase2) {
+    if (runtime_.phase == BossPhase::Phase2) {
         bodyTf_.scale.x += 0.05f;
         bodyTf_.scale.z += 0.05f;
         bodyTf_.position.y += 0.04f * pulse;
@@ -244,7 +247,7 @@ void Enemy::UpdateParts() {
 
     if (phaseTransitionActive_) {
         float t = phaseTransitionDuration_ > 0.0001f
-                      ? phaseTransitionTimer_ / phaseTransitionDuration_
+                      ? runtime_.phaseTransitionTimer / phaseTransitionDuration_
                       : 1.0f;
         if (t > 1.0f) {
             t = 1.0f;
@@ -281,8 +284,9 @@ void Enemy::UpdateParts() {
         visualRoll += 0.10f * phasePulse;
     }
 
-    if (!suppressActionPresentation && action_.kind == ActionKind::None &&
-        isMargitComboATransition_) {
+    if (!suppressActionPresentation &&
+        runtime_.action.kind == ActionKind::None &&
+        runtime_.isMargitComboATransition) {
         bodyTf_.position.y -= 0.08f;
         bodyTf_.position.x += rightX * 0.22f;
         bodyTf_.position.z += rightZ * 0.22f;
@@ -305,8 +309,9 @@ void Enemy::UpdateParts() {
         leftHandTf_.position.y += 0.14f;
     }
 
-    if (!suppressActionPresentation && action_.kind == ActionKind::None &&
-        isMargitComboBTransition_) {
+    if (!suppressActionPresentation &&
+        runtime_.action.kind == ActionKind::None &&
+        runtime_.isMargitComboBTransition) {
         bodyTf_.position.y -= 0.12f;
         bodyTf_.position.x += forwardX * 0.10f;
         bodyTf_.position.z += forwardZ * 0.10f;
@@ -329,9 +334,10 @@ void Enemy::UpdateParts() {
         leftHandTf_.position.z += (-forwardZ) * 0.10f;
     }
 
-    if (!suppressActionPresentation && action_.kind == ActionKind::Smash) {
-        if (action_.step == ActionStep::Charge ||
-            action_.step == ActionStep::Hold) {
+    if (!suppressActionPresentation &&
+        runtime_.action.kind == ActionKind::Smash) {
+        if (runtime_.action.step == ActionStep::Charge ||
+            runtime_.action.step == ActionStep::Hold) {
             bodyTf_.position.y -= 0.10f;
             bodyTf_.scale.y += 0.08f;
 
@@ -347,7 +353,7 @@ void Enemy::UpdateParts() {
             visualTf_.position.z += (-forwardZ) * 0.18f;
             visualTf_.position.y -= 0.04f;
             visualPitch -= 0.28f;
-        } else if (action_.step == ActionStep::Active) {
+        } else if (runtime_.action.step == ActionStep::Active) {
             bodyTf_.position.x += forwardX * 0.18f;
             bodyTf_.position.z += forwardZ * 0.18f;
             bodyTf_.position.y -= 0.05f;
@@ -359,7 +365,7 @@ void Enemy::UpdateParts() {
             visualTf_.position.z += forwardZ * 0.42f;
             visualTf_.position.y += 0.06f;
             visualPitch += 0.34f;
-        } else if (action_.step == ActionStep::Recovery) {
+        } else if (runtime_.action.step == ActionStep::Recovery) {
             rightHandTf_.position.y += 0.3f;
             rightHandTf_.position.x += forwardX * 0.8f;
             rightHandTf_.position.z += forwardZ * 0.8f;
@@ -385,9 +391,9 @@ void Enemy::UpdateParts() {
         }
 
     } else if (!suppressActionPresentation &&
-               action_.kind == ActionKind::Sweep) {
-        if (action_.step == ActionStep::Charge ||
-            action_.step == ActionStep::Hold) {
+               runtime_.action.kind == ActionKind::Sweep) {
+        if (runtime_.action.step == ActionStep::Charge ||
+            runtime_.action.step == ActionStep::Hold) {
             bodyTf_.position.x += rightX * 0.12f;
             bodyTf_.position.z += rightZ * 0.12f;
 
@@ -399,7 +405,7 @@ void Enemy::UpdateParts() {
             leftHandTf_.position.z += (-rightZ) * 0.25f;
             visualYaw += 0.18f;
             visualRoll -= 0.18f;
-        } else if (action_.step == ActionStep::Active) {
+        } else if (runtime_.action.step == ActionStep::Active) {
             bodyTf_.position.x += (-rightX) * 0.18f;
             bodyTf_.position.z += (-rightZ) * 0.18f;
 
@@ -410,7 +416,7 @@ void Enemy::UpdateParts() {
             visualRoll += 0.26f;
             visualTf_.position.x += (-rightX) * 0.20f;
             visualTf_.position.z += (-rightZ) * 0.20f;
-        } else if (action_.step == ActionStep::Recovery) {
+        } else if (runtime_.action.step == ActionStep::Recovery) {
             rightHandTf_.position.x += rightX * 0.3f;
             rightHandTf_.position.y += 0.1f;
             rightHandTf_.position.z += rightZ * 0.3f;

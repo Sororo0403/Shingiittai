@@ -93,9 +93,9 @@ OBB Enemy::GetRushAttackOBB() const {
     attackTf.scale = {1.0f, 1.0f, 1.0f};
     attackTf.rotation = {0.0f, 0.0f, 0.0f, 1.0f};
     attackTf.position = bodyTf_.position;
-    attackTf.position.x += forwardX * rushAttackForwardOffset_;
-    attackTf.position.y += rushAttackHeightOffset_;
-    attackTf.position.z += forwardZ * rushAttackForwardOffset_;
+    attackTf.position.x += forwardX * config_.attacks.rush.attackForwardOffset;
+    attackTf.position.y += config_.attacks.rush.attackHeightOffset;
+    attackTf.position.z += forwardZ * config_.attacks.rush.attackForwardOffset;
 
     return MakeOBB(attackTf, GetCurrentAttackHitBoxSize());
 }
@@ -138,11 +138,11 @@ float Enemy::GetDistanceToPlayer() const {
 const AttackTimingParam *Enemy::GetCurrentAttackTiming() const {
     switch (action_.kind) {
     case ActionKind::Smash:
-        return &smashTiming_;
+        return &config_.attacks.smash.melee.base.timing;
     case ActionKind::Sweep:
-        return &sweepTiming_;
+        return &config_.attacks.sweep.melee.base.timing;
     case ActionKind::Rush:
-        return &rushTiming_;
+        return &config_.attacks.rush.base.timing;
     default:
         return nullptr;
     }
@@ -151,15 +151,15 @@ const AttackTimingParam *Enemy::GetCurrentAttackTiming() const {
 AttackParam *Enemy::GetCurrentAttackParam() {
     switch (action_.kind) {
     case ActionKind::Smash:
-        return &smashParam_;
+        return &config_.attacks.smash.melee.base.attack;
     case ActionKind::Sweep:
-        return &sweepParam_;
+        return &config_.attacks.sweep.melee.base.attack;
     case ActionKind::Shot:
-        return &bulletParam_;
+        return &config_.attacks.shot.attack;
     case ActionKind::Wave:
-        return &waveParam_;
+        return &config_.attacks.wave.attack;
     case ActionKind::Rush:
-        return &rushParam_;
+        return &config_.attacks.rush.base.attack;
     default:
         return nullptr;
     }
@@ -168,15 +168,15 @@ AttackParam *Enemy::GetCurrentAttackParam() {
 const AttackParam *Enemy::GetCurrentAttackParam() const {
     switch (action_.kind) {
     case ActionKind::Smash:
-        return &smashParam_;
+        return &config_.attacks.smash.melee.base.attack;
     case ActionKind::Sweep:
-        return &sweepParam_;
+        return &config_.attacks.sweep.melee.base.attack;
     case ActionKind::Shot:
-        return &bulletParam_;
+        return &config_.attacks.shot.attack;
     case ActionKind::Wave:
-        return &waveParam_;
+        return &config_.attacks.wave.attack;
     case ActionKind::Rush:
-        return &rushParam_;
+        return &config_.attacks.rush.base.attack;
     default:
         return nullptr;
     }
