@@ -22,6 +22,7 @@ class GameScene : public BaseScene {
     void SyncEnemyAnimation();
     void SetEnemyAnimationFrozen(bool frozen);
     void UpdateCombat(float gameplayDeltaTime);
+    PlayerCombatObservation BuildPlayerCombatObservation() const;
     float ComputeGameplayTimeScale() const;
 
   private:

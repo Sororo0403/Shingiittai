@@ -22,12 +22,22 @@ void Enemy::Initialize(uint32_t modelId, uint32_t projectileModelId) {
     ValidateAllTimings();
 }
 
-void Enemy::Update(const DirectX::XMFLOAT3 &playerPos, float deltaTime) {
+void Enemy::Update(const DirectX::XMFLOAT3 &playerPos, float deltaTime,
+                   bool playerGuarding) {
+    PlayerCombatObservation obs{};
+    obs.position = playerPos;
+    obs.isGuarding = playerGuarding;
+    Update(obs, deltaTime);
+}
+
+void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
     if (deathFinished_) {
         return;
     }
 
-    runtime_.playerPos = playerPos;
+    runtime_.playerObs = playerObs;
+    runtime_.playerPos = playerObs.position;
+    runtime_.playerGuarding = playerObs.isGuarding;
     UpdateBossPhase();
     UpdateWarpTrails(deltaTime);
 
@@ -89,6 +99,18 @@ void Enemy::Update(const DirectX::XMFLOAT3 &playerPos, float deltaTime) {
     runtime_.isDistanceStagnant =
         runtime_.stagnantTimer >= stagnantTimeThreshold_;
 
+    if (currentDistance <= closePressureDistance_) {
+        closePressureTimer_ += deltaTime;
+        if (closePressureTimer_ > closePressureTimeThreshold_) {
+            closePressureTimer_ = closePressureTimeThreshold_;
+        }
+    } else {
+        closePressureTimer_ -= deltaTime;
+        if (closePressureTimer_ < 0.0f) {
+            closePressureTimer_ = 0.0f;
+        }
+    }
+
     if (currentDistance > config_.core.farAttackDistance) {
         farDistanceTimer_ += deltaTime;
     } else {
@@ -103,6 +125,8 @@ void Enemy::Update(const DirectX::XMFLOAT3 &playerPos, float deltaTime) {
 
     stateTimer_ += deltaTime;
     isAttackActive_ = false;
+
+    UpdateCounterAdaptation(deltaTime);
 
     if (hitReactionTimer_ > 0.0f) {
         stateTimer_ -= deltaTime;
@@ -131,6 +155,10 @@ void Enemy::Update(const DirectX::XMFLOAT3 &playerPos, float deltaTime) {
         return;
     }
 
+    if (runtime_.playerObs.justCountered && ApplyCounterBreakReaction()) {
+        return;
+    }
+
     UpdateByAction(deltaTime);
     UpdateBullets(deltaTime);
     UpdateWaves(deltaTime);
@@ -144,16 +172,22 @@ void Enemy::UpdateByAction(float deltaTime) {
     }
 
     switch (action_.kind) {
-    case ActionKind::Melee:
-        UpdateMeleeByStep(deltaTime);
+    case ActionKind::Smash:
+        UpdateSmashByStep(deltaTime);
         break;
-    case ActionKind::Ranged:
-        UpdateRangedByStep(deltaTime);
+    case ActionKind::Sweep:
+        UpdateSweepByStep(deltaTime);
+        break;
+    case ActionKind::Shot:
+        UpdateShotByStep(deltaTime);
+        break;
+    case ActionKind::Wave:
+        UpdateWaveByStep(deltaTime);
         break;
     case ActionKind::Warp:
         UpdateWarpByStep(deltaTime);
         break;
-    case ActionKind::Movement:
+    case ActionKind::Stalk:
         UpdateStalkByStep(deltaTime);
         break;
     default:
@@ -162,15 +196,8 @@ void Enemy::UpdateByAction(float deltaTime) {
     }
 }
 
-void Enemy::BeginAction(ActionKind kind, ActionStep step, ActionVariant variant) {
-    if (kind == ActionKind::Melee && variant == ActionVariant::None) {
-        variant = SelectMeleeVariant();
-    } else if (kind == ActionKind::Ranged && variant == ActionVariant::None) {
-        variant = SelectRangedVariant(GetDistanceToPlayer());
-    }
-
+void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     lastActionKind_ = kind;
-    lastActionVariant_ = variant;
 
     if (kind == ActionKind::Warp) {
         stagnantTimer_ = 0.0f;
@@ -181,15 +208,48 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step, ActionVariant variant)
     }
 
     action_.kind = kind;
-    action_.variant = variant;
+    action_.id = MakeDefaultActionId(kind);
+
+    if (kind == ActionKind::Smash) {
+        float r = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+        float useDelayChance = config_.attacks.smash.delayChance;
+        if (playerObs_.isCounterStance) {
+            useDelayChance += 0.20f;
+        }
+        if (phase_ == BossPhase::Phase2) {
+            useDelayChance += phase2DelaySmashBonus_;
+        }
+
+        if (r < useDelayChance) {
+            action_.id = ActionId::DelaySmash;
+        }
+    }
+
+    if (kind == ActionKind::Sweep) {
+        float r = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+        float useDoubleChance = config_.attacks.sweep.doubleChance;
+        if (IsCounterFailObserved()) {
+            useDoubleChance += 0.20f;
+        }
+
+        if (r < useDoubleChance) {
+            action_.id = ActionId::DoubleSweep;
+        }
+    }
 
     action_.step = step;
     hasTrackingLocked_ = false;
+    holdConfigured_ = false;
+    currentHoldDuration_ = 0.0f;
     isAttackActive_ = false;
     stateTimer_ = 0.0f;
+    isDoubleSweepSecondStage_ = false;
+    currentActionConnected_ = false;
+    currentActionGuarded_ = false;
     ResetPreAttackPresentationState();
+    ResetRecoveryBranchState();
 
-    if (kind == ActionKind::Movement) {
+    if (kind == ActionKind::Stalk) {
         stalkMoveDir_ = (std::rand() % 2 == 0) ? -1.0f : 1.0f;
 
         const int biasRand = std::rand() % 3;
@@ -205,12 +265,11 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step, ActionVariant variant)
 
 bool Enemy::TryBeginTacticAction(ActionKind kind) {
     switch (kind) {
-    case ActionKind::Melee:
-        BeginAction(kind, ActionStep::Charge, SelectMeleeVariant());
-        return true;
-    case ActionKind::Ranged:
-        BeginAction(kind, ActionStep::Charge,
-                    SelectRangedVariant(GetDistanceToPlayer()));
+    case ActionKind::Smash:
+    case ActionKind::Sweep:
+    case ActionKind::Shot:
+    case ActionKind::Wave:
+        BeginAction(kind, ActionStep::Charge);
         return true;
     case ActionKind::Warp:
         if (!PrepareWarpContext()) {
@@ -218,7 +277,7 @@ bool Enemy::TryBeginTacticAction(ActionKind kind) {
         }
         BeginAction(kind, ActionStep::Start);
         return true;
-    case ActionKind::Movement:
+    case ActionKind::Stalk:
         BeginStalkAction();
         return true;
     default:
@@ -239,30 +298,72 @@ void Enemy::ChangeActionStep(ActionStep step) {
     isAttackActive_ = false;
     stateTimer_ = 0.0f;
 
-    if (step != ActionStep::Charge) {
+    if (step != ActionStep::Hold) {
+        holdBranchType_ = HoldBranchType::None;
+        holdBranchDecided_ = false;
+        holdBranchDecisionTime_ = 0.0f;
+    }
+
+    if (step != ActionStep::Charge && step != ActionStep::Hold) {
         ResetPreAttackPresentationState();
     }
 }
 
 void Enemy::EndAttack() {
     action_.kind = ActionKind::None;
-    action_.variant = ActionVariant::None;
+    action_.id = ActionId::None;
     action_.step = ActionStep::None;
 
     ResetWarpContext();
     ResetChainContext();
+    ResetPostActionState();
     isVisible_ = true;
 
     hasTrackingLocked_ = false;
+    holdConfigured_ = false;
+    currentHoldDuration_ = 0.0f;
     isAttackActive_ = false;
     stateTimer_ = 0.0f;
+    isDoubleSweepSecondStage_ = false;
+    currentActionConnected_ = false;
+    currentActionGuarded_ = false;
+
+    if (postCounterRhythmTimer_ <= 0.0f) {
+        counterMemory_.consecutiveSuccess = 0;
+    }
+
     ResetPreAttackPresentationState();
+    ResetRecoveryBranchState();
     stalkMoveDir_ = 1.0f;
     stalkForwardBias_ = 0.0f;
 }
 
 void Enemy::FinishCurrentAction() {
+    const ActionKind finishedKind = action_.kind;
+
     if (TryContinueChain()) {
+        return;
+    }
+
+    if (TryBranchFromRecovery(finishedKind)) {
+        if (recoveryBranchType_ == RecoveryBranchType::Recommit ||
+            recoveryBranchType_ == RecoveryBranchType::DelayedSecond) {
+            const ActionKind nextKind = recoveryFollowupKind_;
+            const ActionStep nextStep = recoveryFollowupStep_;
+
+            EndAttack();
+            if (nextKind == ActionKind::Smash || nextKind == ActionKind::Sweep) {
+                tactic_ = TacticState::Melee;
+            }
+
+            recoveryFollowupKind_ = nextKind;
+            recoveryFollowupStep_ = nextStep;
+            return;
+        }
+        return;
+    }
+
+    if (TryStartBackWarpPostAction(finishedKind)) {
         return;
     }
 

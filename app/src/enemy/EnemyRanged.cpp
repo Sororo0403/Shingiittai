@@ -3,16 +3,16 @@
 #include <cmath>
 #include <cstdlib>
 
-void Enemy::UpdateRangedByStep(float deltaTime) {
+void Enemy::UpdateShotByStep(float deltaTime) {
     switch (action_.step) {
     case ActionStep::Charge:
-        UpdateRangedCharge(deltaTime);
+        UpdateShotCharge(deltaTime);
         break;
     case ActionStep::Active:
-        UpdateRangedActive(deltaTime);
+        UpdateShotFire(deltaTime);
         break;
     case ActionStep::Recovery:
-        UpdateRangedRecovery(deltaTime);
+        UpdateShotRecovery(deltaTime);
         break;
     default:
         EndAttack();
@@ -20,36 +20,37 @@ void Enemy::UpdateRangedByStep(float deltaTime) {
     }
 }
 
-void Enemy::UpdateRangedCharge(float deltaTime) {
-    UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_);
-
-    const bool isShot = action_.variant == ActionVariant::Shot;
-    const float chargeTime = isShot ? config_.attacks.shot.chargeTime
-                                    : config_.attacks.wave.chargeTime;
-
-    if (stateTimer_ >= chargeTime) {
-        if (!isShot) {
-            LockCurrentFacing();
-        }
-
-        shotsRemaining_ =
-            isShot ? config_.attacks.shot.minCount +
-                         (std::rand() % (config_.attacks.shot.maxCount -
-                                         config_.attacks.shot.minCount + 1))
-                   : 0;
-        shotIntervalTimer_ = 0.0f;
-        ChangeActionStep(ActionStep::Active);
+void Enemy::UpdateWaveByStep(float deltaTime) {
+    switch (action_.step) {
+    case ActionStep::Charge:
+        UpdateWaveCharge(deltaTime);
+        break;
+    case ActionStep::Active:
+        UpdateWaveFire(deltaTime);
+        break;
+    case ActionStep::Recovery:
+        UpdateWaveRecovery(deltaTime);
+        break;
+    default:
+        EndAttack();
+        break;
     }
 }
 
-void Enemy::UpdateRangedActive(float deltaTime) {
-    if (action_.variant == ActionVariant::Wave) {
-        (void)deltaTime;
-        SpawnWave();
-        ChangeActionStep(ActionStep::Recovery);
-        return;
-    }
+void Enemy::UpdateShotCharge(float deltaTime) {
+    UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_);
 
+    if (stateTimer_ >= config_.attacks.shot.chargeTime) {
+        ChangeActionStep(ActionStep::Active);
+        shotsRemaining_ =
+            config_.attacks.shot.minCount +
+            (std::rand() % (config_.attacks.shot.maxCount -
+                            config_.attacks.shot.minCount + 1));
+        shotIntervalTimer_ = 0.0f;
+    }
+}
+
+void Enemy::UpdateShotFire(float deltaTime) {
     shotIntervalTimer_ += deltaTime;
     if (shotsRemaining_ > 0 &&
         shotIntervalTimer_ >= config_.attacks.shot.interval) {
@@ -63,17 +64,9 @@ void Enemy::UpdateRangedActive(float deltaTime) {
     }
 }
 
-void Enemy::UpdateRangedRecovery(float deltaTime) {
-    const bool isShot = action_.variant == ActionVariant::Shot;
-    const float recoveryTime = isShot ? config_.attacks.shot.recoveryTime
-                                      : config_.attacks.wave.recoveryTime;
-    if (isShot) {
-        UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_ * 1.25f);
-    } else {
-        (void)deltaTime;
-    }
-
-    if (stateTimer_ >= recoveryTime) {
+void Enemy::UpdateShotRecovery(float deltaTime) {
+    UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_ * 1.25f);
+    if (stateTimer_ >= config_.attacks.shot.recoveryTime) {
         FinishCurrentAction();
     }
 }
@@ -117,6 +110,28 @@ void Enemy::UpdateBullets(float deltaTime) {
         if (bullet.lifeTime <= 0.0f) {
             bullet.isAlive = false;
         }
+    }
+}
+
+void Enemy::UpdateWaveCharge(float deltaTime) {
+    UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_);
+
+    if (stateTimer_ >= config_.attacks.wave.chargeTime) {
+        LockCurrentFacing();
+        ChangeActionStep(ActionStep::Active);
+    }
+}
+
+void Enemy::UpdateWaveFire(float deltaTime) {
+    (void)deltaTime;
+    SpawnWave();
+    ChangeActionStep(ActionStep::Recovery);
+}
+
+void Enemy::UpdateWaveRecovery(float deltaTime) {
+    (void)deltaTime;
+    if (stateTimer_ >= config_.attacks.wave.recoveryTime) {
+        FinishCurrentAction();
     }
 }
 

@@ -25,6 +25,12 @@ void Enemy::UpdateParts() {
     const float pulse = 0.5f + 0.5f * std::sin(runtime_.stateTimer * 18.0f);
     const float phasePulse =
         0.5f + 0.5f * std::sin(runtime_.phaseTransitionTimer * 16.0f);
+    const bool isDelaySmashWhiffPunish =
+        action_.kind == ActionKind::Smash &&
+        action_.step == ActionStep::Recovery &&
+        action_.id == ActionId::DelaySmash && !currentActionConnected_ &&
+        !currentActionGuarded_;
+
     const float forwardX = std::sin(usedYaw);
     const float forwardZ = std::cos(usedYaw);
     const float rightX = std::cos(usedYaw);
@@ -91,6 +97,26 @@ void Enemy::UpdateParts() {
         visualTf_.scale.z += 0.02f * pulse;
     }
 
+    if (fakeCommitActive_) {
+        rightHandTf_.position.y += 0.28f * pulse;
+        rightHandTf_.position.x += forwardX * 0.24f * pulse;
+        rightHandTf_.position.z += forwardZ * 0.24f * pulse;
+        rightHandTf_.scale.x += 0.10f * pulse;
+        rightHandTf_.scale.y += 0.10f * pulse;
+        rightHandTf_.scale.z += 0.10f * pulse;
+    }
+
+    if (freezeHoldActive_) {
+        bodyTf_.position.y -= 0.05f;
+        bodyTf_.scale.x += 0.06f;
+        bodyTf_.scale.z += 0.06f;
+        rightHandTf_.scale.x += 0.12f;
+        rightHandTf_.scale.y += 0.12f;
+        rightHandTf_.scale.z += 0.12f;
+        visualTf_.position.y -= 0.03f;
+        visualPitch -= 0.08f;
+    }
+
     if (phase_ == BossPhase::Phase2) {
         bodyTf_.scale.x += 0.05f;
         bodyTf_.scale.z += 0.05f;
@@ -137,9 +163,28 @@ void Enemy::UpdateParts() {
         visualRoll += 0.10f * phasePulse;
     }
 
-    if (!suppressActionPresentation && action_.kind == ActionKind::Melee &&
-        action_.variant == ActionVariant::Smash) {
-        if (action_.step == ActionStep::Charge) {
+    if (!suppressActionPresentation && action_.kind == ActionKind::None &&
+        runtime_.isMargitComboATransition) {
+        bodyTf_.position.y -= 0.08f;
+        bodyTf_.position.x += rightX * 0.22f;
+        bodyTf_.position.z += rightZ * 0.22f;
+        bodyTf_.scale.x += 0.12f;
+        bodyTf_.scale.z += 0.06f;
+
+        rightHandTf_.position.y += 1.10f + 0.12f * pulse;
+        rightHandTf_.position.x += rightX * 1.65f + (-forwardX) * 0.20f;
+        rightHandTf_.position.z += rightZ * 1.65f + (-forwardZ) * 0.20f;
+        rightHandTf_.scale.x += 0.12f;
+        rightHandTf_.scale.y += 0.12f;
+        rightHandTf_.scale.z += 0.12f;
+
+        leftHandTf_.position.x += (-rightX) * 0.60f + forwardX * 0.12f;
+        leftHandTf_.position.z += (-rightZ) * 0.60f + forwardZ * 0.12f;
+        leftHandTf_.position.y += 0.14f;
+    }
+
+    if (!suppressActionPresentation && action_.kind == ActionKind::Smash) {
+        if (action_.step == ActionStep::Charge || action_.step == ActionStep::Hold) {
             bodyTf_.position.y -= 0.10f;
             bodyTf_.scale.y += 0.08f;
             rightHandTf_.position.y += 1.90f;
@@ -169,13 +214,26 @@ void Enemy::UpdateParts() {
             rightHandTf_.position.x += forwardX * 0.8f;
             rightHandTf_.position.z += forwardZ * 0.8f;
 
+            if (isDelaySmashWhiffPunish) {
+                bodyTf_.position.y -= 0.14f;
+                bodyTf_.position.x += forwardX * 0.10f;
+                bodyTf_.position.z += forwardZ * 0.10f;
+                bodyTf_.scale.y -= 0.10f;
+                bodyTf_.scale.x += 0.08f;
+                rightHandTf_.position.y -= 0.30f;
+                rightHandTf_.position.x += forwardX * 0.40f;
+                rightHandTf_.position.z += forwardZ * 0.40f;
+                leftHandTf_.position.y -= 0.18f;
+                leftHandTf_.position.x += (-rightX) * 0.22f;
+                leftHandTf_.position.z += (-rightZ) * 0.22f;
+            }
+
             visualTf_.position.x += forwardX * 0.10f;
             visualTf_.position.z += forwardZ * 0.10f;
             visualPitch += 0.10f;
         }
-    } else if (!suppressActionPresentation && action_.kind == ActionKind::Melee &&
-               action_.variant == ActionVariant::Sweep) {
-        if (action_.step == ActionStep::Charge) {
+    } else if (!suppressActionPresentation && action_.kind == ActionKind::Sweep) {
+        if (action_.step == ActionStep::Charge || action_.step == ActionStep::Hold) {
             bodyTf_.position.x += rightX * 0.12f;
             bodyTf_.position.z += rightZ * 0.12f;
             rightHandTf_.position.x += rightX * 2.00f;
@@ -201,8 +259,7 @@ void Enemy::UpdateParts() {
             rightHandTf_.position.z += rightZ * 0.3f;
             visualRoll += 0.10f;
         }
-    } else if (!suppressActionPresentation && action_.kind == ActionKind::Ranged &&
-               action_.variant == ActionVariant::Shot) {
+    } else if (!suppressActionPresentation && action_.kind == ActionKind::Shot) {
         if (action_.step == ActionStep::Charge) {
             bodyTf_.scale.x -= 0.04f;
             bodyTf_.scale.z -= 0.04f;
@@ -230,8 +287,7 @@ void Enemy::UpdateParts() {
             rightHandTf_.position.z += forwardZ * 0.4f;
             visualPitch += 0.06f;
         }
-    } else if (!suppressActionPresentation && action_.kind == ActionKind::Ranged &&
-               action_.variant == ActionVariant::Wave) {
+    } else if (!suppressActionPresentation && action_.kind == ActionKind::Wave) {
         if (action_.step == ActionStep::Charge) {
             rightHandTf_.position.y += 0.8f;
             rightHandTf_.position.x += forwardX * 0.6f;
@@ -260,20 +316,22 @@ void Enemy::UpdateParts() {
     } else if (!suppressActionPresentation && action_.kind == ActionKind::Warp) {
         if (action_.step == ActionStep::Start) {
             if (warp_.type == WarpType::Approach) {
-                const float toTargetX = warp_.targetPos.x - tf_.position.x;
-                const float toTargetZ = warp_.targetPos.z - tf_.position.z;
-                const float sideBias = (std::clamp)(
-                    toTargetX * rightX + toTargetZ * rightZ, -1.0f, 1.0f);
-                const float forwardBias = (std::clamp)(
-                    toTargetX * forwardX + toTargetZ * forwardZ, -1.0f, 1.0f);
-                bodyTf_.position.x += rightX * sideBias * 0.16f;
-                bodyTf_.position.z += rightZ * sideBias * 0.16f;
-                bodyTf_.position.y -= (1.0f - std::abs(sideBias)) * 0.08f;
-                bodyTf_.scale.z += std::abs(forwardBias) * 0.08f;
-                rightHandTf_.position.x +=
-                    rightX * sideBias * 0.32f + forwardX * forwardBias * 0.18f;
-                rightHandTf_.position.z +=
-                    rightZ * sideBias * 0.32f + forwardZ * forwardBias * 0.18f;
+                if (warp_.approachSlot == WarpApproachSlot::BackLeft) {
+                    bodyTf_.position.x += (-rightX) * 0.16f;
+                    bodyTf_.position.z += (-rightZ) * 0.16f;
+                    rightHandTf_.position.x += (-rightX) * 0.32f;
+                    rightHandTf_.position.z += (-rightZ) * 0.32f;
+                } else if (warp_.approachSlot == WarpApproachSlot::BackRight) {
+                    bodyTf_.position.x += rightX * 0.16f;
+                    bodyTf_.position.z += rightZ * 0.16f;
+                    rightHandTf_.position.x += rightX * 0.32f;
+                    rightHandTf_.position.z += rightZ * 0.32f;
+                } else if (warp_.approachSlot == WarpApproachSlot::DirectBack) {
+                    bodyTf_.position.y -= 0.10f;
+                    bodyTf_.scale.z += 0.10f;
+                    rightHandTf_.position.x += forwardX * 0.28f;
+                    rightHandTf_.position.z += forwardZ * 0.28f;
+                }
             }
 
             // メルゼナ風：消える前に少し締まる
@@ -303,19 +361,23 @@ void Enemy::UpdateParts() {
             rightHandTf_.position.z += forwardZ * 0.3f;
 
             if (warp_.type == WarpType::Approach) {
-                const float toTargetX = warp_.targetPos.x - warp_.departurePos.x;
-                const float toTargetZ = warp_.targetPos.z - warp_.departurePos.z;
-                const float sideBias = (std::clamp)(
-                    toTargetX * rightX + toTargetZ * rightZ, -1.0f, 1.0f);
-                const float forwardBias = (std::clamp)(
-                    toTargetX * forwardX + toTargetZ * forwardZ, -1.0f, 1.0f);
-                bodyTf_.position.x += rightX * sideBias * 0.18f;
-                bodyTf_.position.z += rightZ * sideBias * 0.18f;
-                bodyTf_.position.y -= (1.0f - std::abs(sideBias)) * 0.06f;
-                rightHandTf_.position.x +=
-                    rightX * sideBias * 0.28f + forwardX * forwardBias * 0.24f;
-                rightHandTf_.position.z +=
-                    rightZ * sideBias * 0.28f + forwardZ * forwardBias * 0.24f;
+                if (warp_.approachSlot == WarpApproachSlot::BackLeft) {
+                    bodyTf_.position.x += (-rightX) * 0.18f;
+                    bodyTf_.position.z += (-rightZ) * 0.18f;
+                    rightHandTf_.position.x += (-rightX) * 0.28f;
+                    rightHandTf_.position.z += (-rightZ) * 0.28f;
+                } else if (warp_.approachSlot == WarpApproachSlot::BackRight) {
+                    bodyTf_.position.x += rightX * 0.18f;
+                    bodyTf_.position.z += rightZ * 0.18f;
+                    rightHandTf_.position.x += rightX * 0.28f;
+                    rightHandTf_.position.z += rightZ * 0.28f;
+                } else if (warp_.approachSlot == WarpApproachSlot::DirectBack) {
+                    bodyTf_.position.y -= 0.08f;
+                    bodyTf_.position.x += forwardX * 0.12f;
+                    bodyTf_.position.z += forwardZ * 0.12f;
+                    rightHandTf_.position.x += forwardX * 0.35f;
+                    rightHandTf_.position.z += forwardZ * 0.35f;
+                }
             }
 
             // メルゼナ風：arrivalで本体が少し戻ってくる
@@ -331,8 +393,7 @@ void Enemy::UpdateParts() {
             rightHandTf_.scale.y *= 1.01f;
             rightHandTf_.scale.z *= 1.02f;
         }
-    } else if (!suppressActionPresentation &&
-               action_.kind == ActionKind::Movement) {
+    } else if (!suppressActionPresentation && action_.kind == ActionKind::Stalk) {
         rightHandTf_.position.y += 0.35f;
         leftHandTf_.position.y += 0.20f;
         rightHandTf_.position.x += forwardX * 0.35f;

@@ -37,14 +37,14 @@ void Enemy::UpdateStalkMove(float deltaTime) {
     tf_.position.x += moveX * stalkMoveSpeed_ * deltaTime;
     tf_.position.z += moveZ * stalkMoveSpeed_ * deltaTime;
 
-    if (stateTimer_ >= stalkMoveDuration_) {
-        FinishCurrentAction();
+    if (stateTimer_ >= currentHoldDuration_) {
+        EndAttack();
     }
 }
 
 void Enemy::BeginStalkAction() {
-    BeginAction(ActionKind::Movement, ActionStep::Move);
-    stalkMoveDuration_ = RandomRange(stalkDurationMin_, stalkDurationMax_);
+    EnterHold(RandomRange(stalkDurationMin_, stalkDurationMax_));
+    BeginAction(ActionKind::Stalk, ActionStep::Move);
     stalkRepeatCount_++;
 }
 

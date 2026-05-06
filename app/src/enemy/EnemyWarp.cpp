@@ -1,109 +1,7 @@
 #include "Enemy.h"
 
-#include <algorithm>
 #include <cmath>
 #include <cstdlib>
-#include <initializer_list>
-
-namespace {
-float Random01() {
-    return static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-}
-
-ActionStep GetDefaultStepForChain(ActionKind kind) {
-    return kind == ActionKind::Movement ? ActionStep::Move : ActionStep::Charge;
-}
-
-void AddChainModule(ChainContext &chain, ActionKind module) {
-    if (module == ActionKind::None ||
-        chain.moduleCount >= ChainContext::kMaxModules ||
-        chain.moduleCount >= chain.maxSteps) {
-        return;
-    }
-
-    chain.modules[chain.moduleCount++] = module;
-}
-
-void AddChainRecipe(ChainContext &chain,
-                    std::initializer_list<ActionKind> modules) {
-    for (ActionKind module : modules) {
-        AddChainModule(chain, module);
-    }
-}
-
-void BuildChainRecipe(ChainContext &chain, ActionKind starter,
-                      int maxSteps) {
-    chain = ChainContext{};
-    chain.active = true;
-    chain.maxSteps = (std::min)(maxSteps, ChainContext::kMaxModules);
-
-    const int roll = std::rand() % 5;
-    switch (starter) {
-    case ActionKind::Melee:
-        if (roll == 0) {
-            AddChainRecipe(chain, {ActionKind::Movement, ActionKind::Melee});
-        } else if (roll == 1) {
-            AddChainRecipe(chain, {ActionKind::Warp, ActionKind::Ranged});
-        } else if (roll == 2) {
-            AddChainRecipe(chain, {ActionKind::Ranged, ActionKind::Warp,
-                                   ActionKind::Melee});
-        } else if (roll == 3) {
-            AddChainRecipe(chain, {ActionKind::Movement, ActionKind::Ranged});
-        } else {
-            AddChainRecipe(chain, {ActionKind::Warp, ActionKind::Melee});
-        }
-        break;
-    case ActionKind::Ranged:
-        if (roll == 0) {
-            AddChainRecipe(chain, {ActionKind::Movement, ActionKind::Ranged});
-        } else if (roll == 1) {
-            AddChainRecipe(chain, {ActionKind::Warp, ActionKind::Melee});
-        } else if (roll == 2) {
-            AddChainRecipe(chain, {ActionKind::Movement, ActionKind::Melee});
-        } else if (roll == 3) {
-            AddChainRecipe(chain, {ActionKind::Warp, ActionKind::Ranged});
-        } else {
-            AddChainRecipe(chain, {ActionKind::Melee, ActionKind::Warp,
-                                   ActionKind::Ranged});
-        }
-        break;
-    case ActionKind::Movement:
-        if (roll == 0) {
-            AddChainRecipe(chain, {ActionKind::Melee});
-        } else if (roll == 1) {
-            AddChainRecipe(chain, {ActionKind::Ranged});
-        } else if (roll == 2) {
-            AddChainRecipe(chain, {ActionKind::Warp, ActionKind::Melee});
-        } else if (roll == 3) {
-            AddChainRecipe(chain, {ActionKind::Melee, ActionKind::Warp,
-                                   ActionKind::Ranged});
-        } else {
-            AddChainRecipe(chain, {ActionKind::Ranged, ActionKind::Movement,
-                                   ActionKind::Melee});
-        }
-        break;
-    case ActionKind::Warp:
-        if (roll == 0) {
-            AddChainRecipe(chain, {ActionKind::Melee});
-        } else if (roll == 1) {
-            AddChainRecipe(chain, {ActionKind::Ranged});
-        } else if (roll == 2) {
-            AddChainRecipe(chain, {ActionKind::Movement, ActionKind::Melee});
-        } else if (roll == 3) {
-            AddChainRecipe(chain, {ActionKind::Ranged, ActionKind::Movement});
-        } else {
-            AddChainRecipe(chain, {ActionKind::Melee, ActionKind::Ranged});
-        }
-        break;
-    default:
-        break;
-    }
-
-    if (chain.moduleCount <= 0) {
-        chain.active = false;
-    }
-}
-} // namespace
 
 void Enemy::UpdateWarpByStep(float deltaTime) {
     switch (action_.step) {
@@ -127,10 +25,17 @@ bool Enemy::IsWarpSuspendedForPresentation() const {
 }
 
 bool Enemy::DecideWarpTargetNearPlayer(DirectX::XMFLOAT3 &outTarget) {
-    float playerForwardX = playerPos_.x - tf_.position.x;
-    float playerForwardZ = playerPos_.z - tf_.position.z;
+    float playerForwardX = playerObs_.velocity.x;
+    float playerForwardZ = playerObs_.velocity.z;
     float playerForwardLength =
         std::sqrt(playerForwardX * playerForwardX + playerForwardZ * playerForwardZ);
+
+    if (playerForwardLength <= 0.0001f) {
+        playerForwardX = playerPos_.x - tf_.position.x;
+        playerForwardZ = playerPos_.z - tf_.position.z;
+        playerForwardLength =
+            std::sqrt(playerForwardX * playerForwardX + playerForwardZ * playerForwardZ);
+    }
 
     if (playerForwardLength <= 0.0001f) {
         playerForwardX = std::sin(facingYaw_);
@@ -146,15 +51,32 @@ bool Enemy::DecideWarpTargetNearPlayer(DirectX::XMFLOAT3 &outTarget) {
     const float rightX = playerForwardZ;
     const float rightZ = -playerForwardX;
 
+    if (warp_.approachSlot == WarpApproachSlot::None) {
+        int slotRoll = std::rand() % 100;
+        if (slotRoll < 42) {
+            warp_.approachSlot = WarpApproachSlot::BackLeft;
+        } else if (slotRoll < 84) {
+            warp_.approachSlot = WarpApproachSlot::BackRight;
+        } else {
+            warp_.approachSlot = WarpApproachSlot::DirectBack;
+        }
+    }
+
     outTarget = playerPos_;
-    const float sideOffset =
-        (Random01() * 2.0f - 1.0f) * warpApproachSideDistance_;
-    const float forwardDistance =
-        warpApproachForwardDistance_ +
-        (warpApproachLongFrontDistance_ - warpApproachForwardDistance_) *
-            Random01();
-    outTarget.x += backX * forwardDistance + rightX * sideOffset;
-    outTarget.z += backZ * forwardDistance + rightZ * sideOffset;
+    if (warp_.approachSlot == WarpApproachSlot::BackLeft) {
+        outTarget.x += backX * warpApproachForwardDistance_ -
+                       rightX * warpApproachSideDistance_;
+        outTarget.z += backZ * warpApproachForwardDistance_ -
+                       rightZ * warpApproachSideDistance_;
+    } else if (warp_.approachSlot == WarpApproachSlot::BackRight) {
+        outTarget.x += backX * warpApproachForwardDistance_ +
+                       rightX * warpApproachSideDistance_;
+        outTarget.z += backZ * warpApproachForwardDistance_ +
+                       rightZ * warpApproachSideDistance_;
+    } else {
+        outTarget.x += backX * warpApproachLongFrontDistance_;
+        outTarget.z += backZ * warpApproachLongFrontDistance_;
+    }
     outTarget.y = tf_.position.y;
     return true;
 }
@@ -188,9 +110,28 @@ bool Enemy::PrepareWarpContext() {
     }
 
     warp_.hasValidTarget = true;
-    warp_.followupKind = ActionKind::Melee;
+    warp_.followupKind = SelectNearPressureAction();
     warp_.followupStep = ActionStep::Charge;
     return true;
+}
+
+void Enemy::ResetPostActionState() { postActionOption_ = PostActionOption::None; }
+
+void Enemy::BeginBackWarpPostAction() {
+    if (IsWarpSuspendedForPresentation()) {
+        ResetPostActionState();
+        return;
+    }
+
+    ResetWarpContext();
+    warp_.type = WarpType::Escape;
+    if (!DecideWarpTargetFarFromPlayer(warp_.targetPos)) {
+        ResetPostActionState();
+        return;
+    }
+
+    warp_.hasValidTarget = true;
+    BeginAction(ActionKind::Warp, ActionStep::Start);
 }
 
 void Enemy::ResetWarpContext() { warp_ = WarpContext{}; }
@@ -200,143 +141,90 @@ void Enemy::ResetChainContext() { chain_ = ChainContext{}; }
 bool Enemy::DecideNextChainAction(ActionKind finishedKind, ActionKind &outKind,
                                   ActionStep &outStep) const {
     (void)finishedKind;
-
     outKind = ActionKind::None;
     outStep = ActionStep::None;
+    return false;
+}
 
-    if (!chain_.active || chain_.moduleIndex >= chain_.moduleCount) {
+void Enemy::SetupSweepWarpSmashChain() { ResetChainContext(); }
+
+void Enemy::SetupWaveWarpSmashChain() { ResetChainContext(); }
+
+void Enemy::OverrideWarpFollowupByChain() {}
+
+bool Enemy::TryStartPostActionWarpChain(ActionKind finishedKind) {
+    if (IsWarpSuspendedForPresentation()) {
         return false;
     }
 
     const float distance = GetDistanceToPlayer();
-    ActionKind module = chain_.modules[chain_.moduleIndex];
-    if (module == ActionKind::Warp && IsWarpSuspendedForPresentation()) {
-        module = ActionKind::Movement;
-    } else if (module == ActionKind::Movement &&
-               stalkRepeatCount_ >= stalkRepeatLimit_) {
-        module = distance <= config_.core.nearAttackDistance
-                     ? ActionKind::Melee
-                     : ActionKind::Ranged;
+
+    if (finishedKind == ActionKind::Sweep &&
+        distance <= config_.chain.sweepWarpSmashMaxDistance) {
+        float r = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+        if (r < config_.chain.sweepWarpSmashChance) {
+            ResetWarpContext();
+            warp_.type = WarpType::Approach;
+            if (!DecideWarpTargetNearPlayer(warp_.targetPos)) {
+                ResetWarpContext();
+                return false;
+            }
+            warp_.hasValidTarget = true;
+            BeginAction(ActionKind::Warp, ActionStep::Start);
+            return true;
+        }
     }
 
-    switch (module) {
-    case ActionKind::Melee:
-        if (distance > config_.core.nearAttackDistance + 0.8f) {
-            outKind = IsWarpSuspendedForPresentation() ? ActionKind::Movement
-                                                       : ActionKind::Warp;
-        } else {
-            outKind = ActionKind::Melee;
+    if (finishedKind == ActionKind::Wave &&
+        distance >= config_.chain.waveWarpSmashMinDistance) {
+        float r = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+        if (r < config_.chain.waveWarpSmashChance) {
+            ResetWarpContext();
+            warp_.type = WarpType::Approach;
+            if (!DecideWarpTargetNearPlayer(warp_.targetPos)) {
+                ResetWarpContext();
+                return false;
+            }
+            warp_.hasValidTarget = true;
+            BeginAction(ActionKind::Warp, ActionStep::Start);
+            return true;
         }
+    }
+
+    return false;
+}
+
+bool Enemy::TryStartBackWarpPostAction(ActionKind finishedKind) {
+    if (IsWarpSuspendedForPresentation()) {
+        return false;
+    }
+
+    float chance = 0.0f;
+    switch (finishedKind) {
+    case ActionKind::Smash:
+        chance = backWarpAfterSmashChance_;
         break;
-    case ActionKind::Ranged:
-        outKind = ActionKind::Ranged;
+    case ActionKind::Sweep:
+        chance = backWarpAfterSweepChance_;
         break;
-    case ActionKind::Movement:
-        outKind = ActionKind::Movement;
-        break;
-    case ActionKind::Warp:
-        outKind = ActionKind::Warp;
+    case ActionKind::Wave:
+        chance = backWarpAfterWaveChance_;
         break;
     default:
         return false;
     }
 
-    outStep = GetDefaultStepForChain(outKind);
-    return outKind != ActionKind::None && outStep != ActionStep::None;
-}
-
-bool Enemy::BeginChainFollowup(ActionKind finishedKind, ActionKind nextKind,
-                               ActionStep nextStep) {
-    if (nextKind == ActionKind::None || nextStep == ActionStep::None) {
+    float r = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+    if (r >= chance) {
         return false;
     }
 
-    if (nextKind == ActionKind::Warp) {
-        if (IsWarpSuspendedForPresentation()) {
-            return false;
-        }
-
-        const float distance = GetDistanceToPlayer();
-        const bool shouldRetreat =
-            finishedKind == ActionKind::Melee &&
-            distance <= config_.chain.nearRetreatDistance;
-
-        ResetWarpContext();
-        warp_.type = shouldRetreat ? WarpType::Escape : WarpType::Approach;
-        const bool hasTarget =
-            shouldRetreat ? DecideWarpTargetFarFromPlayer(warp_.targetPos)
-                          : DecideWarpTargetNearPlayer(warp_.targetPos);
-        if (!hasTarget) {
-            ResetWarpContext();
-            return false;
-        }
-
-        warp_.hasValidTarget = true;
-        BeginAction(ActionKind::Warp, ActionStep::Start);
-        return true;
-    }
-
-    if (nextKind == ActionKind::Movement) {
-        BeginStalkAction();
-        return true;
-    }
-
-    BeginAction(nextKind, nextStep);
+    postActionOption_ = PostActionOption::BackWarp;
+    BeginBackWarpPostAction();
     return true;
 }
 
-bool Enemy::TryStartModularActionChain(ActionKind finishedKind) {
-    if (finishedKind == ActionKind::None) {
-        return false;
-    }
-
-    if (!chain_.active) {
-        float chance = config_.chain.continueChance;
-        if (phase_ == BossPhase::Phase2) {
-            chance += config_.chain.phase2ContinueBonus;
-        }
-        if (finishedKind == ActionKind::Movement) {
-            chance *= 0.75f;
-        }
-
-        chance = (std::clamp)(chance, 0.0f, 0.86f);
-        if (Random01() >= chance) {
-            return false;
-        }
-
-        const int maxSteps = (phase_ == BossPhase::Phase2)
-                                 ? config_.chain.maxStepsPhase2
-                                 : config_.chain.maxStepsPhase1;
-        BuildChainRecipe(chain_, finishedKind, maxSteps);
-        if (!chain_.active) {
-            return false;
-        }
-    }
-
-    if (chain_.moduleIndex >= chain_.moduleCount ||
-        chain_.stepCount >= chain_.maxSteps) {
-        ResetChainContext();
-        return false;
-    }
-
-    ActionKind nextKind = ActionKind::None;
-    ActionStep nextStep = ActionStep::None;
-    if (!DecideNextChainAction(finishedKind, nextKind, nextStep)) {
-        ResetChainContext();
-        return false;
-    }
-
-    if (!BeginChainFollowup(finishedKind, nextKind, nextStep)) {
-        ResetChainContext();
-        return false;
-    }
-
-    chain_.stepCount++;
-    chain_.moduleIndex++;
-    return true;
-}
-
-bool Enemy::TryContinueChain() { return TryStartModularActionChain(action_.kind); }
+bool Enemy::TryContinueChain() { return TryStartPostActionWarpChain(action_.kind); }
 
 void Enemy::UpdateWarpStart(float deltaTime) {
     if (!warp_.hasDeparturePos) {
@@ -351,7 +239,15 @@ void Enemy::UpdateWarpStart(float deltaTime) {
     isVisible_ = false;
     warp_.collisionDisabled = true;
 
-    if (stateTimer_ >= config_.warp.startTime) {
+    float startTime = config_.warp.startTime;
+    if (action_.id == ActionId::WarpBackstab) {
+        startTime *= 0.55f;
+        if (startTime < 0.08f) {
+            startTime = 0.08f;
+        }
+    }
+
+    if (stateTimer_ >= startTime) {
         warpTrailEmitTimer_ = 0.0f;
         EmitWarpTrailGhost(warp_.departurePos, warpTrailScaleMax_);
         ChangeActionStep(ActionStep::Move);
@@ -406,21 +302,14 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
 
     const ActionKind followupKind = warp_.followupKind;
     const ActionStep followupStep = warp_.followupStep;
-    const ChainContext chainSnapshot = chain_;
+    const WarpType warpType = warp_.type;
 
     EndAttack();
-    if (followupKind != ActionKind::None && followupStep != ActionStep::None) {
-        chain_ = chainSnapshot;
-        tactic_ = followupKind;
+    if (warpType == WarpType::Approach && followupKind != ActionKind::None &&
+        followupStep != ActionStep::None) {
+        tactic_ = TacticState::Melee;
         BeginAction(followupKind, followupStep);
         return;
-    }
-
-    if (chainSnapshot.active) {
-        chain_ = chainSnapshot;
-        if (TryStartModularActionChain(ActionKind::Warp)) {
-            return;
-        }
     }
 
     tactic_ = DecideTactic();
