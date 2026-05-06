@@ -26,34 +26,11 @@ class GameScene : public BaseScene {
     void SyncEnemyAnimation();
     void SetEnemyAnimationFrozen(bool frozen);
     float ComputeGameplayTimeScale() const;
-    void UpdateCounterVignette(float deltaTime);
-    void DrawCounterVignette();
-    bool ProjectWorldToScreen(const DirectX::XMFLOAT3 &worldPos,
-                              DirectX::XMFLOAT2 &outScreen) const;
-    bool ComputeEnemySlashScreenEffect(DirectX::XMFLOAT2 &outStart,
-                                       DirectX::XMFLOAT2 &outEnd,
-                                       float &outPhaseAlpha,
-                                       float &outActionTime,
-                                       ActionKind &outActionKind) const;
-    bool ComputeEnemySlashWorldEffect(DirectX::XMFLOAT3 &outStart,
-                                      DirectX::XMFLOAT3 &outEnd,
-                                      float &outPhaseAlpha,
-                                      float &outActionTime,
-                                      ActionKind &outActionKind) const;
-    void UpdateEnemySlashEffects();
-    void DrawEnemySlashPass();
-    void DrawWarpSmokePass();
-    void DrawWarpDistortionPass();
 
     void SpawnElectricRing(const DirectX::XMFLOAT3 &worldPos, bool isWarpEnd);
     void UpdateElectricRing();
 
-    void UpdateEnemySwordTrail();
-
   private:
-    static constexpr DirectX::XMFLOAT3 kCameraStartPos = {0.0f, 1.0f, 0.5f};
-    static constexpr float kCameraDistance = 3.5f;
-    static constexpr float kCameraHeight = 1.2f;
     static constexpr float kGuardDamageMultiplier = 0.25f;
 
     Camera camera_;
@@ -89,8 +66,6 @@ class GameScene : public BaseScene {
     bool dbgFreezeEnemyMotion_ = false;
 #endif
     Bullet bullet_;
-    uint32_t warpSmokeSpriteId_ = 0;
-    uint32_t warpSmokeDarkSpriteId_ = 0;
 
     float cameraYaw_ = 0.0f;
     float cameraPitch_ = 0.22f;
@@ -153,61 +128,17 @@ class GameScene : public BaseScene {
     float phaseTransitionLookAtHeight_ = 1.45f;
     float phaseTransitionPushIn_ = 0.85f;
 
-    float warpDistortionRadiusPx_ = 116.0f;
-    float warpDistortionThicknessPx_ = 4.0f;
-    float warpDistortionLineLengthPx_ = 72.0f;
-    float warpDistortionAlpha_ = 0.34f;
-    float warpDistortionMoveAlphaBonus_ = 0.20f;
-    float warpDistortionJitterPx_ = 16.0f;
-    float warpDistortionPreviewOffsetPx_ = 46.0f;
-    float warpDistortionFootOffsetPx_ = 0.0f;
-    float warpSmokeBaseSizePx_ = 132.0f;
-    float warpSmokeMoveStretchPx_ = 92.0f;
-    float warpSmokeAlpha_ = 0.34f;
-    float warpSourceSmokeBloomScale_ = 1.42f;
-    float warpSourceSmokeDriftPx_ = 30.0f;
-    float warpSourceSmokeDarkAlpha_ = 0.58f;
-    float warpSourceSmokeRedAlpha_ = 0.42f;
-    float warpArrivalSmokeScale_ = 0.76f;
-    float warpArrivalSmokeAlphaScale_ = 0.42f;
-    float warpArrivalSmokeDenseScale_ = 1.58f;
-    float warpArrivalSmokeDarkAlpha_ = 1.08f;
-    float warpArrivalSmokeOffsetXPx_ = 54.0f;
-    float warpArrivalSmokeOffsetYPx_ = 112.0f;
-    float warpArrivalSmokeClusterRadiusPx_ = 74.0f;
-    float warpMoveSmokeAlphaScale_ = 0.78f;
-    float warpMoveSmokeStretchScale_ = 0.78f;
     float sceneLightTime_ = 0.0f;
 
     bool counterCinematicActive_ = false;
     bool enemyAnimationFrozen_ = false;
     float counterTimeScale_ = 0.05f;
-    float counterVignetteAlpha_ = 0.0f;
-    float counterVignetteFadeSpeed_ = 8.0f;
     float counterCameraShakeX_ = 0.035f;
     float counterCameraShakeY_ = 0.020f;
     float counterCameraShakeFrequency_ = 18.0f;
 
     float reflectDamage_ = 0.0f;
     float damageMultiplier_ = 2.0f;
-
-    float warpArrivalBurstBillboardSizePx_ = 18.0f;
-    float warpArrivalBurstBillboardSpreadPx_ = 54.0f;
-    float warpArrivalBurstBillboardAlpha_ = 0.52f;
-
-    // Enemy slash presentation
-    float enemySlashCoreThicknessPx_ = 8.0f;
-    float enemySlashOuterThicknessPx_ = 18.0f;
-    float enemySlashEchoOffsetPx_ = 14.0f;
-    float enemySlashSparkSpreadPx_ = 70.0f;
-    float enemySlashDistortionThicknessUv_ = 0.038f;
-    float enemySlashDistortionStrength_ = 0.012f;
-    float enemySlashChargePreviewAlpha_ = 0.22f;
-    float enemySlashActiveAlpha_ = 0.92f;
-    float enemySlashRecoveryAlpha_ = 0.36f;
-    float warpArrivalFlashLengthPx_ = 172.0f;
-    float warpArrivalFlashThicknessPx_ = 6.0f;
-    float warpArrivalFlashGlowThicknessPx_ = 18.0f;
 
     struct ActiveElectricRing {
         bool active = false;
@@ -230,17 +161,5 @@ class GameScene : public BaseScene {
     };
 
     ActiveElectricRing activeElectricRing_{};
-
-    // slash effect
-    ActionKind prevEnemyActionKind_ = ActionKind::None;
-    ActionStep prevEnemyActionStep_ = ActionStep::None;
-    bool enemySlashActiveLatched_ = false;
-
-    float enemySlashParticleEmitScale_ = 1.0f;
-    uint32_t enemySlashParticleCountSmash_ = 52;
-    uint32_t enemySlashParticleCountSweep_ = 84;
-
-    bool enemySwordTrailEnabled_ = true;
-    float enemySwordTrailWidth_ = 1.0f;
 
 };
