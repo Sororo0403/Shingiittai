@@ -151,7 +151,6 @@ if exist "$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClInclude Include="include\enemy\EnemyTuningPresetIO.h" />
     <ClInclude Include="include\player\PlayerTuningPreset.h" />
     <ClInclude Include="include\player\PlayerTuningPresetIO.h" />
-    <ClInclude Include="include\enemy\WarpPostEffect.h" />
     <ClInclude Include="include\player\SwordControllerState.h" />
     <ClInclude Include="include\player\SwordPose.h" />
     <ClInclude Include="include\enemy\Bullet.h" />
@@ -178,58 +177,14 @@ if exist "$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" (
     <None Include="resources\enemy_tuning.csv" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="resources\model\boss\boss.bin" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="resources\model\boss\boss.gltf" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="resources\model\boss\bossBody.png" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="resources\model\bullet\bullet.mtl" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="resources\model\bullet\bullet.obj" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="resources\model\bullet\bullet.png" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="resources\model\enemy\bossBody.mtl" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="resources\model\enemy\bossBody.obj" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="resources\model\enemy\bossBody.png" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="resources\model\enemy\bossHand.png" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="resources\model\enemy\bossLeftHand.mtl" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="resources\model\enemy\bossLeftHand.obj" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="resources\model\enemy\bossModel.glb" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="resources\model\enemy\bossRightHand.mtl" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="resources\model\enemy\bossRightHand.obj" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="resources\model\enemy\enemy.glb" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="resources\model\player\player.glb" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="resources\model\player\sword.glb" />
+    <None Include="resources\models\boss\boss.bin" />
+    <None Include="resources\models\boss\boss.gltf" />
+    <None Include="resources\models\boss\bossBody.png" />
+    <None Include="resources\models\bullet\bullet.mtl" />
+    <None Include="resources\models\bullet\bullet.obj" />
+    <None Include="resources\models\bullet\bullet.png" />
+    <None Include="resources\models\player\player.glb" />
+    <None Include="resources\models\player\sword.glb" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

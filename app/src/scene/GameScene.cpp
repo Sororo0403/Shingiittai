@@ -9,15 +9,7 @@
 #include "SpriteManager.h"
 #include "TextureManager.h"
 #include "WinApp.h"
-#include "WarpPostEffectRenderer.h"
-#include "ElectricRingEffectRenderer.h"
-#include "GpuSlashParticleSystem.h"
-#include "SlashEffectRenderer.h"
-#include "SwordTrailRenderer.h"
 #include <string>
-#ifdef _DEBUG
-#include "DebugDraw.h"
-#endif // _DEBUG
 #ifndef IMGUI_DISABLED
 #include "imgui.h"
 #include "imgui_internal.h"
@@ -186,19 +178,15 @@ void GameScene::Initialize(const SceneContext &ctx) {
 
     dx->BeginUpload();
 
-    uint32_t playerModel = model->Load(L"app/resources/model/player/player.glb");
-    uint32_t swordModel = model->Load(L"app/resources/model/player/sword.glb");
+    uint32_t playerModel = model->Load(L"app/resources/models/player/player.glb");
+    uint32_t swordModel = model->Load(L"app/resources/models/player/sword.glb");
     uint32_t enemyModel = 0;
     uint32_t bulletModel =
-        ctx_->model->Load(L"app/resources/model/bullet/bullet.obj");
-    warpSmokeSpriteId_ =
-        ctx_->sprite->Create(L"engine/resources/texture/effect/warp_smoke.png");
-    warpSmokeDarkSpriteId_ =
-        ctx_->sprite->Create(L"engine/resources/texture/effect/warp_smoke_dark.png");
+        ctx_->model->Load(L"app/resources/models/bullet/bullet.obj");
     try {
-        enemyModel = model->Load(L"app/resources/model/boss/boss.gltf");
+        enemyModel = model->Load(L"app/resources/models/boss/boss.gltf");
     } catch (const std::exception &) {
-        enemyModel = model->Load(L"app/resources/model/enemy/enemy.glb");
+        enemyModel = model->Load(L"app/resources/models/enemy/enemy.glb");
     }
 
     dx->EndUpload();
@@ -265,12 +253,8 @@ void GameScene::Initialize(const SceneContext &ctx) {
     counterCinematicActive_ = false;
     enemyAnimationFrozen_ = false;
     counterVignetteAlpha_ = 0.0f;
-    counterVignetteRenderer_.Initialize(ctx_->dxCommon);
 
     activeElectricRing_ = {};
-    if (ctx_ != nullptr && ctx_->electricRingParam != nullptr) {
-        ctx_->electricRingParam->enabled = 0.0f;
-    }
 }
 
 void GameScene::Update() {
@@ -701,97 +685,6 @@ void GameScene::Update() {
         SetEnemyAnimationFrozen(true);
     }
 
-    if (ctx_ != nullptr && ctx_->warpPostEffectParam != nullptr) {
-        WarpPostEffectParamGPU *warpParam = ctx_->warpPostEffectParam;
-
-        warpParam->time += ctx_->deltaTime;
-        warpParam->center = {0.5f, 0.5f};
-        warpParam->radius = 0.0f;
-        warpParam->strength = 0.0f;
-        warpParam->center2 = {0.5f, 0.5f};
-        warpParam->radius2 = 0.0f;
-        warpParam->strength2 = 0.0f;
-        warpParam->enabled = 0.0f;
-        warpParam->slashStart = {0.5f, 0.5f};
-        warpParam->slashEnd = {0.5f, 0.5f};
-        warpParam->slashThickness = 0.0f;
-        warpParam->slashStrength = 0.0f;
-        warpParam->slashEnabled = 0.0f;
-
-        XMFLOAT2 slashStartScreen{};
-        XMFLOAT2 slashEndScreen{};
-        float slashPhaseAlpha = 0.0f;
-        float slashActionTime = 0.0f;
-        ActionKind slashActionKind = ActionKind::None;
-        if (ComputeEnemySlashScreenEffect(slashStartScreen, slashEndScreen,
-                                          slashPhaseAlpha, slashActionTime,
-                                          slashActionKind)) {
-            const float width = static_cast<float>(ctx_->winApp->GetWidth());
-            const float height = static_cast<float>(ctx_->winApp->GetHeight());
-            warpParam->slashStart = {slashStartScreen.x / width,
-                                     slashStartScreen.y / height};
-            warpParam->slashEnd = {slashEndScreen.x / width,
-                                   slashEndScreen.y / height};
-            warpParam->slashThickness =
-                enemySlashDistortionThicknessUv_ *
-                (slashActionKind == ActionKind::Sweep ? 1.18f : 1.0f) *
-                (0.72f + slashPhaseAlpha * 0.55f);
-            warpParam->slashStrength =
-                enemySlashDistortionStrength_ * (0.58f + slashPhaseAlpha * 0.88f);
-            warpParam->slashEnabled = 1.0f;
-        }
-
-        if (enemy_.GetActionKind() == ActionKind::Warp) {
-            const float width = static_cast<float>(ctx_->winApp->GetWidth());
-            const float height = static_cast<float>(ctx_->winApp->GetHeight());
-
-            bool hasAnyCenter = false;
-            DirectX::XMFLOAT2 targetScreen{};
-            if (ProjectWorldToScreen(enemy_.GetWarpTargetPos(), targetScreen)) {
-                warpParam->center = {targetScreen.x / width,
-                                     targetScreen.y / height};
-                hasAnyCenter = true;
-            }
-
-            if (enemy_.HasWarpDeparturePos()) {
-                DirectX::XMFLOAT2 sourceScreen{};
-                if (ProjectWorldToScreen(enemy_.GetWarpDeparturePos(),
-                                         sourceScreen)) {
-                    warpParam->center2 = {sourceScreen.x / width,
-                                          sourceScreen.y / height};
-                }
-            }
-
-            if (hasAnyCenter) {
-                warpParam->enabled = 1.0f;
-
-                switch (enemy_.GetActionStep()) {
-                case ActionStep::Start:
-                    warpParam->radius = 0.085f;
-                    warpParam->strength = 0.010f;
-                    warpParam->radius2 = 0.110f;
-                    warpParam->strength2 = 0.014f;
-                    break;
-                case ActionStep::Move:
-                    warpParam->radius = 0.060f;
-                    warpParam->strength = 0.004f;
-                    warpParam->radius2 = 0.085f;
-                    warpParam->strength2 = 0.007f;
-                    break;
-                case ActionStep::End:
-                    warpParam->radius = 0.135f;
-                    warpParam->strength = 0.022f;
-                    warpParam->radius2 = 0.040f;
-                    warpParam->strength2 = 0.004f;
-                    break;
-                default:
-                    warpParam->enabled = 0.0f;
-                    break;
-                }
-            }
-        }
-    }
-
     UpdateCounterVignette(baseDeltaTime);
 }
 
@@ -844,18 +737,6 @@ void GameScene::UpdateCounterVignette(float deltaTime) {
 }
 
 void GameScene::DrawCounterVignette() {
-    if (counterVignetteAlpha_ <= 0.001f || ctx_ == nullptr ||
-        ctx_->dxCommon == nullptr) {
-        return;
-    }
-
-    VignetteParams params{};
-    params.color = {0.06f, 0.0f, 0.0f};
-    params.intensity = counterVignetteAlpha_ * 0.78f;
-    params.innerRadius = 0.34f;
-    params.power = 1.9f;
-    params.roundness = 1.25f;
-    counterVignetteRenderer_.Draw(params);
 }
 
 void GameScene::SyncEnemyAnimation() {
@@ -880,9 +761,6 @@ void GameScene::SyncEnemyAnimation() {
     enemyAnimationName_ = nextAnimation;
     enemyAnimationLoop_ = shouldLoop;
 }
-// #ifdef _DEBUG
-//     DebugDraw *debugDraw = ctx_->debugDraw;
-// #endif
 
 void GameScene::Draw() {
     ctx_->model->PreDraw();
@@ -902,119 +780,9 @@ void GameScene::Draw() {
             aliveWaveCount++;
         }
     }
-#ifdef _DEBUG
-    // 蠖薙◁E��雁�E螳壽緒逕ｻ
-    ModelDrawEffect hitBoxEffect{};
-    hitBoxEffect.enabled = true;
-    hitBoxEffect.intensity = 0.45f;
-    hitBoxEffect.fresnelPower = 2.8f;
-    hitBoxEffect.noiseAmount = 0.06f;
-    hitBoxEffect.time = sceneLightTime_ * 5.0f;
-
-    // 繝励Ξ繧�E�繝､繝ｼ譛ｬ菴・
-    hitBoxEffect.color = {0.20f, 0.95f, 0.28f, 0.45f};
-    ctx_->model->SetDrawEffect(hitBoxEffect);
-    ctx_->debugDraw->DrawOBB(ctx_->model, player_.GetOBB(), *currentCamera_);
-
-    // 繝励Ξ繧�E�繝､繝ｼ蜑｣
-    hitBoxEffect.color = {0.20f, 0.85f, 1.00f, 0.42f};
-    ctx_->model->SetDrawEffect(hitBoxEffect);
-    for (const Sword *sword : player_.GetSwords()) {
-        if (sword == nullptr) {
-            continue;
-        }
-        ctx_->debugDraw->DrawOBB(ctx_->model, sword->GetOBB(), *currentCamera_);
-    }
-
-    // 繝懊せ驛ｨ菴・
-    if (enemy_.IsAlive()) {
-        hitBoxEffect.color = {1.00f, 0.28f, 0.20f, 0.40f};
-        ctx_->model->SetDrawEffect(hitBoxEffect);
-        ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetBodyOBB(),
-                                 *currentCamera_);
-        hitBoxEffect.color = {1.00f, 0.45f, 0.25f, 0.35f};
-        ctx_->model->SetDrawEffect(hitBoxEffect);
-        ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetLeftHandOBB(),
-                                 *currentCamera_);
-        ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetRightHandOBB(),
-                                 *currentCamera_);
-
-        const bool isEnemySmashActive =
-            (enemy_.GetActionKind() == ActionKind::Smash &&
-             (enemy_.GetActionStep() == ActionStep::Active ||
-              enemy_.GetActionStep() == ActionStep::Recovery));
-        const bool isEnemySweepActive =
-            (enemy_.GetActionKind() == ActionKind::Sweep &&
-             (enemy_.GetActionStep() == ActionStep::Active ||
-              enemy_.GetActionStep() == ActionStep::Recovery));
-
-        if (isEnemySmashActive || isEnemySweepActive) {
-            hitBoxEffect.color = {1.00f, 1.00f, 0.15f, 0.52f};
-            hitBoxEffect.intensity = 0.62f;
-            ctx_->model->SetDrawEffect(hitBoxEffect);
-            ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetAttackOBB(),
-                                     *currentCamera_);
-            hitBoxEffect.intensity = 0.45f;
-        }
-
-        // 蠑ｾ繝�Eャ繝亥愛螳・
-        hitBoxEffect.color = {0.95f, 0.20f, 1.00f, 0.34f};
-        ctx_->model->SetDrawEffect(hitBoxEffect);
-        for (const auto &bullet : enemy_.GetBullets()) {
-            if (!bullet.isAlive) {
-                continue;
-            }
-
-            OBB bulletBox{};
-            bulletBox.center = bullet.position;
-            bulletBox.size = enemy_.GetBulletHitBoxSize();
-            bulletBox.rotation = player_.GetTransform().rotation;
-            ctx_->debugDraw->DrawOBB(ctx_->model, bulletBox, *currentCamera_);
-        }
-
-        // 豕｢蜍輔ヲ繝�Eヨ蛻�E�螳・
-        hitBoxEffect.color = {0.25f, 0.65f, 1.00f, 0.34f};
-        ctx_->model->SetDrawEffect(hitBoxEffect);
-        for (const auto &wave : enemy_.GetWaves()) {
-            if (!wave.isAlive) {
-                continue;
-            }
-
-            OBB waveBox{};
-            waveBox.center = wave.position;
-            waveBox.size = enemy_.GetWaveHitBoxSize();
-            waveBox.rotation = player_.GetTransform().rotation;
-            ctx_->debugDraw->DrawOBB(ctx_->model, waveBox, *currentCamera_);
-        }
-    }
-    ctx_->model->ClearDrawEffect();
-#endif // _DEBUG
     ctx_->model->PostDraw();
     DrawMagnetismic();
-     /* if (ctx_->swordTrailRenderer != nullptr) {
-        ctx_->swordTrailRenderer->Draw(*currentCamera_);
-    }
 
-     {
-        DirectX::XMFLOAT3 slashStartWorld{};
-        DirectX::XMFLOAT3 slashEndWorld{};
-        float phaseAlpha = 0.0f;
-        float actionTime = 0.0f;
-        ActionKind actionKind = ActionKind::None;
-
-        if (ComputeEnemySlashWorldEffect(slashStartWorld, slashEndWorld,
-                                         phaseAlpha, actionTime, actionKind)) {
-            const bool isSweep = (actionKind == ActionKind::Sweep);
-          
-            ctx_->slashEffectRenderer->DrawEnemySlash(
-                *currentCamera_, slashStartWorld, slashEndWorld, phaseAlpha,
-                actionTime, isSweep);
-        }
-    }*/
-
-    //ctx_->gpuSlashParticleSystem->Render(*currentCamera_, ctx_->deltaTime);
-    DrawWarpSmokePass();
-    DrawWarpDistortionPass();
     DrawCounterVignette();
 
 #ifdef _DEBUG
@@ -1922,96 +1690,12 @@ void GameScene::DrawEnemySlashPass() {
 }
 
 void GameScene::UpdateEnemySlashEffects() {
-    const ActionKind actionKind = enemy_.GetActionKind();
-    const ActionStep actionStep = enemy_.GetActionStep();
-
-    const bool isSlashActive =
-        (actionKind == ActionKind::Smash || actionKind == ActionKind::Sweep) &&
-        (actionStep == ActionStep::Active);
-
-    if (isSlashActive && !enemySlashActiveLatched_) {
-        DirectX::XMFLOAT3 slashStartWorld{};
-        DirectX::XMFLOAT3 slashEndWorld{};
-        float phaseAlpha = 0.0f;
-        float actionTime = 0.0f;
-        ActionKind worldActionKind = ActionKind::None;
-
-        if (ComputeEnemySlashWorldEffect(slashStartWorld, slashEndWorld,
-                                         phaseAlpha, actionTime,
-                                         worldActionKind)) {
-            const bool isSweep = (worldActionKind == ActionKind::Sweep);
-            const uint32_t count = isSweep ? enemySlashParticleCountSweep_
-                                           : enemySlashParticleCountSmash_;
-
-            ctx_->gpuSlashParticleSystem->EmitSlashBurst(
-                slashStartWorld, slashEndWorld, count,
-                enemySlashParticleEmitScale_, isSweep);
-        }
-    }
-
-    enemySlashActiveLatched_ = isSlashActive;
-    prevEnemyActionKind_ = actionKind;
-    prevEnemyActionStep_ = actionStep;
+    prevEnemyActionKind_ = enemy_.GetActionKind();
+    prevEnemyActionStep_ = enemy_.GetActionStep();
+    enemySlashActiveLatched_ = false;
 }
 
 void GameScene::UpdateEnemySwordTrail() {
-    if (ctx_ == nullptr || ctx_->swordTrailRenderer == nullptr) {
-        return;
-    }
-
-    ctx_->swordTrailRenderer->SetEnabled(enemySwordTrailEnabled_);
-    ctx_->swordTrailRenderer->BeginFrame(ctx_->deltaTime);
-
-    const ActionKind actionKind = enemy_.GetActionKind();
-    const ActionStep actionStep = enemy_.GetActionStep();
-
-    const bool isTrailAction =
-        (actionKind == ActionKind::Smash || actionKind == ActionKind::Sweep) &&
-        (actionStep == ActionStep::Charge || actionStep == ActionStep::Active);
-
-    if (isTrailAction) {
-        DirectX::XMFLOAT3 baseWorld = enemy_.GetRightHandTransform().position;
-        DirectX::XMFLOAT3 tipWorld = enemy_.GetAttackOBB().center;
-
-        const float yaw = (actionStep == ActionStep::Charge)
-                              ? enemy_.GetFacingYaw()
-                              : enemy_.GetLockedAttackYaw();
-
-        const float forwardX = std::sinf(yaw);
-        const float forwardZ = std::cosf(yaw);
-        const float rightX = std::cosf(yaw);
-        const float rightZ = -std::sinf(yaw);
-
-        if (actionKind == ActionKind::Smash) {
-            baseWorld.x += -forwardX * 0.18f;
-            baseWorld.y += 0.70f;
-            baseWorld.z += -forwardZ * 0.18f;
-
-            tipWorld.x += forwardX * 0.42f;
-            tipWorld.y -= 0.38f;
-            tipWorld.z += forwardZ * 0.42f;
-        } else {
-            const DirectX::XMFLOAT3 attackCenter = enemy_.GetAttackOBB().center;
-            const float sweepHalfWidth =
-                enemy_.GetSweepAttackBoxSize().x * 0.52f;
-
-            baseWorld = {attackCenter.x - rightX * sweepHalfWidth,
-                         attackCenter.y + 0.16f,
-                         attackCenter.z - rightZ * sweepHalfWidth};
-
-            tipWorld = {attackCenter.x + rightX * sweepHalfWidth,
-                        attackCenter.y - 0.10f,
-                        attackCenter.z + rightZ * sweepHalfWidth};
-        }
-
-        const float width = (actionKind == ActionKind::Sweep)
-                                ? enemySwordTrailWidth_ * 1.10f
-                                : enemySwordTrailWidth_ * 0.82f;
-
-        ctx_->swordTrailRenderer->AddPoint(baseWorld, tipWorld, width);
-    }
-
-    ctx_->swordTrailRenderer->EndFrame();
 }
 
 void GameScene::DrawWarpSmokePass() {
@@ -2981,74 +2665,13 @@ void GameScene::SpawnElectricRing(const XMFLOAT3 &worldPos, bool isWarpEnd) {
 }
 
 void GameScene::UpdateElectricRing() {
-    if (ctx_ == nullptr || ctx_->electricRingParam == nullptr ||
-        ctx_->winApp == nullptr || currentCamera_ == nullptr) {
-        return;
-    }
-
-    ElectricRingParamGPU &gpu = *ctx_->electricRingParam;
-
-    if (!activeElectricRing_.active) {
-        gpu.enabled = 0.0f;
+    if (!activeElectricRing_.active || ctx_ == nullptr) {
         return;
     }
 
     activeElectricRing_.time += ctx_->deltaTime;
     if (activeElectricRing_.time >= activeElectricRing_.lifeTime) {
         activeElectricRing_.active = false;
-        gpu.enabled = 0.0f;
         return;
     }
-
-    XMMATRIX viewProj = currentCamera_->GetView() * currentCamera_->GetProj();
-    XMVECTOR pos = XMVectorSet(activeElectricRing_.worldPos.x,
-                               activeElectricRing_.worldPos.y,
-                               activeElectricRing_.worldPos.z, 1.0f);
-    XMVECTOR clip = XMVector4Transform(pos, viewProj);
-
-    float w = XMVectorGetW(clip);
-    if (w <= 0.0001f) {
-        gpu.enabled = 0.0f;
-        return;
-    }
-
-    float invW = 1.0f / w;
-    float ndcX = XMVectorGetX(clip) * invW;
-    float ndcY = XMVectorGetY(clip) * invW;
-    float ndcZ = XMVectorGetZ(clip) * invW;
-
-    if (ndcZ < 0.0f || ndcZ > 1.0f) {
-        gpu.enabled = 0.0f;
-        return;
-    }
-
-    float t = activeElectricRing_.time / activeElectricRing_.lifeTime;
-    t = std::clamp(t, 0.0f, 1.0f);
-    float ease = 1.0f - std::pow(1.0f - t, 3.0f);
-
-    float aspect = static_cast<float>(ctx_->winApp->GetWidth()) /
-                   static_cast<float>(ctx_->winApp->GetHeight());
-
-    gpu.center = {ndcX * 0.5f + 0.5f, -ndcY * 0.5f + 0.5f};
-    gpu.radius =
-        activeElectricRing_.startRadius +
-        (activeElectricRing_.endRadius - activeElectricRing_.startRadius) *
-            ease;
-    gpu.time = activeElectricRing_.time;
-
-    gpu.ringWidth = activeElectricRing_.ringWidth;
-    gpu.distortionWidth = activeElectricRing_.distortionWidth;
-    gpu.distortionStrength =
-        activeElectricRing_.distortionStrength * (1.0f - t * 0.75f);
-    gpu.swirlStrength = activeElectricRing_.swirlStrength;
-
-    gpu.cloudScale = activeElectricRing_.cloudScale;
-    gpu.cloudIntensity = activeElectricRing_.cloudIntensity;
-    gpu.brightness = activeElectricRing_.brightness * (1.0f - t * 0.35f);
-    gpu.haloIntensity = activeElectricRing_.haloIntensity;
-
-    gpu.aspectInvAspect = {aspect, 1.0f / aspect};
-    gpu.innerFade = 0.85f;
-    gpu.outerFade = 1.0f;
-    gpu.enabled = 1.0f;
 }

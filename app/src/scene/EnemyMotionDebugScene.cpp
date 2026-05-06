@@ -1,5 +1,4 @@
 #include "EnemyMotionDebugScene.h"
-#include "DebugDraw.h"
 #include "DirectXCommon.h"
 #include "EnemyTuningPresetIO.h"
 #include "GameScene.h"
@@ -152,11 +151,11 @@ void EnemyMotionDebugScene::Initialize(const SceneContext &ctx) {
 
     dx->BeginUpload();
     uint32_t enemyModel = 0;
-    const uint32_t bulletModel = model->Load(L"app/resources/model/bullet/bullet.obj");
+    const uint32_t bulletModel = model->Load(L"app/resources/models/bullet/bullet.obj");
     try {
-        enemyModel = model->Load(L"app/resources/model/boss/boss.gltf");
+        enemyModel = model->Load(L"app/resources/models/boss/boss.gltf");
     } catch (const std::exception &) {
-        enemyModel = model->Load(L"app/resources/model/enemy/enemy.glb");
+        enemyModel = model->Load(L"app/resources/models/enemy/enemy.glb");
     }
     dx->EndUpload();
     texture->ReleaseUploadBuffers();
@@ -207,63 +206,6 @@ void EnemyMotionDebugScene::Update() {
 void EnemyMotionDebugScene::Draw() {
     ctx_->model->PreDraw();
     enemy_.Draw(ctx_->model, *currentCamera_);
-
-#ifdef _DEBUG
-    if (drawHitBoxes_ && ctx_->debugDraw != nullptr) {
-        ModelDrawEffect hitBoxEffect{};
-        hitBoxEffect.enabled = true;
-        hitBoxEffect.intensity = 0.45f;
-        hitBoxEffect.fresnelPower = 2.8f;
-        hitBoxEffect.noiseAmount = 0.06f;
-        hitBoxEffect.time = sceneLightTime_ * 5.0f;
-
-        hitBoxEffect.color = {1.00f, 0.28f, 0.20f, 0.40f};
-        ctx_->model->SetDrawEffect(hitBoxEffect);
-        ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetBodyOBB(), *currentCamera_);
-        hitBoxEffect.color = {1.00f, 0.45f, 0.25f, 0.35f};
-        ctx_->model->SetDrawEffect(hitBoxEffect);
-        ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetLeftHandOBB(), *currentCamera_);
-        ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetRightHandOBB(), *currentCamera_);
-
-        if (enemy_.IsAttackActive()) {
-            hitBoxEffect.color = {1.00f, 1.00f, 0.15f, 0.52f};
-            hitBoxEffect.intensity = 0.62f;
-            ctx_->model->SetDrawEffect(hitBoxEffect);
-            ctx_->debugDraw->DrawOBB(ctx_->model, enemy_.GetAttackOBB(),
-                                     *currentCamera_);
-        }
-
-        for (const auto &bullet : enemy_.GetBullets()) {
-            if (!bullet.isAlive) {
-                continue;
-            }
-            OBB bulletBox{};
-            bulletBox.center = bullet.position;
-            bulletBox.size = enemy_.GetBulletHitBoxSize();
-            bulletBox.rotation = enemy_.GetTransform().rotation;
-            hitBoxEffect.color = {0.95f, 0.20f, 1.00f, 0.34f};
-            hitBoxEffect.intensity = 0.45f;
-            ctx_->model->SetDrawEffect(hitBoxEffect);
-            ctx_->debugDraw->DrawOBB(ctx_->model, bulletBox, *currentCamera_);
-        }
-
-        for (const auto &wave : enemy_.GetWaves()) {
-            if (!wave.isAlive) {
-                continue;
-            }
-            OBB waveBox{};
-            waveBox.center = wave.position;
-            waveBox.size = enemy_.GetWaveHitBoxSize();
-            waveBox.rotation = enemy_.GetTransform().rotation;
-            hitBoxEffect.color = {0.25f, 0.65f, 1.00f, 0.34f};
-            hitBoxEffect.intensity = 0.45f;
-            ctx_->model->SetDrawEffect(hitBoxEffect);
-            ctx_->debugDraw->DrawOBB(ctx_->model, waveBox, *currentCamera_);
-        }
-
-        ctx_->model->ClearDrawEffect();
-    }
-#endif
 
     ctx_->model->PostDraw();
     DrawDebugUi();
@@ -352,7 +294,6 @@ void EnemyMotionDebugScene::DrawDebugUi() {
     ImGui::Text("F8: Back to GameScene");
     ImGui::Checkbox("Pause Enemy Update", &pauseEnemyUpdate_);
     ImGui::Checkbox("Idle Lock", &lockIdle_);
-    ImGui::Checkbox("Draw HitBoxes", &drawHitBoxes_);
 
     if (ImGui::Button("Back To Game")) {
         if (sceneManager_ != nullptr) {

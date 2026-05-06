@@ -13,16 +13,9 @@ class SrvManager;
 class PostEffectRenderer;
 class RenderTexture;
 class SkyboxRenderer;
-struct WarpPostEffectParamGPU;
-struct ElectricRingParamGPU;
-class SlashEffectRenderer;
-class GpuSlashParticleSystem;
-class SwordTrailRenderer;
-class MagnetismicRenderer;
 
 #ifdef _DEBUG
 class ImguiManager;
-class DebugDraw;
 #endif // _DEBUG
 
 /// <summary>
@@ -46,13 +39,5 @@ struct SceneContext {
 
 #ifdef _DEBUG
     ImguiManager *imgui = nullptr;
-    DebugDraw *debugDraw = nullptr;
 #endif // _DEBUG
-
-    WarpPostEffectParamGPU *warpPostEffectParam = nullptr;
-    ElectricRingParamGPU *electricRingParam = nullptr;
-    SlashEffectRenderer *slashEffectRenderer = nullptr;
-    GpuSlashParticleSystem *gpuSlashParticleSystem = nullptr;
-    SwordTrailRenderer *swordTrailRenderer = nullptr;
-    MagnetismicRenderer *magnetismicRenderer = nullptr;
 };

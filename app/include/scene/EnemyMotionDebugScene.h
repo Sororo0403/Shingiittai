@@ -44,7 +44,6 @@ class EnemyMotionDebugScene : public BaseScene {
     DirectX::XMFLOAT3 previewPlayerPos_ = {0.0f, 0.0f, 0.0f};
     bool pauseEnemyUpdate_ = false;
     bool lockIdle_ = false;
-    bool drawHitBoxes_ = true;
     float sceneLightTime_ = 0.0f;
 
 #ifdef _DEBUG

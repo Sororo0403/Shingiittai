@@ -5,7 +5,6 @@
 #include "Enemy.h"
 #include "Player.h"
 #include "Transform.h"
-#include "VignetteRenderer.h"
 #include <DirectXMath.h>
 #include <cstdint>
 #include <string>
@@ -190,7 +189,6 @@ class GameScene : public BaseScene {
     float counterCameraShakeX_ = 0.035f;
     float counterCameraShakeY_ = 0.020f;
     float counterCameraShakeFrequency_ = 18.0f;
-    VignetteRenderer counterVignetteRenderer_;
 
     float reflectDamage_ = 0.0f;
     float damageMultiplier_ = 2.0f;

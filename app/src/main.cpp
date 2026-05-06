@@ -1,24 +1,16 @@
 #include "DirectXCommon.h"
-#include "ElectricRingEffectRenderer.h"
 #include "GameScene.h"
-#include "GpuSlashParticleSystem.h"
 #include "Input.h"
 #include "ModelManager.h"
+#include "PostEffectRenderer.h"
 #include "SceneContext.h"
 #include "SceneManager.h"
-#include "SlashEffectRenderer.h"
 #include "SoundManager.h"
 #include "SpriteManager.h"
 #include "SrvManager.h"
-#include "SwordTrailRenderer.h"
 #include "TextureManager.h"
-#include "WarpPostEffectRenderer.h"
-#include "MagnetismicRenderer.h"
 #include "WinApp.h"
 #include <memory>
-#ifdef _DEBUG
-#include "DebugDraw.h"
-#endif // _DEBUG
 
 #ifndef IMGUI_DISABLED
 #include "ImguiManager.h"
@@ -41,14 +33,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     SrvManager srvManager;
     srvManager.Initialize(&dxCommon, 512);
     dxCommon.RegisterSceneColorSRV(&srvManager);
+    dxCommon.CreateDepthStencilSrv(&srvManager);
 
-    WarpPostEffectRenderer warpPostEffectRenderer;
-    warpPostEffectRenderer.Initialize(&dxCommon, &srvManager);
-    WarpPostEffectParamGPU warpPostParam{};
-
-    ElectricRingEffectRenderer electricRingEffectRenderer;
-    electricRingEffectRenderer.Initialize(&dxCommon, &srvManager);
-    ElectricRingParamGPU electricRingParam{};
+    PostEffectRenderer postEffectRenderer;
+    postEffectRenderer.Initialize(&dxCommon, &srvManager, width, height);
+    postEffectRenderer.SetVignettingEnabled(false);
 
     // Input
     Input input;
@@ -62,29 +51,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     TextureManager textureManager;
     textureManager.Initialize(&dxCommon, &srvManager);
 
-    SlashEffectRenderer slashEffectRenderer;
-    slashEffectRenderer.Initialize(&dxCommon, &srvManager, &textureManager);
-
-    GpuSlashParticleSystem gpuSlashParticleSystem;
-    gpuSlashParticleSystem.Initialize(&dxCommon, &srvManager, &textureManager,
-                                      4096);
-
-    uint32_t electricNoiseTex0 =
-        textureManager.Load(L"engine/resources/texture/effect/warp_smoke.png");
-    uint32_t electricNoiseTex1 =
-        textureManager.Load(L"engine/resources/texture/effect/warp_smoke_dark.png");
-
-    SwordTrailRenderer swordTrailRenderer;
-    swordTrailRenderer.Initialize(&dxCommon, &srvManager, &textureManager, 24);
-    swordTrailRenderer.SetLifeTime(0.24f);
-
-        MagnetismicRenderer magnetismicRenderer;
-    magnetismicRenderer.Initialize(
-        dxCommon.GetDevice(), DXGI_FORMAT_R8G8B8A8_UNORM,
-        DXGI_FORMAT_D24_UNORM_S8_UINT,
-        L"engine/resources/shaders/warp/Magnetismic.VS.hlsl",
-        L"engine/resources/shaders/warp/Magnetismic.PS.hlsl");
-
     // ModelManager
     ModelManager modelManager;
     modelManager.Initialize(&dxCommon, &srvManager, &textureManager);
@@ -96,20 +62,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
 
     dxCommon.BeginUpload();
 
-#ifdef _DEBUG
-    // DebugDraw
-    DebugDraw debugDraw;
-    uint32_t boxModelId =
-        modelManager.Load(L"engine/resources/model/debug/box.obj");
-#endif // _DEBUG
-
     dxCommon.EndUpload();
 
     textureManager.ReleaseUploadBuffers();
-
-#ifdef _DEBUG
-    debugDraw.Initialize(boxModelId);
-#endif // _DEBUG
 
 #ifndef IMGUI_DISABLED
     // ImguiManager
@@ -123,19 +78,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     sceneCtx.sound = &soundManager;
     sceneCtx.model = &modelManager;
     sceneCtx.sprite = &spriteManager;
+    sceneCtx.srv = &srvManager;
     sceneCtx.texture = &textureManager;
     sceneCtx.dxCommon = &dxCommon;
-    sceneCtx.warpPostEffectParam = &warpPostParam;
-    sceneCtx.electricRingParam = &electricRingParam;
-    sceneCtx.slashEffectRenderer = &slashEffectRenderer;
-    sceneCtx.gpuSlashParticleSystem = &gpuSlashParticleSystem;
-    sceneCtx.swordTrailRenderer = &swordTrailRenderer;
-    sceneCtx.magnetismicRenderer = &magnetismicRenderer;
+    sceneCtx.postEffectRenderer = &postEffectRenderer;
     sceneCtx.deltaTime = 0.0f;
-
-#ifdef _DEBUG
-    sceneCtx.debugDraw = &debugDraw;
-#endif // _DEBUG
 
 #ifndef IMGUI_DISABLED
     sceneCtx.imgui = &imguiManager;
@@ -186,26 +133,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
         dxCommon.EndScenePass();
 
         dxCommon.BeginBackBufferPass();
-
-        /* warpPostEffectRenderer.Draw(warpPostParam,
-                                     dxCommon.GetSceneSrvGpuHandle(&srvManager));*/
-        D3D12_GPU_DESCRIPTOR_HANDLE sceneSrv =
-            dxCommon.GetSceneSrvGpuHandle(&srvManager);
-
-        warpPostEffectRenderer.Draw(warpPostParam, sceneSrv);
-
-        if (electricRingParam.enabled > 0.5f) {
-            D3D12_GPU_DESCRIPTOR_HANDLE noise0 =
-                textureManager.GetGpuHandle(electricNoiseTex0);
-            D3D12_GPU_DESCRIPTOR_HANDLE noise1 =
-                textureManager.GetGpuHandle(electricNoiseTex1);
-
-            electricRingEffectRenderer.DrawDistortion(electricRingParam,
-                                                      sceneSrv, noise0, noise1);
-
-            electricRingEffectRenderer.DrawPlasma(electricRingParam, noise0,
-                                                  noise1);
-        }
+        dxCommon.TransitionDepthToShaderResource();
+        postEffectRenderer.Draw(dxCommon.GetSceneSrvGpuHandle(&srvManager),
+                                dxCommon.GetDepthStencilGpuHandle());
+        dxCommon.TransitionDepthToWrite();
 
 #ifndef IMGUI_DISABLED
         imguiManager.End(cmdList);

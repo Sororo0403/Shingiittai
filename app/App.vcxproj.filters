@@ -128,9 +128,6 @@
     <ClInclude Include="include\player\PlayerTuningPresetIO.h">
       <Filter>Header Files\player</Filter>
     </ClInclude>
-    <ClInclude Include="include\enemy\WarpPostEffect.h">
-      <Filter>Header Files\enemy</Filter>
-    </ClInclude>
     <ClInclude Include="include\player\SwordControllerState.h">
       <Filter>Header Files\player</Filter>
     </ClInclude>
@@ -166,58 +163,28 @@
     <None Include="resources\enemy_tuning.csv">
       <Filter>Resources\Tuning</Filter>
     </None>
-    <None Include="resources\model\boss\boss.bin">
+    <None Include="resources\models\boss\boss.bin">
       <Filter>Resources\Model\boss</Filter>
     </None>
-    <None Include="resources\model\boss\boss.gltf">
+    <None Include="resources\models\boss\boss.gltf">
       <Filter>Resources\Model\boss</Filter>
     </None>
-    <None Include="resources\model\boss\bossBody.png">
+    <None Include="resources\models\boss\bossBody.png">
       <Filter>Resources\Model\boss</Filter>
     </None>
-    <None Include="resources\model\bullet\bullet.mtl">
+    <None Include="resources\models\bullet\bullet.mtl">
       <Filter>Resources\Model\bullet</Filter>
     </None>
-    <None Include="resources\model\bullet\bullet.obj">
+    <None Include="resources\models\bullet\bullet.obj">
       <Filter>Resources\Model\bullet</Filter>
     </None>
-    <None Include="resources\model\bullet\bullet.png">
+    <None Include="resources\models\bullet\bullet.png">
       <Filter>Resources\Model\bullet</Filter>
     </None>
-    <None Include="resources\model\enemy\bossBody.mtl">
-      <Filter>Resources\Model\enemy</Filter>
-    </None>
-    <None Include="resources\model\enemy\bossBody.obj">
-      <Filter>Resources\Model\enemy</Filter>
-    </None>
-    <None Include="resources\model\enemy\bossBody.png">
-      <Filter>Resources\Model\enemy</Filter>
-    </None>
-    <None Include="resources\model\enemy\bossHand.png">
-      <Filter>Resources\Model\enemy</Filter>
-    </None>
-    <None Include="resources\model\enemy\bossLeftHand.mtl">
-      <Filter>Resources\Model\enemy</Filter>
-    </None>
-    <None Include="resources\model\enemy\bossLeftHand.obj">
-      <Filter>Resources\Model\enemy</Filter>
-    </None>
-    <None Include="resources\model\enemy\bossModel.glb">
-      <Filter>Resources\Model\enemy</Filter>
-    </None>
-    <None Include="resources\model\enemy\bossRightHand.mtl">
-      <Filter>Resources\Model\enemy</Filter>
-    </None>
-    <None Include="resources\model\enemy\bossRightHand.obj">
-      <Filter>Resources\Model\enemy</Filter>
-    </None>
-    <None Include="resources\model\enemy\enemy.glb">
-      <Filter>Resources\Model\enemy</Filter>
-    </None>
-    <None Include="resources\model\player\player.glb">
+    <None Include="resources\models\player\player.glb">
       <Filter>Resources\Model\player</Filter>
     </None>
-    <None Include="resources\model\player\sword.glb">
+    <None Include="resources\models\player\sword.glb">
       <Filter>Resources\Model\player</Filter>
     </None>
   </ItemGroup>

@@ -109,29 +109,8 @@
     <Filter Include="resources\shaders\posteffect">
       <UniqueIdentifier>{2be6bc38-3dda-4303-a10f-338456c66f26}</UniqueIdentifier>
     </Filter>
-    <Filter Include="resources\shaders\postprocess">
-      <UniqueIdentifier>{0d02052d-1a83-4f7f-8bf6-c2b0c710dd04}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="resources\shaders\slash">
-      <UniqueIdentifier>{59bd3c17-79fb-4993-99f3-54adc35d3597}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="resources\shaders\trail">
-      <UniqueIdentifier>{00a8ffde-63c6-4be3-a96d-15b7b168e655}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="resources\shaders\warp">
-      <UniqueIdentifier>{0d0ef337-1517-4e28-8149-fe39f7d855fe}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="resources\texture">
-      <UniqueIdentifier>{c824e384-25f5-4a68-8ca8-57d3337c975c}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="resources\texture\effect">
-      <UniqueIdentifier>{61aa0204-4540-4bb3-a643-bf94a4b48273}</UniqueIdentifier>
-    </Filter>
     <Filter Include="resources\model">
       <UniqueIdentifier>{7a0e05f1-7a1d-4f1c-9b6c-7d8507a4d64d}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="resources\model\debug">
-      <UniqueIdentifier>{89178708-296d-4b76-91cd-e0f4b0bed371}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -144,25 +123,10 @@
     <ClCompile Include="$(SolutionDir)engine\src\graphics\PostEffectRenderer.cpp">
       <Filter>src\graphics</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)engine\src\graphics\ElectricRingEffectRenderer.cpp">
-      <Filter>src\graphics</Filter>
-    </ClCompile>
-    <ClCompile Include="$(SolutionDir)engine\src\graphics\MagnetismicRenderer.cpp">
-      <Filter>src\graphics</Filter>
-    </ClCompile>
     <ClCompile Include="$(SolutionDir)engine\src\graphics\RenderTexture.cpp">
       <Filter>src\graphics</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)engine\src\graphics\SlashEffectRenderer.cpp">
-      <Filter>src\graphics</Filter>
-    </ClCompile>
-    <ClCompile Include="$(SolutionDir)engine\src\graphics\SwordTrailRenderer.cpp">
-      <Filter>src\graphics</Filter>
-    </ClCompile>
     <ClCompile Include="$(SolutionDir)engine\src\graphics\VignetteRenderer.cpp">
-      <Filter>src\graphics</Filter>
-    </ClCompile>
-    <ClCompile Include="$(SolutionDir)engine\src\graphics\WarpPostEffectRenderer.cpp">
       <Filter>src\graphics</Filter>
     </ClCompile>
     <ClCompile Include="$(SolutionDir)engine\src\graphics\SrvManager.cpp">
@@ -222,16 +186,10 @@
     <ClCompile Include="$(SolutionDir)engine\src\particle\GPUParticleSystem.cpp">
       <Filter>src\particle</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)engine\src\particle\GpuSlashParticleSystem.cpp">
-      <Filter>src\particle</Filter>
-    </ClCompile>
     <ClCompile Include="$(SolutionDir)engine\src\particle\CylinderParticleSystem.cpp">
       <Filter>src\particle</Filter>
     </ClCompile>
     <ClCompile Include="$(SolutionDir)engine\src\collision\CollisionUtil.cpp">
-      <Filter>src\collision</Filter>
-    </ClCompile>
-    <ClCompile Include="$(SolutionDir)engine\src\collision\DebugDraw.cpp">
       <Filter>src\collision</Filter>
     </ClCompile>
     <ClCompile Include="$(SolutionDir)engine\src\animation\Animator.cpp">
@@ -278,25 +236,10 @@
     <ClInclude Include="$(SolutionDir)engine\include\graphics\PostEffectRenderer.h">
       <Filter>include\graphics</Filter>
     </ClInclude>
-    <ClInclude Include="$(SolutionDir)engine\include\graphics\ElectricRingEffectRenderer.h">
-      <Filter>include\graphics</Filter>
-    </ClInclude>
-    <ClInclude Include="$(SolutionDir)engine\include\graphics\MagnetismicRenderer.h">
-      <Filter>include\graphics</Filter>
-    </ClInclude>
     <ClInclude Include="$(SolutionDir)engine\include\graphics\RenderTexture.h">
       <Filter>include\graphics</Filter>
     </ClInclude>
-    <ClInclude Include="$(SolutionDir)engine\include\graphics\SlashEffectRenderer.h">
-      <Filter>include\graphics</Filter>
-    </ClInclude>
-    <ClInclude Include="$(SolutionDir)engine\include\graphics\SwordTrailRenderer.h">
-      <Filter>include\graphics</Filter>
-    </ClInclude>
     <ClInclude Include="$(SolutionDir)engine\include\graphics\VignetteRenderer.h">
-      <Filter>include\graphics</Filter>
-    </ClInclude>
-    <ClInclude Include="$(SolutionDir)engine\include\graphics\WarpPostEffectRenderer.h">
       <Filter>include\graphics</Filter>
     </ClInclude>
     <ClInclude Include="$(SolutionDir)engine\include\graphics\DxUtils.h">
@@ -389,16 +332,10 @@
     <ClInclude Include="$(SolutionDir)engine\include\particle\GPUParticleSystem.h">
       <Filter>include\particle</Filter>
     </ClInclude>
-    <ClInclude Include="$(SolutionDir)engine\include\particle\GpuSlashParticleSystem.h">
-      <Filter>include\particle</Filter>
-    </ClInclude>
     <ClInclude Include="$(SolutionDir)engine\include\particle\CylinderParticleSystem.h">
       <Filter>include\particle</Filter>
     </ClInclude>
     <ClInclude Include="$(SolutionDir)engine\include\collision\CollisionUtil.h">
-      <Filter>include\collision</Filter>
-    </ClInclude>
-    <ClInclude Include="$(SolutionDir)engine\include\collision\DebugDraw.h">
       <Filter>include\collision</Filter>
     </ClInclude>
     <ClInclude Include="$(SolutionDir)engine\include\collision\AABB.h">
@@ -481,54 +418,6 @@
     <FxCompile Include="$(SolutionDir)engine\resources\shaders\particle\GPUParticleUpdateCS.hlsl">
       <Filter>resources\shaders\particle</Filter>
     </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\slash\Slash.PS.hlsl">
-      <Filter>resources\shaders\slash</Filter>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\slash\Slash.VS.hlsl">
-      <Filter>resources\shaders\slash</Filter>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\slash\SlashParticleDraw.PS.hlsl">
-      <Filter>resources\shaders\slash</Filter>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\slash\SlashParticleDraw.VS.hlsl">
-      <Filter>resources\shaders\slash</Filter>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\slash\SlashParticleEmit.CS.hlsl">
-      <Filter>resources\shaders\slash</Filter>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\slash\SlashParticleUpdate.CS.hlsl">
-      <Filter>resources\shaders\slash</Filter>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\trail\SwordTrail.PS.hlsl">
-      <Filter>resources\shaders\trail</Filter>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\trail\SwordTrail.VS.hlsl">
-      <Filter>resources\shaders\trail</Filter>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\warp\DistortionPS.hlsl">
-      <Filter>resources\shaders\warp</Filter>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\warp\Fullscreen.VS.hlsl">
-      <Filter>resources\shaders\warp</Filter>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\warp\Magnetismic.PS.hlsl">
-      <Filter>resources\shaders\warp</Filter>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\warp\Magnetismic.VS.hlsl">
-      <Filter>resources\shaders\warp</Filter>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\warp\PlasmaRingPS.hlsl">
-      <Filter>resources\shaders\warp</Filter>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\warp\WarpPostEffect.PS.hlsl">
-      <Filter>resources\shaders\warp</Filter>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\postprocess\VignettePS.hlsl">
-      <Filter>resources\shaders\postprocess</Filter>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\postprocess\VignetteVS.hlsl">
-      <Filter>resources\shaders\postprocess</Filter>
-    </FxCompile>
     <FxCompile Include="$(SolutionDir)engine\resources\shaders\posteffect\PostEffectPS.hlsl">
       <Filter>resources\shaders\posteffect</Filter>
     </FxCompile>
@@ -566,15 +455,6 @@
     </None>
     <None Include="$(SolutionDir)engine\resources\shaders\posteffect\VignettingEffect.hlsli">
       <Filter>resources\shaders\posteffect</Filter>
-    </None>
-    <None Include="$(SolutionDir)engine\resources\model\debug\box.obj">
-      <Filter>resources\model\debug</Filter>
-    </None>
-    <None Include="$(SolutionDir)engine\resources\texture\effect\warp_smoke.png">
-      <Filter>resources\texture\effect</Filter>
-    </None>
-    <None Include="$(SolutionDir)engine\resources\texture\effect\warp_smoke_dark.png">
-      <Filter>resources\texture\effect</Filter>
     </None>
   </ItemGroup>
 </Project>

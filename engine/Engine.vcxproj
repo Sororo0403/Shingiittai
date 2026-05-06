@@ -91,14 +91,9 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="$(SolutionDir)engine\src\graphics\DxUtils.cpp" />
-    <ClCompile Include="$(SolutionDir)engine\src\graphics\ElectricRingEffectRenderer.cpp" />
-    <ClCompile Include="$(SolutionDir)engine\src\graphics\MagnetismicRenderer.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\graphics\PostEffectRenderer.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\graphics\RenderTexture.cpp" />
-    <ClCompile Include="$(SolutionDir)engine\src\graphics\SlashEffectRenderer.cpp" />
-    <ClCompile Include="$(SolutionDir)engine\src\graphics\SwordTrailRenderer.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\graphics\VignetteRenderer.cpp" />
-    <ClCompile Include="$(SolutionDir)engine\src\graphics\WarpPostEffectRenderer.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\model\SkyboxRenderer.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\model\MaterialManager.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\camera\DebugCamera.cpp" />
@@ -108,12 +103,10 @@
     <ClCompile Include="$(SolutionDir)engine\src\model\AssimpLoader.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\model\AssimpMeshLoader.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\collision\CollisionUtil.cpp" />
-    <ClCompile Include="$(SolutionDir)engine\src\collision\DebugDraw.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\particle\RingBurstEmitter.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\particle\CylinderBurstEmitter.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\particle\RingParticleSystem.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\particle\GPUParticleSystem.cpp" />
-    <ClCompile Include="$(SolutionDir)engine\src\particle\GpuSlashParticleSystem.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\particle\CylinderParticleSystem.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\scene\LevelLoader.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\scene\SceneManager.cpp" />
@@ -158,14 +151,9 @@
     <ClInclude Include="$(SolutionDir)engine\include\graphics\DxHelpers.h" />
     <ClInclude Include="$(SolutionDir)engine\include\graphics\DxUtils.h" />
     <ClInclude Include="$(SolutionDir)engine\include\graphics\DirectXCommon.h" />
-    <ClInclude Include="$(SolutionDir)engine\include\graphics\ElectricRingEffectRenderer.h" />
-    <ClInclude Include="$(SolutionDir)engine\include\graphics\MagnetismicRenderer.h" />
     <ClInclude Include="$(SolutionDir)engine\include\graphics\PostEffectRenderer.h" />
     <ClInclude Include="$(SolutionDir)engine\include\graphics\RenderTexture.h" />
-    <ClInclude Include="$(SolutionDir)engine\include\graphics\SlashEffectRenderer.h" />
-    <ClInclude Include="$(SolutionDir)engine\include\graphics\SwordTrailRenderer.h" />
     <ClInclude Include="$(SolutionDir)engine\include\graphics\VignetteRenderer.h" />
-    <ClInclude Include="$(SolutionDir)engine\include\graphics\WarpPostEffectRenderer.h" />
     <ClInclude Include="$(SolutionDir)engine\include\model\SkyboxRenderer.h" />
     <ClInclude Include="$(SolutionDir)engine\include\core\WinApp.h" />
     <ClInclude Include="$(SolutionDir)engine\include\model\Model.h" />
@@ -192,8 +180,6 @@
     <ClInclude Include="$(SolutionDir)engine\include\model\Material.h" />
     <ClInclude Include="$(SolutionDir)engine\include\model\MaterialManager.h" />
     <ClInclude Include="$(SolutionDir)engine\include\animation\SkeletonPoseBuilder.h" />
-    <ClInclude Include="$(SolutionDir)engine\include\particle\GpuSlashParticleSystem.h" />
-    <ClInclude Include="$(SolutionDir)engine\include\collision\DebugDraw.h" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="$(SolutionDir)engine\resources\shaders\model\ModelPS.hlsl">
@@ -272,70 +258,6 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\slash\Slash.PS.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\slash\Slash.VS.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\slash\SlashParticleDraw.PS.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\slash\SlashParticleDraw.VS.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\slash\SlashParticleEmit.CS.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\slash\SlashParticleUpdate.CS.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\trail\SwordTrail.PS.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\trail\SwordTrail.VS.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\warp\DistortionPS.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\warp\Fullscreen.VS.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\warp\Magnetismic.PS.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\warp\Magnetismic.VS.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\warp\PlasmaRingPS.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\warp\WarpPostEffect.PS.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\postprocess\VignettePS.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\postprocess\VignetteVS.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="$(SolutionDir)engine\resources\shaders\model\Model.hlsli">
@@ -375,18 +297,6 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </None>
     <None Include="$(SolutionDir)engine\resources\shaders\skybox\Skybox.hlsli">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </None>
-    <None Include="$(SolutionDir)engine\resources\model\debug\box.obj">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </None>
-    <None Include="$(SolutionDir)engine\resources\texture\effect\warp_smoke.png">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </None>
-    <None Include="$(SolutionDir)engine\resources\texture\effect\warp_smoke_dark.png">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </None>
