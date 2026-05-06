@@ -123,6 +123,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
 
         // 描画
         dxCommon.BeginFrame();
+        spriteManager.BeginFrame();
 
 #ifndef IMGUI_DISABLED
         ID3D12GraphicsCommandList *cmdList = dxCommon.GetCommandList();
@@ -138,6 +139,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
         postEffectRenderer.Draw(dxCommon.GetSceneSrvGpuHandle(&srvManager),
                                 dxCommon.GetDepthStencilGpuHandle());
         dxCommon.TransitionDepthToWrite();
+
+        sceneManager.DrawOverlay();
 
 #ifndef IMGUI_DISABLED
         imguiManager.End(cmdList);

@@ -43,3 +43,11 @@ void SceneManager::Draw() {
         isDrawing_ = false;
     }
 }
+
+void SceneManager::DrawOverlay() {
+    if (currentScene_) {
+        isDrawing_ = true;
+        currentScene_->DrawOverlay();
+        isDrawing_ = false;
+    }
+}

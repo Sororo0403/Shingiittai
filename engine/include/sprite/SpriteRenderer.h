@@ -1,6 +1,7 @@
 #pragma once
 #include "Sprite.h"
 #include <DirectXMath.h>
+#include <cstdint>
 #include <d3d12.h>
 #include <wrl.h>
 
@@ -26,6 +27,11 @@ class SpriteRenderer {
     /// </summary>
     /// <param name="sprite">描画するスプライト</param>
     void Draw(const Sprite &sprite);
+
+    /// <summary>
+    /// フレーム開始時に一時描画領域を先頭へ戻す
+    /// </summary>
+    void BeginFrame();
 
     /// <summary>
     /// 描画前処理
@@ -67,6 +73,9 @@ class SpriteRenderer {
 
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
     D3D12_VERTEX_BUFFER_VIEW vbView_{};
+    uint32_t drawCursor_ = 0;
+    static constexpr uint32_t kVerticesPerSprite = 6;
+    static constexpr uint32_t kMaxSpriteDraws = 4096;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> constBuffer_;
 

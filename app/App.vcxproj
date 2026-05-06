@@ -181,6 +181,19 @@ if exist "$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" (
     <None Include="resources\models\bullet\bullet.png" />
     <None Include="resources\models\player\player.glb" />
     <None Include="resources\models\player\sword.glb" />
+    <None Include="resources\select\weapon_select_bg.png" />
+    <None Include="resources\text\weapon_bottom_dual.png" />
+    <None Include="resources\text\weapon_bottom_great.png" />
+    <None Include="resources\text\weapon_bottom_standard.png" />
+    <None Include="resources\text\weapon_controls.png" />
+    <None Include="resources\text\weapon_dual.png" />
+    <None Include="resources\text\weapon_dual_desc.png" />
+    <None Include="resources\text\weapon_great.png" />
+    <None Include="resources\text\weapon_great_desc.png" />
+    <None Include="resources\text\weapon_ready.png" />
+    <None Include="resources\text\weapon_standard.png" />
+    <None Include="resources\text\weapon_standard_desc.png" />
+    <None Include="resources\text\weapon_title.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

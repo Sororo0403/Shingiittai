@@ -26,6 +26,7 @@ class SpriteManager {
     /// </summary>
     /// <param name="id">描画するスプライトのid</param>
     void Draw(uint32_t id);
+    void DrawSprite(const Sprite &sprite);
 
     /// <summary>
     /// スプライトを作成してidを返す
@@ -33,6 +34,11 @@ class SpriteManager {
     /// <param name="filePath">作成するスプライトのファイルパス</param>
     /// <returns>スプライトid</returns>
     uint32_t Create(const std::wstring &filePath);
+
+    /// <summary>
+    /// フレーム開始時に一時描画領域を先頭へ戻す
+    /// </summary>
+    void BeginFrame();
 
     /// <summary>
     /// 描画前処理

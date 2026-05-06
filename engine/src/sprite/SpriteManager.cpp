@@ -15,6 +15,10 @@ void SpriteManager::Initialize(DirectXCommon *dxCommon,
 
 void SpriteManager::Draw(uint32_t id) { spriteRenderer_.Draw(sprites_.at(id)); }
 
+void SpriteManager::DrawSprite(const Sprite &sprite) {
+    spriteRenderer_.Draw(sprite);
+}
+
 uint32_t SpriteManager::Create(const std::wstring &filePath) {
     // テクスチャ取得
     uint32_t texId = textureManager_->Load(filePath);
@@ -29,6 +33,8 @@ uint32_t SpriteManager::Create(const std::wstring &filePath) {
     sprites_.push_back(sprite);
     return static_cast<uint32_t>(sprites_.size() - 1);
 }
+
+void SpriteManager::BeginFrame() { spriteRenderer_.BeginFrame(); }
 
 void SpriteManager::PreDraw() { spriteRenderer_.PreDraw(); }
 

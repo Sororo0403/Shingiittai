@@ -29,6 +29,8 @@ class BaseScene {
     /// </summary>
     virtual void Draw() = 0;
 
+    virtual void DrawOverlay() {}
+
     /// <summary>
     /// シーンマネージャーを設定する
     /// </summary>

@@ -34,6 +34,12 @@
     <Filter Include="Resources\Tuning">
       <UniqueIdentifier>{fea49a77-7765-acdf-93f8-af892e0ffed2}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Resources\Select">
+      <UniqueIdentifier>{75cd1bbf-105d-4073-bb6d-ea37b8d7e644}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\Text">
+      <UniqueIdentifier>{b9e4f8ac-0f67-4e8d-a727-42d51b920f0c}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Source Files">
       <UniqueIdentifier>{29388da4-e2a8-2891-25b7-64a4dd6bcc45}</UniqueIdentifier>
     </Filter>
@@ -174,6 +180,45 @@
     </None>
     <None Include="resources\models\player\sword.glb">
       <Filter>Resources\Model\player</Filter>
+    </None>
+    <None Include="resources\select\weapon_select_bg.png">
+      <Filter>Resources\Select</Filter>
+    </None>
+    <None Include="resources\text\weapon_bottom_dual.png">
+      <Filter>Resources\Text</Filter>
+    </None>
+    <None Include="resources\text\weapon_bottom_great.png">
+      <Filter>Resources\Text</Filter>
+    </None>
+    <None Include="resources\text\weapon_bottom_standard.png">
+      <Filter>Resources\Text</Filter>
+    </None>
+    <None Include="resources\text\weapon_controls.png">
+      <Filter>Resources\Text</Filter>
+    </None>
+    <None Include="resources\text\weapon_dual.png">
+      <Filter>Resources\Text</Filter>
+    </None>
+    <None Include="resources\text\weapon_dual_desc.png">
+      <Filter>Resources\Text</Filter>
+    </None>
+    <None Include="resources\text\weapon_great.png">
+      <Filter>Resources\Text</Filter>
+    </None>
+    <None Include="resources\text\weapon_great_desc.png">
+      <Filter>Resources\Text</Filter>
+    </None>
+    <None Include="resources\text\weapon_ready.png">
+      <Filter>Resources\Text</Filter>
+    </None>
+    <None Include="resources\text\weapon_standard.png">
+      <Filter>Resources\Text</Filter>
+    </None>
+    <None Include="resources\text\weapon_standard_desc.png">
+      <Filter>Resources\Text</Filter>
+    </None>
+    <None Include="resources\text\weapon_title.png">
+      <Filter>Resources\Text</Filter>
     </None>
   </ItemGroup>
 </Project>

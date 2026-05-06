@@ -30,6 +30,7 @@ class SceneManager {
     /// 描画処理
     /// </summary>
     void Draw();
+    void DrawOverlay();
 
   private:
     void ApplySceneChange(std::unique_ptr<BaseScene> nextScene);

@@ -42,6 +42,10 @@ void SpriteRenderer::Draw(const Sprite &sprite) {
     float b = sprite.position.y + sprite.size.y;
 
     auto drawPass = [&](PipelineKind pipelineKind, const XMFLOAT4 &color) {
+        if (drawCursor_ >= kMaxSpriteDraws) {
+            return;
+        }
+
         if (activePipelineKind_ != pipelineKind) {
             activePipelineKind_ = pipelineKind;
             cmd->SetPipelineState(
@@ -59,11 +63,19 @@ void SpriteRenderer::Draw(const Sprite &sprite) {
             {{r, b, 0.0f}, {1.0f, 1.0f}, color},
         };
 
+        const uint32_t spriteIndex = drawCursor_++;
+        const UINT64 vertexOffset =
+            static_cast<UINT64>(spriteIndex) * sizeof(vertices);
         SpriteVertex *mapped = nullptr;
         vertexBuffer_->Map(0, nullptr, reinterpret_cast<void **>(&mapped));
-        memcpy(mapped, vertices, sizeof(vertices));
+        memcpy(reinterpret_cast<uint8_t *>(mapped) + vertexOffset, vertices,
+               sizeof(vertices));
         vertexBuffer_->Unmap(0, nullptr);
 
+        D3D12_VERTEX_BUFFER_VIEW view = vbView_;
+        view.BufferLocation += vertexOffset;
+        view.SizeInBytes = sizeof(vertices);
+        cmd->IASetVertexBuffers(0, 1, &view);
         cmd->SetGraphicsRootDescriptorTable(
             1, textureManager_->GetGpuHandle(sprite.textureId));
         cmd->DrawInstanced(6, 1, 0, 0);
@@ -95,6 +107,8 @@ void SpriteRenderer::Draw(const Sprite &sprite) {
     }
 }
 
+void SpriteRenderer::BeginFrame() { drawCursor_ = 0; }
+
 void SpriteRenderer::PreDraw() {
     auto cmd = dxCommon_->GetCommandList();
 
@@ -116,7 +130,7 @@ void SpriteRenderer::PreDraw() {
 void SpriteRenderer::PostDraw() {}
 
 void SpriteRenderer::CreateVertexBuffer() {
-    UINT size = sizeof(SpriteVertex) * 6;
+    UINT size = sizeof(SpriteVertex) * kVerticesPerSprite * kMaxSpriteDraws;
 
     CD3DX12_HEAP_PROPERTIES heap(D3D12_HEAP_TYPE_UPLOAD);
     auto desc = CD3DX12_RESOURCE_DESC::Buffer(size);
@@ -128,7 +142,7 @@ void SpriteRenderer::CreateVertexBuffer() {
                   "Create sprite VB failed");
 
     vbView_.BufferLocation = vertexBuffer_->GetGPUVirtualAddress();
-    vbView_.SizeInBytes = size;
+    vbView_.SizeInBytes = sizeof(SpriteVertex) * kVerticesPerSprite;
     vbView_.StrideInBytes = sizeof(SpriteVertex);
 }
 
@@ -217,7 +231,7 @@ void SpriteRenderer::CreatePipelineState() {
     desc.InputLayout = {layout, _countof(layout)};
     desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     desc.NumRenderTargets = 1;
-    desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
     desc.SampleDesc.Count = 1;
     desc.SampleMask = UINT_MAX;
     desc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
