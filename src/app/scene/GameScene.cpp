@@ -193,6 +193,7 @@ static float EaseOutCubic(float t) {
     return 1.0f - inv * inv * inv;
 }
 
+#ifndef IMGUI_DISABLED
 static ImU32 ToImColor(const XMFLOAT4 &color, float alphaScale = 1.0f) {
     int r = static_cast<int>(Clamp01(color.x) * 255.0f);
     int g = static_cast<int>(Clamp01(color.y) * 255.0f);
@@ -200,6 +201,7 @@ static ImU32 ToImColor(const XMFLOAT4 &color, float alphaScale = 1.0f) {
     int a = static_cast<int>(Clamp01(color.w * alphaScale) * 255.0f);
     return IM_COL32(r, g, b, a);
 }
+#endif // IMGUI_DISABLED
 
 void GameScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
@@ -1906,6 +1908,9 @@ bool GameScene::ComputeEnemySlashWorldEffect(XMFLOAT3 &outStart,
 }
 
 void GameScene::DrawEnemySlashPass() {
+#ifdef IMGUI_DISABLED
+    return;
+#else
     ImGuiContext *imguiCtx = ImGui::GetCurrentContext();
     if (imguiCtx == nullptr || imguiCtx->Viewports.Size <= 0) {
         return;
@@ -2096,6 +2101,7 @@ void GameScene::DrawEnemySlashPass() {
                               ToImColor(hotColor, 0.26f));
     drawList->AddCircleFilled(impact, 34.0f + phaseAlpha * 16.0f,
                               ToImColor(bloomColor, 0.14f));
+#endif // IMGUI_DISABLED
 }
 
 void GameScene::UpdateEnemySlashEffects() {
