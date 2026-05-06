@@ -189,10 +189,10 @@ void ElectricRingEffectRenderer::CreateDistortionPipelineState() {
     auto device = dxCommon_->GetDevice();
 
     auto vs = ShaderCompiler::Compile(
-        L"resources/shaders/warp/Fullscreen.VS.hlsl", "main", "vs_5_0");
+        L"engine/resources/shaders/warp/Fullscreen.VS.hlsl", "main", "vs_5_0");
 
     auto ps = ShaderCompiler::Compile(
-        L"resources/shaders/warp/DistortionPS.hlsl", "main", "ps_5_0");
+        L"engine/resources/shaders/warp/DistortionPS.hlsl", "main", "ps_5_0");
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
     desc.pRootSignature = rootSignature_.Get();
@@ -225,10 +225,10 @@ void ElectricRingEffectRenderer::CreatePlasmaPipelineState() {
     auto device = dxCommon_->GetDevice();
 
     auto vs = ShaderCompiler::Compile(
-        L"resources/shaders/warp/Fullscreen.VS.hlsl", "main", "vs_5_0");
+        L"engine/resources/shaders/warp/Fullscreen.VS.hlsl", "main", "vs_5_0");
 
     auto ps = ShaderCompiler::Compile(
-        L"resources/shaders/warp/PlasmaRingPS.hlsl", "main", "ps_5_0");
+        L"engine/resources/shaders/warp/PlasmaRingPS.hlsl", "main", "ps_5_0");
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
     desc.pRootSignature = rootSignature_.Get();

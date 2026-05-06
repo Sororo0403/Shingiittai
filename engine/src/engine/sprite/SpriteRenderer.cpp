@@ -190,16 +190,16 @@ void SpriteRenderer::CreateRootSignature() {
 }
 
 void SpriteRenderer::CreatePipelineState() {
-    auto vs = ShaderCompiler::Compile(L"resources/shaders/sprite/SpriteVS.hlsl",
+    auto vs = ShaderCompiler::Compile(L"engine/resources/shaders/sprite/SpriteVS.hlsl",
                                       "main", "vs_5_0");
     auto psAlpha =
-        ShaderCompiler::Compile(L"resources/shaders/sprite/SpritePS.hlsl",
+        ShaderCompiler::Compile(L"engine/resources/shaders/sprite/SpritePS.hlsl",
                                 "main", "ps_5_0");
     auto psModulate =
-        ShaderCompiler::Compile(L"resources/shaders/sprite/SpritePS.hlsl",
+        ShaderCompiler::Compile(L"engine/resources/shaders/sprite/SpritePS.hlsl",
                                 "mainModulate", "ps_5_0");
     auto psDarkSmoke =
-        ShaderCompiler::Compile(L"resources/shaders/sprite/SpritePS.hlsl",
+        ShaderCompiler::Compile(L"engine/resources/shaders/sprite/SpritePS.hlsl",
                                 "mainDarkSmoke", "ps_5_0");
 
     D3D12_INPUT_ELEMENT_DESC layout[] = {

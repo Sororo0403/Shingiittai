@@ -1,111 +1,436 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="4.0">
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <FxCompile Include="resources\shaders\model\ModelPS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
-    <FxCompile Include="resources\shaders\model\ModelVS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
-    <FxCompile Include="resources\shaders\slash\Slash.PS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
-    <FxCompile Include="resources\shaders\slash\Slash.VS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
-    <FxCompile Include="resources\shaders\slash\SlashParticleDraw.PS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
-    <FxCompile Include="resources\shaders\slash\SlashParticleDraw.VS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
-    <FxCompile Include="resources\shaders\slash\SlashParticleEmit.CS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType><ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4.0</ShaderModel><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType><ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4.0</ShaderModel><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
-    <FxCompile Include="resources\shaders\slash\SlashParticleUpdate.CS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType><ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4.0</ShaderModel><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType><ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4.0</ShaderModel><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
-    <FxCompile Include="resources\shaders\sprite\SpritePS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
-    <FxCompile Include="resources\shaders\sprite\SpriteVS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
-    <FxCompile Include="resources\shaders\postprocess\VignettePS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
-    <FxCompile Include="resources\shaders\postprocess\VignetteVS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
-    <FxCompile Include="resources\shaders\trail\SwordTrail.PS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
-    <FxCompile Include="resources\shaders\trail\SwordTrail.VS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
-    <FxCompile Include="resources\shaders\warp\DistortionPS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
-    <FxCompile Include="resources\shaders\warp\Fullscreen.VS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild></FxCompile>
-    <FxCompile Include="resources\shaders\warp\Magnetismic.PS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
-    <FxCompile Include="resources\shaders\warp\Magnetismic.VS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
-    <FxCompile Include="resources\shaders\warp\PlasmaRingPS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
-    <FxCompile Include="resources\shaders\warp\WarpPostEffect.PS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild></FxCompile>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{57252bc3-1d83-699c-e2e6-53c4089439c6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\camera">
+      <UniqueIdentifier>{c166cec5-1c9d-a8d9-080c-ca0d0a495244}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\collision">
+      <UniqueIdentifier>{9831a560-b2e6-7e31-dfc0-1f29a02669d8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\core">
+      <UniqueIdentifier>{f257a172-b629-a80b-ff00-35c67b69b7b6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\graphics">
+      <UniqueIdentifier>{f72902f8-2725-881c-37c0-bada2d3c2743}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\imgui">
+      <UniqueIdentifier>{d16a18b0-6148-367a-4ccb-ee8ddfa6ff18}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\input">
+      <UniqueIdentifier>{5023b9a4-9c43-501a-720f-63f6f866ce33}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\model">
+      <UniqueIdentifier>{3281abdc-dfc7-c586-0fd4-0c50f7f78131}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\particle">
+      <UniqueIdentifier>{d526a067-52db-8271-e028-d47b43a63e84}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\scene">
+      <UniqueIdentifier>{65b532f5-0011-6786-0084-565d733e5460}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\sound">
+      <UniqueIdentifier>{f2ced951-f478-df94-47ea-aa63b9cba7b9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\sprite">
+      <UniqueIdentifier>{b0aed939-2a40-057b-de24-6eb17a2777dc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\texture">
+      <UniqueIdentifier>{00158661-cf27-6d99-5be6-aeaee0482b3f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources">
+      <UniqueIdentifier>{0e5e0217-9dd3-98b9-8471-2db07b63d767}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\Model">
+      <UniqueIdentifier>{5aec72ba-71a6-f00c-81ef-c0a5a440886a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\Model\debug">
+      <UniqueIdentifier>{0e62d01b-4c4a-25c4-d19f-02cc007ae696}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\Shaders">
+      <UniqueIdentifier>{69612f38-42f7-7354-5400-5a9ae3aebe0e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\Shaders\model">
+      <UniqueIdentifier>{6e2fd5a3-48d1-b452-a1b6-1375c06f12fc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\Shaders\postprocess">
+      <UniqueIdentifier>{78ba12d3-38e1-feac-c778-6b57d03fa4b5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\Shaders\slash">
+      <UniqueIdentifier>{ec4d0f53-0946-93c3-101b-167dd4317c91}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\Shaders\sprite">
+      <UniqueIdentifier>{dbe0d526-35ca-7800-90fb-084994206d1b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\Shaders\trail">
+      <UniqueIdentifier>{69e7a19a-f90a-89e8-3707-60af26782712}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\Shaders\warp">
+      <UniqueIdentifier>{c94d91cf-75d4-4b4c-4065-8dcd41e40713}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\Texture">
+      <UniqueIdentifier>{fd385f76-e50c-c544-b423-1c2239523756}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\Texture\effect">
+      <UniqueIdentifier>{f2b4de5c-d6d4-9227-96ea-2b9529b8332b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{b14430be-65bd-10c0-e0c0-97427134397d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\camera">
+      <UniqueIdentifier>{ffe1752e-b678-f534-9aaa-8f2274d5d19e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\collision">
+      <UniqueIdentifier>{462706b0-26a2-85f8-20dd-314902ce7341}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\core">
+      <UniqueIdentifier>{40fb79d8-9987-54ea-0e3c-7da562fe76cb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\graphics">
+      <UniqueIdentifier>{c7d1f3f1-73a5-adfe-f7c0-1176bdb36457}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\imgui">
+      <UniqueIdentifier>{2797cbfc-2bbe-adce-4fa5-8d40d5888d94}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\input">
+      <UniqueIdentifier>{176a371a-bed1-c422-511f-56aa6a3e1bf7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\model">
+      <UniqueIdentifier>{e43575ce-3b59-3b48-06f1-5ce7e11665a1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\particle">
+      <UniqueIdentifier>{09bd0fdf-657a-f1fc-8596-e29333932022}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\scene">
+      <UniqueIdentifier>{8ac26b6b-c3b7-77e1-b2fc-b75c01d50253}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\sound">
+      <UniqueIdentifier>{61a745f4-9c7a-a0a2-3d50-f4fa43902c90}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\sprite">
+      <UniqueIdentifier>{96a60d97-72d8-1b06-fb73-6e68bd968d3f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\texture">
+      <UniqueIdentifier>{b5943862-9d88-0563-43d3-a7f375a05583}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\engine\graphics\DxUtils.cpp" />
-    <ClCompile Include="src\engine\graphics\ShaderCompiler.cpp" />
-    <ClCompile Include="src\engine\graphics\VignetteRenderer.cpp" />
-    <ClCompile Include="src\engine\graphics\ElectricRingEffectRenderer.cpp" />
-    <ClCompile Include="src\engine\graphics\MagnetismicRenderer.cpp" />
-    <ClCompile Include="src\engine\graphics\SlashEffectRenderer.cpp" />
-    <ClCompile Include="src\engine\graphics\SwordTrailRenderer.cpp" />
-    <ClCompile Include="src\engine\graphics\WarpPostEffectRenderer.cpp" />
-    <ClCompile Include="src\engine\model\MaterialManager.cpp" />
-    <ClCompile Include="src\engine\model\Material.cpp" />
-    <ClCompile Include="src\engine\camera\DebugCamera.cpp" />
-    <ClCompile Include="src\engine\model\Animator.cpp" />
-    <ClCompile Include="src\engine\model\AssimpLoader.cpp" />
-    <ClCompile Include="src\engine\collision\DebugDraw.cpp" />
-    <ClCompile Include="src\engine\collision\CollisionUtil.cpp" />
-    <ClCompile Include="src\engine\input\MahonyFilter.cpp" />
-    <ClCompile Include="src\engine\particle\BaseParticleSystem.cpp" />
-    <ClCompile Include="src\engine\particle\GpuSlashParticleSystem.cpp" />
-    <ClCompile Include="src\engine\scene\SceneManager.cpp" />
-    <ClCompile Include="src\engine\input\Input.cpp" />
-    <ClCompile Include="src\engine\input\JoyCon.cpp" />
-    <ClCompile Include="src\engine\sound\SoundManager.cpp" />
-    <ClCompile Include="src\engine\imgui\ImguiManager.cpp" />
-    <ClCompile Include="src\engine\model\ModelManager.cpp" />
-    <ClCompile Include="src\engine\model\MeshManager.cpp" />
-    <ClCompile Include="src\engine\camera\Camera.cpp" />
-    <ClCompile Include="src\engine\model\ModelRenderer.cpp" />
-    <ClCompile Include="src\engine\sprite\SpriteManager.cpp" />
-    <ClCompile Include="src\engine\sprite\SpriteRenderer.cpp" />
-    <ClCompile Include="src\engine\graphics\DirectXCommon.cpp" />
-    <ClCompile Include="src\engine\core\WinApp.cpp" />
-    <ClCompile Include="src\engine\graphics\SrvManager.cpp" />
-    <ClCompile Include="src\engine\texture\TextureManager.cpp" />
+    <ClCompile Include="engine\src\engine\graphics\DxUtils.cpp">
+      <Filter>Source Files\graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\graphics\ShaderCompiler.cpp">
+      <Filter>Source Files\graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\graphics\VignetteRenderer.cpp">
+      <Filter>Source Files\graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\graphics\ElectricRingEffectRenderer.cpp">
+      <Filter>Source Files\graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\graphics\MagnetismicRenderer.cpp">
+      <Filter>Source Files\graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\graphics\SlashEffectRenderer.cpp">
+      <Filter>Source Files\graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\graphics\SwordTrailRenderer.cpp">
+      <Filter>Source Files\graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\graphics\WarpPostEffectRenderer.cpp">
+      <Filter>Source Files\graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\model\MaterialManager.cpp">
+      <Filter>Source Files\model</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\model\Material.cpp">
+      <Filter>Source Files\model</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\camera\DebugCamera.cpp">
+      <Filter>Source Files\camera</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\model\Animator.cpp">
+      <Filter>Source Files\model</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\model\AssimpLoader.cpp">
+      <Filter>Source Files\model</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\collision\DebugDraw.cpp">
+      <Filter>Source Files\collision</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\collision\CollisionUtil.cpp">
+      <Filter>Source Files\collision</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\input\MahonyFilter.cpp">
+      <Filter>Source Files\input</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\particle\BaseParticleSystem.cpp">
+      <Filter>Source Files\particle</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\particle\GpuSlashParticleSystem.cpp">
+      <Filter>Source Files\particle</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\scene\SceneManager.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\input\Input.cpp">
+      <Filter>Source Files\input</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\input\JoyCon.cpp">
+      <Filter>Source Files\input</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\sound\SoundManager.cpp">
+      <Filter>Source Files\sound</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\imgui\ImguiManager.cpp">
+      <Filter>Source Files\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\model\ModelManager.cpp">
+      <Filter>Source Files\model</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\model\MeshManager.cpp">
+      <Filter>Source Files\model</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\camera\Camera.cpp">
+      <Filter>Source Files\camera</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\model\ModelRenderer.cpp">
+      <Filter>Source Files\model</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\sprite\SpriteManager.cpp">
+      <Filter>Source Files\sprite</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\sprite\SpriteRenderer.cpp">
+      <Filter>Source Files\sprite</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\graphics\DirectXCommon.cpp">
+      <Filter>Source Files\graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\core\WinApp.cpp">
+      <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\graphics\SrvManager.cpp">
+      <Filter>Source Files\graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\src\engine\texture\TextureManager.cpp">
+      <Filter>Source Files\texture</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="include\engine\camera\DebugCamera.h" />
-    <ClInclude Include="include\engine\graphics\ElectricRingEffectRenderer.h" />
-    <ClInclude Include="include\engine\graphics\MagnetismicRenderer.h" />
-    <ClInclude Include="include\engine\graphics\SlashEffectRenderer.h" />
-    <ClInclude Include="include\engine\graphics\SwordTrailRenderer.h" />
-    <ClInclude Include="include\engine\graphics\WarpPostEffectRenderer.h" />
-    <ClInclude Include="include\engine\model\Animator.h" />
-    <ClInclude Include="include\engine\model\AssimpLoader.h" />
-    <ClInclude Include="include\engine\collision\DebugDraw.h" />
-    <ClInclude Include="include\engine\collision\AABB.h" />
-    <ClInclude Include="include\engine\collision\CollisionUtil.h" />
-    <ClInclude Include="include\engine\collision\OBB.h" />
-    <ClInclude Include="include\engine\input\MahonyFilter.h" />
-    <ClInclude Include="include\engine\particle\BaseParticleSystem.h" />
-    <ClInclude Include="include\engine\model\Transform.h" />
-    <ClInclude Include="include\engine\particle\GpuSlashParticleSystem.h" />
-    <ClInclude Include="include\engine\particle\Particle.h" />
-    <ClInclude Include="include\engine\scene\BaseScene.h" />
-    <ClInclude Include="include\engine\imgui\ImguiManager.h" />
-    <ClInclude Include="include\engine\camera\Camera.h" />
-    <ClInclude Include="include\engine\graphics\DxHelpers.h" />
-    <ClInclude Include="include\engine\graphics\DxUtils.h" />
-    <ClInclude Include="include\engine\graphics\DirectXCommon.h" />
-    <ClInclude Include="include\engine\core\WinApp.h" />
-    <ClInclude Include="include\engine\model\Model.h" />
-    <ClInclude Include="include\engine\model\Vertex.h" />
-    <ClInclude Include="include\engine\scene\SceneContext.h" />
-    <ClInclude Include="include\engine\sprite\Sprite.h" />
-    <ClInclude Include="include\engine\graphics\ShaderCompiler.h" />
-    <ClInclude Include="include\engine\graphics\SrvManager.h" />
-    <ClInclude Include="include\engine\graphics\VignetteRenderer.h" />
-    <ClInclude Include="include\engine\texture\Texture.h" />
-    <ClInclude Include="include\engine\texture\TextureManager.h" />
-    <ClInclude Include="include\engine\sprite\SpriteRenderer.h" />
-    <ClInclude Include="include\engine\sprite\SpriteManager.h" />
-    <ClInclude Include="include\engine\model\ModelRenderer.h" />
-    <ClInclude Include="include\engine\model\MeshManager.h" />
-    <ClInclude Include="include\engine\model\ModelManager.h" />
-    <ClInclude Include="include\engine\sound\SoundManager.h" />
-    <ClInclude Include="include\engine\sound\SoundVoiceCallback.h" />
-    <ClInclude Include="include\engine\input\Input.h" />
-    <ClInclude Include="include\engine\input\JoyCon.h" />
-    <ClInclude Include="include\engine\scene\SceneManager.h" />
-    <ClInclude Include="include\engine\model\Material.h" />
-    <ClInclude Include="include\engine\model\MaterialManager.h" />
+    <ClInclude Include="engine\include\engine\camera\DebugCamera.h">
+      <Filter>Header Files\camera</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\graphics\ElectricRingEffectRenderer.h">
+      <Filter>Header Files\graphics</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\graphics\MagnetismicRenderer.h">
+      <Filter>Header Files\graphics</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\graphics\SlashEffectRenderer.h">
+      <Filter>Header Files\graphics</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\graphics\SwordTrailRenderer.h">
+      <Filter>Header Files\graphics</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\graphics\WarpPostEffectRenderer.h">
+      <Filter>Header Files\graphics</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\model\Animator.h">
+      <Filter>Header Files\model</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\model\AssimpLoader.h">
+      <Filter>Header Files\model</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\collision\DebugDraw.h">
+      <Filter>Header Files\collision</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\collision\AABB.h">
+      <Filter>Header Files\collision</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\collision\CollisionUtil.h">
+      <Filter>Header Files\collision</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\collision\OBB.h">
+      <Filter>Header Files\collision</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\input\MahonyFilter.h">
+      <Filter>Header Files\input</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\particle\BaseParticleSystem.h">
+      <Filter>Header Files\particle</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\model\Transform.h">
+      <Filter>Header Files\model</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\particle\GpuSlashParticleSystem.h">
+      <Filter>Header Files\particle</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\particle\Particle.h">
+      <Filter>Header Files\particle</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\scene\BaseScene.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\imgui\ImguiManager.h">
+      <Filter>Header Files\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\camera\Camera.h">
+      <Filter>Header Files\camera</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\graphics\DxHelpers.h">
+      <Filter>Header Files\graphics</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\graphics\DxUtils.h">
+      <Filter>Header Files\graphics</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\graphics\DirectXCommon.h">
+      <Filter>Header Files\graphics</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\core\WinApp.h">
+      <Filter>Header Files\core</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\model\Model.h">
+      <Filter>Header Files\model</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\model\Vertex.h">
+      <Filter>Header Files\model</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\scene\SceneContext.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\sprite\Sprite.h">
+      <Filter>Header Files\sprite</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\graphics\ShaderCompiler.h">
+      <Filter>Header Files\graphics</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\graphics\SrvManager.h">
+      <Filter>Header Files\graphics</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\graphics\VignetteRenderer.h">
+      <Filter>Header Files\graphics</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\texture\Texture.h">
+      <Filter>Header Files\texture</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\texture\TextureManager.h">
+      <Filter>Header Files\texture</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\sprite\SpriteRenderer.h">
+      <Filter>Header Files\sprite</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\sprite\SpriteManager.h">
+      <Filter>Header Files\sprite</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\model\ModelRenderer.h">
+      <Filter>Header Files\model</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\model\MeshManager.h">
+      <Filter>Header Files\model</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\model\ModelManager.h">
+      <Filter>Header Files\model</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\sound\SoundManager.h">
+      <Filter>Header Files\sound</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\sound\SoundVoiceCallback.h">
+      <Filter>Header Files\sound</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\input\Input.h">
+      <Filter>Header Files\input</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\input\JoyCon.h">
+      <Filter>Header Files\input</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\scene\SceneManager.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\model\Material.h">
+      <Filter>Header Files\model</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\include\engine\model\MaterialManager.h">
+      <Filter>Header Files\model</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="resources\shaders\model\Model.hlsli"><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></None>
-    <None Include="resources\shaders\sprite\Sprite.hlsli"><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></None>
+    <FxCompile Include="engine\resources\shaders\model\ModelPS.hlsl">
+      <Filter>Resources\Shaders\model</Filter>
+    </FxCompile>
+    <FxCompile Include="engine\resources\shaders\model\ModelVS.hlsl">
+      <Filter>Resources\Shaders\model</Filter>
+    </FxCompile>
+    <FxCompile Include="engine\resources\shaders\slash\Slash.PS.hlsl">
+      <Filter>Resources\Shaders\slash</Filter>
+    </FxCompile>
+    <FxCompile Include="engine\resources\shaders\slash\Slash.VS.hlsl">
+      <Filter>Resources\Shaders\slash</Filter>
+    </FxCompile>
+    <FxCompile Include="engine\resources\shaders\slash\SlashParticleDraw.PS.hlsl">
+      <Filter>Resources\Shaders\slash</Filter>
+    </FxCompile>
+    <FxCompile Include="engine\resources\shaders\slash\SlashParticleDraw.VS.hlsl">
+      <Filter>Resources\Shaders\slash</Filter>
+    </FxCompile>
+    <FxCompile Include="engine\resources\shaders\slash\SlashParticleEmit.CS.hlsl">
+      <Filter>Resources\Shaders\slash</Filter>
+    </FxCompile>
+    <FxCompile Include="engine\resources\shaders\slash\SlashParticleUpdate.CS.hlsl">
+      <Filter>Resources\Shaders\slash</Filter>
+    </FxCompile>
+    <FxCompile Include="engine\resources\shaders\sprite\SpritePS.hlsl">
+      <Filter>Resources\Shaders\sprite</Filter>
+    </FxCompile>
+    <FxCompile Include="engine\resources\shaders\sprite\SpriteVS.hlsl">
+      <Filter>Resources\Shaders\sprite</Filter>
+    </FxCompile>
+    <FxCompile Include="engine\resources\shaders\postprocess\VignettePS.hlsl">
+      <Filter>Resources\Shaders\postprocess</Filter>
+    </FxCompile>
+    <FxCompile Include="engine\resources\shaders\postprocess\VignetteVS.hlsl">
+      <Filter>Resources\Shaders\postprocess</Filter>
+    </FxCompile>
+    <FxCompile Include="engine\resources\shaders\trail\SwordTrail.PS.hlsl">
+      <Filter>Resources\Shaders\trail</Filter>
+    </FxCompile>
+    <FxCompile Include="engine\resources\shaders\trail\SwordTrail.VS.hlsl">
+      <Filter>Resources\Shaders\trail</Filter>
+    </FxCompile>
+    <FxCompile Include="engine\resources\shaders\warp\DistortionPS.hlsl">
+      <Filter>Resources\Shaders\warp</Filter>
+    </FxCompile>
+    <FxCompile Include="engine\resources\shaders\warp\Fullscreen.VS.hlsl">
+      <Filter>Resources\Shaders\warp</Filter>
+    </FxCompile>
+    <FxCompile Include="engine\resources\shaders\warp\Magnetismic.PS.hlsl">
+      <Filter>Resources\Shaders\warp</Filter>
+    </FxCompile>
+    <FxCompile Include="engine\resources\shaders\warp\Magnetismic.VS.hlsl">
+      <Filter>Resources\Shaders\warp</Filter>
+    </FxCompile>
+    <FxCompile Include="engine\resources\shaders\warp\PlasmaRingPS.hlsl">
+      <Filter>Resources\Shaders\warp</Filter>
+    </FxCompile>
+    <FxCompile Include="engine\resources\shaders\warp\WarpPostEffect.PS.hlsl">
+      <Filter>Resources\Shaders\warp</Filter>
+    </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="engine\resources\shaders\model\Model.hlsli">
+      <Filter>Resources\Shaders\model</Filter>
+    </None>
+    <None Include="engine\resources\shaders\sprite\Sprite.hlsli">
+      <Filter>Resources\Shaders\sprite</Filter>
+    </None>
+    <None Include="engine\resources\model\debug\box.glb">
+      <Filter>Resources\Model\debug</Filter>
+    </None>
+    <None Include="engine\resources\texture\effect\warp_smoke.png">
+      <Filter>Resources\Texture\effect</Filter>
+    </None>
+    <None Include="engine\resources\texture\effect\warp_smoke_dark.png">
+      <Filter>Resources\Texture\effect</Filter>
+    </None>
   </ItemGroup>
 </Project>

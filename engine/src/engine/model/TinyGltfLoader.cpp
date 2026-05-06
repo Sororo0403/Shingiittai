@@ -26,8 +26,8 @@
 
 #if __has_include("tiny_gltf.h")
 #include "tiny_gltf.h"
-#elif __has_include("../../../externals/tinygltf/tiny_gltf.h")
-#include "../../../externals/tinygltf/tiny_gltf.h"
+#elif __has_include("../../../../externals/tinygltf/tiny_gltf.h")
+#include "../../../../externals/tinygltf/tiny_gltf.h"
 #else
 #error tinygltf header not found. Please add tinygltf include path.
 #endif

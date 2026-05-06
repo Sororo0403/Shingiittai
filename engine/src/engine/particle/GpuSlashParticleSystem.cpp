@@ -162,7 +162,7 @@ void GpuSlashParticleSystem::CreatePipelineStates() {
 
     {
         auto cs =
-            CompileShader(L"resources/shaders/slash/SlashParticleEmit.CS.hlsl",
+            CompileShader(L"engine/resources/shaders/slash/SlashParticleEmit.CS.hlsl",
                           "main", "cs_5_0");
 
         D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};
@@ -176,7 +176,7 @@ void GpuSlashParticleSystem::CreatePipelineStates() {
 
     {
         auto cs = CompileShader(
-            L"resources/shaders/slash/SlashParticleUpdate.CS.hlsl", "main",
+            L"engine/resources/shaders/slash/SlashParticleUpdate.CS.hlsl", "main",
             "cs_5_0");
 
         D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};
@@ -190,10 +190,10 @@ void GpuSlashParticleSystem::CreatePipelineStates() {
 
     {
         auto vs =
-            CompileShader(L"resources/shaders/slash/SlashParticleDraw.VS.hlsl",
+            CompileShader(L"engine/resources/shaders/slash/SlashParticleDraw.VS.hlsl",
                           "main", "vs_5_0");
         auto ps =
-            CompileShader(L"resources/shaders/slash/SlashParticleDraw.PS.hlsl",
+            CompileShader(L"engine/resources/shaders/slash/SlashParticleDraw.PS.hlsl",
                           "main", "ps_5_0");
 
         D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};

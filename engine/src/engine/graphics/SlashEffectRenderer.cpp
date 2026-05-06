@@ -316,10 +316,10 @@ void SlashEffectRenderer::CreateRootSignature() {
 void SlashEffectRenderer::CreatePipelineState() {
     auto *device = dxCommon_->GetDevice();
 
-    auto vs = ShaderCompiler::Compile(L"resources/shaders/slash/Slash.VS.hlsl",
+    auto vs = ShaderCompiler::Compile(L"engine/resources/shaders/slash/Slash.VS.hlsl",
                                       "main", "vs_5_0");
 
-    auto ps = ShaderCompiler::Compile(L"resources/shaders/slash/Slash.PS.hlsl",
+    auto ps = ShaderCompiler::Compile(L"engine/resources/shaders/slash/Slash.PS.hlsl",
                                       "main", "ps_5_0");
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
@@ -387,10 +387,10 @@ bool SlashEffectRenderer::ProjectWorldToUv(const Camera &camera,
 void SlashEffectRenderer::CreateDarkPipelineState() {
     auto *device = dxCommon_->GetDevice();
 
-    auto vs = ShaderCompiler::Compile(L"resources/shaders/slash/Slash.VS.hlsl",
+    auto vs = ShaderCompiler::Compile(L"engine/resources/shaders/slash/Slash.VS.hlsl",
                                       "main", "vs_5_0");
 
-    auto ps = ShaderCompiler::Compile(L"resources/shaders/slash/Slash.PS.hlsl",
+    auto ps = ShaderCompiler::Compile(L"engine/resources/shaders/slash/Slash.PS.hlsl",
                                       "main", "ps_5_0");
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};

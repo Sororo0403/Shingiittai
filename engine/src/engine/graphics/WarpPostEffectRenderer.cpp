@@ -116,10 +116,10 @@ void WarpPostEffectRenderer::CreatePipelineState() {
     auto device = dxCommon_->GetDevice();
 
     auto vs = ShaderCompiler::Compile(
-        L"resources/shaders/warp/Fullscreen.VS.hlsl", "main", "vs_5_0");
+        L"engine/resources/shaders/warp/Fullscreen.VS.hlsl", "main", "vs_5_0");
 
     auto ps = ShaderCompiler::Compile(
-        L"resources/shaders/warp/WarpPostEffect.PS.hlsl", "main", "ps_5_0");
+        L"engine/resources/shaders/warp/WarpPostEffect.PS.hlsl", "main", "ps_5_0");
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
     desc.pRootSignature = rootSignature_.Get();

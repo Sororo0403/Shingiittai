@@ -51,9 +51,9 @@ void VignetteRenderer::CreateRootSignature() {
 
 void VignetteRenderer::CreatePipelineState() {
     auto vs = ShaderCompiler::Compile(
-        L"resources/shaders/postprocess/VignetteVS.hlsl", "main", "vs_5_0");
+        L"engine/resources/shaders/postprocess/VignetteVS.hlsl", "main", "vs_5_0");
     auto ps = ShaderCompiler::Compile(
-        L"resources/shaders/postprocess/VignettePS.hlsl", "main", "ps_5_0");
+        L"engine/resources/shaders/postprocess/VignettePS.hlsl", "main", "ps_5_0");
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
     desc.pRootSignature = rootSignature_.Get();

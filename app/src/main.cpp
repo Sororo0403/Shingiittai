@@ -70,9 +70,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
                                       4096);
 
     uint32_t electricNoiseTex0 =
-        textureManager.Load(L"resources/texture/effect/warp_smoke.png");
+        textureManager.Load(L"engine/resources/texture/effect/warp_smoke.png");
     uint32_t electricNoiseTex1 =
-        textureManager.Load(L"resources/texture/effect/warp_smoke_dark.png");
+        textureManager.Load(L"engine/resources/texture/effect/warp_smoke_dark.png");
 
     SwordTrailRenderer swordTrailRenderer;
     swordTrailRenderer.Initialize(&dxCommon, &srvManager, &textureManager, 24);
@@ -82,8 +82,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     magnetismicRenderer.Initialize(
         dxCommon.GetDevice(), DXGI_FORMAT_R8G8B8A8_UNORM,
         DXGI_FORMAT_D24_UNORM_S8_UINT,
-        L"resources/shaders/warp/Magnetismic.VS.hlsl",
-        L"resources/shaders/warp/Magnetismic.PS.hlsl");
+        L"engine/resources/shaders/warp/Magnetismic.VS.hlsl",
+        L"engine/resources/shaders/warp/Magnetismic.PS.hlsl");
 
     // ModelManager
     ModelManager modelManager;
@@ -99,7 +99,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
 #ifdef _DEBUG
     // DebugDraw
     DebugDraw debugDraw;
-    uint32_t boxModelId = modelManager.Load(L"resources/model/debug/box.glb");
+    uint32_t boxModelId = modelManager.Load(L"engine/resources/model/debug/box.glb");
 #endif // _DEBUG
 
     dxCommon.EndUpload();

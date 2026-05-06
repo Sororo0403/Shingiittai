@@ -233,19 +233,19 @@ void GameScene::Initialize(const SceneContext &ctx) {
 
     dx->BeginUpload();
 
-    uint32_t playerModel = model->Load(L"resources/model/player/player.glb");
-    uint32_t swordModel = model->Load(L"resources/model/player/sword.glb");
+    uint32_t playerModel = model->Load(L"app/resources/model/player/player.glb");
+    uint32_t swordModel = model->Load(L"app/resources/model/player/sword.glb");
     uint32_t enemyModel = 0;
     uint32_t bulletModel =
-        ctx_->model->Load(L"resources/model/bullet/bullet.obj");
+        ctx_->model->Load(L"app/resources/model/bullet/bullet.obj");
     warpSmokeSpriteId_ =
-        ctx_->sprite->Create(L"resources/texture/effect/warp_smoke.png");
+        ctx_->sprite->Create(L"engine/resources/texture/effect/warp_smoke.png");
     warpSmokeDarkSpriteId_ =
-        ctx_->sprite->Create(L"resources/texture/effect/warp_smoke_dark.png");
+        ctx_->sprite->Create(L"engine/resources/texture/effect/warp_smoke_dark.png");
     try {
-        enemyModel = model->Load(L"resources/model/boss/boss.gltf");
+        enemyModel = model->Load(L"app/resources/model/boss/boss.gltf");
     } catch (const std::exception &) {
-        enemyModel = model->Load(L"resources/model/enemy/enemy.glb");
+        enemyModel = model->Load(L"app/resources/model/enemy/enemy.glb");
     }
 
     dx->EndUpload();
@@ -259,7 +259,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
 
     {
         PlayerTuningPreset playerPreset{};
-        if (PlayerTuningPresetIO::Load("resources/player_tuning.txt",
+        if (PlayerTuningPresetIO::Load("app/resources/player_tuning.txt",
                                        playerPreset)) {
             player_.ApplyTuningPreset(playerPreset);
         }
@@ -267,9 +267,9 @@ void GameScene::Initialize(const SceneContext &ctx) {
 
     {
         EnemyTuningPreset enemyPreset{};
-        if (EnemyTuningPresetIO::Load("resources/enemy_tuning.csv",
+        if (EnemyTuningPresetIO::Load("app/resources/enemy_tuning.csv",
                                       enemyPreset) ||
-            EnemyTuningPresetIO::Load("resources/enemy_tuning.txt",
+            EnemyTuningPresetIO::Load("app/resources/enemy_tuning.txt",
                                       enemyPreset)) {
             enemy_.ApplyTuningPreset(enemyPreset);
         }
@@ -1491,7 +1491,7 @@ void GameScene::Draw() {
     ImGui::Separator();
     ImGui::Text("=== Preset ===");
 
-    static char presetPath[256] = "resources/enemy_tuning.csv";
+    static char presetPath[256] = "app/resources/enemy_tuning.csv";
     ImGui::InputText("Preset Path", presetPath, sizeof(presetPath));
 
     if (ImGui::Button("Save Preset")) {
@@ -1533,7 +1533,7 @@ void GameScene::Draw() {
             player_.ApplyTuningPreset(playerPreset);
         }
 
-        static char playerPresetPath[256] = "resources/player_tuning.txt";
+        static char playerPresetPath[256] = "app/resources/player_tuning.txt";
         ImGui::InputText("Player Preset Path", playerPresetPath,
                          sizeof(playerPresetPath));
 

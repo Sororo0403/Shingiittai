@@ -201,9 +201,9 @@ void SwordTrailRenderer::CreatePipelineState() {
     };
 
     auto vs = ShaderCompiler::Compile(
-        L"resources/shaders/trail/SwordTrail.VS.hlsl", "main", "vs_5_0");
+        L"engine/resources/shaders/trail/SwordTrail.VS.hlsl", "main", "vs_5_0");
     auto ps = ShaderCompiler::Compile(
-        L"resources/shaders/trail/SwordTrail.PS.hlsl", "main", "ps_5_0");
+        L"engine/resources/shaders/trail/SwordTrail.PS.hlsl", "main", "ps_5_0");
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
     desc.pRootSignature = rootSignature_.Get();

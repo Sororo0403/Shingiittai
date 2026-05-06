@@ -152,11 +152,11 @@ void EnemyMotionDebugScene::Initialize(const SceneContext &ctx) {
 
     dx->BeginUpload();
     uint32_t enemyModel = 0;
-    const uint32_t bulletModel = model->Load(L"resources/model/bullet/bullet.obj");
+    const uint32_t bulletModel = model->Load(L"app/resources/model/bullet/bullet.obj");
     try {
-        enemyModel = model->Load(L"resources/model/boss/boss.gltf");
+        enemyModel = model->Load(L"app/resources/model/boss/boss.gltf");
     } catch (const std::exception &) {
-        enemyModel = model->Load(L"resources/model/enemy/enemy.glb");
+        enemyModel = model->Load(L"app/resources/model/enemy/enemy.glb");
     }
     dx->EndUpload();
     texture->ReleaseUploadBuffers();
@@ -166,8 +166,8 @@ void EnemyMotionDebugScene::Initialize(const SceneContext &ctx) {
     enemy_.DebugResetState();
 
     EnemyTuningPreset enemyPreset{};
-    if (EnemyTuningPresetIO::Load("resources/enemy_tuning.csv", enemyPreset) ||
-        EnemyTuningPresetIO::Load("resources/enemy_tuning.txt", enemyPreset)) {
+    if (EnemyTuningPresetIO::Load("app/resources/enemy_tuning.csv", enemyPreset) ||
+        EnemyTuningPresetIO::Load("app/resources/enemy_tuning.txt", enemyPreset)) {
         enemy_.ApplyTuningPreset(enemyPreset);
         enemy_.DebugResetState();
     }

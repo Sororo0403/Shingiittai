@@ -64,7 +64,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>$(ProjectDir)include\app\enemy;$(ProjectDir)include\app\player;$(ProjectDir)include\app\scene;$(ProjectDir)include\engine\particle;$(ProjectDir)include\engine\collision;$(ProjectDir)include\engine\scene;$(ProjectDir)include\engine\input;$(ProjectDir)include\engine\camera;$(ProjectDir)include\engine\core;$(ProjectDir)include\engine\graphics;$(ProjectDir)include\engine\imgui;$(ProjectDir)include\engine\model;$(ProjectDir)include\engine\sound;$(ProjectDir)include\engine\sprite;$(ProjectDir)include\engine\texture;$(ProjectDir)externals\assimp\include;$(ProjectDir)externals\assimp\include\assimp;$(ProjectDir)externals\DirectX-Headers;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\JoyShockLibrary\include;$(ProjectDir)externals\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)app\include\app\enemy;$(ProjectDir)app\include\app\player;$(ProjectDir)app\include\app\scene;$(ProjectDir)engine\include\engine\particle;$(ProjectDir)engine\include\engine\collision;$(ProjectDir)engine\include\engine\scene;$(ProjectDir)engine\include\engine\input;$(ProjectDir)engine\include\engine\camera;$(ProjectDir)engine\include\engine\core;$(ProjectDir)engine\include\engine\graphics;$(ProjectDir)engine\include\engine\imgui;$(ProjectDir)engine\include\engine\model;$(ProjectDir)engine\include\engine\sound;$(ProjectDir)engine\include\engine\sprite;$(ProjectDir)engine\include\engine\texture;$(ProjectDir)externals\assimp\include;$(ProjectDir)externals\assimp\include\assimp;$(ProjectDir)externals\DirectX-Headers;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\JoyShockLibrary\include;$(ProjectDir)externals\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -98,7 +98,7 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>$(ProjectDir)include\app\enemy;$(ProjectDir)include\app\player;$(ProjectDir)include\app\scene;$(ProjectDir)include\engine\particle;$(ProjectDir)include\engine\collision;$(ProjectDir)include\engine\scene;$(ProjectDir)include\engine\input;$(ProjectDir)include\engine\camera;$(ProjectDir)include\engine\core;$(ProjectDir)include\engine\graphics;$(ProjectDir)include\engine\imgui;$(ProjectDir)include\engine\model;$(ProjectDir)include\engine\sound;$(ProjectDir)include\engine\sprite;$(ProjectDir)include\engine\texture;$(ProjectDir)externals\assimp\include;$(ProjectDir)externals\assimp\include\assimp;$(ProjectDir)externals\DirectX-Headers;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\JoyShockLibrary\include;$(ProjectDir)externals\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)app\include\app\enemy;$(ProjectDir)app\include\app\player;$(ProjectDir)app\include\app\scene;$(ProjectDir)engine\include\engine\particle;$(ProjectDir)engine\include\engine\collision;$(ProjectDir)engine\include\engine\scene;$(ProjectDir)engine\include\engine\input;$(ProjectDir)engine\include\engine\camera;$(ProjectDir)engine\include\engine\core;$(ProjectDir)engine\include\engine\graphics;$(ProjectDir)engine\include\engine\imgui;$(ProjectDir)engine\include\engine\model;$(ProjectDir)engine\include\engine\sound;$(ProjectDir)engine\include\engine\sprite;$(ProjectDir)engine\include\engine\texture;$(ProjectDir)externals\assimp\include;$(ProjectDir)externals\assimp\include\assimp;$(ProjectDir)externals\DirectX-Headers;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\JoyShockLibrary\include;$(ProjectDir)externals\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -123,45 +123,45 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\app\enemy\EnemyMelee.cpp" />
-    <ClCompile Include="src\app\enemy\EnemyRanged.cpp" />
-    <ClCompile Include="src\app\enemy\EnemyWarp.cpp" />
-    <ClCompile Include="src\app\enemy\EnemyCombat.cpp" />
-    <ClCompile Include="src\app\enemy\EnemyCore.cpp" />
-    <ClCompile Include="src\app\enemy\EnemyDecision.cpp" />
-    <ClCompile Include="src\app\enemy\EnemyMovement.cpp" />
-    <ClCompile Include="src\app\enemy\EnemyPresentation.cpp" />
-    <ClCompile Include="src\app\enemy\EnemyTuning.cpp" />
-    <ClCompile Include="src\app\enemy\EnemyTuningPresetIO.cpp" />
-    <ClCompile Include="src\app\player\PlayerTuningPresetIO.cpp" />
-    <ClCompile Include="src\app\scene\GameScene.Magnetismic.cpp" />
-    <ClCompile Include="src\app\enemy\Bullet.cpp" />
-    <ClCompile Include="src\app\player\Player.cpp" />
-    <ClCompile Include="src\app\scene\EnemyMotionDebugScene.cpp" />
-    <ClCompile Include="src\app\scene\GameScene.cpp" />
-    <ClCompile Include="src\main.cpp" />
-    <ClCompile Include="src\app\player\Sword.cpp" />
-    <ClCompile Include="src\app\player\SwordJoyConController.cpp" />
-    <ClCompile Include="src\app\player\SwordMouseController.cpp" />
+    <ClCompile Include="app\src\app\enemy\EnemyMelee.cpp" />
+    <ClCompile Include="app\src\app\enemy\EnemyRanged.cpp" />
+    <ClCompile Include="app\src\app\enemy\EnemyWarp.cpp" />
+    <ClCompile Include="app\src\app\enemy\EnemyCombat.cpp" />
+    <ClCompile Include="app\src\app\enemy\EnemyCore.cpp" />
+    <ClCompile Include="app\src\app\enemy\EnemyDecision.cpp" />
+    <ClCompile Include="app\src\app\enemy\EnemyMovement.cpp" />
+    <ClCompile Include="app\src\app\enemy\EnemyPresentation.cpp" />
+    <ClCompile Include="app\src\app\enemy\EnemyTuning.cpp" />
+    <ClCompile Include="app\src\app\enemy\EnemyTuningPresetIO.cpp" />
+    <ClCompile Include="app\src\app\player\PlayerTuningPresetIO.cpp" />
+    <ClCompile Include="app\src\app\scene\GameScene.Magnetismic.cpp" />
+    <ClCompile Include="app\src\app\enemy\Bullet.cpp" />
+    <ClCompile Include="app\src\app\player\Player.cpp" />
+    <ClCompile Include="app\src\app\scene\EnemyMotionDebugScene.cpp" />
+    <ClCompile Include="app\src\app\scene\GameScene.cpp" />
+    <ClCompile Include="app\src\main.cpp" />
+    <ClCompile Include="app\src\app\player\Sword.cpp" />
+    <ClCompile Include="app\src\app\player\SwordJoyConController.cpp" />
+    <ClCompile Include="app\src\app\player\SwordMouseController.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="include\app\enemy\EnemyActionData.h" />
-    <ClInclude Include="include\app\enemy\EnemyPresentation.h" />
-    <ClInclude Include="include\app\enemy\EnemyTuningPreset.h" />
-    <ClInclude Include="include\app\enemy\EnemyTuningPresetIO.h" />
-    <ClInclude Include="include\app\player\PlayerTuningPreset.h" />
-    <ClInclude Include="include\app\player\PlayerTuningPresetIO.h" />
-    <ClInclude Include="include\app\enemy\WarpPostEffect.h" />
-    <ClInclude Include="include\app\player\SwordControllerState.h" />
-    <ClInclude Include="include\app\player\SwordPose.h" />
-    <ClInclude Include="include\app\enemy\Bullet.h" />
-    <ClInclude Include="include\app\enemy\Enemy.h" />
-    <ClInclude Include="include\app\scene\EnemyMotionDebugScene.h" />
-    <ClInclude Include="include\app\scene\GameScene.h" />
-    <ClInclude Include="include\app\player\Player.h" />
-    <ClInclude Include="include\app\player\Sword.h" />
-    <ClInclude Include="include\app\player\SwordJoyConController.h" />
-    <ClInclude Include="include\app\player\SwordMouseController.h" />
+    <ClInclude Include="app\include\app\enemy\EnemyActionData.h" />
+    <ClInclude Include="app\include\app\enemy\EnemyPresentation.h" />
+    <ClInclude Include="app\include\app\enemy\EnemyTuningPreset.h" />
+    <ClInclude Include="app\include\app\enemy\EnemyTuningPresetIO.h" />
+    <ClInclude Include="app\include\app\player\PlayerTuningPreset.h" />
+    <ClInclude Include="app\include\app\player\PlayerTuningPresetIO.h" />
+    <ClInclude Include="app\include\app\enemy\WarpPostEffect.h" />
+    <ClInclude Include="app\include\app\player\SwordControllerState.h" />
+    <ClInclude Include="app\include\app\player\SwordPose.h" />
+    <ClInclude Include="app\include\app\enemy\Bullet.h" />
+    <ClInclude Include="app\include\app\enemy\Enemy.h" />
+    <ClInclude Include="app\include\app\scene\EnemyMotionDebugScene.h" />
+    <ClInclude Include="app\include\app\scene\GameScene.h" />
+    <ClInclude Include="app\include\app\player\Player.h" />
+    <ClInclude Include="app\include\app\player\Sword.h" />
+    <ClInclude Include="app\include\app\player\SwordJoyConController.h" />
+    <ClInclude Include="app\include\app\player\SwordMouseController.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="Engine.vcxproj">
@@ -173,6 +173,63 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     <ProjectReference Include="externals\imgui\imgui.vcxproj">
       <Project>{f6ba9c36-46d4-4c55-9c90-d016c833a837}</Project>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app\resources\enemy_tuning.csv" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app\resources\model\boss\boss.bin" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app\resources\model\boss\boss.gltf" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app\resources\model\boss\bossBody.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app\resources\model\bullet\bullet.mtl" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app\resources\model\bullet\bullet.obj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app\resources\model\bullet\bullet.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app\resources\model\enemy\bossBody.mtl" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app\resources\model\enemy\bossBody.obj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app\resources\model\enemy\bossBody.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app\resources\model\enemy\bossHand.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app\resources\model\enemy\bossLeftHand.mtl" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app\resources\model\enemy\bossLeftHand.obj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app\resources\model\enemy\bossModel.glb" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app\resources\model\enemy\bossRightHand.mtl" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app\resources\model\enemy\bossRightHand.obj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app\resources\model\enemy\enemy.glb" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app\resources\model\player\player.glb" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app\resources\model\player\sword.glb" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
