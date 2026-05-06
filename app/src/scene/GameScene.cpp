@@ -104,7 +104,7 @@ void GameScene::Update() {
                    cameraYaw_);
     sceneLightTime_ += baseDeltaTime;
 
-    enemy_.Update(BuildPlayerCombatObservation(), enemyDeltaTime);
+    enemy_.Update(player_.GetTransform().position, enemyDeltaTime);
     UpdateSceneLighting();
 
     SyncEnemyAnimation();

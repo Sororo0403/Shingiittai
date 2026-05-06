@@ -26,38 +26,6 @@ static void TickCooldown(float &cooldown, float deltaTime) {
     }
 }
 
-static CounterAxis ToEnemyCounterAxis(SwordCounterAxis axis) {
-    switch (axis) {
-    case SwordCounterAxis::Vertical:
-        return CounterAxis::Vertical;
-    case SwordCounterAxis::Horizontal:
-        return CounterAxis::Horizontal;
-    default:
-        return CounterAxis::None;
-    }
-}
-
-PlayerCombatObservation GameScene::BuildPlayerCombatObservation() const {
-    const auto slashStates = player_.GetSwordSlashStates();
-
-    PlayerCombatObservation observation{};
-    observation.position = player_.GetTransform().position;
-    observation.velocity = player_.GetVelocity();
-    observation.isGuarding = player_.IsGuarding();
-    observation.isCounterStance = player_.IsCounterStance();
-    observation.justCountered = player_.JustCountered();
-    observation.justCounterFailed = player_.JustCounterFailed();
-    observation.justCounterEarly = player_.JustCounterEarly();
-    observation.justCounterLate = player_.JustCounterLate();
-    observation.counterAxis = ToEnemyCounterAxis(player_.GetCounterAxis());
-
-    for (bool isSlashing : slashStates) {
-        observation.isAttacking = observation.isAttacking || isSlashing;
-    }
-
-    return observation;
-}
-
 void GameScene::UpdateCombat(float gameplayDeltaTime) {
     auto counterBox = player_.GetSword().GetCounterOBB();
     auto playerBox = player_.GetOBB();
@@ -111,29 +79,19 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         }
     }
 
-    const bool isEnemySmashCounterWindow =
-        (enemyActionKind == ActionKind::Smash &&
+    const bool isEnemyCounterWindow =
+        (enemyActionKind == ActionKind::Melee &&
          enemyActionStep == ActionStep::Active);
-    const bool isEnemySweepCounterWindow =
-        (enemyActionKind == ActionKind::Sweep &&
-         enemyActionStep == ActionStep::Active);
-    const bool isEnemySmashMeleeWindow =
-        (enemyActionKind == ActionKind::Smash &&
-         (enemyActionStep == ActionStep::Active ||
-          enemyActionStep == ActionStep::Recovery));
-    const bool isEnemySweepMeleeWindow =
-        (enemyActionKind == ActionKind::Sweep &&
-         (enemyActionStep == ActionStep::Active ||
-          enemyActionStep == ActionStep::Recovery));
     const bool isEnemyMeleeActive =
-        isEnemySmashMeleeWindow || isEnemySweepMeleeWindow;
+        (enemyActionKind == ActionKind::Melee &&
+         (enemyActionStep == ActionStep::Active ||
+          enemyActionStep == ActionStep::Recovery));
 
     const float enemyAttackDamage = enemy_.GetCurrentAttackDamage();
     const float enemyAttackKnockback = enemy_.GetCurrentAttackKnockback();
     const bool isCounterAxisMatch =
-        (isEnemySmashCounterWindow &&
-         player_.GetCounterAxis() == SwordCounterAxis::Vertical) ||
-        (isEnemySweepCounterWindow &&
+        isEnemyCounterWindow &&
+        (player_.GetCounterAxis() == SwordCounterAxis::Vertical ||
          player_.GetCounterAxis() == SwordCounterAxis::Horizontal);
     const bool canCounterThisHit =
         player_.IsCounterStance() && isCounterAxisMatch;
@@ -153,14 +111,12 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             if (canCounterThisHit) {
                 triggerSuccessfulCounter(enemyAttackDamage, 0.2f);
             } else if (isPlayerGuarding) {
-                enemy_.NotifyAttackGuarded();
                 player_.TakeDamage(enemyAttackDamage * kGuardDamageMultiplier);
                 player_.AddKnockback(
                     {knockbackDir.x * (enemyAttackKnockback * 0.5f), 0.0f,
                      knockbackDir.y * (enemyAttackKnockback * 0.5f)});
                 playerHitCooldown_ = 0.2f;
             } else {
-                enemy_.NotifyAttackConnected();
                 player_.TakeDamage(enemyAttackDamage);
                 player_.AddKnockback(
                     {knockbackDir.x * enemyAttackKnockback, 0.0f,

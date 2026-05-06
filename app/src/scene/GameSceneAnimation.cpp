@@ -28,22 +28,17 @@ static std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
     }
 
     switch (enemy.GetActionKind()) {
-    case ActionKind::Smash:
+    case ActionKind::Melee:
         outLoop = false;
         if (HasAnimation(model, kBossAnimSmash)) {
             return kBossAnimSmash;
         }
-        break;
-
-    case ActionKind::Sweep:
-        outLoop = false;
         if (HasAnimation(model, kBossAnimSweep)) {
             return kBossAnimSweep;
         }
         break;
 
-    case ActionKind::Shot:
-    case ActionKind::Wave:
+    case ActionKind::Ranged:
         outLoop = false;
         if (HasAnimation(model, kBossAnimWave)) {
             return kBossAnimWave;
@@ -51,7 +46,7 @@ static std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
         break;
 
     case ActionKind::Warp:
-    case ActionKind::Stalk:
+    case ActionKind::Movement:
     case ActionKind::None:
     default:
         if (HasAnimation(model, kBossAnimIdle)) {

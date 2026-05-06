@@ -18,10 +18,9 @@ void GameScene::UpdateSceneLighting() {
 
     const float pulse = 0.82f + 0.18f * std::sinf(sceneLightTime_ * 2.4f);
     const float actionBoost =
-        enemy_.GetActionKind() == ActionKind::Warp   ? 1.35f
-        : enemy_.GetActionKind() == ActionKind::Wave ? 1.20f
-        : enemy_.GetActionKind() == ActionKind::Shot ? 1.10f
-                                                     : 1.0f;
+        enemy_.GetActionKind() == ActionKind::Warp     ? 1.35f
+        : enemy_.GetActionKind() == ActionKind::Ranged ? 1.18f
+                                                       : 1.0f;
 
     XMFLOAT3 duelCenter = {
         (playerPos.x + enemyPos.x) * 0.5f,
