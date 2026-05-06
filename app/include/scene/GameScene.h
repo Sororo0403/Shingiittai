@@ -29,7 +29,6 @@ class GameScene : public BaseScene {
     float ComputeGameplayTimeScale() const;
     void UpdateCounterVignette(float deltaTime);
     void DrawCounterVignette();
-    void DrawDemoPlayIndicator();
     bool ProjectWorldToScreen(const DirectX::XMFLOAT3 &worldPos,
                               DirectX::XMFLOAT2 &outScreen) const;
     bool ComputeEnemySlashScreenEffect(DirectX::XMFLOAT2 &outStart,
@@ -76,8 +75,6 @@ class GameScene : public BaseScene {
     uint32_t enemyModelId_ = 0;
     std::string enemyAnimationName_{};
     bool enemyAnimationLoop_ = true;
-    bool enemyIntroAnimationStarted_ = false;
-    IntroPhase enemyIntroPhase_ = IntroPhase::SecondSlash;
 
     float playerHitCooldown_ = 0.0f;
     float enemyHitCooldown_ = 0.0f;
@@ -153,16 +150,11 @@ class GameScene : public BaseScene {
     float rushFovDeg_ = 80.0f;
     float warpFovDeg_ = 79.0f;
     float phaseTransitionFovDeg_ = 68.0f;
-    float enemyIntroFovDeg_ = 64.0f;
     float fovLerpSpeed_ = 6.5f;
     float phaseTransitionFovLerpSpeed_ = 5.5f;
-    float enemyIntroFovLerpSpeed_ = 3.4f;
     float phaseTransitionLookAtEnemyWeight_ = 0.82f;
     float phaseTransitionLookAtHeight_ = 1.45f;
     float phaseTransitionPushIn_ = 0.85f;
-    float enemyIntroPushIn_ = 1.55f;
-    float enemyIntroLookAtEnemyWeight_ = 0.90f;
-    float enemyIntroLookAtHeight_ = 1.55f;
 
     float warpDistortionRadiusPx_ = 116.0f;
     float warpDistortionThicknessPx_ = 4.0f;
@@ -191,13 +183,10 @@ class GameScene : public BaseScene {
     float sceneLightTime_ = 0.0f;
 
     bool counterCinematicActive_ = false;
-    bool hasGameStarted_ = false;
-    bool demoIntroSkipped_ = false;
     bool enemyAnimationFrozen_ = false;
     float counterTimeScale_ = 0.05f;
     float counterVignetteAlpha_ = 0.0f;
     float counterVignetteFadeSpeed_ = 8.0f;
-    float demoPlayEffectTime_ = 0.0f;
     float counterCameraShakeX_ = 0.035f;
     float counterCameraShakeY_ = 0.020f;
     float counterCameraShakeFrequency_ = 18.0f;

@@ -20,8 +20,9 @@ void Enemy::Initialize(uint32_t modelId, uint32_t projectileModelId) {
     projectileModelId_ = projectileModelId;
     runtime_.hp = config_.core.maxHp;
     runtime_.phase = BossPhase::Phase1;
-    runtime_.introActive = true;
+    runtime_.introActive = false;
     runtime_.introTimer = 0.0f;
+    runtime_.stateTimer = -0.10f;
     runtime_.phaseTransitionActive = false;
     runtime_.phaseTransitionTimer = 0.0f;
 
