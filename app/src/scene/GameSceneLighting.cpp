@@ -30,12 +30,12 @@ void GameScene::UpdateSceneLighting() {
     };
 
     SceneLighting lighting{};
-    lighting.keyLightDirection = {-0.45f, -1.0f, 0.30f};
-    lighting.keyLightColor = {1.25f, 1.14f, 1.02f, 1.0f};
-    lighting.fillLightDirection = {0.70f, -0.28f, -0.65f};
-    lighting.fillLightColor = {0.20f, 0.34f, 0.58f, 0.42f};
-    lighting.ambientColor = {0.22f, 0.24f, 0.28f, 1.0f};
-    lighting.lightingParams = {56.0f, 0.40f, 3.2f, 0.18f};
+    lighting.keyLightDirection = {-0.52f, -1.0f, 0.22f};
+    lighting.keyLightColor = {1.16f, 1.16f, 1.14f, 1.0f};
+    lighting.fillLightDirection = {0.72f, -0.24f, -0.58f};
+    lighting.fillLightColor = {0.22f, 0.24f, 0.28f, 0.34f};
+    lighting.ambientColor = {0.08f, 0.085f, 0.095f, 1.0f};
+    lighting.lightingParams = {72.0f, 0.32f, 2.4f, 0.08f};
 
     lighting.pointLights[0].positionRange = {
         duelCenter.x,

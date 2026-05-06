@@ -40,9 +40,13 @@ class GameScene : public BaseScene {
     uint32_t playerModelId_ = 0;
     uint32_t enemyModelId_ = 0;
     uint32_t arenaFloorModelId_ = 0;
+    uint32_t arenaLowPolyTerrainModelId_ = 0;
+    uint32_t arenaCenterDiskModelId_ = 0;
+    uint32_t arenaSpokeModelId_ = 0;
     uint32_t arenaInnerRingModelId_ = 0;
     uint32_t arenaOuterRingModelId_ = 0;
     uint32_t arenaColumnModelId_ = 0;
+    uint32_t arenaColumnCapModelId_ = 0;
     uint32_t arenaDomeModelId_ = 0;
     uint32_t arenaBarrierRingModelId_ = 0;
     uint32_t arenaNoiseTextureId_ = 0;

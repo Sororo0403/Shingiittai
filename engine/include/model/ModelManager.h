@@ -71,6 +71,15 @@ class ModelManager {
                             float bottomRadius = 1.0f, float height = 3.0f);
 
     /// <summary>
+    /// 三角面を強調した低ポリ地形Primitiveを生成する
+    /// </summary>
+    uint32_t CreateLowPolyTerrain(uint32_t textureId, const Material &material,
+                                  uint32_t grid = 36, float size = 72.0f,
+                                  float maxHeight = 6.0f,
+                                  float flatRadius = 13.0f,
+                                  uint32_t seed = 0x5A17u);
+
+    /// <summary>
     /// モデルのアニメーションを更新する
     /// </summary>
     /// <param name="modelId">更新するモデルID</param>

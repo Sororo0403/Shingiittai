@@ -25,6 +25,36 @@ constexpr std::array<Vertex, 4> kPlaneVertices = {{
 
 constexpr std::array<uint32_t, 6> kPlaneIndices = {0, 1, 2, 2, 1, 3};
 
+float Hash01(int32_t x, int32_t z, uint32_t seed) {
+    uint32_t h = static_cast<uint32_t>(x) * 374761393u ^
+                 static_cast<uint32_t>(z) * 668265263u ^ seed * 2246822519u;
+    h = (h ^ (h >> 13u)) * 1274126177u;
+    h ^= h >> 16u;
+    return static_cast<float>(h & 0x00FFFFFFu) /
+           static_cast<float>(0x00FFFFFFu);
+}
+
+float SmoothStep(float value) {
+    value = std::clamp(value, 0.0f, 1.0f);
+    return value * value * (3.0f - 2.0f * value);
+}
+
+XMFLOAT3 CalculateFaceNormal(const XMFLOAT3 &a, const XMFLOAT3 &b,
+                             const XMFLOAT3 &c) {
+    XMVECTOR av = XMLoadFloat3(&a);
+    XMVECTOR bv = XMLoadFloat3(&b);
+    XMVECTOR cv = XMLoadFloat3(&c);
+    XMVECTOR normal = XMVector3Normalize(XMVector3Cross(bv - av, cv - av));
+    XMFLOAT3 out{};
+    XMStoreFloat3(&out, normal);
+    if (out.y < 0.0f) {
+        out.x = -out.x;
+        out.y = -out.y;
+        out.z = -out.z;
+    }
+    return out;
+}
+
 } // namespace
 
 void ModelManager::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
@@ -253,6 +283,114 @@ uint32_t ModelManager::CreateCylinder(uint32_t textureId,
         indices.data(), static_cast<uint32_t>(indices.size()));
     subMesh.textureId = textureId;
     subMesh.materialId = materialManager_.CreateMaterial(cylinderMaterial);
+
+    model.subMeshes.push_back(subMesh);
+    model.meshId = subMesh.meshId;
+    model.textureId = textureId;
+    model.materialId = subMesh.materialId;
+
+    modelRenderer_.CreateSkinClusters(model);
+    models_.push_back(model);
+    return static_cast<uint32_t>(models_.size() - 1);
+}
+
+uint32_t ModelManager::CreateLowPolyTerrain(uint32_t textureId,
+                                            const Material &material,
+                                            uint32_t grid, float size,
+                                            float maxHeight, float flatRadius,
+                                            uint32_t seed) {
+    grid = (std::max)(grid, 4u);
+    size = (std::max)(size, 1.0f);
+    maxHeight = (std::max)(maxHeight, 0.0f);
+    flatRadius = (std::max)(flatRadius, 0.0f);
+
+    Material terrainMaterial = material;
+    XMStoreFloat4x4(&terrainMaterial.uvTransform,
+                    XMMatrixTranspose(XMMatrixIdentity()));
+
+    const float halfSize = size * 0.5f;
+    const float step = size / static_cast<float>(grid);
+    const uint32_t pointCount = grid + 1u;
+    std::vector<float> heights(static_cast<size_t>(pointCount) * pointCount);
+
+    auto heightAt = [&](uint32_t xIndex, uint32_t zIndex) -> float & {
+        return heights[static_cast<size_t>(zIndex) * pointCount + xIndex];
+    };
+
+    for (uint32_t z = 0; z < pointCount; ++z) {
+        for (uint32_t x = 0; x < pointCount; ++x) {
+            const float worldX = -halfSize + static_cast<float>(x) * step;
+            const float worldZ = -halfSize + static_cast<float>(z) * step;
+            const float dist = std::sqrt(worldX * worldX + worldZ * worldZ);
+            const float outerT =
+                SmoothStep((dist - flatRadius) / (halfSize - flatRadius));
+
+            const float ridge =
+                0.45f * Hash01(static_cast<int32_t>(x), static_cast<int32_t>(z),
+                               seed) +
+                0.35f * Hash01(static_cast<int32_t>(x / 2u),
+                               static_cast<int32_t>(z / 2u), seed + 97u) +
+                0.20f * Hash01(static_cast<int32_t>(x / 4u),
+                               static_cast<int32_t>(z / 4u), seed + 193u);
+            const float wave =
+                0.5f + 0.5f * std::sinf(worldX * 0.22f + worldZ * 0.17f);
+            heightAt(x, z) =
+                (-0.28f + maxHeight * (0.35f + ridge * 0.78f + wave * 0.24f)) *
+                outerT;
+        }
+    }
+
+    std::vector<Vertex> vertices;
+    std::vector<uint32_t> indices;
+    vertices.reserve(static_cast<size_t>(grid) * grid * 6u);
+    indices.reserve(static_cast<size_t>(grid) * grid * 6u);
+
+    auto makePoint = [&](uint32_t xIndex, uint32_t zIndex) {
+        const float worldX = -halfSize + static_cast<float>(xIndex) * step;
+        const float worldZ = -halfSize + static_cast<float>(zIndex) * step;
+        return XMFLOAT3{worldX, heightAt(xIndex, zIndex), worldZ};
+    };
+
+    auto pushTriangle = [&](const XMFLOAT3 &a, const XMFLOAT3 &b,
+                            const XMFLOAT3 &c) {
+        const XMFLOAT3 normal = CalculateFaceNormal(a, b, c);
+        const uint32_t base = static_cast<uint32_t>(vertices.size());
+        vertices.push_back({a, normal, {0.0f, 0.0f}});
+        vertices.push_back({b, normal, {1.0f, 0.0f}});
+        vertices.push_back({c, normal, {0.5f, 1.0f}});
+        indices.push_back(base + 0u);
+        indices.push_back(base + 1u);
+        indices.push_back(base + 2u);
+    };
+
+    for (uint32_t z = 0; z < grid; ++z) {
+        for (uint32_t x = 0; x < grid; ++x) {
+            XMFLOAT3 p00 = makePoint(x, z);
+            XMFLOAT3 p10 = makePoint(x + 1u, z);
+            XMFLOAT3 p01 = makePoint(x, z + 1u);
+            XMFLOAT3 p11 = makePoint(x + 1u, z + 1u);
+
+            const bool flip =
+                Hash01(static_cast<int32_t>(x), static_cast<int32_t>(z),
+                       seed + 389u) > 0.5f;
+            if (flip) {
+                pushTriangle(p00, p10, p11);
+                pushTriangle(p00, p11, p01);
+            } else {
+                pushTriangle(p00, p10, p01);
+                pushTriangle(p10, p11, p01);
+            }
+        }
+    }
+
+    Model model{};
+    ModelSubMesh subMesh{};
+    subMesh.vertexCount = static_cast<uint32_t>(vertices.size());
+    subMesh.meshId = meshManager_.CreateMesh(
+        vertices.data(), sizeof(Vertex), static_cast<uint32_t>(vertices.size()),
+        indices.data(), static_cast<uint32_t>(indices.size()));
+    subMesh.textureId = textureId;
+    subMesh.materialId = materialManager_.CreateMaterial(terrainMaterial);
 
     model.subMeshes.push_back(subMesh);
     model.meshId = subMesh.meshId;

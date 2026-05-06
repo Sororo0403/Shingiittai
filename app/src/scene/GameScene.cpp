@@ -60,19 +60,30 @@ void GameScene::Initialize(const SceneContext &ctx) {
     arenaNoiseTextureId_ = texture->CreateNoiseTexture(256, 256);
     arenaFloorModelId_ = model->CreatePlane(
         arenaNoiseTextureId_,
-        MakeArenaMaterial({0.28f, 0.30f, 0.32f, 1.0f}, true, 0.10f));
+        MakeArenaMaterial({0.18f, 0.19f, 0.20f, 1.0f}, true, 0.07f));
+    arenaLowPolyTerrainModelId_ = model->CreateLowPolyTerrain(
+        0, MakeArenaMaterial({0.38f, 0.39f, 0.40f, 1.0f}, false, 0.03f), 42,
+        78.0f, 7.2f, 12.0f, 0x4107u);
+    arenaCenterDiskModelId_ = model->CreateRing(
+        0, MakeArenaMaterial({0.43f, 0.44f, 0.45f, 1.0f}, false, 0.12f), 96,
+        1.95f, 0.0f);
+    arenaSpokeModelId_ = model->CreatePlane(
+        0, MakeArenaMaterial({0.58f, 0.59f, 0.60f, 1.0f}, false, 0.08f));
     arenaInnerRingModelId_ = model->CreateRing(
-        0, MakeArenaMaterial({0.82f, 0.70f, 0.46f, 1.0f}, false, 0.18f), 96,
+        0, MakeArenaMaterial({0.62f, 0.63f, 0.64f, 1.0f}, false, 0.12f), 96,
         4.9f, 4.35f);
     arenaOuterRingModelId_ = model->CreateRing(
-        0, MakeArenaMaterial({0.34f, 0.42f, 0.52f, 1.0f}, false, 0.14f), 128,
+        0, MakeArenaMaterial({0.26f, 0.28f, 0.31f, 1.0f}, false, 0.10f), 128,
         12.3f, 11.6f);
     arenaColumnModelId_ = model->CreateCylinder(
-        0, MakeArenaMaterial({0.38f, 0.40f, 0.43f, 1.0f}, false, 0.12f), 24,
-        0.30f, 0.42f, 5.4f);
+        0, MakeArenaMaterial({0.30f, 0.31f, 0.33f, 1.0f}, false, 0.08f), 24,
+        0.26f, 0.38f, 5.4f);
+    arenaColumnCapModelId_ = model->CreateCylinder(
+        0, MakeArenaMaterial({0.42f, 0.43f, 0.44f, 1.0f}, false, 0.10f), 32,
+        0.68f, 0.78f, 0.24f);
     arenaDomeModelId_ = model->CreateCylinder(
-        0, MakeArenaMaterial({0.12f, 0.32f, 0.58f, 0.22f}, false, 0.03f), 96,
-        3.8f, 13.2f, 8.4f);
+        0, MakeArenaMaterial({0.10f, 0.28f, 0.54f, 0.18f}, false, 0.03f), 128,
+        4.5f, 13.5f, 8.8f);
     arenaBarrierRingModelId_ = model->CreateRing(
         0, MakeArenaMaterial({0.24f, 0.68f, 1.0f, 0.45f}, false, 0.05f), 128,
         13.1f, 12.9f);
@@ -162,12 +173,41 @@ void GameScene::Draw() {
 
 void GameScene::DrawArena() {
     ModelManager *model = ctx_->model;
+    const ActionKind actionKind = enemy_.GetActionKind();
+    const float actionGlow =
+        actionKind == ActionKind::Warp   ? 0.22f
+        : actionKind == ActionKind::Wave ? 0.15f
+        : actionKind == ActionKind::Shot ? 0.10f
+                                         : 0.0f;
+
+    Transform terrain{};
+    terrain.position = {0.0f, -0.42f, 0.0f};
+    terrain.rotation = MakeQuat(0.0f, 0.0f, 0.0f);
+    terrain.scale = {1.0f, 1.0f, 1.0f};
+    model->Draw(arenaLowPolyTerrainModelId_, terrain, camera_);
 
     Transform floor{};
     floor.position = {0.0f, -0.04f, 0.0f};
     floor.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
     floor.scale = {28.0f, 28.0f, 1.0f};
     model->Draw(arenaFloorModelId_, floor, camera_);
+
+    Transform centerDisk{};
+    centerDisk.position = {0.0f, 0.006f, 0.0f};
+    centerDisk.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
+    model->Draw(arenaCenterDiskModelId_, centerDisk, camera_);
+
+    for (int i = 0; i < 16; ++i) {
+        const float angle = static_cast<float>(i) * kPi * 0.125f;
+        const float x = std::sinf(angle) * 3.7f;
+        const float z = std::cosf(angle) * 3.7f;
+
+        Transform spoke{};
+        spoke.position = {x, 0.008f, z};
+        spoke.rotation = MakeQuat(-kPi * 0.5f, angle, 0.0f);
+        spoke.scale = {0.075f, 4.8f, 1.0f};
+        model->Draw(arenaSpokeModelId_, spoke, camera_);
+    }
 
     Transform innerRing{};
     innerRing.position = {0.0f, 0.012f, 0.0f};
@@ -188,6 +228,17 @@ void GameScene::DrawArena() {
         column.position = {x, 0.0f, z};
         column.rotation = MakeQuat(0.0f, -angle, 0.0f);
         model->Draw(arenaColumnModelId_, column, camera_);
+
+        Transform base{};
+        base.position = {x, -0.02f, z};
+        base.rotation = MakeQuat(0.0f, -angle, 0.0f);
+        base.scale = {1.0f, 1.0f, 1.0f};
+        model->Draw(arenaColumnCapModelId_, base, camera_);
+
+        Transform cap = base;
+        cap.position.y = 5.38f;
+        cap.rotation = MakeQuat(kPi, -angle, 0.0f);
+        model->Draw(arenaColumnCapModelId_, cap, camera_);
     }
 
     ModelDrawEffect barrierEffect{};
@@ -195,7 +246,8 @@ void GameScene::DrawArena() {
     barrierEffect.additiveBlend = true;
     barrierEffect.disableCulling = true;
     barrierEffect.color = {0.22f, 0.70f, 1.0f, 0.55f};
-    barrierEffect.intensity = 0.42f + 0.08f * std::sinf(sceneLightTime_ * 1.8f);
+    barrierEffect.intensity =
+        0.36f + actionGlow + 0.09f * std::sinf(sceneLightTime_ * 1.8f);
     barrierEffect.fresnelPower = 1.2f;
     barrierEffect.noiseAmount = 0.35f;
     barrierEffect.time = sceneLightTime_;
