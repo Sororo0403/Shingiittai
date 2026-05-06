@@ -49,8 +49,6 @@ class GameScene : public BaseScene {
     void UpdateElectricRing();
 
     void UpdateEnemySwordTrail();
-    void UpdateMagnetismic();
-    void DrawMagnetismic();
 
   private:
     static constexpr DirectX::XMFLOAT3 kCameraStartPos = {0.0f, 1.0f, 0.5f};
@@ -245,12 +243,4 @@ class GameScene : public BaseScene {
     bool enemySwordTrailEnabled_ = true;
     float enemySwordTrailWidth_ = 1.0f;
 
-    bool magnetismicEnabled_ = true;
-    bool magnetismicOnlyWarp_ = true;
-
-    float magnetismicTime_ = 0.0f;
-    float magnetismicBaseSize_ = 2.85f;
-    float magnetismicWarpBonusSize_ = 0.65f;
-    float magnetismicYOffset_ = 1.20f;
-    float magnetismicAlphaScale_ = 1.0f;
 };

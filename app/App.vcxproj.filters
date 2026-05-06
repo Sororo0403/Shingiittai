@@ -81,9 +81,6 @@
     <ClCompile Include="src\player\PlayerTuningPresetIO.cpp">
       <Filter>Source Files\player</Filter>
     </ClCompile>
-    <ClCompile Include="src\scene\GameScene.Magnetismic.cpp">
-      <Filter>Source Files\scene</Filter>
-    </ClCompile>
     <ClCompile Include="src\enemy\Bullet.cpp">
       <Filter>Source Files\enemy</Filter>
     </ClCompile>

@@ -134,7 +134,6 @@ if exist "$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClCompile Include="src\enemy\EnemyTuning.cpp" />
     <ClCompile Include="src\enemy\EnemyTuningPresetIO.cpp" />
     <ClCompile Include="src\player\PlayerTuningPresetIO.cpp" />
-    <ClCompile Include="src\scene\GameScene.Magnetismic.cpp" />
     <ClCompile Include="src\enemy\Bullet.cpp" />
     <ClCompile Include="src\player\Player.cpp" />
     <ClCompile Include="src\scene\GameScene.cpp" />

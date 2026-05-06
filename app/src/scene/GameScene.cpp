@@ -351,8 +351,6 @@ void GameScene::Update() {
 
     UpdateElectricRing();
 
-    UpdateMagnetismic();
-
     UpdateBattleCamera();
 
     auto counterBox = player_.GetSword().GetCounterOBB();
@@ -772,7 +770,6 @@ void GameScene::Draw() {
         }
     }
     ctx_->model->PostDraw();
-    DrawMagnetismic();
 
     DrawCounterVignette();
 
