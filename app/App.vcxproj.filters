@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{4e4f2c66-78e0-1132-4b45-33d4001d2298}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\enemy">
+      <UniqueIdentifier>{79cfc16a-3025-d0d1-a31f-3b51b9908f68}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\player">
+      <UniqueIdentifier>{17481bf1-f951-5e54-71b0-d74bdd476bc4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\scene">
+      <UniqueIdentifier>{87037da8-af53-b64e-ba4b-cbd0913dcaf8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources">
+      <UniqueIdentifier>{2e940d40-3d77-3dc8-a487-6f21e4b33cda}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\Model">
+      <UniqueIdentifier>{153629fd-363a-7f58-06de-530fd9db1da7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\Model\boss">
+      <UniqueIdentifier>{1abdc1c9-c80c-eca4-b2ae-bfa8d792511f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\Model\bullet">
+      <UniqueIdentifier>{12156a62-6047-2f1f-f10d-64b6aaea3650}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\Model\enemy">
+      <UniqueIdentifier>{7d5a4983-9ca7-5ac1-b285-9b2770c6f339}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\Model\player">
+      <UniqueIdentifier>{d91cfcf7-f3c4-3b80-5314-202646ae4f3c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\Tuning">
+      <UniqueIdentifier>{fea49a77-7765-acdf-93f8-af892e0ffed2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{29388da4-e2a8-2891-25b7-64a4dd6bcc45}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\enemy">
+      <UniqueIdentifier>{e87165b1-8f3b-5ed0-e95d-b3b478827ecd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\player">
+      <UniqueIdentifier>{29309051-1374-273a-57cb-7560413dee16}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\scene">
+      <UniqueIdentifier>{4b6c6162-2d8e-9803-3ac2-e0f5c0fb33de}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\enemy\EnemyMelee.cpp">
+      <Filter>Source Files\enemy</Filter>
+    </ClCompile>
+    <ClCompile Include="src\enemy\EnemyRanged.cpp">
+      <Filter>Source Files\enemy</Filter>
+    </ClCompile>
+    <ClCompile Include="src\enemy\EnemyWarp.cpp">
+      <Filter>Source Files\enemy</Filter>
+    </ClCompile>
+    <ClCompile Include="src\enemy\EnemyCombat.cpp">
+      <Filter>Source Files\enemy</Filter>
+    </ClCompile>
+    <ClCompile Include="src\enemy\EnemyCore.cpp">
+      <Filter>Source Files\enemy</Filter>
+    </ClCompile>
+    <ClCompile Include="src\enemy\EnemyDecision.cpp">
+      <Filter>Source Files\enemy</Filter>
+    </ClCompile>
+    <ClCompile Include="src\enemy\EnemyMovement.cpp">
+      <Filter>Source Files\enemy</Filter>
+    </ClCompile>
+    <ClCompile Include="src\enemy\EnemyPresentation.cpp">
+      <Filter>Source Files\enemy</Filter>
+    </ClCompile>
+    <ClCompile Include="src\enemy\EnemyTuning.cpp">
+      <Filter>Source Files\enemy</Filter>
+    </ClCompile>
+    <ClCompile Include="src\enemy\EnemyTuningPresetIO.cpp">
+      <Filter>Source Files\enemy</Filter>
+    </ClCompile>
+    <ClCompile Include="src\player\PlayerTuningPresetIO.cpp">
+      <Filter>Source Files\player</Filter>
+    </ClCompile>
+    <ClCompile Include="src\scene\GameScene.Magnetismic.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\enemy\Bullet.cpp">
+      <Filter>Source Files\enemy</Filter>
+    </ClCompile>
+    <ClCompile Include="src\player\Player.cpp">
+      <Filter>Source Files\player</Filter>
+    </ClCompile>
+    <ClCompile Include="src\scene\EnemyMotionDebugScene.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\scene\GameScene.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\player\Sword.cpp">
+      <Filter>Source Files\player</Filter>
+    </ClCompile>
+    <ClCompile Include="src\player\SwordJoyConController.cpp">
+      <Filter>Source Files\player</Filter>
+    </ClCompile>
+    <ClCompile Include="src\player\SwordMouseController.cpp">
+      <Filter>Source Files\player</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\enemy\EnemyActionData.h">
+      <Filter>Header Files\enemy</Filter>
+    </ClInclude>
+    <ClInclude Include="include\enemy\EnemyPresentation.h">
+      <Filter>Header Files\enemy</Filter>
+    </ClInclude>
+    <ClInclude Include="include\enemy\EnemyTuningPreset.h">
+      <Filter>Header Files\enemy</Filter>
+    </ClInclude>
+    <ClInclude Include="include\enemy\EnemyTuningPresetIO.h">
+      <Filter>Header Files\enemy</Filter>
+    </ClInclude>
+    <ClInclude Include="include\player\PlayerTuningPreset.h">
+      <Filter>Header Files\player</Filter>
+    </ClInclude>
+    <ClInclude Include="include\player\PlayerTuningPresetIO.h">
+      <Filter>Header Files\player</Filter>
+    </ClInclude>
+    <ClInclude Include="include\enemy\WarpPostEffect.h">
+      <Filter>Header Files\enemy</Filter>
+    </ClInclude>
+    <ClInclude Include="include\player\SwordControllerState.h">
+      <Filter>Header Files\player</Filter>
+    </ClInclude>
+    <ClInclude Include="include\player\SwordPose.h">
+      <Filter>Header Files\player</Filter>
+    </ClInclude>
+    <ClInclude Include="include\enemy\Bullet.h">
+      <Filter>Header Files\enemy</Filter>
+    </ClInclude>
+    <ClInclude Include="include\enemy\Enemy.h">
+      <Filter>Header Files\enemy</Filter>
+    </ClInclude>
+    <ClInclude Include="include\scene\EnemyMotionDebugScene.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="include\scene\GameScene.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="include\player\Player.h">
+      <Filter>Header Files\player</Filter>
+    </ClInclude>
+    <ClInclude Include="include\player\Sword.h">
+      <Filter>Header Files\player</Filter>
+    </ClInclude>
+    <ClInclude Include="include\player\SwordJoyConController.h">
+      <Filter>Header Files\player</Filter>
+    </ClInclude>
+    <ClInclude Include="include\player\SwordMouseController.h">
+      <Filter>Header Files\player</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\enemy_tuning.csv">
+      <Filter>Resources\Tuning</Filter>
+    </None>
+    <None Include="resources\model\boss\boss.bin">
+      <Filter>Resources\Model\boss</Filter>
+    </None>
+    <None Include="resources\model\boss\boss.gltf">
+      <Filter>Resources\Model\boss</Filter>
+    </None>
+    <None Include="resources\model\boss\bossBody.png">
+      <Filter>Resources\Model\boss</Filter>
+    </None>
+    <None Include="resources\model\bullet\bullet.mtl">
+      <Filter>Resources\Model\bullet</Filter>
+    </None>
+    <None Include="resources\model\bullet\bullet.obj">
+      <Filter>Resources\Model\bullet</Filter>
+    </None>
+    <None Include="resources\model\bullet\bullet.png">
+      <Filter>Resources\Model\bullet</Filter>
+    </None>
+    <None Include="resources\model\enemy\bossBody.mtl">
+      <Filter>Resources\Model\enemy</Filter>
+    </None>
+    <None Include="resources\model\enemy\bossBody.obj">
+      <Filter>Resources\Model\enemy</Filter>
+    </None>
+    <None Include="resources\model\enemy\bossBody.png">
+      <Filter>Resources\Model\enemy</Filter>
+    </None>
+    <None Include="resources\model\enemy\bossHand.png">
+      <Filter>Resources\Model\enemy</Filter>
+    </None>
+    <None Include="resources\model\enemy\bossLeftHand.mtl">
+      <Filter>Resources\Model\enemy</Filter>
+    </None>
+    <None Include="resources\model\enemy\bossLeftHand.obj">
+      <Filter>Resources\Model\enemy</Filter>
+    </None>
+    <None Include="resources\model\enemy\bossModel.glb">
+      <Filter>Resources\Model\enemy</Filter>
+    </None>
+    <None Include="resources\model\enemy\bossRightHand.mtl">
+      <Filter>Resources\Model\enemy</Filter>
+    </None>
+    <None Include="resources\model\enemy\bossRightHand.obj">
+      <Filter>Resources\Model\enemy</Filter>
+    </None>
+    <None Include="resources\model\enemy\enemy.glb">
+      <Filter>Resources\Model\enemy</Filter>
+    </None>
+    <None Include="resources\model\player\player.glb">
+      <Filter>Resources\Model\player</Filter>
+    </None>
+    <None Include="resources\model\player\sword.glb">
+      <Filter>Resources\Model\player</Filter>
+    </None>
+  </ItemGroup>
+</Project>

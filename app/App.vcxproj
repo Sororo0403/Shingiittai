@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>18.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{7f7e8d20-0e95-4e5a-b1a9-5df7d0d1f4e2}</ProjectGuid>
+    <RootNamespace>App</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>App</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <OutDir>$(SolutionDir)..\generated\outputs\$(Configuration)\$(ProjectName)\</OutDir>
+    <IntDir>$(SolutionDir)..\generated\intermediate\$(Configuration)\$(ProjectName)\</IntDir>
+    <IncludePath>$(IncludePath)</IncludePath>
+    <LibraryPath>$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <OutDir>$(SolutionDir)..\generated\outputs\$(Configuration)\$(ProjectName)\</OutDir>
+    <IntDir>$(SolutionDir)..\generated\intermediate\$(Configuration)\$(ProjectName)\</IntDir>
+    <IncludePath>$(IncludePath)</IncludePath>
+    <LibraryPath>$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <AdditionalIncludeDirectories>$(ProjectDir)include\enemy;$(ProjectDir)include\player;$(ProjectDir)include\scene;$(ProjectDir)..\engine\include\particle;$(ProjectDir)..\engine\include\collision;$(ProjectDir)..\engine\include\scene;$(ProjectDir)..\engine\include\input;$(ProjectDir)..\engine\include\camera;$(ProjectDir)..\engine\include\core;$(ProjectDir)..\engine\include\graphics;$(ProjectDir)..\engine\include\imgui;$(ProjectDir)..\engine\include\model;$(ProjectDir)..\engine\include\animation;$(ProjectDir)..\engine\include\sound;$(ProjectDir)..\engine\include\sprite;$(ProjectDir)..\engine\include\texture;$(ProjectDir)..\engine\externals;$(ProjectDir)..\engine\externals\assimp\include;$(ProjectDir)..\engine\externals\assimp\include\assimp;$(ProjectDir)..\engine\externals\DirectX-Headers;$(ProjectDir)..\engine\externals\DirectXTex;$(ProjectDir)..\engine\externals\JoyShockLibrary\include;$(ProjectDir)..\engine\externals\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
+      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;imgui.lib;dinput8.lib;dxguid.lib;JoyShockLibrary.lib;assimp-vc145-mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ProjectDir)..\engine\externals\assimp\lib\;$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\;$(SolutionDir)..\generated\outputs\$(Configuration)\imgui\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+    <PostBuildEvent>
+      <Command>REM JoyShockLibrary
+if exist "$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\JoyShockLibrary.dll" (
+    xcopy /Y /D "$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\JoyShockLibrary.dll" "$(TargetDir)"
+)
+
+REM assimp
+if exist "$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" (
+    xcopy /Y /D "$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" "$(TargetDir)"
+)</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;IMGUI_DISABLED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <AdditionalIncludeDirectories>$(ProjectDir)include\enemy;$(ProjectDir)include\player;$(ProjectDir)include\scene;$(ProjectDir)..\engine\include\particle;$(ProjectDir)..\engine\include\collision;$(ProjectDir)..\engine\include\scene;$(ProjectDir)..\engine\include\input;$(ProjectDir)..\engine\include\camera;$(ProjectDir)..\engine\include\core;$(ProjectDir)..\engine\include\graphics;$(ProjectDir)..\engine\include\imgui;$(ProjectDir)..\engine\include\model;$(ProjectDir)..\engine\include\animation;$(ProjectDir)..\engine\include\sound;$(ProjectDir)..\engine\include\sprite;$(ProjectDir)..\engine\include\texture;$(ProjectDir)..\engine\externals;$(ProjectDir)..\engine\externals\assimp\include;$(ProjectDir)..\engine\externals\assimp\include\assimp;$(ProjectDir)..\engine\externals\DirectX-Headers;$(ProjectDir)..\engine\externals\DirectXTex;$(ProjectDir)..\engine\externals\JoyShockLibrary\include;$(ProjectDir)..\engine\externals\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
+      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;imgui.lib;dinput8.lib;dxguid.lib;JoyShockLibrary.lib;assimp-vc145-mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ProjectDir)..\engine\externals\assimp\lib\;$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\;$(SolutionDir)..\generated\outputs\$(Configuration)\imgui\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+    <PostBuildEvent>
+      <Command>REM JoyShockLibrary
+if exist "$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\JoyShockLibrary.dll" (
+    xcopy /Y /D "$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\JoyShockLibrary.dll" "$(TargetDir)"
+)
+
+REM assimp
+if exist "$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" (
+    xcopy /Y /D "$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" "$(TargetDir)"
+)</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="src\enemy\EnemyMelee.cpp" />
+    <ClCompile Include="src\enemy\EnemyRanged.cpp" />
+    <ClCompile Include="src\enemy\EnemyWarp.cpp" />
+    <ClCompile Include="src\enemy\EnemyCombat.cpp" />
+    <ClCompile Include="src\enemy\EnemyCore.cpp" />
+    <ClCompile Include="src\enemy\EnemyDecision.cpp" />
+    <ClCompile Include="src\enemy\EnemyMovement.cpp" />
+    <ClCompile Include="src\enemy\EnemyPresentation.cpp" />
+    <ClCompile Include="src\enemy\EnemyTuning.cpp" />
+    <ClCompile Include="src\enemy\EnemyTuningPresetIO.cpp" />
+    <ClCompile Include="src\player\PlayerTuningPresetIO.cpp" />
+    <ClCompile Include="src\scene\GameScene.Magnetismic.cpp" />
+    <ClCompile Include="src\enemy\Bullet.cpp" />
+    <ClCompile Include="src\player\Player.cpp" />
+    <ClCompile Include="src\scene\EnemyMotionDebugScene.cpp" />
+    <ClCompile Include="src\scene\GameScene.cpp" />
+    <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\player\Sword.cpp" />
+    <ClCompile Include="src\player\SwordJoyConController.cpp" />
+    <ClCompile Include="src\player\SwordMouseController.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\enemy\EnemyActionData.h" />
+    <ClInclude Include="include\enemy\EnemyPresentation.h" />
+    <ClInclude Include="include\enemy\EnemyTuningPreset.h" />
+    <ClInclude Include="include\enemy\EnemyTuningPresetIO.h" />
+    <ClInclude Include="include\player\PlayerTuningPreset.h" />
+    <ClInclude Include="include\player\PlayerTuningPresetIO.h" />
+    <ClInclude Include="include\enemy\WarpPostEffect.h" />
+    <ClInclude Include="include\player\SwordControllerState.h" />
+    <ClInclude Include="include\player\SwordPose.h" />
+    <ClInclude Include="include\enemy\Bullet.h" />
+    <ClInclude Include="include\enemy\Enemy.h" />
+    <ClInclude Include="include\scene\EnemyMotionDebugScene.h" />
+    <ClInclude Include="include\scene\GameScene.h" />
+    <ClInclude Include="include\player\Player.h" />
+    <ClInclude Include="include\player\Sword.h" />
+    <ClInclude Include="include\player\SwordJoyConController.h" />
+    <ClInclude Include="include\player\SwordMouseController.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\engine\Engine.vcxproj">
+      <Project>{8d69c2b4-4f39-47f0-9a40-4cb78ec442a1}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\engine\externals\DirectXTex\DirectXTex_Desktop_2022.vcxproj">
+      <Project>{371b9fa9-4c90-4ac6-a123-aced756d6c77}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\engine\externals\imgui\imgui.vcxproj">
+      <Project>{f6ba9c36-46d4-4c55-9c90-d016c833a837}</Project>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\enemy_tuning.csv" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\model\boss\boss.bin" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\model\boss\boss.gltf" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\model\boss\bossBody.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\model\bullet\bullet.mtl" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\model\bullet\bullet.obj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\model\bullet\bullet.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\model\enemy\bossBody.mtl" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\model\enemy\bossBody.obj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\model\enemy\bossBody.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\model\enemy\bossHand.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\model\enemy\bossLeftHand.mtl" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\model\enemy\bossLeftHand.obj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\model\enemy\bossModel.glb" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\model\enemy\bossRightHand.mtl" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\model\enemy\bossRightHand.obj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\model\enemy\enemy.glb" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\model\player\player.glb" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\model\player\sword.glb" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

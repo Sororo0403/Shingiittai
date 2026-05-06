@@ -99,7 +99,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
 #ifdef _DEBUG
     // DebugDraw
     DebugDraw debugDraw;
-    uint32_t boxModelId = modelManager.Load(L"engine/resources/model/debug/box.glb");
+    uint32_t boxModelId =
+        modelManager.Load(L"engine/resources/model/debug/box.obj");
 #endif // _DEBUG
 
     dxCommon.EndUpload();
