@@ -2,6 +2,7 @@
 #include "Camera.h"
 #include "JoyCon.h"
 #include "Sword.h"
+#include "SwordControllerState.h"
 #include "SwordJoyConController.h"
 #include "SwordMouseController.h"
 #include "Transform.h"
@@ -75,6 +76,12 @@ class Player {
   private:
     Transform BuildSwordTransform(const SwordPose &pose, bool isLeft) const;
     SwordPose MakeIdleSwordPose(bool isLeft) const;
+    SwordPose UpdateGamepadSword(Input *input, float deltaTime,
+                                 const Transform &swordTransform);
+    void UpdateGamepadSwordOrientation(Input *input, float deltaTime);
+    void UpdateGamepadSwordGuard(Input *input);
+    void UpdateGamepadSwordCounter(Input *input);
+    void UpdateGamepadSwordSlash(Input *input, float deltaTime);
     void UpdateMovement(Input *input, float deltaTime, float cameraYaw);
     void KeepDistanceFromTarget(const DirectX::XMFLOAT3 &target);
     void LookAt(const DirectX::XMFLOAT3 &target);
@@ -95,6 +102,7 @@ class Player {
     SwordJoyConController leftSwordJoyConController_;
     SwordJoyConController rightSwordJoyConController_;
     SwordMouseController swordMouseController_;
+    SwordControllerState gamepadSwordState_{};
     bool leftSwordSlashMode_ = false;
     bool rightSwordSlashMode_ = false;
     DirectX::XMFLOAT2 leftSwordSlashDir_{};
@@ -113,5 +121,7 @@ class Player {
     float damageTakenScale_ = 1.0f;
     DirectX::XMFLOAT3 knockbackVelocity_ = {0.0f, 0.0f, 0.0f};
     float yaw_ = 0.0f;
+    float gamepadSwordYaw_ = 0.0f;
+    float gamepadSwordPitch_ = 0.0f;
     DirectX::XMFLOAT3 velocity_ = {0.0f, 0.0f, 0.0f};
 };

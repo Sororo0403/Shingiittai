@@ -53,7 +53,10 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
 
     const bool hasLeftJoyCon = leftJoyCon_.IsConnected();
     const bool hasRightJoyCon = rightJoyCon_.IsConnected();
-    const bool useMouseRightSword = !hasLeftJoyCon && !hasRightJoyCon;
+    const bool useGamepadRightSword =
+        !hasLeftJoyCon && !hasRightJoyCon && input->IsGamepadConnected();
+    const bool useMouseRightSword =
+        !hasLeftJoyCon && !hasRightJoyCon && !useGamepadRightSword;
 
     SwordPose leftPose = MakeIdleSwordPose(true);
     if (hasLeftJoyCon) {
@@ -67,6 +70,9 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
         rightSwordJoyConController_.Update(&rightJoyCon_, deltaTime,
                                            rightSword_.GetTransform());
         rightPose = rightSwordJoyConController_.GetPose();
+    } else if (useGamepadRightSword) {
+        rightPose =
+            UpdateGamepadSword(input, deltaTime, rightSword_.GetTransform());
     } else if (useMouseRightSword) {
         swordMouseController_.Update(input, deltaTime, rightSword_.GetTransform());
         rightPose = swordMouseController_.GetPose();
@@ -112,7 +118,8 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     leftSwordSlashDir_ = leftPose.slashDir;
     rightSwordSlashDir_ = rightPose.slashDir;
     leftSwordVisible_ = hasLeftJoyCon;
-    rightSwordVisible_ = hasRightJoyCon || useMouseRightSword;
+    rightSwordVisible_ = hasRightJoyCon || useGamepadRightSword ||
+                         useMouseRightSword;
     isGuarding_ = leftPose.isGuard || rightPose.isGuard;
 
 }
@@ -223,6 +230,11 @@ void Player::UpdateMovement(Input *input, float deltaTime, float cameraYaw) {
     if (input->IsKeyPress(DIK_D))
         inputX += 1.0f;
 
+    if (input->IsGamepadConnected()) {
+        inputX += input->GetGamepadLeftStickX();
+        inputZ += input->GetGamepadLeftStickY();
+    }
+
     float moveLenSq = inputX * inputX + inputZ * inputZ;
     if (moveLenSq > 1.0f) {
         float invLen = 1.0f / std::sqrt(moveLenSq);
@@ -315,4 +327,107 @@ SwordPose Player::MakeIdleSwordPose(bool isLeft) const {
     SwordPose pose{};
     pose.orientation = {0, 0, 0, 1};
     return pose;
+}
+
+SwordPose Player::UpdateGamepadSword(Input *input, float deltaTime,
+                                     const Transform &swordTransform) {
+    UpdateGamepadSwordOrientation(input, deltaTime);
+    UpdateGamepadSwordGuard(input);
+    UpdateGamepadSwordCounter(input);
+    gamepadSwordState_.UpdateCounter();
+
+    if (gamepadSwordState_.isCounter) {
+        gamepadSwordState_.isSlashMode = false;
+        gamepadSwordState_.slashTimer = 0.0f;
+    } else {
+        UpdateGamepadSwordSlash(input, deltaTime);
+    }
+
+    gamepadSwordState_.UpdateSlashDir(swordTransform);
+    return gamepadSwordState_.ToPose();
+}
+
+void Player::UpdateGamepadSwordOrientation(Input *input, float deltaTime) {
+    const float lookX = input->GetGamepadRightStickX();
+    const float lookY = input->GetGamepadRightStickY();
+    const float lookLenSq = lookX * lookX + lookY * lookY;
+
+    if (lookLenSq > 0.04f) {
+        constexpr float kSwordLookSpeed = 3.0f;
+        gamepadSwordYaw_ += lookX * kSwordLookSpeed * deltaTime;
+        gamepadSwordPitch_ -= lookY * kSwordLookSpeed * deltaTime;
+        gamepadSwordPitch_ =
+            std::clamp(gamepadSwordPitch_, -1.2f, 1.2f);
+    }
+
+    XMVECTOR qYaw =
+        XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), gamepadSwordYaw_);
+    XMVECTOR qPitch =
+        XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), gamepadSwordPitch_);
+    XMVECTOR q = XMQuaternionNormalize(XMQuaternionMultiply(qPitch, qYaw));
+    XMStoreFloat4(&gamepadSwordState_.orientation, q);
+}
+
+void Player::UpdateGamepadSwordGuard(Input *input) {
+    gamepadSwordState_.isGuard =
+        input->GetGamepadLeftTrigger() > 0.2f ||
+        input->IsGamepadButtonPress(XINPUT_GAMEPAD_LEFT_SHOULDER);
+}
+
+void Player::UpdateGamepadSwordCounter(Input *input) {
+    if (!gamepadSwordState_.isGuard) {
+        return;
+    }
+
+    if (input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_B)) {
+        gamepadSwordState_.isCounter = true;
+        gamepadSwordState_.counterTimer = SwordControllerState::kCounterFrames;
+        gamepadSwordState_.isSlashMode = false;
+        gamepadSwordState_.slashTimer = 0.0f;
+    }
+}
+
+void Player::UpdateGamepadSwordSlash(Input *input, float deltaTime) {
+    const bool faceButtonSlash =
+        !gamepadSwordState_.isGuard &&
+        (input->IsGamepadButtonPress(XINPUT_GAMEPAD_A) ||
+         input->IsGamepadButtonPress(XINPUT_GAMEPAD_B) ||
+         input->IsGamepadButtonPress(XINPUT_GAMEPAD_X) ||
+         input->IsGamepadButtonPress(XINPUT_GAMEPAD_Y));
+
+    const bool slashActive =
+        input->GetGamepadRightTrigger() > 0.2f || faceButtonSlash;
+
+    float dirX = input->GetGamepadRightStickX();
+    float dirY = input->GetGamepadRightStickY();
+
+    if (input->IsGamepadButtonPress(XINPUT_GAMEPAD_X) ||
+        input->IsGamepadButtonPress(XINPUT_GAMEPAD_DPAD_LEFT)) {
+        dirX -= 1.0f;
+    }
+    if (input->IsGamepadButtonPress(XINPUT_GAMEPAD_B) ||
+        input->IsGamepadButtonPress(XINPUT_GAMEPAD_DPAD_RIGHT)) {
+        dirX += 1.0f;
+    }
+    if (input->IsGamepadButtonPress(XINPUT_GAMEPAD_Y) ||
+        input->IsGamepadButtonPress(XINPUT_GAMEPAD_DPAD_UP)) {
+        dirY += 1.0f;
+    }
+    if (input->IsGamepadButtonPress(XINPUT_GAMEPAD_A) ||
+        input->IsGamepadButtonPress(XINPUT_GAMEPAD_DPAD_DOWN)) {
+        dirY -= 1.0f;
+    }
+
+    const float dirLenSq = dirX * dirX + dirY * dirY;
+    if (dirLenSq > 0.001f) {
+        const float invLen = 1.0f / std::sqrt(dirLenSq);
+        gamepadSwordState_.slashDir = {dirX * invLen, dirY * invLen};
+    } else if (slashActive && gamepadSwordState_.slashDir.x == 0.0f &&
+               gamepadSwordState_.slashDir.y == 0.0f) {
+        gamepadSwordState_.slashDir = {1.0f, 0.0f};
+    }
+
+    gamepadSwordState_.UpdateSlash(
+        slashActive ? SwordControllerState::kSlashThreshold + 1.0f : 0.0f,
+        deltaTime);
 }

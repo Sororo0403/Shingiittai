@@ -27,17 +27,13 @@ void GameScene::Initialize(const SceneContext &ctx) {
 
     dx->BeginUpload();
 
-    uint32_t playerModel = model->Load(L"app/resources/models/player/player.glb");
+    uint32_t playerModel =
+        model->Load(L"app/resources/models/player/player.glb");
     uint32_t swordModel = model->Load(L"app/resources/models/player/sword.glb");
-    uint32_t enemyModel = 0;
+    uint32_t enemyModel = enemyModel =
+        model->Load(L"app/resources/models/boss/boss.gltf");
     uint32_t bulletModel =
         ctx_->model->Load(L"app/resources/models/bullet/bullet.obj");
-    try {
-        enemyModel = model->Load(L"app/resources/models/boss/boss.gltf");
-    } catch (const std::exception &) {
-        enemyModel = model->Load(L"app/resources/models/enemy/enemy.glb");
-    }
-
     dx->EndUpload();
 
     texture->ReleaseUploadBuffers();
@@ -47,7 +43,6 @@ void GameScene::Initialize(const SceneContext &ctx) {
     enemy_.Initialize(enemyModel, bulletModel);
     enemyModelId_ = enemyModel;
 
-    // 荳莠�E�遘ｰ繧�E�繝｡繝ｩ蛻晁E��蜷代″
     cameraYaw_ = 0.0f;
     cameraPitch_ = 0.0f;
     isLockOn_ = true;
@@ -59,18 +54,16 @@ void GameScene::Initialize(const SceneContext &ctx) {
     currentFovDeg_ = normalFovDeg_;
     targetFovDeg_ = normalFovDeg_;
 
-    // 閧�E�雜翫�E�荳我ｺ�E�遘ｰ繧�E�繝｡繝ｩ蛻晁E��蜷代″
     const DirectX::XMFLOAT3 &playerPos = player_.GetTransform().position;
     const DirectX::XMFLOAT3 &enemyPos = enemy_.GetTransform().position;
     lockOnOrbitCameraPos_ = {playerPos.x, playerPos.y + lockOnOrbitHeight_,
                              playerPos.z - lockOnOrbitRadius_};
-    lockOnLookAt_ = {
-        playerPos.x * lockOnLookPlayerWeight_ +
-            enemyPos.x * lockOnLookEnemyWeight_,
-        (playerPos.y + cameraLookHeight_) * 0.52f +
-            (enemyPos.y + 1.30f) * 0.48f,
-        playerPos.z * lockOnLookPlayerWeight_ +
-            enemyPos.z * lockOnLookEnemyWeight_};
+    lockOnLookAt_ = {playerPos.x * lockOnLookPlayerWeight_ +
+                         enemyPos.x * lockOnLookEnemyWeight_,
+                     (playerPos.y + cameraLookHeight_) * 0.52f +
+                         (enemyPos.y + 1.30f) * 0.48f,
+                     playerPos.z * lockOnLookPlayerWeight_ +
+                         enemyPos.z * lockOnLookEnemyWeight_};
     if (Model *playerModelData = model->GetModel(playerModelId_)) {
         if (!playerModelData->animations.empty()) {
             model->PlayAnimation(playerModelId_,
@@ -91,15 +84,13 @@ void GameScene::Update() {
     const float gameplayDeltaTime = baseDeltaTime * ComputeGameplayTimeScale();
     const float playerDeltaTime =
         counterCinematicActive_ ? baseDeltaTime : gameplayDeltaTime;
-    const float enemyDeltaTime =
-        counterCinematicActive_ ? (baseDeltaTime * counterTimeScale_)
-                               : gameplayDeltaTime;
+    const float enemyDeltaTime = counterCinematicActive_
+                                     ? (baseDeltaTime * counterTimeScale_)
+                                     : gameplayDeltaTime;
     UpdateCamera(input);
 
     ctx_->model->UpdateAnimation(playerModelId_, playerDeltaTime);
 
-    // 蠖薙◁E��雁�E螳・
-    // 蜈医↓繝励Ξ繧�E�繝､繝ｼ繧呈峩譁E��縺励※縲√◎縺�E�邨先棡繧脱nemy縺�E�貂｡縺・
     player_.Update(input, playerDeltaTime, enemy_.GetTransform().position,
                    cameraYaw_);
     sceneLightTime_ += baseDeltaTime;

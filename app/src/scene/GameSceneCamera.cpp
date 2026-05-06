@@ -61,7 +61,8 @@ void GameScene::UpdateCamera(Input *input) {
     // ===== 騾壼�E��E�繧�E�繝｡繝ｩ =====
 
     // 繝ｭ繝�Eけ繧�E�繝ｳ蛻・�E�譖ｿ縺・
-    if (input->IsKeyTrigger(DIK_Q)) {
+    if (input->IsKeyTrigger(DIK_Q) ||
+        input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_RIGHT_SHOULDER)) {
         isLockOn_ = !isLockOn_;
     }
 
@@ -82,6 +83,11 @@ void GameScene::UpdateCamera(Input *input) {
         pitchInput -= 1.0f;
     }
 #endif
+
+    if (input->IsGamepadConnected()) {
+        yawInput += input->GetGamepadRightStickX();
+        pitchInput += input->GetGamepadRightStickY();
+    }
 
     cameraYaw_ += yawInput * cameraLookSensitivity_;
     cameraPitch_ += pitchInput * cameraLookSensitivity_;
@@ -178,6 +184,12 @@ void GameScene::UpdateBattleCamera() {
             inputMagnitude = 1.0f;
         }
 #endif
+        if (ctx_->input != nullptr && ctx_->input->IsGamepadConnected()) {
+            const float stick = std::abs(ctx_->input->GetGamepadRightStickX());
+            if (stick > inputMagnitude) {
+                inputMagnitude = stick;
+            }
+        }
 
         float assistScale = 1.0f;
         if (inputMagnitude > 0.0f) {

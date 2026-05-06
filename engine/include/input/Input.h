@@ -4,6 +4,7 @@
 #include <array>
 #include <dinput.h>
 #include <wrl.h>
+#include <Xinput.h>
 
 /// <summary>
 /// キーボードとマウスの入力状態を管理する
@@ -83,6 +84,17 @@ class Input {
     /// <returns>離された瞬間ならtrue</returns>
     bool IsMouseRelease(int button) const;
 
+    bool IsGamepadConnected() const { return gamepadConnected_; }
+    bool IsGamepadButtonPress(WORD button) const;
+    bool IsGamepadButtonTrigger(WORD button) const;
+    bool IsGamepadButtonRelease(WORD button) const;
+    float GetGamepadLeftStickX() const { return gamepadLeftStickX_; }
+    float GetGamepadLeftStickY() const { return gamepadLeftStickY_; }
+    float GetGamepadRightStickX() const { return gamepadRightStickX_; }
+    float GetGamepadRightStickY() const { return gamepadRightStickY_; }
+    float GetGamepadLeftTrigger() const { return gamepadLeftTrigger_; }
+    float GetGamepadRightTrigger() const { return gamepadRightTrigger_; }
+
   private:
     /// <summary>
     /// キーボード状態を更新する
@@ -93,6 +105,11 @@ class Input {
     /// マウス状態を更新する
     /// </summary>
     void UpdateMouse();
+
+    /// <summary>
+    /// Xboxコントローラー状態を更新する
+    /// </summary>
+    void UpdateGamepad();
 
   private:
     static constexpr BYTE kPressMask = 0x80;
@@ -106,4 +123,14 @@ class Input {
 
     DIMOUSESTATE mouseState_{};
     DIMOUSESTATE mousePrevState_{};
+
+    XINPUT_STATE gamepadState_{};
+    XINPUT_STATE gamepadPrevState_{};
+    bool gamepadConnected_ = false;
+    float gamepadLeftStickX_ = 0.0f;
+    float gamepadLeftStickY_ = 0.0f;
+    float gamepadRightStickX_ = 0.0f;
+    float gamepadRightStickY_ = 0.0f;
+    float gamepadLeftTrigger_ = 0.0f;
+    float gamepadRightTrigger_ = 0.0f;
 };
