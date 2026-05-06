@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0">
+  <ItemGroup>
+    <ClCompile Include="src\app\enemy\EnemyMelee.cpp" />
+    <ClCompile Include="src\app\enemy\EnemyRanged.cpp" />
+    <ClCompile Include="src\app\enemy\EnemyWarp.cpp" />
+    <ClCompile Include="src\app\enemy\EnemyCombat.cpp" />
+    <ClCompile Include="src\app\enemy\EnemyCore.cpp" />
+    <ClCompile Include="src\app\enemy\EnemyDecision.cpp" />
+    <ClCompile Include="src\app\enemy\EnemyMovement.cpp" />
+    <ClCompile Include="src\app\enemy\EnemyPresentation.cpp" />
+    <ClCompile Include="src\app\enemy\EnemyTuning.cpp" />
+    <ClCompile Include="src\app\enemy\EnemyTuningPresetIO.cpp" />
+    <ClCompile Include="src\app\player\PlayerTuningPresetIO.cpp" />
+    <ClCompile Include="src\app\scene\GameScene.Magnetismic.cpp" />
+    <ClCompile Include="src\app\enemy\Bullet.cpp" />
+    <ClCompile Include="src\app\player\Player.cpp" />
+    <ClCompile Include="src\app\scene\EnemyMotionDebugScene.cpp" />
+    <ClCompile Include="src\app\scene\GameScene.cpp" />
+    <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\app\player\Sword.cpp" />
+    <ClCompile Include="src\app\player\SwordJoyConController.cpp" />
+    <ClCompile Include="src\app\player\SwordMouseController.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\app\enemy\EnemyActionData.h" />
+    <ClInclude Include="include\app\enemy\EnemyPresentation.h" />
+    <ClInclude Include="include\app\enemy\EnemyTuningPreset.h" />
+    <ClInclude Include="include\app\enemy\EnemyTuningPresetIO.h" />
+    <ClInclude Include="include\app\player\PlayerTuningPreset.h" />
+    <ClInclude Include="include\app\player\PlayerTuningPresetIO.h" />
+    <ClInclude Include="include\app\enemy\WarpPostEffect.h" />
+    <ClInclude Include="include\app\player\SwordControllerState.h" />
+    <ClInclude Include="include\app\player\SwordPose.h" />
+    <ClInclude Include="include\app\enemy\Bullet.h" />
+    <ClInclude Include="include\app\enemy\Enemy.h" />
+    <ClInclude Include="include\app\scene\EnemyMotionDebugScene.h" />
+    <ClInclude Include="include\app\scene\GameScene.h" />
+    <ClInclude Include="include\app\player\Player.h" />
+    <ClInclude Include="include\app\player\Sword.h" />
+    <ClInclude Include="include\app\player\SwordJoyConController.h" />
+    <ClInclude Include="include\app\player\SwordMouseController.h" />
+  </ItemGroup>
+</Project>

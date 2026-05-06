@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project DefaultTargets="Build">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
       <Configuration>Debug</Configuration>
@@ -16,17 +16,17 @@
     <ProjectGuid>{2d2b4186-642f-41bf-97c8-74ab151638ec}</ProjectGuid>
     <RootNamespace>Engine</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>Game</ProjectName>
+    <ProjectName>Engine</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
@@ -64,29 +64,11 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>$(ProjectDir)include\app\enemy;$(ProjectDir)include\app\player;$(ProjectDir)include\app\scene;$(ProjectDir)include\engine\particle;$(ProjectDir)include\engine\collision;$(ProjectDir)include\engine\scene;$(ProjectDir)include\engine\input;$(ProjectDir)include\engine\camera;$(ProjectDir)include\engine\core;$(ProjectDir)include\engine\graphics;$(ProjectDir)include\engine\imgui;$(ProjectDir)include\engine\model;$(ProjectDir)include\engine\sound;$(ProjectDir)include\engine\sprite;$(ProjectDir)include\engine\texture;$(ProjectDir)externals\assimp\include;$(ProjectDir)externals\assimp\include\assimp;$(ProjectDir)externals\DirectX-Headers;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\JoyShockLibrary\include;$(ProjectDir)externals\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)include\engine\particle;$(ProjectDir)include\engine\collision;$(ProjectDir)include\engine\scene;$(ProjectDir)include\engine\input;$(ProjectDir)include\engine\camera;$(ProjectDir)include\engine\core;$(ProjectDir)include\engine\graphics;$(ProjectDir)include\engine\imgui;$(ProjectDir)include\engine\model;$(ProjectDir)include\engine\sound;$(ProjectDir)include\engine\sprite;$(ProjectDir)include\engine\texture;$(ProjectDir)externals\assimp\include;$(ProjectDir)externals\assimp\include\assimp;$(ProjectDir)externals\DirectX-Headers;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\JoyShockLibrary\include;$(ProjectDir)externals\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
-    <Link>
-      <SubSystem>Windows</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
-      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;imgui.lib;dinput8.lib;dxguid.lib;JoyShockLibrary.lib;assimp-vc145-mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(ProjectDir)externals\assimp\lib\;$(ProjectDir)externals\JoyShockLibrary\lib\;$(SolutionDir)..\generated\outputs\$(Configuration)\imgui\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-    </Link>
-    <PostBuildEvent>
-      <Command>REM JoyShockLibrary
-if exist "$(ProjectDir)externals\JoyShockLibrary\lib\JoyShockLibrary.dll" (
-    xcopy /Y /D "$(ProjectDir)externals\JoyShockLibrary\lib\JoyShockLibrary.dll" "$(TargetDir)"
-)
-
-REM assimp
-if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
-    xcopy /Y /D "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" "$(TargetDir)"
-)</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -98,46 +80,16 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>$(ProjectDir)include\app\enemy;$(ProjectDir)include\app\player;$(ProjectDir)include\app\scene;$(ProjectDir)include\engine\particle;$(ProjectDir)include\engine\collision;$(ProjectDir)include\engine\scene;$(ProjectDir)include\engine\input;$(ProjectDir)include\engine\camera;$(ProjectDir)include\engine\core;$(ProjectDir)include\engine\graphics;$(ProjectDir)include\engine\imgui;$(ProjectDir)include\engine\model;$(ProjectDir)include\engine\sound;$(ProjectDir)include\engine\sprite;$(ProjectDir)include\engine\texture;$(ProjectDir)externals\assimp\include;$(ProjectDir)externals\assimp\include\assimp;$(ProjectDir)externals\DirectX-Headers;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\JoyShockLibrary\include;$(ProjectDir)externals\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)include\engine\particle;$(ProjectDir)include\engine\collision;$(ProjectDir)include\engine\scene;$(ProjectDir)include\engine\input;$(ProjectDir)include\engine\camera;$(ProjectDir)include\engine\core;$(ProjectDir)include\engine\graphics;$(ProjectDir)include\engine\imgui;$(ProjectDir)include\engine\model;$(ProjectDir)include\engine\sound;$(ProjectDir)include\engine\sprite;$(ProjectDir)include\engine\texture;$(ProjectDir)externals\assimp\include;$(ProjectDir)externals\assimp\include\assimp;$(ProjectDir)externals\DirectX-Headers;$(ProjectDir)externals\DirectXTex;$(ProjectDir)externals\JoyShockLibrary\include;$(ProjectDir)externals\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
-    <Link>
-      <SubSystem>Windows</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
-      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;imgui.lib;dinput8.lib;dxguid.lib;JoyShockLibrary.lib;assimp-vc145-mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(ProjectDir)externals\assimp\lib\;$(ProjectDir)externals\JoyShockLibrary\lib\;$(SolutionDir)..\generated\outputs\$(Configuration)\imgui\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-    </Link>
-    <PostBuildEvent>
-      <Command>REM JoyShockLibrary
-if exist "$(ProjectDir)externals\JoyShockLibrary\lib\JoyShockLibrary.dll" (
-    xcopy /Y /D "$(ProjectDir)externals\JoyShockLibrary\lib\JoyShockLibrary.dll" "$(TargetDir)"
-)
-
-REM assimp
-if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
-    xcopy /Y /D "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" "$(TargetDir)"
-)</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\app\enemy\EnemyMelee.cpp" />
-    <ClCompile Include="src\app\enemy\EnemyRanged.cpp" />
-    <ClCompile Include="src\app\enemy\EnemyWarp.cpp" />
-    <ClCompile Include="src\app\enemy\EnemyCombat.cpp" />
-    <ClCompile Include="src\app\enemy\EnemyCore.cpp" />
-    <ClCompile Include="src\app\enemy\EnemyDecision.cpp" />
-    <ClCompile Include="src\app\enemy\EnemyMovement.cpp" />
-    <ClCompile Include="src\app\enemy\EnemyPresentation.cpp" />
-    <ClCompile Include="src\app\enemy\EnemyTuning.cpp" />
-    <ClCompile Include="src\app\enemy\EnemyTuningPresetIO.cpp" />
-    <ClCompile Include="src\app\player\PlayerTuningPresetIO.cpp" />
     <ClCompile Include="src\engine\graphics\DxUtils.cpp" />
     <ClCompile Include="src\engine\graphics\ShaderCompiler.cpp" />
     <ClCompile Include="src\engine\graphics\VignetteRenderer.cpp" />
-    <ClCompile Include="src\app\scene\GameScene.Magnetismic.cpp" />
     <ClCompile Include="src\engine\graphics\ElectricRingEffectRenderer.cpp" />
     <ClCompile Include="src\engine\graphics\MagnetismicRenderer.cpp" />
     <ClCompile Include="src\engine\graphics\SlashEffectRenderer.cpp" />
@@ -148,14 +100,10 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClCompile Include="src\engine\camera\DebugCamera.cpp" />
     <ClCompile Include="src\engine\model\Animator.cpp" />
     <ClCompile Include="src\engine\model\AssimpLoader.cpp" />
-    <ClCompile Include="src\app\enemy\Bullet.cpp" />
     <ClCompile Include="src\engine\collision\DebugDraw.cpp" />
     <ClCompile Include="src\engine\collision\CollisionUtil.cpp" />
-    <ClCompile Include="src\app\player\Player.cpp" />
     <ClCompile Include="src\engine\input\MahonyFilter.cpp" />
     <ClCompile Include="src\engine\particle\BaseParticleSystem.cpp" />
-    <ClCompile Include="src\app\scene\EnemyMotionDebugScene.cpp" />
-    <ClCompile Include="src\app\scene\GameScene.cpp" />
     <ClCompile Include="src\engine\particle\GpuSlashParticleSystem.cpp" />
     <ClCompile Include="src\engine\scene\SceneManager.cpp" />
     <ClCompile Include="src\engine\input\Input.cpp" />
@@ -169,24 +117,11 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClCompile Include="src\engine\sprite\SpriteManager.cpp" />
     <ClCompile Include="src\engine\sprite\SpriteRenderer.cpp" />
     <ClCompile Include="src\engine\graphics\DirectXCommon.cpp" />
-    <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\engine\core\WinApp.cpp" />
     <ClCompile Include="src\engine\graphics\SrvManager.cpp" />
     <ClCompile Include="src\engine\texture\TextureManager.cpp" />
-    <ClCompile Include="src\app\player\Sword.cpp" />
-    <ClCompile Include="src\app\player\SwordJoyConController.cpp" />
-    <ClCompile Include="src\app\player\SwordMouseController.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="include\app\enemy\EnemyActionData.h" />
-    <ClInclude Include="include\app\enemy\EnemyPresentation.h" />
-    <ClInclude Include="include\app\enemy\EnemyTuningPreset.h" />
-    <ClInclude Include="include\app\enemy\EnemyTuningPresetIO.h" />
-    <ClInclude Include="include\app\player\PlayerTuningPreset.h" />
-    <ClInclude Include="include\app\player\PlayerTuningPresetIO.h" />
-    <ClInclude Include="include\app\enemy\WarpPostEffect.h" />
-    <ClInclude Include="include\app\player\SwordControllerState.h" />
-    <ClInclude Include="include\app\player\SwordPose.h" />
     <ClInclude Include="include\engine\camera\DebugCamera.h" />
     <ClInclude Include="include\engine\graphics\ElectricRingEffectRenderer.h" />
     <ClInclude Include="include\engine\graphics\MagnetismicRenderer.h" />
@@ -195,16 +130,12 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClInclude Include="include\engine\graphics\WarpPostEffectRenderer.h" />
     <ClInclude Include="include\engine\model\Animator.h" />
     <ClInclude Include="include\engine\model\AssimpLoader.h" />
-    <ClInclude Include="include\app\enemy\Bullet.h" />
     <ClInclude Include="include\engine\collision\DebugDraw.h" />
     <ClInclude Include="include\engine\collision\AABB.h" />
     <ClInclude Include="include\engine\collision\CollisionUtil.h" />
-    <ClInclude Include="include\app\enemy\Enemy.h" />
     <ClInclude Include="include\engine\collision\OBB.h" />
     <ClInclude Include="include\engine\input\MahonyFilter.h" />
     <ClInclude Include="include\engine\particle\BaseParticleSystem.h" />
-    <ClInclude Include="include\app\scene\EnemyMotionDebugScene.h" />
-    <ClInclude Include="include\app\scene\GameScene.h" />
     <ClInclude Include="include\engine\model\Transform.h" />
     <ClInclude Include="include\engine\particle\GpuSlashParticleSystem.h" />
     <ClInclude Include="include\engine\particle\Particle.h" />
@@ -234,138 +165,30 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClInclude Include="include\engine\input\Input.h" />
     <ClInclude Include="include\engine\input\JoyCon.h" />
     <ClInclude Include="include\engine\scene\SceneManager.h" />
-    <ClInclude Include="include\app\player\Player.h" />
-    <ClInclude Include="include\app\player\Sword.h" />
     <ClInclude Include="include\engine\model\Material.h" />
     <ClInclude Include="include\engine\model\MaterialManager.h" />
-    <ClInclude Include="include\app\player\SwordJoyConController.h" />
-    <ClInclude Include="include\app\player\SwordMouseController.h" />
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="resources\shaders\model\ModelPS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="resources\shaders\model\ModelVS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="resources\shaders\slash\Slash.PS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="resources\shaders\slash\Slash.VS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="resources\shaders\slash\SlashParticleDraw.PS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="resources\shaders\slash\SlashParticleDraw.VS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="resources\shaders\slash\SlashParticleEmit.CS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4.0</ShaderModel>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="resources\shaders\slash\SlashParticleUpdate.CS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4.0</ShaderModel>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="resources\shaders\sprite\SpritePS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="resources\shaders\sprite\SpriteVS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="resources\shaders\postprocess\VignettePS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="resources\shaders\postprocess\VignetteVS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="resources\shaders\trail\SwordTrail.PS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="resources\shaders\trail\SwordTrail.VS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="resources\shaders\warp\DistortionPS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="resources\shaders\warp\Fullscreen.VS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="resources\shaders\warp\Magnetismic.PS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="resources\shaders\warp\Magnetismic.VS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="resources\shaders\warp\PlasmaRingPS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="resources\shaders\warp\WarpPostEffect.PS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-    </FxCompile>
+    <FxCompile Include="resources\shaders\model\ModelPS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
+    <FxCompile Include="resources\shaders\model\ModelVS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
+    <FxCompile Include="resources\shaders\slash\Slash.PS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
+    <FxCompile Include="resources\shaders\slash\Slash.VS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
+    <FxCompile Include="resources\shaders\slash\SlashParticleDraw.PS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
+    <FxCompile Include="resources\shaders\slash\SlashParticleDraw.VS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
+    <FxCompile Include="resources\shaders\slash\SlashParticleEmit.CS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType><ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4.0</ShaderModel><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType><ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4.0</ShaderModel><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
+    <FxCompile Include="resources\shaders\slash\SlashParticleUpdate.CS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType><ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4.0</ShaderModel><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType><ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4.0</ShaderModel><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
+    <FxCompile Include="resources\shaders\sprite\SpritePS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
+    <FxCompile Include="resources\shaders\sprite\SpriteVS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
+    <FxCompile Include="resources\shaders\postprocess\VignettePS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
+    <FxCompile Include="resources\shaders\postprocess\VignetteVS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
+    <FxCompile Include="resources\shaders\trail\SwordTrail.PS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
+    <FxCompile Include="resources\shaders\trail\SwordTrail.VS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
+    <FxCompile Include="resources\shaders\warp\DistortionPS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
+    <FxCompile Include="resources\shaders\warp\Fullscreen.VS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild></FxCompile>
+    <FxCompile Include="resources\shaders\warp\Magnetismic.PS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
+    <FxCompile Include="resources\shaders\warp\Magnetismic.VS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
+    <FxCompile Include="resources\shaders\warp\PlasmaRingPS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></FxCompile>
+    <FxCompile Include="resources\shaders\warp\WarpPostEffect.PS.hlsl"><ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType><ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild></FxCompile>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="externals\DirectXTex\DirectXTex_Desktop_2022.vcxproj">
@@ -376,14 +199,8 @@ if exist "$(ProjectDir)externals\assimp\bin\assimp-vc145-mt.dll" (
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <None Include="resources\shaders\model\Model.hlsli">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </None>
-    <None Include="resources\shaders\sprite\Sprite.hlsli">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </None>
+    <None Include="resources\shaders\model\Model.hlsli"><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></None>
+    <None Include="resources\shaders\sprite\Sprite.hlsli"><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild><ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild></None>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
