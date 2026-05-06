@@ -137,7 +137,6 @@ if exist "$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClCompile Include="src\scene\GameScene.Magnetismic.cpp" />
     <ClCompile Include="src\enemy\Bullet.cpp" />
     <ClCompile Include="src\player\Player.cpp" />
-    <ClCompile Include="src\scene\EnemyMotionDebugScene.cpp" />
     <ClCompile Include="src\scene\GameScene.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\player\Sword.cpp" />
@@ -155,7 +154,6 @@ if exist "$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClInclude Include="include\player\SwordPose.h" />
     <ClInclude Include="include\enemy\Bullet.h" />
     <ClInclude Include="include\enemy\Enemy.h" />
-    <ClInclude Include="include\scene\EnemyMotionDebugScene.h" />
     <ClInclude Include="include\scene\GameScene.h" />
     <ClInclude Include="include\player\Player.h" />
     <ClInclude Include="include\player\Sword.h" />

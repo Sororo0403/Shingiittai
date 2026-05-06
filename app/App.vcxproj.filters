@@ -90,9 +90,6 @@
     <ClCompile Include="src\player\Player.cpp">
       <Filter>Source Files\player</Filter>
     </ClCompile>
-    <ClCompile Include="src\scene\EnemyMotionDebugScene.cpp">
-      <Filter>Source Files\scene</Filter>
-    </ClCompile>
     <ClCompile Include="src\scene\GameScene.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
@@ -139,9 +136,6 @@
     </ClInclude>
     <ClInclude Include="include\enemy\Enemy.h">
       <Filter>Header Files\enemy</Filter>
-    </ClInclude>
-    <ClInclude Include="include\scene\EnemyMotionDebugScene.h">
-      <Filter>Header Files\scene</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\GameScene.h">
       <Filter>Header Files\scene</Filter>

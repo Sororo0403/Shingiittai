@@ -1,7 +1,6 @@
 #include "GameScene.h"
 #include "CollisionUtil.h"
 #include "DirectXCommon.h"
-#include "EnemyMotionDebugScene.h"
 #include "Input.h"
 #include "ModelManager.h"
 #include "SceneManager.h"
@@ -278,14 +277,6 @@ void GameScene::Update() {
     if (input != nullptr && input->IsKeyTrigger(DIK_F2)) {
         dbgTriggerWarpBackstabRequested_ = true;
     }
-#ifdef _DEBUG
-    if (input != nullptr && input->IsKeyTrigger(DIK_F8) &&
-        sceneManager_ != nullptr) {
-        sceneManager_->ChangeScene(std::make_unique<EnemyMotionDebugScene>());
-        return;
-    }
-#endif
-
     UpdateCamera(input);
 
     ctx_->model->UpdateAnimation(playerModelId_, playerDeltaTime);
@@ -788,12 +779,6 @@ void GameScene::Draw() {
 #ifdef _DEBUG
     ImGui::Begin("HitInfo");
     ImGui::Checkbox("Freeze Enemy Motion", &dbgFreezeEnemyMotion_);
-    if (sceneManager_ != nullptr &&
-        ImGui::Button("Open Motion Debug Scene (F8)")) {
-        sceneManager_->ChangeScene(std::make_unique<EnemyMotionDebugScene>());
-        ImGui::End();
-        return;
-    }
     const ActionKind dbgEnemyActionKind = enemy_.GetActionKind();
     const ActionStep dbgEnemyActionStep = enemy_.GetActionStep();
     if (ImGui::Button("Trigger Counter")) {
