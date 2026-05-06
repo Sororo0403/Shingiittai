@@ -23,6 +23,7 @@ class GameScene : public BaseScene {
     void UpdateCamera(Input *input);
     void UpdateBattleCamera();
     void UpdateSceneLighting();
+    void DrawArena();
     void SyncEnemyAnimation();
     void SetEnemyAnimationFrozen(bool frozen);
     void UpdateCombat(float gameplayDeltaTime);
@@ -38,6 +39,13 @@ class GameScene : public BaseScene {
     Enemy enemy_;
     uint32_t playerModelId_ = 0;
     uint32_t enemyModelId_ = 0;
+    uint32_t arenaFloorModelId_ = 0;
+    uint32_t arenaInnerRingModelId_ = 0;
+    uint32_t arenaOuterRingModelId_ = 0;
+    uint32_t arenaColumnModelId_ = 0;
+    uint32_t arenaDomeModelId_ = 0;
+    uint32_t arenaBarrierRingModelId_ = 0;
+    uint32_t arenaNoiseTextureId_ = 0;
     std::string enemyAnimationName_{};
     bool enemyAnimationLoop_ = true;
 
