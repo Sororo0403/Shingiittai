@@ -84,7 +84,7 @@ void GameScene::UpdateCamera(Input *input) {
     }
 #endif
 
-    if (input->IsGamepadConnected()) {
+    if (input->IsGamepadConnected() && player_.UsesGamepadCameraLook()) {
         yawInput += input->GetGamepadRightStickX();
         pitchInput += input->GetGamepadRightStickY();
     }
@@ -184,7 +184,8 @@ void GameScene::UpdateBattleCamera() {
             inputMagnitude = 1.0f;
         }
 #endif
-        if (ctx_->input != nullptr && ctx_->input->IsGamepadConnected()) {
+        if (ctx_->input != nullptr && ctx_->input->IsGamepadConnected() &&
+            player_.UsesGamepadCameraLook()) {
             const float stick = std::abs(ctx_->input->GetGamepadRightStickX());
             if (stick > inputMagnitude) {
                 inputMagnitude = stick;

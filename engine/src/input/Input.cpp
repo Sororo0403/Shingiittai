@@ -171,3 +171,13 @@ bool Input::IsGamepadButtonRelease(WORD button) const {
     return gamepadConnected_ && (gamepadState_.Gamepad.wButtons & button) == 0 &&
            (gamepadPrevState_.Gamepad.wButtons & button) != 0;
 }
+
+bool Input::IsGamepadLeftTriggerTrigger(float threshold) const {
+    return gamepadConnected_ && gamepadLeftTrigger_ > threshold &&
+           NormalizeTrigger(gamepadPrevState_.Gamepad.bLeftTrigger) <= threshold;
+}
+
+bool Input::IsGamepadRightTriggerTrigger(float threshold) const {
+    return gamepadConnected_ && gamepadRightTrigger_ > threshold &&
+           NormalizeTrigger(gamepadPrevState_.Gamepad.bRightTrigger) <= threshold;
+}

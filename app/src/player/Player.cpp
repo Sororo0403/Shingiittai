@@ -51,6 +51,13 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId,
     leftManualCounterFrames_ = 0;
     rightManualCounterFrames_ = 0;
     dualNextManualLeft_ = true;
+    gamepadControlMode_ = PlayerGamepadControlMode::Hunter;
+    gamepadSwordState_ = {};
+    gamepadSwordYaw_ = 0.0f;
+    gamepadSwordPitch_ = 0.0f;
+    hunterGamepadAttackKind_ = HunterGamepadAttackKind::None;
+    hunterGamepadAttackTimer_ = 0.0f;
+    hunterGamepadAttackDuration_ = 0.0f;
     leftSword_.Update(BuildSwordTransform(MakeIdleSwordPose(true), true),
                       MakeIdleSwordPose(true), 0.0f);
     rightSword_.Update(BuildSwordTransform(MakeIdleSwordPose(false), false),
@@ -69,6 +76,11 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
         rightJoyCon_.SetBaseOrientation();
     }
 
+    if (input->IsGamepadConnected() &&
+        input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_START)) {
+        ToggleGamepadControlMode();
+    }
+
     leftJoyCon_.Update(deltaTime);
     rightJoyCon_.Update(deltaTime);
 
@@ -80,6 +92,9 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     const bool hasRightJoyCon = rightJoyCon_.IsConnected();
     const bool useGamepadRightSword =
         !hasLeftJoyCon && !hasRightJoyCon && input->IsGamepadConnected();
+    const bool useHunterGamepadControls =
+        useGamepadRightSword &&
+        gamepadControlMode_ == PlayerGamepadControlMode::Hunter;
     const bool useMouseRightSword =
         !hasLeftJoyCon && !hasRightJoyCon && !useGamepadRightSword;
 
@@ -95,6 +110,8 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
         rightSwordJoyConController_.Update(&rightJoyCon_, deltaTime,
                                            rightSword_.GetTransform());
         rightPose = rightSwordJoyConController_.GetPose();
+    } else if (useHunterGamepadControls) {
+        rightPose = UpdateHunterGamepadSword(input, deltaTime);
     } else if (useGamepadRightSword) {
         rightPose =
             UpdateGamepadSword(input, deltaTime, rightSword_.GetTransform());
@@ -104,7 +121,8 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     }
 
     UpdateWeaponRules(input, leftPose, rightPose, hasLeftJoyCon,
-                      hasRightJoyCon, useGamepadRightSword, deltaTime);
+                      hasRightJoyCon, useGamepadRightSword,
+                      useHunterGamepadControls, deltaTime);
 
     if (postSlashRecoveryTimer_ > 0.0f) {
         postSlashRecoveryTimer_ -= deltaTime;
@@ -289,9 +307,14 @@ void Player::UpdateMovement(Input *input, float deltaTime, float cameraYaw) {
     float worldMoveX = sinYaw * inputZ + cosYaw * inputX;
     float worldMoveZ = cosYaw * inputZ - sinYaw * inputX;
 
-    velocity_.x = worldMoveX * moveSpeed_;
+    float speedScale = 1.0f;
+    if (IsHunterGamepadAttacking()) {
+        speedScale = weaponType_ == PlayerWeaponType::GreatSword ? 0.18f : 0.35f;
+    }
+
+    velocity_.x = worldMoveX * moveSpeed_ * speedScale;
     velocity_.y = 0.0f;
-    velocity_.z = worldMoveZ * moveSpeed_;
+    velocity_.z = worldMoveZ * moveSpeed_ * speedScale;
 
     tf_.position.x += velocity_.x * deltaTime;
     tf_.position.z += velocity_.z * deltaTime;
@@ -417,6 +440,7 @@ SwordPose Player::MakeMirroredSwordPose(const SwordPose &source) const {
 void Player::UpdateWeaponRules(Input *input, SwordPose &leftPose,
                                SwordPose &rightPose, bool hasLeftJoyCon,
                                bool hasRightJoyCon, bool useGamepadRightSword,
+                               bool useHunterGamepadControls,
                                float deltaTime) {
     leftSwordAttackDamage_ = 10.0f;
     rightSwordAttackDamage_ = 10.0f;
@@ -433,7 +457,8 @@ void Player::UpdateWeaponRules(Input *input, SwordPose &leftPose,
         rightPose.isGuard = false;
 
         const bool singlePointerControl =
-            !hasLeftJoyCon && !hasRightJoyCon && !useGamepadRightSword;
+            !hasLeftJoyCon && !hasRightJoyCon &&
+            (!useGamepadRightSword || useHunterGamepadControls);
         if (singlePointerControl && rightPose.isSlashMode) {
             if (dualNextManualLeft_ && leftSlashRecoveryTimer_ <= 0.0f) {
                 leftPose = MakeMirroredSwordPose(rightPose);
@@ -451,7 +476,7 @@ void Player::UpdateWeaponRules(Input *input, SwordPose &leftPose,
 
         const bool manualCounterTrigger =
             input->IsMouseTrigger(1) ||
-            (input->IsGamepadConnected() &&
+            (input->IsGamepadConnected() && !useHunterGamepadControls &&
              input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_B));
         if (manualCounterTrigger) {
             float dirX = static_cast<float>(input->GetMouseDX());
@@ -496,10 +521,23 @@ void Player::UpdateWeaponRules(Input *input, SwordPose &leftPose,
         if (rightPose.isSlashMode) {
             const bool startsSwing = !prevRightSwordSlashMode_ &&
                                      greatSwordSwingTimer_ <= 0.0f;
-            if (startsSwing && greatSwordCharge_ >= kGreatSwordMinSwingCharge) {
+            const bool canStartSwing =
+                useHunterGamepadControls ||
+                greatSwordCharge_ >= kGreatSwordMinSwingCharge;
+            if (startsSwing && canStartSwing) {
+                const float swingCharge =
+                    useHunterGamepadControls
+                        ? (std::max)(greatSwordCharge_,
+                                     kGreatSwordMinSwingCharge)
+                        : greatSwordCharge_;
                 greatSwordSwingDamage_ =
-                    ComputeGreatSwordAttackDamage(greatSwordCharge_);
-                greatSwordSwingTimer_ = kGreatSwordSwingDuration;
+                    ComputeGreatSwordAttackDamage(swingCharge);
+                greatSwordSwingTimer_ =
+                    useHunterGamepadControls
+                        ? (std::max)(hunterGamepadAttackDuration_ -
+                                         hunterGamepadAttackTimer_,
+                                     kGreatSwordSwingDuration)
+                        : kGreatSwordSwingDuration;
                 greatSwordCharge_ = 0.0f;
                 greatSwordFullChargeCounterReady_ = false;
             }
@@ -608,6 +646,22 @@ SwordPose Player::UpdateGamepadSword(Input *input, float deltaTime,
     return gamepadSwordState_.ToPose();
 }
 
+SwordPose Player::UpdateHunterGamepadSword(Input *input, float deltaTime) {
+    UpdateHunterGamepadSwordGuard(input);
+    UpdateHunterGamepadSwordCounter(input);
+    gamepadSwordState_.UpdateCounter();
+
+    if (gamepadSwordState_.isCounter) {
+        gamepadSwordState_.isSlashMode = false;
+        gamepadSwordState_.slashTimer = 0.0f;
+    } else {
+        UpdateHunterGamepadSwordSlash(input, deltaTime);
+    }
+
+    UpdateHunterGamepadSwordOrientation();
+    return gamepadSwordState_.ToPose();
+}
+
 void Player::UpdateGamepadSwordOrientation(Input *input, float deltaTime) {
     const float lookX = input->GetGamepadRightStickX();
     const float lookY = input->GetGamepadRightStickY();
@@ -627,6 +681,221 @@ void Player::UpdateGamepadSwordOrientation(Input *input, float deltaTime) {
         XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), gamepadSwordPitch_);
     XMVECTOR q = XMQuaternionNormalize(XMQuaternionMultiply(qPitch, qYaw));
     XMStoreFloat4(&gamepadSwordState_.orientation, q);
+}
+
+void Player::UpdateHunterGamepadSwordOrientation() {
+    const float t = GetHunterGamepadAttackRatio();
+    const float windup = std::clamp(t / 0.28f, 0.0f, 1.0f);
+    const float swing = std::clamp((t - 0.28f) / 0.34f, 0.0f, 1.0f);
+    const float follow = std::clamp((t - 0.62f) / 0.38f, 0.0f, 1.0f);
+
+    float pitch = -0.08f;
+    float yaw = 0.0f;
+    float roll = 0.0f;
+
+    if (gamepadSwordState_.isGuard) {
+        pitch = -0.55f;
+        yaw = 0.10f;
+        roll = 0.20f;
+    }
+
+    if (gamepadSwordState_.isCounter) {
+        pitch = -gamepadSwordState_.slashDir.y * 0.38f;
+        yaw = gamepadSwordState_.slashDir.x * 0.62f;
+        roll = -gamepadSwordState_.slashDir.x * 0.55f;
+    } else if (IsHunterGamepadAttacking()) {
+        switch (hunterGamepadAttackKind_) {
+        case HunterGamepadAttackKind::SideLeft:
+            pitch = -0.18f + 0.22f * windup - 0.12f * follow;
+            yaw = 0.95f - 1.85f * swing + 0.28f * follow;
+            roll = -0.75f + 1.40f * swing - 0.25f * follow;
+            break;
+        case HunterGamepadAttackKind::SideRight:
+            pitch = -0.18f + 0.22f * windup - 0.12f * follow;
+            yaw = -0.95f + 1.85f * swing - 0.28f * follow;
+            roll = 0.75f - 1.40f * swing + 0.25f * follow;
+            break;
+        case HunterGamepadAttackKind::Overhead:
+            pitch = -1.10f + 2.05f * swing - 0.40f * follow;
+            yaw = 0.10f;
+            roll = 0.25f - 0.35f * swing;
+            break;
+        case HunterGamepadAttackKind::Thrust:
+            pitch = -0.16f;
+            yaw = 0.05f;
+            roll = -0.10f + 0.18f * windup;
+            break;
+        default:
+            break;
+        }
+    }
+
+    XMVECTOR q = XMQuaternionNormalize(
+        XMQuaternionRotationRollPitchYaw(pitch, yaw, roll));
+    XMStoreFloat4(&gamepadSwordState_.orientation, q);
+}
+
+void Player::UpdateHunterGamepadSwordGuard(Input *input) {
+    gamepadSwordState_.isGuard =
+        input->GetGamepadLeftTrigger() > 0.2f ||
+        input->IsGamepadButtonPress(XINPUT_GAMEPAD_LEFT_SHOULDER);
+}
+
+void Player::UpdateHunterGamepadSwordCounter(Input *input) {
+    if (!gamepadSwordState_.isGuard) {
+        return;
+    }
+
+    if (input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_B)) {
+        gamepadSwordState_.isCounter = true;
+        gamepadSwordState_.counterTimer = SwordControllerState::kCounterFrames;
+        gamepadSwordState_.isSlashMode = false;
+        gamepadSwordState_.slashTimer = 0.0f;
+        gamepadSwordState_.slashDir = GetHunterGamepadSlashDir(input);
+    }
+}
+
+void Player::UpdateHunterGamepadSwordSlash(Input *input, float deltaTime) {
+    if (!IsHunterGamepadAttacking()) {
+        const HunterGamepadAttackKind attackKind =
+            ReadHunterGamepadAttack(input);
+        if (attackKind != HunterGamepadAttackKind::None) {
+            BeginHunterGamepadAttack(attackKind);
+        }
+    }
+
+    if (!IsHunterGamepadAttacking()) {
+        gamepadSwordState_.isSlashMode = false;
+        return;
+    }
+
+    hunterGamepadAttackTimer_ += deltaTime;
+    gamepadSwordState_.isSlashMode = true;
+    gamepadSwordState_.slashDir =
+        GetHunterGamepadSlashDir(hunterGamepadAttackKind_);
+    gamepadSwordState_.slashTimer = hunterGamepadAttackTimer_;
+
+    if (hunterGamepadAttackTimer_ >= hunterGamepadAttackDuration_) {
+        hunterGamepadAttackKind_ = HunterGamepadAttackKind::None;
+        hunterGamepadAttackTimer_ = 0.0f;
+        hunterGamepadAttackDuration_ = 0.0f;
+        gamepadSwordState_.isSlashMode = false;
+        gamepadSwordState_.slashTimer = 0.0f;
+    }
+}
+
+void Player::BeginHunterGamepadAttack(HunterGamepadAttackKind attackKind) {
+    hunterGamepadAttackKind_ = attackKind;
+    hunterGamepadAttackTimer_ = 0.0f;
+    hunterGamepadAttackDuration_ =
+        GetHunterGamepadAttackDuration(attackKind);
+    gamepadSwordState_.slashDir = GetHunterGamepadSlashDir(attackKind);
+}
+
+HunterGamepadAttackKind Player::ReadHunterGamepadAttack(Input *input) const {
+    if (input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_Y) ||
+        input->IsGamepadRightTriggerTrigger(0.2f)) {
+        return HunterGamepadAttackKind::Overhead;
+    }
+
+    if (input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_X)) {
+        return HunterGamepadAttackKind::SideLeft;
+    }
+
+    if (!gamepadSwordState_.isGuard &&
+        input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_B)) {
+        return HunterGamepadAttackKind::SideRight;
+    }
+
+    if (input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_A)) {
+        return HunterGamepadAttackKind::Thrust;
+    }
+
+    return HunterGamepadAttackKind::None;
+}
+
+float Player::GetHunterGamepadAttackRatio() const {
+    if (hunterGamepadAttackDuration_ <= 0.0f) {
+        return 0.0f;
+    }
+
+    return std::clamp(hunterGamepadAttackTimer_ / hunterGamepadAttackDuration_,
+                      0.0f, 1.0f);
+}
+
+float Player::GetHunterGamepadAttackDuration(
+    HunterGamepadAttackKind attackKind) const {
+    const bool isGreatSword = weaponType_ == PlayerWeaponType::GreatSword;
+    switch (attackKind) {
+    case HunterGamepadAttackKind::Overhead:
+        return isGreatSword ? 0.72f : 0.46f;
+    case HunterGamepadAttackKind::Thrust:
+        return isGreatSword ? 0.58f : 0.34f;
+    case HunterGamepadAttackKind::SideLeft:
+    case HunterGamepadAttackKind::SideRight:
+        return isGreatSword ? 0.64f : 0.38f;
+    default:
+        return 0.0f;
+    }
+}
+
+DirectX::XMFLOAT2 Player::GetHunterGamepadSlashDir(Input *input) const {
+    float dirX = 0.0f;
+    float dirY = 0.0f;
+
+    if (input->IsGamepadButtonPress(XINPUT_GAMEPAD_X) ||
+        input->IsGamepadButtonPress(XINPUT_GAMEPAD_DPAD_LEFT)) {
+        dirX -= 1.0f;
+    }
+    if (input->IsGamepadButtonPress(XINPUT_GAMEPAD_B) ||
+        input->IsGamepadButtonPress(XINPUT_GAMEPAD_DPAD_RIGHT)) {
+        dirX += 1.0f;
+    }
+    if (input->IsGamepadButtonPress(XINPUT_GAMEPAD_Y) ||
+        input->IsGamepadButtonPress(XINPUT_GAMEPAD_DPAD_UP)) {
+        dirY += 1.0f;
+    }
+    if (input->IsGamepadButtonPress(XINPUT_GAMEPAD_A) ||
+        input->IsGamepadButtonPress(XINPUT_GAMEPAD_DPAD_DOWN)) {
+        dirY -= 1.0f;
+    }
+
+    const float lenSq = dirX * dirX + dirY * dirY;
+    if (lenSq <= 0.001f) {
+        return {1.0f, 0.0f};
+    }
+
+    const float invLen = 1.0f / std::sqrt(lenSq);
+    return {dirX * invLen, dirY * invLen};
+}
+
+DirectX::XMFLOAT2
+Player::GetHunterGamepadSlashDir(HunterGamepadAttackKind attackKind) const {
+    switch (attackKind) {
+    case HunterGamepadAttackKind::SideLeft:
+        return {-1.0f, 0.0f};
+    case HunterGamepadAttackKind::SideRight:
+        return {1.0f, 0.0f};
+    case HunterGamepadAttackKind::Overhead:
+        return {0.0f, -1.0f};
+    case HunterGamepadAttackKind::Thrust:
+        return {0.0f, 1.0f};
+    default:
+        return {1.0f, 0.0f};
+    }
+}
+
+void Player::ToggleGamepadControlMode() {
+    gamepadControlMode_ =
+        gamepadControlMode_ == PlayerGamepadControlMode::Hunter
+            ? PlayerGamepadControlMode::MotionSword
+            : PlayerGamepadControlMode::Hunter;
+    gamepadSwordState_ = {};
+    gamepadSwordYaw_ = 0.0f;
+    gamepadSwordPitch_ = 0.0f;
+    hunterGamepadAttackKind_ = HunterGamepadAttackKind::None;
+    hunterGamepadAttackTimer_ = 0.0f;
+    hunterGamepadAttackDuration_ = 0.0f;
 }
 
 void Player::UpdateGamepadSwordGuard(Input *input) {

@@ -88,6 +88,8 @@ class Input {
     bool IsGamepadButtonPress(WORD button) const;
     bool IsGamepadButtonTrigger(WORD button) const;
     bool IsGamepadButtonRelease(WORD button) const;
+    bool IsGamepadLeftTriggerTrigger(float threshold = 0.2f) const;
+    bool IsGamepadRightTriggerTrigger(float threshold = 0.2f) const;
     float GetGamepadLeftStickX() const { return gamepadLeftStickX_; }
     float GetGamepadLeftStickY() const { return gamepadLeftStickY_; }
     float GetGamepadRightStickX() const { return gamepadRightStickX_; }

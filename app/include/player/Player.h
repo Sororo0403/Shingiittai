@@ -13,6 +13,19 @@
 class ModelManager;
 class Input;
 
+enum class PlayerGamepadControlMode {
+    MotionSword,
+    Hunter,
+};
+
+enum class HunterGamepadAttackKind {
+    None,
+    SideLeft,
+    SideRight,
+    Overhead,
+    Thrust,
+};
+
 class Player {
   public:
     static constexpr size_t kSwordCount = 2;
@@ -82,6 +95,9 @@ class Player {
         return SwordCounterAxis::None;
     }
     void NotifyCounterSuccess();
+    bool UsesGamepadCameraLook() const {
+        return gamepadControlMode_ == PlayerGamepadControlMode::Hunter;
+    }
 
   private:
     Transform BuildSwordTransform(const SwordPose &pose, bool isLeft) const;
@@ -89,17 +105,33 @@ class Player {
     SwordPose MakeMirroredSwordPose(const SwordPose &source) const;
     SwordPose UpdateGamepadSword(Input *input, float deltaTime,
                                  const Transform &swordTransform);
+    SwordPose UpdateHunterGamepadSword(Input *input, float deltaTime);
     void UpdateGamepadSwordOrientation(Input *input, float deltaTime);
     void UpdateGamepadSwordGuard(Input *input);
     void UpdateGamepadSwordCounter(Input *input);
     void UpdateGamepadSwordSlash(Input *input, float deltaTime);
+    void UpdateHunterGamepadSwordOrientation();
+    void UpdateHunterGamepadSwordGuard(Input *input);
+    void UpdateHunterGamepadSwordCounter(Input *input);
+    void UpdateHunterGamepadSwordSlash(Input *input, float deltaTime);
+    void BeginHunterGamepadAttack(HunterGamepadAttackKind attackKind);
+    HunterGamepadAttackKind ReadHunterGamepadAttack(Input *input) const;
+    bool IsHunterGamepadAttacking() const {
+        return hunterGamepadAttackKind_ != HunterGamepadAttackKind::None;
+    }
+    float GetHunterGamepadAttackRatio() const;
+    float GetHunterGamepadAttackDuration(HunterGamepadAttackKind attackKind) const;
+    DirectX::XMFLOAT2 GetHunterGamepadSlashDir(Input *input) const;
+    DirectX::XMFLOAT2 GetHunterGamepadSlashDir(
+        HunterGamepadAttackKind attackKind) const;
+    void ToggleGamepadControlMode();
     void UpdateMovement(Input *input, float deltaTime, float cameraYaw);
     void KeepDistanceFromTarget(const DirectX::XMFLOAT3 &target);
     void LookAt(const DirectX::XMFLOAT3 &target);
     void UpdateWeaponRules(Input *input, SwordPose &leftPose,
                            SwordPose &rightPose, bool hasLeftJoyCon,
                            bool hasRightJoyCon, bool useGamepadRightSword,
-                           float deltaTime);
+                           bool useHunterGamepadControls, float deltaTime);
     void ApplyHandRecovery(SwordPose &pose, float &timer, float deltaTime);
     void BeginDualManualCounter(bool preferLeft, const DirectX::XMFLOAT2 &dir);
     void UpdateDualManualCounter(SwordPose &leftPose, SwordPose &rightPose,
@@ -125,6 +157,12 @@ class Player {
     SwordJoyConController rightSwordJoyConController_;
     SwordMouseController swordMouseController_;
     SwordControllerState gamepadSwordState_{};
+    PlayerGamepadControlMode gamepadControlMode_ =
+        PlayerGamepadControlMode::Hunter;
+    HunterGamepadAttackKind hunterGamepadAttackKind_ =
+        HunterGamepadAttackKind::None;
+    float hunterGamepadAttackTimer_ = 0.0f;
+    float hunterGamepadAttackDuration_ = 0.0f;
     bool leftSwordSlashMode_ = false;
     bool rightSwordSlashMode_ = false;
     DirectX::XMFLOAT2 leftSwordSlashDir_{};
