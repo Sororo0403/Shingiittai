@@ -107,9 +107,6 @@
     <ClInclude Include="include\enemy\EnemyActionData.h">
       <Filter>Header Files\enemy</Filter>
     </ClInclude>
-    <ClInclude Include="include\enemy\EnemyPresentation.h">
-      <Filter>Header Files\enemy</Filter>
-    </ClInclude>
     <ClInclude Include="include\enemy\EnemyTuningPreset.h">
       <Filter>Header Files\enemy</Filter>
     </ClInclude>

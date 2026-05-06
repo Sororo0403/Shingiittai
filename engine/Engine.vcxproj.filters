@@ -126,9 +126,6 @@
     <ClCompile Include="$(SolutionDir)engine\src\graphics\RenderTexture.cpp">
       <Filter>src\graphics</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)engine\src\graphics\VignetteRenderer.cpp">
-      <Filter>src\graphics</Filter>
-    </ClCompile>
     <ClCompile Include="$(SolutionDir)engine\src\graphics\SrvManager.cpp">
       <Filter>src\graphics</Filter>
     </ClCompile>
@@ -174,19 +171,7 @@
     <ClCompile Include="$(SolutionDir)engine\src\scene\SceneManager.cpp">
       <Filter>src\scene</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)engine\src\particle\RingBurstEmitter.cpp">
-      <Filter>src\particle</Filter>
-    </ClCompile>
-    <ClCompile Include="$(SolutionDir)engine\src\particle\CylinderBurstEmitter.cpp">
-      <Filter>src\particle</Filter>
-    </ClCompile>
-    <ClCompile Include="$(SolutionDir)engine\src\particle\RingParticleSystem.cpp">
-      <Filter>src\particle</Filter>
-    </ClCompile>
     <ClCompile Include="$(SolutionDir)engine\src\particle\GPUParticleSystem.cpp">
-      <Filter>src\particle</Filter>
-    </ClCompile>
-    <ClCompile Include="$(SolutionDir)engine\src\particle\CylinderParticleSystem.cpp">
       <Filter>src\particle</Filter>
     </ClCompile>
     <ClCompile Include="$(SolutionDir)engine\src\collision\CollisionUtil.cpp">
@@ -237,9 +222,6 @@
       <Filter>include\graphics</Filter>
     </ClInclude>
     <ClInclude Include="$(SolutionDir)engine\include\graphics\RenderTexture.h">
-      <Filter>include\graphics</Filter>
-    </ClInclude>
-    <ClInclude Include="$(SolutionDir)engine\include\graphics\VignetteRenderer.h">
       <Filter>include\graphics</Filter>
     </ClInclude>
     <ClInclude Include="$(SolutionDir)engine\include\graphics\DxUtils.h">
@@ -320,19 +302,7 @@
     <ClInclude Include="$(SolutionDir)engine\include\model\Transform.h">
       <Filter>include\model</Filter>
     </ClInclude>
-    <ClInclude Include="$(SolutionDir)engine\include\particle\RingBurstEmitter.h">
-      <Filter>include\particle</Filter>
-    </ClInclude>
-    <ClInclude Include="$(SolutionDir)engine\include\particle\CylinderBurstEmitter.h">
-      <Filter>include\particle</Filter>
-    </ClInclude>
-    <ClInclude Include="$(SolutionDir)engine\include\particle\RingParticleSystem.h">
-      <Filter>include\particle</Filter>
-    </ClInclude>
     <ClInclude Include="$(SolutionDir)engine\include\particle\GPUParticleSystem.h">
-      <Filter>include\particle</Filter>
-    </ClInclude>
-    <ClInclude Include="$(SolutionDir)engine\include\particle\CylinderParticleSystem.h">
       <Filter>include\particle</Filter>
     </ClInclude>
     <ClInclude Include="$(SolutionDir)engine\include\collision\CollisionUtil.h">

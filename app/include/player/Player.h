@@ -33,15 +33,6 @@ class Player {
     std::array<bool, kSwordCount> GetSwordSlashStates() const {
         return {leftSwordSlashMode_, rightSwordSlashMode_};
     }
-    std::array<DirectX::XMFLOAT2, kSwordCount> GetSwordSlashDirections() const {
-        return {leftSwordSlashDir_, rightSwordSlashDir_};
-    }
-    const DirectX::XMFLOAT2 &GetLeftSwordSlashDirection() const {
-        return leftSwordSlashDir_;
-    }
-    const DirectX::XMFLOAT2 &GetRightSwordSlashDirection() const {
-        return rightSwordSlashDir_;
-    }
     OBB GetOBB() const;
 
     Sword &GetSword() { return rightSword_; }
@@ -51,12 +42,9 @@ class Player {
     const Transform &GetTransform() const { return tf_; }
 
     float GetHP() const { return hp_; }
-    float GetMaxHP() const { return maxHp_; }
     void TakeDamage(float damage);
 
-    PlayerTuningPreset CreateTuningPreset() const;
     void ApplyTuningPreset(const PlayerTuningPreset &preset);
-    void ResetTuningPreset();
 
     void AddKnockback(const DirectX::XMFLOAT3 &velocity);
     const DirectX::XMFLOAT3 &GetVelocity() const { return velocity_; }

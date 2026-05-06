@@ -97,83 +97,6 @@ void Enemy::ValidateAllTimings() {
                    config_.attacks.sweep.melee.base.chargeTime);
 }
 
-EnemyTuningPreset Enemy::CreateTuningPreset() const {
-    EnemyTuningPreset p{};
-
-    p.enemyMaxHp = config_.core.maxHp;
-    p.phase2HealthRatioThreshold = config_.core.phase2HealthRatioThreshold;
-    p.nearAttackDistance = config_.core.nearAttackDistance;
-    p.farAttackDistance = config_.core.farAttackDistance;
-
-    p.smash.damage = config_.attacks.smash.melee.base.attack.damage;
-    p.smash.knockback = config_.attacks.smash.melee.base.attack.knockback;
-    p.smash.hitBoxSize = config_.attacks.smash.melee.base.attack.hitBoxSize;
-    p.smashChargeTime = config_.attacks.smash.melee.base.chargeTime;
-    p.smashAttackForwardOffset = config_.attacks.smash.attackForwardOffset;
-    p.smashAttackHeightOffset = config_.attacks.smash.attackHeightOffset;
-    p.smashTiming.totalTime = config_.attacks.smash.melee.base.timing.totalTime;
-    p.smashTiming.trackingEndTime =
-        config_.attacks.smash.melee.base.timing.trackingEndTime;
-    p.smashTiming.activeStartTime =
-        config_.attacks.smash.melee.base.timing.activeStartTime;
-    p.smashTiming.activeEndTime =
-        config_.attacks.smash.melee.base.timing.activeEndTime;
-    p.smashTiming.recoveryStartTime =
-        config_.attacks.smash.melee.base.timing.recoveryStartTime;
-
-    p.sweep.damage = config_.attacks.sweep.melee.base.attack.damage;
-    p.sweep.knockback = config_.attacks.sweep.melee.base.attack.knockback;
-    p.sweep.hitBoxSize = config_.attacks.sweep.melee.base.attack.hitBoxSize;
-    p.sweepChargeTime = config_.attacks.sweep.melee.base.chargeTime;
-    p.sweepAttackSideOffset = config_.attacks.sweep.attackSideOffset;
-    p.sweepAttackHeightOffset = config_.attacks.sweep.attackHeightOffset;
-    p.sweepTiming.totalTime = config_.attacks.sweep.melee.base.timing.totalTime;
-    p.sweepTiming.trackingEndTime =
-        config_.attacks.sweep.melee.base.timing.trackingEndTime;
-    p.sweepTiming.activeStartTime =
-        config_.attacks.sweep.melee.base.timing.activeStartTime;
-    p.sweepTiming.activeEndTime =
-        config_.attacks.sweep.melee.base.timing.activeEndTime;
-    p.sweepTiming.recoveryStartTime =
-        config_.attacks.sweep.melee.base.timing.recoveryStartTime;
-
-    p.bullet.damage = config_.attacks.shot.attack.damage;
-    p.bullet.knockback = config_.attacks.shot.attack.knockback;
-    p.bullet.hitBoxSize = config_.attacks.shot.attack.hitBoxSize;
-    p.shotChargeTime = config_.attacks.shot.chargeTime;
-    p.shotRecoveryTime = config_.attacks.shot.recoveryTime;
-    p.shotInterval = config_.attacks.shot.interval;
-    p.shotMinCount = config_.attacks.shot.minCount;
-    p.shotMaxCount = config_.attacks.shot.maxCount;
-    p.bulletSpeed = config_.attacks.shot.bulletSpeed;
-    p.bulletLifeTime = config_.attacks.shot.bulletLifeTime;
-    p.bulletSpawnHeightOffset = config_.attacks.shot.spawnHeightOffset;
-
-    p.wave.damage = config_.attacks.wave.attack.damage;
-    p.wave.knockback = config_.attacks.wave.attack.knockback;
-    p.wave.hitBoxSize = config_.attacks.wave.attack.hitBoxSize;
-    p.waveChargeTime = config_.attacks.wave.chargeTime;
-    p.waveRecoveryTime = config_.attacks.wave.recoveryTime;
-    p.waveSpeed = config_.attacks.wave.speed;
-    p.waveMaxDistance = config_.attacks.wave.maxDistance;
-    p.waveSpawnForwardOffset = config_.attacks.wave.spawnForwardOffset;
-    p.waveSpawnHeightOffset = config_.attacks.wave.spawnHeightOffset;
-
-    p.warpStartTime = config_.warp.startTime;
-    p.warpMoveTime = config_.warp.moveTime;
-    p.warpEndTime = config_.warp.endTime;
-    p.warpApproachChainMaxSteps = config_.chain.warpApproachMaxSteps;
-    p.warpEscapeChainMaxSteps = config_.chain.warpEscapeMaxSteps;
-    p.approachChainContinueDistance = config_.chain.approachContinueDistance;
-    p.escapeChainContinueDistance = config_.chain.escapeContinueDistance;
-    p.sweepWarpSmashMaxDistance = config_.chain.sweepWarpSmashMaxDistance;
-    p.sweepWarpSmashChance = config_.chain.sweepWarpSmashChance;
-    p.waveWarpSmashMinDistance = config_.chain.waveWarpSmashMinDistance;
-    p.waveWarpSmashChance = config_.chain.waveWarpSmashChance;
-
-    return p;
-}
-
 void Enemy::ApplyTuningPreset(const EnemyTuningPreset &p) {
     config_.core.maxHp = (p.enemyMaxHp < 1.0f) ? 1.0f : p.enemyMaxHp;
     hp_ = config_.core.maxHp;
@@ -262,5 +185,3 @@ void Enemy::ApplyTuningPreset(const EnemyTuningPreset &p) {
 
     ValidateAllTimings();
 }
-
-void Enemy::ResetTuningPreset() { ApplyTuningPreset(EnemyTuningPreset{}); }

@@ -155,7 +155,7 @@ bool Enemy::ShouldUseLockedAttackYaw() const {
 }
 
 void Enemy::TakeDamage(float damage) {
-    if (deathFinished_ || isDying_ || introActive_) {
+    if (deathFinished_ || isDying_) {
         return;
     }
 

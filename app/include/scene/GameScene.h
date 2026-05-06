@@ -9,10 +9,6 @@
 #include <cstdint>
 #include <string>
 
-#ifdef _DEBUG
-#include "DebugCamera.h"
-#endif // _DEBUG
-
 class GameScene : public BaseScene {
   public:
     void Initialize(const SceneContext &ctx) override;
@@ -27,21 +23,10 @@ class GameScene : public BaseScene {
     void SetEnemyAnimationFrozen(bool frozen);
     float ComputeGameplayTimeScale() const;
 
-    void SpawnElectricRing(const DirectX::XMFLOAT3 &worldPos, bool isWarpEnd);
-    void UpdateElectricRing();
-
   private:
     static constexpr float kGuardDamageMultiplier = 0.25f;
 
     Camera camera_;
-#ifdef _DEBUG
-    DebugCamera debugCamera_;
-    Camera tripodCamera_;
-    bool useTripodCamera_ = false;
-    DirectX::XMFLOAT3 tripodPos_ = {0.0f, 2.0f, -5.0f};
-    DirectX::XMFLOAT3 tripodTarget_ = {0.0f, 1.0f, 0.0f};
-#endif
-    Camera *currentCamera_ = nullptr;
 
     Player player_;
     Enemy enemy_;
@@ -53,18 +38,6 @@ class GameScene : public BaseScene {
     float playerHitCooldown_ = 0.0f;
     float enemyHitCooldown_ = 0.0f;
 
-    bool dbgHitLeftHand_ = false;
-    bool dbgHitRightHand_ = false;
-    bool dbgHitBody_ = false;
-    bool dbgBossHitPlayer_ = false;
-    bool dbgBulletHitPlayer_ = false;
-    bool dbgWaveHitPlayer_ = false;
-    bool dbgPlayerGuardedHit_ = false;
-    bool dbgTriggerCounterRequested_ = false;
-    bool dbgTriggerWarpBackstabRequested_ = false;
-#ifdef _DEBUG
-    bool dbgFreezeEnemyMotion_ = false;
-#endif
     Bullet bullet_;
 
     float cameraYaw_ = 0.0f;
@@ -137,29 +110,6 @@ class GameScene : public BaseScene {
     float counterCameraShakeY_ = 0.020f;
     float counterCameraShakeFrequency_ = 18.0f;
 
-    float reflectDamage_ = 0.0f;
     float damageMultiplier_ = 2.0f;
-
-    struct ActiveElectricRing {
-        bool active = false;
-        DirectX::XMFLOAT3 worldPos = {0.0f, 0.0f, 0.0f};
-        float time = 0.0f;
-        float lifeTime = 0.0f;
-
-        float startRadius = 0.02f;
-        float endRadius = 0.28f;
-
-        float ringWidth = 0.015f;
-        float distortionWidth = 0.045f;
-        float distortionStrength = 0.018f;
-        float swirlStrength = 0.006f;
-
-        float cloudScale = 3.5f;
-        float cloudIntensity = 1.4f;
-        float brightness = 2.4f;
-        float haloIntensity = 1.0f;
-    };
-
-    ActiveElectricRing activeElectricRing_{};
 
 };

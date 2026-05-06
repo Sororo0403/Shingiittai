@@ -36,7 +36,6 @@ class Sword {
 
   private:
     void UpdateCounterObservation(float deltaTime);
-    void ImGuiDraw();
 
   private:
     static constexpr float kSwordLength = 1.2f;

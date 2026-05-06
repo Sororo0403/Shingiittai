@@ -15,18 +15,6 @@ float Saturate(float value) {
     return value;
 }
 
-float EaseOutCubic(float t) {
-    float u = 1.0f - Saturate(t);
-    return 1.0f - u * u * u;
-}
-
-float EaseOutBack(float t) {
-    t = Saturate(t);
-    const float c1 = 1.70158f;
-    const float c3 = c1 + 1.0f;
-    float u = t - 1.0f;
-    return 1.0f + c3 * u * u * u + c1 * u * u;
-}
 } // namespace
 
 void Enemy::UpdateParts() {
@@ -69,93 +57,6 @@ void Enemy::UpdateParts() {
     rightHandTf_.position.y += 0.9f;
     rightHandTf_.position.z += rightZ * 1.2f;
     rightHandTf_.scale = {0.6f, 0.6f, 0.6f};
-
-    if (introActive_) {
-        const float introPulse = std::sin(GetIntroRatio() * 3.14159265f);
-        const IntroPhase introPhase = GetIntroPhase();
-
-        if (introPhase == IntroPhase::SecondSlash) {
-            float t = introSecondSlashDuration_ > 0.0001f
-                          ? runtime_.introTimer / introSecondSlashDuration_
-                          : 1.0f;
-            t = Saturate(t);
-            const float slashT = EaseOutCubic(t);
-
-            bodyTf_.position.y -= 0.05f * (1.0f - slashT);
-            bodyTf_.position.x += forwardX * 0.06f * slashT;
-            bodyTf_.position.z += forwardZ * 0.06f * slashT;
-            bodyTf_.scale.x += 0.10f * (1.0f - t);
-            bodyTf_.scale.z += 0.10f * (1.0f - t);
-
-            rightHandTf_.position.y += 0.72f * (1.0f - t);
-            rightHandTf_.position.x +=
-                rightX * 0.22f + (-forwardX) * 0.24f * (1.0f - t);
-            rightHandTf_.position.z +=
-                rightZ * 0.22f + (-forwardZ) * 0.24f * (1.0f - t);
-            leftHandTf_.position.y += 0.18f * (1.0f - t);
-            leftHandTf_.position.x += (-rightX) * 0.12f;
-            leftHandTf_.position.z += (-rightZ) * 0.12f;
-
-            visualTf_.position.x += forwardX * (introSlashLunge_ * 0.92f) * slashT;
-            visualTf_.position.z += forwardZ * (introSlashLunge_ * 0.92f) * slashT;
-            visualPitch -= 0.14f * (1.0f - t);
-            visualRoll -= 0.06f * (1.0f - t);
-        } else if (introPhase == IntroPhase::SpinSlash) {
-            const float phaseTime = runtime_.introTimer - introSecondSlashDuration_;
-            float t = introSpinSlashDuration_ > 0.0001f
-                          ? phaseTime / introSpinSlashDuration_
-                          : 1.0f;
-            t = Saturate(t);
-            const float spinT = EaseOutBack(t);
-            const float spinYaw = 6.28318530f * introSpinTurns_ * spinT;
-
-            bodyTf_.position.y += introSpinLift_ * std::sin(t * 3.14159265f);
-            bodyTf_.scale.x += 0.08f * (1.0f - t);
-            bodyTf_.scale.z += 0.12f * (1.0f - t);
-
-            rightHandTf_.position.y += 0.45f + 0.22f * introPulse;
-            rightHandTf_.position.x += rightX * 0.32f;
-            rightHandTf_.position.z += rightZ * 0.32f;
-            leftHandTf_.position.y += 0.18f;
-
-            visualTf_.position.x += forwardX * introSpinLunge_ * t;
-            visualTf_.position.z += forwardZ * introSpinLunge_ * t;
-            visualTf_.position.y +=
-                introSpinLift_ * 0.55f * std::sin(t * 3.14159265f);
-            visualTf_.scale.x += introVisualScaleBoost_ * (1.0f - t);
-            visualTf_.scale.z += introVisualScaleBoost_ * (1.0f - t);
-            visualYaw += spinYaw;
-            visualPitch -= 0.10f * (1.0f - t);
-            visualRoll += 0.16f * std::sin(t * 6.28318530f);
-        } else {
-            const float phaseTime =
-                runtime_.introTimer -
-                (introSecondSlashDuration_ + introSpinSlashDuration_);
-            float t = introSettleDuration_ > 0.0001f
-                          ? phaseTime / introSettleDuration_
-                          : 1.0f;
-            t = Saturate(t);
-            const float settle = 1.0f - t;
-
-            bodyTf_.position.y -= 0.02f;
-            bodyTf_.position.x += forwardX * 0.10f;
-            bodyTf_.position.z += forwardZ * 0.10f;
-            bodyTf_.scale.x += introImpactSquash_ * 0.30f;
-            bodyTf_.scale.y -= introImpactSquash_ * 0.34f;
-            bodyTf_.scale.z += introImpactSquash_ * 0.30f;
-
-            rightHandTf_.position.y += 0.08f;
-            rightHandTf_.position.x += forwardX * 0.40f + rightX * 0.10f;
-            rightHandTf_.position.z += forwardZ * 0.40f + rightZ * 0.10f;
-            leftHandTf_.position.y += 0.04f;
-
-            visualTf_.position.x += forwardX * 0.16f;
-            visualTf_.position.z += forwardZ * 0.16f;
-            visualTf_.position.y += 0.02f;
-            visualPitch += 0.16f;
-            visualRoll -= 0.04f * settle;
-        }
-    }
 
     if (hitReactionTimer_ > 0.0f) {
         const float hitT = hitReactionTimer_ / hitReactionDuration_;
@@ -612,35 +513,3 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
     }
 }
 
-void Enemy::UpdatePresentationEvents() {
-    ActionStep currentWarpStep = ActionStep::None;
-    if (action_.kind == ActionKind::Warp) {
-        currentWarpStep = action_.step;
-    }
-
-    if (currentWarpStep == ActionStep::Start &&
-        prevPresentationWarpStep_ != ActionStep::Start) {
-        EnemyElectricRingSpawnRequest req{};
-        req.worldPos =
-            warp_.hasDeparturePos ? warp_.departurePos : tf_.position;
-        req.isWarpEnd = false;
-        electricRingSpawnRequests_.push_back(req);
-    }
-
-    if (currentWarpStep == ActionStep::End &&
-        prevPresentationWarpStep_ != ActionStep::End) {
-        EnemyElectricRingSpawnRequest req{};
-        req.worldPos = warp_.targetPos;
-        req.isWarpEnd = true;
-        electricRingSpawnRequests_.push_back(req);
-    }
-
-    prevPresentationWarpStep_ = currentWarpStep;
-}
-
-std::vector<EnemyElectricRingSpawnRequest>
-Enemy::ConsumeElectricRingSpawnRequests() {
-    std::vector<EnemyElectricRingSpawnRequest> out = electricRingSpawnRequests_;
-    electricRingSpawnRequests_.clear();
-    return out;
-}

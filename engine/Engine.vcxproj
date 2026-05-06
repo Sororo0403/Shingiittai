@@ -93,7 +93,6 @@
     <ClCompile Include="$(SolutionDir)engine\src\graphics\DxUtils.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\graphics\PostEffectRenderer.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\graphics\RenderTexture.cpp" />
-    <ClCompile Include="$(SolutionDir)engine\src\graphics\VignetteRenderer.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\model\SkyboxRenderer.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\model\MaterialManager.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\camera\DebugCamera.cpp" />
@@ -103,11 +102,7 @@
     <ClCompile Include="$(SolutionDir)engine\src\model\AssimpLoader.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\model\AssimpMeshLoader.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\collision\CollisionUtil.cpp" />
-    <ClCompile Include="$(SolutionDir)engine\src\particle\RingBurstEmitter.cpp" />
-    <ClCompile Include="$(SolutionDir)engine\src\particle\CylinderBurstEmitter.cpp" />
-    <ClCompile Include="$(SolutionDir)engine\src\particle\RingParticleSystem.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\particle\GPUParticleSystem.cpp" />
-    <ClCompile Include="$(SolutionDir)engine\src\particle\CylinderParticleSystem.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\scene\LevelLoader.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\scene\SceneManager.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\input\Input.cpp" />
@@ -139,11 +134,7 @@
     <ClInclude Include="$(SolutionDir)engine\include\collision\AABB.h" />
     <ClInclude Include="$(SolutionDir)engine\include\collision\CollisionUtil.h" />
     <ClInclude Include="$(SolutionDir)engine\include\collision\OBB.h" />
-    <ClInclude Include="$(SolutionDir)engine\include\particle\RingBurstEmitter.h" />
-    <ClInclude Include="$(SolutionDir)engine\include\particle\CylinderBurstEmitter.h" />
-    <ClInclude Include="$(SolutionDir)engine\include\particle\RingParticleSystem.h" />
     <ClInclude Include="$(SolutionDir)engine\include\particle\GPUParticleSystem.h" />
-    <ClInclude Include="$(SolutionDir)engine\include\particle\CylinderParticleSystem.h" />
     <ClInclude Include="$(SolutionDir)engine\include\model\Transform.h" />
     <ClInclude Include="$(SolutionDir)engine\include\scene\BaseScene.h" />
     <ClInclude Include="$(SolutionDir)engine\include\imgui\ImguiManager.h" />
@@ -153,7 +144,6 @@
     <ClInclude Include="$(SolutionDir)engine\include\graphics\DirectXCommon.h" />
     <ClInclude Include="$(SolutionDir)engine\include\graphics\PostEffectRenderer.h" />
     <ClInclude Include="$(SolutionDir)engine\include\graphics\RenderTexture.h" />
-    <ClInclude Include="$(SolutionDir)engine\include\graphics\VignetteRenderer.h" />
     <ClInclude Include="$(SolutionDir)engine\include\model\SkyboxRenderer.h" />
     <ClInclude Include="$(SolutionDir)engine\include\core\WinApp.h" />
     <ClInclude Include="$(SolutionDir)engine\include\model\Model.h" />

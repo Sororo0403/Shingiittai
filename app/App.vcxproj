@@ -144,7 +144,6 @@ if exist "$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" (
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\enemy\EnemyActionData.h" />
-    <ClInclude Include="include\enemy\EnemyPresentation.h" />
     <ClInclude Include="include\enemy\EnemyTuningPreset.h" />
     <ClInclude Include="include\enemy\EnemyTuningPresetIO.h" />
     <ClInclude Include="include\player\PlayerTuningPreset.h" />

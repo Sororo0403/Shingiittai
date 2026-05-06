@@ -2,7 +2,6 @@
 #include "Input.h"
 #include "ModelManager.h"
 #include "SwordPose.h"
-#include "imgui.h"
 #include <algorithm>
 #include <cmath>
 
@@ -157,28 +156,6 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera) {
     if (isInPostSlashRecovery) {
         modelManager->ClearDrawEffect();
     }
-
-#ifndef IMGUI_DISABLED
-    ImGui::Begin("Player Combat");
-    ImGui::Text("Guarding: %s", isGuarding_ ? "true" : "false");
-    ImGui::Text("Left Slash : %s", leftSwordSlashMode_ ? "true" : "false");
-    ImGui::Text("Left Dir   : %.2f, %.2f", leftSwordSlashDir_.x,
-                leftSwordSlashDir_.y);
-    ImGui::Text("Left Conn  : %s", leftJoyCon_.IsConnected() ? "true" : "false");
-    ImGui::Text("Left Calib : %s", leftJoyCon_.IsCalibrating() ? "true" : "false");
-    ImGui::Text("Left Still : %.2f", leftJoyCon_.GetStillTimer());
-    ImGui::Text("Left CalTm : %.2f", leftJoyCon_.GetCalibrationTimer());
-    ImGui::Text("Right Slash: %s", rightSwordSlashMode_ ? "true" : "false");
-    ImGui::Text("Right Dir  : %.2f, %.2f", rightSwordSlashDir_.x,
-                rightSwordSlashDir_.y);
-    ImGui::Text("Right Conn : %s", rightJoyCon_.IsConnected() ? "true" : "false");
-    ImGui::Text("Right Calib: %s",
-                rightJoyCon_.IsCalibrating() ? "true" : "false");
-    ImGui::Text("Right Still: %.2f", rightJoyCon_.GetStillTimer());
-    ImGui::Text("Right CalTm: %.2f", rightJoyCon_.GetCalibrationTimer());
-    ImGui::Text("Recovery : %.2f", postSlashRecoveryTimer_);
-    ImGui::End();
-#endif
 }
 
 OBB Player::GetOBB() const {
@@ -292,15 +269,6 @@ void Player::TakeDamage(float damage) {
     }
 }
 
-PlayerTuningPreset Player::CreateTuningPreset() const {
-    PlayerTuningPreset p{};
-    p.maxHp = maxHp_;
-    p.initialHp = hp_;
-    p.moveSpeed = moveSpeed_;
-    p.damageTakenScale = damageTakenScale_;
-    return p;
-}
-
 void Player::ApplyTuningPreset(const PlayerTuningPreset &preset) {
     maxHp_ = preset.maxHp;
     if (maxHp_ < 1.0f) {
@@ -319,8 +287,6 @@ void Player::ApplyTuningPreset(const PlayerTuningPreset &preset) {
 
     hp_ = std::clamp(preset.initialHp, 0.0f, maxHp_);
 }
-
-void Player::ResetTuningPreset() { ApplyTuningPreset(PlayerTuningPreset{}); }
 
 void Player::AddKnockback(const DirectX::XMFLOAT3 &velocity) {
     knockbackVelocity_.x += velocity.x;

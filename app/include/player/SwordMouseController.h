@@ -11,10 +11,8 @@ class SwordMouseController {
     bool IsActive(Input *input);
 
     float GetMouseSpeed() const { return mouseSpeed_; }
-    bool GetIsSlashMode() const { return state_.isSlashMode; }
     bool GetIsGuard() const { return state_.isGuard; }
     bool GetCounter() const { return state_.isCounter; }
-    const DirectX::XMFLOAT2 &GetSlashDir() { return state_.slashDir; }
     const DirectX::XMFLOAT4 &GetOrientation() { return state_.orientation; }
     SwordPose GetPose() const;
 

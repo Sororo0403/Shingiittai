@@ -1,27 +1,13 @@
 #include "Enemy.h"
 
-#include <cstdlib>
 #include <cmath>
-
-namespace {
-float Saturate(float value) {
-    if (value < 0.0f) {
-        return 0.0f;
-    }
-    if (value > 1.0f) {
-        return 1.0f;
-    }
-    return value;
-}
-} // namespace
+#include <cstdlib>
 
 void Enemy::Initialize(uint32_t modelId, uint32_t projectileModelId) {
     modelId_ = modelId;
     projectileModelId_ = projectileModelId;
     runtime_.hp = config_.core.maxHp;
     runtime_.phase = BossPhase::Phase1;
-    runtime_.introActive = false;
-    runtime_.introTimer = 0.0f;
     runtime_.stateTimer = -0.10f;
     runtime_.phaseTransitionActive = false;
     runtime_.phaseTransitionTimer = 0.0f;
@@ -34,79 +20,6 @@ void Enemy::Initialize(uint32_t modelId, uint32_t projectileModelId) {
     visualTf_ = tf_;
     UpdateParts();
     ValidateAllTimings();
-}
-
-void Enemy::SkipIntro() {
-    runtime_.introActive = false;
-    runtime_.introTimer = 0.0f;
-    runtime_.stateTimer = -0.10f;
-}
-
-void Enemy::RestartIntro() {
-    runtime_.introActive = true;
-    runtime_.introTimer = 0.0f;
-    runtime_.stateTimer = 0.0f;
-    runtime_.action.kind = ActionKind::None;
-    runtime_.action.id = ActionId::None;
-    runtime_.action.step = ActionStep::None;
-}
-
-void Enemy::DebugResetState() {
-    isDying_ = false;
-    deathFinished_ = false;
-    deathTimer_ = 0.0f;
-    deathStartY_ = tf_.position.y;
-    hp_ = config_.core.maxHp;
-
-    introActive_ = false;
-    introTimer_ = 0.0f;
-    phaseTransitionActive_ = false;
-    phaseTransitionTimer_ = 0.0f;
-
-    bullets_.clear();
-    waves_.clear();
-    shotsRemaining_ = 0;
-    shotIntervalTimer_ = 0.0f;
-
-    tactic_ = TacticState::DistanceAdjust;
-    EndAttack();
-    stateTimer_ = -0.10f;
-    UpdateParts();
-}
-
-bool Enemy::DebugStartAction(ActionKind kind) {
-    DebugResetState();
-    if (kind == ActionKind::None) {
-        return true;
-    }
-    const bool started = TryBeginTacticAction(kind);
-    UpdateParts();
-    return started;
-}
-
-bool Enemy::DebugTriggerWarpBackstab(const PlayerCombatObservation &playerObs) {
-    if (deathFinished_ || isDying_ || introActive_ || phaseTransitionActive_) {
-        return false;
-    }
-
-    runtime_.playerObs = playerObs;
-    runtime_.playerPos = playerObs.position;
-    runtime_.playerGuarding = playerObs.isGuarding;
-
-    EndAttack();
-    return TryBeginWarpBehindMeleeSkill(true);
-}
-
-void Enemy::DebugSetBossPhase(BossPhase phase) {
-    phase_ = phase;
-    phaseTransitionActive_ = false;
-    phaseTransitionTimer_ = 0.0f;
-    if (phase == BossPhase::Phase1) {
-        hp_ = config_.core.maxHp;
-    } else {
-        hp_ = config_.core.maxHp * config_.core.phase2HealthRatioThreshold * 0.5f;
-    }
-    UpdateParts();
 }
 
 void Enemy::Update(const DirectX::XMFLOAT3 &playerPos, float deltaTime,
@@ -133,26 +46,6 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
         if (counterRecoilTimer_ < 0.0f) {
             counterRecoilTimer_ = 0.0f;
         }
-    }
-
-    if (introActive_) {
-        const float introTotalDuration =
-            introSecondSlashDuration_ + introSpinSlashDuration_ +
-            introSettleDuration_;
-        introTimer_ += deltaTime;
-        introTimer_ = Saturate(introTimer_ / introTotalDuration) * introTotalDuration;
-        isAttackActive_ = false;
-
-        UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_ * 0.55f);
-        UpdateParts();
-
-        if (introTimer_ >= introTotalDuration) {
-            introActive_ = false;
-            introTimer_ = 0.0f;
-            stateTimer_ = -0.10f;
-            UpdateParts();
-        }
-        return;
     }
 
     if (isDying_) {

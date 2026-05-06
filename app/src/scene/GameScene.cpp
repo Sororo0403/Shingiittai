@@ -9,10 +9,6 @@
 #include "TextureManager.h"
 #include "WinApp.h"
 #include <string>
-#ifndef IMGUI_DISABLED
-#include "imgui.h"
-#include "imgui_internal.h"
-#endif
 #include <algorithm>
 #include <cmath>
 #include <memory>
@@ -90,43 +86,6 @@ static std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
                                            : model->currentAnimation;
 }
 
-static const char *GetCounterAxisName(SwordCounterAxis axis) {
-    switch (axis) {
-    case SwordCounterAxis::Vertical:
-        return "Vertical";
-    case SwordCounterAxis::Horizontal:
-        return "Horizontal";
-    default:
-        return "None";
-    }
-}
-
-static bool IsWithinCounterJustWindow(const Enemy &enemy) {
-    const AttackTimingParam *timing = enemy.GetCurrentAttackTimingPublic();
-    if (!timing) {
-        return false;
-    }
-
-    float t = enemy.GetCurrentActionTimePublic();
-
-    float activeStart = timing->activeStartTime;
-    float activeEnd = timing->activeEndTime;
-
-    if (activeEnd < activeStart) {
-        return false;
-    }
-
-    float activeLen = activeEnd - activeStart;
-    if (activeLen <= 0.0001f) {
-        return false;
-    }
-
-    float justStart = activeStart + activeLen * 0.30f;
-    float justEnd = activeStart + activeLen * 0.70f;
-
-    return (t >= justStart && t <= justEnd);
-}
-
 void GameScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
 
@@ -137,19 +96,6 @@ void GameScene::Initialize(const SceneContext &ctx) {
     camera_.SetMode(CameraMode::LookAt);
     camera_.UpdateMatrices();
     camera_.SetPerspectiveFovDeg(currentFovDeg_);
-#ifdef _DEBUG
-    debugCamera_.Initialize(aspect);
-    debugCamera_.SetMode(CameraMode::Free);
-    debugCamera_.UpdateMatrices();
-
-    tripodCamera_.Initialize(aspect);
-    camera_.SetMode(CameraMode::LookAt);
-    tripodCamera_.SetPosition(tripodPos_);
-    tripodCamera_.LookAt(tripodTarget_);
-    tripodCamera_.UpdateMatrices();
-#endif
-
-    currentCamera_ = &camera_;
 
     DirectXCommon *dx = ctx_->dxCommon;
     ModelManager *model = ctx_->model;
@@ -231,8 +177,6 @@ void GameScene::Initialize(const SceneContext &ctx) {
     UpdateSceneLighting();
     counterCinematicActive_ = false;
     enemyAnimationFrozen_ = false;
-
-    activeElectricRing_ = {};
 }
 
 void GameScene::Update() {
@@ -244,26 +188,9 @@ void GameScene::Update() {
     const float enemyDeltaTime =
         counterCinematicActive_ ? (baseDeltaTime * counterTimeScale_)
                                : gameplayDeltaTime;
-#ifdef _DEBUG
-    const bool freezeEnemyMotion = dbgFreezeEnemyMotion_;
-#else
-    const bool freezeEnemyMotion = false;
-#endif
-
-    if (input != nullptr && input->IsKeyTrigger(DIK_F1)) {
-        dbgTriggerCounterRequested_ = true;
-    }
-    if (input != nullptr && input->IsKeyTrigger(DIK_F2)) {
-        dbgTriggerWarpBackstabRequested_ = true;
-    }
     UpdateCamera(input);
 
     ctx_->model->UpdateAnimation(playerModelId_, playerDeltaTime);
-#ifdef _DEBUG
-    if (currentCamera_ == &debugCamera_) {
-        return;
-    }
-#endif
 
     // 蠖薙◁E��雁�E螳・
     // 蜈医↓繝励Ξ繧�E�繝､繝ｼ繧呈峩譁E��縺励※縲√◎縺�E�邨先棡繧脱nemy縺�E�貂｡縺・
@@ -298,15 +225,7 @@ void GameScene::Update() {
         break;
     }
 
-    if (dbgTriggerWarpBackstabRequested_ && !freezeEnemyMotion) {
-        dbgTriggerWarpBackstabRequested_ = false;
-        enemy_.DebugTriggerWarpBackstab(playerObs);
-        SyncEnemyAnimation();
-    }
-
-    if (!freezeEnemyMotion) {
-        enemy_.Update(playerObs, enemyDeltaTime);
-    }
+    enemy_.Update(playerObs, enemyDeltaTime);
     UpdateSceneLighting();
 
     SyncEnemyAnimation();
@@ -314,17 +233,6 @@ void GameScene::Update() {
     if (!enemyAnimationFrozen_) {
         ctx_->model->UpdateAnimation(enemyModelId_, enemyDeltaTime);
     }
-
-    enemy_.UpdatePresentationEvents();
-
-    {
-        auto requests = enemy_.ConsumeElectricRingSpawnRequests();
-        for (const auto &req : requests) {
-            SpawnElectricRing(req.worldPos, req.isWarpEnd);
-        }
-    }
-
-    UpdateElectricRing();
 
     UpdateBattleCamera();
 
@@ -348,12 +256,6 @@ void GameScene::Update() {
         startCounterCinematicThisFrame = true;
     };
 
-    if (dbgTriggerCounterRequested_) {
-        dbgTriggerCounterRequested_ = false;
-        triggerSuccessfulCounter(
-            (std::max)(enemy_.GetCurrentAttackDamage(), 1.0f), 0.2f);
-    }
-
     if (enemyHitCooldown_ > 0.0f) {
         enemyHitCooldown_ -= gameplayDeltaTime;
         if (enemyHitCooldown_ < 0.0f) {
@@ -368,12 +270,6 @@ void GameScene::Update() {
         }
     }
 
-    dbgHitLeftHand_ = false;
-    dbgHitRightHand_ = false;
-    dbgHitBody_ = false;
-    dbgWaveHitPlayer_ = false;
-    dbgPlayerGuardedHit_ = false;
-
     const auto swords = player_.GetSwords();
     const auto swordSlashStates = player_.GetSwordSlashStates();
 
@@ -385,16 +281,8 @@ void GameScene::Update() {
 
         auto swordHitBox = sword->GetOBB();
         auto bodyBox = enemy_.GetBodyOBB();
-        auto leftHandBox = enemy_.GetLeftHandOBB();
-        auto rightHandBox = enemy_.GetRightHandOBB();
 
-        bool hitLeftHand = CollisionUtil::CheckOBB(swordHitBox, leftHandBox);
-        bool hitRightHand = CollisionUtil::CheckOBB(swordHitBox, rightHandBox);
-        bool hitBody = CollisionUtil::CheckOBB(swordHitBox, bodyBox);
-
-        dbgHitLeftHand_ = dbgHitLeftHand_ || hitLeftHand;
-        dbgHitRightHand_ = dbgHitRightHand_ || hitRightHand;
-        dbgHitBody_ = dbgHitBody_ || hitBody;
+        const bool hitBody = CollisionUtil::CheckOBB(swordHitBox, bodyBox);
 
         if (enemyHitCooldown_ <= 0.0f) {
             if (hitBody) {
@@ -438,11 +326,10 @@ void GameScene::Update() {
     const bool canCounterThisHit =
         player_.IsCounterStance() && isCounterAxisMatch;
 
-    bool bossHitPlayer = false;
-
-    if (!freezeEnemyMotion && isEnemyMeleeActive) {
+    if (isEnemyMeleeActive) {
         auto enemyAttackBox = enemy_.GetAttackOBB();
-        bossHitPlayer = CollisionUtil::CheckOBB(enemyAttackBox, playerBox);
+        const bool bossHitPlayer =
+            CollisionUtil::CheckOBB(enemyAttackBox, playerBox);
 
         if (bossHitPlayer && playerHitCooldown_ <= 0.0f) {
             float dx = player_.GetTransform().position.x -
@@ -459,9 +346,7 @@ void GameScene::Update() {
 
             if (canCounterThisHit) {
                 triggerSuccessfulCounter(enemyAttackDamage, 0.2f);
-                bossHitPlayer = false;
             } else if (isPlayerGuarding) {
-                dbgPlayerGuardedHit_ = true;
                 enemy_.NotifyAttackGuarded();
                 player_.TakeDamage(enemyAttackDamage * kGuardDamageMultiplier);
                 player_.AddKnockback({dx * (enemyAttackKnockback * 0.5f), 0.0f,
@@ -475,21 +360,6 @@ void GameScene::Update() {
                 playerHitCooldown_ = 0.4f;
             }
         }
-    }
-
-    dbgBossHitPlayer_ = bossHitPlayer;
-    dbgBulletHitPlayer_ = false;
-
-    if (freezeEnemyMotion) {
-        if (startCounterCinematicThisFrame) {
-            counterCinematicActive_ = true;
-            SetEnemyAnimationFrozen(true);
-        }
-        if (stopCounterCinematicThisFrame) {
-            counterCinematicActive_ = false;
-            SetEnemyAnimationFrozen(false);
-        }
-        return;
     }
 
     const auto &bullets = enemy_.GetBullets();
@@ -507,15 +377,14 @@ void GameScene::Update() {
         if (!bullet.isReflected && isPlayerCountering &&
             CollisionUtil::CheckOBB(bulletBox, counterBox)) {
             enemy_.ReflectBullet(i, enemy_.GetTransform().position);
-            dbgBulletHitPlayer_ = false;
             continue;
         }
 
         if (bullet.isReflected) {
             if (CollisionUtil::CheckOBB(bulletBox, enemyBodyBox) &&
                 enemyHitCooldown_ <= 0.0f) {
-                reflectDamage_ = enemy_.GetBulletDamage() * damageMultiplier_;
-                enemy_.TakeDamage(reflectDamage_);
+                const float damage = enemy_.GetBulletDamage() * damageMultiplier_;
+                enemy_.TakeDamage(damage);
                 enemy_.DestroyBullet(i);
                 enemyHitCooldown_ = 0.2f;
             }
@@ -523,8 +392,6 @@ void GameScene::Update() {
         }
 
         if (CollisionUtil::CheckOBB(bulletBox, playerBox)) {
-            dbgBulletHitPlayer_ = true;
-
             if (playerHitCooldown_ <= 0.0f) {
                 float vx = bullet.velocity.x;
                 float vz = bullet.velocity.z;
@@ -540,7 +407,6 @@ void GameScene::Update() {
                     triggerSuccessfulCounter(enemy_.GetBulletDamage() * 2.0f,
                                              0.12f);
                 } else if (isPlayerGuarding) {
-                    dbgPlayerGuardedHit_ = true;
                     player_.TakeDamage(enemy_.GetBulletDamage() *
                                        kGuardDamageMultiplier);
                     player_.AddKnockback(
@@ -563,8 +429,6 @@ void GameScene::Update() {
         }
     }
 
-    dbgWaveHitPlayer_ = false;
-
     const auto &waves = enemy_.GetWaves();
     for (size_t i = 0; i < waves.size(); ++i) {
         const auto &wave = waves[i];
@@ -580,15 +444,14 @@ void GameScene::Update() {
         if (!wave.isReflected && isPlayerCountering &&
             CollisionUtil::CheckOBB(waveBox, counterBox)) {
             enemy_.ReflectWave(i, enemy_.GetTransform().position);
-            dbgWaveHitPlayer_ = false;
             continue;
         }
 
         if (wave.isReflected) {
             if (CollisionUtil::CheckOBB(waveBox, enemyBodyBox) &&
                 enemyHitCooldown_ <= 0.0f) {
-                reflectDamage_ = enemy_.GetWaveDamage() * damageMultiplier_;
-                enemy_.TakeDamage(reflectDamage_);
+                const float damage = enemy_.GetWaveDamage() * damageMultiplier_;
+                enemy_.TakeDamage(damage);
                 enemy_.DestroyWave(i);
                 enemyHitCooldown_ = 0.2f;
             }
@@ -596,8 +459,6 @@ void GameScene::Update() {
         }
 
         if (CollisionUtil::CheckOBB(waveBox, playerBox)) {
-            dbgWaveHitPlayer_ = true;
-
             if (playerHitCooldown_ <= 0.0f) {
                 float vx = wave.direction.x;
                 float vz = wave.direction.z;
@@ -613,7 +474,6 @@ void GameScene::Update() {
                     triggerSuccessfulCounter(enemy_.GetWaveDamage() * 2.0f,
                                              0.12f);
                 } else if (isPlayerGuarding) {
-                    dbgPlayerGuardedHit_ = true;
                     player_.TakeDamage(enemy_.GetWaveDamage() *
                                        kGuardDamageMultiplier);
                     player_.AddKnockback(
@@ -712,439 +572,9 @@ void GameScene::SyncEnemyAnimation() {
 void GameScene::Draw() {
     ctx_->model->PreDraw();
 
-    player_.Draw(ctx_->model, *currentCamera_);
-    enemy_.Draw(ctx_->model, *currentCamera_);
-    int aliveBulletCount = 0;
-    for (const auto &bullet : enemy_.GetBullets()) {
-        if (bullet.isAlive) {
-            aliveBulletCount++;
-        }
-    }
-
-    int aliveWaveCount = 0;
-    for (const auto &wave : enemy_.GetWaves()) {
-        if (wave.isAlive) {
-            aliveWaveCount++;
-        }
-    }
+    player_.Draw(ctx_->model, camera_);
+    enemy_.Draw(ctx_->model, camera_);
     ctx_->model->PostDraw();
-
-#ifdef _DEBUG
-    ImGui::Begin("HitInfo");
-    ImGui::Checkbox("Freeze Enemy Motion", &dbgFreezeEnemyMotion_);
-    const ActionKind dbgEnemyActionKind = enemy_.GetActionKind();
-    const ActionStep dbgEnemyActionStep = enemy_.GetActionStep();
-    if (ImGui::Button("Trigger Counter")) {
-        dbgTriggerCounterRequested_ = true;
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Stop Counter Cinematic")) {
-        counterCinematicActive_ = false;
-    }
-    ImGui::Text("Hit LeftHand : %s", dbgHitLeftHand_ ? "true" : "false");
-    ImGui::Text("Hit RightHand: %s", dbgHitRightHand_ ? "true" : "false");
-    ImGui::Text("Hit Body     : %s", dbgHitBody_ ? "true" : "false");
-    ImGui::Text("Cooldown     : %.2f", enemyHitCooldown_);
-
-    const ActionKind enemyActionKind = dbgEnemyActionKind;
-    const ActionStep enemyActionStep = dbgEnemyActionStep;
-
-    const char *actionKindName = "None";
-    switch (enemyActionKind) {
-    case ActionKind::Smash:
-        actionKindName = "Smash";
-        break;
-    case ActionKind::Sweep:
-        actionKindName = "Sweep";
-        break;
-    case ActionKind::Shot:
-        actionKindName = "Shot";
-        break;
-    case ActionKind::Wave:
-        actionKindName = "Wave";
-        break;
-    case ActionKind::Warp:
-        actionKindName = "Warp";
-        break;
-    case ActionKind::Stalk:
-        actionKindName = "Stalk";
-        break;
-    default:
-        break;
-    }
-
-    const char *actionStepName = "None";
-    switch (enemyActionStep) {
-    case ActionStep::Charge:
-        actionStepName = "Charge";
-        break;
-    case ActionStep::Active:
-        actionStepName = "Active";
-        break;
-    case ActionStep::Recovery:
-        actionStepName = "Recovery";
-        break;
-    case ActionStep::Start:
-        actionStepName = "Start";
-        break;
-    case ActionStep::Move:
-        actionStepName = "Move";
-        break;
-    case ActionStep::Hold:
-        actionStepName = "Hold";
-        break;
-    case ActionStep::End:
-        actionStepName = "End";
-        break;
-    default:
-        break;
-    }
-
-    const char *tacticName = "DistanceAdjust";
-    switch (enemy_.GetTacticState()) {
-    case TacticState::Warp:
-        tacticName = "Warp";
-        break;
-    case TacticState::Melee:
-        tacticName = "Melee";
-        break;
-    case TacticState::Ranged:
-        tacticName = "Ranged";
-        break;
-    case TacticState::DistanceAdjust:
-        tacticName = "DistanceAdjust";
-        break;
-    }
-
-    ImGui::Text("TacticState  : %s", tacticName);
-
-    const bool isEnemySmashActive = (enemyActionKind == ActionKind::Smash &&
-                                     enemyActionStep == ActionStep::Active);
-
-    const bool isEnemySweepActive = (enemyActionKind == ActionKind::Sweep &&
-                                     enemyActionStep == ActionStep::Active);
-
-    const bool isEnemyAttackActive = isEnemySmashActive || isEnemySweepActive;
-
-    ImGui::Text("ActionKind   : %s", actionKindName);
-    ImGui::Text("ActionStep   : %s", actionStepName);
-    ImGui::Text("AttackActive : %s", isEnemyAttackActive ? "true" : "false");
-
-    ImGui::Text("BossHitPlayer: %s", dbgBossHitPlayer_ ? "true" : "false");
-    ImGui::Text("DistanceToPlayer : %.2f", enemy_.GetDistanceToPlayer());
-    ImGui::Text("FacingYaw       : %.2f", enemy_.GetFacingYaw());
-    ImGui::Text("LockedAttackYaw : %.2f", enemy_.GetLockedAttackYaw());
-    ImGui::Text("CameraYaw       : %.2f", cameraYaw_);
-    ImGui::Text("CameraPitch     : %.2f", cameraPitch_);
-    ImGui::Text("LockOn          : %s", isLockOn_ ? "true" : "false");
-    ImGui::Text("Stagnant        : %s",
-                enemy_.IsDistanceStagnant() ? "true" : "false");
-    ImGui::Text("StagnantTimer   : %.2f", enemy_.GetStagnantTimer());
-    ImGui::Text("LastDistance    : %.2f", enemy_.GetLastDistanceToPlayer());
-    ImGui::Text("StagDistThresh  : %.2f",
-                enemy_.GetStagnantDistanceThreshold());
-    ImGui::Text("StagTimeThresh  : %.2f", enemy_.GetStagnantTimeThreshold());
-    ImGui::Text("WarpBonus       : %d", enemy_.GetStagnantWarpBonus());
-    ImGui::Text("BulletHitPlayer : %s", dbgBulletHitPlayer_ ? "true" : "false");
-    ImGui::Text("AliveBullets    : %d", aliveBulletCount);
-    auto warpPos = enemy_.GetWarpTargetPos();
-    ImGui::Text("Visible         : %s", enemy_.IsVisible() ? "true" : "false");
-    ImGui::Text("WarpTarget      : (%.2f, %.2f, %.2f)", warpPos.x, warpPos.y,
-                warpPos.z);
-    ImGui::Text("WaveHitPlayer   : %s", dbgWaveHitPlayer_ ? "true" : "false");
-    ImGui::Text("AliveWaves      : %d", aliveWaveCount);
-    ImGui::Text("EnemyHP         : %.1f", enemy_.GetHP());
-    ImGui::Text("PlayerHP        : %.1f", player_.GetHP());
-    ImGui::Text("PlayerHitCD     : %.2f", playerHitCooldown_);
-    ImGui::Text("PlayerGuarded   : %s",
-                dbgPlayerGuardedHit_ ? "true" : "false");
-    ImGui::Text("PlayerGuard     : %s",
-                player_.IsGuarding() ? "true" : "false");
-
-    const bool dbgCounterJustWindow =
-        (enemy_.GetActionKind() == ActionKind::Smash ||
-         enemy_.GetActionKind() == ActionKind::Sweep) &&
-        (enemy_.GetActionStep() == ActionStep::Active) &&
-        IsWithinCounterJustWindow(enemy_);
-
-    ImGui::Text("CounterStance   : %s",
-                player_.IsCounterStance() ? "true" : "false");
-
-    const char *counterAxisName = GetCounterAxisName(player_.GetCounterAxis());
-    ImGui::Text("CounterAxis     : %s", counterAxisName);
-    ImGui::Text("CounterJustWin  : %s",
-                dbgCounterJustWindow ? "true" : "false");
-    ImGui::Text("EnemyActionTime : %.3f", enemy_.GetCurrentActionTimePublic());
-    ImGui::Text("SmashDamage     : %.2f", enemy_.GetSmashDamage());
-    ImGui::Text("SweepDamage     : %.2f", enemy_.GetSweepDamage());
-    ImGui::Text("BulletDamage    : %.2f", enemy_.GetBulletDamage());
-    ImGui::Text("WaveDamage      : %.2f", enemy_.GetWaveDamage());
-    ImGui::Text("BulletKB        : %.2f", enemy_.GetBulletKnockback());
-    ImGui::Text("WaveKB          : %.2f", enemy_.GetWaveKnockback());
-    ImGui::Text("reflectDamage   : %.2f", reflectDamage_);
-
-    ImGui::Separator();
-    ImGui::Text("=== Enemy Tuning ===");
-
-    if (ImGui::TreeNode("Distance")) {
-        ImGui::DragFloat("Enemy MaxHP", &enemy_.EditEnemyMaxHp(), 1.0f, 1.0f,
-                         5000.0f);
-        ImGui::DragFloat("Phase2 HP Ratio", &enemy_.EditPhase2HealthRatioThreshold(),
-                         0.005f, 0.05f, 0.95f);
-        ImGui::DragFloat("NearAttackDistance", &enemy_.EditNearAttackDistance(),
-                         0.05f, 0.5f, 20.0f);
-        ImGui::DragFloat("FarAttackDistance", &enemy_.EditFarAttackDistance(),
-                         0.05f, 1.0f, 30.0f);
-        ImGui::TreePop();
-    }
-
-    if (ImGui::TreeNode("Smash")) {
-        auto &p = enemy_.EditSmashParam();
-        ImGui::DragFloat("Smash Damage", &p.damage, 0.1f, 0.0f, 100.0f);
-        ImGui::DragFloat("Smash Knockback", &p.knockback, 0.1f, 0.0f, 30.0f);
-        ImGui::DragFloat3("Smash HitBox", &p.hitBoxSize.x, 0.05f, 0.1f, 10.0f);
-
-        float &smashCharge = enemy_.EditSmashChargeTime();
-        ImGui::DragFloat("Smash Charge", &smashCharge, 0.01f, 0.0f, 5.0f);
-
-        /* ImGui::DragFloat("Smash Attack", &enemy_.EditSmashAttackTime(),
-         0.01f, 0.0f, 5.0f); ImGui::DragFloat("Smash Recovery",
-         &enemy_.EditSmashRecoveryTime(), 0.01f, 0.0f, 5.0f);
-         ImGui::DragFloat("Smash Active Start",
-                          &enemy_.EditSmashActiveStartTime(), 0.01f,
-         0.0f, 1.0f); ImGui::DragFloat("Smash Active End",
-         &enemy_.EditSmashActiveEndTime(), 0.01f, 0.0f, 1.0f);*/
-        if (ImGui::TreeNode("Smash Timing")) {
-            auto &t = enemy_.EditSmashTiming();
-            ImGui::DragFloat("Smash Total", &t.totalTime, 0.01f, 0.0f, 3.0f);
-            ImGui::DragFloat("Smash Active Start", &t.activeStartTime, 0.01f,
-                             0.0f, 3.0f);
-            ImGui::DragFloat("Smash Active End", &t.activeEndTime, 0.01f, 0.0f,
-                             3.0f);
-            ImGui::DragFloat("Smash Recovery Start", &t.recoveryStartTime,
-                             0.01f, 0.0f, 3.0f);
-
-            ImGui::DragFloat("Smash Tracking End", &t.trackingEndTime, 0.01f,
-                             0.0f, 2.0f);
-
-            ImGui::TreePop();
-        }
-
-    if (ImGui::TreeNode("Warp")) {
-        ImGui::DragFloat("Warp Start Time", &enemy_.EditWarpStartTime(), 0.005f,
-                         0.0f, 2.0f);
-        ImGui::DragFloat("Warp Move Time", &enemy_.EditWarpMoveTime(), 0.005f,
-                         0.0f, 2.0f);
-        ImGui::DragFloat("Warp End Time", &enemy_.EditWarpEndTime(), 0.005f,
-                         0.0f, 2.0f);
-        ImGui::TreePop();
-    }
-        ImGui::TreePop();
-    }
-
-    if (ImGui::TreeNode("Sweep")) {
-        auto &p = enemy_.EditSweepParam();
-        ImGui::DragFloat("Sweep Damage", &p.damage, 0.1f, 0.0f, 100.0f);
-        ImGui::DragFloat("Sweep Knockback", &p.knockback, 0.1f, 0.0f, 30.0f);
-        ImGui::DragFloat3("Sweep HitBox", &p.hitBoxSize.x, 0.05f, 0.1f, 10.0f);
-
-        float &sweepCharge = enemy_.EditSweepChargeTime();
-        ImGui::DragFloat("Sweep Charge", &sweepCharge, 0.01f, 0.0f, 5.0f);
-
-        /* ImGui::DragFloat("Sweep Attack", &enemy_.EditSweepAttackTime(),
-         0.01f, 0.0f, 5.0f); ImGui::DragFloat("Sweep Recovery",
-         &enemy_.EditSweepRecoveryTime(), 0.01f, 0.0f, 5.0f);
-         ImGui::DragFloat("Sweep Active Start",
-                          &enemy_.EditSweepActiveStartTime(), 0.01f,
-         0.0f, 1.0f); ImGui::DragFloat("Sweep Active End",
-         &enemy_.EditSweepActiveEndTime(), 0.01f, 0.0f, 1.0f);*/
-        if (ImGui::TreeNode("Sweep Timing")) {
-            auto &t = enemy_.EditSweepTiming();
-            ImGui::DragFloat("Sweep Total", &t.totalTime, 0.01f, 0.0f, 3.0f);
-            ImGui::DragFloat("Sweep Active Start", &t.activeStartTime, 0.01f,
-                             0.0f, 3.0f);
-            ImGui::DragFloat("Sweep Active End", &t.activeEndTime, 0.01f, 0.0f,
-                             3.0f);
-            ImGui::DragFloat("Sweep Recovery Start", &t.recoveryStartTime,
-                             0.01f, 0.0f, 3.0f);
-
-            ImGui::DragFloat("Sweep Tracking End", &t.trackingEndTime, 0.01f,
-                             0.0f, 2.0f);
-            ImGui::TreePop();
-        }
-        ImGui::TreePop();
-    }
-
-    if (ImGui::TreeNode("Bullet")) {
-        auto &p = enemy_.EditBulletParam();
-        ImGui::DragFloat("Bullet Damage", &p.damage, 0.1f, 0.0f, 100.0f);
-        ImGui::DragFloat("Bullet Knockback", &p.knockback, 0.1f, 0.0f, 30.0f);
-        ImGui::DragFloat3("Bullet HitBox", &p.hitBoxSize.x, 0.01f, 0.05f, 5.0f);
-
-        ImGui::DragFloat("Bullet Speed", &enemy_.EditBulletSpeed(), 0.1f, 0.1f,
-                         30.0f);
-        ImGui::DragFloat("Bullet LifeTime", &enemy_.EditBulletLifeTime(), 0.01f,
-                         0.1f, 10.0f);
-        ImGui::DragFloat("Shot Charge", &enemy_.EditShotChargeTime(), 0.01f,
-                         0.0f, 5.0f);
-        ImGui::DragFloat("Shot Recovery", &enemy_.EditShotRecoveryTime(), 0.01f,
-                         0.0f, 5.0f);
-        ImGui::DragFloat("Shot Interval", &enemy_.EditShotInterval(), 0.01f,
-                         0.01f, 2.0f);
-        ImGui::TreePop();
-    }
-
-    if (ImGui::TreeNode("Wave")) {
-        auto &p = enemy_.EditWaveParam();
-        ImGui::DragFloat("Wave Damage", &p.damage, 0.1f, 0.0f, 100.0f);
-        ImGui::DragFloat("Wave Knockback", &p.knockback, 0.1f, 0.0f, 30.0f);
-        ImGui::DragFloat3("Wave HitBox", &p.hitBoxSize.x, 0.05f, 0.1f, 10.0f);
-
-        ImGui::DragFloat("Wave Speed", &enemy_.EditWaveSpeed(), 0.1f, 0.1f,
-                         30.0f);
-        ImGui::DragFloat("Wave MaxDistance", &enemy_.EditWaveMaxDistance(),
-                         0.1f, 0.1f, 50.0f);
-        ImGui::DragFloat("Wave Charge", &enemy_.EditWaveChargeTime(), 0.01f,
-                         0.0f, 5.0f);
-        ImGui::DragFloat("Wave Recovery", &enemy_.EditWaveRecoveryTime(), 0.01f,
-                         0.0f, 5.0f);
-        ImGui::TreePop();
-    }
-
-    ImGui::Separator();
-    ImGui::Text("=== Preset ===");
-
-    static char presetPath[256] = "app/resources/enemy_tuning.csv";
-    ImGui::InputText("Preset Path", presetPath, sizeof(presetPath));
-
-    if (ImGui::Button("Save Preset")) {
-        EnemyTuningPreset preset = enemy_.CreateTuningPreset();
-        EnemyTuningPresetIO::Save(presetPath, preset);
-    }
-
-    ImGui::SameLine();
-
-    if (ImGui::Button("Load Preset")) {
-        EnemyTuningPreset preset{};
-        if (EnemyTuningPresetIO::Load(presetPath, preset)) {
-            enemy_.ApplyTuningPreset(preset);
-        }
-    }
-
-    ImGui::SameLine();
-
-    if (ImGui::Button("Reset Preset")) {
-        enemy_.ResetTuningPreset();
-    }
-
-    ImGui::Separator();
-    ImGui::Text("=== Player Tuning ===");
-    if (ImGui::TreeNode("Player Parameters")) {
-        PlayerTuningPreset playerPreset = player_.CreateTuningPreset();
-        bool changed = false;
-        changed |= ImGui::DragFloat("Player MaxHP", &playerPreset.maxHp, 1.0f,
-                                    1.0f, 1000.0f);
-        changed |= ImGui::DragFloat("Player CurrentHP", &playerPreset.initialHp,
-                                    1.0f, 0.0f, 1000.0f);
-        changed |= ImGui::DragFloat("Player MoveSpeed", &playerPreset.moveSpeed,
-                                    0.05f, 0.0f, 30.0f);
-        changed |= ImGui::DragFloat("Player DamageScale",
-                                    &playerPreset.damageTakenScale, 0.01f, 0.0f,
-                                    5.0f);
-
-        if (changed) {
-            player_.ApplyTuningPreset(playerPreset);
-        }
-
-        static char playerPresetPath[256] = "app/resources/player_tuning.txt";
-        ImGui::InputText("Player Preset Path", playerPresetPath,
-                         sizeof(playerPresetPath));
-
-        if (ImGui::Button("Save Player Preset")) {
-            PlayerTuningPresetIO::Save(playerPresetPath,
-                                       player_.CreateTuningPreset());
-        }
-
-        ImGui::SameLine();
-
-        if (ImGui::Button("Load Player Preset")) {
-            PlayerTuningPreset loaded{};
-            if (PlayerTuningPresetIO::Load(playerPresetPath, loaded)) {
-                player_.ApplyTuningPreset(loaded);
-            }
-        }
-
-        ImGui::SameLine();
-
-        if (ImGui::Button("Reset Player Preset")) {
-            player_.ResetTuningPreset();
-        }
-
-        ImGui::TreePop();
-    }
-
-    if (ImGui::TreeNode("Action Weight")) {
-        ImGui::DragInt("Near Smash Weight", &enemy_.EditNearSmashWeight(), 1.0f,
-                       0, 100);
-        ImGui::DragInt("Near Sweep Weight", &enemy_.EditNearSweepWeight(), 1.0f,
-                       0, 100);
-        ImGui::DragInt("Far Shot Weight", &enemy_.EditFarShotWeight(), 1.0f, 0,
-                       100);
-        ImGui::DragInt("Far Warp Weight", &enemy_.EditFarWarpWeight(), 1.0f, 0,
-                       100);
-        ImGui::DragInt("Far Wave Weight", &enemy_.EditFarWaveWeight(), 1.0f, 0,
-                       100);
-        ImGui::TreePop();
-    }
-
-    ImGui::Text("Chain: Sweep -> Warp -> Smash");
-    ImGui::DragFloat("Sweep Warp Smash MaxDist",
-                     &enemy_.EditSweepWarpSmashMaxDistance(), 0.1f, 0.0f,
-                     20.0f);
-    ImGui::DragFloat("Sweep Warp Smash Chance",
-                     &enemy_.EditSweepWarpSmashChance(), 0.01f, 0.0f, 1.0f);
-
-    ImGui::Text("Chain: Wave -> Warp -> Smash");
-    ImGui::DragFloat("Wave Warp Smash MinDist",
-                     &enemy_.EditWaveWarpSmashMinDistance(), 0.1f, 0.0f, 20.0f);
-    ImGui::DragFloat("Wave Warp Smash Chance",
-                     &enemy_.EditWaveWarpSmashChance(), 0.01f, 0.0f, 1.0f);
-
-    ImGui::End();
-
-    ImGui::Begin("Camera");
-
-    if (ImGui::Button("Normal")) {
-        currentCamera_ = &camera_;
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Debug")) {
-        currentCamera_ = &debugCamera_;
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Tripod")) {
-        currentCamera_ = &tripodCamera_;
-    }
-
-    if (ImGui::Button("Snap From Current")) {
-        tripodPos_ = currentCamera_->GetPosition();
-
-        // DebugCamera蟁E��遲厁E��喃orward縺九ｉtarget菴懊ａE
-        DirectX::XMFLOAT3 rot = currentCamera_->GetRotation();
-
-        float cosPitch = std::cosf(rot.x);
-
-        DirectX::XMFLOAT3 forward = {std::sinf(rot.y) * cosPitch,
-                                     std::sinf(rot.x),
-                                     std::cosf(rot.y) * cosPitch};
-
-        tripodTarget_ = {tripodPos_.x + forward.x, tripodPos_.y + forward.y,
-                         tripodPos_.z + forward.z};
-    }
-
-    ImGui::End();
-#endif
-
 }
 
 void GameScene::UpdateSceneLighting() {
@@ -1209,34 +639,6 @@ void GameScene::UpdateSceneLighting() {
 }
 
 void GameScene::UpdateCamera(Input *input) {
-#ifdef _DEBUG
-    // 蛻・�E�譖ｿ縺・
-    if (input->IsKeyTrigger(DIK_F11)) {
-        currentCamera_ = &debugCamera_;
-    }
-    if (input->IsKeyTrigger(DIK_F10)) {
-        currentCamera_ = &camera_;
-    }
-    if (input->IsKeyTrigger(DIK_F9)) {
-        currentCamera_ = &tripodCamera_;
-    }
-
-    // DebugCamera
-    if (currentCamera_ == &debugCamera_) {
-        debugCamera_.Update(*input, ctx_->deltaTime);
-        debugCamera_.UpdateMatrices();
-        return;
-    }
-
-    // TripodCamera・亥�E�悟�E蝗ｺ螳夲�E�・
-    if (currentCamera_ == &tripodCamera_) {
-        tripodCamera_.SetPosition(tripodPos_);
-        tripodCamera_.LookAt(tripodTarget_);
-        tripodCamera_.UpdateMatrices();
-        return;
-    }
-#endif
-
     // ===== 騾壼�E��E�繧�E�繝｡繝ｩ =====
 
     // 繝ｭ繝�Eけ繧�E�繝ｳ蛻・�E�譖ｿ縺・
@@ -1590,53 +992,3 @@ void GameScene::UpdateBattleCamera() {
     camera_.LookAt(lookAt);
 }
 
-////////////////////////////
-//lightring
-///////////////////////////
-void GameScene::SpawnElectricRing(const XMFLOAT3 &worldPos, bool isWarpEnd) {
-    activeElectricRing_ = {};
-    activeElectricRing_.active = true;
-    activeElectricRing_.worldPos = worldPos;
-    activeElectricRing_.worldPos.y += 1.1f;
-    activeElectricRing_.time = 0.0f;
-
-    if (!isWarpEnd) {
-        // ワープ開姁E
-        activeElectricRing_.lifeTime = 0.45f;
-        activeElectricRing_.startRadius = 0.01f;
-        activeElectricRing_.endRadius = 0.18f;
-        activeElectricRing_.ringWidth = 0.012f;
-        activeElectricRing_.distortionWidth = 0.040f;
-        activeElectricRing_.distortionStrength = 0.022f;
-        activeElectricRing_.swirlStrength = 0.008f;
-        activeElectricRing_.cloudScale = 3.8f;
-        activeElectricRing_.cloudIntensity = 1.10f;
-        activeElectricRing_.brightness = 1.80f;
-        activeElectricRing_.haloIntensity = 0.80f;
-    } else {
-        // ワープ終亁E
-        activeElectricRing_.lifeTime = 0.65f;
-        activeElectricRing_.startRadius = 0.02f;
-        activeElectricRing_.endRadius = 0.28f;
-        activeElectricRing_.ringWidth = 0.015f;
-        activeElectricRing_.distortionWidth = 0.045f;
-        activeElectricRing_.distortionStrength = 0.018f;
-        activeElectricRing_.swirlStrength = 0.006f;
-        activeElectricRing_.cloudScale = 3.5f;
-        activeElectricRing_.cloudIntensity = 1.40f;
-        activeElectricRing_.brightness = 2.40f;
-        activeElectricRing_.haloIntensity = 1.00f;
-    }
-}
-
-void GameScene::UpdateElectricRing() {
-    if (!activeElectricRing_.active || ctx_ == nullptr) {
-        return;
-    }
-
-    activeElectricRing_.time += ctx_->deltaTime;
-    if (activeElectricRing_.time >= activeElectricRing_.lifeTime) {
-        activeElectricRing_.active = false;
-        return;
-    }
-}

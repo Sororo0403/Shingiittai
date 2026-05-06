@@ -1,7 +1,6 @@
 #pragma once
 #include "Camera.h"
 #include "EnemyActionData.h"
-#include "EnemyPresentation.h"
 #include "EnemyTuningPreset.h"
 #include "OBB.h"
 #include "Player.h"
@@ -113,7 +112,6 @@ enum class TacticState {
 };
 
 enum class BossPhase { Phase1, Phase2 };
-enum class IntroPhase { SecondSlash, SpinSlash, Settle };
 
 // GameScene 側から渡す観測情報
 struct PlayerCombatObservation {
@@ -305,8 +303,6 @@ struct EnemyRuntimeState {
     PostActionOption postActionOption = PostActionOption::None;
     TacticState tactic = TacticState::DistanceAdjust;
     BossPhase phase = BossPhase::Phase1;
-    bool introActive = true;
-    float introTimer = 0.0f;
     bool phaseTransitionActive = false;
     float phaseTransitionTimer = 0.0f;
 
@@ -365,12 +361,6 @@ class Enemy {
     void NotifyAttackConnected();
     void NotifyAttackGuarded();
     bool NotifyCountered();
-    void SkipIntro();
-    void RestartIntro();
-    void DebugResetState();
-    bool DebugStartAction(ActionKind kind);
-    bool DebugTriggerWarpBackstab(const PlayerCombatObservation &playerObs);
-    void DebugSetBossPhase(BossPhase phase);
 
     const Transform &GetTransform() const { return tf_; }
     bool IsAlive() const { return !runtime_.deathFinished; }
@@ -387,34 +377,7 @@ class Enemy {
     ActionKind GetActionKind() const { return runtime_.action.kind; }
     ActionId GetActionId() const { return runtime_.action.id; }
     ActionStep GetActionStep() const { return runtime_.action.step; }
-    TacticState GetTacticState() const { return runtime_.tactic; }
     BossPhase GetBossPhase() const { return runtime_.phase; }
-    bool IsIntroActive() const { return runtime_.introActive; }
-    IntroPhase GetIntroPhase() const {
-        if (runtime_.introTimer < introSecondSlashDuration_) {
-            return IntroPhase::SecondSlash;
-        }
-        if (runtime_.introTimer <
-            introSecondSlashDuration_ + introSpinSlashDuration_) {
-            return IntroPhase::SpinSlash;
-        }
-        return IntroPhase::Settle;
-    }
-    float GetIntroRatio() const {
-        float totalDuration = introSecondSlashDuration_ +
-                              introSpinSlashDuration_ + introSettleDuration_;
-        if (totalDuration <= 0.0001f) {
-            return 1.0f;
-        }
-        float t = runtime_.introTimer / totalDuration;
-        if (t < 0.0f) {
-            t = 0.0f;
-        }
-        if (t > 1.0f) {
-            t = 1.0f;
-        }
-        return t;
-    }
     bool IsPhaseTransitionActive() const { return runtime_.phaseTransitionActive; }
     float GetPhaseTransitionRatio() const {
         if (phaseTransitionDuration_ <= 0.0001f) {
@@ -435,17 +398,6 @@ class Enemy {
 
     float GetDistanceToPlayer() const;
 
-    float GetFacingYaw() const { return runtime_.facingYaw; }
-    float GetLockedAttackYaw() const { return runtime_.lockedAttackYaw; }
-    float GetStagnantTimer() const { return runtime_.stagnantTimer; }
-    bool IsDistanceStagnant() const { return runtime_.isDistanceStagnant; }
-    float GetLastDistanceToPlayer() const { return runtime_.lastDistanceToPlayer; }
-    float GetStagnantDistanceThreshold() const {
-        return stagnantDistanceThreshold_;
-    }
-    float GetStagnantTimeThreshold() const { return stagnantTimeThreshold_; }
-    int GetStagnantWarpBonus() const { return stagnantWarpBonus_; }
-
     const std::vector<EnemyBullet> &GetBullets() const { return runtime_.bullets; }
     void DestroyBullet(size_t index);
     void ReflectBullet(size_t index, const DirectX::XMFLOAT3 &targetPos);
@@ -465,8 +417,6 @@ class Enemy {
     void DestroyWave(size_t index);
     void ReflectWave(size_t index, const DirectX::XMFLOAT3 &targetPos);
 
-    float GetSmashDamage() const { return config_.attacks.smash.melee.base.attack.damage; }
-    float GetSweepDamage() const { return config_.attacks.sweep.melee.base.attack.damage; }
     float GetBulletDamage() const { return config_.attacks.shot.attack.damage; }
     float GetWaveDamage() const { return config_.attacks.wave.attack.damage; }
 
@@ -500,74 +450,7 @@ class Enemy {
     const AttackTimingParam &GetSmashTiming() const { return config_.attacks.smash.melee.base.timing; }
     const AttackTimingParam &GetSweepTiming() const { return config_.attacks.sweep.melee.base.timing; }
 
-    AttackParam &EditSmashParam() { return config_.attacks.smash.melee.base.attack; }
-    AttackParam &EditSweepParam() { return config_.attacks.sweep.melee.base.attack; }
-    AttackParam &EditBulletParam() { return config_.attacks.shot.attack; }
-    AttackParam &EditWaveParam() { return config_.attacks.wave.attack; }
-
-    float &EditNearAttackDistance() { return config_.core.nearAttackDistance; }
-    float &EditFarAttackDistance() { return config_.core.farAttackDistance; }
-    float &EditEnemyMaxHp() { return config_.core.maxHp; }
-    float &EditPhase2HealthRatioThreshold() {
-        return config_.core.phase2HealthRatioThreshold;
-    }
-
-    float &EditSmashChargeTime() { return config_.attacks.smash.melee.base.chargeTime; }
-    float &EditSweepChargeTime() { return config_.attacks.sweep.melee.base.chargeTime; }
-
-    float &EditShotChargeTime() { return config_.attacks.shot.chargeTime; }
-    float &EditShotRecoveryTime() { return config_.attacks.shot.recoveryTime; }
-    float &EditShotInterval() { return config_.attacks.shot.interval; }
-    float &EditBulletSpeed() { return config_.attacks.shot.bulletSpeed; }
-    float &EditBulletLifeTime() { return config_.attacks.shot.bulletLifeTime; }
-
-    float &EditWaveChargeTime() { return config_.attacks.wave.chargeTime; }
-    float &EditWaveRecoveryTime() { return config_.attacks.wave.recoveryTime; }
-    float &EditWaveSpeed() { return config_.attacks.wave.speed; }
-    float &EditWaveMaxDistance() { return config_.attacks.wave.maxDistance; }
-
-    int &EditNearSmashWeight() { return nearSmashWeight_; }
-    int &EditNearSweepWeight() { return nearSweepWeight_; }
-    int &EditMidShotWeight() { return midShotWeight_; }
-    int &EditMidWaveWeight() { return midWaveWeight_; }
-
-    int &EditFarShotWeight() { return farShotWeight_; }
-    int &EditFarWarpWeight() { return farWarpWeight_; }
-    int &EditFarWaveWeight() { return farWaveWeight_; }
-
-    float &EditSweepWarpSmashMaxDistance() {
-        return config_.chain.sweepWarpSmashMaxDistance;
-    }
-    float &EditSweepWarpSmashChance() { return config_.chain.sweepWarpSmashChance; }
-    float &EditWaveWarpSmashMinDistance() { return config_.chain.waveWarpSmashMinDistance; }
-    float &EditWaveWarpSmashChance() { return config_.chain.waveWarpSmashChance; }
-
-    float &EditWarpStartTime() { return config_.warp.startTime; }
-    float &EditWarpMoveTime() { return config_.warp.moveTime; }
-    float &EditWarpEndTime() { return config_.warp.endTime; }
-
-    AttackTimingParam &EditSmashTiming() { return config_.attacks.smash.melee.base.timing; }
-    AttackTimingParam &EditSweepTiming() { return config_.attacks.sweep.melee.base.timing; }
-
-    float &EditSmashFeintChance() { return config_.attacks.smash.melee.feintChance; }
-    float &EditSweepFeintChance() { return config_.attacks.sweep.melee.feintChance; }
-    float &EditSmashHoldTimeMin() { return config_.attacks.smash.melee.holdTime.min; }
-    float &EditSmashHoldTimeMax() { return config_.attacks.smash.melee.holdTime.max; }
-    float &EditSweepHoldTimeMin() { return config_.attacks.sweep.melee.holdTime.min; }
-    float &EditSweepHoldTimeMax() { return config_.attacks.sweep.melee.holdTime.max; }
-
-    EnemyTuningPreset CreateTuningPreset() const;
     void ApplyTuningPreset(const EnemyTuningPreset &preset);
-    void ResetTuningPreset();
-
-    float GetCurrentActionTimePublic() const { return GetCurrentActionTime(); }
-    const AttackTimingParam *GetCurrentAttackTimingPublic() const {
-        return GetCurrentAttackTiming();
-    }
-
-    void UpdatePresentationEvents();
-    std::vector<EnemyElectricRingSpawnRequest>
-    ConsumeElectricRingSpawnRequests();
 
   private:
     Transform tf_{};
@@ -621,9 +504,6 @@ class Enemy {
 
     std::vector<EnemyWave> &waves_ = runtime_.waves;
 
-    ActionStep prevPresentationWarpStep_ = ActionStep::None;
-    std::vector<EnemyElectricRingSpawnRequest> electricRingSpawnRequests_{};
-
     int &farActionIndex_ = runtime_.farActionIndex;
     int &nearActionIndex_ = runtime_.nearActionIndex;
 
@@ -638,20 +518,6 @@ class Enemy {
     TacticState &tactic_ = runtime_.tactic;
     BossPhase &phase_ = runtime_.phase;
     EnemyConfig config_{};
-    bool &introActive_ = runtime_.introActive;
-    float &introTimer_ = runtime_.introTimer;
-    float introSecondSlashDuration_ = 1.60f;
-    float introSpinSlashDuration_ = 1.05f;
-    float introSettleDuration_ = 2.0f;
-    float introSpinTurns_ = 1.0f;
-    float introSlashLunge_ = 0.34f;
-    float introSpinLunge_ = 0.42f;
-    float introSpinLift_ = 0.18f;
-    float introPoseLean_ = 0.26f;
-    float introImpactSquash_ = 0.14f;
-    float introHandLift_ = 0.95f;
-    float introBodyScaleBoost_ = 0.18f;
-    float introVisualScaleBoost_ = 0.12f;
     bool &phaseTransitionActive_ = runtime_.phaseTransitionActive;
     float &phaseTransitionTimer_ = runtime_.phaseTransitionTimer;
     float phaseTransitionDuration_ = 0.90f;
