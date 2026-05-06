@@ -135,6 +135,10 @@ if exist "$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClCompile Include="src\enemy\Bullet.cpp" />
     <ClCompile Include="src\player\Player.cpp" />
     <ClCompile Include="src\scene\GameScene.cpp" />
+    <ClCompile Include="src\scene\GameSceneAnimation.cpp" />
+    <ClCompile Include="src\scene\GameSceneCamera.cpp" />
+    <ClCompile Include="src\scene\GameSceneCombat.cpp" />
+    <ClCompile Include="src\scene\GameSceneLighting.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\player\Sword.cpp" />
     <ClCompile Include="src\player\SwordJoyConController.cpp" />
