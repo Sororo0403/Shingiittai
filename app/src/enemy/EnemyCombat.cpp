@@ -185,7 +185,11 @@ void Enemy::NotifyAttackGuarded() { currentActionGuarded_ = true; }
 
 bool Enemy::NotifyCountered() { return ApplyCounterBreakReaction(); }
 
-bool Enemy::ApplyCounterBreakReaction() {
+bool Enemy::NotifyCountered(float vulnerabilityDuration) {
+    return ApplyCounterBreakReaction(vulnerabilityDuration);
+}
+
+bool Enemy::ApplyCounterBreakReaction(float vulnerabilityDuration) {
     RegisterCounterSuccessReaction();
 
     const bool isCounterBreakableAction =
@@ -210,6 +214,7 @@ bool Enemy::ApplyCounterBreakReaction() {
 
     EndAttack();
     counterRecoilTimer_ = counterRecoilDuration_;
+    hitReactionTimer_ = (std::max)(hitReactionTimer_, vulnerabilityDuration);
     ResetChainContext();
     ResetPostActionState();
     stateTimer_ = 0.0f;

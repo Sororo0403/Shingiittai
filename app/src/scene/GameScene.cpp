@@ -38,7 +38,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
 
     texture->ReleaseUploadBuffers();
 
-    player_.Initialize(playerModel, swordModel);
+    player_.Initialize(playerModel, swordModel, selectedWeaponType_);
     playerModelId_ = playerModel;
     enemy_.Initialize(enemyModel, bulletModel);
     enemyModelId_ = enemyModel;

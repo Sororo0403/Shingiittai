@@ -9,6 +9,7 @@
 #include "SpriteManager.h"
 #include "SrvManager.h"
 #include "TextureManager.h"
+#include "WeaponSelectScene.h"
 #include "WinApp.h"
 #include <memory>
 
@@ -91,7 +92,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     // SceneManager
     SceneManager sceneManager;
     sceneManager.Initialize(sceneCtx);
-    sceneManager.ChangeScene(std::make_unique<GameScene>());
+    sceneManager.ChangeScene(std::make_unique<WeaponSelectScene>());
 
     // 高精細タイマの周波数を取得
     LARGE_INTEGER freq;

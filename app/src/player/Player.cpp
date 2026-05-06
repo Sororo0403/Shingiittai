@@ -9,10 +9,22 @@ using namespace DirectX;
 
 namespace {
 constexpr float kPlayerVisualScaleMultiplier = 3.0f;
+
+DirectX::XMFLOAT2 NormalizeCounterDir(float x, float y) {
+    const float lenSq = x * x + y * y;
+    if (lenSq <= 0.001f) {
+        return {0.0f, 1.0f};
+    }
+
+    const float invLen = 1.0f / std::sqrt(lenSq);
+    return {x * invLen, y * invLen};
+}
 }
 
-void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
+void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId,
+                        PlayerWeaponType weaponType) {
     modelId_ = playerModelId;
+    weaponType_ = weaponType;
 
     tf_.position = {0, 0, 0};
     tf_.scale = {1, 1, 1};
@@ -26,6 +38,19 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
     hp_ = maxHp_;
     velocity_ = {0.0f, 0.0f, 0.0f};
     postSlashRecoveryTimer_ = 0.0f;
+    leftSlashRecoveryTimer_ = 0.0f;
+    rightSlashRecoveryTimer_ = 0.0f;
+    leftSwordAttackDamage_ = 10.0f;
+    rightSwordAttackDamage_ = 10.0f;
+    prevLeftSwordSlashMode_ = false;
+    prevRightSwordSlashMode_ = false;
+    greatSwordCharge_ = 0.0f;
+    greatSwordSwingTimer_ = 0.0f;
+    greatSwordSwingDamage_ = 18.0f;
+    greatSwordFullChargeCounterReady_ = false;
+    leftManualCounterFrames_ = 0;
+    rightManualCounterFrames_ = 0;
+    dualNextManualLeft_ = true;
     leftSword_.Update(BuildSwordTransform(MakeIdleSwordPose(true), true),
                       MakeIdleSwordPose(true), 0.0f);
     rightSword_.Update(BuildSwordTransform(MakeIdleSwordPose(false), false),
@@ -78,6 +103,9 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
         rightPose = swordMouseController_.GetPose();
     }
 
+    UpdateWeaponRules(input, leftPose, rightPose, hasLeftJoyCon,
+                      hasRightJoyCon, useGamepadRightSword, deltaTime);
+
     if (postSlashRecoveryTimer_ > 0.0f) {
         postSlashRecoveryTimer_ -= deltaTime;
         if (postSlashRecoveryTimer_ < 0.0f) {
@@ -94,6 +122,9 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
         leftPose.isCounter = false;
         rightPose.isCounter = false;
     }
+
+    ApplyHandRecovery(leftPose, leftSlashRecoveryTimer_, deltaTime);
+    ApplyHandRecovery(rightPose, rightSlashRecoveryTimer_, deltaTime);
 
     const float recoveryRatio =
         (kPostSlashRecoveryDuration > 0.0f)
@@ -115,9 +146,20 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
 
     leftSwordSlashMode_ = leftPose.isSlashMode;
     rightSwordSlashMode_ = rightPose.isSlashMode;
+    if (prevLeftSwordSlashMode_ && !leftSwordSlashMode_) {
+        leftSlashRecoveryTimer_ =
+            (std::max)(leftSlashRecoveryTimer_, GetSlashRecoveryDuration());
+    }
+    if (prevRightSwordSlashMode_ && !rightSwordSlashMode_) {
+        rightSlashRecoveryTimer_ =
+            (std::max)(rightSlashRecoveryTimer_, GetSlashRecoveryDuration());
+    }
+    prevLeftSwordSlashMode_ = leftSwordSlashMode_;
+    prevRightSwordSlashMode_ = rightSwordSlashMode_;
+
     leftSwordSlashDir_ = leftPose.slashDir;
     rightSwordSlashDir_ = rightPose.slashDir;
-    leftSwordVisible_ = hasLeftJoyCon;
+    leftSwordVisible_ = weaponType_ == PlayerWeaponType::Dual;
     rightSwordVisible_ = hasRightJoyCon || useGamepadRightSword ||
                          useMouseRightSword;
     isGuarding_ = leftPose.isGuard || rightPose.isGuard;
@@ -291,6 +333,38 @@ bool Player::IsGuarding() const {
     return isGuarding_;
 }
 
+float Player::GetGuardDamageMultiplier() const {
+    switch (weaponType_) {
+    case PlayerWeaponType::Dual:
+        return 1.0f;
+    case PlayerWeaponType::GreatSword:
+        return std::clamp(0.80f - greatSwordCharge_ * 0.45f, 0.35f, 0.80f);
+    case PlayerWeaponType::Standard:
+    default:
+        return 0.25f;
+    }
+}
+
+float Player::GetCounterDamageMultiplier() const {
+    switch (weaponType_) {
+    case PlayerWeaponType::Dual:
+        return 0.85f;
+    case PlayerWeaponType::GreatSword:
+        return greatSwordFullChargeCounterReady_ ? 4.0f : 1.45f;
+    case PlayerWeaponType::Standard:
+    default:
+        return 1.0f;
+    }
+}
+
+float Player::GetCounterVulnerabilityDuration() const {
+    if (weaponType_ == PlayerWeaponType::GreatSword &&
+        greatSwordFullChargeCounterReady_) {
+        return 1.35f;
+    }
+    return 0.35f;
+}
+
 void Player::NotifyCounterSuccess() {
     if (leftSword_.IsCounterStance()) {
         leftSword_.NotifyCounterSuccess();
@@ -298,6 +372,11 @@ void Player::NotifyCounterSuccess() {
     if (rightSword_.IsCounterStance()) {
         rightSword_.NotifyCounterSuccess();
     }
+    if (weaponType_ == PlayerWeaponType::GreatSword &&
+        greatSwordFullChargeCounterReady_) {
+        greatSwordCharge_ = 0.0f;
+    }
+    greatSwordFullChargeCounterReady_ = false;
 }
 
 Transform Player::BuildSwordTransform(const SwordPose &pose, bool isLeft) const {
@@ -327,6 +406,188 @@ SwordPose Player::MakeIdleSwordPose(bool isLeft) const {
     SwordPose pose{};
     pose.orientation = {0, 0, 0, 1};
     return pose;
+}
+
+SwordPose Player::MakeMirroredSwordPose(const SwordPose &source) const {
+    SwordPose pose = source;
+    pose.slashDir.x = -pose.slashDir.x;
+    return pose;
+}
+
+void Player::UpdateWeaponRules(Input *input, SwordPose &leftPose,
+                               SwordPose &rightPose, bool hasLeftJoyCon,
+                               bool hasRightJoyCon, bool useGamepadRightSword,
+                               float deltaTime) {
+    leftSwordAttackDamage_ = 10.0f;
+    rightSwordAttackDamage_ = 10.0f;
+
+    if (weaponType_ == PlayerWeaponType::Standard) {
+        leftPose = MakeIdleSwordPose(true);
+        return;
+    }
+
+    if (weaponType_ == PlayerWeaponType::Dual) {
+        leftSwordAttackDamage_ = 7.0f;
+        rightSwordAttackDamage_ = 7.0f;
+        leftPose.isGuard = false;
+        rightPose.isGuard = false;
+
+        const bool singlePointerControl =
+            !hasLeftJoyCon && !hasRightJoyCon && !useGamepadRightSword;
+        if (singlePointerControl && rightPose.isSlashMode) {
+            if (dualNextManualLeft_ && leftSlashRecoveryTimer_ <= 0.0f) {
+                leftPose = MakeMirroredSwordPose(rightPose);
+                rightPose.isSlashMode = false;
+            } else if (rightSlashRecoveryTimer_ <= 0.0f) {
+                leftPose = MakeIdleSwordPose(true);
+            } else if (leftSlashRecoveryTimer_ <= 0.0f) {
+                leftPose = MakeMirroredSwordPose(rightPose);
+                rightPose.isSlashMode = false;
+            } else {
+                leftPose = MakeIdleSwordPose(true);
+                rightPose.isSlashMode = false;
+            }
+        }
+
+        const bool manualCounterTrigger =
+            input->IsMouseTrigger(1) ||
+            (input->IsGamepadConnected() &&
+             input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_B));
+        if (manualCounterTrigger) {
+            float dirX = static_cast<float>(input->GetMouseDX());
+            float dirY = -static_cast<float>(input->GetMouseDY());
+            if (input->IsGamepadConnected()) {
+                const float stickX = input->GetGamepadRightStickX();
+                const float stickY = input->GetGamepadRightStickY();
+                if (stickX * stickX + stickY * stickY > 0.04f) {
+                    dirX = stickX;
+                    dirY = stickY;
+                }
+            }
+            BeginDualManualCounter(dualNextManualLeft_,
+                                   NormalizeCounterDir(dirX, dirY));
+            dualNextManualLeft_ = !dualNextManualLeft_;
+        }
+
+        UpdateDualManualCounter(leftPose, rightPose, deltaTime);
+        return;
+    }
+
+    if (weaponType_ == PlayerWeaponType::GreatSword) {
+        leftPose = MakeIdleSwordPose(true);
+        leftSwordAttackDamage_ = 0.0f;
+
+        if (greatSwordSwingTimer_ > 0.0f) {
+            greatSwordSwingTimer_ -= deltaTime;
+            if (greatSwordSwingTimer_ < 0.0f) {
+                greatSwordSwingTimer_ = 0.0f;
+            }
+        }
+
+        if (rightPose.isGuard) {
+            greatSwordCharge_ += deltaTime * kGreatSwordChargeRate;
+            greatSwordCharge_ = std::clamp(greatSwordCharge_, 0.0f, 1.0f);
+        }
+
+        if (rightPose.isCounter && greatSwordCharge_ >= 0.98f) {
+            greatSwordFullChargeCounterReady_ = true;
+        }
+
+        if (rightPose.isSlashMode) {
+            const bool startsSwing = !prevRightSwordSlashMode_ &&
+                                     greatSwordSwingTimer_ <= 0.0f;
+            if (startsSwing && greatSwordCharge_ >= kGreatSwordMinSwingCharge) {
+                greatSwordSwingDamage_ =
+                    ComputeGreatSwordAttackDamage(greatSwordCharge_);
+                greatSwordSwingTimer_ = kGreatSwordSwingDuration;
+                greatSwordCharge_ = 0.0f;
+                greatSwordFullChargeCounterReady_ = false;
+            }
+
+            if (greatSwordSwingTimer_ <= 0.0f) {
+                rightPose.isSlashMode = false;
+            } else {
+                rightSwordAttackDamage_ = greatSwordSwingDamage_;
+            }
+        } else if (greatSwordSwingTimer_ > 0.0f) {
+            rightPose.isSlashMode = true;
+            rightSwordAttackDamage_ = greatSwordSwingDamage_;
+        }
+    }
+}
+
+void Player::ApplyHandRecovery(SwordPose &pose, float &timer,
+                               float deltaTime) {
+    if (timer <= 0.0f) {
+        return;
+    }
+
+    timer -= deltaTime;
+    if (timer < 0.0f) {
+        timer = 0.0f;
+    }
+
+    pose.isSlashMode = false;
+    pose.isGuard = false;
+    pose.isCounter = false;
+}
+
+void Player::BeginDualManualCounter(bool preferLeft,
+                                    const DirectX::XMFLOAT2 &dir) {
+    const bool canUseLeft = leftSlashRecoveryTimer_ <= 0.0f;
+    const bool canUseRight = rightSlashRecoveryTimer_ <= 0.0f;
+    bool useLeft = preferLeft;
+
+    if (useLeft && !canUseLeft && canUseRight) {
+        useLeft = false;
+    } else if (!useLeft && !canUseRight && canUseLeft) {
+        useLeft = true;
+    }
+
+    if (useLeft && canUseLeft) {
+        leftManualCounterFrames_ = SwordControllerState::kCounterFrames;
+        leftManualCounterDir_ = dir;
+    } else if (!useLeft && canUseRight) {
+        rightManualCounterFrames_ = SwordControllerState::kCounterFrames;
+        rightManualCounterDir_ = dir;
+    }
+}
+
+void Player::UpdateDualManualCounter(SwordPose &leftPose,
+                                     SwordPose &rightPose, float deltaTime) {
+    (void)deltaTime;
+
+    if (leftManualCounterFrames_ > 0) {
+        leftPose.isSlashMode = false;
+        leftPose.isGuard = false;
+        leftPose.isCounter = true;
+        leftPose.slashDir = leftManualCounterDir_;
+        --leftManualCounterFrames_;
+    }
+    if (rightManualCounterFrames_ > 0) {
+        rightPose.isSlashMode = false;
+        rightPose.isGuard = false;
+        rightPose.isCounter = true;
+        rightPose.slashDir = rightManualCounterDir_;
+        --rightManualCounterFrames_;
+    }
+}
+
+float Player::GetSlashRecoveryDuration() const {
+    switch (weaponType_) {
+    case PlayerWeaponType::Dual:
+        return 0.16f;
+    case PlayerWeaponType::GreatSword:
+        return 0.55f;
+    case PlayerWeaponType::Standard:
+    default:
+        return 0.25f;
+    }
+}
+
+float Player::ComputeGreatSwordAttackDamage(float chargeRatio) const {
+    const float t = std::clamp(chargeRatio, 0.0f, 1.0f);
+    return 18.0f + 52.0f * t * t;
 }
 
 SwordPose Player::UpdateGamepadSword(Input *input, float deltaTime,

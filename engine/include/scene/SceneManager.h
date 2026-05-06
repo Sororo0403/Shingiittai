@@ -32,6 +32,12 @@ class SceneManager {
     void Draw();
 
   private:
+    void ApplySceneChange(std::unique_ptr<BaseScene> nextScene);
+
+  private:
     std::unique_ptr<BaseScene> currentScene_;
+    std::unique_ptr<BaseScene> pendingScene_;
     const SceneContext *ctx_ = nullptr;
+    bool isUpdating_ = false;
+    bool isDrawing_ = false;
 };

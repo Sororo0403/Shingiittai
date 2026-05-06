@@ -59,31 +59,46 @@ PlayerCombatObservation GameScene::BuildPlayerCombatObservation() const {
 }
 
 void GameScene::UpdateCombat(float gameplayDeltaTime) {
-    auto counterBox = player_.GetSword().GetCounterOBB();
     auto playerBox = player_.GetOBB();
     const bool isPlayerGuarding = player_.IsGuarding();
-    const bool isPlayerCountering = player_.GetSword().IsSlashMode();
+    const bool isPlayerCountering = player_.IsCounterStance();
+    const float guardDamageMultiplier = player_.GetGuardDamageMultiplier();
     const auto enemyBodyBox = enemy_.GetBodyOBB();
     const ActionKind enemyActionKind = enemy_.GetActionKind();
     const ActionStep enemyActionStep = enemy_.GetActionStep();
+    const auto swords = player_.GetSwords();
+    const auto swordSlashStates = player_.GetSwordSlashStates();
+    const auto swordAttackDamages = player_.GetSwordAttackDamages();
     bool startCounterCinematicThisFrame = false;
     bool stopCounterCinematicThisFrame = false;
     bool forceSyncEnemyAnimationThisFrame = false;
+    auto isCounterBoxHit = [&](const OBB &targetBox) {
+        for (const Sword *sword : swords) {
+            if (sword == nullptr || !sword->IsCounterStance()) {
+                continue;
+            }
+            if (CollisionUtil::CheckOBB(targetBox, sword->GetCounterOBB())) {
+                return true;
+            }
+        }
+        return false;
+    };
     auto triggerSuccessfulCounter = [&](float enemyDamage, float hitCooldown) {
+        const float counterDamage =
+            enemyDamage * player_.GetCounterDamageMultiplier();
+        const float vulnerabilityDuration =
+            player_.GetCounterVulnerabilityDuration();
         player_.NotifyCounterSuccess();
-        if (enemy_.NotifyCountered()) {
+        if (enemy_.NotifyCountered(vulnerabilityDuration)) {
             forceSyncEnemyAnimationThisFrame = true;
         }
-        enemy_.TakeDamage(enemyDamage);
+        enemy_.TakeDamage(counterDamage);
         playerHitCooldown_ = hitCooldown;
         startCounterCinematicThisFrame = true;
     };
 
     TickCooldown(enemyHitCooldown_, gameplayDeltaTime);
     TickCooldown(playerHitCooldown_, gameplayDeltaTime);
-
-    const auto swords = player_.GetSwords();
-    const auto swordSlashStates = player_.GetSwordSlashStates();
 
     for (size_t i = 0; i < swords.size(); ++i) {
         const Sword *sword = swords[i];
@@ -98,7 +113,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
 
         if (enemyHitCooldown_ <= 0.0f) {
             if (hitBody) {
-                enemy_.TakeDamage(10.0f);
+                enemy_.TakeDamage(swordAttackDamages[i]);
                 enemyHitCooldown_ = 0.2f;
                 if (counterCinematicActive_) {
                     stopCounterCinematicThisFrame = true;
@@ -154,7 +169,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                 triggerSuccessfulCounter(enemyAttackDamage, 0.2f);
             } else if (isPlayerGuarding) {
                 enemy_.NotifyAttackGuarded();
-                player_.TakeDamage(enemyAttackDamage * kGuardDamageMultiplier);
+                player_.TakeDamage(enemyAttackDamage * guardDamageMultiplier);
                 player_.AddKnockback(
                     {knockbackDir.x * (enemyAttackKnockback * 0.5f), 0.0f,
                      knockbackDir.y * (enemyAttackKnockback * 0.5f)});
@@ -183,7 +198,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         bulletBox.rotation = player_.GetTransform().rotation;
 
         if (!bullet.isReflected && isPlayerCountering &&
-            CollisionUtil::CheckOBB(bulletBox, counterBox)) {
+            isCounterBoxHit(bulletBox)) {
             enemy_.ReflectBullet(i, enemy_.GetTransform().position);
             continue;
         }
@@ -209,7 +224,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                                              0.12f);
                 } else if (isPlayerGuarding) {
                     player_.TakeDamage(enemy_.GetBulletDamage() *
-                                       kGuardDamageMultiplier);
+                                       guardDamageMultiplier);
                     player_.AddKnockback(
                         {hitDir.x * (enemy_.GetBulletKnockback() * 0.5f),
                          0.0f,
@@ -244,7 +259,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         waveBox.rotation = player_.GetTransform().rotation;
 
         if (!wave.isReflected && isPlayerCountering &&
-            CollisionUtil::CheckOBB(waveBox, counterBox)) {
+            isCounterBoxHit(waveBox)) {
             enemy_.ReflectWave(i, enemy_.GetTransform().position);
             continue;
         }
@@ -270,7 +285,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                                              0.12f);
                 } else if (isPlayerGuarding) {
                     player_.TakeDamage(enemy_.GetWaveDamage() *
-                                       kGuardDamageMultiplier);
+                                       guardDamageMultiplier);
                     player_.AddKnockback(
                         {hitDir.x * (enemy_.GetWaveKnockback() * 0.5f), 0.0f,
                          hitDir.y * (enemy_.GetWaveKnockback() * 0.5f)});

@@ -4,6 +4,7 @@
 #include "Camera.h"
 #include "Enemy.h"
 #include "Player.h"
+#include "PlayerWeaponType.h"
 #include "Transform.h"
 #include <DirectXMath.h>
 #include <cstdint>
@@ -11,6 +12,9 @@
 
 class GameScene : public BaseScene {
   public:
+    explicit GameScene(PlayerWeaponType weaponType = PlayerWeaponType::Standard)
+        : selectedWeaponType_(weaponType) {}
+
     void Initialize(const SceneContext &ctx) override;
     void Update() override;
     void Draw() override;
@@ -26,7 +30,7 @@ class GameScene : public BaseScene {
     float ComputeGameplayTimeScale() const;
 
   private:
-    static constexpr float kGuardDamageMultiplier = 0.25f;
+    PlayerWeaponType selectedWeaponType_ = PlayerWeaponType::Standard;
 
     Camera camera_;
 

@@ -139,6 +139,7 @@ if exist "$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClCompile Include="src\scene\GameSceneCamera.cpp" />
     <ClCompile Include="src\scene\GameSceneCombat.cpp" />
     <ClCompile Include="src\scene\GameSceneLighting.cpp" />
+    <ClCompile Include="src\scene\WeaponSelectScene.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\player\Sword.cpp" />
     <ClCompile Include="src\player\SwordJoyConController.cpp" />
@@ -151,7 +152,9 @@ if exist "$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClInclude Include="include\enemy\Bullet.h" />
     <ClInclude Include="include\enemy\Enemy.h" />
     <ClInclude Include="include\scene\GameScene.h" />
+    <ClInclude Include="include\scene\WeaponSelectScene.h" />
     <ClInclude Include="include\player\Player.h" />
+    <ClInclude Include="include\player\PlayerWeaponType.h" />
     <ClInclude Include="include\player\Sword.h" />
     <ClInclude Include="include\player\SwordJoyConController.h" />
     <ClInclude Include="include\player\SwordMouseController.h" />

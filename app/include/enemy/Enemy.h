@@ -360,6 +360,7 @@ class Enemy {
     void NotifyAttackConnected();
     void NotifyAttackGuarded();
     bool NotifyCountered();
+    bool NotifyCountered(float vulnerabilityDuration);
 
     const Transform &GetTransform() const { return tf_; }
     bool IsAlive() const { return !runtime_.deathFinished; }
@@ -822,7 +823,7 @@ class Enemy {
 
     void UpdateCounterAdaptation(float deltaTime);
     void RegisterCounterSuccessReaction();
-    bool ApplyCounterBreakReaction();
+    bool ApplyCounterBreakReaction(float vulnerabilityDuration = 0.0f);
     float GetAdaptiveHoldChance(ActionKind kind) const;
     float GetAdaptiveChargeOffset(ActionKind kind) const;
     bool ShouldSnapReleaseFromRead() const;
