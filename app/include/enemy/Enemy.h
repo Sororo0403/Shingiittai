@@ -1,7 +1,6 @@
 #pragma once
 #include "Camera.h"
 #include "EnemyActionData.h"
-#include "EnemyTuningPreset.h"
 #include "OBB.h"
 #include "Player.h"
 #include "Transform.h"
@@ -449,8 +448,6 @@ class Enemy {
 
     const AttackTimingParam &GetSmashTiming() const { return config_.attacks.smash.melee.base.timing; }
     const AttackTimingParam &GetSweepTiming() const { return config_.attacks.sweep.melee.base.timing; }
-
-    void ApplyTuningPreset(const EnemyTuningPreset &preset);
 
   private:
     Transform tf_{};

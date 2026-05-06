@@ -269,25 +269,6 @@ void Player::TakeDamage(float damage) {
     }
 }
 
-void Player::ApplyTuningPreset(const PlayerTuningPreset &preset) {
-    maxHp_ = preset.maxHp;
-    if (maxHp_ < 1.0f) {
-        maxHp_ = 1.0f;
-    }
-
-    moveSpeed_ = preset.moveSpeed;
-    if (moveSpeed_ < 0.0f) {
-        moveSpeed_ = 0.0f;
-    }
-
-    damageTakenScale_ = preset.damageTakenScale;
-    if (damageTakenScale_ < 0.0f) {
-        damageTakenScale_ = 0.0f;
-    }
-
-    hp_ = std::clamp(preset.initialHp, 0.0f, maxHp_);
-}
-
 void Player::AddKnockback(const DirectX::XMFLOAT3 &velocity) {
     knockbackVelocity_.x += velocity.x;
     knockbackVelocity_.y += velocity.y;

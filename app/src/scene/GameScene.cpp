@@ -4,7 +4,6 @@
 #include "Input.h"
 #include "ModelManager.h"
 #include "SceneManager.h"
-#include "PlayerTuningPresetIO.h"
 #include "SpriteManager.h"
 #include "TextureManager.h"
 #include "WinApp.h"
@@ -12,7 +11,6 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
-#include "EnemyTuningPresetIO.h"
 
 using namespace DirectX;
 
@@ -122,24 +120,6 @@ void GameScene::Initialize(const SceneContext &ctx) {
     playerModelId_ = playerModel;
     enemy_.Initialize(enemyModel, bulletModel);
     enemyModelId_ = enemyModel;
-
-    {
-        PlayerTuningPreset playerPreset{};
-        if (PlayerTuningPresetIO::Load("app/resources/player_tuning.txt",
-                                       playerPreset)) {
-            player_.ApplyTuningPreset(playerPreset);
-        }
-    }
-
-    {
-        EnemyTuningPreset enemyPreset{};
-        if (EnemyTuningPresetIO::Load("app/resources/enemy_tuning.csv",
-                                      enemyPreset) ||
-            EnemyTuningPresetIO::Load("app/resources/enemy_tuning.txt",
-                                      enemyPreset)) {
-            enemy_.ApplyTuningPreset(enemyPreset);
-        }
-    }
 
     // 荳莠�E�遘ｰ繧�E�繝｡繝ｩ蛻晁E��蜷代″
     cameraYaw_ = 0.0f;

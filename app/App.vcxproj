@@ -132,8 +132,6 @@ if exist "$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClCompile Include="src\enemy\EnemyMovement.cpp" />
     <ClCompile Include="src\enemy\EnemyPresentation.cpp" />
     <ClCompile Include="src\enemy\EnemyTuning.cpp" />
-    <ClCompile Include="src\enemy\EnemyTuningPresetIO.cpp" />
-    <ClCompile Include="src\player\PlayerTuningPresetIO.cpp" />
     <ClCompile Include="src\enemy\Bullet.cpp" />
     <ClCompile Include="src\player\Player.cpp" />
     <ClCompile Include="src\scene\GameScene.cpp" />
@@ -144,10 +142,6 @@ if exist "$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" (
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\enemy\EnemyActionData.h" />
-    <ClInclude Include="include\enemy\EnemyTuningPreset.h" />
-    <ClInclude Include="include\enemy\EnemyTuningPresetIO.h" />
-    <ClInclude Include="include\player\PlayerTuningPreset.h" />
-    <ClInclude Include="include\player\PlayerTuningPresetIO.h" />
     <ClInclude Include="include\player\SwordControllerState.h" />
     <ClInclude Include="include\player\SwordPose.h" />
     <ClInclude Include="include\enemy\Bullet.h" />
@@ -170,7 +164,6 @@ if exist "$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" (
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <None Include="resources\enemy_tuning.csv" />
   </ItemGroup>
   <ItemGroup>
     <None Include="resources\models\boss\boss.bin" />

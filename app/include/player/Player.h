@@ -1,7 +1,6 @@
 #pragma once
 #include "Camera.h"
 #include "JoyCon.h"
-#include "PlayerTuningPreset.h"
 #include "Sword.h"
 #include "SwordJoyConController.h"
 #include "SwordMouseController.h"
@@ -43,8 +42,6 @@ class Player {
 
     float GetHP() const { return hp_; }
     void TakeDamage(float damage);
-
-    void ApplyTuningPreset(const PlayerTuningPreset &preset);
 
     void AddKnockback(const DirectX::XMFLOAT3 &velocity);
     const DirectX::XMFLOAT3 &GetVelocity() const { return velocity_; }

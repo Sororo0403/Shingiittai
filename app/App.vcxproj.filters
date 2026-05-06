@@ -75,12 +75,6 @@
     <ClCompile Include="src\enemy\EnemyTuning.cpp">
       <Filter>Source Files\enemy</Filter>
     </ClCompile>
-    <ClCompile Include="src\enemy\EnemyTuningPresetIO.cpp">
-      <Filter>Source Files\enemy</Filter>
-    </ClCompile>
-    <ClCompile Include="src\player\PlayerTuningPresetIO.cpp">
-      <Filter>Source Files\player</Filter>
-    </ClCompile>
     <ClCompile Include="src\enemy\Bullet.cpp">
       <Filter>Source Files\enemy</Filter>
     </ClCompile>
@@ -106,18 +100,6 @@
   <ItemGroup>
     <ClInclude Include="include\enemy\EnemyActionData.h">
       <Filter>Header Files\enemy</Filter>
-    </ClInclude>
-    <ClInclude Include="include\enemy\EnemyTuningPreset.h">
-      <Filter>Header Files\enemy</Filter>
-    </ClInclude>
-    <ClInclude Include="include\enemy\EnemyTuningPresetIO.h">
-      <Filter>Header Files\enemy</Filter>
-    </ClInclude>
-    <ClInclude Include="include\player\PlayerTuningPreset.h">
-      <Filter>Header Files\player</Filter>
-    </ClInclude>
-    <ClInclude Include="include\player\PlayerTuningPresetIO.h">
-      <Filter>Header Files\player</Filter>
     </ClInclude>
     <ClInclude Include="include\player\SwordControllerState.h">
       <Filter>Header Files\player</Filter>
@@ -148,9 +130,6 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="resources\enemy_tuning.csv">
-      <Filter>Resources\Tuning</Filter>
-    </None>
     <None Include="resources\models\boss\boss.bin">
       <Filter>Resources\Model\boss</Filter>
     </None>
