@@ -32,35 +32,6 @@ XMFLOAT4 MakeQuat(float pitch, float yaw, float roll) {
     return q;
 }
 
-void StylizeModelMaterials(ModelManager *modelManager, uint32_t modelId,
-                           const XMFLOAT4 &baseColor,
-                           float reflectionStrength,
-                           float fresnelStrength,
-                           float roughness) {
-    Model *model = modelManager->GetModel(modelId);
-    if (model == nullptr) {
-        return;
-    }
-
-    for (size_t i = 0; i < model->subMeshes.size(); ++i) {
-        const ModelSubMesh &subMesh = model->subMeshes[i];
-        Material material = modelManager->GetMaterial(subMesh.materialId);
-        const float shade = (i % 2 == 0) ? 0.88f : 1.08f;
-        material.color = {baseColor.x * shade, baseColor.y * shade,
-                          baseColor.z * shade, baseColor.w};
-        material.enableTexture = 0;
-        material.reflectionStrength = reflectionStrength;
-        material.reflectionFresnelStrength = fresnelStrength;
-        material.reflectionRoughness = roughness;
-        material.enableDissolve = 0;
-        modelManager->SetMaterial(subMesh.materialId, material);
-    }
-}
-
-void StylizeEnemyMaterials(ModelManager *modelManager, uint32_t modelId) {
-    StylizeModelMaterials(modelManager, modelId, {0.52f, 0.53f, 0.55f, 1.0f},
-                          0.06f, 0.22f, 0.72f);
-}
 } // namespace
 
 void GameScene::Initialize(const SceneContext &ctx) {
@@ -86,13 +57,6 @@ void GameScene::Initialize(const SceneContext &ctx) {
     uint32_t enemyModel = model->Load(L"app/resources/models/boss/boss.gltf");
     uint32_t bulletModel =
         ctx_->model->Load(L"app/resources/models/bullet/bullet.obj");
-    StylizeModelMaterials(model, playerModel, {0.64f, 0.65f, 0.67f, 1.0f},
-                          0.04f, 0.18f, 0.78f);
-    StylizeModelMaterials(model, swordModel, {0.84f, 0.85f, 0.86f, 1.0f},
-                          0.10f, 0.34f, 0.42f);
-    StylizeEnemyMaterials(model, enemyModel);
-    StylizeModelMaterials(model, bulletModel, {0.78f, 0.80f, 0.84f, 1.0f},
-                          0.08f, 0.38f, 0.52f);
     arenaNoiseTextureId_ = texture->CreateNoiseTexture(256, 256);
     arenaFloorModelId_ = model->CreatePlane(
         arenaNoiseTextureId_,
@@ -201,7 +165,7 @@ void GameScene::Update() {
 void GameScene::Draw() {
     ctx_->model->PreDraw();
 
-    DrawArena();
+    // DrawArena();
     player_.Draw(ctx_->model, camera_);
     enemy_.Draw(ctx_->model, camera_);
     ctx_->model->PostDraw();

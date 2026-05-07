@@ -196,36 +196,32 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera) {
     playerVisual.scale.x *= kPlayerVisualScaleMultiplier;
     playerVisual.scale.y *= kPlayerVisualScaleMultiplier;
     playerVisual.scale.z *= kPlayerVisualScaleMultiplier;
-    ModelDrawEffect playerEffect{};
-    playerEffect.enabled = true;
-    playerEffect.additiveBlend = false;
-    playerEffect.color = {0.82f, 0.86f, 0.92f, 0.34f};
-    playerEffect.intensity = 0.14f;
-    playerEffect.fresnelPower = 3.6f;
-    playerEffect.noiseAmount = 0.10f;
-
     if (isInPostSlashRecovery) {
         const float phase = (1.0f - recoveryRatio) * 64.0f;
         const float shake = 0.035f * recoveryRatio;
         playerVisual.position.x += std::sinf(phase) * shake;
         playerVisual.position.z += std::cosf(phase * 1.37f) * shake;
 
-        playerEffect.color = {0.95f, 0.97f, 1.0f, 0.74f};
-        playerEffect.intensity = 0.46f + 0.48f * recoveryRatio;
-        playerEffect.fresnelPower = 3.0f;
-        playerEffect.noiseAmount = 0.32f * recoveryRatio;
-        playerEffect.time = phase;
+        ModelDrawEffect recoveryEffect{};
+        recoveryEffect.enabled = true;
+        recoveryEffect.color = {1.0f, 0.25f, 0.25f, 0.75f};
+        recoveryEffect.intensity = 0.55f + 0.60f * recoveryRatio;
+        recoveryEffect.fresnelPower = 3.4f;
+        recoveryEffect.noiseAmount = 0.35f * recoveryRatio;
+        recoveryEffect.time = phase;
+        modelManager->SetDrawEffect(recoveryEffect);
     }
 
-    modelManager->SetDrawEffect(playerEffect);
     modelManager->Draw(modelId_, playerVisual, camera);
-    modelManager->ClearDrawEffect();
-
     if (leftSwordVisible_) {
         leftSword_.Draw(modelManager, camera);
     }
     if (rightSwordVisible_) {
         rightSword_.Draw(modelManager, camera);
+    }
+
+    if (isInPostSlashRecovery) {
+        modelManager->ClearDrawEffect();
     }
 }
 

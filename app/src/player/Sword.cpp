@@ -97,38 +97,9 @@ void Sword::Draw(ModelManager *modelManager, const Camera &camera) {
         drawTransform.scale.z *= 1.0f + 0.12f * recoveryReaction_;
     }
 
-    ModelDrawEffect swordEffect{};
-    swordEffect.enabled = true;
-    swordEffect.additiveBlend = true;
-    swordEffect.color = {0.86f, 0.90f, 1.0f, 0.46f};
-    swordEffect.intensity = 0.22f;
-    swordEffect.fresnelPower = 3.2f;
-    swordEffect.noiseAmount = 0.12f;
-
-    if (isSlashMode_) {
-        swordEffect.color = {0.96f, 0.98f, 1.0f, 0.78f};
-        swordEffect.intensity = 0.78f;
-        swordEffect.fresnelPower = 2.0f;
-        swordEffect.noiseAmount = 0.28f;
-    } else if (isCounter_ || isGuard_) {
-        swordEffect.color = {0.90f, 0.94f, 1.0f, 0.64f};
-        swordEffect.intensity = 0.52f;
-        swordEffect.fresnelPower = 2.4f;
-        swordEffect.noiseAmount = 0.20f;
+    if (const Model *model = modelManager->GetModel(modelId_)) {
+        modelManager->GetRenderer()->Draw(*model, drawTransform, camera);
     }
-
-    if (recoveryReaction_ > 0.0f) {
-        swordEffect.color = {1.0f, 1.0f, 1.0f, 0.82f};
-        swordEffect.intensity =
-            (std::max)(swordEffect.intensity, 0.62f + 0.36f * recoveryReaction_);
-        swordEffect.fresnelPower = 2.2f;
-        swordEffect.noiseAmount =
-            (std::max)(swordEffect.noiseAmount, 0.30f * recoveryReaction_);
-    }
-
-    modelManager->SetDrawEffect(swordEffect);
-    modelManager->Draw(modelId_, drawTransform, camera);
-    modelManager->ClearDrawEffect();
 }
 
 void Sword::UpdateCounterObservation(float deltaTime) {

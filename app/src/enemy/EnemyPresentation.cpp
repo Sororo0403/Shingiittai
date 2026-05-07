@@ -426,29 +426,12 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
     }
     const bool isHitFlashing = hitFlash > 0.0f;
 
-    const bool isPhase2 = runtime_.phase == BossPhase::Phase2;
-    const bool isChargeTell =
-        tellActive_ || freezeHoldActive_ || fakeCommitActive_ ||
-        action_.step == ActionStep::Charge || action_.step == ActionStep::Hold;
-
-    ModelDrawEffect baseEffect{};
-    baseEffect.enabled = true;
-    baseEffect.additiveBlend = false;
-    baseEffect.color =
-        isPhase2 ? DirectX::XMFLOAT4{0.88f, 0.92f, 1.00f, 0.50f}
-                 : DirectX::XMFLOAT4{0.78f, 0.80f, 0.84f, 0.42f};
-    baseEffect.intensity =
-        0.24f + (isPhase2 ? 0.10f : 0.0f) + (isChargeTell ? 0.16f : 0.0f);
-    baseEffect.fresnelPower = isChargeTell ? 2.1f : 3.0f;
-    baseEffect.noiseAmount = 0.18f;
-    baseEffect.time = runtime_.stateTimer;
-
     ModelDrawEffect hitEffect{};
     if (isHitFlashing) {
         hitEffect.enabled = true;
         hitEffect.additiveBlend = false;
-        hitEffect.color = {1.00f, 1.00f, 1.00f, 0.92f};
-        hitEffect.intensity = 0.65f + 0.70f * hitFlash;
+        hitEffect.color = {1.0f, 0.24f, 0.18f, 0.85f};
+        hitEffect.intensity = 0.60f + 0.70f * hitFlash;
         hitEffect.fresnelPower = 2.2f;
         hitEffect.noiseAmount = 0.22f;
         hitEffect.time = runtime_.stateTimer;
@@ -463,14 +446,14 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
     if (action_.kind == ActionKind::Warp) {
         warpEffect.enabled = true;
         warpEffect.additiveBlend = true;
-        warpEffect.color = {0.80f, 0.86f, 1.00f, 0.78f};
-        warpEffect.intensity = (action_.step == ActionStep::Move) ? 1.65f : 1.25f;
+        warpEffect.color = {1.0f, 0.22f, 0.12f, 0.78f};
+        warpEffect.intensity = (action_.step == ActionStep::Move) ? 1.85f : 1.35f;
         warpEffect.fresnelPower = 2.8f;
         warpEffect.noiseAmount = 0.72f;
         warpEffect.time = stateTimer_;
 
         if (isHitFlashing) {
-            warpEffect.color = {1.00f, 1.00f, 1.00f, 0.92f};
+            warpEffect.color = {1.0f, 0.30f, 0.20f, 0.92f};
             warpEffect.intensity += 0.55f * hitFlash;
             warpEffect.noiseAmount += 0.10f * hitFlash;
         }
@@ -478,8 +461,6 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         modelManager->SetDrawEffect(warpEffect);
     } else if (isHitFlashing) {
         modelManager->SetDrawEffect(hitEffect);
-    } else {
-        modelManager->SetDrawEffect(baseEffect);
     }
 
     auto drawEnemyVisual = [&](const Transform &visual) {
@@ -512,18 +493,6 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
             continue;
         }
 
-        ModelDrawEffect projectileEffect{};
-        projectileEffect.enabled = true;
-        projectileEffect.additiveBlend = true;
-        projectileEffect.color =
-            bullet.isReflected ? DirectX::XMFLOAT4{1.0f, 1.0f, 1.0f, 0.88f}
-                               : DirectX::XMFLOAT4{0.82f, 0.88f, 1.0f, 0.70f};
-        projectileEffect.intensity = bullet.isReflected ? 1.05f : 0.72f;
-        projectileEffect.fresnelPower = bullet.isReflected ? 1.8f : 2.3f;
-        projectileEffect.noiseAmount = bullet.isReflected ? 0.42f : 0.30f;
-        projectileEffect.time = runtime_.stateTimer + bullet.lifeTime;
-        modelManager->SetDrawEffect(projectileEffect);
-
         Transform bulletTf = tf_;
         bulletTf.position = bullet.position;
         bulletTf.scale = {0.2f, 0.2f, 0.2f};
@@ -535,24 +504,10 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
             continue;
         }
 
-        ModelDrawEffect waveEffect{};
-        waveEffect.enabled = true;
-        waveEffect.additiveBlend = true;
-        waveEffect.color =
-            wave.isReflected ? DirectX::XMFLOAT4{1.0f, 1.0f, 1.0f, 0.84f}
-                             : DirectX::XMFLOAT4{0.78f, 0.84f, 0.96f, 0.62f};
-        waveEffect.intensity = wave.isReflected ? 0.95f : 0.66f;
-        waveEffect.fresnelPower = 2.0f;
-        waveEffect.noiseAmount = 0.34f;
-        waveEffect.time = runtime_.stateTimer + wave.traveledDistance * 0.08f;
-        modelManager->SetDrawEffect(waveEffect);
-
         Transform waveTf = tf_;
         waveTf.position = wave.position;
         waveTf.scale = {0.6f, 0.2f, 1.2f};
         modelManager->Draw(effectModelId, waveTf, camera);
     }
-
-    modelManager->ClearDrawEffect();
 }
 
