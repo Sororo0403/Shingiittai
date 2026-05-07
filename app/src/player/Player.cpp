@@ -9,16 +9,6 @@ using namespace DirectX;
 
 namespace {
 constexpr float kPlayerVisualScaleMultiplier = 3.0f;
-
-DirectX::XMFLOAT2 NormalizeCounterDir(float x, float y) {
-    const float lenSq = x * x + y * y;
-    if (lenSq <= 0.001f) {
-        return {0.0f, 1.0f};
-    }
-
-    const float invLen = 1.0f / std::sqrt(lenSq);
-    return {x * invLen, y * invLen};
-}
 }
 
 void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId,
@@ -48,8 +38,6 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId,
     greatSwordSwingTimer_ = 0.0f;
     greatSwordSwingDamage_ = 18.0f;
     greatSwordFullChargeCounterReady_ = false;
-    leftManualCounterFrames_ = 0;
-    rightManualCounterFrames_ = 0;
     dualNextManualLeft_ = true;
     gamepadControlMode_ = PlayerGamepadControlMode::Hunter;
     gamepadSwordState_ = {};
@@ -144,13 +132,14 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     ApplyHandRecovery(leftPose, leftSlashRecoveryTimer_, deltaTime);
     ApplyHandRecovery(rightPose, rightSlashRecoveryTimer_, deltaTime);
 
-    const float recoveryRatio =
-        (kPostSlashRecoveryDuration > 0.0f)
-            ? std::clamp(postSlashRecoveryTimer_ / kPostSlashRecoveryDuration,
-                         0.0f, 1.0f)
-            : 0.0f;
-    leftSword_.SetRecoveryReaction(recoveryRatio);
-    rightSword_.SetRecoveryReaction(recoveryRatio);
+    leftSword_.SetRecoveryReaction(GetSlashRecoveryRatio(leftSlashRecoveryTimer_));
+    rightSword_.SetRecoveryReaction(
+        (std::max)(GetSlashRecoveryRatio(rightSlashRecoveryTimer_),
+                   (kPostSlashRecoveryDuration > 0.0f)
+                       ? std::clamp(postSlashRecoveryTimer_ /
+                                        kPostSlashRecoveryDuration,
+                                    0.0f, 1.0f)
+                       : 0.0f));
 
     leftSword_.Update(BuildSwordTransform(leftPose, true), leftPose, deltaTime);
     rightSword_.Update(BuildSwordTransform(rightPose, false), rightPose,
@@ -402,6 +391,20 @@ void Player::NotifyCounterSuccess() {
     greatSwordFullChargeCounterReady_ = false;
 }
 
+void Player::NotifyCounterSuccess(size_t swordIndex) {
+    if (swordIndex == 0) {
+        leftSword_.NotifyCounterSuccess();
+    } else if (swordIndex == 1) {
+        rightSword_.NotifyCounterSuccess();
+    }
+
+    if (weaponType_ == PlayerWeaponType::GreatSword &&
+        greatSwordFullChargeCounterReady_) {
+        greatSwordCharge_ = 0.0f;
+    }
+    greatSwordFullChargeCounterReady_ = false;
+}
+
 Transform Player::BuildSwordTransform(const SwordPose &pose, bool isLeft) const {
     Transform swordTransform{};
 
@@ -442,6 +445,7 @@ void Player::UpdateWeaponRules(Input *input, SwordPose &leftPose,
                                bool hasRightJoyCon, bool useGamepadRightSword,
                                bool useHunterGamepadControls,
                                float deltaTime) {
+    (void)input;
     leftSwordAttackDamage_ = 10.0f;
     rightSwordAttackDamage_ = 10.0f;
 
@@ -474,27 +478,7 @@ void Player::UpdateWeaponRules(Input *input, SwordPose &leftPose,
             }
         }
 
-        const bool manualCounterTrigger =
-            input->IsMouseTrigger(1) ||
-            (input->IsGamepadConnected() && !useHunterGamepadControls &&
-             input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_B));
-        if (manualCounterTrigger) {
-            float dirX = static_cast<float>(input->GetMouseDX());
-            float dirY = -static_cast<float>(input->GetMouseDY());
-            if (input->IsGamepadConnected()) {
-                const float stickX = input->GetGamepadRightStickX();
-                const float stickY = input->GetGamepadRightStickY();
-                if (stickX * stickX + stickY * stickY > 0.04f) {
-                    dirX = stickX;
-                    dirY = stickY;
-                }
-            }
-            BeginDualManualCounter(dualNextManualLeft_,
-                                   NormalizeCounterDir(dirX, dirY));
-            dualNextManualLeft_ = !dualNextManualLeft_;
-        }
-
-        UpdateDualManualCounter(leftPose, rightPose, deltaTime);
+        (void)deltaTime;
         return;
     }
 
@@ -532,6 +516,7 @@ void Player::UpdateWeaponRules(Input *input, SwordPose &leftPose,
                         : greatSwordCharge_;
                 greatSwordSwingDamage_ =
                     ComputeGreatSwordAttackDamage(swingCharge);
+                greatSwordFullChargeCounterReady_ = swingCharge >= 0.98f;
                 greatSwordSwingTimer_ =
                     useHunterGamepadControls
                         ? (std::max)(hunterGamepadAttackDuration_ -
@@ -539,11 +524,11 @@ void Player::UpdateWeaponRules(Input *input, SwordPose &leftPose,
                                      kGreatSwordSwingDuration)
                         : kGreatSwordSwingDuration;
                 greatSwordCharge_ = 0.0f;
-                greatSwordFullChargeCounterReady_ = false;
             }
 
             if (greatSwordSwingTimer_ <= 0.0f) {
                 rightPose.isSlashMode = false;
+                greatSwordFullChargeCounterReady_ = false;
             } else {
                 rightSwordAttackDamage_ = greatSwordSwingDamage_;
             }
@@ -570,47 +555,6 @@ void Player::ApplyHandRecovery(SwordPose &pose, float &timer,
     pose.isCounter = false;
 }
 
-void Player::BeginDualManualCounter(bool preferLeft,
-                                    const DirectX::XMFLOAT2 &dir) {
-    const bool canUseLeft = leftSlashRecoveryTimer_ <= 0.0f;
-    const bool canUseRight = rightSlashRecoveryTimer_ <= 0.0f;
-    bool useLeft = preferLeft;
-
-    if (useLeft && !canUseLeft && canUseRight) {
-        useLeft = false;
-    } else if (!useLeft && !canUseRight && canUseLeft) {
-        useLeft = true;
-    }
-
-    if (useLeft && canUseLeft) {
-        leftManualCounterFrames_ = SwordControllerState::kCounterFrames;
-        leftManualCounterDir_ = dir;
-    } else if (!useLeft && canUseRight) {
-        rightManualCounterFrames_ = SwordControllerState::kCounterFrames;
-        rightManualCounterDir_ = dir;
-    }
-}
-
-void Player::UpdateDualManualCounter(SwordPose &leftPose,
-                                     SwordPose &rightPose, float deltaTime) {
-    (void)deltaTime;
-
-    if (leftManualCounterFrames_ > 0) {
-        leftPose.isSlashMode = false;
-        leftPose.isGuard = false;
-        leftPose.isCounter = true;
-        leftPose.slashDir = leftManualCounterDir_;
-        --leftManualCounterFrames_;
-    }
-    if (rightManualCounterFrames_ > 0) {
-        rightPose.isSlashMode = false;
-        rightPose.isGuard = false;
-        rightPose.isCounter = true;
-        rightPose.slashDir = rightManualCounterDir_;
-        --rightManualCounterFrames_;
-    }
-}
-
 float Player::GetSlashRecoveryDuration() const {
     switch (weaponType_) {
     case PlayerWeaponType::Dual:
@@ -623,6 +567,15 @@ float Player::GetSlashRecoveryDuration() const {
     }
 }
 
+float Player::GetSlashRecoveryRatio(float timer) const {
+    const float duration = GetSlashRecoveryDuration();
+    if (duration <= 0.0f) {
+        return 0.0f;
+    }
+
+    return std::clamp(timer / duration, 0.0f, 1.0f);
+}
+
 float Player::ComputeGreatSwordAttackDamage(float chargeRatio) const {
     const float t = std::clamp(chargeRatio, 0.0f, 1.0f);
     return 18.0f + 52.0f * t * t;
@@ -632,15 +585,8 @@ SwordPose Player::UpdateGamepadSword(Input *input, float deltaTime,
                                      const Transform &swordTransform) {
     UpdateGamepadSwordOrientation(input, deltaTime);
     UpdateGamepadSwordGuard(input);
-    UpdateGamepadSwordCounter(input);
-    gamepadSwordState_.UpdateCounter();
-
-    if (gamepadSwordState_.isCounter) {
-        gamepadSwordState_.isSlashMode = false;
-        gamepadSwordState_.slashTimer = 0.0f;
-    } else {
-        UpdateGamepadSwordSlash(input, deltaTime);
-    }
+    gamepadSwordState_.isCounter = false;
+    UpdateGamepadSwordSlash(input, deltaTime);
 
     gamepadSwordState_.UpdateSlashDir(swordTransform);
     return gamepadSwordState_.ToPose();
@@ -648,15 +594,8 @@ SwordPose Player::UpdateGamepadSword(Input *input, float deltaTime,
 
 SwordPose Player::UpdateHunterGamepadSword(Input *input, float deltaTime) {
     UpdateHunterGamepadSwordGuard(input);
-    UpdateHunterGamepadSwordCounter(input);
-    gamepadSwordState_.UpdateCounter();
-
-    if (gamepadSwordState_.isCounter) {
-        gamepadSwordState_.isSlashMode = false;
-        gamepadSwordState_.slashTimer = 0.0f;
-    } else {
-        UpdateHunterGamepadSwordSlash(input, deltaTime);
-    }
+    gamepadSwordState_.isCounter = false;
+    UpdateHunterGamepadSwordSlash(input, deltaTime);
 
     UpdateHunterGamepadSwordOrientation();
     return gamepadSwordState_.ToPose();
@@ -699,11 +638,7 @@ void Player::UpdateHunterGamepadSwordOrientation() {
         roll = 0.20f;
     }
 
-    if (gamepadSwordState_.isCounter) {
-        pitch = -gamepadSwordState_.slashDir.y * 0.38f;
-        yaw = gamepadSwordState_.slashDir.x * 0.62f;
-        roll = -gamepadSwordState_.slashDir.x * 0.55f;
-    } else if (IsHunterGamepadAttacking()) {
+    if (IsHunterGamepadAttacking()) {
         switch (hunterGamepadAttackKind_) {
         case HunterGamepadAttackKind::SideLeft:
             pitch = -0.18f + 0.22f * windup - 0.12f * follow;
@@ -739,20 +674,6 @@ void Player::UpdateHunterGamepadSwordGuard(Input *input) {
     gamepadSwordState_.isGuard =
         input->GetGamepadLeftTrigger() > 0.2f ||
         input->IsGamepadButtonPress(XINPUT_GAMEPAD_LEFT_SHOULDER);
-}
-
-void Player::UpdateHunterGamepadSwordCounter(Input *input) {
-    if (!gamepadSwordState_.isGuard) {
-        return;
-    }
-
-    if (input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_B)) {
-        gamepadSwordState_.isCounter = true;
-        gamepadSwordState_.counterTimer = SwordControllerState::kCounterFrames;
-        gamepadSwordState_.isSlashMode = false;
-        gamepadSwordState_.slashTimer = 0.0f;
-        gamepadSwordState_.slashDir = GetHunterGamepadSlashDir(input);
-    }
 }
 
 void Player::UpdateHunterGamepadSwordSlash(Input *input, float deltaTime) {
@@ -902,19 +823,6 @@ void Player::UpdateGamepadSwordGuard(Input *input) {
     gamepadSwordState_.isGuard =
         input->GetGamepadLeftTrigger() > 0.2f ||
         input->IsGamepadButtonPress(XINPUT_GAMEPAD_LEFT_SHOULDER);
-}
-
-void Player::UpdateGamepadSwordCounter(Input *input) {
-    if (!gamepadSwordState_.isGuard) {
-        return;
-    }
-
-    if (input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_B)) {
-        gamepadSwordState_.isCounter = true;
-        gamepadSwordState_.counterTimer = SwordControllerState::kCounterFrames;
-        gamepadSwordState_.isSlashMode = false;
-        gamepadSwordState_.slashTimer = 0.0f;
-    }
 }
 
 void Player::UpdateGamepadSwordSlash(Input *input, float deltaTime) {

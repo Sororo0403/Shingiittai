@@ -22,7 +22,6 @@ class SwordJoyConController {
   private:
     void UpdateOrientation(JoyCon *joyCon, float dt);
     void UpdateGuard(JoyCon *joyCon);
-    void UpdateCounterFromGuardMotion();
     void UpdateSlash(float dt);
 
   private:
@@ -30,6 +29,4 @@ class SwordJoyConController {
     SwordControllerState state_{};
 
     float angularVelocity_ = 0.0f;
-    bool prevCounterMotionActive_ = false;
-    float counterSwingThreshold_ = 820.0f;
 };

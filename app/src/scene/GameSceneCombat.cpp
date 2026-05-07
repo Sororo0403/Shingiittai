@@ -72,6 +72,20 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     bool startCounterCinematicThisFrame = false;
     bool stopCounterCinematicThisFrame = false;
     bool forceSyncEnemyAnimationThisFrame = false;
+    auto triggerSuccessfulCounter = [&](size_t swordIndex, float enemyDamage,
+                                        float hitCooldown) {
+        const float counterDamage =
+            enemyDamage * player_.GetCounterDamageMultiplier();
+        const float vulnerabilityDuration =
+            player_.GetCounterVulnerabilityDuration();
+        player_.NotifyCounterSuccess(swordIndex);
+        if (enemy_.NotifyCountered(vulnerabilityDuration)) {
+            forceSyncEnemyAnimationThisFrame = true;
+        }
+        enemy_.TakeDamage(counterDamage);
+        playerHitCooldown_ = hitCooldown;
+        startCounterCinematicThisFrame = true;
+    };
     auto isCounterBoxHit = [&](const OBB &targetBox) {
         for (const Sword *sword : swords) {
             if (sword == nullptr || !sword->IsCounterStance()) {
@@ -83,48 +97,9 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         }
         return false;
     };
-    auto triggerSuccessfulCounter = [&](float enemyDamage, float hitCooldown) {
-        const float counterDamage =
-            enemyDamage * player_.GetCounterDamageMultiplier();
-        const float vulnerabilityDuration =
-            player_.GetCounterVulnerabilityDuration();
-        player_.NotifyCounterSuccess();
-        if (enemy_.NotifyCountered(vulnerabilityDuration)) {
-            forceSyncEnemyAnimationThisFrame = true;
-        }
-        enemy_.TakeDamage(counterDamage);
-        playerHitCooldown_ = hitCooldown;
-        startCounterCinematicThisFrame = true;
-    };
 
     TickCooldown(enemyHitCooldown_, gameplayDeltaTime);
     TickCooldown(playerHitCooldown_, gameplayDeltaTime);
-
-    for (size_t i = 0; i < swords.size(); ++i) {
-        const Sword *sword = swords[i];
-        if (sword == nullptr || !swordSlashStates[i]) {
-            continue;
-        }
-
-        auto swordHitBox = sword->GetOBB();
-        auto bodyBox = enemy_.GetBodyOBB();
-
-        const bool hitBody = CollisionUtil::CheckOBB(swordHitBox, bodyBox);
-
-        if (enemyHitCooldown_ <= 0.0f) {
-            if (hitBody) {
-                enemy_.TakeDamage(swordAttackDamages[i]);
-                enemyHitCooldown_ = 0.2f;
-                if (counterCinematicActive_) {
-                    stopCounterCinematicThisFrame = true;
-                }
-            }
-        }
-
-        if (enemyHitCooldown_ > 0.0f) {
-            break;
-        }
-    }
 
     const bool isEnemySmashCounterWindow =
         (enemyActionKind == ActionKind::Smash &&
@@ -145,16 +120,58 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
 
     const float enemyAttackDamage = enemy_.GetCurrentAttackDamage();
     const float enemyAttackKnockback = enemy_.GetCurrentAttackKnockback();
-    const bool isCounterAxisMatch =
-        (isEnemySmashCounterWindow &&
-         player_.GetCounterAxis() == SwordCounterAxis::Vertical) ||
-        (isEnemySweepCounterWindow &&
-         player_.GetCounterAxis() == SwordCounterAxis::Horizontal);
-    const bool canCounterThisHit =
-        player_.IsCounterStance() && isCounterAxisMatch;
-
+    const bool isEnemyCounterWindow =
+        isEnemySmashCounterWindow || isEnemySweepCounterWindow;
+    OBB enemyAttackBox{};
     if (isEnemyMeleeActive) {
-        auto enemyAttackBox = enemy_.GetAttackOBB();
+        enemyAttackBox = enemy_.GetAttackOBB();
+    }
+
+    bool counterTriggeredThisFrame = false;
+    for (size_t i = 0; i < swords.size(); ++i) {
+        const Sword *sword = swords[i];
+        if (sword == nullptr || !swordSlashStates[i]) {
+            continue;
+        }
+
+        auto swordHitBox = sword->GetOBB();
+        const SwordCounterAxis slashCounterAxis = sword->GetSlashCounterAxis();
+        const bool slashAxisMatches =
+            (isEnemySmashCounterWindow &&
+             slashCounterAxis == SwordCounterAxis::Vertical) ||
+            (isEnemySweepCounterWindow &&
+             slashCounterAxis == SwordCounterAxis::Horizontal);
+        const bool canSlashCounter =
+            playerHitCooldown_ <= 0.0f && isEnemyCounterWindow &&
+            slashAxisMatches &&
+            CollisionUtil::CheckOBB(swordHitBox, enemyAttackBox);
+
+        if (canSlashCounter) {
+            triggerSuccessfulCounter(i, enemyAttackDamage, 0.2f);
+            counterTriggeredThisFrame = true;
+            break;
+        }
+
+        auto bodyBox = enemy_.GetBodyOBB();
+
+        const bool hitBody = CollisionUtil::CheckOBB(swordHitBox, bodyBox);
+
+        if (enemyHitCooldown_ <= 0.0f) {
+            if (hitBody) {
+                enemy_.TakeDamage(swordAttackDamages[i]);
+                enemyHitCooldown_ = 0.2f;
+                if (counterCinematicActive_) {
+                    stopCounterCinematicThisFrame = true;
+                }
+            }
+        }
+
+        if (enemyHitCooldown_ > 0.0f) {
+            break;
+        }
+    }
+
+    if (isEnemyMeleeActive && !counterTriggeredThisFrame) {
         const bool bossHitPlayer =
             CollisionUtil::CheckOBB(enemyAttackBox, playerBox);
 
@@ -165,9 +182,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                 player_.GetTransform().position.z -
                     enemy_.GetTransform().position.z);
 
-            if (canCounterThisHit) {
-                triggerSuccessfulCounter(enemyAttackDamage, 0.2f);
-            } else if (isPlayerGuarding) {
+            if (isPlayerGuarding) {
                 enemy_.NotifyAttackGuarded();
                 player_.TakeDamage(enemyAttackDamage * guardDamageMultiplier);
                 player_.AddKnockback(
@@ -220,7 +235,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                     NormalizeXZ(bullet.velocity.x, bullet.velocity.z);
 
                 if (player_.IsCounterStance()) {
-                    triggerSuccessfulCounter(enemy_.GetBulletDamage() * 2.0f,
+                    triggerSuccessfulCounter(1, enemy_.GetBulletDamage() * 2.0f,
                                              0.12f);
                 } else if (isPlayerGuarding) {
                     player_.TakeDamage(enemy_.GetBulletDamage() *
@@ -281,7 +296,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                     NormalizeXZ(wave.direction.x, wave.direction.z);
 
                 if (player_.IsCounterStance()) {
-                    triggerSuccessfulCounter(enemy_.GetWaveDamage() * 2.0f,
+                    triggerSuccessfulCounter(1, enemy_.GetWaveDamage() * 2.0f,
                                              0.12f);
                 } else if (isPlayerGuarding) {
                     player_.TakeDamage(enemy_.GetWaveDamage() *

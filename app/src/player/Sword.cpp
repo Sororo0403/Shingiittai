@@ -147,6 +147,24 @@ void Sword::UpdateCounterObservation(float deltaTime) {
     prevIsCounter_ = isCounterStance_;
 }
 
+SwordCounterAxis Sword::ComputeSlashAxis() const {
+    if (std::fabs(slashDir_.y) >= std::fabs(slashDir_.x)) {
+        return std::fabs(slashDir_.y) > 0.1f ? SwordCounterAxis::Vertical
+                                             : SwordCounterAxis::None;
+    }
+
+    return std::fabs(slashDir_.x) > 0.1f ? SwordCounterAxis::Horizontal
+                                         : SwordCounterAxis::None;
+}
+
+SwordCounterAxis Sword::GetSlashCounterAxis() const {
+    if (!CanSlashCounter()) {
+        return SwordCounterAxis::None;
+    }
+
+    return ComputeSlashAxis();
+}
+
 void Sword::NotifyCounterSuccess() {
     justCountered_ = true;
     justCounterFailed_ = false;

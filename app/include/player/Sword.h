@@ -24,6 +24,7 @@ class Sword {
 
     bool IsSlashMode() const { return isSlashMode_; }
     bool IsGuard() const { return isGuard_; }
+    bool CanSlashCounter() const { return isSlashMode_ && !isGuard_; }
 
     bool IsCounterStance() const { return isCounterStance_; }
     bool JustCountered() const { return justCountered_; }
@@ -32,10 +33,12 @@ class Sword {
     bool JustCounterLate() const { return justCounterLate_; }
 
     SwordCounterAxis GetCounterAxis() const { return counterAxis_; }
+    SwordCounterAxis GetSlashCounterAxis() const;
     void NotifyCounterSuccess();
 
   private:
     void UpdateCounterObservation(float deltaTime);
+    SwordCounterAxis ComputeSlashAxis() const;
 
   private:
     static constexpr float kSwordLength = 1.2f;

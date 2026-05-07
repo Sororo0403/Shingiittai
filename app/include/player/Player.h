@@ -95,6 +95,7 @@ class Player {
         return SwordCounterAxis::None;
     }
     void NotifyCounterSuccess();
+    void NotifyCounterSuccess(size_t swordIndex);
     bool UsesGamepadCameraLook() const {
         return gamepadControlMode_ == PlayerGamepadControlMode::Hunter;
     }
@@ -108,11 +109,9 @@ class Player {
     SwordPose UpdateHunterGamepadSword(Input *input, float deltaTime);
     void UpdateGamepadSwordOrientation(Input *input, float deltaTime);
     void UpdateGamepadSwordGuard(Input *input);
-    void UpdateGamepadSwordCounter(Input *input);
     void UpdateGamepadSwordSlash(Input *input, float deltaTime);
     void UpdateHunterGamepadSwordOrientation();
     void UpdateHunterGamepadSwordGuard(Input *input);
-    void UpdateHunterGamepadSwordCounter(Input *input);
     void UpdateHunterGamepadSwordSlash(Input *input, float deltaTime);
     void BeginHunterGamepadAttack(HunterGamepadAttackKind attackKind);
     HunterGamepadAttackKind ReadHunterGamepadAttack(Input *input) const;
@@ -133,10 +132,8 @@ class Player {
                            bool hasRightJoyCon, bool useGamepadRightSword,
                            bool useHunterGamepadControls, float deltaTime);
     void ApplyHandRecovery(SwordPose &pose, float &timer, float deltaTime);
-    void BeginDualManualCounter(bool preferLeft, const DirectX::XMFLOAT2 &dir);
-    void UpdateDualManualCounter(SwordPose &leftPose, SwordPose &rightPose,
-                                 float deltaTime);
     float GetSlashRecoveryDuration() const;
+    float GetSlashRecoveryRatio(float timer) const;
     float ComputeGreatSwordAttackDamage(float chargeRatio) const;
 
   private:
@@ -187,10 +184,6 @@ class Player {
     static constexpr float kGreatSwordChargeRate = 0.55f;
     static constexpr float kGreatSwordSwingDuration = 0.32f;
 
-    int leftManualCounterFrames_ = 0;
-    int rightManualCounterFrames_ = 0;
-    DirectX::XMFLOAT2 leftManualCounterDir_{0.0f, 1.0f};
-    DirectX::XMFLOAT2 rightManualCounterDir_{0.0f, 1.0f};
     bool dualNextManualLeft_ = true;
 
     float moveSpeed_ = 5.0f;
