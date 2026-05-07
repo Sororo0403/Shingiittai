@@ -20,7 +20,9 @@ float4 main(PostEffectVSOutput input) : SV_TARGET
     outputColor.rgb = ApplyColorEffect(outputColor.rgb, colorMode);
     if (enableVignetting != 0)
     {
-        outputColor.rgb = ApplyVignettingEffect(outputColor.rgb, input.uv);
+        outputColor.rgb =
+            ApplyVignettingEffect(outputColor.rgb, input.uv,
+                                  vignettingStrength);
     }
 
     outputColor = ApplyEdgeEffect(outputColor, renderTexture, depthTexture,

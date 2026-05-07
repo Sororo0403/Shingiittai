@@ -2,6 +2,7 @@
 #include "DirectXCommon.h"
 #include "GameScene.h"
 #include "Input.h"
+#include "PostEffectRenderer.h"
 #include "SceneManager.h"
 #include "SpriteManager.h"
 #include "TextureManager.h"
@@ -29,6 +30,9 @@ void TitleScene::Initialize(const SceneContext &ctx) {
         LoadTitleImage(L"app/resources/title/press_any_button.png");
     ctx_->dxCommon->EndUpload();
     ctx_->texture->ReleaseUploadBuffers();
+
+    ctx_->postEffectRenderer->SetVignettingStrength(0.28f);
+    ctx_->postEffectRenderer->SetVignettingEnabled(true);
 }
 
 void TitleScene::Update() {
@@ -42,7 +46,7 @@ void TitleScene::Update() {
 void TitleScene::Draw() {
     const float w = static_cast<float>(ctx_->winApp->GetWidth());
     const float h = static_cast<float>(ctx_->winApp->GetHeight());
-    const float letterboxH = (std::max)(56.0f, h * 0.115f);
+    const float letterboxH = (std::max)(42.0f, h * 0.085f);
 
     ctx_->sprite->PreDraw();
 

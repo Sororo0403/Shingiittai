@@ -7,6 +7,7 @@
 #include "TextureManager.h"
 #include "WinApp.h"
 #include "Material.h"
+#include "PostEffectRenderer.h"
 #include <exception>
 #include <cmath>
 
@@ -36,6 +37,7 @@ XMFLOAT4 MakeQuat(float pitch, float yaw, float roll) {
 
 void GameScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
+    ctx_->postEffectRenderer->SetVignettingEnabled(false);
 
     float aspect = static_cast<float>(ctx_->winApp->GetWidth()) /
                    static_cast<float>(ctx_->winApp->GetHeight());

@@ -94,6 +94,11 @@ void PostEffectRenderer::SetVignettingEnabled(bool enabled) {
     UpdateConstantBuffer();
 }
 
+void PostEffectRenderer::SetVignettingStrength(float strength) {
+    vignettingStrength_ = std::clamp(strength, 0.0f, 1.0f);
+    UpdateConstantBuffer();
+}
+
 void PostEffectRenderer::SetRadialBlurCenter(float x, float y) {
     radialBlurCenter_[0] = std::clamp(x, 0.0f, 1.0f);
     radialBlurCenter_[1] = std::clamp(y, 0.0f, 1.0f);
@@ -226,6 +231,7 @@ void PostEffectRenderer::UpdateConstantBuffer() {
     mappedConstBuffer_->colorMode = static_cast<int32_t>(colorMode_);
     mappedConstBuffer_->enableVignetting = enableVignetting_ ? 1 : 0;
     mappedConstBuffer_->filterMode = static_cast<int32_t>(filterMode_);
+    mappedConstBuffer_->vignettingStrength = vignettingStrength_;
     mappedConstBuffer_->texelSize[0] = 1.0f / static_cast<float>(width_);
     mappedConstBuffer_->texelSize[1] = 1.0f / static_cast<float>(height_);
     mappedConstBuffer_->edgeMode = static_cast<int32_t>(edgeMode_);

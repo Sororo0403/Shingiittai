@@ -122,6 +122,16 @@ class PostEffectRenderer {
     bool IsVignettingEnabled() const { return enableVignetting_; }
 
     /// <summary>
+    /// ビネット効果の強さを設定する
+    /// </summary>
+    void SetVignettingStrength(float strength);
+
+    /// <summary>
+    /// ビネット効果の強さを取得する
+    /// </summary>
+    float GetVignettingStrength() const { return vignettingStrength_; }
+
+    /// <summary>
     /// ラジアルブラーの中心座標を設定する
     /// </summary>
     void SetRadialBlurCenter(float x, float y);
@@ -191,7 +201,7 @@ class PostEffectRenderer {
         int32_t colorMode = 0;
         int32_t enableVignetting = 0;
         int32_t filterMode = 0;
-        int32_t padding0 = 0;
+        float vignettingStrength = 1.0f;
         float texelSize[2]{};
         float padding1[2]{};
         int32_t edgeMode = 0;
@@ -228,6 +238,7 @@ class PostEffectRenderer {
     FilterMode filterMode_ = FilterMode::None;
     EdgeMode edgeMode_ = EdgeMode::None;
     bool enableVignetting_ = true;
+    float vignettingStrength_ = 1.0f;
     float luminanceEdgeThreshold_ = 0.2f;
     float depthEdgeThreshold_ = 0.02f;
     float nearZ_ = 0.1f;

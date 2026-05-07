@@ -12,7 +12,7 @@ cbuffer PostEffectConstants : register(b0)
     int colorMode;
     int enableVignetting;
     int filterMode;
-    int padding0;
+    float vignettingStrength;
     float2 texelSize;
     float2 padding1;
     int edgeMode;
