@@ -1,0 +1,61 @@
+name: Debug
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Debug x64
+    runs-on: windows-2025-vs2026
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+        with:
+          msbuild-architecture: x64
+
+      - name: Build
+        run: >
+          msbuild Shingiittai.slnx
+          /m
+          /p:Configuration=Debug
+          /p:Platform=x64
+          /p:PlatformToolset=v145
+          /p:WindowsTargetPlatformVersion=10.0
+
+      - name: Verify runtime output
+        shell: pwsh
+        run: |
+          $outputDir = Join-Path $env:GITHUB_WORKSPACE "..\generated\outputs\Debug\App"
+          $requiredFiles = @(
+            "App.exe",
+            "JoyShockLibrary.dll",
+            "assimp-vc145-mt.dll",
+            "app\resources\title\title_logo.png",
+            "engine\resources\shaders\sprite\SpriteVS.hlsl"
+          )
+
+          foreach ($file in $requiredFiles) {
+            $path = Join-Path $outputDir $file
+            if (-not (Test-Path $path)) {
+              throw "Required output is missing: $path"
+            }
+          }
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Shingiittai-Debug-x64
+          path: |
+            ../generated/outputs/Debug/App/**
+            !../generated/outputs/Debug/App/*.ilk
+            !../generated/outputs/Debug/App/*.lib
+            !../generated/outputs/Debug/App/*.pdb

@@ -1,4 +1,4 @@
-name: Build
+name: Release
 
 on:
   push:
@@ -10,15 +10,8 @@ permissions:
 
 jobs:
   build:
-    name: ${{ matrix.configuration }} x64
+    name: Release x64
     runs-on: windows-2025-vs2026
-
-    strategy:
-      fail-fast: false
-      matrix:
-        configuration:
-          - Debug
-          - Release
 
     steps:
       - name: Checkout
@@ -33,7 +26,7 @@ jobs:
         run: >
           msbuild Shingiittai.slnx
           /m
-          /p:Configuration=${{ matrix.configuration }}
+          /p:Configuration=Release
           /p:Platform=x64
           /p:PlatformToolset=v145
           /p:WindowsTargetPlatformVersion=10.0
@@ -41,7 +34,7 @@ jobs:
       - name: Verify runtime output
         shell: pwsh
         run: |
-          $outputDir = Join-Path $env:GITHUB_WORKSPACE "..\generated\outputs\${{ matrix.configuration }}\App"
+          $outputDir = Join-Path $env:GITHUB_WORKSPACE "..\generated\outputs\Release\App"
           $requiredFiles = @(
             "App.exe",
             "JoyShockLibrary.dll",
@@ -60,14 +53,14 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Shingiittai-${{ matrix.configuration }}-x64
+          name: Shingiittai-Release-x64
           path: |
-            ../generated/outputs/${{ matrix.configuration }}/App/**
-            !../generated/outputs/${{ matrix.configuration }}/App/*.ilk
-            !../generated/outputs/${{ matrix.configuration }}/App/*.lib
-            !../generated/outputs/${{ matrix.configuration }}/App/*.pdb
+            ../generated/outputs/Release/App/**
+            !../generated/outputs/Release/App/*.ilk
+            !../generated/outputs/Release/App/*.lib
+            !../generated/outputs/Release/App/*.pdb
 
-  release:
+  publish:
     name: Publish GitHub Release
     runs-on: windows-2025-vs2026
     needs: build
