@@ -11,6 +11,7 @@
 #include <DirectXMath.h>
 #include <cstdint>
 #include <string>
+#include "GameSceneHud.h"
 
 class GameScene : public BaseScene {
   public:
@@ -39,6 +40,7 @@ class GameScene : public BaseScene {
 
     Player player_;
     Enemy enemy_;
+    GameSceneHud hud_;
     CollisionManager collisionManager_;
     CollisionDebugRenderer collisionDebugRenderer_;
     uint32_t playerModelId_ = 0;

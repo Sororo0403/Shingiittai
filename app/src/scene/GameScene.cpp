@@ -133,6 +133,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
     UpdateSceneLighting();
     counterCinematicActive_ = false;
     enemyAnimationFrozen_ = false;
+    hud_.Initialize(ctx);
 }
 
 void GameScene::Update() {
@@ -149,6 +150,8 @@ void GameScene::Update() {
                                      ? (baseDeltaTime * counterTimeScale_)
                                      : gameplayDeltaTime;
     UpdateCamera(input);
+
+    hud_.Update(*ctx_, player_.GetHP(), enemy_.GetHP());
 
     ctx_->model->UpdateAnimation(playerModelId_, playerDeltaTime);
 
@@ -279,4 +282,5 @@ void GameScene::DrawArena() {
     }
 
     model->ClearDrawEffect();
+    hud_.Draw(*ctx_);
 }
