@@ -38,7 +38,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
 
     PostEffectRenderer postEffectRenderer;
     postEffectRenderer.Initialize(&dxCommon, &srvManager, width, height);
-    postEffectRenderer.SetVignettingEnabled(false);
+    postEffectRenderer.SetColorMode(PostEffectRenderer::ColorMode::Grayscale);
+    postEffectRenderer.SetVignettingEnabled(true);
+    postEffectRenderer.SetEdgeMode(PostEffectRenderer::EdgeMode::Depth);
+    postEffectRenderer.SetDepthEdgeThreshold(0.06f);
+    postEffectRenderer.SetRandomMode(PostEffectRenderer::RandomMode::OverlayNoise);
+    postEffectRenderer.SetRandomStrength(0.045f);
+    postEffectRenderer.SetRandomScale(520.0f);
 
     // Input
     Input input;
@@ -100,6 +106,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
 
     LARGE_INTEGER prevTime;
     QueryPerformanceCounter(&prevTime);
+    float postEffectTime = 0.0f;
 
     // メインループ
     while (winApp.ProcessMessage()) {
@@ -112,6 +119,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
             static_cast<float>(freq.QuadPart);
 
         prevTime = currentTime;
+        postEffectTime += deltaTime;
+        postEffectRenderer.SetRandomTime(postEffectTime);
 
         sceneCtx.deltaTime = deltaTime;
 
