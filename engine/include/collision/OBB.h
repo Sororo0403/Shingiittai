@@ -6,6 +6,7 @@
 /// </summary>
 struct OBB {
     DirectX::XMFLOAT3 center;
+    /// <summary>各ローカル軸方向の半径</summary>
     DirectX::XMFLOAT3 size;
     DirectX::XMFLOAT4 rotation;
 };

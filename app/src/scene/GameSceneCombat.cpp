@@ -1,10 +1,30 @@
 #include "GameScene.h"
-#include "CollisionUtil.h"
+#include <array>
 #include <cmath>
 
 using namespace DirectX;
 
 static constexpr float kMinVectorLength = 0.0001f;
+
+namespace {
+constexpr CollisionManager::LayerMask kLayerPlayer = 1u << 0;
+constexpr CollisionManager::LayerMask kLayerEnemy = 1u << 1;
+constexpr CollisionManager::LayerMask kLayerPlayerAttack = 1u << 2;
+constexpr CollisionManager::LayerMask kLayerEnemyAttack = 1u << 3;
+constexpr CollisionManager::LayerMask kLayerPlayerCounter = 1u << 4;
+constexpr CollisionManager::LayerMask kLayerEnemyProjectile = 1u << 5;
+constexpr CollisionManager::LayerMask kLayerReflectedProjectile = 1u << 6;
+
+CollisionManager::BodyId AddCollisionBody(
+    CollisionManager &collisionManager, const OBB &box,
+    CollisionManager::LayerMask layer, CollisionManager::LayerMask mask) {
+    CollisionManager::BodyDesc desc{};
+    desc.box = box;
+    desc.layer = layer;
+    desc.mask = mask;
+    return collisionManager.AddBody(desc);
+}
+} // namespace
 
 static XMFLOAT2 NormalizeXZ(float x, float z) {
     float length = std::sqrt(x * x + z * z);
@@ -59,16 +79,36 @@ PlayerCombatObservation GameScene::BuildPlayerCombatObservation() const {
 }
 
 void GameScene::UpdateCombat(float gameplayDeltaTime) {
-    auto playerBox = player_.GetOBB();
+    collisionManager_.Clear();
+
+    const auto playerBox = player_.GetOBB();
     const bool isPlayerGuarding = player_.IsGuarding();
     const bool isPlayerCountering = player_.IsCounterStance();
     const float guardDamageMultiplier = player_.GetGuardDamageMultiplier();
     const auto enemyBodyBox = enemy_.GetBodyOBB();
+    const CollisionManager::BodyId playerBody =
+        AddCollisionBody(collisionManager_, playerBox, kLayerPlayer,
+                         kLayerEnemyAttack | kLayerEnemyProjectile);
+    const CollisionManager::BodyId enemyBody =
+        AddCollisionBody(collisionManager_, enemyBodyBox, kLayerEnemy,
+                         kLayerPlayerAttack | kLayerReflectedProjectile);
     const ActionKind enemyActionKind = enemy_.GetActionKind();
     const ActionStep enemyActionStep = enemy_.GetActionStep();
     const auto swords = player_.GetSwords();
     const auto swordSlashStates = player_.GetSwordSlashStates();
     const auto swordAttackDamages = player_.GetSwordAttackDamages();
+    std::array<CollisionManager::BodyId, Player::kSwordCount> counterBodies{};
+    counterBodies.fill(CollisionManager::kInvalidBodyId);
+    for (size_t i = 0; i < swords.size(); ++i) {
+        const Sword *sword = swords[i];
+        if (sword == nullptr || !sword->IsCounterStance()) {
+            continue;
+        }
+        counterBodies[i] = AddCollisionBody(
+            collisionManager_, sword->GetCounterOBB(), kLayerPlayerCounter,
+            kLayerEnemyAttack | kLayerEnemyProjectile);
+    }
+
     bool startCounterCinematicThisFrame = false;
     bool stopCounterCinematicThisFrame = false;
     bool forceSyncEnemyAnimationThisFrame = false;
@@ -86,12 +126,12 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         playerHitCooldown_ = hitCooldown;
         startCounterCinematicThisFrame = true;
     };
-    auto isCounterBoxHit = [&](const OBB &targetBox) {
-        for (const Sword *sword : swords) {
-            if (sword == nullptr || !sword->IsCounterStance()) {
+    auto isCounterBodyHit = [&](CollisionManager::BodyId targetBody) {
+        for (CollisionManager::BodyId counterBody : counterBodies) {
+            if (counterBody == CollisionManager::kInvalidBodyId) {
                 continue;
             }
-            if (CollisionUtil::CheckOBB(targetBox, sword->GetCounterOBB())) {
+            if (collisionManager_.Test(targetBody, counterBody)) {
                 return true;
             }
         }
@@ -123,8 +163,14 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     const bool isEnemyCounterWindow =
         isEnemySmashCounterWindow || isEnemySweepCounterWindow;
     OBB enemyAttackBox{};
+    CollisionManager::BodyId enemyAttackBody =
+        CollisionManager::kInvalidBodyId;
     if (isEnemyMeleeActive) {
         enemyAttackBox = enemy_.GetAttackOBB();
+        enemyAttackBody =
+            AddCollisionBody(collisionManager_, enemyAttackBox,
+                             kLayerEnemyAttack,
+                             kLayerPlayer | kLayerPlayerCounter);
     }
 
     bool counterTriggeredThisFrame = false;
@@ -134,7 +180,11 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             continue;
         }
 
-        auto swordHitBox = sword->GetOBB();
+        const auto swordHitBox = sword->GetOBB();
+        const CollisionManager::BodyId swordHitBody =
+            AddCollisionBody(collisionManager_, swordHitBox,
+                             kLayerPlayerAttack,
+                             kLayerEnemy | kLayerEnemyAttack);
         const SwordCounterAxis slashCounterAxis = sword->GetSlashCounterAxis();
         const bool slashAxisMatches =
             (isEnemySmashCounterWindow &&
@@ -144,7 +194,8 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         const bool canSlashCounter =
             playerHitCooldown_ <= 0.0f && isEnemyCounterWindow &&
             slashAxisMatches &&
-            CollisionUtil::CheckOBB(swordHitBox, enemyAttackBox);
+            enemyAttackBody != CollisionManager::kInvalidBodyId &&
+            collisionManager_.Test(swordHitBody, enemyAttackBody);
 
         if (canSlashCounter) {
             triggerSuccessfulCounter(i, enemyAttackDamage, 0.2f);
@@ -152,9 +203,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             break;
         }
 
-        auto bodyBox = enemy_.GetBodyOBB();
-
-        const bool hitBody = CollisionUtil::CheckOBB(swordHitBox, bodyBox);
+        const bool hitBody = collisionManager_.Test(swordHitBody, enemyBody);
 
         if (enemyHitCooldown_ <= 0.0f) {
             if (hitBody) {
@@ -173,7 +222,8 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
 
     if (isEnemyMeleeActive && !counterTriggeredThisFrame) {
         const bool bossHitPlayer =
-            CollisionUtil::CheckOBB(enemyAttackBox, playerBox);
+            enemyAttackBody != CollisionManager::kInvalidBodyId &&
+            collisionManager_.Test(enemyAttackBody, playerBody);
 
         if (bossHitPlayer && playerHitCooldown_ <= 0.0f) {
             const XMFLOAT2 knockbackDir = NormalizeXZ(
@@ -211,15 +261,21 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         bulletBox.center = bullet.position;
         bulletBox.size = enemy_.GetBulletHitBoxSize();
         bulletBox.rotation = player_.GetTransform().rotation;
+        const CollisionManager::BodyId bulletBody = AddCollisionBody(
+            collisionManager_, bulletBox,
+            bullet.isReflected ? kLayerReflectedProjectile
+                               : kLayerEnemyProjectile,
+            bullet.isReflected ? kLayerEnemy
+                               : (kLayerPlayer | kLayerPlayerCounter));
 
         if (!bullet.isReflected && isPlayerCountering &&
-            isCounterBoxHit(bulletBox)) {
+            isCounterBodyHit(bulletBody)) {
             enemy_.ReflectBullet(i, enemy_.GetTransform().position);
             continue;
         }
 
         if (bullet.isReflected) {
-            if (CollisionUtil::CheckOBB(bulletBox, enemyBodyBox) &&
+            if (collisionManager_.Test(bulletBody, enemyBody) &&
                 enemyHitCooldown_ <= 0.0f) {
                 const float damage = enemy_.GetBulletDamage() * damageMultiplier_;
                 enemy_.TakeDamage(damage);
@@ -229,7 +285,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             continue;
         }
 
-        if (CollisionUtil::CheckOBB(bulletBox, playerBox)) {
+        if (collisionManager_.Test(bulletBody, playerBody)) {
             if (playerHitCooldown_ <= 0.0f) {
                 const XMFLOAT2 hitDir =
                     NormalizeXZ(bullet.velocity.x, bullet.velocity.z);
@@ -272,15 +328,21 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         waveBox.center = wave.position;
         waveBox.size = enemy_.GetWaveHitBoxSize();
         waveBox.rotation = player_.GetTransform().rotation;
+        const CollisionManager::BodyId waveBody = AddCollisionBody(
+            collisionManager_, waveBox,
+            wave.isReflected ? kLayerReflectedProjectile
+                             : kLayerEnemyProjectile,
+            wave.isReflected ? kLayerEnemy
+                             : (kLayerPlayer | kLayerPlayerCounter));
 
         if (!wave.isReflected && isPlayerCountering &&
-            isCounterBoxHit(waveBox)) {
+            isCounterBodyHit(waveBody)) {
             enemy_.ReflectWave(i, enemy_.GetTransform().position);
             continue;
         }
 
         if (wave.isReflected) {
-            if (CollisionUtil::CheckOBB(waveBox, enemyBodyBox) &&
+            if (collisionManager_.Test(waveBody, enemyBody) &&
                 enemyHitCooldown_ <= 0.0f) {
                 const float damage = enemy_.GetWaveDamage() * damageMultiplier_;
                 enemy_.TakeDamage(damage);
@@ -290,7 +352,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             continue;
         }
 
-        if (CollisionUtil::CheckOBB(waveBox, playerBox)) {
+        if (collisionManager_.Test(waveBody, playerBody)) {
             if (playerHitCooldown_ <= 0.0f) {
                 const XMFLOAT2 hitDir =
                     NormalizeXZ(wave.direction.x, wave.direction.z);

@@ -101,6 +101,7 @@
     <ClCompile Include="$(SolutionDir)engine\src\animation\AssimpAnimationLoader.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\model\AssimpLoader.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\model\AssimpMeshLoader.cpp" />
+    <ClCompile Include="$(SolutionDir)engine\src\collision\CollisionManager.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\collision\CollisionUtil.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\particle\GPUParticleSystem.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\scene\LevelLoader.cpp" />
@@ -132,6 +133,7 @@
     <ClInclude Include="$(SolutionDir)engine\include\model\AssimpLoader.h" />
     <ClInclude Include="$(SolutionDir)engine\include\model\AssimpMeshLoader.h" />
     <ClInclude Include="$(SolutionDir)engine\include\collision\AABB.h" />
+    <ClInclude Include="$(SolutionDir)engine\include\collision\CollisionManager.h" />
     <ClInclude Include="$(SolutionDir)engine\include\collision\CollisionUtil.h" />
     <ClInclude Include="$(SolutionDir)engine\include\collision\OBB.h" />
     <ClInclude Include="$(SolutionDir)engine\include\particle\GPUParticleSystem.h" />

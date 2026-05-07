@@ -2,6 +2,7 @@
 #include "BaseScene.h"
 #include "Bullet.h"
 #include "Camera.h"
+#include "CollisionManager.h"
 #include "Enemy.h"
 #include "Player.h"
 #include "PlayerWeaponType.h"
@@ -37,6 +38,7 @@ class GameScene : public BaseScene {
 
     Player player_;
     Enemy enemy_;
+    CollisionManager collisionManager_;
     uint32_t playerModelId_ = 0;
     uint32_t enemyModelId_ = 0;
     uint32_t arenaFloorModelId_ = 0;

@@ -8,6 +8,20 @@
 /// </summary>
 namespace CollisionUtil {
 
+struct CollisionResult {
+    bool hit = false;
+    DirectX::XMFLOAT3 normal = {0.0f, 0.0f, 0.0f};
+    float penetration = 0.0f;
+};
+
+/// <summary>
+/// 2つのOBBの衝突情報を取得
+/// </summary>
+/// <param name="a">判定対象となる1つ目のOBB</param>
+/// <param name="b">判定対象となる2つ目のOBB</param>
+/// <returns>衝突有無、aからbへ向かう法線、めり込み量</returns>
+CollisionResult TestOBB(const OBB &a, const OBB &b);
+
 /// <summary>
 /// 2つのOBBが衝突しているかを判定
 /// </summary>
