@@ -37,7 +37,8 @@ XMFLOAT4 MakeQuat(float pitch, float yaw, float roll) {
 
 void GameScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
-    ctx_->postEffectRenderer->SetVignettingEnabled(false);
+    ctx_->postEffectRenderer->SetVignettingStrength(0.24f);
+    ctx_->postEffectRenderer->SetVignettingEnabled(true);
 
     float aspect = static_cast<float>(ctx_->winApp->GetWidth()) /
                    static_cast<float>(ctx_->winApp->GetHeight());
@@ -62,32 +63,32 @@ void GameScene::Initialize(const SceneContext &ctx) {
     arenaNoiseTextureId_ = texture->CreateNoiseTexture(256, 256);
     arenaFloorModelId_ = model->CreatePlane(
         arenaNoiseTextureId_,
-        MakeArenaMaterial({0.18f, 0.19f, 0.20f, 1.0f}, true, 0.07f));
+        MakeArenaMaterial({0.92f, 0.92f, 0.90f, 1.0f}, true, 0.02f));
     arenaLowPolyTerrainModelId_ = model->CreateLowPolyTerrain(
-        0, MakeArenaMaterial({0.38f, 0.39f, 0.40f, 1.0f}, false, 0.03f), 42,
+        0, MakeArenaMaterial({0.82f, 0.82f, 0.80f, 1.0f}, false, 0.01f), 42,
         78.0f, 7.2f, 12.0f, 0x4107u);
     arenaCenterDiskModelId_ = model->CreateRing(
-        0, MakeArenaMaterial({0.43f, 0.44f, 0.45f, 1.0f}, false, 0.12f), 96,
+        0, MakeArenaMaterial({0.76f, 0.76f, 0.74f, 1.0f}, false, 0.02f), 96,
         1.95f, 0.0f);
     arenaSpokeModelId_ = model->CreatePlane(
-        0, MakeArenaMaterial({0.58f, 0.59f, 0.60f, 1.0f}, false, 0.08f));
+        0, MakeArenaMaterial({0.18f, 0.18f, 0.18f, 1.0f}, false, 0.00f));
     arenaInnerRingModelId_ = model->CreateRing(
-        0, MakeArenaMaterial({0.62f, 0.63f, 0.64f, 1.0f}, false, 0.12f), 96,
+        0, MakeArenaMaterial({0.20f, 0.20f, 0.20f, 1.0f}, false, 0.00f), 96,
         4.9f, 4.35f);
     arenaOuterRingModelId_ = model->CreateRing(
-        0, MakeArenaMaterial({0.26f, 0.28f, 0.31f, 1.0f}, false, 0.10f), 128,
+        0, MakeArenaMaterial({0.16f, 0.16f, 0.16f, 1.0f}, false, 0.00f), 128,
         12.3f, 11.6f);
     arenaColumnModelId_ = model->CreateCylinder(
-        0, MakeArenaMaterial({0.30f, 0.31f, 0.33f, 1.0f}, false, 0.08f), 24,
+        0, MakeArenaMaterial({0.72f, 0.72f, 0.70f, 1.0f}, false, 0.01f), 24,
         0.26f, 0.38f, 5.4f);
     arenaColumnCapModelId_ = model->CreateCylinder(
-        0, MakeArenaMaterial({0.42f, 0.43f, 0.44f, 1.0f}, false, 0.10f), 32,
+        0, MakeArenaMaterial({0.86f, 0.86f, 0.84f, 1.0f}, false, 0.01f), 32,
         0.68f, 0.78f, 0.24f);
     arenaDomeModelId_ = model->CreateCylinder(
-        0, MakeArenaMaterial({0.10f, 0.28f, 0.54f, 0.18f}, false, 0.03f), 128,
+        0, MakeArenaMaterial({0.90f, 0.90f, 0.88f, 0.18f}, false, 0.00f), 128,
         4.5f, 13.5f, 8.8f);
     arenaBarrierRingModelId_ = model->CreateRing(
-        0, MakeArenaMaterial({0.24f, 0.68f, 1.0f, 0.45f}, false, 0.05f), 128,
+        0, MakeArenaMaterial({0.10f, 0.10f, 0.10f, 0.45f}, false, 0.00f), 128,
         13.1f, 12.9f);
     dx->EndUpload();
 
@@ -167,7 +168,7 @@ void GameScene::Update() {
 void GameScene::Draw() {
     ctx_->model->PreDraw();
 
-    // DrawArena();
+    DrawArena();
     player_.Draw(ctx_->model, camera_);
     enemy_.Draw(ctx_->model, camera_);
     ctx_->model->PostDraw();
@@ -247,9 +248,9 @@ void GameScene::DrawArena() {
     barrierEffect.enabled = true;
     barrierEffect.additiveBlend = true;
     barrierEffect.disableCulling = true;
-    barrierEffect.color = {0.22f, 0.70f, 1.0f, 0.55f};
+    barrierEffect.color = {0.08f, 0.08f, 0.08f, 0.50f};
     barrierEffect.intensity =
-        0.36f + actionGlow + 0.09f * std::sinf(sceneLightTime_ * 1.8f);
+        0.16f + actionGlow * 0.35f + 0.04f * std::sinf(sceneLightTime_ * 1.8f);
     barrierEffect.fresnelPower = 1.2f;
     barrierEffect.noiseAmount = 0.35f;
     barrierEffect.time = sceneLightTime_;

@@ -66,12 +66,15 @@ void TitleScene::Draw() {
     ctx_->sprite->PreDraw();
 
     DrawRect(0.0f, 0.0f, w, h, MakeColor(1.0f, 1.0f, 1.0f, 1.0f));
-    DrawRect(0.0f, 0.0f, w, letterboxH, MakeColor(0.0f, 0.0f, 0.0f, 1.0f));
+    DrawRect(w * 0.14f, h * 0.24f, w * 0.42f, 2.0f,
+             MakeColor(0.0f, 0.0f, 0.0f, 0.16f));
+    DrawRect(w * 0.48f, h * 0.68f, w * 0.24f, 2.0f,
+             MakeColor(0.0f, 0.0f, 0.0f, 0.12f));
     DrawRect(0.0f, h - letterboxH, w, letterboxH,
              MakeColor(0.0f, 0.0f, 0.0f, 1.0f));
 
     const float logoX = (w - logoImage_.width) * 0.5f;
-    const float logoY = (h - logoImage_.height) * 0.5f - 26.0f;
+    const float logoY = (h - letterboxH - logoImage_.height) * 0.5f - 8.0f;
     DrawImage(logoImage_, logoX, logoY);
 
     const float blink = startRequested_

@@ -41,7 +41,8 @@ void ModeSelectScene::Initialize(const SceneContext &ctx) {
     ctx_->dxCommon->EndUpload();
     ctx_->texture->ReleaseUploadBuffers();
 
-    ctx_->postEffectRenderer->SetVignettingEnabled(false);
+    ctx_->postEffectRenderer->SetVignettingStrength(0.22f);
+    ctx_->postEffectRenderer->SetVignettingEnabled(true);
 }
 
 void ModeSelectScene::Update() {
@@ -163,26 +164,22 @@ void ModeSelectScene::BeginTransition(NextScene nextScene) {
 }
 
 void ModeSelectScene::LayoutButtons(float screenWidth, float screenHeight) {
-    const float helpH = (std::max)(42.0f, screenHeight * 0.06f);
+    const float helpH = (std::max)(58.0f, screenHeight * 0.085f);
     const float usableH = (std::max)(1.0f, screenHeight - helpH);
-    const float large = (std::min)(usableH * 0.72f, screenWidth * 0.38f);
-    const float smallSize = large * 0.48f;
-    const float leftCenterX = screenWidth * 0.335f;
-    const float rightCenterX = screenWidth * 0.795f;
-    const float selectedCenterY = usableH * 0.61f;
-    const float idleCenterY = usableH * 0.79f;
+    const float startBaseW = (std::min)(520.0f, screenWidth * 0.50f);
+    const float settingsBaseW = (std::min)(330.0f, screenWidth * 0.32f);
+    const float startBaseH = 260.0f;
+    const float settingsBaseH = 172.0f;
+    const float leftCenterX = screenWidth * 0.34f;
+    const float rightCenterX = screenWidth * 0.78f;
+    const float startCenterY = usableH * 0.52f;
+    const float settingsCenterY = usableH * 0.58f;
 
-    const float startSize = selectedIndex_ == 0 ? large : smallSize;
-    const float settingsSize = selectedIndex_ == 1 ? large : smallSize;
-    const float startCenterY = selectedIndex_ == 0 ? selectedCenterY : idleCenterY;
-    const float settingsCenterY =
-        selectedIndex_ == 1 ? selectedCenterY : idleCenterY;
-
-    buttons_[0] = {leftCenterX - startSize * 0.5f,
-                   startCenterY - startSize * 0.5f, startSize, startSize};
-    buttons_[1] = {rightCenterX - settingsSize * 0.5f,
-                   settingsCenterY - settingsSize * 0.5f, settingsSize,
-                   settingsSize};
+    buttons_[0] = {leftCenterX - startBaseW * 0.5f,
+                   startCenterY - startBaseH * 0.5f, startBaseW, startBaseH};
+    buttons_[1] = {rightCenterX - settingsBaseW * 0.5f,
+                   settingsCenterY - settingsBaseH * 0.5f, settingsBaseW,
+                   settingsBaseH};
 }
 
 bool ModeSelectScene::IsMouseOver(const ButtonRect &rect) const {
@@ -203,13 +200,17 @@ bool ModeSelectScene::IsMouseOver(const ButtonRect &rect) const {
 void ModeSelectScene::DrawBackground(float screenWidth, float screenHeight) {
     DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
              MakeColor(1.0f, 1.0f, 1.0f, 1.0f));
-    const float helpH = (std::max)(42.0f, screenHeight * 0.06f);
+    const float helpH = (std::max)(58.0f, screenHeight * 0.085f);
+    DrawRect(screenWidth * 0.11f, screenHeight * 0.22f, screenWidth * 0.52f,
+             2.0f, MakeColor(0.0f, 0.0f, 0.0f, 0.18f));
+    DrawRect(screenWidth * 0.53f, screenHeight * 0.72f, screenWidth * 0.24f,
+             2.0f, MakeColor(0.0f, 0.0f, 0.0f, 0.14f));
     DrawRect(0.0f, screenHeight - helpH, screenWidth, helpH,
              MakeColor(0.0f, 0.0f, 0.0f, 1.0f));
 }
 
 void ModeSelectScene::DrawHelp(float screenWidth, float screenHeight) {
-    const float helpH = (std::max)(42.0f, screenHeight * 0.06f);
+    const float helpH = (std::max)(58.0f, screenHeight * 0.085f);
     const Image &help = helpImages_[selectedIndex_];
     const float scale =
         (std::min)(1.0f, (screenWidth - 120.0f) / (std::max)(help.width, 1.0f));
@@ -221,13 +222,32 @@ void ModeSelectScene::DrawHelp(float screenWidth, float screenHeight) {
 void ModeSelectScene::DrawButton(const ButtonRect &rect, const Image &label,
                                  bool selected) {
     DrawRect(rect.x, rect.y, rect.w, rect.h,
-             MakeColor(0.0f, 0.0f, 0.0f, selected ? 1.0f : 0.96f));
+             MakeColor(1.0f, 1.0f, 1.0f, 0.82f));
+    DrawRect(rect.x, rect.y + rect.h - 2.0f, rect.w, 2.0f,
+             MakeColor(0.0f, 0.0f, 0.0f, selected ? 0.78f : 0.34f));
+    DrawRect(rect.x + rect.w - 2.0f, rect.y, 2.0f, rect.h,
+             MakeColor(0.0f, 0.0f, 0.0f, selected ? 0.68f : 0.24f));
 
     const float labelScale =
         (std::min)(1.0f, (rect.w * 0.72f) / (std::max)(label.width, 1.0f));
     DrawImage(label, rect.x + (rect.w - label.width * labelScale) * 0.5f,
               rect.y + (rect.h - label.height * labelScale) * 0.5f,
-              labelScale, 1.0f);
+              labelScale, selected ? 1.0f : 0.46f);
+
+    if (!selected) {
+        return;
+    }
+
+    const float frame = 5.0f;
+    const XMFLOAT4 outer = MakeColor(0.0f, 0.0f, 0.0f, 1.0f);
+    DrawRect(rect.x - frame, rect.y - frame, rect.w + frame * 2.0f, frame,
+             outer);
+    DrawRect(rect.x - frame, rect.y + rect.h, rect.w + frame * 2.0f, frame,
+             outer);
+    DrawRect(rect.x - frame, rect.y - frame, frame, rect.h + frame * 2.0f,
+             outer);
+    DrawRect(rect.x + rect.w, rect.y - frame, frame, rect.h + frame * 2.0f,
+             outer);
 }
 
 void ModeSelectScene::DrawRect(float x, float y, float w, float h,

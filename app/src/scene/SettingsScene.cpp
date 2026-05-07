@@ -58,8 +58,10 @@ void SettingsScene::Draw() {
     DrawImage(titleImage_, (w - titleImage_.width) * 0.5f, 84.0f);
     DrawVolumeControl();
     DrawBackButton();
-    DrawImage(controlsImage_, (w - controlsImage_.width) * 0.5f, h - 74.0f,
-              1.0f, 0.76f);
+    const float helpH = (std::max)(58.0f, h * 0.085f);
+    DrawImage(controlsImage_, (w - controlsImage_.width) * 0.5f,
+              h - helpH + (helpH - controlsImage_.height) * 0.5f, 1.0f,
+              1.0f);
     ctx_->sprite->PostDraw();
 }
 
@@ -179,64 +181,87 @@ float SettingsScene::MouseX() const {
 
 void SettingsScene::DrawBackground(float screenWidth, float screenHeight) {
     DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
-             MakeColor(0.985f, 0.988f, 0.992f, 1.0f));
-    DrawRect(0.0f, 0.0f, screenWidth, 78.0f,
-             MakeColor(0.04f, 0.04f, 0.05f, 1.0f));
-    DrawRect(0.0f, screenHeight - 42.0f, screenWidth, 42.0f,
-             MakeColor(0.04f, 0.04f, 0.05f, 1.0f));
-    DrawRect(0.0f, 78.0f, screenWidth, 8.0f,
-             MakeColor(1.0f, 0.82f, 0.00f, 1.0f));
-    DrawRect(0.0f, screenHeight - 50.0f, screenWidth, 8.0f,
-             MakeColor(0.02f, 0.34f, 0.86f, 0.95f));
+             MakeColor(1.0f, 1.0f, 1.0f, 1.0f));
+    DrawRect(screenWidth * 0.18f, screenHeight * 0.25f, screenWidth * 0.32f,
+             2.0f, MakeColor(0.0f, 0.0f, 0.0f, 0.16f));
+    DrawRect(screenWidth * 0.56f, screenHeight * 0.68f, screenWidth * 0.20f,
+             2.0f, MakeColor(0.0f, 0.0f, 0.0f, 0.12f));
+    const float helpH = (std::max)(58.0f, screenHeight * 0.085f);
+    DrawRect(0.0f, screenHeight - helpH, screenWidth, helpH,
+             MakeColor(0.0f, 0.0f, 0.0f, 1.0f));
 }
 
 void SettingsScene::DrawVolumeControl() {
     const bool selected = selectedIndex_ == 0;
-    const float pulse = 0.5f + 0.5f * std::sinf(sceneTime_ * 7.0f);
-
     DrawRect(volumeRect_.x, volumeRect_.y, volumeRect_.w, volumeRect_.h,
-             selected ? MakeColor(0.06f, 0.06f, 0.07f, 0.96f)
-                      : MakeColor(1.0f, 1.0f, 1.0f, 0.82f));
-    DrawRect(volumeRect_.x, volumeRect_.y, volumeRect_.w, 6.0f,
-             selected ? MakeColor(1.0f, 0.82f, 0.00f, 1.0f)
-                      : MakeColor(0.06f, 0.06f, 0.07f, 0.24f));
+             MakeColor(1.0f, 1.0f, 1.0f, 0.88f));
+    DrawRect(volumeRect_.x, volumeRect_.y + volumeRect_.h - 2.0f,
+             volumeRect_.w, 2.0f,
+             MakeColor(0.0f, 0.0f, 0.0f, selected ? 0.78f : 0.28f));
+    DrawRect(volumeRect_.x + volumeRect_.w - 2.0f, volumeRect_.y, 2.0f,
+             volumeRect_.h,
+             MakeColor(0.0f, 0.0f, 0.0f, selected ? 0.68f : 0.22f));
 
     if (selected) {
-        DrawRect(volumeRect_.x - 10.0f, volumeRect_.y - 10.0f, 10.0f,
-                 volumeRect_.h + 20.0f,
-                 MakeColor(1.0f, 0.82f, 0.00f, 0.70f + pulse * 0.18f));
+        const float frame = 4.0f;
+        DrawRect(volumeRect_.x - frame, volumeRect_.y - frame,
+                 volumeRect_.w + frame * 2.0f, frame,
+                 MakeColor(0.0f, 0.0f, 0.0f, 1.0f));
+        DrawRect(volumeRect_.x - frame, volumeRect_.y + volumeRect_.h,
+                 volumeRect_.w + frame * 2.0f, frame,
+                 MakeColor(0.0f, 0.0f, 0.0f, 1.0f));
+        DrawRect(volumeRect_.x - frame, volumeRect_.y - frame, frame,
+                 volumeRect_.h + frame * 2.0f,
+                 MakeColor(0.0f, 0.0f, 0.0f, 1.0f));
+        DrawRect(volumeRect_.x + volumeRect_.w, volumeRect_.y - frame, frame,
+                 volumeRect_.h + frame * 2.0f,
+                 MakeColor(0.0f, 0.0f, 0.0f, 1.0f));
     }
 
     DrawImage(volumeImage_, volumeRect_.x + 34.0f,
               volumeRect_.y + (volumeRect_.h - volumeImage_.height) * 0.5f,
-              1.0f, selected ? 1.0f : 0.82f);
+              1.0f, selected ? 1.0f : 0.48f);
 
     const float sliderX = volumeRect_.x + 228.0f;
     const float sliderY = volumeRect_.y + 37.0f;
     const float sliderW = volumeRect_.w - 278.0f;
     DrawRect(sliderX, sliderY, sliderW, 12.0f,
-             MakeColor(0.20f, 0.21f, 0.23f, selected ? 0.90f : 0.60f));
+             MakeColor(0.0f, 0.0f, 0.0f, selected ? 0.22f : 0.12f));
     DrawRect(sliderX, sliderY, sliderW * volume_, 12.0f,
-             MakeColor(0.02f, 0.34f, 0.86f, 1.0f));
+             MakeColor(0.0f, 0.0f, 0.0f, selected ? 0.94f : 0.40f));
     DrawRect(sliderX + sliderW * volume_ - 9.0f, sliderY - 13.0f, 18.0f,
-             38.0f, MakeColor(1.0f, 0.82f, 0.00f, 1.0f));
+             38.0f, MakeColor(0.0f, 0.0f, 0.0f, selected ? 1.0f : 0.45f));
 }
 
 void SettingsScene::DrawBackButton() {
     const bool selected = selectedIndex_ == 1;
     DrawRect(backRect_.x, backRect_.y, backRect_.w, backRect_.h,
-             selected ? MakeColor(0.06f, 0.06f, 0.07f, 0.96f)
-                      : MakeColor(1.0f, 1.0f, 1.0f, 0.80f));
-    DrawRect(backRect_.x, backRect_.y, backRect_.w, 6.0f,
-             selected ? MakeColor(1.0f, 0.82f, 0.00f, 1.0f)
-                      : MakeColor(0.06f, 0.06f, 0.07f, 0.24f));
-    DrawRect(backRect_.x, backRect_.y + backRect_.h - 6.0f, backRect_.w, 6.0f,
-             selected ? MakeColor(0.92f, 0.02f, 0.02f, 1.0f)
-                      : MakeColor(0.06f, 0.06f, 0.07f, 0.18f));
+             MakeColor(1.0f, 1.0f, 1.0f, 0.88f));
+    DrawRect(backRect_.x, backRect_.y + backRect_.h - 2.0f, backRect_.w, 2.0f,
+             MakeColor(0.0f, 0.0f, 0.0f, selected ? 0.78f : 0.28f));
+    DrawRect(backRect_.x + backRect_.w - 2.0f, backRect_.y, 2.0f,
+             backRect_.h,
+             MakeColor(0.0f, 0.0f, 0.0f, selected ? 0.68f : 0.22f));
+
+    if (selected) {
+        const float frame = 4.0f;
+        DrawRect(backRect_.x - frame, backRect_.y - frame,
+                 backRect_.w + frame * 2.0f, frame,
+                 MakeColor(0.0f, 0.0f, 0.0f, 1.0f));
+        DrawRect(backRect_.x - frame, backRect_.y + backRect_.h,
+                 backRect_.w + frame * 2.0f, frame,
+                 MakeColor(0.0f, 0.0f, 0.0f, 1.0f));
+        DrawRect(backRect_.x - frame, backRect_.y - frame, frame,
+                 backRect_.h + frame * 2.0f,
+                 MakeColor(0.0f, 0.0f, 0.0f, 1.0f));
+        DrawRect(backRect_.x + backRect_.w, backRect_.y - frame, frame,
+                 backRect_.h + frame * 2.0f,
+                 MakeColor(0.0f, 0.0f, 0.0f, 1.0f));
+    }
 
     DrawImage(backImage_, backRect_.x + (backRect_.w - backImage_.width) * 0.5f,
               backRect_.y + (backRect_.h - backImage_.height) * 0.5f, 1.0f,
-              selected ? 1.0f : 0.82f);
+              selected ? 1.0f : 0.48f);
 }
 
 void SettingsScene::DrawRect(float x, float y, float w, float h,
