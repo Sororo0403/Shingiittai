@@ -78,4 +78,6 @@ class Sword {
     bool slashFollowThroughStarted_ = false;
     DirectX::XMFLOAT2 slashFollowThroughDir_{};
     DirectX::XMFLOAT2 slashFollowThroughAngles_{};
+    float slashFollowThroughRoll_ = 0.0f;
+    float slashFollowThroughSurge_ = 0.0f;
 };
