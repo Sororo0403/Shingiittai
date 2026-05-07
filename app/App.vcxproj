@@ -76,17 +76,6 @@
       <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;imgui.lib;dinput8.lib;dxguid.lib;xinput.lib;JoyShockLibrary.lib;assimp-vc145-mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(ProjectDir)..\engine\externals\assimp\lib\;$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\;$(SolutionDir)..\generated\outputs\$(Configuration)\imgui\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
-    <PostBuildEvent>
-      <Command>REM JoyShockLibrary
-if exist "$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\JoyShockLibrary.dll" (
-    xcopy /Y /D "$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\JoyShockLibrary.dll" "$(TargetDir)"
-)
-
-REM assimp
-if exist "$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" (
-    xcopy /Y /D "$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" "$(TargetDir)"
-)</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -110,17 +99,6 @@ if exist "$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" (
       <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;imgui.lib;dinput8.lib;dxguid.lib;xinput.lib;JoyShockLibrary.lib;assimp-vc145-mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(ProjectDir)..\engine\externals\assimp\lib\;$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\;$(SolutionDir)..\generated\outputs\$(Configuration)\imgui\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
-    <PostBuildEvent>
-      <Command>REM JoyShockLibrary
-if exist "$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\JoyShockLibrary.dll" (
-    xcopy /Y /D "$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\JoyShockLibrary.dll" "$(TargetDir)"
-)
-
-REM assimp
-if exist "$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" (
-    xcopy /Y /D "$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" "$(TargetDir)"
-)</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\enemy\EnemyMelee.cpp" />
@@ -214,6 +192,13 @@ if exist "$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" (
     <None Include="resources\text\weapon_title.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Target Name="CopyRuntimeDlls" AfterTargets="Build">
+    <ItemGroup>
+      <RuntimeDll Include="$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\JoyShockLibrary.dll" Condition="Exists('$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\JoyShockLibrary.dll')" />
+      <RuntimeDll Include="$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" Condition="Exists('$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll')" />
+    </ItemGroup>
+    <Copy SourceFiles="@(RuntimeDll)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" Condition="'@(RuntimeDll)' != ''" />
+  </Target>
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
 </Project>

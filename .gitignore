@@ -371,3 +371,5 @@ FodyWeavers.xsd
 # track externals
 !externals/
 !externals/**
+!engine/externals/assimp/bin/
+!engine/externals/assimp/bin/assimp-vc145-mt.dll
