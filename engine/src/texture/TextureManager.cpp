@@ -89,6 +89,21 @@ static float ValueNoise(float x, float y, uint32_t seed) {
     return Lerp(Lerp(n00, n10, tx), Lerp(n01, n11, tx), ty);
 }
 
+static uint32_t PackRgba(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255u) {
+    return (static_cast<uint32_t>(a) << 24u) |
+           (static_cast<uint32_t>(b) << 16u) |
+           (static_cast<uint32_t>(g) << 8u) | static_cast<uint32_t>(r);
+}
+
+static float Saturate(float value) {
+    return (std::clamp)(value, 0.0f, 1.0f);
+}
+
+static float Smoothstep(float edge0, float edge1, float value) {
+    const float t = Saturate((value - edge0) / (edge1 - edge0));
+    return t * t * (3.0f - 2.0f * t);
+}
+
 using namespace DirectX;
 using namespace DxUtils;
 using Microsoft::WRL::ComPtr;
@@ -205,6 +220,111 @@ uint32_t TextureManager::CreateNoiseTexture(uint32_t width, uint32_t height) {
                 0xFF000000u | (static_cast<uint32_t>(gray) << 16u) |
                 (static_cast<uint32_t>(gray) << 8u) |
                 static_cast<uint32_t>(gray);
+        }
+    }
+
+    Image image{};
+    image.width = width;
+    image.height = height;
+    image.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    image.rowPitch = static_cast<size_t>(width) * sizeof(uint32_t);
+    image.slicePitch = image.rowPitch * height;
+    image.pixels = reinterpret_cast<uint8_t *>(pixels.data());
+
+    TexMetadata metadata{};
+    metadata.width = width;
+    metadata.height = height;
+    metadata.depth = 1;
+    metadata.arraySize = 1;
+    metadata.mipLevels = 1;
+    metadata.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    metadata.dimension = TEX_DIMENSION_TEXTURE2D;
+
+    return CreateTexture(&image, 1, metadata);
+}
+
+uint32_t TextureManager::CreateRustedMetalTexture(uint32_t width,
+                                                  uint32_t height) {
+    width = (std::max)(width, 1u);
+    height = (std::max)(height, 1u);
+
+    std::vector<uint32_t> pixels(static_cast<size_t>(width) * height);
+    constexpr uint32_t seed = 0x8E71C0DEu;
+
+    for (uint32_t y = 0; y < height; ++y) {
+        for (uint32_t x = 0; x < width; ++x) {
+            const float u = static_cast<float>(x) / static_cast<float>(width);
+            const float v = static_cast<float>(y) / static_cast<float>(height);
+
+            const float broadRust =
+                ValueNoise(u * 5.0f, v * 5.0f, seed + 13u);
+            const float fineRust =
+                ValueNoise(u * 38.0f, v * 38.0f, seed + 41u);
+            const float pitting =
+                ValueNoise(u * 96.0f, v * 96.0f, seed + 73u);
+            const float grime =
+                ValueNoise(u * 14.0f + 7.0f, v * 20.0f, seed + 109u);
+            const float scratchNoise =
+                ValueNoise(u * 180.0f, v * 28.0f, seed + 151u);
+
+            const float panelLineX =
+                1.0f - Smoothstep(0.010f, 0.024f, std::fabs(std::fmod(u * 5.0f, 1.0f) - 0.5f));
+            const float panelLineY =
+                1.0f - Smoothstep(0.010f, 0.024f, std::fabs(std::fmod(v * 4.0f, 1.0f) - 0.5f));
+            const float panelLine = Saturate((panelLineX + panelLineY) * 0.34f);
+
+            const float scratchBand =
+                std::pow(Saturate(1.0f - std::fabs(scratchNoise - 0.50f) * 28.0f),
+                         1.8f);
+            const float rustMask =
+                Saturate((broadRust - 0.38f) * 1.55f + fineRust * 0.26f +
+                         panelLine * 0.40f);
+            const float darkOxide =
+                Saturate((grime - 0.42f) * 1.3f + pitting * 0.28f);
+            const float exposedMetal =
+                Saturate((1.0f - rustMask) * 0.65f + scratchBand * 0.75f -
+                         darkOxide * 0.35f);
+
+            float r = 0.18f;
+            float g = 0.19f;
+            float b = 0.19f;
+
+            const float steel = exposedMetal;
+            r = Lerp(r, 0.56f, steel);
+            g = Lerp(g, 0.59f, steel);
+            b = Lerp(b, 0.58f, steel);
+
+            const float rust = rustMask;
+            r = Lerp(r, 0.70f, rust);
+            g = Lerp(g, 0.27f + fineRust * 0.10f, rust);
+            b = Lerp(b, 0.075f, rust);
+
+            const float soot = darkOxide;
+            r = Lerp(r, 0.065f, soot * 0.78f);
+            g = Lerp(g, 0.060f, soot * 0.78f);
+            b = Lerp(b, 0.055f, soot * 0.78f);
+
+            const float rivetGridX =
+                std::fabs(std::fmod(u * 5.0f, 1.0f) - 0.08f);
+            const float rivetGridY =
+                std::fabs(std::fmod(v * 4.0f, 1.0f) - 0.08f);
+            const float rivetGrid =
+                rivetGridX < rivetGridY ? rivetGridX : rivetGridY;
+            const float rivet =
+                1.0f - Smoothstep(0.018f, 0.036f, rivetGrid);
+            r = Lerp(r, 0.74f, rivet * 0.42f);
+            g = Lerp(g, 0.68f, rivet * 0.42f);
+            b = Lerp(b, 0.57f, rivet * 0.42f);
+
+            const float lineDarken = panelLine * 0.42f;
+            r *= 1.0f - lineDarken;
+            g *= 1.0f - lineDarken;
+            b *= 1.0f - lineDarken;
+
+            pixels[static_cast<size_t>(y) * width + x] = PackRgba(
+                static_cast<uint8_t>(Saturate(r) * 255.0f),
+                static_cast<uint8_t>(Saturate(g) * 255.0f),
+                static_cast<uint8_t>(Saturate(b) * 255.0f), 255u);
         }
     }
 

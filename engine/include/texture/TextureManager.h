@@ -56,6 +56,15 @@ class TextureManager {
     uint32_t CreateNoiseTexture(uint32_t width = 256, uint32_t height = 256);
 
     /// <summary>
+    /// 錆びた金属表現用の手続きテクスチャを生成する
+    /// </summary>
+    /// <param name="width">テクスチャ幅</param>
+    /// <param name="height">テクスチャ高さ</param>
+    /// <returns>生成されたテクスチャのID</returns>
+    uint32_t CreateRustedMetalTexture(uint32_t width = 512,
+                                      uint32_t height = 512);
+
+    /// <summary>
     /// ロード時に使った一時UploadBufferを解放
     /// </summary>
     void ReleaseUploadBuffers();

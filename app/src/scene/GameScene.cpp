@@ -1,15 +1,16 @@
 #include "GameScene.h"
 #include "DirectXCommon.h"
 #include "Input.h"
+#include "Material.h"
+#include "Model.h"
 #include "ModelManager.h"
-#include "SceneManager.h"
 #include "SpriteManager.h"
 #include "TextureManager.h"
 #include "WinApp.h"
-#include "Material.h"
 #include "PostEffectRenderer.h"
-#include <exception>
 #include <cmath>
+#include <exception>
+#include <vector>
 
 using namespace DirectX;
 
@@ -17,20 +18,89 @@ namespace {
 constexpr float kPi = 3.14159265f;
 
 Material MakeArenaMaterial(const XMFLOAT4 &color, bool useTexture = false,
-                           float reflection = 0.08f) {
+                           float reflection = 0.54f) {
     Material material{};
     material.color = color;
     material.enableTexture = useTexture ? 1 : 0;
     material.reflectionStrength = reflection;
-    material.reflectionFresnelStrength = reflection * 0.45f;
-    material.reflectionRoughness = 0.58f;
+    material.reflectionFresnelStrength = reflection * 0.72f;
+    material.reflectionRoughness = 0.055f;
     return material;
+}
+
+XMFLOAT4 LerpColor(const XMFLOAT4 &from, const XMFLOAT4 &to, float t) {
+    return {
+        from.x + (to.x - from.x) * t,
+        from.y + (to.y - from.y) * t,
+        from.z + (to.z - from.z) * t,
+        from.w + (to.w - from.w) * t,
+    };
 }
 
 XMFLOAT4 MakeQuat(float pitch, float yaw, float roll) {
     XMFLOAT4 q{};
     XMStoreFloat4(&q, XMQuaternionRotationRollPitchYaw(pitch, yaw, roll));
     return q;
+}
+
+void TintModelMaterials(ModelManager *modelManager, uint32_t modelId,
+                        const std::vector<XMFLOAT4> &palette,
+                        float reflection, float fresnel) {
+    if (!modelManager || palette.empty()) {
+        return;
+    }
+
+    Model *model = modelManager->GetModel(modelId);
+    if (!model) {
+        return;
+    }
+
+    size_t colorIndex = 0;
+    for (const ModelSubMesh &subMesh : model->subMeshes) {
+        Material material = modelManager->GetMaterial(subMesh.materialId);
+        material.color = palette[colorIndex % palette.size()];
+        material.reflectionStrength = reflection;
+        material.reflectionFresnelStrength = fresnel;
+        material.reflectionRoughness = 0.035f;
+        modelManager->SetMaterial(subMesh.materialId, material);
+        ++colorIndex;
+    }
+}
+
+void ApplyRustedRobotMaterials(ModelManager *modelManager, uint32_t modelId,
+                               uint32_t rustTextureId) {
+    if (!modelManager) {
+        return;
+    }
+
+    Model *model = modelManager->GetModel(modelId);
+    if (!model) {
+        return;
+    }
+
+    const std::vector<XMFLOAT4> metalTints = {
+        {0.82f, 0.78f, 0.70f, 1.0f},
+        {0.54f, 0.50f, 0.46f, 1.0f},
+        {0.78f, 0.36f, 0.16f, 1.0f},
+        {0.22f, 0.20f, 0.18f, 1.0f},
+    };
+
+    size_t materialIndex = 0;
+    for (ModelSubMesh &subMesh : model->subMeshes) {
+        subMesh.textureId = rustTextureId;
+
+        Material material = modelManager->GetMaterial(subMesh.materialId);
+        material.enableTexture = 1;
+        material.color = metalTints[materialIndex % metalTints.size()];
+        material.reflectionStrength = (materialIndex % 3 == 0) ? 0.74f : 0.48f;
+        material.reflectionFresnelStrength =
+            (materialIndex % 3 == 0) ? 0.64f : 0.38f;
+        material.reflectionRoughness = (materialIndex % 3 == 0) ? 0.18f : 0.42f;
+        material.enableDissolve = 0;
+        material.dissolveEdgeColor = {1.0f, 0.42f, 0.12f, 1.0f};
+        modelManager->SetMaterial(subMesh.materialId, material);
+        ++materialIndex;
+    }
 }
 
 } // namespace
@@ -62,36 +132,64 @@ void GameScene::Initialize(const SceneContext &ctx) {
     uint32_t enemyModel = model->Load(L"app/resources/models/boss/boss.gltf");
     uint32_t bulletModel =
         ctx_->model->Load(L"app/resources/models/bullet/bullet.obj");
+    particleTextureId_ = texture->Load(L"app/resources/sprites/smoke.png");
+    const uint32_t enemyRustTextureId = texture->CreateRustedMetalTexture(512, 512);
+    TintModelMaterials(model, playerModel,
+                       {{0.78f, 0.92f, 0.95f, 1.0f},
+                        {0.55f, 0.66f, 0.78f, 1.0f},
+                        {0.96f, 0.72f, 0.36f, 1.0f}},
+                       0.92f, 0.82f);
+    TintModelMaterials(model, swordModel,
+                       {{0.96f, 0.99f, 1.00f, 1.0f},
+                        {0.66f, 0.82f, 0.96f, 1.0f},
+                        {0.95f, 0.55f, 0.76f, 1.0f}},
+                       1.00f, 0.92f);
+    ApplyRustedRobotMaterials(model, enemyModel, enemyRustTextureId);
+    TintModelMaterials(model, bulletModel,
+                       {{0.28f, 0.95f, 1.00f, 1.0f},
+                        {1.00f, 0.95f, 0.24f, 1.0f},
+                        {1.00f, 0.22f, 0.74f, 1.0f}},
+                       1.00f, 0.90f);
     arenaNoiseTextureId_ = texture->CreateNoiseTexture(256, 256);
     arenaFloorModelId_ = model->CreatePlane(
         arenaNoiseTextureId_,
-        MakeArenaMaterial({0.92f, 0.92f, 0.90f, 1.0f}, true, 0.02f));
+        MakeArenaMaterial({0.70f, 0.86f, 1.00f, 1.0f}, true, 0.08f));
     arenaLowPolyTerrainModelId_ = model->CreateLowPolyTerrain(
-        0, MakeArenaMaterial({0.82f, 0.82f, 0.80f, 1.0f}, false, 0.01f), 42,
+        0, MakeArenaMaterial({0.34f, 0.62f, 0.92f, 1.0f}, false, 0.04f), 42,
         78.0f, 7.2f, 12.0f, 0x4107u);
     arenaCenterDiskModelId_ = model->CreateRing(
-        0, MakeArenaMaterial({0.76f, 0.76f, 0.74f, 1.0f}, false, 0.02f), 96,
+        0, MakeArenaMaterial({1.00f, 0.75f, 0.28f, 1.0f}, false, 0.12f), 96,
         1.95f, 0.0f);
     arenaSpokeModelId_ = model->CreatePlane(
-        0, MakeArenaMaterial({0.18f, 0.18f, 0.18f, 1.0f}, false, 0.00f));
+        0, MakeArenaMaterial({0.92f, 0.18f, 0.76f, 1.0f}, false, 0.05f));
     arenaInnerRingModelId_ = model->CreateRing(
-        0, MakeArenaMaterial({0.20f, 0.20f, 0.20f, 1.0f}, false, 0.00f), 96,
+        0, MakeArenaMaterial({0.18f, 0.98f, 0.82f, 1.0f}, false, 0.08f), 96,
         4.9f, 4.35f);
     arenaOuterRingModelId_ = model->CreateRing(
-        0, MakeArenaMaterial({0.16f, 0.16f, 0.16f, 1.0f}, false, 0.00f), 128,
+        0, MakeArenaMaterial({0.45f, 0.32f, 1.00f, 1.0f}, false, 0.08f), 128,
         12.3f, 11.6f);
     arenaColumnModelId_ = model->CreateCylinder(
-        0, MakeArenaMaterial({0.72f, 0.72f, 0.70f, 1.0f}, false, 0.01f), 24,
+        0, MakeArenaMaterial({0.88f, 0.78f, 1.00f, 1.0f}, false, 0.08f), 24,
         0.26f, 0.38f, 5.4f);
     arenaColumnCapModelId_ = model->CreateCylinder(
-        0, MakeArenaMaterial({0.86f, 0.86f, 0.84f, 1.0f}, false, 0.01f), 32,
+        0, MakeArenaMaterial({1.00f, 0.90f, 0.42f, 1.0f}, false, 0.10f), 32,
         0.68f, 0.78f, 0.24f);
     arenaDomeModelId_ = model->CreateCylinder(
-        0, MakeArenaMaterial({0.90f, 0.90f, 0.88f, 0.18f}, false, 0.00f), 128,
+        0, MakeArenaMaterial({0.20f, 0.76f, 1.00f, 0.20f}, false, 0.00f), 128,
         4.5f, 13.5f, 8.8f);
     arenaBarrierRingModelId_ = model->CreateRing(
-        0, MakeArenaMaterial({0.10f, 0.10f, 0.10f, 0.45f}, false, 0.00f), 128,
+        0, MakeArenaMaterial({1.00f, 0.32f, 0.82f, 0.55f}, false, 0.00f), 128,
         13.1f, 12.9f);
+    sparkParticles_.Initialize(dx, ctx_->srv, texture, particleTextureId_, 2048);
+    sparkParticles_.SetEmission(1, 1000.0f);
+    sparkParticles_.SetEmitterRadius(0.08f);
+    explosionParticles_.Initialize(dx, ctx_->srv, texture, particleTextureId_,
+                                   1024);
+    explosionParticles_.SetEmission(1, 1000.0f);
+    explosionParticles_.SetEmitterRadius(0.25f);
+    smokeParticles_.Initialize(dx, ctx_->srv, texture, particleTextureId_, 1536);
+    smokeParticles_.SetEmission(1, 1000.0f);
+    smokeParticles_.SetEmitterRadius(0.40f);
     dx->EndUpload();
 
     texture->ReleaseUploadBuffers();
@@ -171,6 +269,9 @@ void GameScene::Update() {
     camera_.UpdateMatrices();
 
     UpdateCombat(gameplayDeltaTime);
+    sparkParticles_.Update(baseDeltaTime);
+    explosionParticles_.Update(baseDeltaTime);
+    smokeParticles_.Update(baseDeltaTime);
 }
 
 void GameScene::Draw() {
@@ -183,11 +284,100 @@ void GameScene::Draw() {
         collisionDebugRenderer_.Draw(collisionManager_, camera_);
     }
     ctx_->model->PostDraw();
+
+    sparkParticles_.Draw(camera_);
+    explosionParticles_.Draw(camera_);
+    smokeParticles_.Draw(camera_);
+}
+
+void GameScene::DispatchCombatFeedback(const CombatFeedbackEvent &event) {
+    combatFeedback_.PushEvent(event);
+    EmitCombatParticles(event);
+}
+
+void GameScene::EmitCombatParticles(const CombatFeedbackEvent &event) {
+    XMFLOAT3 position = event.position;
+    position.y += 0.08f;
+
+    XMFLOAT3 direction = event.direction;
+    const float power = (std::max)(0.6f, event.power);
+
+    switch (event.type) {
+    case CombatFeedbackEventType::PlayerSlashHit:
+        sparkParticles_.EmitBurst(position,
+                                  static_cast<uint32_t>(76.0f + power * 38.0f),
+                                  0.13f, GPUParticleSystem::BurstStyle::Sparks,
+                                  {1.00f, 0.88f, 0.48f, 1.0f}, direction,
+                                  1.35f + power * 0.32f);
+        break;
+    case CombatFeedbackEventType::PlayerGuard:
+        sparkParticles_.EmitBurst(position, 118, 0.20f,
+                                  GPUParticleSystem::BurstStyle::Sparks,
+                                  {0.78f, 0.94f, 1.00f, 1.0f}, direction, 1.8f);
+        explosionParticles_.EmitBurst(position, 24, 0.18f,
+                                      GPUParticleSystem::BurstStyle::Explosion,
+                                      {0.72f, 0.86f, 1.00f, 1.0f}, direction,
+                                      0.72f);
+        smokeParticles_.EmitBurst(position, 16, 0.28f,
+                                  GPUParticleSystem::BurstStyle::Smoke,
+                                  {0.58f, 0.62f, 0.66f, 1.0f}, direction, 0.48f);
+        break;
+    case CombatFeedbackEventType::PlayerDamaged:
+        sparkParticles_.EmitBurst(position, 142, 0.25f,
+                                  GPUParticleSystem::BurstStyle::Sparks,
+                                  {1.00f, 0.60f, 0.36f, 1.0f}, direction, 2.0f);
+        explosionParticles_.EmitBurst(position, 58, 0.34f,
+                                      GPUParticleSystem::BurstStyle::Explosion,
+                                      {1.00f, 0.34f, 0.22f, 1.0f}, direction,
+                                      1.05f);
+        smokeParticles_.EmitBurst(position, 42, 0.44f,
+                                  GPUParticleSystem::BurstStyle::Smoke,
+                                  {0.58f, 0.50f, 0.46f, 1.0f}, direction, 0.72f);
+        break;
+    case CombatFeedbackEventType::CounterSuccess:
+        sparkParticles_.EmitBurst(position, 220, 0.36f,
+                                  GPUParticleSystem::BurstStyle::Sparks,
+                                  {1.00f, 0.92f, 0.44f, 1.0f}, direction, 1.9f);
+        explosionParticles_.EmitBurst(position, 112, 0.52f,
+                                      GPUParticleSystem::BurstStyle::Explosion,
+                                      {1.00f, 0.60f, 0.25f, 1.0f}, direction,
+                                      1.35f);
+        smokeParticles_.EmitBurst(position, 76, 0.62f,
+                                  GPUParticleSystem::BurstStyle::Smoke,
+                                  {0.46f, 0.42f, 0.38f, 1.0f}, direction, 0.82f);
+        break;
+    case CombatFeedbackEventType::ProjectileReflect:
+        sparkParticles_.EmitBurst(position, 162, 0.26f,
+                                  GPUParticleSystem::BurstStyle::Sparks,
+                                  {0.90f, 0.94f, 1.00f, 1.0f}, direction, 2.05f);
+        explosionParticles_.EmitBurst(position, 64, 0.34f,
+                                      GPUParticleSystem::BurstStyle::Explosion,
+                                      {0.80f, 0.42f, 1.00f, 1.0f}, direction,
+                                      1.08f);
+        smokeParticles_.EmitBurst(position, 34, 0.40f,
+                                  GPUParticleSystem::BurstStyle::Smoke,
+                                  {0.46f, 0.44f, 0.52f, 1.0f}, direction, 0.62f);
+        break;
+    }
 }
 
 void GameScene::DrawArena() {
     ModelManager *model = ctx_->model;
     const ActionKind actionKind = enemy_.GetActionKind();
+    const float huePulse = 0.5f + 0.5f * std::sinf(sceneLightTime_ * 2.2f);
+    const XMFLOAT4 calmColor = {0.18f, 0.88f, 1.00f, 0.72f};
+    const XMFLOAT4 attackColor =
+        actionKind == ActionKind::Smash ? XMFLOAT4{1.00f, 0.20f, 0.22f, 0.82f}
+        : actionKind == ActionKind::Sweep
+            ? XMFLOAT4{1.00f, 0.82f, 0.16f, 0.78f}
+        : actionKind == ActionKind::Warp
+            ? XMFLOAT4{0.75f, 0.20f, 1.00f, 0.88f}
+        : actionKind == ActionKind::Wave
+            ? XMFLOAT4{0.18f, 1.00f, 0.64f, 0.78f}
+        : actionKind == ActionKind::Shot
+            ? XMFLOAT4{0.24f, 0.62f, 1.00f, 0.78f}
+            : calmColor;
+    const XMFLOAT4 arenaGlowColor = LerpColor(calmColor, attackColor, 0.55f + 0.45f * huePulse);
     const float actionGlow =
         actionKind == ActionKind::Warp   ? 0.22f
         : actionKind == ActionKind::Wave ? 0.15f
@@ -209,7 +399,17 @@ void GameScene::DrawArena() {
     Transform centerDisk{};
     centerDisk.position = {0.0f, 0.006f, 0.0f};
     centerDisk.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
+    ModelDrawEffect centerEffect{};
+    centerEffect.enabled = true;
+    centerEffect.additiveBlend = true;
+    centerEffect.color = arenaGlowColor;
+    centerEffect.intensity = 0.18f + actionGlow + 0.06f * huePulse;
+    centerEffect.fresnelPower = 1.6f;
+    centerEffect.noiseAmount = 0.18f;
+    centerEffect.time = sceneLightTime_;
+    model->SetDrawEffect(centerEffect);
     model->Draw(arenaCenterDiskModelId_, centerDisk, camera_);
+    model->ClearDrawEffect();
 
     for (int i = 0; i < 16; ++i) {
         const float angle = static_cast<float>(i) * kPi * 0.125f;
@@ -220,18 +420,39 @@ void GameScene::DrawArena() {
         spoke.position = {x, 0.008f, z};
         spoke.rotation = MakeQuat(-kPi * 0.5f, angle, 0.0f);
         spoke.scale = {0.075f, 4.8f, 1.0f};
+        if ((i % 4) == 0) {
+            ModelDrawEffect spokeEffect{};
+            spokeEffect.enabled = true;
+            spokeEffect.additiveBlend = true;
+            spokeEffect.color = LerpColor({1.0f, 0.22f, 0.74f, 0.62f},
+                                          arenaGlowColor, huePulse);
+            spokeEffect.intensity = 0.12f + actionGlow * 0.8f;
+            spokeEffect.fresnelPower = 1.3f;
+            spokeEffect.noiseAmount = 0.14f;
+            spokeEffect.time = sceneLightTime_ + static_cast<float>(i) * 0.1f;
+            model->SetDrawEffect(spokeEffect);
+        }
         model->Draw(arenaSpokeModelId_, spoke, camera_);
+        if ((i % 4) == 0) {
+            model->ClearDrawEffect();
+        }
     }
 
     Transform innerRing{};
     innerRing.position = {0.0f, 0.012f, 0.0f};
     innerRing.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
+    model->SetDrawEffect(centerEffect);
     model->Draw(arenaInnerRingModelId_, innerRing, camera_);
 
     Transform outerRing{};
     outerRing.position = {0.0f, 0.018f, 0.0f};
     outerRing.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
+    centerEffect.color = LerpColor({0.88f, 0.24f, 1.00f, 0.70f},
+                                  arenaGlowColor, 0.45f);
+    centerEffect.intensity *= 0.85f;
+    model->SetDrawEffect(centerEffect);
     model->Draw(arenaOuterRingModelId_, outerRing, camera_);
+    model->ClearDrawEffect();
 
     for (int i = 0; i < 8; ++i) {
         const float angle = static_cast<float>(i) * kPi * 0.25f;
@@ -259,11 +480,11 @@ void GameScene::DrawArena() {
     barrierEffect.enabled = true;
     barrierEffect.additiveBlend = true;
     barrierEffect.disableCulling = true;
-    barrierEffect.color = {0.08f, 0.08f, 0.08f, 0.50f};
+    barrierEffect.color = arenaGlowColor;
     barrierEffect.intensity =
-        0.16f + actionGlow * 0.35f + 0.04f * std::sinf(sceneLightTime_ * 1.8f);
+        0.22f + actionGlow * 0.75f + 0.06f * std::sinf(sceneLightTime_ * 1.8f);
     barrierEffect.fresnelPower = 1.2f;
-    barrierEffect.noiseAmount = 0.35f;
+    barrierEffect.noiseAmount = 0.48f;
     barrierEffect.time = sceneLightTime_;
     model->SetDrawEffect(barrierEffect);
 

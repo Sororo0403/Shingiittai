@@ -15,6 +15,13 @@ float Saturate(float value) {
     return value;
 }
 
+DirectX::XMFLOAT4 LerpColor(const DirectX::XMFLOAT4 &from,
+                            const DirectX::XMFLOAT4 &to, float t) {
+    t = Saturate(t);
+    return {from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t,
+            from.z + (to.z - from.z) * t, from.w + (to.w - from.w) * t};
+}
+
 } // namespace
 
 void Enemy::UpdateParts() {
@@ -425,15 +432,69 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
             std::clamp(runtime_.hitReactionTimer / hitReactionDuration_, 0.0f, 1.0f);
     }
     const bool isHitFlashing = hitFlash > 0.0f;
+    const float actionPulse =
+        0.5f + 0.5f * std::sin(runtime_.stateTimer * 12.0f);
+    const DirectX::XMFLOAT4 phaseTint =
+        phase_ == BossPhase::Phase2
+            ? DirectX::XMFLOAT4{1.0f, 0.42f, 0.16f, 0.52f}
+            : DirectX::XMFLOAT4{0.82f, 0.72f, 0.58f, 0.34f};
+    DirectX::XMFLOAT4 actionTint = phaseTint;
+    float actionIntensity = 0.10f + 0.035f * actionPulse;
+    float actionNoise = 0.28f;
+
+    switch (action_.kind) {
+    case ActionKind::Smash:
+        actionTint = {1.0f, 0.36f, 0.10f, 0.58f};
+        actionIntensity = 0.32f + 0.12f * actionPulse;
+        actionNoise = 0.38f;
+        break;
+    case ActionKind::Sweep:
+        actionTint = {1.0f, 0.62f, 0.18f, 0.54f};
+        actionIntensity = 0.24f + 0.10f * actionPulse;
+        actionNoise = 0.34f;
+        break;
+    case ActionKind::Shot:
+        actionTint = {0.42f, 0.74f, 1.0f, 0.46f};
+        actionIntensity = 0.20f + 0.10f * actionPulse;
+        actionNoise = 0.30f;
+        break;
+    case ActionKind::Wave:
+        actionTint = {0.44f, 0.84f, 0.62f, 0.44f};
+        actionIntensity = 0.22f + 0.10f * actionPulse;
+        actionNoise = 0.34f;
+        break;
+    case ActionKind::Warp:
+        actionTint = {0.90f, 0.48f, 0.20f, 0.70f};
+        actionIntensity = 0.58f + 0.18f * actionPulse;
+        actionNoise = 0.62f;
+        break;
+    case ActionKind::Stalk:
+        actionTint = {0.56f, 0.72f, 0.64f, 0.38f};
+        actionIntensity = 0.14f + 0.04f * actionPulse;
+        actionNoise = 0.24f;
+        break;
+    default:
+        break;
+    }
+
+    if (phaseTransitionActive_) {
+        const float phaseRatio = GetPhaseTransitionRatio();
+        actionTint = LerpColor(actionTint, {1.0f, 0.48f, 0.12f, 0.76f},
+                               phaseRatio);
+        actionIntensity += 0.46f * phaseRatio;
+        actionNoise += 0.28f * phaseRatio;
+    }
 
     ModelDrawEffect hitEffect{};
     if (isHitFlashing) {
         hitEffect.enabled = true;
         hitEffect.additiveBlend = false;
-        hitEffect.color = {1.0f, 0.24f, 0.18f, 0.85f};
-        hitEffect.intensity = 0.60f + 0.70f * hitFlash;
-        hitEffect.fresnelPower = 2.2f;
-        hitEffect.noiseAmount = 0.22f;
+        hitEffect.color = LerpColor({1.0f, 0.30f, 0.08f, 0.78f},
+                                    {1.0f, 0.78f, 0.28f, 0.86f},
+                                    actionPulse);
+        hitEffect.intensity = 0.42f + 0.72f * hitFlash;
+        hitEffect.fresnelPower = 1.8f;
+        hitEffect.noiseAmount = 0.52f;
         hitEffect.time = runtime_.stateTimer;
     }
 
@@ -446,21 +507,33 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
     if (action_.kind == ActionKind::Warp) {
         warpEffect.enabled = true;
         warpEffect.additiveBlend = true;
-        warpEffect.color = {1.0f, 0.22f, 0.12f, 0.78f};
-        warpEffect.intensity = (action_.step == ActionStep::Move) ? 1.85f : 1.35f;
-        warpEffect.fresnelPower = 2.8f;
-        warpEffect.noiseAmount = 0.72f;
+        warpEffect.color = actionTint;
+        warpEffect.intensity = (action_.step == ActionStep::Move) ? 1.38f : 0.88f;
+        warpEffect.fresnelPower = 1.9f;
+        warpEffect.noiseAmount = 0.84f;
         warpEffect.time = stateTimer_;
 
         if (isHitFlashing) {
-            warpEffect.color = {1.0f, 0.30f, 0.20f, 0.92f};
-            warpEffect.intensity += 0.55f * hitFlash;
+            warpEffect.color = LerpColor(warpEffect.color,
+                                         {1.0f, 0.72f, 0.20f, 0.88f},
+                                         hitFlash);
+            warpEffect.intensity += 0.38f * hitFlash;
             warpEffect.noiseAmount += 0.10f * hitFlash;
         }
 
         modelManager->SetDrawEffect(warpEffect);
     } else if (isHitFlashing) {
         modelManager->SetDrawEffect(hitEffect);
+    } else {
+        ModelDrawEffect actionEffect{};
+        actionEffect.enabled = true;
+        actionEffect.additiveBlend = false;
+        actionEffect.color = actionTint;
+        actionEffect.intensity = actionIntensity;
+        actionEffect.fresnelPower = 2.5f;
+        actionEffect.noiseAmount = actionNoise;
+        actionEffect.time = runtime_.stateTimer;
+        modelManager->SetDrawEffect(actionEffect);
     }
 
     auto drawEnemyVisual = [&](const Transform &visual) {
@@ -496,6 +569,17 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         Transform bulletTf = tf_;
         bulletTf.position = bullet.position;
         bulletTf.scale = {0.2f, 0.2f, 0.2f};
+        ModelDrawEffect bulletEffect{};
+        bulletEffect.enabled = true;
+        bulletEffect.additiveBlend = true;
+        bulletEffect.color =
+            bullet.isReflected ? DirectX::XMFLOAT4{1.0f, 0.95f, 0.20f, 0.90f}
+                               : DirectX::XMFLOAT4{0.20f, 0.72f, 1.0f, 0.82f};
+        bulletEffect.intensity = bullet.isReflected ? 1.15f : 0.82f;
+        bulletEffect.fresnelPower = 1.4f;
+        bulletEffect.noiseAmount = 0.26f;
+        bulletEffect.time = stateTimer_ + bullet.lifeTime;
+        modelManager->SetDrawEffect(bulletEffect);
         modelManager->Draw(effectModelId, bulletTf, camera);
     }
 
@@ -507,7 +591,20 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         Transform waveTf = tf_;
         waveTf.position = wave.position;
         waveTf.scale = {0.6f, 0.2f, 1.2f};
+        ModelDrawEffect waveEffect{};
+        waveEffect.enabled = true;
+        waveEffect.additiveBlend = true;
+        waveEffect.color =
+            wave.isReflected ? DirectX::XMFLOAT4{1.0f, 0.34f, 0.86f, 0.90f}
+                             : DirectX::XMFLOAT4{0.20f, 1.0f, 0.56f, 0.82f};
+        waveEffect.intensity = wave.isReflected ? 1.12f : 0.88f;
+        waveEffect.fresnelPower = 1.2f;
+        waveEffect.noiseAmount = 0.32f;
+        waveEffect.time = stateTimer_ + wave.traveledDistance;
+        modelManager->SetDrawEffect(waveEffect);
         modelManager->Draw(effectModelId, waveTf, camera);
     }
+
+    modelManager->ClearDrawEffect();
 }
 

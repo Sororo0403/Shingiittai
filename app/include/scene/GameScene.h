@@ -6,6 +6,7 @@
 #include "CollisionDebugRenderer.h"
 #include "CollisionManager.h"
 #include "Enemy.h"
+#include "GPUParticleSystem.h"
 #include "Player.h"
 #include "PlayerWeaponType.h"
 #include "Transform.h"
@@ -30,6 +31,8 @@ class GameScene : public BaseScene {
     void SyncEnemyAnimation();
     void SetEnemyAnimationFrozen(bool frozen);
     void UpdateCombat(float gameplayDeltaTime);
+    void DispatchCombatFeedback(const CombatFeedbackEvent &event);
+    void EmitCombatParticles(const CombatFeedbackEvent &event);
     PlayerCombatObservation BuildPlayerCombatObservation() const;
     float ComputeGameplayTimeScale() const;
 
@@ -43,6 +46,10 @@ class GameScene : public BaseScene {
     CollisionManager collisionManager_;
     CollisionDebugRenderer collisionDebugRenderer_;
     CombatFeedbackDirector combatFeedback_;
+    GPUParticleSystem sparkParticles_;
+    GPUParticleSystem explosionParticles_;
+    GPUParticleSystem smokeParticles_;
+    uint32_t particleTextureId_ = 0;
     uint32_t playerModelId_ = 0;
     uint32_t enemyModelId_ = 0;
     uint32_t arenaFloorModelId_ = 0;
@@ -135,6 +142,6 @@ class GameScene : public BaseScene {
     float counterCameraShakeFrequency_ = 18.0f;
 
     float damageMultiplier_ = 2.0f;
-    bool showCollisionDebug_ = true;
+    bool showCollisionDebug_ = false;
 
 };

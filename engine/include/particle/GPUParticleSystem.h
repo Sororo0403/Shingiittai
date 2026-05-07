@@ -15,6 +15,12 @@ class TextureManager;
 /// </summary>
 class GPUParticleSystem {
   public:
+    enum class BurstStyle : uint32_t {
+        Sparks = 0,
+        Explosion = 1,
+        Smoke = 2,
+    };
+
     ~GPUParticleSystem();
 
     /// <summary>
@@ -51,6 +57,15 @@ class GPUParticleSystem {
     /// </summary>
     void SetEmitterRadius(float radius);
 
+    /// <summary>
+    /// 指定位置へ一度だけ粒子を発生させる
+    /// </summary>
+    void EmitBurst(const DirectX::XMFLOAT3 &position, uint32_t count,
+                   float radius, BurstStyle style,
+                   const DirectX::XMFLOAT4 &tintColor,
+                   const DirectX::XMFLOAT3 &direction = {0.0f, 1.0f, 0.0f},
+                   float speed = 1.0f);
+
   private:
     struct ParticleForGPU {
         DirectX::XMFLOAT3 translate{};
@@ -75,6 +90,10 @@ class GPUParticleSystem {
         float frequency = 0.5f;
         float frequencyTime = 0.0f;
         uint32_t emit = 0;
+        DirectX::XMFLOAT4 tintColor{1.0f, 0.92f, 0.66f, 1.0f};
+        DirectX::XMFLOAT4 directionSpeed{0.0f, 1.0f, 0.0f, 1.0f};
+        uint32_t style = 0;
+        DirectX::XMFLOAT3 padding{};
     };
 
     struct DrawConstantBufferData {
@@ -99,6 +118,7 @@ class GPUParticleSystem {
     uint32_t maxParticles_ = 0;
     float totalTime_ = 0.0f;
     bool updatePending_ = false;
+    bool burstPending_ = false;
     EmitterForGPU emitter_{};
     DirectX::XMFLOAT3 emitterPosition_{0.0f, 1.2f, 0.0f};
 

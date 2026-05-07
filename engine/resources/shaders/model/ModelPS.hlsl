@@ -156,8 +156,10 @@ float4 main(ModelVSOutput input) : SV_TARGET
 
         float bodyFade = saturate(effectIntensity * 0.38f);
         finalColor.rgb *= lerp(1.0f, 0.24f, bodyFade);
-        finalColor.rgb = lerp(finalColor.rgb, finalColor.rgb * float3(0.28f, 0.08f, 0.16f),
-                              bodyFade * 0.75f);
+        float3 effectShadowTint = lerp(float3(0.46f, 0.40f, 0.34f),
+                                       saturate(effectColor.rgb), 0.28f);
+        finalColor.rgb = lerp(finalColor.rgb, finalColor.rgb * effectShadowTint,
+                              bodyFade * 0.55f);
 
         finalColor.rgb += effectColor.rgb * glow;
         finalColor.a = saturate(finalColor.a + effectColor.a * glow * 0.55f);

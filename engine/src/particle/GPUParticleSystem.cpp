@@ -38,6 +38,10 @@ void GPUParticleSystem::Initialize(DirectXCommon *dxCommon,
     emitter_.frequency = 0.5f;
     emitter_.frequencyTime = 0.0f;
     emitter_.emit = 0;
+    emitter_.tintColor = {1.0f, 0.92f, 0.66f, 1.0f};
+    emitter_.directionSpeed = {0.0f, 1.0f, 0.0f, 1.0f};
+    emitter_.style = static_cast<uint32_t>(BurstStyle::Sparks);
+    burstPending_ = false;
 
     std::mt19937 randomEngine{std::random_device{}()};
     std::uniform_real_distribution<float> dist01(0.0f, 1.0f);
@@ -70,6 +74,21 @@ void GPUParticleSystem::SetEmitterRadius(float radius) {
     emitter_.radius = (std::max)(0.01f, radius);
 }
 
+void GPUParticleSystem::EmitBurst(const XMFLOAT3 &position, uint32_t count,
+                                  float radius, BurstStyle style,
+                                  const XMFLOAT4 &tintColor,
+                                  const XMFLOAT3 &direction, float speed) {
+    emitterPosition_ = position;
+    emitter_.count = (std::max)(1u, count);
+    emitter_.radius = (std::max)(0.01f, radius);
+    emitter_.tintColor = tintColor;
+    emitter_.directionSpeed = {direction.x, direction.y, direction.z,
+                               (std::max)(0.0f, speed)};
+    emitter_.style = static_cast<uint32_t>(style);
+    emitter_.frequencyTime = 0.0f;
+    burstPending_ = true;
+}
+
 void GPUParticleSystem::Update(float deltaTime) {
     totalTime_ += deltaTime;
 
@@ -80,7 +99,10 @@ void GPUParticleSystem::Update(float deltaTime) {
     emitter_.translate = emitterPosition_;
     emitter_.frequencyTime += deltaTime;
     emitter_.emit = 0;
-    if (emitter_.frequencyTime >= emitter_.frequency) {
+    if (burstPending_) {
+        burstPending_ = false;
+        emitter_.emit = 1;
+    } else if (emitter_.frequencyTime >= emitter_.frequency) {
         emitter_.frequencyTime -= emitter_.frequency;
         emitter_.emit = 1;
     }
