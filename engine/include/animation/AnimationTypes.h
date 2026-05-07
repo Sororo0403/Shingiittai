@@ -33,5 +33,6 @@ struct NodeAnimation {
 /// </summary>
 struct AnimationClip {
     float duration = 0.0f; // 単位は秒
+    std::string rootNodeName;
     std::unordered_map<std::string, NodeAnimation> nodeAnimations;
 };

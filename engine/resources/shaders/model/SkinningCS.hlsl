@@ -28,7 +28,9 @@ StructuredBuffer<VertexInfluence> gInfluences : register(t1);
 StructuredBuffer<Well> gMatrixPalette : register(t2);
 RWStructuredBuffer<Vertex> gOutputVertices : register(u0);
 
-[numthreads(1024, 1, 1)]
+#define SKINNING_THREAD_COUNT 1024
+
+[numthreads(SKINNING_THREAD_COUNT, 1, 1)]
 void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
     const uint vertexIndex = dispatchThreadId.x;

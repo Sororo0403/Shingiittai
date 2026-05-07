@@ -18,6 +18,8 @@ struct Mesh {
 
     uint32_t indexCount = 0;
     uint32_t vertexStride = 0;
+    D3D12_PRIMITIVE_TOPOLOGY primitiveTopology =
+        D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 };
 
 /// <summary>
@@ -42,7 +44,9 @@ class MeshManager {
     /// <returns>登録されたMeshのID</returns>
     uint32_t CreateMesh(const void *vertexData, uint32_t vertexStride,
                         uint32_t vertexCount, const uint32_t *indexData,
-                        uint32_t indexCount);
+                        uint32_t indexCount,
+                        D3D12_PRIMITIVE_TOPOLOGY primitiveTopology =
+                            D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     /// <summary>
     /// メッシュ情報を取得する

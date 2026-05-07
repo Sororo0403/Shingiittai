@@ -19,14 +19,25 @@ RWStructuredBuffer<Particle> gParticles : register(u0);
 RWStructuredBuffer<uint> gFreeList : register(u1);
 RWStructuredBuffer<int> gFreeListIndex : register(u2);
 
+#define PARTICLE_THREAD_COUNT 256
+
 struct RandomGenerator
 {
-    float3 seed;
+    uint state;
+
+    void Initialize(uint index, float particleSeed)
+    {
+        state = asuint(particleSeed) ^ (index * 747796405u) ^
+                (asuint(time.x) * 2891336453u) ^ 0x9E3779B9u;
+        state = state == 0u ? 0xA341316Cu : state;
+    }
 
     float Generate1d()
     {
-        seed = frac(seed * float3(12.9898f, 78.233f, 37.719f) + 0.12345f);
-        return frac(sin(dot(seed.xy, float2(12.9898f, 78.233f))) * 43758.5453f);
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+        return (float) (state & 0x00FFFFFFu) / 16777216.0f;
     }
 
     float3 Generate3d()
@@ -38,9 +49,7 @@ struct RandomGenerator
 void Respawn(uint index, inout Particle particle)
 {
     RandomGenerator generator;
-    generator.seed = float3(particle.seed + (float) index * 17.13f,
-                            time.x * 3.71f + 0.11f,
-                            emitterFrequencyTime + 2.71f);
+    generator.Initialize(index, particle.seed + emitterFrequencyTime);
     float r0 = generator.Generate1d();
     float r1 = generator.Generate1d();
     float r2 = generator.Generate1d();
@@ -80,23 +89,7 @@ void Respawn(uint index, inout Particle particle)
     particle.isActive = 1;
 }
 
-bool TryPopFreeList(out uint particleIndex)
-{
-    particleIndex = 0;
-
-    int freeListIndex = 0;
-    InterlockedAdd(gFreeListIndex[0], -1, freeListIndex);
-    if (freeListIndex <= 0)
-    {
-        InterlockedAdd(gFreeListIndex[0], 1);
-        return false;
-    }
-
-    particleIndex = gFreeList[freeListIndex - 1];
-    return true;
-}
-
-[numthreads(256, 1, 1)]
+[numthreads(PARTICLE_THREAD_COUNT, 1, 1)]
 void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
     uint index = dispatchThreadId.x;
@@ -134,6 +127,9 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
             if (freeListIndex < (int) particleCount)
             {
                 gFreeList[freeListIndex] = index;
+            } else
+            {
+                InterlockedAdd(gFreeListIndex[0], -1);
             }
         } else
         {
@@ -143,9 +139,14 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 
     if (emitterEmit != 0 && index < emitterCount)
     {
-        uint particleIndex = 0;
-        if (TryPopFreeList(particleIndex))
+        int freeListIndex = 0;
+        InterlockedAdd(gFreeListIndex[0], -1, freeListIndex);
+        if (freeListIndex <= 0)
         {
+            InterlockedAdd(gFreeListIndex[0], 1);
+        } else
+        {
+            uint particleIndex = gFreeList[freeListIndex - 1];
             Particle respawnParticle = gParticles[particleIndex];
             Respawn(particleIndex, respawnParticle);
             gParticles[particleIndex] = respawnParticle;

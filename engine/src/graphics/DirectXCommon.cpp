@@ -26,6 +26,7 @@ void DirectXCommon::BeginFrame() {
                   "commandAllocator_->Reset failed");
     ThrowIfFailed(commandList_->Reset(commandAllocator_.Get(), nullptr),
                   "commandList_->Reset failed");
+    isCommandListRecording_ = true;
 
     commandList_->RSSetViewports(1, &viewport_);
     commandList_->RSSetScissorRects(1, &scissorRect_);
@@ -70,6 +71,7 @@ void DirectXCommon::EndFrame() {
     commandList_->ResourceBarrier(1, &barrier);
 
     ThrowIfFailed(commandList_->Close(), "commandList_->Close failed");
+    isCommandListRecording_ = false;
 
     ID3D12CommandList *lists[] = {commandList_.Get()};
     commandQueue_->ExecuteCommandLists(1, lists);
@@ -131,10 +133,12 @@ void DirectXCommon::BeginUpload() {
 
     ThrowIfFailed(commandList_->Reset(commandAllocator_.Get(), nullptr),
                   "commandList_->Reset failed");
+    isCommandListRecording_ = true;
 }
 
 void DirectXCommon::EndUpload() {
     ThrowIfFailed(commandList_->Close(), "commandList_->Close failed");
+    isCommandListRecording_ = false;
 
     ID3D12CommandList *lists[] = {commandList_.Get()};
     commandQueue_->ExecuteCommandLists(1, lists);

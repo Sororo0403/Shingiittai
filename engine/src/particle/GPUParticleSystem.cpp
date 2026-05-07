@@ -13,6 +13,14 @@ using namespace DirectX;
 using namespace DxUtils;
 using Microsoft::WRL::ComPtr;
 
+namespace {
+
+constexpr uint32_t kParticleThreadCount = 256u;
+
+} // namespace
+
+GPUParticleSystem::~GPUParticleSystem() { ReleaseResources(); }
+
 void GPUParticleSystem::Initialize(DirectXCommon *dxCommon,
                                    SrvManager *srvManager,
                                    TextureManager *textureManager,
@@ -80,6 +88,11 @@ void GPUParticleSystem::Update(float deltaTime) {
     mappedUpdateCB_->time = {totalTime_, deltaTime,
                              static_cast<float>(maxParticles_), 0.0f};
     *mappedEmitterCB_ = emitter_;
+
+    updatePending_ = true;
+    if (dxCommon_ && dxCommon_->IsCommandListRecording()) {
+        DispatchUpdate();
+    }
 }
 
 void GPUParticleSystem::Draw(const Camera &camera) {
@@ -91,29 +104,9 @@ void GPUParticleSystem::Draw(const Camera &camera) {
     ID3D12DescriptorHeap *heaps[] = {srvManager_->GetHeap()};
     cmd->SetDescriptorHeaps(1, heaps);
 
-    auto toUav = CD3DX12_RESOURCE_BARRIER::Transition(
-        particleResource_.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-        D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    cmd->ResourceBarrier(1, &toUav);
-
-    cmd->SetComputeRootSignature(updateRootSignature_.Get());
-    cmd->SetPipelineState(updatePSO_.Get());
-    cmd->SetComputeRootConstantBufferView(
-        0, updateConstantBuffer_->GetGPUVirtualAddress());
-    cmd->SetComputeRootConstantBufferView(
-        1, emitterConstantBuffer_->GetGPUVirtualAddress());
-    cmd->SetComputeRootDescriptorTable(2, particleUavGpuHandle_);
-    cmd->SetComputeRootDescriptorTable(3, freeListUavGpuHandle_);
-    cmd->SetComputeRootDescriptorTable(4, freeListIndexUavGpuHandle_);
-    cmd->Dispatch((maxParticles_ + 255u) / 256u, 1, 1);
-
-    auto uavBarrier = CD3DX12_RESOURCE_BARRIER::UAV(particleResource_.Get());
-    cmd->ResourceBarrier(1, &uavBarrier);
-
-    auto toSrv = CD3DX12_RESOURCE_BARRIER::Transition(
-        particleResource_.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-    cmd->ResourceBarrier(1, &toSrv);
+    if (updatePending_ && dxCommon_->IsCommandListRecording()) {
+        DispatchUpdate();
+    }
 
     XMMATRIX viewProjection = camera.GetView() * camera.GetProj();
     XMStoreFloat4x4(&mappedDrawCB_->viewProjection,
@@ -140,6 +133,44 @@ void GPUParticleSystem::Draw(const Camera &camera) {
     cmd->SetGraphicsRootDescriptorTable(2,
                                         textureManager_->GetGpuHandle(textureId_));
     cmd->DrawInstanced(6, maxParticles_, 0, 0);
+}
+
+void GPUParticleSystem::DispatchUpdate() {
+    if (!dxCommon_ || !srvManager_ || !particleResource_ ||
+        !updateConstantBuffer_ || !emitterConstantBuffer_) {
+        return;
+    }
+
+    auto *cmd = dxCommon_->GetCommandList();
+    ID3D12DescriptorHeap *heaps[] = {srvManager_->GetHeap()};
+    cmd->SetDescriptorHeaps(1, heaps);
+
+    auto toUav = CD3DX12_RESOURCE_BARRIER::Transition(
+        particleResource_.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+        D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    cmd->ResourceBarrier(1, &toUav);
+
+    cmd->SetComputeRootSignature(updateRootSignature_.Get());
+    cmd->SetPipelineState(updatePSO_.Get());
+    cmd->SetComputeRootConstantBufferView(
+        0, updateConstantBuffer_->GetGPUVirtualAddress());
+    cmd->SetComputeRootConstantBufferView(
+        1, emitterConstantBuffer_->GetGPUVirtualAddress());
+    cmd->SetComputeRootDescriptorTable(2, particleUavGpuHandle_);
+    cmd->SetComputeRootDescriptorTable(3, freeListUavGpuHandle_);
+    cmd->SetComputeRootDescriptorTable(4, freeListIndexUavGpuHandle_);
+    cmd->Dispatch((maxParticles_ + kParticleThreadCount - 1u) /
+                      kParticleThreadCount,
+                  1, 1);
+
+    auto uavBarrier = CD3DX12_RESOURCE_BARRIER::UAV(particleResource_.Get());
+    cmd->ResourceBarrier(1, &uavBarrier);
+
+    auto toSrv = CD3DX12_RESOURCE_BARRIER::Transition(
+        particleResource_.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    cmd->ResourceBarrier(1, &toSrv);
+    updatePending_ = false;
 }
 
 void GPUParticleSystem::CreateRootSignatures() {
@@ -473,4 +504,34 @@ void GPUParticleSystem::CreateConstantBuffers() {
     ThrowIfFailed(drawConstantBuffer_->Map(
                       0, nullptr, reinterpret_cast<void **>(&mappedDrawCB_)),
                   "GPUParticleDrawCB Map failed");
+}
+
+void GPUParticleSystem::ReleaseResources() {
+    if (updateConstantBuffer_ && mappedUpdateCB_) {
+        updateConstantBuffer_->Unmap(0, nullptr);
+        mappedUpdateCB_ = nullptr;
+    }
+    if (emitterConstantBuffer_ && mappedEmitterCB_) {
+        emitterConstantBuffer_->Unmap(0, nullptr);
+        mappedEmitterCB_ = nullptr;
+    }
+    if (drawConstantBuffer_ && mappedDrawCB_) {
+        drawConstantBuffer_->Unmap(0, nullptr);
+        mappedDrawCB_ = nullptr;
+    }
+
+    updateConstantBuffer_.Reset();
+    emitterConstantBuffer_.Reset();
+    drawConstantBuffer_.Reset();
+    particleResource_.Reset();
+    particleUploadResource_.Reset();
+    freeListResource_.Reset();
+    freeListUploadResource_.Reset();
+    freeListIndexResource_.Reset();
+    freeListIndexUploadResource_.Reset();
+    updatePSO_.Reset();
+    drawPSO_.Reset();
+    updateRootSignature_.Reset();
+    drawRootSignature_.Reset();
+    updatePending_ = false;
 }

@@ -109,6 +109,7 @@ class DirectXCommon {
     ID3D12GraphicsCommandList *GetCommandList() const {
         return commandList_.Get();
     }
+    bool IsCommandListRecording() const { return isCommandListRecording_; }
     /// <summary>
     /// スワップチェーンのバッファ数を取得する
     /// </summary>
@@ -197,6 +198,7 @@ class DirectXCommon {
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue_;
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator_;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList_;
+    bool isCommandListRecording_ = false;
 
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtvHeap_;
     Microsoft::WRL::ComPtr<ID3D12Resource> backBuffers_[kSwapChainBufferCount];

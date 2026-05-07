@@ -110,6 +110,7 @@ struct Model {
     std::unordered_map<std::string, uint32_t> boneMap;
 
     std::unordered_map<std::string, AnimationClip> animations;
+    std::string rootNodeName;
 
     std::vector<DirectX::XMFLOAT4X4> skeletonSpaceMatrices;
     std::vector<DirectX::XMFLOAT4X4> finalBoneMatrices;

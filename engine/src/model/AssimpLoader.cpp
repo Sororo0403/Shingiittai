@@ -30,6 +30,9 @@ Model AssimpLoader::Load(const std::string &path) {
     }
 
     Model model{};
+    if (scene->mRootNode) {
+        model.rootNodeName = scene->mRootNode->mName.C_Str();
+    }
     meshLoader_.LoadMeshes(scene, path, model);
     animationLoader_.LoadAnimations(scene, model);
 

@@ -15,6 +15,8 @@ class TextureManager;
 /// </summary>
 class GPUParticleSystem {
   public:
+    ~GPUParticleSystem();
+
     /// <summary>
     /// 初期化する
     /// </summary>
@@ -87,6 +89,8 @@ class GPUParticleSystem {
     void CreateParticleBuffer(const std::vector<ParticleForGPU> &particles);
     void CreateFreeListBuffers();
     void CreateConstantBuffers();
+    void DispatchUpdate();
+    void ReleaseResources();
 
     DirectXCommon *dxCommon_ = nullptr;
     SrvManager *srvManager_ = nullptr;
@@ -94,6 +98,7 @@ class GPUParticleSystem {
     uint32_t textureId_ = 0;
     uint32_t maxParticles_ = 0;
     float totalTime_ = 0.0f;
+    bool updatePending_ = false;
     EmitterForGPU emitter_{};
     DirectX::XMFLOAT3 emitterPosition_{0.0f, 1.2f, 0.0f};
 

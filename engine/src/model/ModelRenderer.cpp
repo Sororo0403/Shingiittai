@@ -16,6 +16,12 @@ using namespace DirectX;
 using namespace DxUtils;
 using Microsoft::WRL::ComPtr;
 
+namespace {
+
+constexpr UINT kSkinningThreadCount = 1024u;
+
+} // namespace
+
 static XMFLOAT4X4 StoreMatrix(const XMMATRIX &matrix) {
     XMFLOAT4X4 result{};
     XMStoreFloat4x4(&result, matrix);
@@ -84,7 +90,6 @@ void ModelRenderer::PreDraw() {
     cmd->SetDescriptorHeaps(1, heaps);
 
     cmd->SetGraphicsRootSignature(rootSignature_.Get());
-    cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     drawIndex_ = 0;
 }
@@ -211,6 +216,7 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
 
         cmd->IASetVertexBuffers(0, 1, &vertexBufferView);
         cmd->IASetIndexBuffer(&mesh.ibView);
+        cmd->IASetPrimitiveTopology(mesh.primitiveTopology);
         cmd->DrawIndexedInstanced(mesh.indexCount, 1, 0, 0, 0);
 
         drawIndex_++;
@@ -710,7 +716,9 @@ void ModelRenderer::DispatchSkinning(const ModelSubMesh &subMesh) {
     cmd->SetComputeRootDescriptorTable(3, skinCluster.paletteSrvGpuHandle);
     cmd->SetComputeRootDescriptorTable(4, skinCluster.skinnedVertexUavGpuHandle);
 
-    const UINT threadGroupCount = (subMesh.vertexCount + 1023u) / 1024u;
+    const UINT threadGroupCount =
+        (subMesh.vertexCount + kSkinningThreadCount - 1u) /
+        kSkinningThreadCount;
     cmd->Dispatch(threadGroupCount, 1, 1);
 
     auto uavBarrier =
