@@ -20,7 +20,12 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
         with:
+          vs-version: '[18.0,19.0)'
+          vs-prerelease: true
           msbuild-architecture: x64
+
+      - name: Show MSBuild version
+        run: msbuild -version
 
       - name: Build
         run: >
@@ -29,6 +34,7 @@ jobs:
           /p:Configuration=Release
           /p:Platform=x64
           /p:PlatformToolset=v145
+          /p:VisualStudioVersion=18.0
           /p:WindowsTargetPlatformVersion=10.0
 
       - name: Verify runtime output
@@ -50,15 +56,26 @@ jobs:
             }
           }
 
+      - name: Stage artifact
+        shell: pwsh
+        run: |
+          $outputDir = Join-Path $env:GITHUB_WORKSPACE "..\generated\outputs\Release\App"
+          $distDir = Join-Path $env:GITHUB_WORKSPACE "dist\Shingiittai-Release-x64"
+          if (Test-Path $distDir) {
+            Remove-Item $distDir -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path $distDir | Out-Null
+          Copy-Item -Path (Join-Path $outputDir "*") -Destination $distDir -Recurse -Force
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: Shingiittai-Release-x64
           path: |
-            ../generated/outputs/Release/App/**
-            !../generated/outputs/Release/App/*.ilk
-            !../generated/outputs/Release/App/*.lib
-            !../generated/outputs/Release/App/*.pdb
+            dist/Shingiittai-Release-x64/**
+            !dist/Shingiittai-Release-x64/*.ilk
+            !dist/Shingiittai-Release-x64/*.lib
+            !dist/Shingiittai-Release-x64/*.pdb
 
   publish:
     name: Publish GitHub Release
