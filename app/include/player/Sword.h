@@ -37,6 +37,8 @@ class Sword {
     void NotifyCounterSuccess();
 
   private:
+    void UpdateSlashFollowThrough(float deltaTime);
+    void ApplySlashFollowThrough(Transform &drawTransform) const;
     void UpdateCounterObservation(float deltaTime);
     SwordCounterAxis ComputeSlashAxis() const;
 
@@ -72,4 +74,8 @@ class Sword {
 
     SwordCounterAxis counterAxis_ = SwordCounterAxis::None;
     float recoveryReaction_ = 0.0f;
+    float slashFollowThroughTimer_ = 0.0f;
+    bool slashFollowThroughStarted_ = false;
+    DirectX::XMFLOAT2 slashFollowThroughDir_{};
+    DirectX::XMFLOAT2 slashFollowThroughAngles_{};
 };
