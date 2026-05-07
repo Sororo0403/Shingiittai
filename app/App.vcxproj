@@ -196,8 +196,12 @@
     <ItemGroup>
       <RuntimeDll Include="$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\JoyShockLibrary.dll" Condition="Exists('$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\JoyShockLibrary.dll')" />
       <RuntimeDll Include="$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" Condition="Exists('$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll')" />
+      <AppResource Include="$(ProjectDir)resources\**\*" />
+      <EngineResource Include="$(ProjectDir)..\engine\resources\**\*" />
     </ItemGroup>
     <Copy SourceFiles="@(RuntimeDll)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" Condition="'@(RuntimeDll)' != ''" />
+    <Copy SourceFiles="@(AppResource)" DestinationFiles="@(AppResource->'$(TargetDir)app\resources\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" Condition="'@(AppResource)' != ''" />
+    <Copy SourceFiles="@(EngineResource)" DestinationFiles="@(EngineResource->'$(TargetDir)engine\resources\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" Condition="'@(EngineResource)' != ''" />
   </Target>
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

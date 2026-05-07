@@ -32,8 +32,24 @@ static std::filesystem::path ResolveTexturePath(const std::wstring &path) {
         return CanonicalizePath(normalized);
     }
 
-    const std::filesystem::path absolute = std::filesystem::absolute(normalized);
-    return CanonicalizePath(absolute);
+    const std::filesystem::path cwd = std::filesystem::current_path();
+    const std::filesystem::path direct = cwd / normalized;
+    if (std::filesystem::exists(direct)) {
+        return CanonicalizePath(direct);
+    }
+
+    for (std::filesystem::path dir = cwd; !dir.empty(); dir = dir.parent_path()) {
+        const std::filesystem::path candidate = dir / normalized;
+        if (std::filesystem::exists(candidate)) {
+            return CanonicalizePath(candidate);
+        }
+
+        if (dir == dir.root_path()) {
+            break;
+        }
+    }
+
+    return CanonicalizePath(direct);
 }
 
 static std::wstring NormalizePathKey(const std::filesystem::path &path) {

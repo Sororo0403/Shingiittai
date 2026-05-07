@@ -55,6 +55,27 @@ XMFLOAT3 CalculateFaceNormal(const XMFLOAT3 &a, const XMFLOAT3 &b,
     return out;
 }
 
+std::filesystem::path ResolveModelPath(const std::filesystem::path &path) {
+    const std::filesystem::path normalized = path.lexically_normal();
+    if (normalized.is_absolute()) {
+        return normalized;
+    }
+
+    const std::filesystem::path cwd = std::filesystem::current_path();
+    for (std::filesystem::path dir = cwd; !dir.empty(); dir = dir.parent_path()) {
+        const std::filesystem::path candidate = dir / normalized;
+        if (std::filesystem::exists(candidate)) {
+            return candidate.lexically_normal();
+        }
+
+        if (dir == dir.root_path()) {
+            break;
+        }
+    }
+
+    return (cwd / normalized).lexically_normal();
+}
+
 } // namespace
 
 void ModelManager::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
@@ -73,7 +94,7 @@ void ModelManager::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
 }
 
 uint32_t ModelManager::Load(const std::wstring &path) {
-    std::filesystem::path p = path;
+    std::filesystem::path p = ResolveModelPath(path);
     std::string pathStr = p.string();
 
     Model model = assimpLoader_.Load(pathStr);
