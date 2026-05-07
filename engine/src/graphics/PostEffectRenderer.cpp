@@ -99,6 +99,26 @@ void PostEffectRenderer::SetVignettingStrength(float strength) {
     UpdateConstantBuffer();
 }
 
+void PostEffectRenderer::SetVignettingShape(float scale, float power) {
+    vignettingScale_ = std::clamp(scale, 0.0f, 64.0f);
+    vignettingPower_ = std::clamp(power, 0.01f, 8.0f);
+    UpdateConstantBuffer();
+}
+
+void PostEffectRenderer::SetGrayscaleWeights(float r, float g, float b) {
+    grayscaleWeights_[0] = r;
+    grayscaleWeights_[1] = g;
+    grayscaleWeights_[2] = b;
+    UpdateConstantBuffer();
+}
+
+void PostEffectRenderer::SetSepiaTone(float r, float g, float b) {
+    sepiaTone_[0] = std::clamp(r, 0.0f, 4.0f);
+    sepiaTone_[1] = std::clamp(g, 0.0f, 4.0f);
+    sepiaTone_[2] = std::clamp(b, 0.0f, 4.0f);
+    UpdateConstantBuffer();
+}
+
 void PostEffectRenderer::SetRadialBlurCenter(float x, float y) {
     radialBlurCenter_[0] = std::clamp(x, 0.0f, 1.0f);
     radialBlurCenter_[1] = std::clamp(y, 0.0f, 1.0f);
@@ -132,6 +152,11 @@ void PostEffectRenderer::SetRandomScale(float scale) {
 
 void PostEffectRenderer::SetRandomTime(float time) {
     randomTime_ = time;
+    UpdateConstantBuffer();
+}
+
+void PostEffectRenderer::SetRandomSeed(float seed) {
+    randomSeed_ = seed;
     UpdateConstantBuffer();
 }
 
@@ -234,6 +259,8 @@ void PostEffectRenderer::UpdateConstantBuffer() {
     mappedConstBuffer_->vignettingStrength = vignettingStrength_;
     mappedConstBuffer_->texelSize[0] = 1.0f / static_cast<float>(width_);
     mappedConstBuffer_->texelSize[1] = 1.0f / static_cast<float>(height_);
+    mappedConstBuffer_->vignettingScale = vignettingScale_;
+    mappedConstBuffer_->vignettingPower = vignettingPower_;
     mappedConstBuffer_->edgeMode = static_cast<int32_t>(edgeMode_);
     mappedConstBuffer_->luminanceEdgeThreshold = luminanceEdgeThreshold_;
     mappedConstBuffer_->depthEdgeThreshold = depthEdgeThreshold_;
@@ -247,4 +274,11 @@ void PostEffectRenderer::UpdateConstantBuffer() {
     mappedConstBuffer_->randomStrength = randomStrength_;
     mappedConstBuffer_->randomScale = randomScale_;
     mappedConstBuffer_->randomTime = randomTime_;
+    mappedConstBuffer_->randomSeed = randomSeed_;
+    mappedConstBuffer_->grayscaleWeights[0] = grayscaleWeights_[0];
+    mappedConstBuffer_->grayscaleWeights[1] = grayscaleWeights_[1];
+    mappedConstBuffer_->grayscaleWeights[2] = grayscaleWeights_[2];
+    mappedConstBuffer_->sepiaTone[0] = sepiaTone_[0];
+    mappedConstBuffer_->sepiaTone[1] = sepiaTone_[1];
+    mappedConstBuffer_->sepiaTone[2] = sepiaTone_[2];
 }

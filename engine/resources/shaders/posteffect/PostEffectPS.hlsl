@@ -17,12 +17,15 @@ float4 main(PostEffectVSOutput input) : SV_TARGET
     outputColor = ApplyRadialBlurEffect(renderTexture, textureSampler, input.uv,
                                         outputColor);
 
-    outputColor.rgb = ApplyColorEffect(outputColor.rgb, colorMode);
+    outputColor.rgb =
+        ApplyColorEffect(outputColor.rgb, colorMode, grayscaleWeights,
+                         sepiaTone);
     if (enableVignetting != 0)
     {
         outputColor.rgb =
             ApplyVignettingEffect(outputColor.rgb, input.uv,
-                                  vignettingStrength);
+                                  vignettingStrength, vignettingScale,
+                                  vignettingPower);
     }
 
     outputColor = ApplyEdgeEffect(outputColor, renderTexture, depthTexture,

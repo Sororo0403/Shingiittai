@@ -9,7 +9,8 @@ float Gaussian(float x, float y, float sigma)
 }
 
 float4 SampleGaussianBlur(Texture2D sourceTexture, SamplerState sourceSampler,
-                          float2 uv, int radius, float sigma)
+                          float2 uv, float2 sampleTexelSize, int radius,
+                          float sigma)
 {
     float4 color = float4(0.0f, 0.0f, 0.0f, 0.0f);
     float totalWeight = 0.0f;
@@ -19,7 +20,7 @@ float4 SampleGaussianBlur(Texture2D sourceTexture, SamplerState sourceSampler,
         for (int x = -radius; x <= radius; ++x)
         {
             const float weight = Gaussian((float)x, (float)y, sigma);
-            const float2 offset = float2(x, y) * texelSize;
+            const float2 offset = float2(x, y) * sampleTexelSize;
             color += sourceTexture.Sample(sourceSampler, uv + offset) * weight;
             totalWeight += weight;
         }

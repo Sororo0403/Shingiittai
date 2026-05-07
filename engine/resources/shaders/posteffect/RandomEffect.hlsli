@@ -16,7 +16,7 @@ float4 ApplyRandomEffect(float4 baseColor, float2 uv)
     }
 
     float2 cell = floor(uv * max(randomScale, 1.0f));
-    float seed = floor(randomTime * 60.0f);
+    float seed = floor(randomTime * 60.0f) + randomSeed;
     float noise = Random2dTo1d(cell, seed);
 
     if (randomMode == 1)

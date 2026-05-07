@@ -14,7 +14,8 @@ cbuffer PostEffectConstants : register(b0)
     int filterMode;
     float vignettingStrength;
     float2 texelSize;
-    float2 padding1;
+    float vignettingScale;
+    float vignettingPower;
     int edgeMode;
     float luminanceEdgeThreshold;
     float depthEdgeThreshold;
@@ -29,6 +30,10 @@ cbuffer PostEffectConstants : register(b0)
     float randomStrength;
     float randomScale;
     float randomTime;
+    float randomSeed;
+    float3 grayscaleWeights;
+    float3 sepiaTone;
+    float padding5;
 };
 
 #endif // POST_EFFECT_HLSLI

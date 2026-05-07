@@ -132,6 +132,21 @@ class PostEffectRenderer {
     float GetVignettingStrength() const { return vignettingStrength_; }
 
     /// <summary>
+    /// ビネット効果の範囲とカーブを設定する
+    /// </summary>
+    void SetVignettingShape(float scale, float power);
+
+    /// <summary>
+    /// グレースケール変換の輝度係数を設定する
+    /// </summary>
+    void SetGrayscaleWeights(float r, float g, float b);
+
+    /// <summary>
+    /// セピア変換の色味を設定する
+    /// </summary>
+    void SetSepiaTone(float r, float g, float b);
+
+    /// <summary>
     /// ラジアルブラーの中心座標を設定する
     /// </summary>
     void SetRadialBlurCenter(float x, float y);
@@ -196,6 +211,11 @@ class PostEffectRenderer {
     /// </summary>
     void SetRandomTime(float time);
 
+    /// <summary>
+    /// ノイズパターンをずらす追加シード値を設定する
+    /// </summary>
+    void SetRandomSeed(float seed);
+
   private:
     struct EffectConstBuffer {
         int32_t colorMode = 0;
@@ -203,7 +223,8 @@ class PostEffectRenderer {
         int32_t filterMode = 0;
         float vignettingStrength = 1.0f;
         float texelSize[2]{};
-        float padding1[2]{};
+        float vignettingScale = 16.0f;
+        float vignettingPower = 0.8f;
         int32_t edgeMode = 0;
         float luminanceEdgeThreshold = 0.2f;
         float depthEdgeThreshold = 0.02f;
@@ -218,6 +239,10 @@ class PostEffectRenderer {
         float randomStrength = 0.0f;
         float randomScale = 240.0f;
         float randomTime = 0.0f;
+        float randomSeed = 0.0f;
+        float grayscaleWeights[3]{0.2125f, 0.7154f, 0.0721f};
+        float sepiaTone[3]{1.20f, 1.00f, 0.80f};
+        float padding5 = 0.0f;
     };
 
     void CreateRootSignature();
@@ -239,6 +264,10 @@ class PostEffectRenderer {
     EdgeMode edgeMode_ = EdgeMode::None;
     bool enableVignetting_ = true;
     float vignettingStrength_ = 1.0f;
+    float vignettingScale_ = 16.0f;
+    float vignettingPower_ = 0.8f;
+    float grayscaleWeights_[3]{0.2125f, 0.7154f, 0.0721f};
+    float sepiaTone_[3]{1.20f, 1.00f, 0.80f};
     float luminanceEdgeThreshold_ = 0.2f;
     float depthEdgeThreshold_ = 0.02f;
     float nearZ_ = 0.1f;
@@ -250,6 +279,7 @@ class PostEffectRenderer {
     float randomStrength_ = 0.0f;
     float randomScale_ = 240.0f;
     float randomTime_ = 0.0f;
+    float randomSeed_ = 0.0f;
     int width_ = 1;
     int height_ = 1;
 };

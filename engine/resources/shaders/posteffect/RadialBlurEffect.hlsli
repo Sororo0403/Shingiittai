@@ -11,7 +11,7 @@ float4 ApplyRadialBlurEffect(Texture2D sourceTexture, SamplerState sourceSampler
 
     const int sampleCount = min(radialBlurSampleCount, 32);
     const float2 direction = radialBlurCenter - uv;
-    float4 color = baseColor;
+    float4 color = sourceTexture.Sample(sourceSampler, uv);
 
     for (int i = 1; i < sampleCount; ++i)
     {
