@@ -31,4 +31,6 @@ class TitleScene : public BaseScene {
     Image logoImage_;
     Image pressAnyButtonImage_;
     float sceneTime_ = 0.0f;
+    float fadeTimer_ = 0.0f;
+    bool startRequested_ = false;
 };

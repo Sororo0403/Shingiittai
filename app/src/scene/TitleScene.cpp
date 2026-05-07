@@ -15,14 +15,20 @@
 using namespace DirectX;
 
 namespace {
+constexpr float kFadeDuration = 0.2f;
+
 XMFLOAT4 MakeColor(float r, float g, float b, float a = 1.0f) {
     return {r, g, b, a};
 }
+
+float SmoothStep(float t) { return t * t * (3.0f - 2.0f * t); }
 } // namespace
 
 void TitleScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
     sceneTime_ = 0.0f;
+    fadeTimer_ = 0.0f;
+    startRequested_ = false;
 
     ctx_->dxCommon->BeginUpload();
     logoImage_ = LoadTitleImage(L"app/resources/title/title_logo.png");
@@ -38,8 +44,17 @@ void TitleScene::Initialize(const SceneContext &ctx) {
 void TitleScene::Update() {
     sceneTime_ += ctx_->deltaTime;
 
+    if (startRequested_) {
+        fadeTimer_ += ctx_->deltaTime;
+        if (fadeTimer_ >= kFadeDuration) {
+            sceneManager_->ChangeScene(std::make_unique<GameScene>());
+        }
+        return;
+    }
+
     if (IsAnyButtonTriggered(*ctx_->input)) {
-        sceneManager_->ChangeScene(std::make_unique<GameScene>());
+        startRequested_ = true;
+        fadeTimer_ = 0.0f;
     }
 }
 
@@ -59,12 +74,21 @@ void TitleScene::Draw() {
     const float logoY = (h - logoImage_.height) * 0.5f - 26.0f;
     DrawImage(logoImage_, logoX, logoY);
 
-    const float blink = 0.74f + 0.26f * std::sinf(sceneTime_ * 4.6f);
+    const float blink = startRequested_
+                            ? 1.0f
+                            : 0.74f + 0.26f * std::sinf(sceneTime_ * 4.6f);
     const float promptX = (w - pressAnyButtonImage_.width) * 0.5f;
     const float promptY =
         (std::min)(h - letterboxH - pressAnyButtonImage_.height - 36.0f,
                    logoY + logoImage_.height + 54.0f);
     DrawImage(pressAnyButtonImage_, promptX, promptY, blink);
+
+    if (startRequested_) {
+        const float fadeT =
+            std::clamp(fadeTimer_ / kFadeDuration, 0.0f, 1.0f);
+        DrawRect(0.0f, 0.0f, w, h,
+                 MakeColor(0.0f, 0.0f, 0.0f, SmoothStep(fadeT)));
+    }
 
     ctx_->sprite->PostDraw();
 }
