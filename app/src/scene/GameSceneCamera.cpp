@@ -145,7 +145,7 @@ void GameScene::UpdateBattleCamera() {
     }
     const float fovAlpha = SaturatedAlpha(usedFovLerpSpeed, ctx_->deltaTime);
     currentFovDeg_ += (targetFovDeg_ - currentFovDeg_) * fovAlpha;
-    camera_.SetPerspectiveFovDeg(currentFovDeg_);
+    camera_.SetPerspectiveFovDeg(currentFovDeg_ + combatFeedback_.GetFovKickDeg());
 
     // =========================
     // 繝ｭ繝�Eけ繧�E�繝ｳ荳�E�縺�E�縺・yaw 陬懷勧
@@ -356,6 +356,8 @@ void GameScene::UpdateBattleCamera() {
         float blend = enemyPhaseTransitionRatio;
         lookAt = Lerp(lookAt, transitionLookAt, blend);
     }
+
+    combatFeedback_.ApplyCameraImpulse(cameraPos, lookAt, sceneLightTime_);
 
     camera_.SetPosition(cameraPos);
     camera_.LookAt(lookAt);

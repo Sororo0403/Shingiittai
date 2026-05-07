@@ -35,6 +35,18 @@ static XMFLOAT2 NormalizeXZ(float x, float z) {
     return {x / length, z / length};
 }
 
+static XMFLOAT3 DirectionFromTo(const XMFLOAT3 &from, const XMFLOAT3 &to) {
+    float dx = to.x - from.x;
+    float dy = to.y - from.y;
+    float dz = to.z - from.z;
+    float length = std::sqrt(dx * dx + dy * dy + dz * dz);
+    if (length < kMinVectorLength) {
+        length = 1.0f;
+    }
+
+    return {dx / length, dy / length, dz / length};
+}
+
 static void TickCooldown(float &cooldown, float deltaTime) {
     if (cooldown <= 0.0f) {
         return;
@@ -123,6 +135,16 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             forceSyncEnemyAnimationThisFrame = true;
         }
         enemy_.TakeDamage(counterDamage);
+        CombatFeedbackEvent feedback{};
+        feedback.type = CombatFeedbackEventType::CounterSuccess;
+        feedback.position = enemy_.GetTransform().position;
+        feedback.position.y += 1.0f;
+        feedback.direction =
+            DirectionFromTo(player_.GetTransform().position,
+                            enemy_.GetTransform().position);
+        feedback.power = counterDamage / 10.0f;
+        feedback.swordIndex = swordIndex;
+        combatFeedback_.PushEvent(feedback);
         playerHitCooldown_ = hitCooldown;
         startCounterCinematicThisFrame = true;
     };
@@ -207,7 +229,17 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
 
         if (enemyHitCooldown_ <= 0.0f) {
             if (hitBody) {
-                enemy_.TakeDamage(swordAttackDamages[i]);
+                const float swordDamage = swordAttackDamages[i];
+                enemy_.TakeDamage(swordDamage);
+                CombatFeedbackEvent feedback{};
+                feedback.type = CombatFeedbackEventType::PlayerSlashHit;
+                feedback.position = swordHitBox.center;
+                feedback.direction =
+                    DirectionFromTo(player_.GetTransform().position,
+                                    enemy_.GetTransform().position);
+                feedback.power = swordDamage / 10.0f;
+                feedback.swordIndex = i;
+                combatFeedback_.PushEvent(feedback);
                 enemyHitCooldown_ = 0.2f;
                 if (counterCinematicActive_) {
                     stopCounterCinematicThisFrame = true;
@@ -238,6 +270,15 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                 player_.AddKnockback(
                     {knockbackDir.x * (enemyAttackKnockback * 0.5f), 0.0f,
                      knockbackDir.y * (enemyAttackKnockback * 0.5f)});
+                CombatFeedbackEvent feedback{};
+                feedback.type = CombatFeedbackEventType::PlayerGuard;
+                feedback.position = player_.GetTransform().position;
+                feedback.position.y += 1.0f;
+                feedback.direction =
+                    DirectionFromTo(enemy_.GetTransform().position,
+                                    player_.GetTransform().position);
+                feedback.power = enemyAttackDamage / 10.0f;
+                combatFeedback_.PushEvent(feedback);
                 playerHitCooldown_ = 0.2f;
             } else {
                 enemy_.NotifyAttackConnected();
@@ -245,6 +286,15 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                 player_.AddKnockback(
                     {knockbackDir.x * enemyAttackKnockback, 0.0f,
                      knockbackDir.y * enemyAttackKnockback});
+                CombatFeedbackEvent feedback{};
+                feedback.type = CombatFeedbackEventType::PlayerDamaged;
+                feedback.position = player_.GetTransform().position;
+                feedback.position.y += 1.0f;
+                feedback.direction =
+                    DirectionFromTo(enemy_.GetTransform().position,
+                                    player_.GetTransform().position);
+                feedback.power = enemyAttackDamage / 10.0f;
+                combatFeedback_.PushEvent(feedback);
                 playerHitCooldown_ = 0.4f;
             }
         }
@@ -271,6 +321,13 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         if (!bullet.isReflected && isPlayerCountering &&
             isCounterBodyHit(bulletBody)) {
             enemy_.ReflectBullet(i, enemy_.GetTransform().position);
+            CombatFeedbackEvent feedback{};
+            feedback.type = CombatFeedbackEventType::ProjectileReflect;
+            feedback.position = bullet.position;
+            feedback.direction = DirectionFromTo(bullet.position,
+                                                enemy_.GetTransform().position);
+            feedback.power = enemy_.GetBulletDamage() / 5.0f;
+            combatFeedback_.PushEvent(feedback);
             continue;
         }
 
@@ -280,6 +337,13 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                 const float damage = enemy_.GetBulletDamage() * damageMultiplier_;
                 enemy_.TakeDamage(damage);
                 enemy_.DestroyBullet(i);
+                CombatFeedbackEvent feedback{};
+                feedback.type = CombatFeedbackEventType::ProjectileReflect;
+                feedback.position = bullet.position;
+                feedback.direction = DirectionFromTo(player_.GetTransform().position,
+                                                    enemy_.GetTransform().position);
+                feedback.power = damage / 10.0f;
+                combatFeedback_.PushEvent(feedback);
                 enemyHitCooldown_ = 0.2f;
             }
             continue;
@@ -300,6 +364,12 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                         {hitDir.x * (enemy_.GetBulletKnockback() * 0.5f),
                          0.0f,
                          hitDir.y * (enemy_.GetBulletKnockback() * 0.5f)});
+                    CombatFeedbackEvent feedback{};
+                    feedback.type = CombatFeedbackEventType::PlayerGuard;
+                    feedback.position = bullet.position;
+                    feedback.direction = {hitDir.x, 0.0f, hitDir.y};
+                    feedback.power = enemy_.GetBulletDamage() / 5.0f;
+                    combatFeedback_.PushEvent(feedback);
                     enemy_.DestroyBullet(i);
                     playerHitCooldown_ = 0.15f;
                 } else {
@@ -307,6 +377,12 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                     player_.AddKnockback(
                         {hitDir.x * enemy_.GetBulletKnockback(), 0.0f,
                          hitDir.y * enemy_.GetBulletKnockback()});
+                    CombatFeedbackEvent feedback{};
+                    feedback.type = CombatFeedbackEventType::PlayerDamaged;
+                    feedback.position = bullet.position;
+                    feedback.direction = {hitDir.x, 0.0f, hitDir.y};
+                    feedback.power = enemy_.GetBulletDamage() / 5.0f;
+                    combatFeedback_.PushEvent(feedback);
                     enemy_.DestroyBullet(i);
                     playerHitCooldown_ = 0.3f;
                 }
@@ -338,6 +414,13 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         if (!wave.isReflected && isPlayerCountering &&
             isCounterBodyHit(waveBody)) {
             enemy_.ReflectWave(i, enemy_.GetTransform().position);
+            CombatFeedbackEvent feedback{};
+            feedback.type = CombatFeedbackEventType::ProjectileReflect;
+            feedback.position = wave.position;
+            feedback.direction = DirectionFromTo(wave.position,
+                                                enemy_.GetTransform().position);
+            feedback.power = enemy_.GetWaveDamage() / 5.0f;
+            combatFeedback_.PushEvent(feedback);
             continue;
         }
 
@@ -347,6 +430,13 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                 const float damage = enemy_.GetWaveDamage() * damageMultiplier_;
                 enemy_.TakeDamage(damage);
                 enemy_.DestroyWave(i);
+                CombatFeedbackEvent feedback{};
+                feedback.type = CombatFeedbackEventType::ProjectileReflect;
+                feedback.position = wave.position;
+                feedback.direction = DirectionFromTo(player_.GetTransform().position,
+                                                    enemy_.GetTransform().position);
+                feedback.power = damage / 10.0f;
+                combatFeedback_.PushEvent(feedback);
                 enemyHitCooldown_ = 0.2f;
             }
             continue;
@@ -366,6 +456,12 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                     player_.AddKnockback(
                         {hitDir.x * (enemy_.GetWaveKnockback() * 0.5f), 0.0f,
                          hitDir.y * (enemy_.GetWaveKnockback() * 0.5f)});
+                    CombatFeedbackEvent feedback{};
+                    feedback.type = CombatFeedbackEventType::PlayerGuard;
+                    feedback.position = wave.position;
+                    feedback.direction = {hitDir.x, 0.0f, hitDir.y};
+                    feedback.power = enemy_.GetWaveDamage() / 5.0f;
+                    combatFeedback_.PushEvent(feedback);
                     enemy_.DestroyWave(i);
                     playerHitCooldown_ = 0.15f;
                 } else {
@@ -373,6 +469,12 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                     player_.AddKnockback(
                         {hitDir.x * enemy_.GetWaveKnockback(), 0.0f,
                          hitDir.y * enemy_.GetWaveKnockback()});
+                    CombatFeedbackEvent feedback{};
+                    feedback.type = CombatFeedbackEventType::PlayerDamaged;
+                    feedback.position = wave.position;
+                    feedback.direction = {hitDir.x, 0.0f, hitDir.y};
+                    feedback.power = enemy_.GetWaveDamage() / 5.0f;
+                    combatFeedback_.PushEvent(feedback);
                     enemy_.DestroyWave(i);
                     playerHitCooldown_ = 0.35f;
                 }

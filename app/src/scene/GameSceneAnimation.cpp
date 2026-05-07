@@ -72,7 +72,7 @@ static std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
 }
 
 float GameScene::ComputeGameplayTimeScale() const {
-    return 1.0f;
+    return combatFeedback_.GetGameplayTimeScale();
 }
 
 void GameScene::SetEnemyAnimationFrozen(bool frozen) {

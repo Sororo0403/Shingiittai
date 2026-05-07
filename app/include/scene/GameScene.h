@@ -2,6 +2,7 @@
 #include "BaseScene.h"
 #include "Bullet.h"
 #include "Camera.h"
+#include "CombatFeedbackDirector.h"
 #include "CollisionDebugRenderer.h"
 #include "CollisionManager.h"
 #include "Enemy.h"
@@ -41,6 +42,7 @@ class GameScene : public BaseScene {
     Enemy enemy_;
     CollisionManager collisionManager_;
     CollisionDebugRenderer collisionDebugRenderer_;
+    CombatFeedbackDirector combatFeedback_;
     uint32_t playerModelId_ = 0;
     uint32_t enemyModelId_ = 0;
     uint32_t arenaFloorModelId_ = 0;

@@ -39,6 +39,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
     ctx_->postEffectRenderer->SetVignettingStrength(0.24f);
     ctx_->postEffectRenderer->SetVignettingEnabled(true);
+    combatFeedback_.Initialize(ctx_->postEffectRenderer);
 
     float aspect = static_cast<float>(ctx_->winApp->GetWidth()) /
                    static_cast<float>(ctx_->winApp->GetHeight());
@@ -142,6 +143,7 @@ void GameScene::Update() {
     }
 
     const float baseDeltaTime = ctx_->deltaTime;
+    combatFeedback_.Update(baseDeltaTime, sceneLightTime_);
     const float gameplayDeltaTime = baseDeltaTime * ComputeGameplayTimeScale();
     const float playerDeltaTime =
         counterCinematicActive_ ? baseDeltaTime : gameplayDeltaTime;
@@ -166,6 +168,7 @@ void GameScene::Update() {
     }
 
     UpdateBattleCamera();
+    camera_.UpdateMatrices();
 
     UpdateCombat(gameplayDeltaTime);
 }
