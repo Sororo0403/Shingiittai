@@ -101,6 +101,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\scene\GameSceneHud.cpp" />
     <ClCompile Include="src\enemy\EnemyMelee.cpp" />
     <ClCompile Include="src\enemy\EnemyRanged.cpp" />
     <ClCompile Include="src\enemy\EnemyWarp.cpp" />
@@ -128,6 +129,7 @@
     <ClCompile Include="src\player\SwordMouseController.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\scene\GameSceneHud.h" />
     <ClInclude Include="include\enemy\EnemyActionData.h" />
     <ClInclude Include="include\player\SwordControllerState.h" />
     <ClInclude Include="include\player\SwordPose.h" />

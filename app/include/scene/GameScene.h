@@ -13,6 +13,7 @@
 #include <DirectXMath.h>
 #include <cstdint>
 #include <string>
+#include "GameSceneHud.h"
 
 class GameScene : public BaseScene {
   public:
@@ -22,6 +23,7 @@ class GameScene : public BaseScene {
     void Initialize(const SceneContext &ctx) override;
     void Update() override;
     void Draw() override;
+    void DrawOverlay() override;
 
   private:
     void UpdateCamera(Input *input);
@@ -43,6 +45,7 @@ class GameScene : public BaseScene {
 
     Player player_;
     Enemy enemy_;
+    GameSceneHud hud_;
     CollisionManager collisionManager_;
     CollisionDebugRenderer collisionDebugRenderer_;
     CombatFeedbackDirector combatFeedback_;

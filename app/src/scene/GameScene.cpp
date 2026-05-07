@@ -253,6 +253,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
     UpdateSceneLighting();
     counterCinematicActive_ = false;
     enemyAnimationFrozen_ = false;
+    hud_.Initialize(*ctx_);
 }
 
 void GameScene::Update() {
@@ -270,6 +271,8 @@ void GameScene::Update() {
                                      ? (baseDeltaTime * counterTimeScale_)
                                      : gameplayDeltaTime;
     UpdateCamera(input);
+
+    hud_.Update(*ctx_, player_.GetHP(), enemy_.GetHP());
 
     ctx_->model->UpdateAnimation(playerModelId_, playerDeltaTime);
 
@@ -381,6 +384,8 @@ void GameScene::EmitCombatParticles(const CombatFeedbackEvent &event) {
         break;
     }
 }
+
+void GameScene::DrawOverlay() { hud_.Draw(*ctx_); }
 
 void GameScene::DrawArena() {
     ModelManager *model = ctx_->model;
