@@ -193,7 +193,7 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera) {
 
         ModelDrawEffect recoveryEffect{};
         recoveryEffect.enabled = true;
-        recoveryEffect.color = {1.0f, 0.25f, 0.25f, 0.75f};
+        recoveryEffect.color = {1.0f, 0.34f, 0.10f, 0.75f};
         recoveryEffect.intensity = 0.55f + 0.60f * recoveryRatio;
         recoveryEffect.fresnelPower = 3.4f;
         recoveryEffect.noiseAmount = 0.35f * recoveryRatio;
@@ -203,8 +203,8 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera) {
         ModelDrawEffect playerAura{};
         playerAura.enabled = true;
         playerAura.additiveBlend = false;
-        playerAura.color = {0.28f, 1.00f, 0.92f, 0.58f};
-        playerAura.intensity = 0.18f + 0.05f * std::sinf(yaw_ * 2.0f);
+        playerAura.color = {0.84f, 0.52f, 0.24f, 0.52f};
+        playerAura.intensity = 0.14f + 0.04f * std::sinf(yaw_ * 2.0f);
         playerAura.fresnelPower = 2.6f;
         playerAura.noiseAmount = 0.08f;
         playerAura.time = yaw_;
@@ -218,7 +218,7 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera) {
         ModelDrawEffect leftSwordEffect{};
         leftSwordEffect.enabled = true;
         leftSwordEffect.additiveBlend = true;
-        leftSwordEffect.color = {1.00f, 0.22f, 0.78f, 0.72f};
+        leftSwordEffect.color = {1.00f, 0.44f, 0.12f, 0.72f};
         leftSwordEffect.intensity = leftSwordSlashMode_ ? 0.62f : 0.28f;
         leftSwordEffect.fresnelPower = 1.8f;
         leftSwordEffect.noiseAmount = leftSwordSlashMode_ ? 0.22f : 0.08f;
@@ -232,8 +232,8 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera) {
         rightSwordEffect.additiveBlend = true;
         rightSwordEffect.color =
             weaponType_ == PlayerWeaponType::GreatSword
-                ? DirectX::XMFLOAT4{1.00f, 0.86f, 0.20f, 0.82f}
-                : DirectX::XMFLOAT4{0.24f, 0.92f, 1.00f, 0.72f};
+                ? DirectX::XMFLOAT4{1.00f, 0.68f, 0.18f, 0.82f}
+                : DirectX::XMFLOAT4{0.78f, 0.88f, 0.76f, 0.72f};
         rightSwordEffect.intensity =
             rightSwordSlashMode_ ? 0.70f + 0.28f * greatSwordCharge_ : 0.32f;
         rightSwordEffect.fresnelPower = 1.7f;

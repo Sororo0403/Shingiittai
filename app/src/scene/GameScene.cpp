@@ -18,13 +18,14 @@ namespace {
 constexpr float kPi = 3.14159265f;
 
 Material MakeArenaMaterial(const XMFLOAT4 &color, bool useTexture = false,
-                           float reflection = 0.54f) {
+                           float reflection = 0.34f,
+                           float roughness = 0.48f) {
     Material material{};
     material.color = color;
     material.enableTexture = useTexture ? 1 : 0;
     material.reflectionStrength = reflection;
-    material.reflectionFresnelStrength = reflection * 0.72f;
-    material.reflectionRoughness = 0.055f;
+    material.reflectionFresnelStrength = reflection * 0.58f;
+    material.reflectionRoughness = roughness;
     return material;
 }
 
@@ -43,9 +44,11 @@ XMFLOAT4 MakeQuat(float pitch, float yaw, float roll) {
     return q;
 }
 
-void TintModelMaterials(ModelManager *modelManager, uint32_t modelId,
-                        const std::vector<XMFLOAT4> &palette,
-                        float reflection, float fresnel) {
+void ApplyWeatheredMetalMaterials(ModelManager *modelManager, uint32_t modelId,
+                                  uint32_t rustTextureId,
+                                  const std::vector<XMFLOAT4> &palette,
+                                  float reflection, float fresnel,
+                                  float roughness) {
     if (!modelManager || palette.empty()) {
         return;
     }
@@ -56,12 +59,17 @@ void TintModelMaterials(ModelManager *modelManager, uint32_t modelId,
     }
 
     size_t colorIndex = 0;
-    for (const ModelSubMesh &subMesh : model->subMeshes) {
+    for (ModelSubMesh &subMesh : model->subMeshes) {
+        subMesh.textureId = rustTextureId;
+
         Material material = modelManager->GetMaterial(subMesh.materialId);
+        material.enableTexture = 1;
         material.color = palette[colorIndex % palette.size()];
         material.reflectionStrength = reflection;
         material.reflectionFresnelStrength = fresnel;
-        material.reflectionRoughness = 0.035f;
+        material.reflectionRoughness = roughness;
+        material.enableDissolve = 0;
+        material.dissolveEdgeColor = {1.0f, 0.44f, 0.14f, 1.0f};
         modelManager->SetMaterial(subMesh.materialId, material);
         ++colorIndex;
     }
@@ -107,7 +115,8 @@ void ApplyRustedRobotMaterials(ModelManager *modelManager, uint32_t modelId,
 
 void GameScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
-    ctx_->postEffectRenderer->SetVignettingStrength(0.24f);
+    ctx_->postEffectRenderer->SetColorMode(PostEffectRenderer::ColorMode::Sepia);
+    ctx_->postEffectRenderer->SetVignettingStrength(0.34f);
     ctx_->postEffectRenderer->SetVignettingEnabled(true);
     combatFeedback_.Initialize(ctx_->postEffectRenderer);
 
@@ -133,52 +142,64 @@ void GameScene::Initialize(const SceneContext &ctx) {
     uint32_t bulletModel =
         ctx_->model->Load(L"app/resources/models/bullet/bullet.obj");
     particleTextureId_ = texture->Load(L"app/resources/sprites/smoke.png");
-    const uint32_t enemyRustTextureId = texture->CreateRustedMetalTexture(512, 512);
-    TintModelMaterials(model, playerModel,
-                       {{0.78f, 0.92f, 0.95f, 1.0f},
-                        {0.55f, 0.66f, 0.78f, 1.0f},
-                        {0.96f, 0.72f, 0.36f, 1.0f}},
-                       0.92f, 0.82f);
-    TintModelMaterials(model, swordModel,
-                       {{0.96f, 0.99f, 1.00f, 1.0f},
-                        {0.66f, 0.82f, 0.96f, 1.0f},
-                        {0.95f, 0.55f, 0.76f, 1.0f}},
-                       1.00f, 0.92f);
+    const uint32_t enemyRustTextureId =
+        texture->CreateRustedMetalTexture(512, 512);
+    const uint32_t worldRustTextureId =
+        texture->CreateRustedMetalTexture(768, 768);
+    ApplyWeatheredMetalMaterials(model, playerModel, worldRustTextureId,
+                                 {{0.66f, 0.63f, 0.56f, 1.0f},
+                                  {0.34f, 0.32f, 0.30f, 1.0f},
+                                  {0.58f, 0.30f, 0.15f, 1.0f}},
+                                 0.58f, 0.42f, 0.34f);
+    ApplyWeatheredMetalMaterials(model, swordModel, worldRustTextureId,
+                                 {{0.90f, 0.82f, 0.62f, 1.0f},
+                                  {0.58f, 0.58f, 0.54f, 1.0f},
+                                  {0.86f, 0.40f, 0.15f, 1.0f}},
+                                 0.82f, 0.70f, 0.18f);
     ApplyRustedRobotMaterials(model, enemyModel, enemyRustTextureId);
-    TintModelMaterials(model, bulletModel,
-                       {{0.28f, 0.95f, 1.00f, 1.0f},
-                        {1.00f, 0.95f, 0.24f, 1.0f},
-                        {1.00f, 0.22f, 0.74f, 1.0f}},
-                       1.00f, 0.90f);
-    arenaNoiseTextureId_ = texture->CreateNoiseTexture(256, 256);
+    ApplyWeatheredMetalMaterials(model, bulletModel, worldRustTextureId,
+                                 {{0.95f, 0.72f, 0.36f, 1.0f},
+                                  {0.70f, 0.78f, 0.76f, 1.0f},
+                                  {0.48f, 0.24f, 0.12f, 1.0f}},
+                                 0.76f, 0.58f, 0.26f);
+    arenaNoiseTextureId_ = worldRustTextureId;
     arenaFloorModelId_ = model->CreatePlane(
         arenaNoiseTextureId_,
-        MakeArenaMaterial({0.70f, 0.86f, 1.00f, 1.0f}, true, 0.08f));
+        MakeArenaMaterial({0.46f, 0.31f, 0.22f, 1.0f}, true, 0.30f, 0.62f));
     arenaLowPolyTerrainModelId_ = model->CreateLowPolyTerrain(
-        0, MakeArenaMaterial({0.34f, 0.62f, 0.92f, 1.0f}, false, 0.04f), 42,
+        worldRustTextureId,
+        MakeArenaMaterial({0.23f, 0.20f, 0.17f, 1.0f}, true, 0.16f, 0.78f), 42,
         78.0f, 7.2f, 12.0f, 0x4107u);
     arenaCenterDiskModelId_ = model->CreateRing(
-        0, MakeArenaMaterial({1.00f, 0.75f, 0.28f, 1.0f}, false, 0.12f), 96,
+        worldRustTextureId,
+        MakeArenaMaterial({0.78f, 0.42f, 0.16f, 1.0f}, true, 0.42f, 0.36f), 96,
         1.95f, 0.0f);
     arenaSpokeModelId_ = model->CreatePlane(
-        0, MakeArenaMaterial({0.92f, 0.18f, 0.76f, 1.0f}, false, 0.05f));
+        worldRustTextureId,
+        MakeArenaMaterial({0.26f, 0.22f, 0.19f, 1.0f}, true, 0.28f, 0.54f));
     arenaInnerRingModelId_ = model->CreateRing(
-        0, MakeArenaMaterial({0.18f, 0.98f, 0.82f, 1.0f}, false, 0.08f), 96,
+        worldRustTextureId,
+        MakeArenaMaterial({0.48f, 0.74f, 0.60f, 1.0f}, true, 0.36f, 0.44f), 96,
         4.9f, 4.35f);
     arenaOuterRingModelId_ = model->CreateRing(
-        0, MakeArenaMaterial({0.45f, 0.32f, 1.00f, 1.0f}, false, 0.08f), 128,
+        worldRustTextureId,
+        MakeArenaMaterial({0.62f, 0.30f, 0.12f, 1.0f}, true, 0.34f, 0.50f), 128,
         12.3f, 11.6f);
     arenaColumnModelId_ = model->CreateCylinder(
-        0, MakeArenaMaterial({0.88f, 0.78f, 1.00f, 1.0f}, false, 0.08f), 24,
+        worldRustTextureId,
+        MakeArenaMaterial({0.36f, 0.30f, 0.25f, 1.0f}, true, 0.32f, 0.58f), 24,
         0.26f, 0.38f, 5.4f);
     arenaColumnCapModelId_ = model->CreateCylinder(
-        0, MakeArenaMaterial({1.00f, 0.90f, 0.42f, 1.0f}, false, 0.10f), 32,
+        worldRustTextureId,
+        MakeArenaMaterial({0.72f, 0.38f, 0.15f, 1.0f}, true, 0.40f, 0.38f), 32,
         0.68f, 0.78f, 0.24f);
     arenaDomeModelId_ = model->CreateCylinder(
-        0, MakeArenaMaterial({0.20f, 0.76f, 1.00f, 0.20f}, false, 0.00f), 128,
+        worldRustTextureId,
+        MakeArenaMaterial({0.22f, 0.42f, 0.36f, 0.20f}, true, 0.02f, 0.84f), 128,
         4.5f, 13.5f, 8.8f);
     arenaBarrierRingModelId_ = model->CreateRing(
-        0, MakeArenaMaterial({1.00f, 0.32f, 0.82f, 0.55f}, false, 0.00f), 128,
+        worldRustTextureId,
+        MakeArenaMaterial({0.98f, 0.48f, 0.14f, 0.55f}, true, 0.04f, 0.66f), 128,
         13.1f, 12.9f);
     sparkParticles_.Initialize(dx, ctx_->srv, texture, particleTextureId_, 2048);
     sparkParticles_.SetEmission(1, 1000.0f);
@@ -305,58 +326,58 @@ void GameScene::EmitCombatParticles(const CombatFeedbackEvent &event) {
     switch (event.type) {
     case CombatFeedbackEventType::PlayerSlashHit:
         sparkParticles_.EmitBurst(position,
-                                  static_cast<uint32_t>(76.0f + power * 38.0f),
+                                  static_cast<uint32_t>(96.0f + power * 46.0f),
                                   0.13f, GPUParticleSystem::BurstStyle::Sparks,
-                                  {1.00f, 0.88f, 0.48f, 1.0f}, direction,
-                                  1.35f + power * 0.32f);
+                                  {1.00f, 0.68f, 0.28f, 1.0f}, direction,
+                                  1.55f + power * 0.38f);
         break;
     case CombatFeedbackEventType::PlayerGuard:
-        sparkParticles_.EmitBurst(position, 118, 0.20f,
+        sparkParticles_.EmitBurst(position, 148, 0.22f,
                                   GPUParticleSystem::BurstStyle::Sparks,
-                                  {0.78f, 0.94f, 1.00f, 1.0f}, direction, 1.8f);
+                                  {1.00f, 0.74f, 0.36f, 1.0f}, direction, 1.95f);
         explosionParticles_.EmitBurst(position, 24, 0.18f,
                                       GPUParticleSystem::BurstStyle::Explosion,
-                                      {0.72f, 0.86f, 1.00f, 1.0f}, direction,
+                                      {0.92f, 0.50f, 0.22f, 1.0f}, direction,
                                       0.72f);
         smokeParticles_.EmitBurst(position, 16, 0.28f,
                                   GPUParticleSystem::BurstStyle::Smoke,
-                                  {0.58f, 0.62f, 0.66f, 1.0f}, direction, 0.48f);
+                                  {0.42f, 0.36f, 0.31f, 1.0f}, direction, 0.48f);
         break;
     case CombatFeedbackEventType::PlayerDamaged:
-        sparkParticles_.EmitBurst(position, 142, 0.25f,
+        sparkParticles_.EmitBurst(position, 172, 0.27f,
                                   GPUParticleSystem::BurstStyle::Sparks,
-                                  {1.00f, 0.60f, 0.36f, 1.0f}, direction, 2.0f);
-        explosionParticles_.EmitBurst(position, 58, 0.34f,
+                                  {1.00f, 0.52f, 0.20f, 1.0f}, direction, 2.15f);
+        explosionParticles_.EmitBurst(position, 72, 0.36f,
                                       GPUParticleSystem::BurstStyle::Explosion,
-                                      {1.00f, 0.34f, 0.22f, 1.0f}, direction,
-                                      1.05f);
-        smokeParticles_.EmitBurst(position, 42, 0.44f,
+                                      {1.00f, 0.30f, 0.10f, 1.0f}, direction,
+                                      1.15f);
+        smokeParticles_.EmitBurst(position, 58, 0.48f,
                                   GPUParticleSystem::BurstStyle::Smoke,
-                                  {0.58f, 0.50f, 0.46f, 1.0f}, direction, 0.72f);
+                                  {0.48f, 0.36f, 0.28f, 1.0f}, direction, 0.78f);
         break;
     case CombatFeedbackEventType::CounterSuccess:
-        sparkParticles_.EmitBurst(position, 220, 0.36f,
+        sparkParticles_.EmitBurst(position, 280, 0.40f,
                                   GPUParticleSystem::BurstStyle::Sparks,
-                                  {1.00f, 0.92f, 0.44f, 1.0f}, direction, 1.9f);
-        explosionParticles_.EmitBurst(position, 112, 0.52f,
+                                  {1.00f, 0.76f, 0.26f, 1.0f}, direction, 2.1f);
+        explosionParticles_.EmitBurst(position, 136, 0.56f,
                                       GPUParticleSystem::BurstStyle::Explosion,
-                                      {1.00f, 0.60f, 0.25f, 1.0f}, direction,
-                                      1.35f);
-        smokeParticles_.EmitBurst(position, 76, 0.62f,
+                                      {1.00f, 0.46f, 0.12f, 1.0f}, direction,
+                                      1.48f);
+        smokeParticles_.EmitBurst(position, 96, 0.70f,
                                   GPUParticleSystem::BurstStyle::Smoke,
-                                  {0.46f, 0.42f, 0.38f, 1.0f}, direction, 0.82f);
+                                  {0.36f, 0.31f, 0.27f, 1.0f}, direction, 0.92f);
         break;
     case CombatFeedbackEventType::ProjectileReflect:
-        sparkParticles_.EmitBurst(position, 162, 0.26f,
+        sparkParticles_.EmitBurst(position, 190, 0.28f,
                                   GPUParticleSystem::BurstStyle::Sparks,
-                                  {0.90f, 0.94f, 1.00f, 1.0f}, direction, 2.05f);
-        explosionParticles_.EmitBurst(position, 64, 0.34f,
+                                  {0.96f, 0.86f, 0.64f, 1.0f}, direction, 2.15f);
+        explosionParticles_.EmitBurst(position, 78, 0.36f,
                                       GPUParticleSystem::BurstStyle::Explosion,
-                                      {0.80f, 0.42f, 1.00f, 1.0f}, direction,
-                                      1.08f);
-        smokeParticles_.EmitBurst(position, 34, 0.40f,
+                                      {0.68f, 0.78f, 0.72f, 1.0f}, direction,
+                                      1.12f);
+        smokeParticles_.EmitBurst(position, 44, 0.44f,
                                   GPUParticleSystem::BurstStyle::Smoke,
-                                  {0.46f, 0.44f, 0.52f, 1.0f}, direction, 0.62f);
+                                  {0.38f, 0.34f, 0.31f, 1.0f}, direction, 0.66f);
         break;
     }
 }
@@ -365,17 +386,17 @@ void GameScene::DrawArena() {
     ModelManager *model = ctx_->model;
     const ActionKind actionKind = enemy_.GetActionKind();
     const float huePulse = 0.5f + 0.5f * std::sinf(sceneLightTime_ * 2.2f);
-    const XMFLOAT4 calmColor = {0.18f, 0.88f, 1.00f, 0.72f};
+    const XMFLOAT4 calmColor = {0.84f, 0.44f, 0.16f, 0.66f};
     const XMFLOAT4 attackColor =
-        actionKind == ActionKind::Smash ? XMFLOAT4{1.00f, 0.20f, 0.22f, 0.82f}
+        actionKind == ActionKind::Smash ? XMFLOAT4{1.00f, 0.28f, 0.06f, 0.86f}
         : actionKind == ActionKind::Sweep
-            ? XMFLOAT4{1.00f, 0.82f, 0.16f, 0.78f}
+            ? XMFLOAT4{1.00f, 0.62f, 0.18f, 0.78f}
         : actionKind == ActionKind::Warp
-            ? XMFLOAT4{0.75f, 0.20f, 1.00f, 0.88f}
+            ? XMFLOAT4{0.48f, 0.82f, 0.66f, 0.82f}
         : actionKind == ActionKind::Wave
-            ? XMFLOAT4{0.18f, 1.00f, 0.64f, 0.78f}
+            ? XMFLOAT4{0.64f, 0.88f, 0.48f, 0.78f}
         : actionKind == ActionKind::Shot
-            ? XMFLOAT4{0.24f, 0.62f, 1.00f, 0.78f}
+            ? XMFLOAT4{0.68f, 0.82f, 0.86f, 0.76f}
             : calmColor;
     const XMFLOAT4 arenaGlowColor = LerpColor(calmColor, attackColor, 0.55f + 0.45f * huePulse);
     const float actionGlow =
@@ -424,7 +445,7 @@ void GameScene::DrawArena() {
             ModelDrawEffect spokeEffect{};
             spokeEffect.enabled = true;
             spokeEffect.additiveBlend = true;
-            spokeEffect.color = LerpColor({1.0f, 0.22f, 0.74f, 0.62f},
+            spokeEffect.color = LerpColor({1.0f, 0.34f, 0.10f, 0.62f},
                                           arenaGlowColor, huePulse);
             spokeEffect.intensity = 0.12f + actionGlow * 0.8f;
             spokeEffect.fresnelPower = 1.3f;
@@ -447,7 +468,7 @@ void GameScene::DrawArena() {
     Transform outerRing{};
     outerRing.position = {0.0f, 0.018f, 0.0f};
     outerRing.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
-    centerEffect.color = LerpColor({0.88f, 0.24f, 1.00f, 0.70f},
+    centerEffect.color = LerpColor({0.54f, 0.78f, 0.62f, 0.70f},
                                   arenaGlowColor, 0.45f);
     centerEffect.intensity *= 0.85f;
     model->SetDrawEffect(centerEffect);

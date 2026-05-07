@@ -61,5 +61,5 @@ class CombatFeedbackDirector {
     float vignetteBoost_ = 0.0f;
     float fovKickDeg_ = 0.0f;
 
-    float baseVignetteStrength_ = 0.24f;
+    float baseVignetteStrength_ = 0.34f;
 };

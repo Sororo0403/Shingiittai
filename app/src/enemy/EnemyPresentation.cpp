@@ -437,7 +437,7 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
     const DirectX::XMFLOAT4 phaseTint =
         phase_ == BossPhase::Phase2
             ? DirectX::XMFLOAT4{1.0f, 0.42f, 0.16f, 0.52f}
-            : DirectX::XMFLOAT4{0.82f, 0.72f, 0.58f, 0.34f};
+            : DirectX::XMFLOAT4{0.72f, 0.48f, 0.30f, 0.34f};
     DirectX::XMFLOAT4 actionTint = phaseTint;
     float actionIntensity = 0.10f + 0.035f * actionPulse;
     float actionNoise = 0.28f;
@@ -454,12 +454,12 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         actionNoise = 0.34f;
         break;
     case ActionKind::Shot:
-        actionTint = {0.42f, 0.74f, 1.0f, 0.46f};
+        actionTint = {0.68f, 0.78f, 0.78f, 0.46f};
         actionIntensity = 0.20f + 0.10f * actionPulse;
         actionNoise = 0.30f;
         break;
     case ActionKind::Wave:
-        actionTint = {0.44f, 0.84f, 0.62f, 0.44f};
+        actionTint = {0.54f, 0.78f, 0.50f, 0.44f};
         actionIntensity = 0.22f + 0.10f * actionPulse;
         actionNoise = 0.34f;
         break;
@@ -469,7 +469,7 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         actionNoise = 0.62f;
         break;
     case ActionKind::Stalk:
-        actionTint = {0.56f, 0.72f, 0.64f, 0.38f};
+        actionTint = {0.52f, 0.56f, 0.42f, 0.38f};
         actionIntensity = 0.14f + 0.04f * actionPulse;
         actionNoise = 0.24f;
         break;
@@ -574,7 +574,7 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         bulletEffect.additiveBlend = true;
         bulletEffect.color =
             bullet.isReflected ? DirectX::XMFLOAT4{1.0f, 0.95f, 0.20f, 0.90f}
-                               : DirectX::XMFLOAT4{0.20f, 0.72f, 1.0f, 0.82f};
+                               : DirectX::XMFLOAT4{0.74f, 0.84f, 0.78f, 0.82f};
         bulletEffect.intensity = bullet.isReflected ? 1.15f : 0.82f;
         bulletEffect.fresnelPower = 1.4f;
         bulletEffect.noiseAmount = 0.26f;
@@ -595,8 +595,8 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         waveEffect.enabled = true;
         waveEffect.additiveBlend = true;
         waveEffect.color =
-            wave.isReflected ? DirectX::XMFLOAT4{1.0f, 0.34f, 0.86f, 0.90f}
-                             : DirectX::XMFLOAT4{0.20f, 1.0f, 0.56f, 0.82f};
+            wave.isReflected ? DirectX::XMFLOAT4{1.0f, 0.58f, 0.18f, 0.90f}
+                             : DirectX::XMFLOAT4{0.54f, 0.82f, 0.48f, 0.82f};
         waveEffect.intensity = wave.isReflected ? 1.12f : 0.88f;
         waveEffect.fresnelPower = 1.2f;
         waveEffect.noiseAmount = 0.32f;

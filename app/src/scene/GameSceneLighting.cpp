@@ -23,25 +23,25 @@ void GameScene::UpdateSceneLighting() {
         : enemy_.GetActionKind() == ActionKind::Wave ? 1.20f
         : enemy_.GetActionKind() == ActionKind::Shot ? 1.10f
                                                      : 1.0f;
-    XMFLOAT4 actionColor = {0.28f, 0.86f, 1.0f, 1.0f};
+    XMFLOAT4 actionColor = {0.86f, 0.44f, 0.18f, 1.0f};
     switch (enemy_.GetActionKind()) {
     case ActionKind::Smash:
-        actionColor = {1.0f, 0.16f, 0.20f, 1.0f};
+        actionColor = {1.0f, 0.24f, 0.08f, 1.0f};
         break;
     case ActionKind::Sweep:
-        actionColor = {1.0f, 0.84f, 0.18f, 1.0f};
+        actionColor = {1.0f, 0.58f, 0.14f, 1.0f};
         break;
     case ActionKind::Shot:
-        actionColor = {0.24f, 0.58f, 1.0f, 1.0f};
+        actionColor = {0.68f, 0.78f, 0.84f, 1.0f};
         break;
     case ActionKind::Wave:
-        actionColor = {0.16f, 1.0f, 0.58f, 1.0f};
+        actionColor = {0.56f, 0.82f, 0.48f, 1.0f};
         break;
     case ActionKind::Warp:
-        actionColor = {0.78f, 0.18f, 1.0f, 1.0f};
+        actionColor = {0.46f, 0.78f, 0.66f, 1.0f};
         break;
     case ActionKind::Stalk:
-        actionColor = {0.24f, 1.0f, 0.86f, 1.0f};
+        actionColor = {0.58f, 0.62f, 0.48f, 1.0f};
         break;
     default:
         break;
@@ -54,27 +54,27 @@ void GameScene::UpdateSceneLighting() {
     };
 
     SceneLighting lighting{};
-    lighting.keyLightDirection = {-0.52f, -1.0f, 0.22f};
+    lighting.keyLightDirection = {-0.58f, -1.0f, 0.18f};
     lighting.keyLightColor = {
-        1.10f + actionColor.x * 0.32f,
-        1.02f + actionColor.y * 0.28f,
-        1.00f + actionColor.z * 0.34f,
+        0.92f + actionColor.x * 0.42f,
+        0.72f + actionColor.y * 0.30f,
+        0.52f + actionColor.z * 0.22f,
         1.0f,
     };
     lighting.fillLightDirection = {0.72f, -0.24f, -0.58f};
     lighting.fillLightColor = {
-        0.34f + (1.0f - actionColor.x) * 0.34f,
-        0.34f + (1.0f - actionColor.y) * 0.30f,
-        0.42f + (1.0f - actionColor.z) * 0.34f,
-        0.56f,
+        0.22f + actionColor.x * 0.12f,
+        0.25f + actionColor.y * 0.18f,
+        0.24f + actionColor.z * 0.22f,
+        0.50f,
     };
     lighting.ambientColor = {
-        0.30f + actionColor.x * 0.12f,
-        0.30f + actionColor.y * 0.12f,
-        0.34f + actionColor.z * 0.14f,
+        0.20f + actionColor.x * 0.08f,
+        0.17f + actionColor.y * 0.07f,
+        0.14f + actionColor.z * 0.06f,
         1.0f,
     };
-    lighting.lightingParams = {132.0f, 0.44f, 1.18f, 0.06f};
+    lighting.lightingParams = {96.0f, 0.36f, 1.10f, 0.08f};
 
     lighting.pointLights[0].positionRange = {
         duelCenter.x,
@@ -83,10 +83,10 @@ void GameScene::UpdateSceneLighting() {
         8.5f,
     };
     lighting.pointLights[0].colorIntensity = {
-        0.32f + actionColor.x * 0.90f,
-        0.32f + actionColor.y * 0.90f,
-        0.36f + actionColor.z * 0.92f,
-        0.88f * pulse,
+        0.70f + actionColor.x * 0.72f,
+        0.28f + actionColor.y * 0.42f,
+        0.10f + actionColor.z * 0.22f,
+        1.05f * pulse,
     };
 
     lighting.pointLights[1].positionRange = {
@@ -96,10 +96,10 @@ void GameScene::UpdateSceneLighting() {
         6.8f,
     };
     lighting.pointLights[1].colorIntensity = {
-        1.0f - actionColor.x * 0.45f + 0.20f * colorPulse,
-        1.0f - actionColor.y * 0.35f,
-        1.0f - actionColor.z * 0.45f + 0.16f * (1.0f - colorPulse),
-        0.62f * actionBoost,
+        0.42f + actionColor.x * 0.26f + 0.08f * colorPulse,
+        0.58f + actionColor.y * 0.32f,
+        0.46f + actionColor.z * 0.28f + 0.08f * (1.0f - colorPulse),
+        0.74f * actionBoost,
     };
 
     ctx_->model->SetSceneLighting(lighting);
