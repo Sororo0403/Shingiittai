@@ -39,6 +39,7 @@ class CollisionManager {
     bool UpdateBody(BodyId id, const BodyDesc &desc);
 
     const Body *GetBody(BodyId id) const;
+    const std::vector<Body> &GetBodies() const { return bodies_; }
 
     bool Test(BodyId a, BodyId b, Hit *outHit = nullptr) const;
     bool QueryFirst(BodyId body, Hit &outHit) const;

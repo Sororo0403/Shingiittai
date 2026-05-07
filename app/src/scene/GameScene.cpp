@@ -47,6 +47,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
     camera_.SetMode(CameraMode::LookAt);
     camera_.UpdateMatrices();
     camera_.SetPerspectiveFovDeg(currentFovDeg_);
+    collisionDebugRenderer_.Initialize(ctx_->dxCommon);
 
     DirectXCommon *dx = ctx_->dxCommon;
     ModelManager *model = ctx_->model;
@@ -136,6 +137,10 @@ void GameScene::Initialize(const SceneContext &ctx) {
 
 void GameScene::Update() {
     Input *input = ctx_->input;
+    if (input->IsKeyTrigger(DIK_F3)) {
+        showCollisionDebug_ = !showCollisionDebug_;
+    }
+
     const float baseDeltaTime = ctx_->deltaTime;
     const float gameplayDeltaTime = baseDeltaTime * ComputeGameplayTimeScale();
     const float playerDeltaTime =
@@ -171,6 +176,9 @@ void GameScene::Draw() {
     DrawArena();
     player_.Draw(ctx_->model, camera_);
     enemy_.Draw(ctx_->model, camera_);
+    if (showCollisionDebug_) {
+        collisionDebugRenderer_.Draw(collisionManager_, camera_);
+    }
     ctx_->model->PostDraw();
 }
 

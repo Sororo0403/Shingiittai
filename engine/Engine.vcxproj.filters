@@ -106,6 +106,9 @@
     <Filter Include="resources\shaders\debug">
       <UniqueIdentifier>{5555559b-2eca-4b5d-bf84-335509c634f7}</UniqueIdentifier>
     </Filter>
+    <Filter Include="resources\shaders\line">
+      <UniqueIdentifier>{2e3cf9f8-4b35-4a9c-b10c-bc8a13f2cba4}</UniqueIdentifier>
+    </Filter>
     <Filter Include="resources\shaders\posteffect">
       <UniqueIdentifier>{2be6bc38-3dda-4303-a10f-338456c66f26}</UniqueIdentifier>
     </Filter>
@@ -173,6 +176,9 @@
     </ClCompile>
     <ClCompile Include="$(SolutionDir)engine\src\particle\GPUParticleSystem.cpp">
       <Filter>src\particle</Filter>
+    </ClCompile>
+    <ClCompile Include="$(SolutionDir)engine\src\collision\CollisionDebugRenderer.cpp">
+      <Filter>src\collision</Filter>
     </ClCompile>
     <ClCompile Include="$(SolutionDir)engine\src\collision\CollisionManager.cpp">
       <Filter>src\collision</Filter>
@@ -314,6 +320,9 @@
     <ClInclude Include="$(SolutionDir)engine\include\collision\AABB.h">
       <Filter>include\collision</Filter>
     </ClInclude>
+    <ClInclude Include="$(SolutionDir)engine\include\collision\CollisionDebugRenderer.h">
+      <Filter>include\collision</Filter>
+    </ClInclude>
     <ClInclude Include="$(SolutionDir)engine\include\collision\CollisionManager.h">
       <Filter>include\collision</Filter>
     </ClInclude>
@@ -361,8 +370,8 @@
     <FxCompile Include="$(SolutionDir)engine\resources\shaders\model\ModelPS.hlsl">
       <Filter>resources\shaders\model</Filter>
     </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\debug\SkeletonDebugPS.hlsl">
-      <Filter>resources\shaders\debug</Filter>
+    <FxCompile Include="$(SolutionDir)engine\resources\shaders\line\DebugLinePS.hlsl">
+      <Filter>resources\shaders\line</Filter>
     </FxCompile>
     <FxCompile Include="$(SolutionDir)engine\resources\shaders\model\ModelVS.hlsl">
       <Filter>resources\shaders\model</Filter>
@@ -370,8 +379,8 @@
     <FxCompile Include="$(SolutionDir)engine\resources\shaders\model\SkinningCS.hlsl">
       <Filter>resources\shaders\model</Filter>
     </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\debug\SkeletonDebugVS.hlsl">
-      <Filter>resources\shaders\debug</Filter>
+    <FxCompile Include="$(SolutionDir)engine\resources\shaders\line\DebugLineVS.hlsl">
+      <Filter>resources\shaders\line</Filter>
     </FxCompile>
     <FxCompile Include="$(SolutionDir)engine\resources\shaders\sprite\SpritePS.hlsl">
       <Filter>resources\shaders\sprite</Filter>

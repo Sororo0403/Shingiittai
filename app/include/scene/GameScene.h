@@ -2,6 +2,7 @@
 #include "BaseScene.h"
 #include "Bullet.h"
 #include "Camera.h"
+#include "CollisionDebugRenderer.h"
 #include "CollisionManager.h"
 #include "Enemy.h"
 #include "Player.h"
@@ -39,6 +40,7 @@ class GameScene : public BaseScene {
     Player player_;
     Enemy enemy_;
     CollisionManager collisionManager_;
+    CollisionDebugRenderer collisionDebugRenderer_;
     uint32_t playerModelId_ = 0;
     uint32_t enemyModelId_ = 0;
     uint32_t arenaFloorModelId_ = 0;
@@ -131,5 +133,6 @@ class GameScene : public BaseScene {
     float counterCameraShakeFrequency_ = 18.0f;
 
     float damageMultiplier_ = 2.0f;
+    bool showCollisionDebug_ = true;
 
 };

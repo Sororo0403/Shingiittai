@@ -1,7 +1,10 @@
 #include "CollisionManager.h"
 #include <algorithm>
 
-void CollisionManager::Clear() { bodies_.clear(); }
+void CollisionManager::Clear() {
+    bodies_.clear();
+    nextBodyId_ = 1;
+}
 
 CollisionManager::BodyId
 CollisionManager::AddBody(const CollisionManager::BodyDesc &desc) {
