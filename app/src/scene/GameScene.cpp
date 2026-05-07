@@ -133,7 +133,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
     UpdateSceneLighting();
     counterCinematicActive_ = false;
     enemyAnimationFrozen_ = false;
-    hud_.Initialize(ctx);
+    hud_.Initialize(*ctx_);
 }
 
 void GameScene::Update() {
@@ -184,6 +184,8 @@ void GameScene::Draw() {
     }
     ctx_->model->PostDraw();
 }
+
+void GameScene::DrawOverlay() { hud_.Draw(*ctx_); }
 
 void GameScene::DrawArena() {
     ModelManager *model = ctx_->model;
@@ -282,5 +284,4 @@ void GameScene::DrawArena() {
     }
 
     model->ClearDrawEffect();
-    hud_.Draw(*ctx_);
 }

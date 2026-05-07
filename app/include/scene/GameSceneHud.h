@@ -14,11 +14,10 @@ class GameSceneHud {
 
   private:
     // UI
-    uint32_t playerHpSpriteId_ = 0;
-    uint32_t playerHpBackSpriteId_ = 0;
-
-    uint32_t bossHpSpriteId_ = 0;
-    uint32_t bossHpBackSpriteId_ = 0;
+    Sprite playerHpSprite_{};
+    Sprite playerHpBackSprite_{};
+    Sprite bossHpSprite_{};
+    Sprite bossHpBackSprite_{};
 
     static constexpr float kPlayerHpMax = 100.0f;
     static constexpr float kPlayerHpBarMaxWidth = 400.0f;
