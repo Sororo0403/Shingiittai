@@ -41,6 +41,9 @@ class SoundManager {
     /// <param name="soundId">再生する音声id</param>
     void Play(uint32_t soundId);
 
+    void SetMasterVolume(float volume);
+    float GetMasterVolume() const { return masterVolume_; }
+
   private:
     /// <summary>
     /// WAVファイルを読み込み
@@ -52,6 +55,7 @@ class SoundManager {
   private:
     Microsoft::WRL::ComPtr<IXAudio2> xAudio2_;
     IXAudio2MasteringVoice *masterVoice_ = nullptr;
+    float masterVolume_ = 1.0f;
 
     /// <summary>
     /// 読み込み済み音声1件分のデータ

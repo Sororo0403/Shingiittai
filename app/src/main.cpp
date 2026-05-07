@@ -2,6 +2,7 @@
 #include "GameScene.h"
 #include "Input.h"
 #include "ModelManager.h"
+#include "ModeSelectScene.h"
 #include "PostEffectRenderer.h"
 #include "SceneContext.h"
 #include "SceneManager.h"
@@ -90,12 +91,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     // SceneManager
     SceneManager sceneManager;
     sceneManager.Initialize(sceneCtx);
+    // sceneManager.ChangeScene(std::make_unique<GameScene>());
+    // sceneManager.ChangeScene(std::make_unique<ModeSelectScene>());
     // sceneManager.ChangeScene(std::make_unique<WeaponSelectScene>());
-#ifdef _DEBUG
-    sceneManager.ChangeScene(std::make_unique<GameScene>());
-#else
     sceneManager.ChangeScene(std::make_unique<TitleScene>());
-#endif
 
     // 高精細タイマの周波数を取得
     LARGE_INTEGER freq;

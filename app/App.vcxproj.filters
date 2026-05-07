@@ -43,6 +43,9 @@
     <Filter Include="Resources\Title">
       <UniqueIdentifier>{68685a10-6401-4a43-986b-85723dbe8c62}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Resources\Menu">
+      <UniqueIdentifier>{8ebd6c86-64d5-411e-84a4-6c4ed0039b28}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Source Files">
       <UniqueIdentifier>{29388da4-e2a8-2891-25b7-64a4dd6bcc45}</UniqueIdentifier>
     </Filter>
@@ -105,6 +108,12 @@
     <ClCompile Include="src\scene\GameSceneLighting.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
+    <ClCompile Include="src\scene\ModeSelectScene.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\scene\SettingsScene.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
     <ClCompile Include="src\scene\TitleScene.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
@@ -141,6 +150,12 @@
       <Filter>Header Files\enemy</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\GameScene.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="include\scene\ModeSelectScene.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="include\scene\SettingsScene.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\TitleScene.h">
@@ -198,6 +213,36 @@
     </None>
     <None Include="resources\title\title_logo.png">
       <Filter>Resources\Title</Filter>
+    </None>
+    <None Include="resources\menu\back.png">
+      <Filter>Resources\Menu</Filter>
+    </None>
+    <None Include="resources\menu\game_start.png">
+      <Filter>Resources\Menu</Filter>
+    </None>
+    <None Include="resources\menu\game_start_help.png">
+      <Filter>Resources\Menu</Filter>
+    </None>
+    <None Include="resources\menu\menu_controls.png">
+      <Filter>Resources\Menu</Filter>
+    </None>
+    <None Include="resources\menu\mode_select_title.png">
+      <Filter>Resources\Menu</Filter>
+    </None>
+    <None Include="resources\menu\settings.png">
+      <Filter>Resources\Menu</Filter>
+    </None>
+    <None Include="resources\menu\settings_controls.png">
+      <Filter>Resources\Menu</Filter>
+    </None>
+    <None Include="resources\menu\settings_help.png">
+      <Filter>Resources\Menu</Filter>
+    </None>
+    <None Include="resources\menu\settings_title.png">
+      <Filter>Resources\Menu</Filter>
+    </None>
+    <None Include="resources\menu\volume.png">
+      <Filter>Resources\Menu</Filter>
     </None>
     <None Include="resources\text\weapon_bottom_dual.png">
       <Filter>Resources\Text</Filter>

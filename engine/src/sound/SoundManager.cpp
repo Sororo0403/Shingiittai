@@ -1,4 +1,5 @@
 #include "SoundManager.h"
+#include <algorithm>
 #include <cassert>
 #include <cstring>
 #include <filesystem>
@@ -18,6 +19,8 @@ void SoundManager::Initialize() {
 
     hr = xAudio2_->CreateMasteringVoice(&masterVoice_);
     assert(SUCCEEDED(hr));
+
+    SetMasterVolume(masterVolume_);
 }
 
 uint32_t SoundManager::Load(const std::wstring &path) {
@@ -57,6 +60,14 @@ void SoundManager::Play(uint32_t soundId) {
     hr = voice->Start();
     assert(SUCCEEDED(hr));
 }
+
+void SoundManager::SetMasterVolume(float volume) {
+    masterVolume_ = std::clamp(volume, 0.0f, 1.0f);
+    if (masterVoice_) {
+        masterVoice_->SetVolume(masterVolume_);
+    }
+}
+
 WavData SoundManager::LoadWavPcm16(const std::wstring &path) {
     std::ifstream f(std::filesystem::path(path), std::ios::binary);
     assert(f && "Failed to open wav file");

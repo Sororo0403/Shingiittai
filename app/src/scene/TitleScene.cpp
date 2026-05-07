@@ -1,7 +1,7 @@
 #include "TitleScene.h"
 #include "DirectXCommon.h"
-#include "GameScene.h"
 #include "Input.h"
+#include "ModeSelectScene.h"
 #include "PostEffectRenderer.h"
 #include "SceneManager.h"
 #include "SpriteManager.h"
@@ -47,7 +47,7 @@ void TitleScene::Update() {
     if (startRequested_) {
         fadeTimer_ += ctx_->deltaTime;
         if (fadeTimer_ >= kFadeDuration) {
-            sceneManager_->ChangeScene(std::make_unique<GameScene>());
+            sceneManager_->ChangeScene(std::make_unique<ModeSelectScene>());
         }
         return;
     }
@@ -130,12 +130,6 @@ void TitleScene::DrawImage(const Image &image, float x, float y, float alpha) {
 bool TitleScene::IsAnyButtonTriggered(const Input &input) const {
     for (int dik = 0; dik < 256; ++dik) {
         if (input.IsKeyTrigger(dik)) {
-            return true;
-        }
-    }
-
-    for (int button = 0; button < 4; ++button) {
-        if (input.IsMouseTrigger(button)) {
             return true;
         }
     }
