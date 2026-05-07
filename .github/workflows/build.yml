@@ -1,0 +1,98 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.configuration }} x64
+    runs-on: windows-2025-vs2026
+
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration:
+          - Debug
+          - Release
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+        with:
+          msbuild-architecture: x64
+
+      - name: Build
+        run: >
+          msbuild Shingiittai.slnx
+          /m
+          /p:Configuration=${{ matrix.configuration }}
+          /p:Platform=x64
+          /p:PlatformToolset=v145
+          /p:WindowsTargetPlatformVersion=10.0
+
+      - name: Verify runtime output
+        shell: pwsh
+        run: |
+          $outputDir = Join-Path $env:GITHUB_WORKSPACE "..\generated\outputs\${{ matrix.configuration }}\App"
+          $requiredFiles = @(
+            "App.exe",
+            "JoyShockLibrary.dll",
+            "assimp-vc145-mt.dll",
+            "app\resources\title\title_logo.png",
+            "engine\resources\shaders\sprite\SpriteVS.hlsl"
+          )
+
+          foreach ($file in $requiredFiles) {
+            $path = Join-Path $outputDir $file
+            if (-not (Test-Path $path)) {
+              throw "Required output is missing: $path"
+            }
+          }
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Shingiittai-${{ matrix.configuration }}-x64
+          path: |
+            ../generated/outputs/${{ matrix.configuration }}/App/**
+            !../generated/outputs/${{ matrix.configuration }}/App/*.ilk
+            !../generated/outputs/${{ matrix.configuration }}/App/*.lib
+            !../generated/outputs/${{ matrix.configuration }}/App/*.pdb
+
+  release:
+    name: Publish GitHub Release
+    runs-on: windows-2025-vs2026
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download Release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Shingiittai-Release-x64
+          path: dist/Shingiittai
+
+      - name: Package
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/Shingiittai/* -DestinationPath Shingiittai-${{ github.ref_name }}-x64.zip -Force
+
+      - name: Create GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" `
+            "Shingiittai-${{ github.ref_name }}-x64.zip" `
+            --title "Shingiittai ${{ github.ref_name }}" `
+            --notes "Automated Release build for ${{ github.ref_name }}."
