@@ -10,6 +10,7 @@ enum class ActionKind {
     Wave,
     Warp,
     Stalk,
+    PhaseTransition,
 };
 
 enum class ActionId {

@@ -4,12 +4,12 @@
 
 static const std::string kBossAnimIdle = "Action";
 static const std::string kBossAnimMove = "Action.001";
-static const std::string kBossAnimSweep =
-    "\xE6\xA8\xAA\xE8\x96\x99\xE3\x81\x8E\xE6\x89\x95\xE3\x81\x84";
-static const std::string kBossAnimWave =
-    "\xE6\xB3\xA2\xE7\x8A\xB6\xE6\x94\xBB\xE6\x92\x83";
-static const std::string kBossAnimSmash =
-    "\xE7\xB8\xA6\xE6\x8C\xAF\xE3\x82\x8A\xE4\xB8\x8B\xE3\x82\x8D\xE3\x81\x97";
+static const std::string kBossAnimSweep = "横薙ぎ払い";
+static const std::string kBossAnimWave = "波状攻撃";
+static const std::string kBossAnimSmash = "縦振り下ろし";
+static const std::string kBossAnimShoot = "弾発射";
+static const std::string kBossAnimTeleport = "テレポート";
+static const std::string kBossAnimPhaseChange = "第二形態移行";
 
 static bool HasAnimation(const Model *model, const std::string &animationName) {
     if (!model) {
@@ -43,6 +43,12 @@ static std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
         break;
 
     case ActionKind::Shot:
+        outLoop = false;
+        if (HasAnimation(model, kBossAnimShoot)) {
+            return kBossAnimShoot;
+        }
+        break;
+
     case ActionKind::Wave:
         outLoop = false;
         if (HasAnimation(model, kBossAnimWave)) {
@@ -51,6 +57,19 @@ static std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
         break;
 
     case ActionKind::Warp:
+        outLoop = false;
+        if (HasAnimation(model, kBossAnimTeleport)) {
+            return kBossAnimTeleport;
+        }
+        break;
+
+    case ActionKind::PhaseTransition:
+        outLoop = false;
+        if (HasAnimation(model, kBossAnimPhaseChange)) {
+            return kBossAnimPhaseChange;
+        }
+        break;
+
     case ActionKind::Stalk:
     case ActionKind::None:
     default:
