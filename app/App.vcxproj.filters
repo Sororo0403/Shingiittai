@@ -40,6 +40,9 @@
     <Filter Include="Resources\Text">
       <UniqueIdentifier>{b9e4f8ac-0f67-4e8d-a727-42d51b920f0c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Resources\Title">
+      <UniqueIdentifier>{68685a10-6401-4a43-986b-85723dbe8c62}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Source Files">
       <UniqueIdentifier>{29388da4-e2a8-2891-25b7-64a4dd6bcc45}</UniqueIdentifier>
     </Filter>
@@ -102,6 +105,9 @@
     <ClCompile Include="src\scene\GameSceneLighting.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
+    <ClCompile Include="src\scene\TitleScene.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
     <ClCompile Include="src\scene\WeaponSelectScene.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
@@ -135,6 +141,9 @@
       <Filter>Header Files\enemy</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\GameScene.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="include\scene\TitleScene.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\WeaponSelectScene.h">
@@ -183,6 +192,12 @@
     </None>
     <None Include="resources\select\weapon_select_bg.png">
       <Filter>Resources\Select</Filter>
+    </None>
+    <None Include="resources\title\press_any_button.png">
+      <Filter>Resources\Title</Filter>
+    </None>
+    <None Include="resources\title\title_logo.png">
+      <Filter>Resources\Title</Filter>
     </None>
     <None Include="resources\text\weapon_bottom_dual.png">
       <Filter>Resources\Text</Filter>

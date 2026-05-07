@@ -9,6 +9,7 @@
 #include "SpriteManager.h"
 #include "SrvManager.h"
 #include "TextureManager.h"
+#include "TitleScene.h"
 #include "WeaponSelectScene.h"
 #include "WinApp.h"
 #include <memory>
@@ -50,7 +51,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
 
     // TextureManager
     TextureManager textureManager;
+    dxCommon.BeginUpload();
     textureManager.Initialize(&dxCommon, &srvManager);
+    dxCommon.EndUpload();
+    textureManager.ReleaseUploadBuffers();
 
     // ModelManager
     ModelManager modelManager;
@@ -60,12 +64,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     SpriteManager spriteManager;
     spriteManager.Initialize(&dxCommon, &textureManager, &srvManager, width,
                              height);
-
-    dxCommon.BeginUpload();
-
-    dxCommon.EndUpload();
-
-    textureManager.ReleaseUploadBuffers();
 
 #ifndef IMGUI_DISABLED
     // ImguiManager
@@ -93,7 +91,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     SceneManager sceneManager;
     sceneManager.Initialize(sceneCtx);
     // sceneManager.ChangeScene(std::make_unique<WeaponSelectScene>());
-    sceneManager.ChangeScene(std::make_unique<GameScene>());
+    sceneManager.ChangeScene(std::make_unique<TitleScene>());
 
     // 高精細タイマの周波数を取得
     LARGE_INTEGER freq;

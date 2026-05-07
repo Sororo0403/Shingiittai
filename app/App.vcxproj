@@ -139,6 +139,7 @@ if exist "$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClCompile Include="src\scene\GameSceneCamera.cpp" />
     <ClCompile Include="src\scene\GameSceneCombat.cpp" />
     <ClCompile Include="src\scene\GameSceneLighting.cpp" />
+    <ClCompile Include="src\scene\TitleScene.cpp" />
     <ClCompile Include="src\scene\WeaponSelectScene.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\player\Sword.cpp" />
@@ -152,6 +153,7 @@ if exist "$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" (
     <ClInclude Include="include\enemy\Bullet.h" />
     <ClInclude Include="include\enemy\Enemy.h" />
     <ClInclude Include="include\scene\GameScene.h" />
+    <ClInclude Include="include\scene\TitleScene.h" />
     <ClInclude Include="include\scene\WeaponSelectScene.h" />
     <ClInclude Include="include\player\Player.h" />
     <ClInclude Include="include\player\PlayerWeaponType.h" />
@@ -182,6 +184,8 @@ if exist "$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" (
     <None Include="resources\models\player\player.glb" />
     <None Include="resources\models\player\sword.glb" />
     <None Include="resources\select\weapon_select_bg.png" />
+    <None Include="resources\title\press_any_button.png" />
+    <None Include="resources\title\title_logo.png" />
     <None Include="resources\text\weapon_bottom_dual.png" />
     <None Include="resources\text\weapon_bottom_great.png" />
     <None Include="resources\text\weapon_bottom_standard.png" />
