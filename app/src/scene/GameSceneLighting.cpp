@@ -19,7 +19,8 @@ void GameScene::UpdateSceneLighting() {
     const float pulse = 0.82f + 0.18f * std::sinf(sceneLightTime_ * 2.4f);
     const float colorPulse = 0.5f + 0.5f * std::sinf(sceneLightTime_ * 3.1f);
     const float actionBoost =
-        enemy_.GetActionKind() == ActionKind::Warp   ? 1.35f
+        enemy_.GetActionKind() == ActionKind::Nova   ? 1.80f
+        : enemy_.GetActionKind() == ActionKind::Warp ? 1.35f
         : enemy_.GetActionKind() == ActionKind::Wave ? 1.20f
         : enemy_.GetActionKind() == ActionKind::Shot ? 1.10f
                                                      : 1.0f;
@@ -36,6 +37,9 @@ void GameScene::UpdateSceneLighting() {
         break;
     case ActionKind::Wave:
         actionColor = {0.56f, 0.82f, 0.48f, 1.0f};
+        break;
+    case ActionKind::Nova:
+        actionColor = {1.0f, 0.22f, 0.04f, 1.0f};
         break;
     case ActionKind::Warp:
         actionColor = {0.46f, 0.78f, 0.66f, 1.0f};

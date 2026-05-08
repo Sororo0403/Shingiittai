@@ -31,6 +31,7 @@ class GameScene : public BaseScene {
     void UpdateSceneLighting();
     void DrawArena();
     void SyncEnemyAnimation();
+    void ApplyEnemyProceduralAnimation();
     void SetEnemyAnimationFrozen(bool frozen);
     void UpdateCombat(float gameplayDeltaTime);
     void DispatchCombatFeedback(const CombatFeedbackEvent &event);

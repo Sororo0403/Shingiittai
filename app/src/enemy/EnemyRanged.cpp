@@ -1,5 +1,6 @@
 #include "Enemy.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 
@@ -30,6 +31,23 @@ void Enemy::UpdateWaveByStep(float deltaTime) {
         break;
     case ActionStep::Recovery:
         UpdateWaveRecovery(deltaTime);
+        break;
+    default:
+        EndAttack();
+        break;
+    }
+}
+
+void Enemy::UpdateNovaByStep(float deltaTime) {
+    switch (action_.step) {
+    case ActionStep::Charge:
+        UpdateNovaCharge(deltaTime);
+        break;
+    case ActionStep::Active:
+        UpdateNovaActive(deltaTime);
+        break;
+    case ActionStep::Recovery:
+        UpdateNovaRecovery(deltaTime);
         break;
     default:
         EndAttack();
@@ -74,9 +92,36 @@ void Enemy::UpdateShotRecovery(float deltaTime) {
 void Enemy::SpawnBullet() {
     EnemyBullet bullet{};
 
-    float dirX = playerPos_.x - rightHandTf_.position.x;
-    float dirY = playerPos_.y - rightHandTf_.position.y;
-    float dirZ = playerPos_.z - rightHandTf_.position.z;
+    DirectX::XMFLOAT3 target = playerPos_;
+    const float toPlayerX = playerPos_.x - rightHandTf_.position.x;
+    const float toPlayerY = playerPos_.y - rightHandTf_.position.y;
+    const float toPlayerZ = playerPos_.z - rightHandTf_.position.z;
+    const float distance =
+        std::sqrt(toPlayerX * toPlayerX + toPlayerY * toPlayerY +
+                  toPlayerZ * toPlayerZ);
+    const float safeBulletSpeed =
+        (std::max)(config_.attacks.shot.bulletSpeed, 0.001f);
+    float leadTime = (distance / safeBulletSpeed) * shotLeadTimeScale_;
+    if (phase_ == BossPhase::Phase2) {
+        leadTime += phase2ShotLeadBonus_;
+    }
+    leadTime = (std::clamp)(leadTime, 0.0f, 0.85f);
+
+    target.x += playerObs_.velocity.x * leadTime;
+    target.y += playerObs_.velocity.y * leadTime;
+    target.z += playerObs_.velocity.z * leadTime;
+
+    if (phase_ == BossPhase::Phase2) {
+        const int lane = (shotsRemaining_ % 3) - 1;
+        const float rightX = std::cos(facingYaw_);
+        const float rightZ = -std::sin(facingYaw_);
+        target.x += rightX * phase2ShotFanOffset_ * static_cast<float>(lane);
+        target.z += rightZ * phase2ShotFanOffset_ * static_cast<float>(lane);
+    }
+
+    float dirX = target.x - rightHandTf_.position.x;
+    float dirY = target.y - rightHandTf_.position.y;
+    float dirZ = target.z - rightHandTf_.position.z;
     float length = std::sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
     if (length <= 0.0001f) {
         length = 1.0f;
@@ -135,24 +180,133 @@ void Enemy::UpdateWaveRecovery(float deltaTime) {
     }
 }
 
+void Enemy::UpdateNovaCharge(float deltaTime) {
+    UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_ * 0.42f);
+    if (stateTimer_ >= config_.attacks.nova.chargeTime) {
+        LockCurrentFacing();
+        runtime_.novaSkyBulletsSpawned = false;
+        runtime_.novaRingsSpawned = 0;
+        runtime_.novaRingTimer = 0.0f;
+        ChangeActionStep(ActionStep::Active);
+    }
+}
+
+void Enemy::UpdateNovaActive(float deltaTime) {
+    UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_ * 0.35f);
+
+    if (!runtime_.novaSkyBulletsSpawned) {
+        SpawnNovaSkyBullets();
+        runtime_.novaSkyBulletsSpawned = true;
+    }
+
+    runtime_.novaRingTimer -= deltaTime;
+    while (runtime_.novaRingsSpawned < config_.attacks.nova.ringCount &&
+           runtime_.novaRingTimer <= 0.0f) {
+        SpawnNovaRing(runtime_.novaRingsSpawned);
+        ++runtime_.novaRingsSpawned;
+        runtime_.novaRingTimer += config_.attacks.nova.ringInterval;
+    }
+
+    if (stateTimer_ >= config_.attacks.nova.activeTime &&
+        runtime_.novaRingsSpawned >= config_.attacks.nova.ringCount) {
+        ChangeActionStep(ActionStep::Recovery);
+    }
+}
+
+void Enemy::UpdateNovaRecovery(float deltaTime) {
+    UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_ * 0.7f);
+    if (stateTimer_ >= config_.attacks.nova.recoveryTime) {
+        FinishCurrentAction();
+    }
+}
+
 void Enemy::SpawnWave() {
-    EnemyWave wave{};
-
     const float usedYaw = lockedAttackYaw_;
-    const float forwardX = std::sin(usedYaw);
-    const float forwardZ = std::cos(usedYaw);
+    auto spawnWaveWithYaw = [&](float yaw) {
+        EnemyWave wave{};
+        const float forwardX = std::sin(yaw);
+        const float forwardZ = std::cos(yaw);
 
-    wave.position = bodyTf_.position;
-    wave.position.y = tf_.position.y + config_.attacks.wave.spawnHeightOffset;
-    wave.position.x += forwardX * config_.attacks.wave.spawnForwardOffset;
-    wave.position.z += forwardZ * config_.attacks.wave.spawnForwardOffset;
-    wave.direction = {forwardX, 0.0f, forwardZ};
-    wave.speed = config_.attacks.wave.speed;
-    wave.traveledDistance = 0.0f;
-    wave.maxDistance = config_.attacks.wave.maxDistance;
-    wave.isAlive = true;
+        wave.position = bodyTf_.position;
+        wave.position.y =
+            tf_.position.y + config_.attacks.wave.spawnHeightOffset;
+        wave.position.x += forwardX * config_.attacks.wave.spawnForwardOffset;
+        wave.position.z += forwardZ * config_.attacks.wave.spawnForwardOffset;
+        wave.direction = {forwardX, 0.0f, forwardZ};
+        wave.speed = config_.attacks.wave.speed;
+        if (phase_ == BossPhase::Phase2) {
+            wave.speed *= 1.12f;
+        }
+        wave.traveledDistance = 0.0f;
+        wave.maxDistance = config_.attacks.wave.maxDistance;
+        wave.isAlive = true;
 
-    waves_.push_back(wave);
+        waves_.push_back(wave);
+    };
+
+    if (phase_ == BossPhase::Phase2) {
+        spawnWaveWithYaw(usedYaw - phase2WaveFanAngleRad_);
+        spawnWaveWithYaw(usedYaw);
+        spawnWaveWithYaw(usedYaw + phase2WaveFanAngleRad_);
+        return;
+    }
+
+    spawnWaveWithYaw(usedYaw);
+}
+
+void Enemy::SpawnNovaRing(int ringIndex) {
+    const int waveCount = (std::max)(1, config_.attacks.nova.wavesPerRing);
+    const float angleOffset =
+        (ringIndex % 2 == 0) ? 0.0f : (3.14159265f / static_cast<float>(waveCount));
+    const float spawnRadius = config_.attacks.nova.firstRingRadius +
+                              config_.attacks.nova.ringRadiusStep *
+                                  static_cast<float>(ringIndex);
+
+    for (int i = 0; i < waveCount; ++i) {
+        const float angle = angleOffset +
+                            (6.28318530f * static_cast<float>(i)) /
+                                static_cast<float>(waveCount);
+        const float dirX = std::sin(angle);
+        const float dirZ = std::cos(angle);
+
+        EnemyWave wave{};
+        wave.position = bodyTf_.position;
+        wave.position.x += dirX * spawnRadius;
+        wave.position.y = tf_.position.y + config_.attacks.wave.spawnHeightOffset;
+        wave.position.z += dirZ * spawnRadius;
+        wave.direction = {dirX, 0.0f, dirZ};
+        wave.speed = config_.attacks.nova.waveSpeed *
+                     (1.0f + 0.08f * static_cast<float>(ringIndex));
+        wave.traveledDistance = 0.0f;
+        wave.maxDistance = config_.attacks.nova.waveMaxDistance;
+        wave.isAlive = true;
+        waves_.push_back(wave);
+    }
+}
+
+void Enemy::SpawnNovaSkyBullets() {
+    const int bulletCount = (std::max)(1, config_.attacks.nova.skyBulletCount);
+    for (int i = 0; i < bulletCount; ++i) {
+        const float angle = (6.28318530f * static_cast<float>(i)) /
+                            static_cast<float>(bulletCount);
+        const float dirX = std::sin(angle);
+        const float dirZ = std::cos(angle);
+
+        EnemyBullet bullet{};
+        bullet.position = bodyTf_.position;
+        bullet.position.x += dirX * 0.42f;
+        bullet.position.y =
+            tf_.position.y + config_.attacks.nova.skyBulletHeightOffset;
+        bullet.position.z += dirZ * 0.42f;
+
+        const float up = (i % 2 == 0) ? 0.34f : 0.18f;
+        bullet.velocity = {dirX * config_.attacks.nova.bulletSpeed,
+                           up * config_.attacks.nova.bulletSpeed,
+                           dirZ * config_.attacks.nova.bulletSpeed};
+        bullet.lifeTime = config_.attacks.nova.bulletLifeTime;
+        bullet.isAlive = true;
+        bullets_.push_back(bullet);
+    }
 }
 
 void Enemy::UpdateWaves(float deltaTime) {

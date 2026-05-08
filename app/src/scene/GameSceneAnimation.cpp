@@ -1,6 +1,11 @@
 #include "GameScene.h"
 #include "ModelManager.h"
+#include <algorithm>
+#include <cmath>
 #include <string>
+#include <vector>
+
+using namespace DirectX;
 
 static const std::string kBossAnimIdle = "Action";
 static const std::string kBossAnimMove = "Action.001";
@@ -10,6 +15,78 @@ static const std::string kBossAnimWave =
     "\xE6\xB3\xA2\xE7\x8A\xB6\xE6\x94\xBB\xE6\x92\x83";
 static const std::string kBossAnimSmash =
     "\xE7\xB8\xA6\xE6\x8C\xAF\xE3\x82\x8A\xE4\xB8\x8B\xE3\x82\x8D\xE3\x81\x97";
+static const std::string kBossBoneBase =
+    "\xE3\x83\x9C\xE3\x83\xBC\xE3\x83\xB3";
+
+static std::string BossBoneName(const char *suffix) {
+    return suffix ? (kBossBoneBase + suffix) : kBossBoneBase;
+}
+
+static float Clamp01(float value) { return std::clamp(value, 0.0f, 1.0f); }
+
+static float Smooth01(float value) {
+    const float t = Clamp01(value);
+    return t * t * (3.0f - 2.0f * t);
+}
+
+static int FindBoneIndex(const Model &model, const std::string &name) {
+    const auto it = model.boneMap.find(name);
+    if (it == model.boneMap.end()) {
+        return -1;
+    }
+    return static_cast<int>(it->second);
+}
+
+static XMFLOAT3 GetMatrixTranslation(const XMFLOAT4X4 &matrix) {
+    return {matrix._41, matrix._42, matrix._43};
+}
+
+static XMMATRIX MakePivotRotation(const XMFLOAT3 &pivot, float pitch, float yaw,
+                                  float roll) {
+    return XMMatrixTranslation(-pivot.x, -pivot.y, -pivot.z) *
+           XMMatrixRotationRollPitchYaw(pitch, yaw, roll) *
+           XMMatrixTranslation(pivot.x, pivot.y, pivot.z);
+}
+
+static void ApplyDeltaToBoneTree(Model &model, int boneIndex,
+                                 const XMMATRIX &delta) {
+    if (boneIndex < 0 ||
+        static_cast<size_t>(boneIndex) >= model.skeletonSpaceMatrices.size()) {
+        return;
+    }
+
+    std::vector<int> stack;
+    stack.push_back(boneIndex);
+
+    while (!stack.empty()) {
+        const int current = stack.back();
+        stack.pop_back();
+
+        XMMATRIX currentMatrix =
+            XMLoadFloat4x4(&model.skeletonSpaceMatrices[current]);
+        XMStoreFloat4x4(&model.skeletonSpaceMatrices[current],
+                        currentMatrix * delta);
+
+        for (size_t i = 0; i < model.bones.size(); ++i) {
+            if (model.bones[i].parentIndex == current) {
+                stack.push_back(static_cast<int>(i));
+            }
+        }
+    }
+}
+
+static void PoseBoneTree(Model &model, int boneIndex, float pitch, float yaw,
+                         float roll) {
+    if (boneIndex < 0 ||
+        static_cast<size_t>(boneIndex) >= model.skeletonSpaceMatrices.size()) {
+        return;
+    }
+
+    const XMFLOAT3 pivot =
+        GetMatrixTranslation(model.skeletonSpaceMatrices[boneIndex]);
+    ApplyDeltaToBoneTree(model, boneIndex,
+                         MakePivotRotation(pivot, pitch, yaw, roll));
+}
 
 static bool HasAnimation(const Model *model, const std::string &animationName) {
     if (!model) {
@@ -44,14 +121,20 @@ static std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
 
     case ActionKind::Shot:
     case ActionKind::Wave:
+    case ActionKind::Nova:
         outLoop = false;
         if (HasAnimation(model, kBossAnimWave)) {
             return kBossAnimWave;
         }
         break;
 
-    case ActionKind::Warp:
     case ActionKind::Stalk:
+        if (HasAnimation(model, kBossAnimMove)) {
+            return kBossAnimMove;
+        }
+        break;
+
+    case ActionKind::Warp:
     case ActionKind::None:
     default:
         if (HasAnimation(model, kBossAnimIdle)) {
@@ -129,4 +212,151 @@ void GameScene::SyncEnemyAnimation() {
     modelManager->UpdateAnimation(enemyModelId_, 0.0f);
     enemyAnimationName_ = nextAnimation;
     enemyAnimationLoop_ = shouldLoop;
+}
+
+void GameScene::ApplyEnemyProceduralAnimation() {
+    if (ctx_ == nullptr || ctx_->model == nullptr) {
+        return;
+    }
+
+    Model *enemyModel = ctx_->model->GetModel(enemyModelId_);
+    if (enemyModel == nullptr || enemyModel->bones.empty() ||
+        enemyModel->skeletonSpaceMatrices.empty()) {
+        return;
+    }
+
+    const int root = FindBoneIndex(*enemyModel, BossBoneName(nullptr));
+    const int spine = FindBoneIndex(*enemyModel, BossBoneName(".003"));
+    const int chest = FindBoneIndex(*enemyModel, BossBoneName(".013"));
+    const int head = FindBoneIndex(*enemyModel, BossBoneName(".004"));
+    const int headTip = FindBoneIndex(*enemyModel, BossBoneName(".007"));
+    const int upperA = FindBoneIndex(*enemyModel, BossBoneName(".014"));
+    const int upperB = FindBoneIndex(*enemyModel, BossBoneName(".017"));
+    const int upperC = FindBoneIndex(*enemyModel, BossBoneName(".018"));
+    const int upperD = FindBoneIndex(*enemyModel, BossBoneName(".019"));
+
+    const float time = enemyModel->animationTime;
+    const float pulse = std::sin(time * 7.5f);
+    const float slowPulse = std::sin(time * 3.2f);
+    const ActionKind action = enemy_.GetActionKind();
+    const ActionStep step = enemy_.GetActionStep();
+    const bool phase2 = enemy_.GetBossPhase() == BossPhase::Phase2;
+    const float phaseScale = phase2 ? 1.18f : 1.0f;
+
+    auto poseArms = [&](float pitch, float yaw, float roll) {
+        PoseBoneTree(*enemyModel, upperA, pitch * 0.55f, -yaw * 0.55f,
+                     -roll * 0.35f);
+        PoseBoneTree(*enemyModel, upperB, pitch * 0.70f, yaw * 0.75f,
+                     roll * 0.55f);
+        PoseBoneTree(*enemyModel, upperC, pitch, yaw, roll);
+        PoseBoneTree(*enemyModel, upperD, pitch * 0.85f, yaw * 0.60f,
+                     roll * 0.70f);
+    };
+
+    PoseBoneTree(*enemyModel, spine, -0.025f * slowPulse, 0.0f,
+                 0.025f * pulse);
+    PoseBoneTree(*enemyModel, chest, 0.018f * pulse, 0.018f * slowPulse,
+                 -0.020f * pulse);
+    PoseBoneTree(*enemyModel, head, 0.025f * slowPulse, 0.020f * pulse, 0.0f);
+    PoseBoneTree(*enemyModel, headTip, 0.020f * slowPulse, 0.0f, 0.0f);
+
+    switch (action) {
+    case ActionKind::Smash:
+        if (step == ActionStep::Charge || step == ActionStep::Hold) {
+            const float hold = 0.70f + 0.30f * pulse;
+            PoseBoneTree(*enemyModel, root, -0.08f * phaseScale, 0.0f, 0.0f);
+            PoseBoneTree(*enemyModel, chest, -0.20f * phaseScale, 0.0f,
+                         0.05f * hold);
+            poseArms(-0.58f * phaseScale, 0.08f, 0.18f * hold);
+        } else if (step == ActionStep::Active) {
+            const float strike = Smooth01(time / 0.18f);
+            PoseBoneTree(*enemyModel, root, 0.10f * phaseScale, 0.0f, 0.0f);
+            PoseBoneTree(*enemyModel, chest, 0.34f * phaseScale * strike,
+                         0.0f, -0.06f);
+            poseArms(0.72f * phaseScale * strike, 0.04f,
+                     -0.16f * phaseScale);
+        } else if (step == ActionStep::Recovery) {
+            PoseBoneTree(*enemyModel, chest, 0.12f, 0.0f, -0.04f);
+            poseArms(0.20f, 0.0f, -0.08f);
+        }
+        break;
+
+    case ActionKind::Sweep:
+        if (step == ActionStep::Charge || step == ActionStep::Hold) {
+            PoseBoneTree(*enemyModel, chest, -0.06f, -0.30f * phaseScale,
+                         -0.10f);
+            poseArms(-0.05f, -0.34f * phaseScale, 0.30f);
+        } else if (step == ActionStep::Active) {
+            const float strike = Smooth01(time / 0.24f);
+            PoseBoneTree(*enemyModel, root, 0.0f, 0.18f * phaseScale * strike,
+                         0.0f);
+            PoseBoneTree(*enemyModel, chest, 0.04f, 0.56f * phaseScale * strike,
+                         0.14f);
+            poseArms(0.08f, 0.74f * phaseScale * strike,
+                     -0.28f * phaseScale);
+        } else if (step == ActionStep::Recovery) {
+            PoseBoneTree(*enemyModel, chest, 0.04f, 0.18f, 0.05f);
+            poseArms(0.02f, 0.24f, -0.10f);
+        }
+        break;
+
+    case ActionKind::Shot:
+    case ActionKind::Wave:
+        if (step == ActionStep::Charge) {
+            PoseBoneTree(*enemyModel, chest, -0.05f, 0.03f * pulse,
+                         0.04f * pulse);
+            poseArms(-0.22f * phaseScale, 0.10f * pulse, 0.06f);
+        } else {
+            PoseBoneTree(*enemyModel, chest, 0.08f, 0.0f, 0.0f);
+            poseArms(0.28f * phaseScale, 0.03f, -0.05f);
+        }
+        break;
+
+    case ActionKind::Nova:
+        if (step == ActionStep::Charge) {
+            const float chargePulse = 0.65f + 0.35f * std::sin(time * 18.0f);
+            PoseBoneTree(*enemyModel, root, -0.12f * phaseScale, 0.0f,
+                         0.04f * chargePulse);
+            PoseBoneTree(*enemyModel, chest, -0.34f * phaseScale, 0.0f,
+                         0.18f * chargePulse);
+            PoseBoneTree(*enemyModel, head, -0.10f, 0.0f, 0.0f);
+            poseArms(-0.70f * phaseScale, 0.16f * chargePulse,
+                     0.34f * chargePulse);
+        } else if (step == ActionStep::Active) {
+            const float burst = 0.7f + 0.3f * std::sin(time * 34.0f);
+            PoseBoneTree(*enemyModel, root, 0.16f * phaseScale, 0.0f,
+                         0.08f * burst);
+            PoseBoneTree(*enemyModel, chest, 0.44f * phaseScale, 0.0f,
+                         -0.20f * burst);
+            PoseBoneTree(*enemyModel, head, 0.16f, 0.0f, 0.0f);
+            poseArms(0.64f * phaseScale, 0.44f * burst,
+                     -0.52f * phaseScale);
+        } else {
+            PoseBoneTree(*enemyModel, chest, 0.08f, 0.0f, -0.06f);
+            poseArms(0.16f, 0.10f, -0.08f);
+        }
+        break;
+
+    case ActionKind::Warp:
+        PoseBoneTree(*enemyModel, root, -0.06f, 0.0f, 0.0f);
+        PoseBoneTree(*enemyModel, chest, -0.12f, 0.08f * pulse,
+                     0.14f * slowPulse);
+        poseArms(-0.16f, 0.16f * pulse, 0.24f * slowPulse);
+        break;
+
+    case ActionKind::Stalk:
+        PoseBoneTree(*enemyModel, root, 0.04f * slowPulse, 0.0f,
+                     0.06f * pulse);
+        PoseBoneTree(*enemyModel, chest, -0.04f, 0.08f * pulse,
+                     -0.05f * slowPulse);
+        poseArms(0.06f * pulse, 0.12f * slowPulse, 0.10f * pulse);
+        break;
+
+    case ActionKind::None:
+    default:
+        poseArms(0.035f * pulse, 0.025f * slowPulse, 0.045f * pulse);
+        break;
+    }
+
+    ctx_->model->GetRenderer()->UpdateSkinClusters(*enemyModel);
 }

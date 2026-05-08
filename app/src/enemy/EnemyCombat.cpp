@@ -110,6 +110,8 @@ AttackParam *Enemy::GetCurrentAttackParam() {
         return &config_.attacks.shot.attack;
     case ActionKind::Wave:
         return &config_.attacks.wave.attack;
+    case ActionKind::Nova:
+        return &config_.attacks.wave.attack;
     default:
         return nullptr;
     }
@@ -124,6 +126,8 @@ const AttackParam *Enemy::GetCurrentAttackParam() const {
     case ActionKind::Shot:
         return &config_.attacks.shot.attack;
     case ActionKind::Wave:
+        return &config_.attacks.wave.attack;
+    case ActionKind::Nova:
         return &config_.attacks.wave.attack;
     default:
         return nullptr;

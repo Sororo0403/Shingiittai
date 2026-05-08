@@ -58,6 +58,8 @@ ActionId Enemy::MakeDefaultActionId(ActionKind kind) const {
         return ActionId::Shot;
     case ActionKind::Wave:
         return ActionId::Wave;
+    case ActionKind::Nova:
+        return ActionId::Nova;
     case ActionKind::Warp:
         return (warp_.type == WarpType::Escape) ? ActionId::WarpEscape
                                                 : ActionId::WarpApproach;

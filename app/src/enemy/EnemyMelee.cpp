@@ -1,5 +1,7 @@
 #include "Enemy.h"
 
+#include <cmath>
+
 void Enemy::UpdateSmashByStep(float deltaTime) {
     switch (action_.step) {
     case ActionStep::Charge:
@@ -129,7 +131,6 @@ void Enemy::UpdateSmashHold(float deltaTime) {
 }
 
 void Enemy::UpdateSmashAttack(float deltaTime) {
-    (void)deltaTime;
     const AttackTimingParam *timing = GetCurrentAttackTiming();
     if (!timing) {
         EndAttack();
@@ -137,6 +138,16 @@ void Enemy::UpdateSmashAttack(float deltaTime) {
     }
 
     isAttackActive_ = true;
+    if (stateTimer_ <= timing->activeEndTime) {
+        float speed = smashActiveLungeSpeed_;
+        if (phase_ == BossPhase::Phase2) {
+            speed *= phase2ActiveLungeScale_;
+        }
+
+        tf_.position.x += std::sin(lockedAttackYaw_) * speed * deltaTime;
+        tf_.position.z += std::cos(lockedAttackYaw_) * speed * deltaTime;
+    }
+
     if (stateTimer_ >= timing->totalTime) {
         ChangeActionStep(ActionStep::Recovery);
     }
@@ -260,7 +271,6 @@ void Enemy::UpdateSweepHold(float deltaTime) {
 }
 
 void Enemy::UpdateSweepAttack(float deltaTime) {
-    (void)deltaTime;
     const AttackTimingParam *timing = GetCurrentAttackTiming();
     if (!timing) {
         EndAttack();
@@ -268,6 +278,16 @@ void Enemy::UpdateSweepAttack(float deltaTime) {
     }
 
     isAttackActive_ = true;
+    if (stateTimer_ <= timing->activeEndTime) {
+        float speed = sweepActiveLungeSpeed_;
+        if (phase_ == BossPhase::Phase2) {
+            speed *= phase2ActiveLungeScale_;
+        }
+
+        tf_.position.x += std::sin(lockedAttackYaw_) * speed * deltaTime;
+        tf_.position.z += std::cos(lockedAttackYaw_) * speed * deltaTime;
+    }
+
     if (stateTimer_ >= timing->totalTime) {
         ChangeActionStep(ActionStep::Recovery);
     }

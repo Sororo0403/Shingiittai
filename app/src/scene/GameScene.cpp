@@ -288,6 +288,7 @@ void GameScene::Update() {
     if (!enemyAnimationFrozen_) {
         ctx_->model->UpdateAnimation(enemyModelId_, enemyDeltaTime);
     }
+    ApplyEnemyProceduralAnimation();
 
     UpdateBattleCamera();
     camera_.UpdateMatrices();
@@ -400,12 +401,15 @@ void GameScene::DrawArena() {
             ? XMFLOAT4{0.48f, 0.82f, 0.66f, 0.82f}
         : actionKind == ActionKind::Wave
             ? XMFLOAT4{0.64f, 0.88f, 0.48f, 0.78f}
+        : actionKind == ActionKind::Nova
+            ? XMFLOAT4{1.00f, 0.18f, 0.02f, 0.94f}
         : actionKind == ActionKind::Shot
             ? XMFLOAT4{0.68f, 0.82f, 0.86f, 0.76f}
             : calmColor;
     const XMFLOAT4 arenaGlowColor = LerpColor(calmColor, attackColor, 0.55f + 0.45f * huePulse);
     const float actionGlow =
         actionKind == ActionKind::Warp   ? 0.22f
+        : actionKind == ActionKind::Nova ? 0.32f
         : actionKind == ActionKind::Wave ? 0.15f
         : actionKind == ActionKind::Shot ? 0.10f
                                          : 0.0f;

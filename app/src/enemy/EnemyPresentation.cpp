@@ -320,6 +320,41 @@ void Enemy::UpdateParts() {
             rightHandTf_.position.z += forwardZ * 0.4f;
             visualPitch += 0.06f;
         }
+    } else if (!suppressActionPresentation && action_.kind == ActionKind::Nova) {
+        const float novaPulse = 0.5f + 0.5f * std::sin(runtime_.stateTimer * 28.0f);
+        if (action_.step == ActionStep::Charge) {
+            bodyTf_.position.y -= 0.14f;
+            bodyTf_.scale.x += 0.18f + 0.12f * novaPulse;
+            bodyTf_.scale.z += 0.18f + 0.12f * novaPulse;
+            bodyTf_.scale.y -= 0.08f;
+            rightHandTf_.position.y += 1.25f + 0.16f * novaPulse;
+            leftHandTf_.position.y += 1.00f + 0.12f * novaPulse;
+            rightHandTf_.position.x += rightX * 0.50f + (-forwardX) * 0.26f;
+            rightHandTf_.position.z += rightZ * 0.50f + (-forwardZ) * 0.26f;
+            leftHandTf_.position.x += (-rightX) * 0.50f + (-forwardX) * 0.18f;
+            leftHandTf_.position.z += (-rightZ) * 0.50f + (-forwardZ) * 0.18f;
+            visualTf_.position.y += 0.08f * novaPulse;
+            visualPitch -= 0.18f;
+            visualRoll += 0.14f * novaPulse;
+        } else if (action_.step == ActionStep::Active) {
+            bodyTf_.position.y += 0.12f + 0.10f * novaPulse;
+            bodyTf_.scale.x += 0.34f;
+            bodyTf_.scale.z += 0.34f;
+            rightHandTf_.position.y += 1.70f;
+            leftHandTf_.position.y += 1.52f;
+            rightHandTf_.position.x += rightX * 0.95f + forwardX * 0.24f;
+            rightHandTf_.position.z += rightZ * 0.95f + forwardZ * 0.24f;
+            leftHandTf_.position.x += (-rightX) * 0.95f + forwardX * 0.24f;
+            leftHandTf_.position.z += (-rightZ) * 0.95f + forwardZ * 0.24f;
+            visualTf_.scale.x += 0.08f * novaPulse;
+            visualTf_.scale.z += 0.08f * novaPulse;
+            visualPitch += 0.20f;
+        } else if (action_.step == ActionStep::Recovery) {
+            bodyTf_.position.y -= 0.06f;
+            rightHandTf_.position.y += 0.36f;
+            leftHandTf_.position.y += 0.30f;
+            visualPitch += 0.08f;
+        }
     } else if (!suppressActionPresentation && action_.kind == ActionKind::Warp) {
         if (action_.step == ActionStep::Start) {
             if (warp_.type == WarpType::Approach) {
@@ -463,6 +498,11 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         actionIntensity = 0.22f + 0.10f * actionPulse;
         actionNoise = 0.34f;
         break;
+    case ActionKind::Nova:
+        actionTint = {1.0f, 0.28f, 0.06f, 0.82f};
+        actionIntensity = 0.78f + 0.26f * actionPulse;
+        actionNoise = 0.72f;
+        break;
     case ActionKind::Warp:
         actionTint = {0.90f, 0.48f, 0.20f, 0.70f};
         actionIntensity = 0.58f + 0.18f * actionPulse;
@@ -591,6 +631,10 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         Transform waveTf = tf_;
         waveTf.position = wave.position;
         waveTf.scale = {0.6f, 0.2f, 1.2f};
+        const float waveYaw = std::atan2(wave.direction.x, wave.direction.z);
+        DirectX::XMStoreFloat4(
+            &waveTf.rotation,
+            DirectX::XMQuaternionRotationRollPitchYaw(0.0f, waveYaw, 0.0f));
         ModelDrawEffect waveEffect{};
         waveEffect.enabled = true;
         waveEffect.additiveBlend = true;

@@ -37,14 +37,34 @@ void Enemy::UpdateStalkMove(float deltaTime) {
     tf_.position.x += moveX * stalkMoveSpeed_ * deltaTime;
     tf_.position.z += moveZ * stalkMoveSpeed_ * deltaTime;
 
+    const float pounceDistance =
+        config_.core.nearAttackDistance + stalkPounceDistanceBonus_;
+    if (stateTimer_ >= stalkPounceMinTime_ &&
+        GetDistanceToPlayer() <= pounceDistance) {
+        float chance = stalkPounceChance_;
+        if (phase_ == BossPhase::Phase2) {
+            chance += 0.18f;
+        }
+        if (playerObs_.isAttacking || playerObs_.isGuarding) {
+            chance += 0.10f;
+        }
+
+        const float roll =
+            static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+        if (roll < chance) {
+            BeginPressureAction();
+            return;
+        }
+    }
+
     if (stateTimer_ >= currentHoldDuration_) {
         EndAttack();
     }
 }
 
 void Enemy::BeginStalkAction() {
-    EnterHold(RandomRange(stalkDurationMin_, stalkDurationMax_));
     BeginAction(ActionKind::Stalk, ActionStep::Move);
+    EnterHold(RandomRange(stalkDurationMin_, stalkDurationMax_));
     stalkRepeatCount_++;
 }
 

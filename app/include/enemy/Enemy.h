@@ -199,6 +199,23 @@ struct EnemyWaveConfig {
     float spawnHeightOffset = 0.0f;
 };
 
+struct EnemyNovaConfig {
+    float chargeTime = 1.20f;
+    float activeTime = 0.58f;
+    float recoveryTime = 1.00f;
+    float ringInterval = 0.18f;
+    int ringCount = 3;
+    int wavesPerRing = 12;
+    float waveSpeed = 6.6f;
+    float waveMaxDistance = 11.5f;
+    float firstRingRadius = 0.8f;
+    float ringRadiusStep = 0.36f;
+    float bulletSpeed = 7.4f;
+    float bulletLifeTime = 2.2f;
+    int skyBulletCount = 8;
+    float skyBulletHeightOffset = 1.15f;
+};
+
 struct EnemyAttackSet {
     EnemySmashConfig smash = {{{{10.0f, 4.0f, {1.5f, 1.8f, 1.5f}},
                                 {0.88f, 0.28f, 0.04f, 0.10f, 0.18f}, 0.45f},
@@ -212,6 +229,7 @@ struct EnemyAttackSet {
                             0.6f, 0.8f, 0.2f, 3, 5, 6.0f, 2.0f, 0.2f};
     EnemyWaveConfig wave = {{8.0f, 3.0f, {1.2f, 0.6f, 1.6f}},
                             0.6f, 0.8f, 4.0f, 8.0f, 1.5f, 0.0f};
+    EnemyNovaConfig nova{};
 };
 
 struct EnemyWarpConfig {
@@ -221,14 +239,14 @@ struct EnemyWarpConfig {
 };
 
 struct EnemyChainConfig {
-    int warpApproachMaxSteps = 2;
+    int warpApproachMaxSteps = 3;
     int warpEscapeMaxSteps = 2;
-    float approachContinueDistance = 5.0f;
+    float approachContinueDistance = 5.6f;
     float escapeContinueDistance = 4.5f;
-    float sweepWarpSmashMaxDistance = 5.0f;
-    float sweepWarpSmashChance = 0.45f;
-    float waveWarpSmashMinDistance = 4.5f;
-    float waveWarpSmashChance = 0.50f;
+    float sweepWarpSmashMaxDistance = 5.6f;
+    float sweepWarpSmashChance = 0.62f;
+    float waveWarpSmashMinDistance = 4.0f;
+    float waveWarpSmashChance = 0.64f;
 };
 
 struct EnemyConfig {
@@ -327,6 +345,9 @@ struct EnemyRuntimeState {
     bool currentActionConnected = false;
     bool currentActionGuarded = false;
     bool hasTrackingLocked = false;
+    bool novaSkyBulletsSpawned = false;
+    int novaRingsSpawned = 0;
+    float novaRingTimer = 0.0f;
 
     CounterAdaptMemory counterMemory{};
     float postCounterRhythmTimer = 0.0f;
@@ -595,8 +616,12 @@ class Enemy {
     bool &currentActionGuarded_ = runtime_.currentActionGuarded;
     float delaySmashWhiffRecoveryBonus_ = 0.34f;
     float punishWindowTurnSpeedScale_ = 0.55f;
+    float smashActiveLungeSpeed_ = 1.65f;
+    float sweepActiveLungeSpeed_ = 1.25f;
+    float phase2ActiveLungeScale_ = 1.25f;
+    float phase2RecoveryBranchChanceBonus_ = 0.08f;
 
-    bool suspendWarpForPresentation_ = true;
+    bool suspendWarpForPresentation_ = false;
     float warpDepartureEchoOffset_ = 0.28f;
     float warpArrivalEchoOffset_ = 0.22f;
     float warpArrivalPreviewHeight_ = 0.10f;
@@ -671,8 +696,20 @@ class Enemy {
     float stalkStrafeRadiusWeight_ = 0.75f;
     float stalkForwardAdjustWeight_ = 0.35f;
     float stalkNearEnterChance_ = 0.28f;
+    float stalkPounceDistanceBonus_ = 0.65f;
+    float stalkPounceMinTime_ = 0.22f;
+    float stalkPounceChance_ = 0.58f;
     float stalkMidEnterChance_ = 0.18f;
     int stalkRepeatLimit_ = 2;
+
+    float shotLeadTimeScale_ = 0.42f;
+    float phase2ShotLeadBonus_ = 0.18f;
+    float phase2ShotFanOffset_ = 0.55f;
+    float phase2WaveFanAngleRad_ = 0.28f;
+    float novaPhase2Cooldown_ = 0.0f;
+    float novaPhase2CooldownDuration_ = 7.0f;
+    float novaPhase2NearChance_ = 0.18f;
+    float novaPhase2FarChance_ = 0.16f;
 
     int &stalkRepeatCount_ = runtime_.stalkRepeatCount;
     float &stalkMoveDir_ = runtime_.stalkMoveDir;         // -1:left / +1:right
@@ -688,6 +725,7 @@ class Enemy {
     void UpdateSweepByStep(float deltaTime);
     void UpdateShotByStep(float deltaTime);
     void UpdateWaveByStep(float deltaTime);
+    void UpdateNovaByStep(float deltaTime);
     void UpdateWarpByStep(float deltaTime);
     void UpdateIdle(float deltaTime);
 
@@ -758,6 +796,11 @@ class Enemy {
 
     void SpawnWave();
     void UpdateWaves(float deltaTime);
+    void UpdateNovaCharge(float deltaTime);
+    void UpdateNovaActive(float deltaTime);
+    void UpdateNovaRecovery(float deltaTime);
+    void SpawnNovaRing(int ringIndex);
+    void SpawnNovaSkyBullets();
 
     void UpdateStalkByStep(float deltaTime);
     void UpdateStalkMove(float deltaTime);

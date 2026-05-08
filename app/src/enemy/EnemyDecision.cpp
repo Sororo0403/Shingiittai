@@ -39,6 +39,8 @@ CounterReadAxis Enemy::GetCounterReadAxis(ActionKind kind) const {
         return CounterReadAxis::Horizontal;
     case ActionKind::Wave:
         return CounterReadAxis::Radial;
+    case ActionKind::Nova:
+        return CounterReadAxis::Radial;
     case ActionKind::Shot:
         return CounterReadAxis::Projectile;
     default:
@@ -316,6 +318,9 @@ bool Enemy::TryBranchFromRecovery(ActionKind finishedKind) {
     if (phase_ == BossPhase::Phase2) {
         recommitChance += phase2RecommitBonus_;
         delayedSecondChance += phase2DelayedSecondBonus_;
+        recommitChance += phase2RecoveryBranchChanceBonus_;
+        delayedSecondChance += phase2RecoveryBranchChanceBonus_;
+        fakeoutChance += phase2RecoveryBranchChanceBonus_;
     }
 
     if (playerObs_.isCounterStance) {
@@ -597,8 +602,28 @@ ActionKind Enemy::SelectNeutralAction(float distance) const {
         return SelectNearPressureAction();
     }
 
+    if (phase_ == BossPhase::Phase2 && novaPhase2Cooldown_ <= 0.0f) {
+        float novaChance = (distance >= config_.core.farAttackDistance)
+                               ? novaPhase2FarChance_
+                               : novaPhase2NearChance_;
+        if (playerObs_.isGuarding || playerObs_.isCounterStance) {
+            novaChance += 0.08f;
+        }
+
+        const float roll =
+            static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+        if (roll < novaChance) {
+            return ActionKind::Nova;
+        }
+    }
+
     int shotWeight = midShotWeight_ + neutralMidShotBonus_;
     int waveWeight = midWaveWeight_ + neutralMidWaveBonus_;
+
+    if (phase_ == BossPhase::Phase2) {
+        shotWeight += phase2MidShotBonus_;
+        waveWeight += 8;
+    }
 
     if (playerObs_.isGuarding) {
         waveWeight += 12;
@@ -616,6 +641,15 @@ ActionKind Enemy::SelectNeutralAction(float distance) const {
 ActionKind Enemy::SelectNearPressureAction() const {
     int smashWeight = nearSmashWeight_;
     int sweepWeight = nearSweepWeight_;
+
+    if (phase_ == BossPhase::Phase2 && novaPhase2Cooldown_ <= 0.0f &&
+        closePressureTimer_ >= closePressureTimeThreshold_ * 0.85f) {
+        float roll = static_cast<float>(std::rand()) /
+                     static_cast<float>(RAND_MAX);
+        if (roll < novaPhase2NearChance_) {
+            return ActionKind::Nova;
+        }
+    }
 
     if (phase_ == BossPhase::Phase2) {
         smashWeight += phase2NearSmashBonus_;

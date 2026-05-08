@@ -116,6 +116,12 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
     } else {
         farDistanceTimer_ = 0.0f;
     }
+    if (novaPhase2Cooldown_ > 0.0f) {
+        novaPhase2Cooldown_ -= deltaTime;
+        if (novaPhase2Cooldown_ < 0.0f) {
+            novaPhase2Cooldown_ = 0.0f;
+        }
+    }
 
     runtime_.lastDistanceToPlayer = currentDistance;
 
@@ -184,6 +190,9 @@ void Enemy::UpdateByAction(float deltaTime) {
     case ActionKind::Wave:
         UpdateWaveByStep(deltaTime);
         break;
+    case ActionKind::Nova:
+        UpdateNovaByStep(deltaTime);
+        break;
     case ActionKind::Warp:
         UpdateWarpByStep(deltaTime);
         break;
@@ -237,6 +246,10 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
         }
     }
 
+    if (kind == ActionKind::Nova) {
+        novaPhase2Cooldown_ = novaPhase2CooldownDuration_;
+    }
+
     action_.step = step;
     hasTrackingLocked_ = false;
     holdConfigured_ = false;
@@ -246,6 +259,9 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     isDoubleSweepSecondStage_ = false;
     currentActionConnected_ = false;
     currentActionGuarded_ = false;
+    runtime_.novaSkyBulletsSpawned = false;
+    runtime_.novaRingsSpawned = 0;
+    runtime_.novaRingTimer = 0.0f;
     ResetPreAttackPresentationState();
     ResetRecoveryBranchState();
 
@@ -269,6 +285,7 @@ bool Enemy::TryBeginTacticAction(ActionKind kind) {
     case ActionKind::Sweep:
     case ActionKind::Shot:
     case ActionKind::Wave:
+    case ActionKind::Nova:
         BeginAction(kind, ActionStep::Charge);
         return true;
     case ActionKind::Warp:
@@ -327,6 +344,9 @@ void Enemy::EndAttack() {
     isDoubleSweepSecondStage_ = false;
     currentActionConnected_ = false;
     currentActionGuarded_ = false;
+    runtime_.novaSkyBulletsSpawned = false;
+    runtime_.novaRingsSpawned = 0;
+    runtime_.novaRingTimer = 0.0f;
 
     if (postCounterRhythmTimer_ <= 0.0f) {
         counterMemory_.consecutiveSuccess = 0;
