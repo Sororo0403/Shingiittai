@@ -114,6 +114,7 @@
     <ClCompile Include="src\enemy\Bullet.cpp" />
     <ClCompile Include="src\player\Player.cpp" />
     <ClCompile Include="src\scene\CombatFeedbackDirector.cpp" />
+    <ClCompile Include="src\scene\EnemyAnimationDebugScene.cpp" />
     <ClCompile Include="src\scene\GameScene.cpp" />
     <ClCompile Include="src\scene\GameSceneAnimation.cpp" />
     <ClCompile Include="src\scene\GameSceneCamera.cpp" />
@@ -136,6 +137,7 @@
     <ClInclude Include="include\enemy\Bullet.h" />
     <ClInclude Include="include\enemy\Enemy.h" />
     <ClInclude Include="include\scene\CombatFeedbackDirector.h" />
+    <ClInclude Include="include\scene\EnemyAnimationDebugScene.h" />
     <ClInclude Include="include\scene\GameScene.h" />
     <ClInclude Include="include\scene\ModeSelectScene.h" />
     <ClInclude Include="include\scene\SettingsScene.h" />
@@ -163,7 +165,7 @@
   <ItemGroup>
     <None Include="resources\models\boss\boss.bin" />
     <None Include="resources\models\boss\boss.gltf" />
-    <None Include="resources\models\boss\bossBody.png" />
+    <None Include="resources\models\boss\boss.png" />
     <None Include="resources\models\bullet\bullet.mtl" />
     <None Include="resources\models\bullet\bullet.obj" />
     <None Include="resources\models\bullet\bullet.png" />

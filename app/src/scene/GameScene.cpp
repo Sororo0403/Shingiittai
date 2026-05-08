@@ -1,5 +1,6 @@
 #include "GameScene.h"
 #include "DirectXCommon.h"
+#include "EnemyAnimationDebugScene.h"
 #include "Input.h"
 #include "Material.h"
 #include "Model.h"
@@ -8,6 +9,7 @@
 #include "TextureManager.h"
 #include "WinApp.h"
 #include "PostEffectRenderer.h"
+#include "SceneManager.h"
 #include <cmath>
 #include <exception>
 #include <vector>
@@ -258,6 +260,12 @@ void GameScene::Initialize(const SceneContext &ctx) {
 
 void GameScene::Update() {
     Input *input = ctx_->input;
+#ifdef _DEBUG
+    if (input->IsKeyTrigger(DIK_F7)) {
+        sceneManager_->ChangeScene(std::make_unique<EnemyAnimationDebugScene>());
+        return;
+    }
+#endif
     if (input->IsKeyTrigger(DIK_F3)) {
         showCollisionDebug_ = !showCollisionDebug_;
     }

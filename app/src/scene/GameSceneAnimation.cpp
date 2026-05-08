@@ -15,6 +15,10 @@ static const std::string kBossAnimWave =
     "\xE6\xB3\xA2\xE7\x8A\xB6\xE6\x94\xBB\xE6\x92\x83";
 static const std::string kBossAnimSmash =
     "\xE7\xB8\xA6\xE6\x8C\xAF\xE3\x82\x8A\xE4\xB8\x8B\xE3\x82\x8D\xE3\x81\x97";
+static const std::string kBossAnimShot =
+    "\xE5\xBC\xBE\xE7\x99\xBA\xE5\xB0\x84";
+static const std::string kBossAnimTeleport =
+    "\xE3\x83\x86\xE3\x83\xAC\xE3\x83\x9D\xE3\x83\xBC\xE3\x83\x88";
 static const std::string kBossBoneBase =
     "\xE3\x83\x9C\xE3\x83\xBC\xE3\x83\xB3";
 
@@ -120,6 +124,15 @@ static std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
         break;
 
     case ActionKind::Shot:
+        outLoop = false;
+        if (HasAnimation(model, kBossAnimShot)) {
+            return kBossAnimShot;
+        }
+        if (HasAnimation(model, kBossAnimWave)) {
+            return kBossAnimWave;
+        }
+        break;
+
     case ActionKind::Wave:
     case ActionKind::Nova:
         outLoop = false;
@@ -135,6 +148,16 @@ static std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
         break;
 
     case ActionKind::Warp:
+        outLoop = false;
+        if (HasAnimation(model, kBossAnimTeleport)) {
+            return kBossAnimTeleport;
+        }
+        if (HasAnimation(model, kBossAnimIdle)) {
+            outLoop = true;
+            return kBossAnimIdle;
+        }
+        break;
+
     case ActionKind::None:
     default:
         if (HasAnimation(model, kBossAnimIdle)) {
@@ -150,8 +173,7 @@ static std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
         return kBossAnimMove;
     }
 
-    return model->currentAnimation.empty() ? model->animations.begin()->first
-                                           : model->currentAnimation;
+    return {};
 }
 
 float GameScene::ComputeGameplayTimeScale() const {
@@ -175,6 +197,12 @@ void GameScene::SetEnemyAnimationFrozen(bool frozen) {
             ctx_->model->PlayAnimation(enemyModelId_, kBossAnimIdle, true);
             ctx_->model->UpdateAnimation(enemyModelId_, 0.0f);
             enemyAnimationName_ = kBossAnimIdle;
+            enemyAnimationLoop_ = true;
+        } else {
+            enemyModel->currentAnimation.clear();
+            enemyModel->animationTime = 0.0f;
+            ctx_->model->UpdateAnimation(enemyModelId_, 0.0f);
+            enemyAnimationName_.clear();
             enemyAnimationLoop_ = true;
         }
         enemyModel->isPlaying = false;
@@ -201,6 +229,17 @@ void GameScene::SyncEnemyAnimation() {
     bool shouldLoop = true;
     std::string nextAnimation = PickEnemyAnimation(enemyModel, enemy_, shouldLoop);
     if (nextAnimation.empty()) {
+        if (!enemyAnimationName_.empty() ||
+            !enemyModel->currentAnimation.empty()) {
+            enemyModel->currentAnimation.clear();
+            enemyModel->animationTime = 0.0f;
+            enemyModel->isLoop = true;
+            enemyModel->isPlaying = false;
+            enemyModel->animationFinished = false;
+            modelManager->UpdateAnimation(enemyModelId_, 0.0f);
+            enemyAnimationName_.clear();
+            enemyAnimationLoop_ = true;
+        }
         return;
     }
 
