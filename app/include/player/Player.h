@@ -36,7 +36,8 @@ class Player {
     void Update(Input *input, float deltaTime,
                 const DirectX::XMFLOAT3 &lookTarget, float cameraYaw);
 
-    void Draw(ModelManager *modelManager, const Camera &camera);
+    void Draw(ModelManager *modelManager, const Camera &camera,
+              bool drawBody = true);
 
     const Sword &GetSword() const { return rightSword_; }
     const Sword &GetLeftSword() const { return leftSword_; }

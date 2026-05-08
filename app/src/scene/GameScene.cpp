@@ -149,9 +149,9 @@ void GameScene::Initialize(const SceneContext &ctx) {
     const uint32_t worldRustTextureId =
         texture->CreateRustedMetalTexture(768, 768);
     ApplyWeatheredMetalMaterials(model, playerModel, worldRustTextureId,
-                                 {{0.66f, 0.63f, 0.56f, 1.0f},
-                                  {0.34f, 0.32f, 0.30f, 1.0f},
-                                  {0.58f, 0.30f, 0.15f, 1.0f}},
+                                 {{0.66f, 0.63f, 0.56f, 0.42f},
+                                  {0.34f, 0.32f, 0.30f, 0.42f},
+                                  {0.58f, 0.30f, 0.15f, 0.42f}},
                                  0.58f, 0.42f, 0.34f);
     ApplyWeatheredMetalMaterials(model, swordModel, worldRustTextureId,
                                  {{0.90f, 0.82f, 0.62f, 1.0f},
@@ -237,12 +237,18 @@ void GameScene::Initialize(const SceneContext &ctx) {
     const DirectX::XMFLOAT3 &enemyPos = enemy_.GetTransform().position;
     lockOnOrbitCameraPos_ = {playerPos.x, playerPos.y + lockOnOrbitHeight_,
                              playerPos.z - lockOnOrbitRadius_};
-    lockOnLookAt_ = {playerPos.x * lockOnLookPlayerWeight_ +
-                         enemyPos.x * lockOnLookEnemyWeight_,
-                     (playerPos.y + cameraLookHeight_) * 0.52f +
-                         (enemyPos.y + 1.30f) * 0.48f,
-                     playerPos.z * lockOnLookPlayerWeight_ +
-                         enemyPos.z * lockOnLookEnemyWeight_};
+    lockOnLookAt_ = playerViewCamera_
+                        ? DirectX::XMFLOAT3{enemyPos.x,
+                                            enemyPos.y +
+                                                playerViewLockOnLookHeight_,
+                                            enemyPos.z}
+                        : DirectX::XMFLOAT3{
+                              playerPos.x * lockOnLookPlayerWeight_ +
+                                  enemyPos.x * lockOnLookEnemyWeight_,
+                              (playerPos.y + cameraLookHeight_) * 0.52f +
+                                  (enemyPos.y + 1.30f) * 0.48f,
+                              playerPos.z * lockOnLookPlayerWeight_ +
+                                  enemyPos.z * lockOnLookEnemyWeight_};
     if (Model *playerModelData = model->GetModel(playerModelId_)) {
         if (!playerModelData->animations.empty()) {
             model->PlayAnimation(playerModelId_,
@@ -311,7 +317,7 @@ void GameScene::Draw() {
     ctx_->model->PreDraw();
 
     DrawArena();
-    player_.Draw(ctx_->model, camera_);
+    player_.Draw(ctx_->model, camera_, !playerViewCamera_);
     enemy_.Draw(ctx_->model, camera_);
     if (showCollisionDebug_) {
         collisionDebugRenderer_.Draw(collisionManager_, camera_);

@@ -7,7 +7,7 @@
 using namespace DirectX;
 
 namespace {
-constexpr float kSwordVisualScaleMultiplier = 3.0f;
+constexpr float kSwordVisualScaleMultiplier = 4.2f;
 constexpr float kSlashFollowThroughDuration = 0.16f;
 constexpr float kSlashFollowThroughPixelsPerSecond = 3000.0f;
 constexpr float kSlashFollowThroughMouseSensitivity = 0.003f;

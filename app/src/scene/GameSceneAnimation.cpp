@@ -283,13 +283,13 @@ void GameScene::ApplyEnemyProceduralAnimation() {
     const float phaseScale = phase2 ? 1.18f : 1.0f;
 
     auto poseArms = [&](float pitch, float yaw, float roll) {
-        PoseBoneTree(*enemyModel, upperA, pitch * 0.55f, -yaw * 0.55f,
-                     -roll * 0.35f);
-        PoseBoneTree(*enemyModel, upperB, pitch * 0.70f, yaw * 0.75f,
-                     roll * 0.55f);
-        PoseBoneTree(*enemyModel, upperC, pitch, yaw, roll);
-        PoseBoneTree(*enemyModel, upperD, pitch * 0.85f, yaw * 0.60f,
-                     roll * 0.70f);
+        (void)pitch;
+        (void)yaw;
+        (void)roll;
+        (void)upperA;
+        (void)upperB;
+        (void)upperC;
+        (void)upperD;
     };
 
     PoseBoneTree(*enemyModel, spine, -0.025f * slowPulse, 0.0f,

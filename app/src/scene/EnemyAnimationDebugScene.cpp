@@ -212,7 +212,7 @@ void EnemyAnimationDebugScene::Initialize(const SceneContext &ctx) {
     ctx_->texture->ReleaseUploadBuffers();
 
     enemyTf_.position = {0.0f, -0.65f, -1.35f};
-    enemyTf_.rotation = MakeQuat(0.0f, kPi, 0.0f);
+    enemyTf_.rotation = MakeQuat(0.0f, 0.0f, 0.0f);
     enemyTf_.scale = {1.0f, 1.0f, 1.0f};
 
     floorTf_.position = {0.0f, -0.05f, 0.0f};
@@ -561,13 +561,13 @@ void EnemyAnimationDebugScene::ApplySelectedSkillPose() {
     const int upperD = FindBoneIndex(*enemyModel, BossBoneName(".019"));
 
     auto poseArms = [&](float pitch, float yaw, float roll) {
-        PoseBoneTree(*enemyModel, upperA, pitch * 0.55f, -yaw * 0.55f,
-                     -roll * 0.35f);
-        PoseBoneTree(*enemyModel, upperB, pitch * 0.70f, yaw * 0.75f,
-                     roll * 0.55f);
-        PoseBoneTree(*enemyModel, upperC, pitch, yaw, roll);
-        PoseBoneTree(*enemyModel, upperD, pitch * 0.85f, yaw * 0.60f,
-                     roll * 0.70f);
+        (void)pitch;
+        (void)yaw;
+        (void)roll;
+        (void)upperA;
+        (void)upperB;
+        (void)upperC;
+        (void)upperD;
     };
 
     PoseBoneTree(*enemyModel, spine, -0.025f * slowPulse, 0.0f,

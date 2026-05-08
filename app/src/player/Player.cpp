@@ -8,7 +8,7 @@
 using namespace DirectX;
 
 namespace {
-constexpr float kPlayerVisualScaleMultiplier = 3.0f;
+constexpr float kPlayerVisualScaleMultiplier = 1.45f;
 }
 
 void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId,
@@ -173,7 +173,8 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
 
 }
 
-void Player::Draw(ModelManager *modelManager, const Camera &camera) {
+void Player::Draw(ModelManager *modelManager, const Camera &camera,
+                  bool drawBody) {
     const bool isInPostSlashRecovery = postSlashRecoveryTimer_ > 0.0f;
     const float recoveryRatio =
         (kPostSlashRecoveryDuration > 0.0f)
@@ -191,56 +192,17 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera) {
         playerVisual.position.x += std::sinf(phase) * shake;
         playerVisual.position.z += std::cosf(phase * 1.37f) * shake;
 
-        ModelDrawEffect recoveryEffect{};
-        recoveryEffect.enabled = true;
-        recoveryEffect.color = {1.0f, 0.34f, 0.10f, 0.75f};
-        recoveryEffect.intensity = 0.55f + 0.60f * recoveryRatio;
-        recoveryEffect.fresnelPower = 3.4f;
-        recoveryEffect.noiseAmount = 0.35f * recoveryRatio;
-        recoveryEffect.time = phase;
-        modelManager->SetDrawEffect(recoveryEffect);
-    } else {
-        ModelDrawEffect playerAura{};
-        playerAura.enabled = true;
-        playerAura.additiveBlend = false;
-        playerAura.color = {0.84f, 0.52f, 0.24f, 0.52f};
-        playerAura.intensity = 0.14f + 0.04f * std::sinf(yaw_ * 2.0f);
-        playerAura.fresnelPower = 2.6f;
-        playerAura.noiseAmount = 0.08f;
-        playerAura.time = yaw_;
-        modelManager->SetDrawEffect(playerAura);
     }
 
-    modelManager->Draw(modelId_, playerVisual, camera);
+    if (drawBody) {
+        modelManager->Draw(modelId_, playerVisual, camera);
+    }
     modelManager->ClearDrawEffect();
 
     if (leftSwordVisible_) {
-        ModelDrawEffect leftSwordEffect{};
-        leftSwordEffect.enabled = true;
-        leftSwordEffect.additiveBlend = true;
-        leftSwordEffect.color = {1.00f, 0.44f, 0.12f, 0.72f};
-        leftSwordEffect.intensity = leftSwordSlashMode_ ? 0.62f : 0.28f;
-        leftSwordEffect.fresnelPower = 1.8f;
-        leftSwordEffect.noiseAmount = leftSwordSlashMode_ ? 0.22f : 0.08f;
-        leftSwordEffect.time = leftSlashRecoveryTimer_ * 8.0f;
-        modelManager->SetDrawEffect(leftSwordEffect);
         leftSword_.Draw(modelManager, camera);
     }
     if (rightSwordVisible_) {
-        ModelDrawEffect rightSwordEffect{};
-        rightSwordEffect.enabled = true;
-        rightSwordEffect.additiveBlend = true;
-        rightSwordEffect.color =
-            weaponType_ == PlayerWeaponType::GreatSword
-                ? DirectX::XMFLOAT4{1.00f, 0.68f, 0.18f, 0.82f}
-                : DirectX::XMFLOAT4{0.78f, 0.88f, 0.76f, 0.72f};
-        rightSwordEffect.intensity =
-            rightSwordSlashMode_ ? 0.70f + 0.28f * greatSwordCharge_ : 0.32f;
-        rightSwordEffect.fresnelPower = 1.7f;
-        rightSwordEffect.noiseAmount =
-            rightSwordSlashMode_ ? 0.24f + 0.18f * greatSwordCharge_ : 0.08f;
-        rightSwordEffect.time = rightSlashRecoveryTimer_ * 8.0f + greatSwordCharge_;
-        modelManager->SetDrawEffect(rightSwordEffect);
         rightSword_.Draw(modelManager, camera);
     }
 

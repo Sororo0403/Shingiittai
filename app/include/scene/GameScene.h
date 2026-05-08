@@ -76,40 +76,40 @@ class GameScene : public BaseScene {
     Bullet bullet_;
 
     float cameraYaw_ = 0.0f;
-    float cameraPitch_ = 0.22f;
+    float cameraPitch_ = 0.12f;
     float cameraPitchMin_ = -0.20f;
     float cameraPitchMax_ = 0.55f;
     float cameraLookSensitivity_ = 0.022f;
-    float cameraDistance_ = 6.4f;
-    float cameraHeight_ = 2.3f;
-    float cameraSideOffset_ = 0.10f;
-    float cameraLookHeight_ = 1.55f;
-    float cameraLookAhead_ = 2.7f;
+    float cameraDistance_ = 5.8f;
+    float cameraHeight_ = 1.95f;
+    float cameraSideOffset_ = 0.18f;
+    float cameraLookHeight_ = 1.30f;
+    float cameraLookAhead_ = 3.0f;
 
     bool isLockOn_ = false;
-    float lockOnAssistStrength_ = 3.6f;
-    float lockOnAssistMaxStep_ = 4.8f;
-    float lockOnInputReduce_ = 0.45f;
+    float lockOnAssistStrength_ = 4.3f;
+    float lockOnAssistMaxStep_ = 5.8f;
+    float lockOnInputReduce_ = 0.35f;
 
-    float lockOnCameraDistance_ = 7.4f;
-    float lockOnCameraHeight_ = 2.5f;
-    float lockOnCameraSideOffset_ = 0.08f;
-    float lockOnLookPlayerWeight_ = 0.48f;
-    float lockOnLookEnemyWeight_ = 0.52f;
+    float lockOnCameraDistance_ = 8.0f;
+    float lockOnCameraHeight_ = 2.9f;
+    float lockOnCameraSideOffset_ = 0.20f;
+    float lockOnLookPlayerWeight_ = 0.32f;
+    float lockOnLookEnemyWeight_ = 0.68f;
 
     float lockOnDistanceMin_ = 2.5f;
     float lockOnDistanceMax_ = 11.0f;
     float lockOnDistancePullBackMin_ = 0.0f;
-    float lockOnDistancePullBackMax_ = 1.8f;
+    float lockOnDistancePullBackMax_ = 2.5f;
 
-    float lockOnOrbitRadius_ = 6.8f;
-    float lockOnOrbitHeight_ = 2.4f;
-    float lockOnOrbitSideBias_ = 0.05f;
-    float lockOnOrbitLerpSpeed_ = 7.5f;
-    float lockOnOrbitPullBackMax_ = 2.3f;
+    float lockOnOrbitRadius_ = 5.4f;
+    float lockOnOrbitHeight_ = 2.95f;
+    float lockOnOrbitSideBias_ = 0.55f;
+    float lockOnOrbitLerpSpeed_ = 6.2f;
+    float lockOnOrbitPullBackMax_ = 1.8f;
     DirectX::XMFLOAT3 lockOnOrbitCameraPos_ = {0.0f, 0.0f, 0.0f};
 
-    float lockOnLookAtLerpSpeed_ = 9.0f;
+    float lockOnLookAtLerpSpeed_ = 8.2f;
     DirectX::XMFLOAT3 lockOnLookAt_ = {0.0f, 0.0f, 0.0f};
 
     float rushChargeAssistStrength_ = 4.8f;
@@ -123,18 +123,24 @@ class GameScene : public BaseScene {
     float warpEndAssistStrength_ = 6.0f;
     float warpEndAssistMaxStep_ = 10.0f;
 
-    float currentFovDeg_ = 74.0f;
-    float targetFovDeg_ = 74.0f;
-    float normalFovDeg_ = 74.0f;
-    float lockOnFovDeg_ = 78.0f;
-    float rushFovDeg_ = 80.0f;
-    float warpFovDeg_ = 79.0f;
-    float phaseTransitionFovDeg_ = 68.0f;
+    float currentFovDeg_ = 82.0f;
+    float targetFovDeg_ = 82.0f;
+    float normalFovDeg_ = 82.0f;
+    float lockOnFovDeg_ = 82.0f;
+    float rushFovDeg_ = 84.0f;
+    float warpFovDeg_ = 84.0f;
+    float phaseTransitionFovDeg_ = 78.0f;
     float fovLerpSpeed_ = 6.5f;
     float phaseTransitionFovLerpSpeed_ = 5.5f;
     float phaseTransitionLookAtEnemyWeight_ = 0.82f;
-    float phaseTransitionLookAtHeight_ = 1.45f;
+    float phaseTransitionLookAtHeight_ = 2.35f;
     float phaseTransitionPushIn_ = 0.85f;
+    bool playerViewCamera_ = false;
+    float playerViewEyeHeight_ = 1.42f;
+    float playerViewForwardOffset_ = 0.10f;
+    float playerViewSideOffset_ = 0.12f;
+    float playerViewLookAhead_ = 8.0f;
+    float playerViewLockOnLookHeight_ = 1.48f;
 
     float sceneLightTime_ = 0.0f;
 
