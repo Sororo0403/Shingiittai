@@ -348,6 +348,98 @@ uint32_t TextureManager::CreateRustedMetalTexture(uint32_t width,
     return CreateTexture(&image, 1, metadata);
 }
 
+uint32_t TextureManager::CreateArenaStoneTexture(uint32_t width,
+                                                 uint32_t height) {
+    width = (std::max)(width, 1u);
+    height = (std::max)(height, 1u);
+
+    std::vector<uint32_t> pixels(static_cast<size_t>(width) * height);
+    constexpr uint32_t seed = 0x51A7E0A1u;
+
+    for (uint32_t y = 0; y < height; ++y) {
+        for (uint32_t x = 0; x < width; ++x) {
+            const float u = static_cast<float>(x) / static_cast<float>(width);
+            const float v = static_cast<float>(y) / static_cast<float>(height);
+
+            const float largeGrain =
+                ValueNoise(u * 7.0f, v * 7.0f, seed + 11u);
+            const float fineGrain =
+                ValueNoise(u * 58.0f, v * 58.0f, seed + 29u);
+            const float cloud =
+                ValueNoise(u * 2.6f + 3.0f, v * 2.1f, seed + 47u);
+            const float wear =
+                ValueNoise(u * 18.0f, v * 18.0f + 5.0f, seed + 83u);
+
+            const float tileU = std::fmod(u * 7.0f, 1.0f);
+            const float tileV = std::fmod(v * 7.0f, 1.0f);
+            const float edgeU = (std::min)(tileU, 1.0f - tileU);
+            const float edgeV = (std::min)(tileV, 1.0f - tileV);
+            const float mortar =
+                1.0f - Smoothstep(0.010f, 0.030f, (std::min)(edgeU, edgeV));
+            const float tileCenter =
+                Smoothstep(0.05f, 0.36f, edgeU) * Smoothstep(0.05f, 0.36f, edgeV);
+
+            const float crackNoise =
+                ValueNoise(u * 23.0f + 7.0f, v * 23.0f, seed + 131u);
+            const float crack =
+                std::pow(Saturate(1.0f - std::fabs(crackNoise - 0.52f) * 24.0f),
+                         2.4f) *
+                Smoothstep(0.52f, 0.82f, wear);
+
+            float r = 0.60f;
+            float g = 0.58f;
+            float b = 0.52f;
+
+            const float stoneVariation =
+                (largeGrain - 0.5f) * 0.14f + (fineGrain - 0.5f) * 0.08f +
+                (cloud - 0.5f) * 0.10f;
+            r += stoneVariation;
+            g += stoneVariation * 0.92f;
+            b += stoneVariation * 0.78f;
+
+            const float sunWear = tileCenter * Smoothstep(0.38f, 0.76f, wear);
+            r = Lerp(r, 0.76f, sunWear * 0.28f);
+            g = Lerp(g, 0.72f, sunWear * 0.28f);
+            b = Lerp(b, 0.63f, sunWear * 0.22f);
+
+            const float coolVein =
+                Smoothstep(0.62f, 0.90f,
+                           ValueNoise(u * 11.0f - 4.0f, v * 15.0f, seed + 191u));
+            r = Lerp(r, 0.54f, coolVein * 0.12f);
+            g = Lerp(g, 0.62f, coolVein * 0.12f);
+            b = Lerp(b, 0.60f, coolVein * 0.10f);
+
+            r = Lerp(r, 0.36f, mortar * 0.32f + crack * 0.42f);
+            g = Lerp(g, 0.34f, mortar * 0.32f + crack * 0.42f);
+            b = Lerp(b, 0.31f, mortar * 0.30f + crack * 0.38f);
+
+            pixels[static_cast<size_t>(y) * width + x] = PackRgba(
+                static_cast<uint8_t>(Saturate(r) * 255.0f),
+                static_cast<uint8_t>(Saturate(g) * 255.0f),
+                static_cast<uint8_t>(Saturate(b) * 255.0f), 255u);
+        }
+    }
+
+    Image image{};
+    image.width = width;
+    image.height = height;
+    image.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    image.rowPitch = static_cast<size_t>(width) * sizeof(uint32_t);
+    image.slicePitch = image.rowPitch * height;
+    image.pixels = reinterpret_cast<uint8_t *>(pixels.data());
+
+    TexMetadata metadata{};
+    metadata.width = width;
+    metadata.height = height;
+    metadata.depth = 1;
+    metadata.arraySize = 1;
+    metadata.mipLevels = 1;
+    metadata.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    metadata.dimension = TEX_DIMENSION_TEXTURE2D;
+
+    return CreateTexture(&image, 1, metadata);
+}
+
 uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
                                        const TexMetadata &metadata) {
     Texture texture;

@@ -54,6 +54,9 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId,
     dodgeCooldownTimer_ = 0.0f;
     dodgeInvulnerableTimer_ = 0.0f;
     dodgeDirection_ = {0.0f, -1.0f};
+    autoMoveOrbitDir_ = 1.0f;
+    autoMoveOrbitTimer_ = 0.0f;
+    autoDodgeSide_ = 1.0f;
     leftSword_.Update(BuildSwordTransform(MakeIdleSwordPose(true), true),
                       MakeIdleSwordPose(true), 0.0f);
     rightSword_.Update(BuildSwordTransform(MakeIdleSwordPose(false), false),
@@ -80,8 +83,8 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     leftJoyCon_.Update(deltaTime);
     rightJoyCon_.Update(deltaTime);
 
-    UpdateDodgeInput(input, deltaTime, cameraYaw);
-    UpdateMovement(input, deltaTime, cameraYaw);
+    UpdateDodgeInput(input, deltaTime, cameraYaw, lookTarget);
+    UpdateMovement(input, deltaTime, cameraYaw, lookTarget);
     UpdateSwingCombo(deltaTime);
     KeepDistanceFromTarget(lookTarget);
     LookAt(lookTarget);
@@ -329,7 +332,12 @@ bool Player::IsDodgeInputTriggered(Input *input) const {
     return keyboardDodge || gamepadDodge || leftJoyConDodge || rightJoyConDodge;
 }
 
-void Player::UpdateDodgeInput(Input *input, float deltaTime, float cameraYaw) {
+bool Player::UsesJoyConAutoMovement() const {
+    return leftJoyCon_.IsConnected() || rightJoyCon_.IsConnected();
+}
+
+void Player::UpdateDodgeInput(Input *input, float deltaTime, float cameraYaw,
+                              const XMFLOAT3 &lookTarget) {
     if (dodgeCooldownTimer_ > 0.0f) {
         dodgeCooldownTimer_ -= deltaTime;
         if (dodgeCooldownTimer_ < 0.0f) {
@@ -358,11 +366,36 @@ void Player::UpdateDodgeInput(Input *input, float deltaTime, float cameraYaw) {
     const float lenSq = inputDir.x * inputDir.x + inputDir.y * inputDir.y;
     float worldX = 0.0f;
     float worldZ = 0.0f;
-    if (lenSq > 0.01f) {
+    if (lenSq > 0.01f && !UsesJoyConAutoMovement()) {
         const float sinYaw = std::sinf(cameraYaw);
         const float cosYaw = std::cosf(cameraYaw);
         worldX = sinYaw * inputDir.y + cosYaw * inputDir.x;
         worldZ = cosYaw * inputDir.y - sinYaw * inputDir.x;
+    } else if (UsesJoyConAutoMovement()) {
+        float toTargetX = lookTarget.x - tf_.position.x;
+        float toTargetZ = lookTarget.z - tf_.position.z;
+        float distSq = toTargetX * toTargetX + toTargetZ * toTargetZ;
+        if (distSq < 0.0001f) {
+            toTargetX = std::sinf(yaw_);
+            toTargetZ = std::cosf(yaw_);
+            distSq = 1.0f;
+        }
+
+        const float invDist = 1.0f / std::sqrt(distSq);
+        const float towardX = toTargetX * invDist;
+        const float towardZ = toTargetZ * invDist;
+        const float rightX = towardZ;
+        const float rightZ = -towardX;
+        const float distance = std::sqrt(distSq);
+        const bool tooClose = distance < kJoyConAutoMoveNearDistance;
+
+        worldX = rightX * autoDodgeSide_;
+        worldZ = rightZ * autoDodgeSide_;
+        if (tooClose) {
+            worldX -= towardX * 0.75f;
+            worldZ -= towardZ * 0.75f;
+        }
+        autoDodgeSide_ *= -1.0f;
     } else {
         worldX = -std::sinf(yaw_);
         worldZ = -std::cosf(yaw_);
@@ -382,7 +415,8 @@ void Player::UpdateDodgeInput(Input *input, float deltaTime, float cameraYaw) {
     postSlashRecoveryTimer_ = 0.0f;
 }
 
-void Player::UpdateMovement(Input *input, float deltaTime, float cameraYaw) {
+void Player::UpdateMovement(Input *input, float deltaTime, float cameraYaw,
+                            const XMFLOAT3 &lookTarget) {
     const XMFLOAT2 moveInput = ReadMovementInput(input);
     float inputX = moveInput.x;
     float inputZ = moveInput.y;
@@ -391,6 +425,47 @@ void Player::UpdateMovement(Input *input, float deltaTime, float cameraYaw) {
     float cosYaw = std::cosf(cameraYaw);
     float worldMoveX = sinYaw * inputZ + cosYaw * inputX;
     float worldMoveZ = cosYaw * inputZ - sinYaw * inputX;
+    const bool useAutoMovement = UsesJoyConAutoMovement();
+    const bool hasManualMove = inputX * inputX + inputZ * inputZ > 0.04f;
+    if (useAutoMovement && !hasManualMove) {
+        autoMoveOrbitTimer_ -= deltaTime;
+        if (autoMoveOrbitTimer_ <= 0.0f) {
+            autoMoveOrbitTimer_ = 1.6f;
+            autoMoveOrbitDir_ *= -1.0f;
+        }
+
+        float toTargetX = lookTarget.x - tf_.position.x;
+        float toTargetZ = lookTarget.z - tf_.position.z;
+        float distSq = toTargetX * toTargetX + toTargetZ * toTargetZ;
+        if (distSq < 0.0001f) {
+            toTargetX = std::sinf(yaw_);
+            toTargetZ = std::cosf(yaw_);
+            distSq = 1.0f;
+        }
+
+        const float distance = std::sqrt(distSq);
+        const float invDist = 1.0f / distance;
+        const float towardX = toTargetX * invDist;
+        const float towardZ = toTargetZ * invDist;
+        const float rightX = towardZ;
+        const float rightZ = -towardX;
+        const float distanceError =
+            distance - kJoyConAutoMoveIdealDistance;
+        const float distancePush =
+            std::clamp(distanceError * 1.15f, -1.0f, 1.0f);
+        const float orbitScale =
+            distance < kJoyConAutoMoveNearDistance ||
+                    distance > kJoyConAutoMoveFarDistance
+                ? 0.35f
+                : 1.0f;
+
+        worldMoveX = rightX * autoMoveOrbitDir_ * kJoyConAutoMoveOrbitSpeed *
+                         orbitScale +
+                     towardX * distancePush * kJoyConAutoMoveDistanceSpeed;
+        worldMoveZ = rightZ * autoMoveOrbitDir_ * kJoyConAutoMoveOrbitSpeed *
+                         orbitScale +
+                     towardZ * distancePush * kJoyConAutoMoveDistanceSpeed;
+    }
 
     float speedScale = 1.0f;
     if (IsHunterGamepadAttacking()) {
@@ -401,6 +476,10 @@ void Player::UpdateMovement(Input *input, float deltaTime, float cameraYaw) {
         velocity_.x = dodgeDirection_.x * kDodgeSpeed;
         velocity_.y = 0.0f;
         velocity_.z = dodgeDirection_.y * kDodgeSpeed;
+    } else if (useAutoMovement && !hasManualMove) {
+        velocity_.x = worldMoveX * speedScale;
+        velocity_.y = 0.0f;
+        velocity_.z = worldMoveZ * speedScale;
     } else {
         velocity_.x = worldMoveX * moveSpeed_ * speedScale;
         velocity_.y = 0.0f;

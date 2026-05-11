@@ -131,10 +131,13 @@ class Player {
     DirectX::XMFLOAT2 GetHunterGamepadSlashDir(
         HunterGamepadAttackKind attackKind) const;
     void ToggleGamepadControlMode();
-    void UpdateDodgeInput(Input *input, float deltaTime, float cameraYaw);
+    void UpdateDodgeInput(Input *input, float deltaTime, float cameraYaw,
+                          const DirectX::XMFLOAT3 &lookTarget);
     bool IsDodgeInputTriggered(Input *input) const;
     DirectX::XMFLOAT2 ReadMovementInput(Input *input) const;
-    void UpdateMovement(Input *input, float deltaTime, float cameraYaw);
+    bool UsesJoyConAutoMovement() const;
+    void UpdateMovement(Input *input, float deltaTime, float cameraYaw,
+                        const DirectX::XMFLOAT3 &lookTarget);
     void KeepDistanceFromTarget(const DirectX::XMFLOAT3 &target);
     void LookAt(const DirectX::XMFLOAT3 &target);
     void UpdateWeaponRules(Input *input, SwordPose &leftPose,
@@ -193,6 +196,14 @@ class Player {
     static constexpr float kDodgeInvulnerableDuration = 0.24f;
     static constexpr float kDodgeCooldownDuration = 0.46f;
     static constexpr float kDodgeSpeed = 8.8f;
+    float autoMoveOrbitDir_ = 1.0f;
+    float autoMoveOrbitTimer_ = 0.0f;
+    float autoDodgeSide_ = 1.0f;
+    static constexpr float kJoyConAutoMoveIdealDistance = 3.35f;
+    static constexpr float kJoyConAutoMoveNearDistance = 2.75f;
+    static constexpr float kJoyConAutoMoveFarDistance = 4.15f;
+    static constexpr float kJoyConAutoMoveOrbitSpeed = 1.75f;
+    static constexpr float kJoyConAutoMoveDistanceSpeed = 3.35f;
     float leftSlashRecoveryTimer_ = 0.0f;
     float rightSlashRecoveryTimer_ = 0.0f;
     float leftSwordAttackDamage_ = 10.0f;

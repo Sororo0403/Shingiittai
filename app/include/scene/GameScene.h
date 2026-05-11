@@ -34,8 +34,6 @@ class GameScene : public BaseScene {
     void ApplyEnemyProceduralAnimation();
     void SetEnemyAnimationFrozen(bool frozen);
     void UpdateCombat(float gameplayDeltaTime);
-    void UpdateEnemyTelegraphEffects(float deltaTime);
-    void DrawEnemyTelegraph();
     void DispatchCombatFeedback(const CombatFeedbackEvent &event);
     void EmitCombatParticles(const CombatFeedbackEvent &event);
     PlayerCombatObservation BuildPlayerCombatObservation() const;
@@ -68,18 +66,12 @@ class GameScene : public BaseScene {
     uint32_t arenaColumnCapModelId_ = 0;
     uint32_t arenaDomeModelId_ = 0;
     uint32_t arenaBarrierRingModelId_ = 0;
-    uint32_t enemyTelegraphPlaneModelId_ = 0;
-    uint32_t enemyTelegraphRingModelId_ = 0;
-    uint32_t animeSlashTextureId_ = 0;
-    uint32_t enemySlashPlaneModelId_ = 0;
     uint32_t arenaNoiseTextureId_ = 0;
     std::string enemyAnimationName_{};
     bool enemyAnimationLoop_ = true;
 
     float playerHitCooldown_ = 0.0f;
     float enemyHitCooldown_ = 0.0f;
-    float enemyTelegraphParticleTimer_ = 0.0f;
-
     Bullet bullet_;
 
     float cameraYaw_ = 0.0f;
