@@ -78,17 +78,6 @@ void Enemy::UpdateSmashCharge(float deltaTime) {
             LockCurrentFacing();
             hasTrackingLocked_ = true;
         }
-
-        if (ShouldEnterSmashHold()) {
-            EnterHold(RandomRange(config_.attacks.smash.melee.holdTime.min,
-                                  config_.attacks.smash.melee.holdTime.max));
-            if (ShouldDoFakeCommit(ActionKind::Smash)) {
-                EnterFakeCommit(ActionKind::Smash);
-            }
-            ChangeActionStep(ActionStep::Hold);
-            return;
-        }
-
         ChangeActionStep(ActionStep::Active);
     }
 }
@@ -131,6 +120,7 @@ void Enemy::UpdateSmashHold(float deltaTime) {
 }
 
 void Enemy::UpdateSmashAttack(float deltaTime) {
+    (void)deltaTime;
     const AttackTimingParam *timing = GetCurrentAttackTiming();
     if (!timing) {
         EndAttack();
@@ -138,30 +128,13 @@ void Enemy::UpdateSmashAttack(float deltaTime) {
     }
 
     isAttackActive_ = true;
-    if (stateTimer_ <= timing->activeEndTime) {
-        float speed = smashActiveLungeSpeed_;
-        if (phase_ == BossPhase::Phase2) {
-            speed *= phase2ActiveLungeScale_;
-        }
-
-        tf_.position.x += std::sin(lockedAttackYaw_) * speed * deltaTime;
-        tf_.position.z += std::cos(lockedAttackYaw_) * speed * deltaTime;
-    }
-
-    if (stateTimer_ >= timing->totalTime) {
+    if (stateTimer_ >= timing->activeEndTime) {
         ChangeActionStep(ActionStep::Recovery);
     }
 }
 
 void Enemy::UpdateSmashRecovery(float deltaTime) {
-    const bool isDelaySmashWhiff =
-        action_.id == ActionId::DelaySmash && !currentActionConnected_ &&
-        !currentActionGuarded_;
-    float turnSpeed = recoveryTurnSpeed_;
-    if (isDelaySmashWhiff) {
-        turnSpeed *= punishWindowTurnSpeedScale_;
-    }
-    UpdateFacingToPlayerWithSpeed(deltaTime, turnSpeed);
+    UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_ * 0.25f);
 
     const AttackTimingParam *timing = GetCurrentAttackTiming();
     if (!timing) {
@@ -173,12 +146,10 @@ void Enemy::UpdateSmashRecovery(float deltaTime) {
     if (recoveryDuration < 0.0f) {
         recoveryDuration = 0.0f;
     }
-    if (isDelaySmashWhiff) {
-        recoveryDuration += delaySmashWhiffRecoveryBonus_;
-    }
+    recoveryDuration += 0.18f;
 
     if (stateTimer_ >= recoveryDuration) {
-        FinishCurrentAction();
+        EndAttack();
     }
 }
 
@@ -218,17 +189,6 @@ void Enemy::UpdateSweepCharge(float deltaTime) {
             LockCurrentFacing();
             hasTrackingLocked_ = true;
         }
-
-        if (ShouldEnterSweepHold()) {
-            EnterHold(RandomRange(config_.attacks.sweep.melee.holdTime.min,
-                                  config_.attacks.sweep.melee.holdTime.max));
-            if (ShouldDoFakeCommit(ActionKind::Sweep)) {
-                EnterFakeCommit(ActionKind::Sweep);
-            }
-            ChangeActionStep(ActionStep::Hold);
-            return;
-        }
-
         ChangeActionStep(ActionStep::Active);
     }
 }
@@ -271,6 +231,7 @@ void Enemy::UpdateSweepHold(float deltaTime) {
 }
 
 void Enemy::UpdateSweepAttack(float deltaTime) {
+    (void)deltaTime;
     const AttackTimingParam *timing = GetCurrentAttackTiming();
     if (!timing) {
         EndAttack();
@@ -278,27 +239,13 @@ void Enemy::UpdateSweepAttack(float deltaTime) {
     }
 
     isAttackActive_ = true;
-    if (stateTimer_ <= timing->activeEndTime) {
-        float speed = sweepActiveLungeSpeed_;
-        if (phase_ == BossPhase::Phase2) {
-            speed *= phase2ActiveLungeScale_;
-        }
-
-        tf_.position.x += std::sin(lockedAttackYaw_) * speed * deltaTime;
-        tf_.position.z += std::cos(lockedAttackYaw_) * speed * deltaTime;
-    }
-
-    if (stateTimer_ >= timing->totalTime) {
+    if (stateTimer_ >= timing->activeEndTime) {
         ChangeActionStep(ActionStep::Recovery);
     }
 }
 
 void Enemy::UpdateSweepRecovery(float deltaTime) {
-    UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_);
-
-    if (TryBeginDoubleSweepSecondStage()) {
-        return;
-    }
+    UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_ * 0.25f);
 
     const AttackTimingParam *timing = GetCurrentAttackTiming();
     if (!timing) {
@@ -310,9 +257,10 @@ void Enemy::UpdateSweepRecovery(float deltaTime) {
     if (recoveryDuration < 0.0f) {
         recoveryDuration = 0.0f;
     }
+    recoveryDuration += 0.16f;
 
     if (stateTimer_ >= recoveryDuration) {
-        FinishCurrentAction();
+        EndAttack();
     }
 }
 

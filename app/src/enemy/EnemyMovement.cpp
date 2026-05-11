@@ -109,3 +109,5 @@ float Enemy::GetVisualYaw() const {
     }
     return facingYaw_;
 }
+
+float Enemy::GetTelegraphYaw() const { return GetVisualYaw(); }

@@ -219,33 +219,6 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     action_.kind = kind;
     action_.id = MakeDefaultActionId(kind);
 
-    if (kind == ActionKind::Smash) {
-        float r = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-        float useDelayChance = config_.attacks.smash.delayChance;
-        if (playerObs_.isCounterStance) {
-            useDelayChance += 0.20f;
-        }
-        if (phase_ == BossPhase::Phase2) {
-            useDelayChance += phase2DelaySmashBonus_;
-        }
-
-        if (r < useDelayChance) {
-            action_.id = ActionId::DelaySmash;
-        }
-    }
-
-    if (kind == ActionKind::Sweep) {
-        float r = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-        float useDoubleChance = config_.attacks.sweep.doubleChance;
-        if (IsCounterFailObserved()) {
-            useDoubleChance += 0.20f;
-        }
-
-        if (r < useDoubleChance) {
-            action_.id = ActionId::DoubleSweep;
-        }
-    }
-
     if (kind == ActionKind::Nova) {
         novaPhase2Cooldown_ = novaPhase2CooldownDuration_;
     }
@@ -359,34 +332,6 @@ void Enemy::EndAttack() {
 }
 
 void Enemy::FinishCurrentAction() {
-    const ActionKind finishedKind = action_.kind;
-
-    if (TryContinueChain()) {
-        return;
-    }
-
-    if (TryBranchFromRecovery(finishedKind)) {
-        if (recoveryBranchType_ == RecoveryBranchType::Recommit ||
-            recoveryBranchType_ == RecoveryBranchType::DelayedSecond) {
-            const ActionKind nextKind = recoveryFollowupKind_;
-            const ActionStep nextStep = recoveryFollowupStep_;
-
-            EndAttack();
-            if (nextKind == ActionKind::Smash || nextKind == ActionKind::Sweep) {
-                tactic_ = TacticState::Melee;
-            }
-
-            recoveryFollowupKind_ = nextKind;
-            recoveryFollowupStep_ = nextStep;
-            return;
-        }
-        return;
-    }
-
-    if (TryStartBackWarpPostAction(finishedKind)) {
-        return;
-    }
-
     EndAttack();
 }
 

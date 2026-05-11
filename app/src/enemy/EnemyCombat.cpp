@@ -31,16 +31,14 @@ OBB Enemy::GetSmashAttackOBB() const {
     const float usedYaw = ShouldUseLockedAttackYaw() ? lockedAttackYaw_ : facingYaw_;
     const float forwardX = std::sin(usedYaw);
     const float forwardZ = std::cos(usedYaw);
-    const float rightX = std::cos(usedYaw);
-    const float rightZ = -std::sin(usedYaw);
 
     Transform attackTf{};
     attackTf.scale = {1.0f, 1.0f, 1.0f};
-    attackTf.rotation = rightHandTf_.rotation;
-    attackTf.position = rightHandTf_.position;
-    attackTf.position.x += forwardX * 0.50f + rightX * 0.08f;
-    attackTf.position.y += 0.05f;
-    attackTf.position.z += forwardZ * 0.50f + rightZ * 0.08f;
+    attackTf.rotation = bodyTf_.rotation;
+    attackTf.position = tf_.position;
+    attackTf.position.x += forwardX * 1.05f;
+    attackTf.position.y += 0.04f;
+    attackTf.position.z += forwardZ * 1.05f;
 
     return MakeOBB(attackTf, GetCurrentAttackHitBoxSize());
 }
@@ -49,20 +47,14 @@ OBB Enemy::GetSweepAttackOBB() const {
     const float usedYaw = ShouldUseLockedAttackYaw() ? lockedAttackYaw_ : facingYaw_;
     const float forwardX = std::sin(usedYaw);
     const float forwardZ = std::cos(usedYaw);
-    const float rightX = std::cos(usedYaw);
-    const float rightZ = -std::sin(usedYaw);
-    const float handDirX = rightHandTf_.position.x - bodyTf_.position.x;
-    const float handDirZ = rightHandTf_.position.z - bodyTf_.position.z;
-    const float sideDot = handDirX * rightX + handDirZ * rightZ;
-    const float sideSign = (sideDot >= 0.0f) ? 1.0f : -1.0f;
 
     Transform attackTf{};
     attackTf.scale = {1.0f, 1.0f, 1.0f};
-    attackTf.rotation = rightHandTf_.rotation;
-    attackTf.position = rightHandTf_.position;
-    attackTf.position.x += rightX * (0.28f * sideSign) + forwardX * 0.24f;
+    attackTf.rotation = bodyTf_.rotation;
+    attackTf.position = tf_.position;
+    attackTf.position.x += forwardX * 0.42f;
     attackTf.position.y += 0.04f;
-    attackTf.position.z += rightZ * (0.28f * sideSign) + forwardZ * 0.24f;
+    attackTf.position.z += forwardZ * 0.42f;
 
     return MakeOBB(attackTf, GetCurrentAttackHitBoxSize());
 }
@@ -80,6 +72,80 @@ float Enemy::GetCurrentAttackKnockback() const {
 DirectX::XMFLOAT3 Enemy::GetCurrentAttackHitBoxSize() const {
     const AttackParam *param = GetCurrentAttackParam();
     return param ? param->hitBoxSize : DirectX::XMFLOAT3{0.1f, 0.1f, 0.1f};
+}
+
+bool Enemy::IsNovaImpactPending() const {
+    return action_.kind == ActionKind::Nova && action_.step == ActionStep::Active &&
+           stateTimer_ < config_.attacks.nova.impactTime;
+}
+
+bool Enemy::IsNovaImpactWindow() const {
+    if (action_.kind != ActionKind::Nova || action_.step != ActionStep::Active) {
+        return false;
+    }
+
+    const float start = config_.attacks.nova.impactTime;
+    const float end = start + config_.attacks.nova.impactWindow;
+    return stateTimer_ >= start && stateTimer_ <= end;
+}
+
+float Enemy::GetNovaImpactRadius() const {
+    return config_.attacks.nova.impactRadius;
+}
+
+float Enemy::GetNovaImpactDamage() const {
+    return config_.attacks.nova.impactDamage;
+}
+
+float Enemy::GetNovaImpactKnockback() const {
+    return config_.attacks.nova.impactKnockback;
+}
+
+bool Enemy::IsPunishableRecovery() const {
+    switch (action_.kind) {
+    case ActionKind::Smash:
+    case ActionKind::Sweep:
+    case ActionKind::Shot:
+    case ActionKind::Wave:
+    case ActionKind::Nova:
+        return action_.step == ActionStep::Recovery && hitReactionTimer_ <= 0.0f;
+    default:
+        return false;
+    }
+}
+
+float Enemy::GetRecoveryProgressForPresentation() const {
+    if (action_.step != ActionStep::Recovery) {
+        return 0.0f;
+    }
+
+    float duration = 1.0f;
+    switch (action_.kind) {
+    case ActionKind::Smash:
+    case ActionKind::Sweep:
+        if (const AttackTimingParam *timing = GetCurrentAttackTiming()) {
+            duration = timing->totalTime - timing->recoveryStartTime;
+        }
+        duration += (action_.kind == ActionKind::Smash) ? 0.18f : 0.16f;
+        break;
+    case ActionKind::Shot:
+        duration = config_.attacks.shot.recoveryTime + 0.18f;
+        break;
+    case ActionKind::Wave:
+        duration = config_.attacks.wave.recoveryTime + 0.18f;
+        break;
+    case ActionKind::Nova:
+        duration = config_.attacks.nova.recoveryTime + 0.25f;
+        break;
+    default:
+        duration = 1.0f;
+        break;
+    }
+
+    if (duration <= 0.0001f) {
+        return 1.0f;
+    }
+    return (std::clamp)(stateTimer_ / duration, 0.0f, 1.0f);
 }
 
 float Enemy::GetDistanceToPlayer() const {

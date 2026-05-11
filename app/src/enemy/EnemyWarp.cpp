@@ -314,8 +314,8 @@ void Enemy::UpdateWarpStart(float deltaTime) {
         UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_ * 0.45f);
     }
 
-    isVisible_ = false;
-    warp_.collisionDisabled = true;
+    isVisible_ = true;
+    warp_.collisionDisabled = false;
 
     float startTime = config_.warp.startTime;
     if (action_.id == ActionId::WarpBackstab) {
@@ -326,6 +326,8 @@ void Enemy::UpdateWarpStart(float deltaTime) {
     }
 
     if (stateTimer_ >= startTime) {
+        isVisible_ = false;
+        warp_.collisionDisabled = true;
         warpTrailEmitTimer_ = 0.0f;
         EmitWarpTrailGhost(warp_.departurePos, warpTrailScaleMax_);
         ChangeActionStep(ActionStep::Move);

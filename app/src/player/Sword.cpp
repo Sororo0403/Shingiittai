@@ -65,43 +65,48 @@ void Sword::SetRecoveryReaction(float reaction) {
 OBB Sword::GetOBB() const {
     OBB box;
 
-    float hitBoxDepth = size_.z;
-    float forwardOffset = kSwordLength * 0.5f;
+    const Transform hitTransform = BuildVisualTransform();
+    float hitBoxDepth = kSwordLength * hitTransform.scale.z;
     if (isSlashMode_) {
-        hitBoxDepth += kSlashHitDepthExtension;
-        forwardOffset += kSlashHitDepthExtension * 0.5f;
+        hitBoxDepth += kSlashHitDepthExtension * hitTransform.scale.z * 0.64f;
     }
 
-    XMVECTOR pos = XMLoadFloat3(&tf_.position);
-    XMVECTOR rot = XMLoadFloat4(&tf_.rotation);
+    const float forwardOffset = hitBoxDepth * 0.5f;
+    XMVECTOR pos = XMLoadFloat3(&hitTransform.position);
+    XMVECTOR rot = XMLoadFloat4(&hitTransform.rotation);
     XMVECTOR forward = XMVector3Rotate(XMVectorSet(0, 0, 1, 0), rot);
     XMVECTOR center = pos + forward * forwardOffset;
 
     XMStoreFloat3(&box.center, center);
-    box.size = size_;
-    box.size.z = hitBoxDepth;
-    box.rotation = tf_.rotation;
+    box.size = {size_.x * hitTransform.scale.x * 1.02f,
+                size_.y * hitTransform.scale.y * 1.02f, hitBoxDepth};
+    box.rotation = hitTransform.rotation;
     return box;
 }
 
 OBB Sword::GetCounterOBB() const {
     OBB box;
 
-    XMVECTOR pos = XMLoadFloat3(&tf_.position);
-    XMVECTOR rot = XMLoadFloat4(&tf_.rotation);
+    const Transform hitTransform = BuildVisualTransform();
+    const float counterDepth = kSwordLength * hitTransform.scale.z * 0.92f;
+
+    XMVECTOR pos = XMLoadFloat3(&hitTransform.position);
+    XMVECTOR rot = XMLoadFloat4(&hitTransform.rotation);
 
     XMVECTOR forward = XMVector3Rotate(XMVectorSet(0, 0, 1, 0), rot);
-    XMVECTOR center = pos + forward * 0.9f;
+    XMVECTOR center = pos + forward * (counterDepth * 0.5f);
 
     XMStoreFloat3(&box.center, center);
 
-    box.size = counterSize_;
-    box.rotation = tf_.rotation;
+    box.size = {(std::max)(counterSize_.x, size_.x * hitTransform.scale.x * 1.22f),
+                (std::max)(counterSize_.y, size_.y * hitTransform.scale.y * 1.18f),
+                counterDepth};
+    box.rotation = hitTransform.rotation;
 
     return box;
 }
 
-void Sword::Draw(ModelManager *modelManager, const Camera &camera) {
+Transform Sword::BuildVisualTransform() const {
     Transform drawTransform = tf_;
     drawTransform.scale.x *= kSwordVisualScaleMultiplier;
     drawTransform.scale.y *= kSwordVisualScaleMultiplier;
@@ -115,7 +120,11 @@ void Sword::Draw(ModelManager *modelManager, const Camera &camera) {
         drawTransform.scale.z *= 1.0f + 0.12f * recoveryReaction_;
     }
     ApplySlashFollowThrough(drawTransform);
+    return drawTransform;
+}
 
+void Sword::Draw(ModelManager *modelManager, const Camera &camera) {
+    const Transform drawTransform = BuildVisualTransform();
     if (const Model *model = modelManager->GetModel(modelId_)) {
         modelManager->GetRenderer()->Draw(*model, drawTransform, camera);
     }

@@ -22,6 +22,7 @@ class SwordJoyConController {
   private:
     void UpdateOrientation(JoyCon *joyCon, float dt);
     void UpdateGuard(JoyCon *joyCon);
+    void UpdateCounter(JoyCon *joyCon);
     void UpdateSlash(float dt);
 
   private:

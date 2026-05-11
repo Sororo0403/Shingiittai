@@ -34,6 +34,9 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId,
     rightSwordAttackDamage_ = 10.0f;
     prevLeftSwordSlashMode_ = false;
     prevRightSwordSlashMode_ = false;
+    damageTakenScale_ = 1.0f;
+    swingComboCount_ = 0;
+    swingComboTimer_ = 0.0f;
     greatSwordCharge_ = 0.0f;
     greatSwordSwingTimer_ = 0.0f;
     greatSwordSwingDamage_ = 18.0f;
@@ -46,6 +49,11 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId,
     hunterGamepadAttackKind_ = HunterGamepadAttackKind::None;
     hunterGamepadAttackTimer_ = 0.0f;
     hunterGamepadAttackDuration_ = 0.0f;
+    hunterNextSideSlashLeft_ = true;
+    dodgeTimer_ = 0.0f;
+    dodgeCooldownTimer_ = 0.0f;
+    dodgeInvulnerableTimer_ = 0.0f;
+    dodgeDirection_ = {0.0f, -1.0f};
     leftSword_.Update(BuildSwordTransform(MakeIdleSwordPose(true), true),
                       MakeIdleSwordPose(true), 0.0f);
     rightSword_.Update(BuildSwordTransform(MakeIdleSwordPose(false), false),
@@ -72,7 +80,9 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     leftJoyCon_.Update(deltaTime);
     rightJoyCon_.Update(deltaTime);
 
+    UpdateDodgeInput(input, deltaTime, cameraYaw);
     UpdateMovement(input, deltaTime, cameraYaw);
+    UpdateSwingCombo(deltaTime);
     KeepDistanceFromTarget(lookTarget);
     LookAt(lookTarget);
 
@@ -120,7 +130,8 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     }
 
     const bool isInPostSlashRecovery = postSlashRecoveryTimer_ > 0.0f;
-    if (isInPostSlashRecovery) {
+    const bool isDodging = dodgeTimer_ > 0.0f;
+    if (isInPostSlashRecovery || isDodging) {
         leftPose.isSlashMode = false;
         rightPose.isSlashMode = false;
         leftPose.isGuard = false;
@@ -193,6 +204,18 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
         playerVisual.position.z += std::cosf(phase * 1.37f) * shake;
 
     }
+    if (dodgeTimer_ > 0.0f) {
+        const float dodgeRatio =
+            std::clamp(dodgeTimer_ / kDodgeDuration, 0.0f, 1.0f);
+        const float lean = 0.22f * std::sinf((1.0f - dodgeRatio) * 3.14159265f);
+        XMVECTOR baseRot = XMLoadFloat4(&playerVisual.rotation);
+        XMVECTOR qLean =
+            XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), lean);
+        XMStoreFloat4(&playerVisual.rotation,
+                      XMQuaternionNormalize(XMQuaternionMultiply(qLean, baseRot)));
+        playerVisual.position.y -= 0.10f * std::sinf((1.0f - dodgeRatio) *
+                                                     3.14159265f);
+    }
 
     if (drawBody) {
         modelManager->Draw(modelId_, playerVisual, camera);
@@ -261,7 +284,7 @@ void Player::KeepDistanceFromTarget(const DirectX::XMFLOAT3 &target) {
     knockbackVelocity_.z = 0.0f;
 }
 
-void Player::UpdateMovement(Input *input, float deltaTime, float cameraYaw) {
+DirectX::XMFLOAT2 Player::ReadMovementInput(Input *input) const {
     float inputX = 0.0f;
     float inputZ = 0.0f;
 
@@ -286,6 +309,84 @@ void Player::UpdateMovement(Input *input, float deltaTime, float cameraYaw) {
         inputZ *= invLen;
     }
 
+    return {inputX, inputZ};
+}
+
+bool Player::IsDodgeInputTriggered(Input *input) const {
+    const bool keyboardDodge = input->IsKeyTrigger(DIK_SPACE);
+    const bool gamepadDodge =
+        input->IsGamepadConnected() &&
+        input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_B);
+    const bool leftJoyConDodge =
+        leftJoyCon_.IsConnected() &&
+        (leftJoyCon_.IsButtonTrigger(JSMASK_S) ||
+         leftJoyCon_.IsButtonTrigger(JSMASK_LCLICK));
+    const bool rightJoyConDodge =
+        rightJoyCon_.IsConnected() &&
+        (rightJoyCon_.IsButtonTrigger(JSMASK_S) ||
+         rightJoyCon_.IsButtonTrigger(JSMASK_RCLICK));
+
+    return keyboardDodge || gamepadDodge || leftJoyConDodge || rightJoyConDodge;
+}
+
+void Player::UpdateDodgeInput(Input *input, float deltaTime, float cameraYaw) {
+    if (dodgeCooldownTimer_ > 0.0f) {
+        dodgeCooldownTimer_ -= deltaTime;
+        if (dodgeCooldownTimer_ < 0.0f) {
+            dodgeCooldownTimer_ = 0.0f;
+        }
+    }
+    if (dodgeTimer_ > 0.0f) {
+        dodgeTimer_ -= deltaTime;
+        if (dodgeTimer_ < 0.0f) {
+            dodgeTimer_ = 0.0f;
+        }
+    }
+    if (dodgeInvulnerableTimer_ > 0.0f) {
+        dodgeInvulnerableTimer_ -= deltaTime;
+        if (dodgeInvulnerableTimer_ < 0.0f) {
+            dodgeInvulnerableTimer_ = 0.0f;
+        }
+    }
+
+    if (dodgeTimer_ > 0.0f || dodgeCooldownTimer_ > 0.0f ||
+        !IsDodgeInputTriggered(input)) {
+        return;
+    }
+
+    XMFLOAT2 inputDir = ReadMovementInput(input);
+    const float lenSq = inputDir.x * inputDir.x + inputDir.y * inputDir.y;
+    float worldX = 0.0f;
+    float worldZ = 0.0f;
+    if (lenSq > 0.01f) {
+        const float sinYaw = std::sinf(cameraYaw);
+        const float cosYaw = std::cosf(cameraYaw);
+        worldX = sinYaw * inputDir.y + cosYaw * inputDir.x;
+        worldZ = cosYaw * inputDir.y - sinYaw * inputDir.x;
+    } else {
+        worldX = -std::sinf(yaw_);
+        worldZ = -std::cosf(yaw_);
+    }
+
+    const float worldLenSq = worldX * worldX + worldZ * worldZ;
+    if (worldLenSq > 0.001f) {
+        const float invLen = 1.0f / std::sqrt(worldLenSq);
+        worldX *= invLen;
+        worldZ *= invLen;
+    }
+
+    dodgeDirection_ = {worldX, worldZ};
+    dodgeTimer_ = kDodgeDuration;
+    dodgeInvulnerableTimer_ = kDodgeInvulnerableDuration;
+    dodgeCooldownTimer_ = kDodgeCooldownDuration;
+    postSlashRecoveryTimer_ = 0.0f;
+}
+
+void Player::UpdateMovement(Input *input, float deltaTime, float cameraYaw) {
+    const XMFLOAT2 moveInput = ReadMovementInput(input);
+    float inputX = moveInput.x;
+    float inputZ = moveInput.y;
+
     float sinYaw = std::sinf(cameraYaw);
     float cosYaw = std::cosf(cameraYaw);
     float worldMoveX = sinYaw * inputZ + cosYaw * inputX;
@@ -296,9 +397,15 @@ void Player::UpdateMovement(Input *input, float deltaTime, float cameraYaw) {
         speedScale = weaponType_ == PlayerWeaponType::GreatSword ? 0.18f : 0.35f;
     }
 
-    velocity_.x = worldMoveX * moveSpeed_ * speedScale;
-    velocity_.y = 0.0f;
-    velocity_.z = worldMoveZ * moveSpeed_ * speedScale;
+    if (dodgeTimer_ > 0.0f) {
+        velocity_.x = dodgeDirection_.x * kDodgeSpeed;
+        velocity_.y = 0.0f;
+        velocity_.z = dodgeDirection_.y * kDodgeSpeed;
+    } else {
+        velocity_.x = worldMoveX * moveSpeed_ * speedScale;
+        velocity_.y = 0.0f;
+        velocity_.z = worldMoveZ * moveSpeed_ * speedScale;
+    }
 
     tf_.position.x += velocity_.x * deltaTime;
     tf_.position.z += velocity_.z * deltaTime;
@@ -324,13 +431,59 @@ void Player::UpdateMovement(Input *input, float deltaTime, float cameraYaw) {
 }
 
 void Player::TakeDamage(float damage) {
+    if (IsDamageInvulnerable()) {
+        return;
+    }
+
     hp_ -= damage * damageTakenScale_;
     if (hp_ < 0.0f) {
         hp_ = 0.0f;
     }
 }
 
+void Player::NotifyAttackHit(float damage) {
+    (void)damage;
+    if (swingComboTimer_ <= 0.0f) {
+        swingComboCount_ = 0;
+    }
+
+    if (swingComboCount_ < kSwingComboMax) {
+        ++swingComboCount_;
+    }
+    swingComboTimer_ = kSwingComboWindow;
+}
+
+float Player::GetSwingComboDamageMultiplier() const {
+    if (swingComboCount_ <= 0 || swingComboTimer_ <= 0.0f) {
+        return 1.0f;
+    }
+    return 1.0f + 0.08f * static_cast<float>(swingComboCount_);
+}
+
+void Player::UpdateSwingCombo(float deltaTime) {
+    if (swingComboTimer_ <= 0.0f) {
+        swingComboCount_ = 0;
+        return;
+    }
+
+    swingComboTimer_ -= deltaTime;
+    if (swingComboTimer_ <= 0.0f) {
+        swingComboTimer_ = 0.0f;
+        swingComboCount_ = 0;
+    }
+}
+
+float Player::ComputeJoyConSwingDamageMultiplier(float angularVelocity) const {
+    const float swingRatio =
+        std::clamp((angularVelocity - 520.0f) / 1280.0f, 0.0f, 1.0f);
+    return 1.0f + 0.55f * swingRatio;
+}
+
 void Player::AddKnockback(const DirectX::XMFLOAT3 &velocity) {
+    if (IsDamageInvulnerable()) {
+        return;
+    }
+
     knockbackVelocity_.x += velocity.x;
     knockbackVelocity_.y += velocity.y;
     knockbackVelocity_.z += velocity.z;
@@ -353,15 +506,21 @@ float Player::GetGuardDamageMultiplier() const {
 }
 
 float Player::GetCounterDamageMultiplier() const {
+    float multiplier = 1.0f;
     switch (weaponType_) {
     case PlayerWeaponType::Dual:
-        return 0.85f;
+        multiplier = 0.85f;
+        break;
     case PlayerWeaponType::GreatSword:
-        return greatSwordFullChargeCounterReady_ ? 4.0f : 1.45f;
+        multiplier = greatSwordFullChargeCounterReady_ ? 4.0f : 1.45f;
+        break;
     case PlayerWeaponType::Standard:
     default:
-        return 1.0f;
+        multiplier = 1.0f;
+        break;
     }
+
+    return multiplier * GetSwingComboDamageMultiplier();
 }
 
 float Player::GetCounterVulnerabilityDuration() const {
@@ -443,9 +602,21 @@ void Player::UpdateWeaponRules(Input *input, SwordPose &leftPose,
     (void)input;
     leftSwordAttackDamage_ = 10.0f;
     rightSwordAttackDamage_ = 10.0f;
+    auto applyJoyConSwingDamage = [&]() {
+        if (hasLeftJoyCon && leftPose.isSlashMode) {
+            leftSwordAttackDamage_ *= ComputeJoyConSwingDamageMultiplier(
+                leftSwordJoyConController_.GetAngularVelocity());
+        }
+        if (hasRightJoyCon && rightPose.isSlashMode) {
+            rightSwordAttackDamage_ *= ComputeJoyConSwingDamageMultiplier(
+                rightSwordJoyConController_.GetAngularVelocity());
+        }
+    };
 
     if (weaponType_ == PlayerWeaponType::Standard) {
         leftPose = MakeIdleSwordPose(true);
+        leftSwordAttackDamage_ = 0.0f;
+        applyJoyConSwingDamage();
         return;
     }
 
@@ -474,6 +645,7 @@ void Player::UpdateWeaponRules(Input *input, SwordPose &leftPose,
         }
 
         (void)deltaTime;
+        applyJoyConSwingDamage();
         return;
     }
 
@@ -531,6 +703,7 @@ void Player::UpdateWeaponRules(Input *input, SwordPose &leftPose,
             rightPose.isSlashMode = true;
             rightSwordAttackDamage_ = greatSwordSwingDamage_;
         }
+        applyJoyConSwingDamage();
     }
 }
 
@@ -589,7 +762,7 @@ SwordPose Player::UpdateGamepadSword(Input *input, float deltaTime,
 
 SwordPose Player::UpdateHunterGamepadSword(Input *input, float deltaTime) {
     UpdateHunterGamepadSwordGuard(input);
-    gamepadSwordState_.isCounter = false;
+    UpdateHunterGamepadSwordCounter(input);
     UpdateHunterGamepadSwordSlash(input, deltaTime);
 
     UpdateHunterGamepadSwordOrientation();
@@ -671,7 +844,29 @@ void Player::UpdateHunterGamepadSwordGuard(Input *input) {
         input->IsGamepadButtonPress(XINPUT_GAMEPAD_LEFT_SHOULDER);
 }
 
+void Player::UpdateHunterGamepadSwordCounter(Input *input) {
+    const bool counterTriggered =
+        gamepadSwordState_.isGuard &&
+        (input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_Y) ||
+         input->IsGamepadRightTriggerTrigger(0.2f));
+    if (counterTriggered) {
+        gamepadSwordState_.isCounter = true;
+        gamepadSwordState_.counterTimer = SwordControllerState::kCounterFrames;
+        hunterGamepadAttackKind_ = HunterGamepadAttackKind::None;
+        hunterGamepadAttackTimer_ = 0.0f;
+        hunterGamepadAttackDuration_ = 0.0f;
+    }
+
+    gamepadSwordState_.UpdateCounter();
+}
+
 void Player::UpdateHunterGamepadSwordSlash(Input *input, float deltaTime) {
+    if (gamepadSwordState_.isCounter || gamepadSwordState_.isGuard) {
+        gamepadSwordState_.isSlashMode = false;
+        gamepadSwordState_.slashTimer = 0.0f;
+        return;
+    }
+
     if (!IsHunterGamepadAttacking()) {
         const HunterGamepadAttackKind attackKind =
             ReadHunterGamepadAttack(input);
@@ -706,21 +901,25 @@ void Player::BeginHunterGamepadAttack(HunterGamepadAttackKind attackKind) {
     hunterGamepadAttackDuration_ =
         GetHunterGamepadAttackDuration(attackKind);
     gamepadSwordState_.slashDir = GetHunterGamepadSlashDir(attackKind);
+    if (attackKind == HunterGamepadAttackKind::SideLeft ||
+        attackKind == HunterGamepadAttackKind::SideRight) {
+        hunterNextSideSlashLeft_ = !hunterNextSideSlashLeft_;
+    }
 }
 
 HunterGamepadAttackKind Player::ReadHunterGamepadAttack(Input *input) const {
+    if (gamepadSwordState_.isGuard) {
+        return HunterGamepadAttackKind::None;
+    }
+
     if (input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_Y) ||
         input->IsGamepadRightTriggerTrigger(0.2f)) {
         return HunterGamepadAttackKind::Overhead;
     }
 
     if (input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_X)) {
-        return HunterGamepadAttackKind::SideLeft;
-    }
-
-    if (!gamepadSwordState_.isGuard &&
-        input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_B)) {
-        return HunterGamepadAttackKind::SideRight;
+        return hunterNextSideSlashLeft_ ? HunterGamepadAttackKind::SideLeft
+                                        : HunterGamepadAttackKind::SideRight;
     }
 
     if (input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_A)) {
@@ -812,6 +1011,7 @@ void Player::ToggleGamepadControlMode() {
     hunterGamepadAttackKind_ = HunterGamepadAttackKind::None;
     hunterGamepadAttackTimer_ = 0.0f;
     hunterGamepadAttackDuration_ = 0.0f;
+    hunterNextSideSlashLeft_ = true;
 }
 
 void Player::UpdateGamepadSwordGuard(Input *input) {

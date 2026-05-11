@@ -37,6 +37,7 @@ class Sword {
     void NotifyCounterSuccess();
 
   private:
+    Transform BuildVisualTransform() const;
     void UpdateSlashFollowThrough(float deltaTime);
     void ApplySlashFollowThrough(Transform &drawTransform) const;
     void UpdateCounterObservation(float deltaTime);

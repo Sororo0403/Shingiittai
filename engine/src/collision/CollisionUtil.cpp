@@ -41,9 +41,9 @@ OBBBasis BuildBasis(const OBB &box) {
         DirectX::XMVector3Rotate(DirectX::XMVectorSet(0, 1, 0, 0), rotation);
     basis.axes[2] =
         DirectX::XMVector3Rotate(DirectX::XMVectorSet(0, 0, 1, 0), rotation);
-    basis.extent[0] = std::max(0.0f, box.size.x);
-    basis.extent[1] = std::max(0.0f, box.size.y);
-    basis.extent[2] = std::max(0.0f, box.size.z);
+    basis.extent[0] = std::max(0.0f, box.size.x * 0.5f);
+    basis.extent[1] = std::max(0.0f, box.size.y * 0.5f);
+    basis.extent[2] = std::max(0.0f, box.size.z * 0.5f);
     return basis;
 }
 

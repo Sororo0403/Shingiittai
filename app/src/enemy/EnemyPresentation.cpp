@@ -42,6 +42,10 @@ void Enemy::UpdateParts() {
     const float forwardZ = std::cos(usedYaw);
     const float rightX = std::cos(usedYaw);
     const float rightZ = -std::sin(usedYaw);
+    const bool suppressAttackBodyMotion =
+        action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
+        action_.kind == ActionKind::Shot || action_.kind == ActionKind::Wave ||
+        action_.kind == ActionKind::Nova;
 
     bodyTf_ = tf_;
     bodyTf_.position = tf_.position;
@@ -90,18 +94,26 @@ void Enemy::UpdateParts() {
     }
 
     const bool suppressActionPresentation = (counterRecoilTimer_ > 0.0f);
+    const bool isTelegraphCharge =
+        action_.step == ActionStep::Charge &&
+        (action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
+         action_.kind == ActionKind::Shot || action_.kind == ActionKind::Wave ||
+         action_.kind == ActionKind::Nova);
 
-    if (tellActive_) {
-        bodyTf_.scale.x += 0.10f * pulse;
-        bodyTf_.scale.z += 0.10f * pulse;
-        bodyTf_.scale.y -= 0.06f * pulse;
-        bodyTf_.position.y += 0.05f * pulse;
-        rightHandTf_.scale.x += 0.12f * pulse;
-        rightHandTf_.scale.y += 0.12f * pulse;
-        rightHandTf_.scale.z += 0.12f * pulse;
-        visualTf_.position.y += 0.03f * pulse;
-        visualTf_.scale.x += 0.02f * pulse;
-        visualTf_.scale.z += 0.02f * pulse;
+    if (tellActive_ || isTelegraphCharge) {
+        const float chargePulse = tellActive_ ? (1.0f + 0.55f * pulse)
+                                              : (0.72f + 0.42f * pulse);
+        bodyTf_.scale.x += 0.12f * chargePulse;
+        bodyTf_.scale.z += 0.12f * chargePulse;
+        bodyTf_.scale.y -= 0.06f * chargePulse;
+        bodyTf_.position.y += 0.05f * chargePulse;
+        rightHandTf_.scale.x += 0.18f * chargePulse;
+        rightHandTf_.scale.y += 0.18f * chargePulse;
+        rightHandTf_.scale.z += 0.18f * chargePulse;
+        rightHandTf_.position.y += 0.10f * chargePulse;
+        visualTf_.position.y += 0.035f * chargePulse;
+        visualTf_.scale.x += 0.026f * chargePulse;
+        visualTf_.scale.z += 0.026f * chargePulse;
     }
 
     if (fakeCommitActive_) {
@@ -337,18 +349,32 @@ void Enemy::UpdateParts() {
             visualPitch -= 0.18f;
             visualRoll += 0.14f * novaPulse;
         } else if (action_.step == ActionStep::Active) {
-            bodyTf_.position.y += 0.12f + 0.10f * novaPulse;
-            bodyTf_.scale.x += 0.34f;
-            bodyTf_.scale.z += 0.34f;
-            rightHandTf_.position.y += 1.70f;
-            leftHandTf_.position.y += 1.52f;
+            const float impactTime = config_.attacks.nova.impactTime;
+            const float riseT =
+                impactTime > 0.0001f
+                    ? std::clamp(runtime_.stateTimer / impactTime, 0.0f, 1.0f)
+                    : 1.0f;
+            const float afterImpactT =
+                std::clamp((runtime_.stateTimer - impactTime) / 0.22f, 0.0f, 1.0f);
+            const float jumpHeight =
+                runtime_.stateTimer < impactTime
+                    ? std::sin(riseT * 1.57079633f) * 1.95f
+                    : (1.0f - afterImpactT) * 1.95f;
+            const float impactSquash = 1.0f - afterImpactT;
+            visualTf_.position.y += jumpHeight;
+            bodyTf_.position.y += jumpHeight * 0.35f - 0.14f * impactSquash;
+            bodyTf_.scale.x += 0.34f + 0.28f * impactSquash;
+            bodyTf_.scale.z += 0.34f + 0.28f * impactSquash;
+            bodyTf_.scale.y -= 0.08f * impactSquash;
+            rightHandTf_.position.y += 1.70f + jumpHeight * 0.35f;
+            leftHandTf_.position.y += 1.52f + jumpHeight * 0.35f;
             rightHandTf_.position.x += rightX * 0.95f + forwardX * 0.24f;
             rightHandTf_.position.z += rightZ * 0.95f + forwardZ * 0.24f;
             leftHandTf_.position.x += (-rightX) * 0.95f + forwardX * 0.24f;
             leftHandTf_.position.z += (-rightZ) * 0.95f + forwardZ * 0.24f;
-            visualTf_.scale.x += 0.08f * novaPulse;
-            visualTf_.scale.z += 0.08f * novaPulse;
-            visualPitch += 0.20f;
+            visualTf_.scale.x += 0.08f * novaPulse + 0.10f * impactSquash;
+            visualTf_.scale.z += 0.08f * novaPulse + 0.10f * impactSquash;
+            visualPitch += 0.20f - 0.28f * riseT;
         } else if (action_.step == ActionStep::Recovery) {
             bodyTf_.position.y -= 0.06f;
             rightHandTf_.position.y += 0.36f;
@@ -445,6 +471,16 @@ void Enemy::UpdateParts() {
         visualRoll += 0.04f * pulse;
     }
 
+    if (suppressAttackBodyMotion) {
+        bodyTf_.position.x = tf_.position.x;
+        bodyTf_.position.z = tf_.position.z;
+        visualTf_.position.x = tf_.position.x;
+        visualTf_.position.z = tf_.position.z;
+        visualYaw = usedYaw;
+        visualPitch = 0.0f;
+        visualRoll = 0.0f;
+    }
+
     DirectX::XMVECTOR hitboxRot =
         DirectX::XMQuaternionRotationRollPitchYaw(0.0f, usedYaw, 0.0f);
     DirectX::XMStoreFloat4(&bodyTf_.rotation, hitboxRot);
@@ -500,13 +536,13 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         break;
     case ActionKind::Nova:
         actionTint = {1.0f, 0.28f, 0.06f, 0.82f};
-        actionIntensity = 0.78f + 0.26f * actionPulse;
-        actionNoise = 0.72f;
+        actionIntensity = 0.58f + 0.18f * actionPulse;
+        actionNoise = 0.42f;
         break;
     case ActionKind::Warp:
         actionTint = {0.90f, 0.48f, 0.20f, 0.70f};
-        actionIntensity = 0.58f + 0.18f * actionPulse;
-        actionNoise = 0.62f;
+        actionIntensity = 0.42f + 0.12f * actionPulse;
+        actionNoise = 0.36f;
         break;
     case ActionKind::Stalk:
         actionTint = {0.52f, 0.56f, 0.42f, 0.38f};
@@ -515,6 +551,27 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         break;
     default:
         break;
+    }
+
+    const bool isTelegraphCharge =
+        action_.step == ActionStep::Charge &&
+        (action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
+         action_.kind == ActionKind::Shot || action_.kind == ActionKind::Wave ||
+         action_.kind == ActionKind::Nova);
+    if (isTelegraphCharge) {
+        actionTint = LerpColor(actionTint, {1.0f, 0.82f, 0.24f, 0.86f},
+                               0.12f + 0.12f * actionPulse);
+        actionIntensity = actionIntensity * 0.42f + 0.05f * actionPulse;
+        actionNoise += 0.06f + 0.04f * actionPulse;
+    }
+
+    if (IsPunishableRecovery()) {
+        const float recoveryPulse =
+            0.5f + 0.5f * std::sin(runtime_.stateTimer * 22.0f);
+        actionTint = LerpColor(actionTint, {1.0f, 0.92f, 0.24f, 0.88f},
+                               0.55f + 0.25f * recoveryPulse);
+        actionIntensity += 0.44f + 0.30f * recoveryPulse;
+        actionNoise += 0.18f + 0.10f * recoveryPulse;
     }
 
     if (phaseTransitionActive_) {
@@ -534,7 +591,7 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
                                     actionPulse);
         hitEffect.intensity = 0.42f + 0.72f * hitFlash;
         hitEffect.fresnelPower = 1.8f;
-        hitEffect.noiseAmount = 0.52f;
+        hitEffect.noiseAmount = 0.30f;
         hitEffect.time = runtime_.stateTimer;
     }
 
@@ -548,9 +605,9 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         warpEffect.enabled = true;
         warpEffect.additiveBlend = true;
         warpEffect.color = actionTint;
-        warpEffect.intensity = (action_.step == ActionStep::Move) ? 1.38f : 0.88f;
+        warpEffect.intensity = (action_.step == ActionStep::Move) ? 0.92f : 0.62f;
         warpEffect.fresnelPower = 1.9f;
-        warpEffect.noiseAmount = 0.84f;
+        warpEffect.noiseAmount = 0.42f;
         warpEffect.time = stateTimer_;
 
         if (isHitFlashing) {
@@ -569,7 +626,9 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         actionEffect.enabled = true;
         actionEffect.additiveBlend = false;
         actionEffect.color = actionTint;
-        actionEffect.intensity = actionIntensity;
+        actionEffect.intensity = (isTelegraphCharge || action_.step == ActionStep::Active)
+                                     ? actionIntensity * 0.52f
+                                     : actionIntensity;
         actionEffect.fresnelPower = 2.5f;
         actionEffect.noiseAmount = actionNoise;
         actionEffect.time = runtime_.stateTimer;

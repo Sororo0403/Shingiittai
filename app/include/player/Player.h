@@ -50,7 +50,9 @@ class Player {
         return {leftSwordSlashMode_, rightSwordSlashMode_};
     }
     std::array<float, kSwordCount> GetSwordAttackDamages() const {
-        return {leftSwordAttackDamage_, rightSwordAttackDamage_};
+        const float comboMultiplier = GetSwingComboDamageMultiplier();
+        return {leftSwordAttackDamage_ * comboMultiplier,
+                rightSwordAttackDamage_ * comboMultiplier};
     }
     OBB GetOBB() const;
 
@@ -64,9 +66,12 @@ class Player {
     float GetGreatSwordChargeRatio() const { return greatSwordCharge_; }
     PlayerWeaponType GetWeaponType() const { return weaponType_; }
     const Transform &GetTransform() const { return tf_; }
+    bool IsDodging() const { return dodgeTimer_ > 0.0f; }
+    bool IsDamageInvulnerable() const { return dodgeInvulnerableTimer_ > 0.0f; }
 
     float GetHP() const { return hp_; }
     void TakeDamage(float damage);
+    void NotifyAttackHit(float damage);
 
     void AddKnockback(const DirectX::XMFLOAT3 &velocity);
     const DirectX::XMFLOAT3 &GetVelocity() const { return velocity_; }
@@ -113,6 +118,7 @@ class Player {
     void UpdateGamepadSwordSlash(Input *input, float deltaTime);
     void UpdateHunterGamepadSwordOrientation();
     void UpdateHunterGamepadSwordGuard(Input *input);
+    void UpdateHunterGamepadSwordCounter(Input *input);
     void UpdateHunterGamepadSwordSlash(Input *input, float deltaTime);
     void BeginHunterGamepadAttack(HunterGamepadAttackKind attackKind);
     HunterGamepadAttackKind ReadHunterGamepadAttack(Input *input) const;
@@ -125,6 +131,9 @@ class Player {
     DirectX::XMFLOAT2 GetHunterGamepadSlashDir(
         HunterGamepadAttackKind attackKind) const;
     void ToggleGamepadControlMode();
+    void UpdateDodgeInput(Input *input, float deltaTime, float cameraYaw);
+    bool IsDodgeInputTriggered(Input *input) const;
+    DirectX::XMFLOAT2 ReadMovementInput(Input *input) const;
     void UpdateMovement(Input *input, float deltaTime, float cameraYaw);
     void KeepDistanceFromTarget(const DirectX::XMFLOAT3 &target);
     void LookAt(const DirectX::XMFLOAT3 &target);
@@ -136,10 +145,15 @@ class Player {
     float GetSlashRecoveryDuration() const;
     float GetSlashRecoveryRatio(float timer) const;
     float ComputeGreatSwordAttackDamage(float chargeRatio) const;
+    float ComputeJoyConSwingDamageMultiplier(float angularVelocity) const;
+    float GetSwingComboDamageMultiplier() const;
+    void UpdateSwingCombo(float deltaTime);
 
   private:
     static constexpr float kHandHeight = 1.0f;
     static constexpr float kArmLength = 1.0f;
+    static constexpr float kSwingComboWindow = 1.35f;
+    static constexpr int kSwingComboMax = 3;
 
     Transform tf_;
     uint32_t modelId_ = 0;
@@ -161,6 +175,7 @@ class Player {
         HunterGamepadAttackKind::None;
     float hunterGamepadAttackTimer_ = 0.0f;
     float hunterGamepadAttackDuration_ = 0.0f;
+    bool hunterNextSideSlashLeft_ = true;
     bool leftSwordSlashMode_ = false;
     bool rightSwordSlashMode_ = false;
     DirectX::XMFLOAT2 leftSwordSlashDir_{};
@@ -170,12 +185,22 @@ class Player {
     bool isGuarding_ = false;
     float postSlashRecoveryTimer_ = 0.0f;
     static constexpr float kPostSlashRecoveryDuration = 0.25f;
+    float dodgeTimer_ = 0.0f;
+    float dodgeCooldownTimer_ = 0.0f;
+    float dodgeInvulnerableTimer_ = 0.0f;
+    DirectX::XMFLOAT2 dodgeDirection_ = {0.0f, -1.0f};
+    static constexpr float kDodgeDuration = 0.34f;
+    static constexpr float kDodgeInvulnerableDuration = 0.24f;
+    static constexpr float kDodgeCooldownDuration = 0.46f;
+    static constexpr float kDodgeSpeed = 8.8f;
     float leftSlashRecoveryTimer_ = 0.0f;
     float rightSlashRecoveryTimer_ = 0.0f;
     float leftSwordAttackDamage_ = 10.0f;
     float rightSwordAttackDamage_ = 10.0f;
     bool prevLeftSwordSlashMode_ = false;
     bool prevRightSwordSlashMode_ = false;
+    int swingComboCount_ = 0;
+    float swingComboTimer_ = 0.0f;
 
     float greatSwordCharge_ = 0.0f;
     float greatSwordSwingTimer_ = 0.0f;

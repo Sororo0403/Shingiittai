@@ -113,34 +113,34 @@ void CombatFeedbackDirector::PushEvent(const CombatFeedbackEvent &event) {
 
     switch (event.type) {
     case CombatFeedbackEventType::PlayerSlashHit:
-        AddHitStop(0.030f + 0.010f * power, 0.20f);
-        AddCameraShake(0.13f, 0.018f + 0.006f * power,
-                       0.012f + 0.004f * power);
-        AddPostFlash(0.13f, 0.020f + 0.010f * power, 0.06f, 0.08f);
-        fovKickDeg_ = (std::max)(fovKickDeg_, 1.2f + 0.35f * power);
+        AddHitStop(0.045f + 0.012f * power, 0.16f);
+        AddCameraShake(0.13f, 0.016f + 0.005f * power,
+                       0.010f + 0.003f * power);
+        AddPostFlash(0.13f, 0.016f + 0.007f * power, 0.025f, 0.04f);
+        fovKickDeg_ = (std::max)(fovKickDeg_, 1.6f + 0.42f * power);
         break;
     case CombatFeedbackEventType::PlayerGuard:
         AddHitStop(0.025f, 0.24f);
-        AddCameraShake(0.12f, 0.018f, 0.010f);
-        AddPostFlash(0.10f, 0.018f, 0.05f, 0.06f);
+        AddCameraShake(0.10f, 0.012f, 0.007f);
+        AddPostFlash(0.09f, 0.012f, 0.020f, 0.03f);
         fovKickDeg_ = (std::max)(fovKickDeg_, 1.0f);
         break;
     case CombatFeedbackEventType::PlayerDamaged:
         AddHitStop(0.045f, 0.18f);
-        AddCameraShake(0.22f, 0.050f, 0.032f);
-        AddPostFlash(0.20f, 0.030f, 0.16f, 0.18f);
+        AddCameraShake(0.18f, 0.034f, 0.022f);
+        AddPostFlash(0.16f, 0.020f, 0.050f, 0.08f);
         fovKickDeg_ = (std::max)(fovKickDeg_, 2.6f);
         break;
     case CombatFeedbackEventType::CounterSuccess:
         AddHitStop(0.150f, 0.06f);
-        AddCameraShake(0.34f, 0.075f, 0.045f);
-        AddPostFlash(0.32f, 0.070f, 0.22f, 0.26f);
+        AddCameraShake(0.28f, 0.052f, 0.032f);
+        AddPostFlash(0.24f, 0.040f, 0.070f, 0.10f);
         fovKickDeg_ = (std::max)(fovKickDeg_, 4.5f);
         break;
     case CombatFeedbackEventType::ProjectileReflect:
         AddHitStop(0.060f, 0.12f);
-        AddCameraShake(0.18f, 0.036f, 0.022f);
-        AddPostFlash(0.18f, 0.045f, 0.13f, 0.15f);
+        AddCameraShake(0.15f, 0.024f, 0.015f);
+        AddPostFlash(0.14f, 0.026f, 0.045f, 0.06f);
         fovKickDeg_ = (std::max)(fovKickDeg_, 2.8f);
         break;
     }

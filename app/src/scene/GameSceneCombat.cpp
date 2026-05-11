@@ -47,6 +47,13 @@ static XMFLOAT3 DirectionFromTo(const XMFLOAT3 &from, const XMFLOAT3 &to) {
     return {dx / length, dy / length, dz / length};
 }
 
+static XMFLOAT4 MakeYawRotation(float yaw) {
+    XMFLOAT4 rotation{};
+    XMStoreFloat4(&rotation,
+                  XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), yaw));
+    return rotation;
+}
+
 static void TickCooldown(float &cooldown, float deltaTime) {
     if (cooldown <= 0.0f) {
         return;
@@ -96,14 +103,25 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     const auto playerBox = player_.GetOBB();
     const bool isPlayerGuarding = player_.IsGuarding();
     const bool isPlayerCountering = player_.IsCounterStance();
+    const bool isPlayerDodging = player_.IsDamageInvulnerable();
     const float guardDamageMultiplier = player_.GetGuardDamageMultiplier();
     const auto enemyBodyBox = enemy_.GetBodyOBB();
+    const auto enemyLeftHandBox = enemy_.GetLeftHandOBB();
+    const auto enemyRightHandBox = enemy_.GetRightHandOBB();
     const CollisionManager::BodyId playerBody =
         AddCollisionBody(collisionManager_, playerBox, kLayerPlayer,
                          kLayerEnemyAttack | kLayerEnemyProjectile);
     const CollisionManager::BodyId enemyBody =
         AddCollisionBody(collisionManager_, enemyBodyBox, kLayerEnemy,
                          kLayerPlayerAttack | kLayerReflectedProjectile);
+    const CollisionManager::BodyId enemyLeftHandBody =
+        AddCollisionBody(collisionManager_, enemyLeftHandBox, kLayerEnemy,
+                         kLayerPlayerAttack | kLayerReflectedProjectile);
+    const CollisionManager::BodyId enemyRightHandBody =
+        AddCollisionBody(collisionManager_, enemyRightHandBox, kLayerEnemy,
+                         kLayerPlayerAttack | kLayerReflectedProjectile);
+    const std::array<CollisionManager::BodyId, 3> enemyHurtBodies = {
+        enemyBody, enemyLeftHandBody, enemyRightHandBody};
     const ActionKind enemyActionKind = enemy_.GetActionKind();
     const ActionStep enemyActionStep = enemy_.GetActionStep();
     const auto swords = player_.GetSwords();
@@ -135,6 +153,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             forceSyncEnemyAnimationThisFrame = true;
         }
         enemy_.TakeDamage(counterDamage);
+        player_.NotifyAttackHit(counterDamage);
         CombatFeedbackEvent feedback{};
         feedback.type = CombatFeedbackEventType::CounterSuccess;
         feedback.position = enemy_.GetTransform().position;
@@ -159,6 +178,17 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         }
         return false;
     };
+    auto isEnemyHurtBodyHit = [&](CollisionManager::BodyId attackBody) {
+        for (CollisionManager::BodyId targetBody : enemyHurtBodies) {
+            if (targetBody == CollisionManager::kInvalidBodyId) {
+                continue;
+            }
+            if (collisionManager_.Test(attackBody, targetBody)) {
+                return true;
+            }
+        }
+        return false;
+    };
 
     TickCooldown(enemyHitCooldown_, gameplayDeltaTime);
     TickCooldown(playerHitCooldown_, gameplayDeltaTime);
@@ -171,12 +201,10 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
          enemyActionStep == ActionStep::Active);
     const bool isEnemySmashMeleeWindow =
         (enemyActionKind == ActionKind::Smash &&
-         (enemyActionStep == ActionStep::Active ||
-          enemyActionStep == ActionStep::Recovery));
+         enemyActionStep == ActionStep::Active);
     const bool isEnemySweepMeleeWindow =
         (enemyActionKind == ActionKind::Sweep &&
-         (enemyActionStep == ActionStep::Active ||
-          enemyActionStep == ActionStep::Recovery));
+         enemyActionStep == ActionStep::Active);
     const bool isEnemyMeleeActive =
         isEnemySmashMeleeWindow || isEnemySweepMeleeWindow;
 
@@ -192,7 +220,8 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         enemyAttackBody =
             AddCollisionBody(collisionManager_, enemyAttackBox,
                              kLayerEnemyAttack,
-                             kLayerPlayer | kLayerPlayerCounter);
+                             kLayerPlayer | kLayerPlayerAttack |
+                                 kLayerPlayerCounter);
     }
 
     bool counterTriggeredThisFrame = false;
@@ -225,12 +254,13 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             break;
         }
 
-        const bool hitBody = collisionManager_.Test(swordHitBody, enemyBody);
+        const bool hitBody = isEnemyHurtBodyHit(swordHitBody);
 
         if (enemyHitCooldown_ <= 0.0f) {
             if (hitBody) {
                 const float swordDamage = swordAttackDamages[i];
                 enemy_.TakeDamage(swordDamage);
+                player_.NotifyAttackHit(swordDamage);
                 CombatFeedbackEvent feedback{};
                 feedback.type = CombatFeedbackEventType::PlayerSlashHit;
                 feedback.position = swordHitBox.center;
@@ -264,7 +294,9 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                 player_.GetTransform().position.z -
                     enemy_.GetTransform().position.z);
 
-            if (isPlayerGuarding) {
+            if (isPlayerDodging) {
+                playerHitCooldown_ = 0.08f;
+            } else if (isPlayerGuarding) {
                 enemy_.NotifyAttackGuarded();
                 player_.TakeDamage(enemyAttackDamage * guardDamageMultiplier);
                 player_.AddKnockback(
@@ -300,6 +332,66 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         }
     }
 
+    if (enemyActionKind == ActionKind::Nova && enemy_.IsNovaImpactWindow() &&
+        playerHitCooldown_ <= 0.0f) {
+        const XMFLOAT3 &enemyPos = enemy_.GetTransform().position;
+        const XMFLOAT3 &playerPos = player_.GetTransform().position;
+        const float dx = playerPos.x - enemyPos.x;
+        const float dz = playerPos.z - enemyPos.z;
+        const float distanceSq = dx * dx + dz * dz;
+        const float radius = enemy_.GetNovaImpactRadius();
+
+        if (distanceSq <= radius * radius) {
+            const XMFLOAT2 knockbackDir = NormalizeXZ(dx, dz);
+            const float novaDamage = enemy_.GetNovaImpactDamage();
+            const float novaKnockback = enemy_.GetNovaImpactKnockback();
+
+            if (isPlayerDodging) {
+                playerHitCooldown_ = 0.08f;
+            } else if (isPlayerCountering) {
+                triggerSuccessfulCounter(0, novaDamage * 2.0f, 0.18f);
+            } else if (isPlayerGuarding) {
+                enemy_.NotifyAttackGuarded();
+                player_.TakeDamage(novaDamage * guardDamageMultiplier);
+                player_.AddKnockback(
+                    {knockbackDir.x * (novaKnockback * 0.55f), 0.0f,
+                     knockbackDir.y * (novaKnockback * 0.55f)});
+                CombatFeedbackEvent feedback{};
+                feedback.type = CombatFeedbackEventType::PlayerGuard;
+                feedback.position = playerPos;
+                feedback.position.y += 1.0f;
+                feedback.direction = {knockbackDir.x, 0.0f, knockbackDir.y};
+                feedback.power = novaDamage / 8.0f;
+                DispatchCombatFeedback(feedback);
+                playerHitCooldown_ = 0.45f;
+            } else {
+                enemy_.NotifyAttackConnected();
+                player_.TakeDamage(novaDamage);
+                player_.AddKnockback(
+                    {knockbackDir.x * novaKnockback, 0.0f,
+                     knockbackDir.y * novaKnockback});
+                CombatFeedbackEvent feedback{};
+                feedback.type = CombatFeedbackEventType::PlayerDamaged;
+                feedback.position = playerPos;
+                feedback.position.y += 1.0f;
+                feedback.direction = {knockbackDir.x, 0.0f, knockbackDir.y};
+                feedback.power = novaDamage / 8.0f;
+                DispatchCombatFeedback(feedback);
+                playerHitCooldown_ = 0.55f;
+            }
+        }
+    }
+
+    if (enemyActionKind == ActionKind::Nova && enemy_.IsNovaImpactWindow()) {
+        OBB novaDebugBox{};
+        novaDebugBox.center = enemy_.GetTransform().position;
+        novaDebugBox.center.y += 0.06f;
+        const float diameter = enemy_.GetNovaImpactRadius() * 2.0f;
+        novaDebugBox.size = {diameter, 0.12f, diameter};
+        novaDebugBox.rotation = MakeYawRotation(0.0f);
+        AddCollisionBody(collisionManager_, novaDebugBox, kLayerEnemyAttack, 0u);
+    }
+
     const auto &bullets = enemy_.GetBullets();
     for (size_t i = 0; i < bullets.size(); ++i) {
         const auto &bullet = bullets[i];
@@ -310,7 +402,8 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         OBB bulletBox{};
         bulletBox.center = bullet.position;
         bulletBox.size = enemy_.GetBulletHitBoxSize();
-        bulletBox.rotation = player_.GetTransform().rotation;
+        bulletBox.rotation =
+            MakeYawRotation(std::atan2(bullet.velocity.x, bullet.velocity.z));
         const CollisionManager::BodyId bulletBody = AddCollisionBody(
             collisionManager_, bulletBox,
             bullet.isReflected ? kLayerReflectedProjectile
@@ -332,10 +425,11 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         }
 
         if (bullet.isReflected) {
-            if (collisionManager_.Test(bulletBody, enemyBody) &&
+            if (isEnemyHurtBodyHit(bulletBody) &&
                 enemyHitCooldown_ <= 0.0f) {
                 const float damage = enemy_.GetBulletDamage() * damageMultiplier_;
                 enemy_.TakeDamage(damage);
+                player_.NotifyAttackHit(damage);
                 enemy_.DestroyBullet(i);
                 CombatFeedbackEvent feedback{};
                 feedback.type = CombatFeedbackEventType::ProjectileReflect;
@@ -350,6 +444,11 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         }
 
         if (collisionManager_.Test(bulletBody, playerBody)) {
+            if (isPlayerDodging) {
+                playerHitCooldown_ = 0.08f;
+                continue;
+            }
+
             if (playerHitCooldown_ <= 0.0f) {
                 const XMFLOAT2 hitDir =
                     NormalizeXZ(bullet.velocity.x, bullet.velocity.z);
@@ -403,7 +502,8 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         OBB waveBox{};
         waveBox.center = wave.position;
         waveBox.size = enemy_.GetWaveHitBoxSize();
-        waveBox.rotation = player_.GetTransform().rotation;
+        waveBox.rotation =
+            MakeYawRotation(std::atan2(wave.direction.x, wave.direction.z));
         const CollisionManager::BodyId waveBody = AddCollisionBody(
             collisionManager_, waveBox,
             wave.isReflected ? kLayerReflectedProjectile
@@ -425,10 +525,11 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         }
 
         if (wave.isReflected) {
-            if (collisionManager_.Test(waveBody, enemyBody) &&
+            if (isEnemyHurtBodyHit(waveBody) &&
                 enemyHitCooldown_ <= 0.0f) {
                 const float damage = enemy_.GetWaveDamage() * damageMultiplier_;
                 enemy_.TakeDamage(damage);
+                player_.NotifyAttackHit(damage);
                 enemy_.DestroyWave(i);
                 CombatFeedbackEvent feedback{};
                 feedback.type = CombatFeedbackEventType::ProjectileReflect;
@@ -443,6 +544,11 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         }
 
         if (collisionManager_.Test(waveBody, playerBody)) {
+            if (isPlayerDodging) {
+                playerHitCooldown_ = 0.08f;
+                continue;
+            }
+
             if (playerHitCooldown_ <= 0.0f) {
                 const XMFLOAT2 hitDir =
                     NormalizeXZ(wave.direction.x, wave.direction.z);

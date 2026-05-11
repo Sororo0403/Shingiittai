@@ -60,11 +60,8 @@ void Enemy::UpdateShotCharge(float deltaTime) {
 
     if (stateTimer_ >= config_.attacks.shot.chargeTime) {
         ChangeActionStep(ActionStep::Active);
-        shotsRemaining_ =
-            config_.attacks.shot.minCount +
-            (std::rand() % (config_.attacks.shot.maxCount -
-                            config_.attacks.shot.minCount + 1));
-        shotIntervalTimer_ = 0.0f;
+        shotsRemaining_ = 1;
+        shotIntervalTimer_ = config_.attacks.shot.interval;
     }
 }
 
@@ -83,9 +80,9 @@ void Enemy::UpdateShotFire(float deltaTime) {
 }
 
 void Enemy::UpdateShotRecovery(float deltaTime) {
-    UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_ * 1.25f);
-    if (stateTimer_ >= config_.attacks.shot.recoveryTime) {
-        FinishCurrentAction();
+    UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_ * 0.25f);
+    if (stateTimer_ >= config_.attacks.shot.recoveryTime + 0.18f) {
+        EndAttack();
     }
 }
 
@@ -175,8 +172,8 @@ void Enemy::UpdateWaveFire(float deltaTime) {
 
 void Enemy::UpdateWaveRecovery(float deltaTime) {
     (void)deltaTime;
-    if (stateTimer_ >= config_.attacks.wave.recoveryTime) {
-        FinishCurrentAction();
+    if (stateTimer_ >= config_.attacks.wave.recoveryTime + 0.18f) {
+        EndAttack();
     }
 }
 
@@ -193,6 +190,10 @@ void Enemy::UpdateNovaCharge(float deltaTime) {
 
 void Enemy::UpdateNovaActive(float deltaTime) {
     UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_ * 0.35f);
+
+    if (stateTimer_ < config_.attacks.nova.impactTime) {
+        return;
+    }
 
     if (!runtime_.novaSkyBulletsSpawned) {
         SpawnNovaSkyBullets();
@@ -214,9 +215,9 @@ void Enemy::UpdateNovaActive(float deltaTime) {
 }
 
 void Enemy::UpdateNovaRecovery(float deltaTime) {
-    UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_ * 0.7f);
-    if (stateTimer_ >= config_.attacks.nova.recoveryTime) {
-        FinishCurrentAction();
+    UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_ * 0.20f);
+    if (stateTimer_ >= config_.attacks.nova.recoveryTime + 0.25f) {
+        EndAttack();
     }
 }
 

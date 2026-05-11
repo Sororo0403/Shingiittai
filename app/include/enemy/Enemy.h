@@ -200,42 +200,47 @@ struct EnemyWaveConfig {
 };
 
 struct EnemyNovaConfig {
-    float chargeTime = 1.20f;
-    float activeTime = 0.58f;
+    float chargeTime = 2.00f;
+    float activeTime = 1.05f;
     float recoveryTime = 1.00f;
-    float ringInterval = 0.18f;
+    float impactTime = 0.52f;
+    float impactWindow = 0.18f;
+    float impactRadius = 6.70f;
+    float impactDamage = 14.0f;
+    float impactKnockback = 6.5f;
+    float ringInterval = 0.13f;
     int ringCount = 3;
-    int wavesPerRing = 12;
-    float waveSpeed = 6.6f;
-    float waveMaxDistance = 11.5f;
+    int wavesPerRing = 16;
+    float waveSpeed = 7.2f;
+    float waveMaxDistance = 12.2f;
     float firstRingRadius = 0.8f;
-    float ringRadiusStep = 0.36f;
-    float bulletSpeed = 7.4f;
+    float ringRadiusStep = 0.50f;
+    float bulletSpeed = 7.8f;
     float bulletLifeTime = 2.2f;
-    int skyBulletCount = 8;
-    float skyBulletHeightOffset = 1.15f;
+    int skyBulletCount = 12;
+    float skyBulletHeightOffset = 2.10f;
 };
 
 struct EnemyAttackSet {
-    EnemySmashConfig smash = {{{{10.0f, 4.0f, {1.5f, 1.8f, 1.5f}},
-                                {0.88f, 0.28f, 0.04f, 0.10f, 0.18f}, 0.45f},
+    EnemySmashConfig smash = {{{{10.0f, 4.0f, {2.8f, 2.1f, 3.2f}},
+                                {0.88f, 0.48f, 0.04f, 0.10f, 0.18f}, 0.85f},
                                {0.12f, 0.40f}, 0.45f},
                               1.4f, 0.8f, 0.35f, 0.30f};
-    EnemySweepConfig sweep = {{{{10.0f, 4.0f, {3.2f, 1.2f, 1.4f}},
-                                {1.27f, 0.36f, 0.12f, 0.24f, 0.32f}, 0.65f},
+    EnemySweepConfig sweep = {{{{10.0f, 4.0f, {5.0f, 1.65f, 2.6f}},
+                                {1.27f, 0.66f, 0.12f, 0.24f, 0.32f}, 1.05f},
                                {0.10f, 0.30f}, 0.28f},
                               0.2f, 0.8f, 0.30f, 0.18f, 0.55f};
-    EnemyShotConfig shot = {{5.0f, 2.5f, {0.4f, 0.4f, 0.4f}},
-                            0.6f, 0.8f, 0.2f, 3, 5, 6.0f, 2.0f, 0.2f};
-    EnemyWaveConfig wave = {{8.0f, 3.0f, {1.2f, 0.6f, 1.6f}},
-                            0.6f, 0.8f, 4.0f, 8.0f, 1.5f, 0.0f};
+    EnemyShotConfig shot = {{5.0f, 2.5f, {0.85f, 0.85f, 0.85f}},
+                            0.95f, 0.8f, 0.2f, 3, 5, 6.0f, 2.0f, 0.2f};
+    EnemyWaveConfig wave = {{8.0f, 3.0f, {2.25f, 0.95f, 2.6f}},
+                            1.15f, 0.8f, 4.0f, 8.0f, 1.5f, 0.0f};
     EnemyNovaConfig nova{};
 };
 
 struct EnemyWarpConfig {
-    float startTime = 0.2f;
-    float moveTime = 0.10f;
-    float endTime = 0.2f;
+    float startTime = 0.55f;
+    float moveTime = 0.16f;
+    float endTime = 0.35f;
 };
 
 struct EnemyChainConfig {
@@ -398,6 +403,15 @@ class Enemy {
     ActionKind GetActionKind() const { return runtime_.action.kind; }
     ActionId GetActionId() const { return runtime_.action.id; }
     ActionStep GetActionStep() const { return runtime_.action.step; }
+    float GetActionTimerForPresentation() const { return runtime_.stateTimer; }
+    float GetTelegraphYaw() const;
+    bool IsNovaImpactPending() const;
+    bool IsNovaImpactWindow() const;
+    float GetNovaImpactRadius() const;
+    float GetNovaImpactDamage() const;
+    float GetNovaImpactKnockback() const;
+    bool IsPunishableRecovery() const;
+    float GetRecoveryProgressForPresentation() const;
     BossPhase GetBossPhase() const { return runtime_.phase; }
     bool IsPhaseTransitionActive() const { return runtime_.phaseTransitionActive; }
     float GetPhaseTransitionRatio() const {
@@ -482,16 +496,16 @@ class Enemy {
     uint32_t modelId_ = 0;
     uint32_t projectileModelId_ = 0;
 
-    DirectX::XMFLOAT3 bodySize_ = {0.8f, 1.4f, 0.6f};
-    DirectX::XMFLOAT3 handSize_ = {0.45f, 0.45f, 0.45f};
+    DirectX::XMFLOAT3 bodySize_ = {1.45f, 1.8f, 1.25f};
+    DirectX::XMFLOAT3 handSize_ = {0.82f, 0.82f, 0.82f};
 
     EnemyRuntimeState runtime_{};
     float &hp_ = runtime_.hp;
     bool &isDying_ = runtime_.isDying;
     bool &deathFinished_ = runtime_.deathFinished;
     float &hitReactionTimer_ = runtime_.hitReactionTimer;
-    float hitReactionDuration_ = 0.12f;
-    float hitReactionMoveSpeed_ = 3.5f;
+    float hitReactionDuration_ = 0.16f;
+    float hitReactionMoveSpeed_ = 4.4f;
     float &counterRecoilTimer_ = runtime_.counterRecoilTimer;
     float counterRecoilDuration_ = 0.85f;
     float counterRecoilPitchRad_ = 0.12f;
