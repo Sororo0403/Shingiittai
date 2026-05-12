@@ -219,6 +219,8 @@ void GameScene::Initialize(const SceneContext &ctx) {
 
     swordTrailRenderer_.Initialize(dx);
     swordTrailRenderer_.Reset();
+    swordSlashArcRenderer_.Initialize(dx);
+    swordSlashArcRenderer_.Reset();
     prevSwordSlashStates_.fill(false);
     dx->EndUpload();
 
@@ -320,6 +322,7 @@ void GameScene::Draw() {
     }
     ctx_->model->PostDraw();
     swordTrailRenderer_.Draw(camera_);
+    swordSlashArcRenderer_.Draw(camera_);
 
     sparkParticles_.Draw(camera_);
     explosionParticles_.Draw(camera_);
@@ -330,6 +333,10 @@ void GameScene::Draw() {
 void GameScene::DispatchCombatFeedback(const CombatFeedbackEvent &event) {
     combatFeedback_.PushEvent(event);
     EmitCombatParticles(event);
+    if (event.type == CombatFeedbackEventType::PlayerSlashHit) {
+        swordSlashArcRenderer_.EmitHitLine(event.position, event.direction,
+                                           camera_, event.power);
+    }
 }
 
 void GameScene::EmitCombatParticles(const CombatFeedbackEvent &event) {
@@ -417,8 +424,8 @@ void GameScene::UpdateSwordVfx(float deltaTime) {
         const bool justStarted = isSlashing && !prevSwordSlashStates_[i];
 
         if (justStarted && swords[i]) {
-            const DirectX::XMFLOAT3 root = swords[i]->GetBladeRootWorld();
-            const DirectX::XMFLOAT3 tip = swords[i]->GetBladeTipWorld();
+            const DirectX::XMFLOAT3 root = swords[i]->GetVisualBladeRootWorld();
+            const DirectX::XMFLOAT3 tip = swords[i]->GetVisualBladeTipWorld();
 
             DirectX::XMVECTOR rootV = DirectX::XMLoadFloat3(&root);
             DirectX::XMVECTOR tipV = DirectX::XMLoadFloat3(&tip);
@@ -452,6 +459,8 @@ void GameScene::UpdateSwordVfx(float deltaTime) {
 
         prevSwordSlashStates_[i] = isSlashing;
     }
+
+    swordSlashArcRenderer_.Update(deltaTime);
 
     if (!hasStart) {
         return;

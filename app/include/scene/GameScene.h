@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <string>
 #include "GameSceneHud.h"
+#include "SwordSlashArcRenderer.h"
 #include "SwordTrailRenderer.h"
 #include <array>
 
@@ -57,6 +58,7 @@ class GameScene : public BaseScene {
     GPUParticleSystem smokeParticles_;
     GPUParticleSystem swordFlashParticles_;
     SwordTrailRenderer swordTrailRenderer_;
+    SwordSlashArcRenderer swordSlashArcRenderer_;
     std::array<bool, Player::kSwordCount> prevSwordSlashStates_{};
     uint32_t particleTextureId_ = 0;
     uint32_t playerModelId_ = 0;
