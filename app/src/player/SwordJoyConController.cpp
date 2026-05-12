@@ -4,6 +4,10 @@
 
 using namespace DirectX;
 
+namespace {
+constexpr float kJoyConSlashSensitivity = 2.05f;
+}
+
 SwordPose SwordJoyConController::GetPose() const {
     SwordPose pose = state_.ToPose();
     pose.isJoyCon = true;
@@ -12,12 +16,13 @@ SwordPose SwordJoyConController::GetPose() const {
 
 void SwordJoyConController::Update(JoyCon *joyCon, float dt,
                                    const Transform &swordPos) {
+    (void)swordPos;
     UpdateOrientation(joyCon, dt);
     state_.isGuard = false;
     state_.isCounter = false;
     state_.counterTimer = SwordControllerState::kCounterFrames;
     UpdateSlash(dt);
-    state_.UpdateSlashDir(swordPos);
+    UpdateSlashDirFromOrientation();
 }
 
 bool SwordJoyConController::IsActive(const JoyCon *joyCon) const {
@@ -59,5 +64,28 @@ void SwordJoyConController::UpdateCounter(JoyCon *joyCon) {
 }
 
 void SwordJoyConController::UpdateSlash(float dt) {
-    state_.UpdateSlash(angularVelocity_, dt);
+    state_.UpdateSlash(angularVelocity_ * kJoyConSlashSensitivity, dt);
+}
+
+void SwordJoyConController::UpdateSlashDirFromOrientation() {
+    XMVECTOR orientation = XMLoadFloat4(&state_.orientation);
+    XMVECTOR tip =
+        XMVector3Rotate(XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f), orientation);
+    XMFLOAT3 currentTip{};
+    XMStoreFloat3(&currentTip, tip);
+
+    if (!state_.isSlashMode) {
+        prevTipDirection_ = currentTip;
+        return;
+    }
+
+    const float dx = currentTip.x - prevTipDirection_.x;
+    const float dy = currentTip.y - prevTipDirection_.y;
+    const float lenSq = dx * dx + dy * dy;
+    if (lenSq > 0.000025f) {
+        const float invLen = 1.0f / std::sqrt(lenSq);
+        state_.slashDir = {dx * invLen, dy * invLen};
+    }
+
+    prevTipDirection_ = currentTip;
 }

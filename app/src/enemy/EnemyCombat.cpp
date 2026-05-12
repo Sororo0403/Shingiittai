@@ -42,6 +42,9 @@ OBB Enemy::GetAttackOBB() const {
         return GetSmashAttackOBB();
     case ActionKind::Sweep:
         return GetSweepAttackOBB();
+    case ActionKind::Shot:
+        return MakeOBB(IsDualCounterHandStage() ? leftHandTf_ : rightHandTf_,
+                       GetCurrentAttackHitBoxSize());
     default:
         return OBB{};
     }
@@ -273,6 +276,97 @@ void Enemy::NotifyAttackConnected() { currentActionConnected_ = true; }
 
 void Enemy::NotifyAttackGuarded() { currentActionGuarded_ = true; }
 
+void Enemy::ForcePunishRelease() {
+    if (!(action_.kind == ActionKind::Smash ||
+          action_.kind == ActionKind::Sweep ||
+          action_.kind == ActionKind::Shot)) {
+        return;
+    }
+    if (!(action_.step == ActionStep::Charge ||
+          action_.step == ActionStep::Hold ||
+          action_.step == ActionStep::Active)) {
+        return;
+    }
+
+    if (!hasTrackingLocked_) {
+        LockCurrentFacing();
+        hasTrackingLocked_ = true;
+    }
+    ChangeActionStep(ActionStep::Active);
+    if (action_.kind == ActionKind::Shot) {
+        dualCounterStage_ = 0;
+        dualCounterStageResolved_ = false;
+    }
+    const AttackTimingParam *timing = GetCurrentAttackTiming();
+    if (timing != nullptr) {
+        stateTimer_ = timing->activeStartTime;
+        isAttackActive_ = true;
+    } else if (action_.kind == ActionKind::Shot) {
+        stateTimer_ = 0.20f;
+        isAttackActive_ = true;
+    }
+}
+
+bool Enemy::IsDualCounterAction() const {
+    return action_.kind == ActionKind::Shot &&
+           (action_.step == ActionStep::Charge ||
+            action_.step == ActionStep::Active);
+}
+
+bool Enemy::IsDualCounterWindow() const {
+    return action_.kind == ActionKind::Shot && action_.step == ActionStep::Active &&
+           !dualCounterStageResolved_ && stateTimer_ >= 0.14f &&
+           stateTimer_ <= 0.72f;
+}
+
+bool Enemy::IsDualCounterHandStage() const {
+    if (dualCounterStage_ <= 0) {
+        return dualCounterFirstHand_;
+    }
+    return !dualCounterFirstHand_;
+}
+
+bool Enemy::NotifyDualCountered() {
+    if (action_.kind != ActionKind::Shot || action_.step != ActionStep::Active) {
+        return false;
+    }
+
+    currentActionGuarded_ = true;
+    dualCounterStageResolved_ = true;
+    isAttackActive_ = false;
+
+    if (dualCounterStage_ <= 0) {
+        dualCounterStage_ = 1;
+        stateTimer_ = 0.0f;
+        dualCounterStageResolved_ = false;
+        LockCurrentFacing();
+        return false;
+    }
+
+    return ApplyCounterBreakReaction(0.95f);
+}
+
+void Enemy::NotifyDualStrikeLanded() {
+    if (action_.kind != ActionKind::Shot || action_.step != ActionStep::Active) {
+        NotifyAttackConnected();
+        return;
+    }
+
+    NotifyAttackConnected();
+    dualCounterStageResolved_ = true;
+    isAttackActive_ = false;
+
+    if (dualCounterStage_ <= 0) {
+        dualCounterStage_ = 1;
+        stateTimer_ = 0.0f;
+        dualCounterStageResolved_ = false;
+        LockCurrentFacing();
+        return;
+    }
+
+    ChangeActionStep(ActionStep::Recovery);
+}
+
 bool Enemy::NotifyCountered() { return ApplyCounterBreakReaction(); }
 
 bool Enemy::NotifyCountered(float vulnerabilityDuration) {
@@ -291,7 +385,8 @@ bool Enemy::ApplyCounterBreakReaction(float vulnerabilityDuration) {
     RegisterCounterSuccessReaction();
 
     const bool isCounterBreakableAction =
-        action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep;
+        action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
+        action_.kind == ActionKind::Shot;
     if (!isCounterBreakableAction) {
         return false;
     }

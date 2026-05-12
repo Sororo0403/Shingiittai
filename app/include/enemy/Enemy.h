@@ -350,6 +350,9 @@ struct EnemyRuntimeState {
     bool isDoubleSweepSecondStage = false;
     bool currentActionConnected = false;
     bool currentActionGuarded = false;
+    int dualCounterStage = 0;
+    bool dualCounterFirstHand = true;
+    bool dualCounterStageResolved = false;
     bool hasTrackingLocked = false;
     bool novaSkyBulletsSpawned = false;
     int novaRingsSpawned = 0;
@@ -386,6 +389,9 @@ class Enemy {
     void ConsumeWave(size_t index);
     void NotifyAttackConnected();
     void NotifyAttackGuarded();
+    void ForcePunishRelease();
+    bool NotifyDualCountered();
+    void NotifyDualStrikeLanded();
     bool NotifyCountered();
     bool NotifyCountered(float vulnerabilityDuration);
     void FinishCounterRecoil();
@@ -439,6 +445,9 @@ class Enemy {
 
     bool IsAttackActive() const { return runtime_.isAttackActive; }
     OBB GetAttackOBB() const;
+    bool IsDualCounterAction() const;
+    bool IsDualCounterWindow() const;
+    bool IsDualCounterHandStage() const;
 
     float GetDistanceToPlayer() const;
 
@@ -638,6 +647,9 @@ class Enemy {
     float shotWarpFollowupDelayMax_ = 0.18f;
     bool &currentActionConnected_ = runtime_.currentActionConnected;
     bool &currentActionGuarded_ = runtime_.currentActionGuarded;
+    int &dualCounterStage_ = runtime_.dualCounterStage;
+    bool &dualCounterFirstHand_ = runtime_.dualCounterFirstHand;
+    bool &dualCounterStageResolved_ = runtime_.dualCounterStageResolved;
     float delaySmashWhiffRecoveryBonus_ = 0.34f;
     float punishWindowTurnSpeedScale_ = 0.55f;
     float smashActiveLungeSpeed_ = 1.18f;

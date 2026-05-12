@@ -39,7 +39,7 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId,
     recoveryVulnerableFlashTimer_ = 0.0f;
     overSwingCount_ = 0;
     overSwingResetTimer_ = 0.0f;
-    damageTakenScale_ = 1.0f;
+    damageTakenScale_ = 3.34f;
     swingComboCount_ = 0;
     swingComboTimer_ = 0.0f;
     greatSwordCharge_ = 0.0f;
@@ -69,7 +69,11 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId,
 }
 
 void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
-                    float cameraYaw, bool forceRangedReflectMove) {
+                    float cameraYaw, bool forceRangedReflectMove,
+                    float controlDeltaTime) {
+    const float inputDeltaTime =
+        controlDeltaTime > 0.0f ? controlDeltaTime : deltaTime;
+
     if (input->IsKeyTrigger(DIK_C)) {
         leftJoyCon_.StartCalibration();
         rightJoyCon_.StartCalibration();
@@ -79,14 +83,17 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
         leftJoyCon_.SetBaseOrientation();
         rightJoyCon_.SetBaseOrientation();
     }
+    if (rightJoyCon_.IsConnected() && rightJoyCon_.IsButtonTrigger(JSMASK_ZR)) {
+        rightJoyCon_.SetBaseOrientation();
+    }
 
     if (input->IsGamepadConnected() &&
         input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_START)) {
         ToggleGamepadControlMode();
     }
 
-    leftJoyCon_.Update(deltaTime);
-    rightJoyCon_.Update(deltaTime);
+    leftJoyCon_.Update(inputDeltaTime);
+    rightJoyCon_.Update(inputDeltaTime);
 
     UpdateDodgeInput(input, deltaTime, cameraYaw, lookTarget);
     UpdateMovement(input, deltaTime, cameraYaw, lookTarget,
@@ -108,23 +115,24 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
 
     SwordPose leftPose = MakeIdleSwordPose(true);
     if (hasLeftJoyCon) {
-        leftSwordJoyConController_.Update(&leftJoyCon_, deltaTime,
+        leftSwordJoyConController_.Update(&leftJoyCon_, inputDeltaTime,
                                           leftSword_.GetTransform());
         leftPose = leftSwordJoyConController_.GetPose();
     }
 
     SwordPose rightPose = MakeIdleSwordPose(false);
     if (hasRightJoyCon) {
-        rightSwordJoyConController_.Update(&rightJoyCon_, deltaTime,
+        rightSwordJoyConController_.Update(&rightJoyCon_, inputDeltaTime,
                                            rightSword_.GetTransform());
         rightPose = rightSwordJoyConController_.GetPose();
     } else if (useHunterGamepadControls) {
-        rightPose = UpdateHunterGamepadSword(input, deltaTime);
+        rightPose = UpdateHunterGamepadSword(input, inputDeltaTime);
     } else if (useGamepadRightSword) {
         rightPose =
-            UpdateGamepadSword(input, deltaTime, rightSword_.GetTransform());
+            UpdateGamepadSword(input, inputDeltaTime, rightSword_.GetTransform());
     } else if (useMouseRightSword) {
-        swordMouseController_.Update(input, deltaTime, rightSword_.GetTransform());
+        swordMouseController_.Update(input, inputDeltaTime,
+                                     rightSword_.GetTransform());
         rightPose = swordMouseController_.GetPose();
     }
 
@@ -162,9 +170,10 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
                                     0.0f, 1.0f)
                        : 0.0f));
 
-    leftSword_.Update(BuildSwordTransform(leftPose, true), leftPose, deltaTime);
+    leftSword_.Update(BuildSwordTransform(leftPose, true), leftPose,
+                      inputDeltaTime);
     rightSword_.Update(BuildSwordTransform(rightPose, false), rightPose,
-                       deltaTime);
+                       inputDeltaTime);
 
     if (postSlashRecoveryTimer_ <= 0.0f && JustCounterFailed()) {
         postSlashRecoveryTimer_ = kPostSlashRecoveryDuration;

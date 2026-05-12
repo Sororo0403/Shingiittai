@@ -62,35 +62,40 @@ void Enemy::UpdateNovaByStep(float deltaTime) {
 }
 
 void Enemy::UpdateShotCharge(float deltaTime) {
-    if (!shotWarpedToArenaEdge_) {
-        WarpToShotArenaEdge();
-        shotWarpedToArenaEdge_ = true;
-    }
-
     UpdateFacingToPlayerWithSpeed(
         deltaTime,
-        chargeTurnSpeed_ * ChargeTurnScaleAfterStance(stateTimer_, 0.22f));
+        chargeTurnSpeed_ * ChargeTurnScaleAfterStance(stateTimer_, 0.36f));
+
+    const float dx = playerPos_.x - tf_.position.x;
+    const float dz = playerPos_.z - tf_.position.z;
+    const float distanceSq = dx * dx + dz * dz;
+    if (distanceSq > 3.0f * 3.0f) {
+        const float distance = std::sqrt(distanceSq);
+        const float moveSpeed = phase_ == BossPhase::Phase2 ? 3.45f : 3.10f;
+        tf_.position.x += (dx / distance) * moveSpeed * deltaTime;
+        tf_.position.z += (dz / distance) * moveSpeed * deltaTime;
+        ClampToArena();
+    }
 
     if (stateTimer_ >= config_.attacks.shot.chargeTime) {
         LockCurrentFacing();
+        dualCounterStage_ = 0;
+        dualCounterStageResolved_ = false;
         ChangeActionStep(ActionStep::Active);
-        shotsRemaining_ =
-            (std::max)(config_.attacks.shot.minCount,
-                       config_.attacks.shot.maxCount);
-        shotIntervalTimer_ = config_.attacks.shot.interval;
     }
 }
 
 void Enemy::UpdateShotFire(float deltaTime) {
-    shotIntervalTimer_ += deltaTime;
-    if (shotsRemaining_ > 0 &&
-        shotIntervalTimer_ >= config_.attacks.shot.interval) {
-        SpawnBullet();
-        shotsRemaining_--;
-        shotIntervalTimer_ = 0.0f;
-    }
-
-    if (shotsRemaining_ <= 0) {
+    (void)deltaTime;
+    isAttackActive_ = IsDualCounterWindow();
+    if (stateTimer_ >= 0.88f) {
+        if (dualCounterStage_ <= 0) {
+            dualCounterStage_ = 1;
+            dualCounterStageResolved_ = false;
+            stateTimer_ = 0.0f;
+            LockCurrentFacing();
+            return;
+        }
         ChangeActionStep(ActionStep::Recovery);
     }
 }

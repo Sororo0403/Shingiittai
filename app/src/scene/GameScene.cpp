@@ -209,6 +209,33 @@ bool IsChargeStanceSettled(ActionKind kind, ActionStep step, float timer) {
     return timer >= GetChargeStanceSettleTime(kind);
 }
 
+SwordCounterAxis RequiredVisualCounterAxisForAction(ActionKind kind) {
+    switch (kind) {
+    case ActionKind::Smash:
+        return SwordCounterAxis::Vertical;
+    case ActionKind::Sweep:
+        return SwordCounterAxis::Horizontal;
+    default:
+        return SwordCounterAxis::None;
+    }
+}
+
+SwordCounterAxis RequiredVisualDualCounterAxis(bool handStage) {
+    return handStage ? SwordCounterAxis::Horizontal
+                     : SwordCounterAxis::Vertical;
+}
+
+XMFLOAT3 CounterAxisParticleDirection(SwordCounterAxis axis) {
+    switch (axis) {
+    case SwordCounterAxis::Vertical:
+        return {0.0f, 1.0f, 0.0f};
+    case SwordCounterAxis::Horizontal:
+        return {1.0f, 0.0f, 0.0f};
+    default:
+        return {1.0f, 0.0f, 0.0f};
+    }
+}
+
 void ApplyWeatheredMetalMaterials(ModelManager *modelManager, uint32_t modelId,
                                   uint32_t rustTextureId,
                                   const std::vector<XMFLOAT4> &palette,
@@ -397,14 +424,18 @@ void GameScene::Initialize(const SceneContext &ctx) {
     enemy_.Initialize(enemyModel, bulletModel);
     enemyModelId_ = enemyModel;
     if (ctx_->sound != nullptr) {
-        slashSoundId_ = ctx_->sound->Load(L"app/resources/sounds/slash.wav");
+        slashSoundId_ =
+            ctx_->sound->Load(L"app/resources/sounds/slash_hero.wav");
         enemyReleaseSoundId_ =
-            ctx_->sound->Load(L"app/resources/sounds/enemy_release.wav");
-        hitSoundId_ = ctx_->sound->Load(L"app/resources/sounds/hit.wav");
+            ctx_->sound->Load(L"app/resources/sounds/enemy_release_snap.wav");
+        hitSoundId_ =
+            ctx_->sound->Load(L"app/resources/sounds/hit_impact.wav");
         counterSoundId_ =
-            ctx_->sound->Load(L"app/resources/sounds/counter.wav");
+            ctx_->sound->Load(L"app/resources/sounds/counter_burst.wav");
         damageSoundId_ =
-            ctx_->sound->Load(L"app/resources/sounds/damage.wav");
+            ctx_->sound->Load(L"app/resources/sounds/damage_heavy.wav");
+        explosionSoundId_ =
+            ctx_->sound->Load(L"app/resources/sounds/explosion_boss.wav");
         soundsLoaded_ = true;
     }
     showJoyConTutorial_ = true;
@@ -458,6 +489,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
     failedChargeWeakPointActionKind_ = ActionKind::None;
     chargeWeakPointBroken_ = false;
     chargeWeakPointFailedThisAction_ = false;
+    enemyRedPunishUncounterable_ = false;
     chargeWeakPointSlashCount_ = 0;
     previousChargeWeakPointSlashStates_.fill(false);
     previousSwordSoundStates_.fill(false);
@@ -519,10 +551,7 @@ void GameScene::Update() {
 
     ctx_->model->UpdateAnimation(playerModelId_, playerDeltaTime);
 
-    bool forceRangedReflectMove =
-        enemy_.GetActionKind() == ActionKind::Shot &&
-        (enemy_.GetActionStep() == ActionStep::Charge ||
-         enemy_.GetActionStep() == ActionStep::Active);
+    bool forceRangedReflectMove = false;
     for (const auto &bullet : enemy_.GetBullets()) {
         if (bullet.isAlive && !bullet.isReflected) {
             forceRangedReflectMove = true;
@@ -530,7 +559,7 @@ void GameScene::Update() {
         }
     }
     player_.Update(input, playerDeltaTime, enemy_.GetTransform().position,
-                   cameraYaw_, forceRangedReflectMove);
+                   cameraYaw_, forceRangedReflectMove, baseDeltaTime);
     if (soundsLoaded_ && ctx_->sound != nullptr) {
         const auto slashStates = player_.GetSwordSlashStates();
         for (size_t i = 0; i < slashStates.size(); ++i) {
@@ -797,18 +826,18 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
         cuePos.y += 1.64f;
         cuePos.z += (toCameraZ / toCameraLen) * 0.84f;
 
-        const XMFLOAT4 cueColor =
-            kind == ActionKind::Smash ? XMFLOAT4{1.0f, 0.86f, 0.16f, 1.0f}
-                                      : XMFLOAT4{0.20f, 0.92f, 1.0f, 1.0f};
+        const XMFLOAT4 cueColor{0.22f, 1.0f, 0.34f, 1.0f};
         sparkParticles_.EmitBurst(cuePos, 178, 1.50f,
                                   GPUParticleSystem::BurstStyle::SlashLine,
                                   cueColor, {slashDir.x, slashDir.y, 0.0f},
                                   0.86f);
-            enemyWeakPointParticleTimer_ = 0.050f;
+        enemyWeakPointParticleTimer_ = 0.050f;
     }
 
-    constexpr float kReleaseCounterWindowDuration = 0.36f;
+    constexpr float kReleaseCounterWindowDuration = 0.62f;
     const float releaseAnticipation = enemy_.GetReleaseAnticipationRatio();
+    const bool dualCounterCueVisible =
+        kind == ActionKind::Shot && enemy_.IsDualCounterWindow();
     const bool preReleaseCounterCueVisible =
         !chargeDirectionVisible && actionStep != ActionStep::Active &&
         releaseAnticipation > 0.0f;
@@ -817,38 +846,125 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
         enemy_.GetActionTimerForPresentation() <=
             kReleaseCounterWindowDuration;
     const bool releaseCounterCueVisible =
-        !chargeWeakPointFailedThisAction_ &&
-        (kind == ActionKind::Smash || kind == ActionKind::Sweep) &&
-        (preReleaseCounterCueVisible || activeReleaseCounterCueVisible);
-    if (releaseCounterCueVisible && enemyCueParticleTimer_ <= 0.0f) {
+        dualCounterCueVisible ||
+        (!chargeWeakPointFailedThisAction_ &&
+         (kind == ActionKind::Smash || kind == ActionKind::Sweep) &&
+         (preReleaseCounterCueVisible || activeReleaseCounterCueVisible));
+    const bool badSlashCueVisible =
+        (kind == ActionKind::Smash || kind == ActionKind::Sweep ||
+         kind == ActionKind::Shot) &&
+        !chargeDirectionVisible && !releaseCounterCueVisible &&
+        (actionStep == ActionStep::Charge || actionStep == ActionStep::Hold ||
+         actionStep == ActionStep::Active);
+
+    if (dualCounterCueVisible && enemyCueParticleTimer_ <= 0.0f) {
+        const float yaw = enemy_.GetTelegraphYaw();
+        const XMFLOAT3 forward = {std::sinf(yaw), 0.12f, std::cosf(yaw)};
+        auto emitDualCue = [&](const XMFLOAT3 &basePos,
+                               const XMFLOAT4 &sparkColor,
+                               const XMFLOAT4 &flashColor,
+                               SwordCounterAxis axis) {
+            XMFLOAT3 cuePos = basePos;
+            cuePos.y += 0.42f;
+            sparkParticles_.EmitBurst(cuePos, 112, 0.90f,
+                                      GPUParticleSystem::BurstStyle::Sparks,
+                                      sparkColor, forward, 4.15f);
+            sparkParticles_.EmitBurst(
+                cuePos, 124, 1.20f, GPUParticleSystem::BurstStyle::SlashLine,
+                sparkColor, CounterAxisParticleDirection(axis), 0.72f);
+            smokeParticles_.EmitBurst(cuePos, 7, 0.82f,
+                                      GPUParticleSystem::BurstStyle::Flash,
+                                      flashColor, forward, 0.58f);
+        };
+
+        const bool handIsGreen = enemy_.IsDualCounterHandStage();
+        const SwordCounterAxis greenAxis =
+            RequiredVisualDualCounterAxis(handIsGreen);
+        const SwordCounterAxis redAxis =
+            RequiredVisualDualCounterAxis(!handIsGreen);
+        const XMFLOAT3 greenPos =
+            handIsGreen ? enemy_.GetLeftHandTransform().position
+                        : enemy_.GetRightHandTransform().position;
+        const XMFLOAT3 redPos =
+            handIsGreen ? enemy_.GetRightHandTransform().position
+                        : enemy_.GetLeftHandTransform().position;
+        emitDualCue(greenPos, {0.22f, 1.0f, 0.34f, 0.92f},
+                    {0.18f, 1.0f, 0.28f, 0.78f}, greenAxis);
+        emitDualCue(redPos, {1.0f, 0.08f, 0.04f, 0.92f},
+                    {1.0f, 0.05f, 0.03f, 0.78f}, redAxis);
+        enemyCueParticleTimer_ = 0.070f;
+    } else if ((releaseCounterCueVisible || badSlashCueVisible) &&
+        enemyCueParticleTimer_ <= 0.0f) {
         const float yaw = enemy_.GetTelegraphYaw();
         const XMFLOAT3 forward = {std::sinf(yaw), 0.12f, std::cosf(yaw)};
         XMFLOAT3 cuePos = enemyPos;
         cuePos.x += forward.x * 1.18f;
         cuePos.y += 1.28f;
         cuePos.z += forward.z * 1.18f;
+        if (kind == ActionKind::Shot) {
+            cuePos = enemy_.IsDualCounterHandStage()
+                         ? enemy_.GetLeftHandTransform().position
+                         : enemy_.GetRightHandTransform().position;
+            cuePos.y += 0.42f;
+        }
         const XMFLOAT4 cueColor =
-            kind == ActionKind::Smash ? XMFLOAT4{1.0f, 0.90f, 0.30f, 0.88f}
-                                      : XMFLOAT4{0.46f, 0.96f, 1.0f, 0.88f};
+            releaseCounterCueVisible ? XMFLOAT4{0.22f, 1.0f, 0.34f, 0.92f}
+                                     : XMFLOAT4{1.0f, 0.08f, 0.04f, 0.92f};
         const float cuePower =
-            activeReleaseCounterCueVisible
+            dualCounterCueVisible
+                ? 1.0f
+                : activeReleaseCounterCueVisible
                 ? 1.0f
                 : std::clamp(0.64f + releaseAnticipation * 0.28f, 0.64f,
                              0.92f);
-        sparkParticles_.EmitBurst(cuePos, activeReleaseCounterCueVisible ? 112 : 76,
-                                  0.90f * cuePower,
+        const uint32_t sparkCount =
+            releaseCounterCueVisible
+                ? ((activeReleaseCounterCueVisible || dualCounterCueVisible)
+                       ? 112u
+                       : 76u)
+                : 88u;
+        const float sparkRadius =
+            releaseCounterCueVisible ? 0.90f * cuePower : 0.98f;
+        const float sparkSpeed =
+            releaseCounterCueVisible ? 4.15f * cuePower : 4.35f;
+        sparkParticles_.EmitBurst(cuePos, sparkCount, sparkRadius,
                                   GPUParticleSystem::BurstStyle::Sparks,
-                                  cueColor, forward, 4.15f * cuePower);
+                                  cueColor, forward, sparkSpeed);
+        const bool showCounterAxisLine =
+            kind == ActionKind::Smash || kind == ActionKind::Sweep ||
+            kind == ActionKind::Shot;
+        if ((releaseCounterCueVisible || badSlashCueVisible) &&
+            showCounterAxisLine) {
+            const SwordCounterAxis cueAxis =
+                kind == ActionKind::Shot
+                    ? RequiredVisualDualCounterAxis(
+                          enemy_.IsDualCounterHandStage())
+                    : RequiredVisualCounterAxisForAction(kind);
+            sparkParticles_.EmitBurst(
+                cuePos, releaseCounterCueVisible ? 132u : 116u,
+                releaseCounterCueVisible ? 1.22f : 1.12f,
+                GPUParticleSystem::BurstStyle::SlashLine, cueColor,
+                CounterAxisParticleDirection(cueAxis), 0.74f);
+        }
         const XMFLOAT4 flashColor =
-            kind == ActionKind::Smash ? XMFLOAT4{1.0f, 0.82f, 0.22f, 0.78f}
-                                      : XMFLOAT4{0.34f, 0.92f, 1.0f, 0.78f};
+            releaseCounterCueVisible ? XMFLOAT4{0.18f, 1.0f, 0.28f, 0.78f}
+                                     : XMFLOAT4{1.0f, 0.05f, 0.03f, 0.78f};
         smokeParticles_.EmitBurst(cuePos,
-                                  activeReleaseCounterCueVisible ? 7 : 4,
-                                  activeReleaseCounterCueVisible ? 0.82f
-                                                                 : 0.62f,
+                                  releaseCounterCueVisible
+                                      ? ((activeReleaseCounterCueVisible ||
+                                          dualCounterCueVisible)
+                                             ? 7
+                                             : 4)
+                                      : 5,
+                                  releaseCounterCueVisible
+                                      ? ((activeReleaseCounterCueVisible ||
+                                          dualCounterCueVisible)
+                                             ? 0.82f
+                                             : 0.62f)
+                                      : 0.70f,
                                   GPUParticleSystem::BurstStyle::Flash,
                                   flashColor, forward, 0.58f);
-        enemyCueParticleTimer_ = 0.070f;
+        enemyCueParticleTimer_ = releaseCounterCueVisible ? 0.070f : 0.085f;
     }
 
     if (enemySwordParticleTimer_ > 0.0f || ctx_->model == nullptr) {
@@ -973,6 +1089,9 @@ void GameScene::UpdateVictorySequence(float deltaTime) {
     if (!victoryFinalExplosionEmitted_ && victorySequenceTimer_ >= 3.90f) {
         victoryFinalExplosionEmitted_ = true;
         const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
+        if (soundsLoaded_ && ctx_ != nullptr && ctx_->sound != nullptr) {
+            ctx_->sound->Play(explosionSoundId_);
+        }
         explosionParticles_.EmitBurst(
             {enemyPos.x, enemyPos.y + 1.05f, enemyPos.z}, 3200, 8.40f,
             GPUParticleSystem::BurstStyle::Explosion,
@@ -1109,28 +1228,117 @@ void GameScene::DrawJoyConTutorial() {
         return;
     }
 
+    const ActionKind kind = enemy_.GetActionKind();
+    const ActionStep step = enemy_.GetActionStep();
+    constexpr float kReleaseCounterWindowDuration = 0.62f;
+    const bool chargeDirectionVisible =
+        !chargeWeakPointBroken_ &&
+        enemy_.GetChargeWeakPointTimeLimitForPresentation() > 0.0f;
+    const float releaseAnticipation = enemy_.GetReleaseAnticipationRatio();
+    const bool preReleaseCounterCueVisible =
+        !chargeDirectionVisible && step != ActionStep::Active &&
+        releaseAnticipation > 0.0f;
+    const bool activeReleaseCounterCueVisible =
+        step == ActionStep::Active &&
+        enemy_.GetActionTimerForPresentation() <=
+            kReleaseCounterWindowDuration;
+    const bool counterCueVisible =
+        !chargeWeakPointFailedThisAction_ &&
+        (kind == ActionKind::Smash || kind == ActionKind::Sweep) &&
+        (preReleaseCounterCueVisible || activeReleaseCounterCueVisible);
+    const bool redCueVisible =
+        (kind == ActionKind::Smash || kind == ActionKind::Sweep ||
+         kind == ActionKind::Shot) &&
+        !chargeDirectionVisible && !counterCueVisible &&
+        (step == ActionStep::Charge || step == ActionStep::Hold ||
+         step == ActionStep::Active);
+    const bool joyConMode = player_.UsesJoyConControls();
+
+    auto axisText = [](SwordCounterAxis axis) {
+        switch (axis) {
+        case SwordCounterAxis::Vertical:
+            return "VERTICAL slash";
+        case SwordCounterAxis::Horizontal:
+            return "HORIZONTAL slash";
+        default:
+            return "slash";
+        }
+    };
+    auto coloredLine = [](const ImVec4 &color, const char *label,
+                          const char *text) {
+        ImGui::PushStyleColor(ImGuiCol_Text, color);
+        ImGui::TextUnformatted(label);
+        ImGui::PopStyleColor();
+        ImGui::SameLine();
+        ImGui::TextWrapped("%s", text);
+    };
+
+    const char *mainTitle = "WATCH THE BOSS";
+    const char *mainText = "Stay ready. Do not swing until a clear cue appears.";
+    ImVec4 mainColor{0.90f, 0.92f, 0.96f, 1.0f};
+    if (chargeDirectionVisible) {
+        mainTitle = "FLOW LINE";
+        mainText = "Slash along the GREEN line. Same angle, either direction is OK.";
+        mainColor = {0.24f, 1.0f, 0.36f, 1.0f};
+    } else if (counterCueVisible) {
+        mainTitle = "COUNTER NOW";
+        const SwordCounterAxis axis = RequiredVisualCounterAxisForAction(kind);
+        mainText = axisText(axis);
+        mainColor = {0.24f, 1.0f, 0.36f, 1.0f};
+    } else if (redCueVisible) {
+        mainTitle = "DO NOT SLASH";
+        mainText = "RED means danger. Swinging now triggers an uncounterable hit.";
+        mainColor = {1.0f, 0.18f, 0.10f, 1.0f};
+    } else if (counterCinematicActive_) {
+        mainTitle = "PARRY HIT";
+        mainText = "Time is slow. Make one clean follow-up slash.";
+        mainColor = {0.36f, 0.88f, 1.0f, 1.0f};
+    }
+
     ImGui::SetNextWindowPos(ImVec2(22.0f, 92.0f), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(430.0f, 300.0f), ImGuiCond_Always);
-    ImGui::SetNextWindowBgAlpha(0.78f);
-    ImGui::Begin("Joy-Con Tutorial", nullptr,
+    ImGui::SetNextWindowSize(ImVec2(520.0f, 378.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.84f);
+    ImGui::Begin("Battle Tutorial", nullptr,
                  ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 
-    ImGui::Text("JOY-CON QUICK GUIDE");
+    ImGui::Text("BATTLE TUTORIAL  (%s)", joyConMode ? "JOY-CON" : "MOUSE");
     ImGui::Separator();
-    ImGui::Text("Setup");
-    ImGui::BulletText("C: calibrate sensors");
-    ImGui::BulletText("R: set current pose as neutral");
+    ImGui::PushStyleColor(ImGuiCol_Text, mainColor);
+    ImGui::TextUnformatted(mainTitle);
+    ImGui::PopStyleColor();
+    ImGui::TextWrapped("%s", mainText);
     ImGui::Spacing();
-    ImGui::Text("Fight");
-    ImGui::BulletText("Swing Joy-Con: slash");
-    ImGui::BulletText("Move mouse: slash");
-    ImGui::BulletText("Swing into enemy attack: parry");
-    ImGui::BulletText("Parry slows time and opens a decisive hit");
-    ImGui::BulletText("Slash glowing weak line: stun charge attack");
-    ImGui::BulletText("S / stick click: dodge");
+
+    ImGui::TextUnformatted("CUES");
+    coloredLine({0.24f, 1.0f, 0.36f, 1.0f}, "GREEN",
+                "slash now. Match the line direction for counters.");
+    coloredLine({1.0f, 0.18f, 0.10f, 1.0f}, "RED",
+                "do not slash. Wait for the boss to commit.");
+    coloredLine({0.36f, 0.88f, 1.0f, 1.0f}, "SLOW",
+                "after a parry, take the free follow-up hit.");
+    ImGui::Spacing();
+
+    ImGui::TextUnformatted("DIRECTION RULE");
+    ImGui::BulletText("Vertical boss slash / vertical line: vertical slash.");
+    ImGui::BulletText("Horizontal boss slash / horizontal line: horizontal slash.");
+    ImGui::BulletText("Opposite direction on the same line still counts.");
+    ImGui::Spacing();
+
+    ImGui::TextUnformatted("CONTROLS");
+    if (joyConMode) {
+        ImGui::BulletText("Swing Joy-Con: slash.");
+        ImGui::BulletText("C: calibrate sensors.");
+        ImGui::BulletText("ZR: reset right Joy-Con pose.");
+        ImGui::BulletText("R: reset both Joy-Con poses.");
+        ImGui::BulletText("S / stick click: dodge.");
+    } else {
+        ImGui::BulletText("Hold Left Mouse Button and move: slash.");
+        ImGui::BulletText("Release Left Mouse Button: sword returns front.");
+        ImGui::BulletText("Space: dodge.");
+    }
     ImGui::Separator();
-    ImGui::Text("F1: hide / show this guide");
+    ImGui::Text("F1: hide / show tutorial");
 
     ImGui::End();
 #endif

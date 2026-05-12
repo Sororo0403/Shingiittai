@@ -245,6 +245,9 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     isDoubleSweepSecondStage_ = false;
     currentActionConnected_ = false;
     currentActionGuarded_ = false;
+    dualCounterStage_ = 0;
+    dualCounterFirstHand_ = (std::rand() % 2) == 0;
+    dualCounterStageResolved_ = false;
     runtime_.novaSkyBulletsSpawned = false;
     runtime_.novaRingsSpawned = 0;
     runtime_.novaRingTimer = 0.0f;
@@ -331,6 +334,9 @@ void Enemy::EndAttack() {
     isDoubleSweepSecondStage_ = false;
     currentActionConnected_ = false;
     currentActionGuarded_ = false;
+    dualCounterStage_ = 0;
+    dualCounterFirstHand_ = true;
+    dualCounterStageResolved_ = false;
     runtime_.novaSkyBulletsSpawned = false;
     runtime_.novaRingsSpawned = 0;
     runtime_.novaRingTimer = 0.0f;

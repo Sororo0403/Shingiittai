@@ -97,6 +97,7 @@ class GameScene : public BaseScene {
     uint32_t hitSoundId_ = 0;
     uint32_t counterSoundId_ = 0;
     uint32_t damageSoundId_ = 0;
+    uint32_t explosionSoundId_ = 0;
     bool soundsLoaded_ = false;
     std::array<bool, Player::kSwordCount> previousSwordSoundStates_{};
     std::array<EnemyWeaponTrailSample, 6> enemyWeaponTrailSamples_{};
@@ -209,6 +210,7 @@ class GameScene : public BaseScene {
     ActionKind failedChargeWeakPointActionKind_ = ActionKind::None;
     bool chargeWeakPointBroken_ = false;
     bool chargeWeakPointFailedThisAction_ = false;
+    bool enemyRedPunishUncounterable_ = false;
     int chargeWeakPointSlashCount_ = 0;
     float chargeWeakPointFocusRatio_ = 0.0f;
     float chargeWeakPointFocusInSpeed_ = 7.5f;

@@ -24,9 +24,11 @@ class SwordJoyConController {
     void UpdateGuard(JoyCon *joyCon);
     void UpdateCounter(JoyCon *joyCon);
     void UpdateSlash(float dt);
+    void UpdateSlashDirFromOrientation();
 
   private:
     DirectX::XMFLOAT4 prevOrientation_{0, 0, 0, 1};
+    DirectX::XMFLOAT3 prevTipDirection_{0.0f, 0.0f, 1.0f};
     SwordControllerState state_{};
 
     float angularVelocity_ = 0.0f;

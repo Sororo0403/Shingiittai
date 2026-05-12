@@ -16,7 +16,7 @@ constexpr CollisionManager::LayerMask kLayerEnemyAttack = 1u << 3;
 constexpr CollisionManager::LayerMask kLayerPlayerCounter = 1u << 4;
 constexpr CollisionManager::LayerMask kLayerEnemyProjectile = 1u << 5;
 constexpr CollisionManager::LayerMask kLayerReflectedProjectile = 1u << 6;
-constexpr float kReleaseCounterWindowDuration = 0.36f;
+constexpr float kReleaseCounterWindowDuration = 0.62f;
 
 CollisionManager::BodyId AddCollisionBody(
     CollisionManager &collisionManager, const OBB &box,
@@ -155,6 +155,30 @@ static bool IsSlashAlongDirection(const Sword &sword,
                       slashDir.y * invSlashLen *
                           requiredDirection.y * invRequiredLen;
     return std::fabs(dot) >= minAbsDot;
+}
+
+static SwordCounterAxis RequiredCounterAxisForAction(ActionKind kind) {
+    switch (kind) {
+    case ActionKind::Smash:
+        return SwordCounterAxis::Vertical;
+    case ActionKind::Sweep:
+        return SwordCounterAxis::Horizontal;
+    default:
+        return SwordCounterAxis::None;
+    }
+}
+
+static SwordCounterAxis RequiredDualCounterAxis(const Enemy &enemy) {
+    return enemy.IsDualCounterHandStage() ? SwordCounterAxis::Horizontal
+                                          : SwordCounterAxis::Vertical;
+}
+
+static bool IsSlashAxisMatched(const Sword &sword,
+                               SwordCounterAxis requiredAxis) {
+    if (requiredAxis == SwordCounterAxis::None) {
+        return sword.CanSlashCounter();
+    }
+    return sword.CanSlashCounter() && sword.GetSlashAxis() == requiredAxis;
 }
 
 static bool FindSlashTowardPoint(
@@ -310,6 +334,20 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         isEnemySmashMeleeWindow || isEnemySweepMeleeWindow;
     const bool isEnemyMeleeCommitted =
         isEnemySmashCommitted || isEnemySweepCommitted;
+    const bool isEnemyDualCommitted =
+        enemyActionKind == ActionKind::Shot &&
+        enemyActionStep == ActionStep::Active;
+    const bool isEnemyDualCounterWindow =
+        isEnemyDualCommitted && enemy_.IsDualCounterWindow();
+    const bool isEnemyDualStrikeActive =
+        isEnemyDualCommitted && enemy_.IsAttackActive();
+    if (enemyRedPunishUncounterable_ &&
+        (!(enemyActionKind == ActionKind::Smash ||
+           enemyActionKind == ActionKind::Sweep) ||
+         enemyActionStep == ActionStep::Recovery ||
+         enemyActionStep == ActionStep::None)) {
+        enemyRedPunishUncounterable_ = false;
+    }
     const bool isEnemyChargeWeakPointWindow =
         IsChargeWeakPointWindow(enemyActionKind, enemyActionId,
                                 enemyActionStep);
@@ -351,20 +389,25 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         enemyActionStep == ActionStep::Active;
     const bool isEnemyMeleePreparationOrRelease =
         (enemyActionKind == ActionKind::Smash ||
-         enemyActionKind == ActionKind::Sweep) &&
+         enemyActionKind == ActionKind::Sweep ||
+         enemyActionKind == ActionKind::Shot) &&
         (enemyActionStep == ActionStep::Charge ||
          enemyActionStep == ActionStep::Hold ||
          enemyActionStep == ActionStep::Active);
     const bool isPreReleaseCounterWindow =
+        (enemyActionKind == ActionKind::Smash ||
+         enemyActionKind == ActionKind::Sweep) &&
         isEnemyMeleePreparationOrRelease && !isEnemyChargeWeakPointWindow &&
         !chargeWeakPointFailedThisAction_ &&
         enemyActionStep != ActionStep::Active &&
         enemy_.GetReleaseAnticipationRatio() > 0.0f;
     const bool isReleaseCounterWindow =
-        isPreReleaseCounterWindow ||
-        (isEnemyMeleeCommitted &&
-         enemy_.GetActionTimerForPresentation() <=
-             kReleaseCounterWindowDuration);
+        !enemyRedPunishUncounterable_ &&
+        (isPreReleaseCounterWindow ||
+         (isEnemyMeleeCommitted &&
+          enemy_.GetActionTimerForPresentation() <=
+              kReleaseCounterWindowDuration) ||
+         isEnemyDualCounterWindow);
     const bool suppressNormalSlashHitDuringEnemyMelee =
         isEnemyMeleePreparationOrRelease;
 
@@ -374,12 +417,56 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     OBB enemyAttackBox{};
     CollisionManager::BodyId enemyAttackBody =
         CollisionManager::kInvalidBodyId;
-    if (isEnemyMeleeCommitted || isPreReleaseCounterWindow) {
+    if (isEnemyMeleeCommitted || isPreReleaseCounterWindow ||
+        isEnemyDualCommitted) {
         enemyAttackBox = enemy_.GetAttackOBB();
         enemyAttackBody =
             AddCollisionBody(collisionManager_, enemyAttackBox,
                              kLayerEnemyAttack,
                              kLayerPlayer | kLayerPlayerAttack);
+    }
+
+    const bool isBadSlashPunishWindow =
+        isEnemyMeleePreparationOrRelease && !isEnemyChargeWeakPointWindow &&
+        !isReleaseCounterWindow && !enemyRedPunishUncounterable_;
+    if (isBadSlashPunishWindow && playerHitCooldown_ <= 0.0f) {
+        for (size_t i = 0; i < swordSlashStates.size(); ++i) {
+            if (!swordSlashStates[i] || previousChargeWeakPointSlashStates_[i]) {
+                continue;
+            }
+
+            enemy_.ForcePunishRelease();
+            enemyRedPunishUncounterable_ = true;
+            forceSyncEnemyAnimationThisFrame = true;
+
+            const XMFLOAT2 knockbackDir = NormalizeXZ(
+                player_.GetTransform().position.x -
+                    enemy_.GetTransform().position.x,
+                player_.GetTransform().position.z -
+                    enemy_.GetTransform().position.z);
+            player_.TakeDamage(enemyAttackDamage * 1.25f *
+                               playerRecoveryDamageScale);
+            player_.AddKnockback(
+                {knockbackDir.x * enemyAttackKnockback, 0.0f,
+                 knockbackDir.y * enemyAttackKnockback});
+
+            CombatFeedbackEvent feedback{};
+            feedback.type = CombatFeedbackEventType::PlayerDamaged;
+            feedback.position = player_.GetTransform().position;
+            feedback.position.y += 1.0f;
+            feedback.direction =
+                DirectionFromTo(enemy_.GetTransform().position,
+                                player_.GetTransform().position);
+            feedback.power = enemyAttackDamage / 8.0f;
+            DispatchCombatFeedback(feedback);
+            if (enemyActionKind == ActionKind::Shot) {
+                enemy_.NotifyDualStrikeLanded();
+            } else {
+                enemy_.NotifyAttackConnected();
+            }
+            playerHitCooldown_ = 0.45f;
+            break;
+        }
     }
 
     bool counterTriggeredThisFrame = false;
@@ -415,15 +502,53 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             IsSlashAlongDirection(*sword, requiredChargeSlashDirection);
         const bool canSlashCounter =
             !isFailedChargeWeakPointRelease &&
+            enemyActionKind != ActionKind::Shot &&
             isReleaseCounterWindow &&
             playerHitCooldown_ <= 0.0f && isEnemyCounterWindow &&
             enemyAttackBody != CollisionManager::kInvalidBodyId &&
             IsNearXZ(player_.GetTransform().position, enemyAttackBox.center,
                      GetReadableMeleeRadius(enemyAttackBox) + 0.85f) &&
-            sword->CanSlashCounter();
+            IsSlashAxisMatched(*sword,
+                               RequiredCounterAxisForAction(enemyActionKind));
+        const bool canDualCounter =
+            enemyActionKind == ActionKind::Shot && isEnemyDualCounterWindow &&
+            playerHitCooldown_ <= 0.0f &&
+            enemyAttackBody != CollisionManager::kInvalidBodyId &&
+            IsNearXZ(player_.GetTransform().position, enemyAttackBox.center,
+                     GetReadableMeleeRadius(enemyAttackBox) + 0.95f) &&
+            IsSlashAxisMatched(*sword, RequiredDualCounterAxis(enemy_));
 
         if (canSlashCounter) {
             triggerSuccessfulCounter(i, enemyAttackDamage, 0.2f);
+            counterTriggeredThisFrame = true;
+            break;
+        }
+
+        if (canDualCounter) {
+            const bool finalCounter = enemy_.NotifyDualCountered();
+            if (finalCounter) {
+                forceSyncEnemyAnimationThisFrame = true;
+            }
+            const float counterDamage =
+                finalCounter ? 115.0f : 32.0f;
+            enemy_.TakeDamage(counterDamage);
+            player_.NotifyCounterSuccess(i);
+            player_.NotifyAttackHit(i, counterDamage);
+
+            CombatFeedbackEvent feedback{};
+            feedback.type = CombatFeedbackEventType::CounterSuccess;
+            feedback.position = enemyAttackBox.center;
+            feedback.direction =
+                DirectionFromTo(player_.GetTransform().position,
+                                enemyAttackBox.center);
+            feedback.power = finalCounter ? 8.0f : 3.0f;
+            feedback.swordIndex = i;
+            DispatchCombatFeedback(feedback);
+            playerHitCooldown_ = finalCounter ? 0.20f : 0.10f;
+            if (finalCounter) {
+                startCounterCinematicThisFrame = true;
+                counterCinematicTimer_ = counterCinematicDuration_;
+            }
             counterTriggeredThisFrame = true;
             break;
         }
@@ -501,7 +626,8 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         }
     }
 
-    if (isEnemyMeleeActive && !counterTriggeredThisFrame) {
+    if ((isEnemyMeleeActive || isEnemyDualStrikeActive) &&
+        !counterTriggeredThisFrame) {
         const bool bossHitPlayer =
             enemyAttackBody != CollisionManager::kInvalidBodyId &&
             IsNearXZ(player_.GetTransform().position, enemyAttackBox.center,
@@ -517,7 +643,11 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             if (isPlayerDodging) {
                 playerHitCooldown_ = 0.08f;
             } else {
-                enemy_.NotifyAttackConnected();
+                if (isEnemyDualStrikeActive) {
+                    enemy_.NotifyDualStrikeLanded();
+                } else {
+                    enemy_.NotifyAttackConnected();
+                }
                 player_.TakeDamage(enemyAttackDamage * playerRecoveryDamageScale);
                 player_.AddKnockback(
                     {knockbackDir.x * enemyAttackKnockback, 0.0f,

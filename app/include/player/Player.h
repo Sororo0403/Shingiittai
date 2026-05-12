@@ -35,7 +35,8 @@ class Player {
 
     void Update(Input *input, float deltaTime,
                 const DirectX::XMFLOAT3 &lookTarget, float cameraYaw,
-                bool forceRangedReflectMove = false);
+                bool forceRangedReflectMove = false,
+                float controlDeltaTime = -1.0f);
 
     void Draw(ModelManager *modelManager, const Camera &camera,
               bool drawBody = true);
@@ -108,6 +109,9 @@ class Player {
     void NotifyCounterSuccess(size_t swordIndex);
     bool UsesGamepadCameraLook() const {
         return gamepadControlMode_ == PlayerGamepadControlMode::Hunter;
+    }
+    bool UsesJoyConControls() const {
+        return leftJoyCon_.IsConnected() || rightJoyCon_.IsConnected();
     }
 
   private:

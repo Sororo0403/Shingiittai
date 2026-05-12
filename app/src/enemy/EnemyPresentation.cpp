@@ -330,29 +330,41 @@ void Enemy::UpdateParts() {
             bodyTf_.scale.x -= 0.04f;
             bodyTf_.scale.z -= 0.04f;
             bodyTf_.scale.y += 0.06f;
-            leftHandTf_.position.y += 0.52f;
-            leftHandTf_.position.x += forwardX * 1.55f + (-rightX) * 0.28f;
-            leftHandTf_.position.z += forwardZ * 1.55f + (-rightZ) * 0.28f;
+            leftHandTf_.position.y += 0.48f;
+            leftHandTf_.position.x += forwardX * 1.02f + (-rightX) * 0.48f;
+            leftHandTf_.position.z += forwardZ * 1.02f + (-rightZ) * 0.48f;
             leftHandTf_.scale.x += 0.20f + 0.14f * pulse;
             leftHandTf_.scale.y += 0.20f + 0.14f * pulse;
             leftHandTf_.scale.z += 0.20f + 0.14f * pulse;
-            rightHandTf_.position.y += 0.22f;
-            rightHandTf_.position.x += (-forwardX) * 0.42f;
-            rightHandTf_.position.z += (-forwardZ) * 0.42f;
+            rightHandTf_.position.y += 0.44f;
+            rightHandTf_.position.x += forwardX * 0.72f + rightX * 0.52f;
+            rightHandTf_.position.z += forwardZ * 0.72f + rightZ * 0.52f;
+            rightHandTf_.scale.x += 0.10f + 0.08f * pulse;
+            rightHandTf_.scale.y += 0.10f + 0.08f * pulse;
+            rightHandTf_.scale.z += 0.10f + 0.08f * pulse;
             visualTf_.position.x += (-forwardX) * 0.10f;
             visualTf_.position.z += (-forwardZ) * 0.10f;
             visualPitch -= 0.12f;
-            leftHandTf_.position.x += forwardX * 0.55f;
-            leftHandTf_.position.z += forwardZ * 0.55f;
-            rightHandTf_.position.x += (-rightX) * 0.32f;
-            rightHandTf_.position.z += (-rightZ) * 0.32f;
         } else if (action_.step == ActionStep::Active) {
-            leftHandTf_.position.y += 0.36f;
-            leftHandTf_.position.x += forwardX * 1.65f + (-rightX) * 0.24f;
-            leftHandTf_.position.z += forwardZ * 1.65f + (-rightZ) * 0.24f;
-            leftHandTf_.scale.x += 0.16f;
-            leftHandTf_.scale.y += 0.16f;
-            leftHandTf_.scale.z += 0.16f;
+            const bool handStage = IsDualCounterHandStage();
+            if (handStage) {
+                leftHandTf_.position.y += 0.44f;
+                leftHandTf_.position.x += forwardX * 1.82f + (-rightX) * 0.24f;
+                leftHandTf_.position.z += forwardZ * 1.82f + (-rightZ) * 0.24f;
+                leftHandTf_.scale.x += 0.20f;
+                leftHandTf_.scale.y += 0.20f;
+                leftHandTf_.scale.z += 0.20f;
+                visualYaw -= 0.18f;
+            } else {
+                rightHandTf_.position.y += 0.38f;
+                rightHandTf_.position.x += forwardX * 1.92f + rightX * 0.18f;
+                rightHandTf_.position.z += forwardZ * 1.92f + rightZ * 0.18f;
+                rightHandTf_.scale.x += 0.18f;
+                rightHandTf_.scale.y += 0.18f;
+                rightHandTf_.scale.z += 0.18f;
+                visualYaw += 0.24f;
+                visualRoll -= 0.22f;
+            }
             visualTf_.position.x += forwardX * 0.12f;
             visualTf_.position.z += forwardZ * 0.12f;
         } else if (action_.step == ActionStep::Recovery) {

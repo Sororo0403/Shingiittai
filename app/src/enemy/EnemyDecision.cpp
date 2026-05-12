@@ -638,7 +638,7 @@ ActionKind Enemy::SelectNeutralAction(float distance) const {
         return SelectNearPressureAction();
     }
 
-    return ActionKind::Shot;
+    return ActionKind::Stalk;
 }
 
 ActionKind Enemy::SelectNearPressureAction() const {

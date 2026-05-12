@@ -52,7 +52,7 @@ bool Enemy::HasReachedRecoveryStart() const {
 
 float Enemy::GetReleaseAnticipationRatio() const {
     float releaseTime = 0.0f;
-    float cueWindow = 0.24f;
+    float cueWindow = 0.52f;
 
     if (action_.step == ActionStep::Charge) {
         switch (action_.kind) {
@@ -79,7 +79,7 @@ float Enemy::GetReleaseAnticipationRatio() const {
                (action_.kind == ActionKind::Smash ||
                 action_.kind == ActionKind::Sweep)) {
         releaseTime = currentHoldDuration_;
-        cueWindow = 0.20f;
+        cueWindow = 0.48f;
     } else {
         return 0.0f;
     }
