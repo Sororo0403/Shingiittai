@@ -63,16 +63,16 @@ static std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
         }
         break;
 
-    case ActionKind::PhaseTransition:
-        outLoop = false;
-        if (HasAnimation(model, kBossAnimPhaseChange)) {
-            return kBossAnimPhaseChange;
-        }
-        break;
-
     case ActionKind::Stalk:
     case ActionKind::None:
     default:
+        if (enemy.GetIsPhaseChanging()) {
+            outLoop = false;
+            if (HasAnimation(model, kBossAnimPhaseChange)) {
+                return kBossAnimPhaseChange;
+            }
+        }
+
         if (HasAnimation(model, kBossAnimIdle)) {
             return kBossAnimIdle;
         }
@@ -136,6 +136,7 @@ void GameScene::SyncEnemyAnimation() {
 
     bool shouldLoop = true;
     std::string nextAnimation = PickEnemyAnimation(enemyModel, enemy_, shouldLoop);
+
     if (nextAnimation.empty()) {
         return;
     }

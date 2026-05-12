@@ -379,6 +379,8 @@ class Enemy {
     ActionStep GetActionStep() const { return runtime_.action.step; }
     BossPhase GetBossPhase() const { return runtime_.phase; }
     bool IsPhaseTransitionActive() const { return runtime_.phaseTransitionActive; }
+    bool GetIsPhaseChanging() const { return isPhaseChanging_; }
+    void SetIsPhaseChanging(bool changing) { isPhaseChanging_ = changing; }
     float GetPhaseTransitionRatio() const {
         if (phaseTransitionDuration_ <= 0.0001f) {
             return 1.0f;
@@ -530,6 +532,8 @@ class Enemy {
 
     float smashHoldBranchWarpChance_ = 0.18f;
     float sweepHoldBranchWarpChance_ = 0.14f;
+
+    bool isPhaseChanging_ = false;
 
     // ============================================================
     // Step2: Tell / FakeCommit / FreezeHold
