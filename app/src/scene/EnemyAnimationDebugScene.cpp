@@ -16,10 +16,6 @@
 #include <iterator>
 #include <memory>
 
-#ifndef IMGUI_DISABLED
-#include "imgui.h"
-#endif
-
 using namespace DirectX;
 
 namespace {
@@ -236,7 +232,7 @@ void EnemyAnimationDebugScene::Initialize(const SceneContext &ctx) {
 void EnemyAnimationDebugScene::Update() {
     Input *input = ctx_->input;
 
-    if (input->IsKeyTrigger(DIK_F7) || input->IsKeyTrigger(DIK_ESCAPE)) {
+    if (input->IsKeyTrigger(DIK_F7) || input->IsKeyTrigger(DIK_TAB)) {
         sceneManager_->ChangeScene(std::make_unique<GameScene>());
         return;
     }
@@ -342,63 +338,6 @@ void EnemyAnimationDebugScene::Draw() {
 }
 
 void EnemyAnimationDebugScene::DrawOverlay() {
-#ifndef IMGUI_DISABLED
-    ImGui::SetNextWindowPos(ImVec2(16.0f, 16.0f), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(420.0f, 280.0f), ImGuiCond_Always);
-    ImGui::Begin("Enemy Animation Debug", nullptr,
-                 ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
-
-    ImGui::Text("F7 / Esc: return to GameScene");
-    ImGui::Text("F1: clips, F2: attack skills");
-    ImGui::Text("1-9: select, Tab/Backspace: next/prev");
-    ImGui::Text("Space: pause, L: clip loop, R: restart skill");
-    ImGui::Separator();
-    ImGui::Text("Mode: %s  Paused: %s  Speed: %.1fx",
-                previewMode_ == PreviewMode::Clip ? "clip" : "skill",
-                animationPaused_ ? "yes" : "no", playbackSpeed_);
-    ImGui::Text("Loop: %s  Phase2 pose: %s",
-                animationLoop_ ? "on" : "off",
-                skillPhase2Preview_ ? "on" : "off");
-
-    if (previewMode_ == PreviewMode::Skill) {
-        const ActionStep step = GetSelectedSkillStep(skillTimer_);
-        const SkillPreview &skill = kSkillPreviews[selectedSkillIndex_];
-        ImGui::Text("Current skill: %s / %s", skill.name, ActionStepName(step));
-        ImGui::Text("P: toggle Phase2 pose");
-        if (ImGui::BeginListBox("Attack Skills")) {
-            for (int i = 0; i < static_cast<int>(std::size(kSkillPreviews)); ++i) {
-                const bool selected = i == selectedSkillIndex_;
-                if (ImGui::Selectable(kSkillPreviews[i].name, selected)) {
-                    selectedSkillIndex_ = i;
-                    RestartSelectedSkill();
-                }
-                if (selected) {
-                    ImGui::SetItemDefaultFocus();
-                }
-            }
-            ImGui::EndListBox();
-        }
-    } else if (!animationNames_.empty()) {
-        ImGui::Text("Current: %s", animationNames_[selectedAnimationIndex_].c_str());
-        if (ImGui::BeginListBox("Clips")) {
-            for (int i = 0; i < static_cast<int>(animationNames_.size()); ++i) {
-                const bool selected = i == selectedAnimationIndex_;
-                if (ImGui::Selectable(animationNames_[i].c_str(), selected)) {
-                    selectedAnimationIndex_ = i;
-                    PlaySelectedAnimation();
-                }
-                if (selected) {
-                    ImGui::SetItemDefaultFocus();
-                }
-            }
-            ImGui::EndListBox();
-        }
-    } else {
-        ImGui::Text("No animations loaded.");
-    }
-
-    ImGui::End();
-#endif
 }
 
 void EnemyAnimationDebugScene::SelectPreviewMode(PreviewMode mode) {

@@ -18,8 +18,14 @@
 
 class GameScene : public BaseScene {
   public:
-    explicit GameScene(PlayerWeaponType weaponType = PlayerWeaponType::Standard)
-        : selectedWeaponType_(weaponType) {}
+    enum class RunMode {
+        Play,
+        TitleDemo,
+    };
+
+    explicit GameScene(PlayerWeaponType weaponType = PlayerWeaponType::Standard,
+                       RunMode runMode = RunMode::Play)
+        : selectedWeaponType_(weaponType), runMode_(runMode) {}
 
     void Initialize(const SceneContext &ctx) override;
     void Update() override;
@@ -35,10 +41,14 @@ class GameScene : public BaseScene {
     void DrawEnemyWeaponTrail();
     void DrawChargeWeakPoint();
     void DrawChargeWeakPointTimeGauge();
-    void DrawJoyConTutorial();
     void DrawVictoryFlash();
+    void DrawDefeatFlash();
+    void UpdateBattleIntro(float deltaTime);
+    void UpdateTitleDemo(float deltaTime);
     void BeginVictorySequence();
     void UpdateVictorySequence(float deltaTime);
+    void BeginDefeatSequence();
+    void UpdateDefeatSequence(float deltaTime);
     void SyncEnemyAnimation();
     void ApplyEnemyProceduralAnimation();
     void SetEnemyAnimationFrozen(bool frozen);
@@ -64,6 +74,7 @@ class GameScene : public BaseScene {
     };
 
     PlayerWeaponType selectedWeaponType_ = PlayerWeaponType::Standard;
+    RunMode runMode_ = RunMode::Play;
 
     Camera camera_;
 
@@ -186,6 +197,12 @@ class GameScene : public BaseScene {
 
     float sceneLightTime_ = 0.0f;
     float battleElapsedTime_ = 0.0f;
+    bool battleIntroActive_ = true;
+    float battleIntroTimer_ = 0.0f;
+    float battleIntroDuration_ = 2.45f;
+    bool battleIntroSparkEmitted_ = false;
+    float titleDemoTimer_ = 0.0f;
+    float titleDemoCounterTimer_ = 1.15f;
     bool battleResultRequested_ = false;
     bool victorySequenceActive_ = false;
     float victorySequenceTimer_ = 0.0f;
@@ -193,6 +210,10 @@ class GameScene : public BaseScene {
     float victoryClearTime_ = 0.0f;
     bool victoryFinalExplosionEmitted_ = false;
     DirectX::XMFLOAT3 victoryEnemyStartPos_ = {0.0f, 0.0f, 0.0f};
+    bool defeatSequenceActive_ = false;
+    float defeatSequenceTimer_ = 0.0f;
+    float defeatSequenceDuration_ = 2.75f;
+    bool defeatImpactEmitted_ = false;
 
     bool counterCinematicActive_ = false;
     bool enemyAnimationFrozen_ = false;
@@ -205,7 +226,6 @@ class GameScene : public BaseScene {
 
     float damageMultiplier_ = 2.0f;
     bool showCollisionDebug_ = false;
-    bool showJoyConTutorial_ = true;
     ActionKind chargeWeakPointActionKind_ = ActionKind::None;
     ActionKind failedChargeWeakPointActionKind_ = ActionKind::None;
     bool chargeWeakPointBroken_ = false;

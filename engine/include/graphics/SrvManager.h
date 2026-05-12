@@ -1,5 +1,6 @@
 #pragma once
 #include <d3d12.h>
+#include <vector>
 #include <wrl.h>
 
 class DirectXCommon;
@@ -21,6 +22,7 @@ class SrvManager {
     /// </summary>
     /// <returns>割り当てられたSRVインデックス</returns>
     UINT Allocate();
+    void Free(UINT index);
 
     /// <summary>
     /// 指定インデックスのCPUハンドルを取得する
@@ -50,4 +52,5 @@ class SrvManager {
     UINT descriptorSize_ = 0;
     UINT maxSrvCount_ = 0;
     UINT currentIndex_ = 0;
+    std::vector<UINT> freeList_;
 };

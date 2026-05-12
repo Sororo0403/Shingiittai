@@ -104,6 +104,12 @@ static float Smoothstep(float edge0, float edge1, float value) {
     return t * t * (3.0f - 2.0f * t);
 }
 
+static std::wstring MakeGeneratedTextureKey(const wchar_t *prefix,
+                                            uint32_t width, uint32_t height) {
+    return std::wstring(prefix) + L":" + std::to_wstring(width) + L"x" +
+           std::to_wstring(height);
+}
+
 using namespace DirectX;
 using namespace DxUtils;
 using Microsoft::WRL::ComPtr;
@@ -116,6 +122,7 @@ void TextureManager::Initialize(DirectXCommon *dxCommon,
     textures_.clear();
     uploadBuffers_.clear();
     filePathToTextureId_.clear();
+    generatedTextureToId_.clear();
 
     uint32_t whitePixel = 0xFFFFFFFF;
     Image image{};
@@ -192,6 +199,11 @@ uint32_t TextureManager::LoadFromMemory(const uint8_t *data, size_t size) {
 uint32_t TextureManager::CreateNoiseTexture(uint32_t width, uint32_t height) {
     width = (std::max)(width, 1u);
     height = (std::max)(height, 1u);
+    const std::wstring cacheKey = MakeGeneratedTextureKey(L"noise", width, height);
+    auto cached = generatedTextureToId_.find(cacheKey);
+    if (cached != generatedTextureToId_.end()) {
+        return cached->second;
+    }
 
     std::vector<uint32_t> pixels(static_cast<size_t>(width) * height);
     constexpr uint32_t seed = 0xC65D1A5Bu;
@@ -240,13 +252,21 @@ uint32_t TextureManager::CreateNoiseTexture(uint32_t width, uint32_t height) {
     metadata.format = DXGI_FORMAT_R8G8B8A8_UNORM;
     metadata.dimension = TEX_DIMENSION_TEXTURE2D;
 
-    return CreateTexture(&image, 1, metadata);
+    const uint32_t id = CreateTexture(&image, 1, metadata);
+    generatedTextureToId_[cacheKey] = id;
+    return id;
 }
 
 uint32_t TextureManager::CreateRustedMetalTexture(uint32_t width,
                                                   uint32_t height) {
     width = (std::max)(width, 1u);
     height = (std::max)(height, 1u);
+    const std::wstring cacheKey =
+        MakeGeneratedTextureKey(L"rusted_metal", width, height);
+    auto cached = generatedTextureToId_.find(cacheKey);
+    if (cached != generatedTextureToId_.end()) {
+        return cached->second;
+    }
 
     std::vector<uint32_t> pixels(static_cast<size_t>(width) * height);
     constexpr uint32_t seed = 0x8E71C0DEu;
@@ -345,13 +365,21 @@ uint32_t TextureManager::CreateRustedMetalTexture(uint32_t width,
     metadata.format = DXGI_FORMAT_R8G8B8A8_UNORM;
     metadata.dimension = TEX_DIMENSION_TEXTURE2D;
 
-    return CreateTexture(&image, 1, metadata);
+    const uint32_t id = CreateTexture(&image, 1, metadata);
+    generatedTextureToId_[cacheKey] = id;
+    return id;
 }
 
 uint32_t TextureManager::CreateArenaStoneTexture(uint32_t width,
                                                  uint32_t height) {
     width = (std::max)(width, 1u);
     height = (std::max)(height, 1u);
+    const std::wstring cacheKey =
+        MakeGeneratedTextureKey(L"arena_stone", width, height);
+    auto cached = generatedTextureToId_.find(cacheKey);
+    if (cached != generatedTextureToId_.end()) {
+        return cached->second;
+    }
 
     std::vector<uint32_t> pixels(static_cast<size_t>(width) * height);
     constexpr uint32_t seed = 0x51A7E0A1u;
@@ -437,7 +465,9 @@ uint32_t TextureManager::CreateArenaStoneTexture(uint32_t width,
     metadata.format = DXGI_FORMAT_R8G8B8A8_UNORM;
     metadata.dimension = TEX_DIMENSION_TEXTURE2D;
 
-    return CreateTexture(&image, 1, metadata);
+    const uint32_t id = CreateTexture(&image, 1, metadata);
+    generatedTextureToId_[cacheKey] = id;
+    return id;
 }
 
 uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,

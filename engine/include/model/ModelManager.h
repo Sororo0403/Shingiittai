@@ -8,6 +8,7 @@
 #include "SkeletonDebugRenderer.h"
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 class DirectXCommon;
@@ -190,4 +191,5 @@ class ModelManager {
     Animator animator_;
 
     std::vector<Model> models_;
+    std::unordered_map<std::wstring, uint32_t> modelPathToId_;
 };

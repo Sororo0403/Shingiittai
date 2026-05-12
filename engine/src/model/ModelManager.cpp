@@ -10,6 +10,7 @@
 #include <cmath>
 #include <filesystem>
 #include <numbers>
+#include <cwctype>
 #include <vector>
 
 using namespace DirectX;
@@ -76,6 +77,25 @@ std::filesystem::path ResolveModelPath(const std::filesystem::path &path) {
     return (cwd / normalized).lexically_normal();
 }
 
+std::wstring NormalizeModelPathKey(const std::filesystem::path &path) {
+    std::wstring key = path.lexically_normal().wstring();
+#ifdef _WIN32
+    std::transform(key.begin(), key.end(), key.begin(),
+                   [](wchar_t c) { return static_cast<wchar_t>(towlower(c)); });
+#endif
+    return key;
+}
+
+void ResetModelPlayback(Model &model) {
+    if (!model.animations.empty()) {
+        model.currentAnimation = model.animations.begin()->first;
+        model.animationTime = 0.0f;
+        model.isLoop = true;
+        model.isPlaying = true;
+        model.animationFinished = false;
+    }
+}
+
 } // namespace
 
 void ModelManager::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
@@ -95,24 +115,29 @@ void ModelManager::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
 
 uint32_t ModelManager::Load(const std::wstring &path) {
     std::filesystem::path p = ResolveModelPath(path);
+    const std::wstring pathKey = NormalizeModelPathKey(p);
+    auto it = modelPathToId_.find(pathKey);
+    if (it != modelPathToId_.end()) {
+        Model &cached = models_.at(it->second);
+        ResetModelPlayback(cached);
+        animator_.Update(cached, 0.0f);
+        modelRenderer_.UpdateSkinClusters(cached);
+        return it->second;
+    }
+
     std::string pathStr = p.string();
 
     Model model = assimpLoader_.Load(pathStr);
     modelRenderer_.CreateSkinClusters(model);
 
-    if (!model.animations.empty()) {
-        model.currentAnimation = model.animations.begin()->first;
-        model.animationTime = 0.0f;
-        model.isLoop = true;
-        model.isPlaying = true;
-        model.animationFinished = false;
-    }
+    ResetModelPlayback(model);
 
     animator_.Update(model, 0.0f);
     modelRenderer_.UpdateSkinClusters(model);
 
-    models_.push_back(model);
+    models_.push_back(std::move(model));
     uint32_t modelId = static_cast<uint32_t>(models_.size() - 1);
+    modelPathToId_[pathKey] = modelId;
 
     return modelId;
 }

@@ -14,6 +14,24 @@ SwordPose SwordJoyConController::GetPose() const {
     return pose;
 }
 
+void SwordJoyConController::ResetTracking(JoyCon *joyCon) {
+    XMVECTOR q = XMQuaternionIdentity();
+    if (joyCon != nullptr && joyCon->IsConnected()) {
+        q = XMQuaternionNormalize(XMQuaternionConjugate(joyCon->GetOrientation()));
+    }
+
+    XMStoreFloat4(&state_.orientation, q);
+    XMStoreFloat4(&prevOrientation_, q);
+
+    XMVECTOR tip = XMVector3Rotate(XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f), q);
+    XMStoreFloat3(&prevTipDirection_, tip);
+
+    angularVelocity_ = 0.0f;
+    state_.isSlashMode = false;
+    state_.slashTimer = 0.0f;
+    state_.slashDir = {};
+}
+
 void SwordJoyConController::Update(JoyCon *joyCon, float dt,
                                    const Transform &swordPos) {
     (void)swordPos;

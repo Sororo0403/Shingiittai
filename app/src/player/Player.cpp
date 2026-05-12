@@ -46,6 +46,7 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId,
     greatSwordSwingTimer_ = 0.0f;
     greatSwordSwingDamage_ = 18.0f;
     greatSwordFullChargeCounterReady_ = false;
+    defeatPoseRatio_ = 0.0f;
     dualNextManualLeft_ = true;
     gamepadControlMode_ = PlayerGamepadControlMode::Hunter;
     gamepadSwordState_ = {};
@@ -74,26 +75,12 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     const float inputDeltaTime =
         controlDeltaTime > 0.0f ? controlDeltaTime : deltaTime;
 
-    if (input->IsKeyTrigger(DIK_C)) {
-        leftJoyCon_.StartCalibration();
-        rightJoyCon_.StartCalibration();
-    }
-
-    if (input->IsKeyTrigger(DIK_R)) {
-        leftJoyCon_.SetBaseOrientation();
-        rightJoyCon_.SetBaseOrientation();
-    }
-    if (rightJoyCon_.IsConnected() && rightJoyCon_.IsButtonTrigger(JSMASK_ZR)) {
-        rightJoyCon_.SetBaseOrientation();
-    }
+    UpdateJoyConCalibrationInput(input, inputDeltaTime);
 
     if (input->IsGamepadConnected() &&
         input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_START)) {
         ToggleGamepadControlMode();
     }
-
-    leftJoyCon_.Update(inputDeltaTime);
-    rightJoyCon_.Update(inputDeltaTime);
 
     UpdateDodgeInput(input, deltaTime, cameraYaw, lookTarget);
     UpdateMovement(input, deltaTime, cameraYaw, lookTarget,
@@ -222,6 +209,33 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
 
 }
 
+void Player::UpdateJoyConCalibrationInput(Input *input, float deltaTime) {
+    if (input->IsKeyTrigger(DIK_C)) {
+        leftJoyCon_.StartCalibration();
+        rightJoyCon_.StartCalibration();
+        leftSwordJoyConController_.ResetTracking(&leftJoyCon_);
+        rightSwordJoyConController_.ResetTracking(&rightJoyCon_);
+    }
+
+    if (input->IsKeyTrigger(DIK_R)) {
+        leftJoyCon_.SetBaseOrientation();
+        rightJoyCon_.SetBaseOrientation();
+        leftSwordJoyConController_.ResetTracking(&leftJoyCon_);
+        rightSwordJoyConController_.ResetTracking(&rightJoyCon_);
+    }
+    if (leftJoyCon_.IsConnected() && leftJoyCon_.IsButtonTrigger(JSMASK_ZL)) {
+        leftJoyCon_.SetBaseOrientation();
+        leftSwordJoyConController_.ResetTracking(&leftJoyCon_);
+    }
+    if (rightJoyCon_.IsConnected() && rightJoyCon_.IsButtonTrigger(JSMASK_ZR)) {
+        rightJoyCon_.SetBaseOrientation();
+        rightSwordJoyConController_.ResetTracking(&rightJoyCon_);
+    }
+
+    leftJoyCon_.Update(deltaTime);
+    rightJoyCon_.Update(deltaTime);
+}
+
 void Player::Draw(ModelManager *modelManager, const Camera &camera,
                   bool drawBody) {
     const bool isInPostSlashRecovery = postSlashRecoveryTimer_ > 0.0f;
@@ -268,6 +282,19 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
                       XMQuaternionNormalize(XMQuaternionMultiply(qLean, baseRot)));
         playerVisual.position.y -= 0.10f * std::sinf((1.0f - dodgeRatio) *
                                                      3.14159265f);
+    }
+    if (defeatPoseRatio_ > 0.0f) {
+        const float fall = std::clamp(defeatPoseRatio_, 0.0f, 1.0f);
+        const float eased = fall * fall * (3.0f - 2.0f * fall);
+        XMVECTOR baseRot = XMLoadFloat4(&playerVisual.rotation);
+        XMVECTOR qFall =
+            XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), -1.34f * eased);
+        XMStoreFloat4(&playerVisual.rotation,
+                      XMQuaternionNormalize(XMQuaternionMultiply(qFall, baseRot)));
+        playerVisual.position.y -= 0.48f * eased;
+        playerVisual.scale.x *= 1.0f + 0.08f * eased;
+        playerVisual.scale.y *= 1.0f - 0.24f * eased;
+        playerVisual.scale.z *= 1.0f + 0.10f * eased;
     }
 
     if (drawBody) {

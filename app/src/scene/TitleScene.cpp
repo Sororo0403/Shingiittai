@@ -1,7 +1,7 @@
 #include "TitleScene.h"
 #include "DirectXCommon.h"
+#include "GameScene.h"
 #include "Input.h"
-#include "ModeSelectScene.h"
 #include "PostEffectRenderer.h"
 #include "SceneManager.h"
 #include "SpriteManager.h"
@@ -15,7 +15,7 @@
 using namespace DirectX;
 
 namespace {
-constexpr float kFadeDuration = 0.2f;
+constexpr float kFadeDuration = 0.35f;
 
 XMFLOAT4 MakeColor(float r, float g, float b, float a = 1.0f) {
     return {r, g, b, a};
@@ -24,6 +24,8 @@ XMFLOAT4 MakeColor(float r, float g, float b, float a = 1.0f) {
 float SmoothStep(float t) { return t * t * (3.0f - 2.0f * t); }
 } // namespace
 
+TitleScene::~TitleScene() = default;
+
 void TitleScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
     sceneTime_ = 0.0f;
@@ -31,23 +33,27 @@ void TitleScene::Initialize(const SceneContext &ctx) {
     startRequested_ = false;
 
     ctx_->dxCommon->BeginUpload();
-    logoImage_ = LoadTitleImage(L"app/resources/title/title_logo.png");
-    pressAnyButtonImage_ =
-        LoadTitleImage(L"app/resources/title/press_any_button.png");
+    logoImage_ = LoadTitleImage(L"app/resources/title/title_simple.png");
     ctx_->dxCommon->EndUpload();
     ctx_->texture->ReleaseUploadBuffers();
 
-    ctx_->postEffectRenderer->SetVignettingStrength(0.28f);
-    ctx_->postEffectRenderer->SetVignettingEnabled(true);
+    demoScene_ = std::make_unique<GameScene>(PlayerWeaponType::Standard,
+                                             GameScene::RunMode::TitleDemo);
+    demoScene_->SetSceneManager(sceneManager_);
+    demoScene_->Initialize(ctx);
 }
 
 void TitleScene::Update() {
     sceneTime_ += ctx_->deltaTime;
 
+    if (demoScene_) {
+        demoScene_->Update();
+    }
+
     if (startRequested_) {
         fadeTimer_ += ctx_->deltaTime;
         if (fadeTimer_ >= kFadeDuration) {
-            sceneManager_->ChangeScene(std::make_unique<ModeSelectScene>());
+            sceneManager_->ChangeScene(std::make_unique<GameScene>());
         }
         return;
     }
@@ -61,30 +67,20 @@ void TitleScene::Update() {
 void TitleScene::Draw() {
     const float w = static_cast<float>(ctx_->winApp->GetWidth());
     const float h = static_cast<float>(ctx_->winApp->GetHeight());
-    const float letterboxH = (std::max)(42.0f, h * 0.085f);
+
+    if (demoScene_) {
+        demoScene_->Draw();
+    }
 
     ctx_->sprite->PreDraw();
 
-    DrawRect(0.0f, 0.0f, w, h, MakeColor(1.0f, 1.0f, 1.0f, 1.0f));
-    DrawRect(w * 0.14f, h * 0.24f, w * 0.42f, 2.0f,
-             MakeColor(0.0f, 0.0f, 0.0f, 0.16f));
-    DrawRect(w * 0.48f, h * 0.68f, w * 0.24f, 2.0f,
-             MakeColor(0.0f, 0.0f, 0.0f, 0.12f));
-    DrawRect(0.0f, h - letterboxH, w, letterboxH,
-             MakeColor(0.0f, 0.0f, 0.0f, 1.0f));
+    DrawRect(0.0f, 0.0f, w, h, MakeColor(0.0f, 0.0f, 0.0f, 0.42f));
 
-    const float logoX = (w - logoImage_.width) * 0.5f;
-    const float logoY = (h - letterboxH - logoImage_.height) * 0.5f - 8.0f;
-    DrawImage(logoImage_, logoX, logoY);
-
-    const float blink = startRequested_
-                            ? 1.0f
-                            : 0.74f + 0.26f * std::sinf(sceneTime_ * 4.6f);
-    const float promptX = (w - pressAnyButtonImage_.width) * 0.5f;
-    const float promptY =
-        (std::min)(h - letterboxH - pressAnyButtonImage_.height - 36.0f,
-                   logoY + logoImage_.height + 54.0f);
-    DrawImage(pressAnyButtonImage_, promptX, promptY, blink);
+    const float logoScale = std::clamp(w * 0.50f / logoImage_.width,
+                                       0.58f, 1.0f);
+    const float logoX = (w - logoImage_.width * logoScale) * 0.5f;
+    const float logoY = (h - logoImage_.height * logoScale) * 0.5f;
+    DrawImage(logoImage_, logoX, logoY, 1.0f, logoScale);
 
     if (startRequested_) {
         const float fadeT =
@@ -118,13 +114,18 @@ void TitleScene::DrawRect(float x, float y, float w, float h,
 }
 
 void TitleScene::DrawImage(const Image &image, float x, float y, float alpha) {
+    DrawImage(image, x, y, alpha, 1.0f);
+}
+
+void TitleScene::DrawImage(const Image &image, float x, float y, float alpha,
+                           float scale) {
     if (image.width <= 0.0f || image.height <= 0.0f) {
         return;
     }
 
     Sprite sprite{};
     sprite.position = {x, y};
-    sprite.size = {image.width, image.height};
+    sprite.size = {image.width * scale, image.height * scale};
     sprite.color = {1.0f, 1.0f, 1.0f, alpha};
     sprite.textureId = image.textureId;
     ctx_->sprite->DrawSprite(sprite);
@@ -132,6 +133,9 @@ void TitleScene::DrawImage(const Image &image, float x, float y, float alpha) {
 
 bool TitleScene::IsAnyButtonTriggered(const Input &input) const {
     for (int dik = 0; dik < 256; ++dik) {
+        if (dik == DIK_C || dik == DIK_R) {
+            continue;
+        }
         if (input.IsKeyTrigger(dik)) {
             return true;
         }

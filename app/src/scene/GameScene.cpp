@@ -18,14 +18,30 @@
 #include <string>
 #include <vector>
 
-#ifndef IMGUI_DISABLED
-#include "imgui.h"
-#endif
-
 using namespace DirectX;
 
 namespace {
 constexpr float kPi = 3.14159265f;
+
+struct SharedBattleModels {
+    bool initialized = false;
+    uint32_t arenaNoiseTextureId = 0;
+    uint32_t arenaFloorModelId = 0;
+    uint32_t arenaLowPolyTerrainModelId = 0;
+    uint32_t arenaCenterDiskModelId = 0;
+    uint32_t arenaSpokeModelId = 0;
+    uint32_t arenaInnerRingModelId = 0;
+    uint32_t arenaOuterRingModelId = 0;
+    uint32_t arenaColumnModelId = 0;
+    uint32_t arenaColumnCapModelId = 0;
+    uint32_t arenaDomeModelId = 0;
+    uint32_t arenaBarrierRingModelId = 0;
+    uint32_t enemyFocusRingModelId = 0;
+    uint32_t enemyWeaponTrailModelId = 0;
+    uint32_t chargeWeakPointModelId = 0;
+};
+
+SharedBattleModels gSharedBattleModels;
 
 Material MakeArenaMaterial(const XMFLOAT4 &color, bool useTexture = false,
                            float reflection = 0.34f,
@@ -356,55 +372,85 @@ void GameScene::Initialize(const SceneContext &ctx) {
                                   {0.70f, 0.78f, 0.76f, 1.0f},
                                   {0.48f, 0.24f, 0.12f, 1.0f}},
                                  0.76f, 0.58f, 0.26f);
-    arenaNoiseTextureId_ = arenaStoneTextureId;
-    arenaFloorModelId_ = model->CreatePlane(
-        arenaNoiseTextureId_,
-        MakeArenaMaterial({0.62f, 0.64f, 0.60f, 1.0f}, true, 0.06f, 0.82f));
-    arenaLowPolyTerrainModelId_ = model->CreateLowPolyTerrain(
-        arenaStoneTextureId,
-        MakeArenaMaterial({0.36f, 0.40f, 0.42f, 1.0f}, true, 0.00f, 0.98f), 42,
-        78.0f, 1.25f, 15.0f, 0x4107u);
-    arenaCenterDiskModelId_ = model->CreateRing(
-        arenaStoneTextureId,
-        MakeArenaMaterial({0.34f, 0.36f, 0.34f, 1.0f}, true, 0.06f, 0.82f), 96,
-        1.95f, 0.0f);
-    arenaSpokeModelId_ = model->CreatePlane(
-        arenaStoneTextureId,
-        MakeArenaMaterial({0.31f, 0.33f, 0.32f, 1.0f}, true, 0.02f, 0.88f));
-    arenaInnerRingModelId_ = model->CreateRing(
-        arenaStoneTextureId,
-        MakeArenaMaterial({0.38f, 0.44f, 0.40f, 1.0f}, true, 0.04f, 0.84f), 96,
-        4.9f, 4.35f);
-    arenaOuterRingModelId_ = model->CreateRing(
-        arenaStoneTextureId,
-        MakeArenaMaterial({0.36f, 0.34f, 0.31f, 1.0f}, true, 0.04f, 0.86f), 128,
-        12.3f, 11.6f);
-    arenaColumnModelId_ = model->CreateCylinder(
-        arenaStoneTextureId,
-        MakeArenaMaterial({0.42f, 0.44f, 0.43f, 1.0f}, true, 0.02f, 0.92f), 24,
-        0.26f, 0.38f, 5.4f);
-    arenaColumnCapModelId_ = model->CreateCylinder(
-        arenaStoneTextureId,
-        MakeArenaMaterial({0.34f, 0.34f, 0.31f, 1.0f}, true, 0.04f, 0.86f), 32,
-        0.68f, 0.78f, 0.24f);
-    arenaDomeModelId_ = model->CreateCylinder(
-        arenaStoneTextureId,
-        MakeArenaMaterial({0.30f, 0.36f, 0.40f, 0.42f}, true, 0.00f, 0.96f), 128,
-        4.5f, 13.5f, 8.8f);
-    arenaBarrierRingModelId_ = model->CreateRing(
-        arenaStoneTextureId,
-        MakeArenaMaterial({0.72f, 0.78f, 0.76f, 0.28f}, true, 0.00f, 0.92f), 128,
-        13.1f, 12.9f);
-    enemyFocusRingModelId_ = model->CreateRing(
-        0, MakeArenaMaterial({0.92f, 0.98f, 1.0f, 0.72f}, false, 0.0f,
-                             0.42f),
-        96, 1.85f, 1.58f);
-    enemyWeaponTrailModelId_ = model->CreatePlane(
-        0, MakeArenaMaterial({1.0f, 0.92f, 0.62f, 0.82f}, false, 0.0f,
-                             0.28f));
-    chargeWeakPointModelId_ = model->CreatePlane(
-        0, MakeArenaMaterial({1.0f, 0.96f, 0.78f, 0.92f}, false, 0.02f,
-                             0.20f));
+    if (!gSharedBattleModels.initialized) {
+        gSharedBattleModels.arenaNoiseTextureId = arenaStoneTextureId;
+        gSharedBattleModels.arenaFloorModelId = model->CreatePlane(
+            arenaStoneTextureId,
+            MakeArenaMaterial({0.62f, 0.64f, 0.60f, 1.0f}, true, 0.06f,
+                              0.82f));
+        gSharedBattleModels.arenaLowPolyTerrainModelId =
+            model->CreateLowPolyTerrain(
+                arenaStoneTextureId,
+                MakeArenaMaterial({0.36f, 0.40f, 0.42f, 1.0f}, true, 0.00f,
+                                  0.98f),
+                42, 78.0f, 1.25f, 15.0f, 0x4107u);
+        gSharedBattleModels.arenaCenterDiskModelId = model->CreateRing(
+            arenaStoneTextureId,
+            MakeArenaMaterial({0.34f, 0.36f, 0.34f, 1.0f}, true, 0.06f,
+                              0.82f),
+            96, 1.95f, 0.0f);
+        gSharedBattleModels.arenaSpokeModelId = model->CreatePlane(
+            arenaStoneTextureId,
+            MakeArenaMaterial({0.31f, 0.33f, 0.32f, 1.0f}, true, 0.02f,
+                              0.88f));
+        gSharedBattleModels.arenaInnerRingModelId = model->CreateRing(
+            arenaStoneTextureId,
+            MakeArenaMaterial({0.38f, 0.44f, 0.40f, 1.0f}, true, 0.04f,
+                              0.84f),
+            96, 4.9f, 4.35f);
+        gSharedBattleModels.arenaOuterRingModelId = model->CreateRing(
+            arenaStoneTextureId,
+            MakeArenaMaterial({0.36f, 0.34f, 0.31f, 1.0f}, true, 0.04f,
+                              0.86f),
+            128, 12.3f, 11.6f);
+        gSharedBattleModels.arenaColumnModelId = model->CreateCylinder(
+            arenaStoneTextureId,
+            MakeArenaMaterial({0.42f, 0.44f, 0.43f, 1.0f}, true, 0.02f,
+                              0.92f),
+            24, 0.26f, 0.38f, 5.4f);
+        gSharedBattleModels.arenaColumnCapModelId = model->CreateCylinder(
+            arenaStoneTextureId,
+            MakeArenaMaterial({0.34f, 0.34f, 0.31f, 1.0f}, true, 0.04f,
+                              0.86f),
+            32, 0.68f, 0.78f, 0.24f);
+        gSharedBattleModels.arenaDomeModelId = model->CreateCylinder(
+            arenaStoneTextureId,
+            MakeArenaMaterial({0.30f, 0.36f, 0.40f, 0.42f}, true, 0.00f,
+                              0.96f),
+            128, 4.5f, 13.5f, 8.8f);
+        gSharedBattleModels.arenaBarrierRingModelId = model->CreateRing(
+            arenaStoneTextureId,
+            MakeArenaMaterial({0.72f, 0.78f, 0.76f, 0.28f}, true, 0.00f,
+                              0.92f),
+            128, 13.1f, 12.9f);
+        gSharedBattleModels.enemyFocusRingModelId = model->CreateRing(
+            0, MakeArenaMaterial({0.92f, 0.98f, 1.0f, 0.72f}, false, 0.0f,
+                                 0.42f),
+            96, 1.85f, 1.58f);
+        gSharedBattleModels.enemyWeaponTrailModelId = model->CreatePlane(
+            0, MakeArenaMaterial({1.0f, 0.92f, 0.62f, 0.82f}, false, 0.0f,
+                                 0.28f));
+        gSharedBattleModels.chargeWeakPointModelId = model->CreatePlane(
+            0, MakeArenaMaterial({1.0f, 0.96f, 0.78f, 0.92f}, false, 0.02f,
+                                 0.20f));
+        gSharedBattleModels.initialized = true;
+    }
+
+    arenaNoiseTextureId_ = gSharedBattleModels.arenaNoiseTextureId;
+    arenaFloorModelId_ = gSharedBattleModels.arenaFloorModelId;
+    arenaLowPolyTerrainModelId_ =
+        gSharedBattleModels.arenaLowPolyTerrainModelId;
+    arenaCenterDiskModelId_ = gSharedBattleModels.arenaCenterDiskModelId;
+    arenaSpokeModelId_ = gSharedBattleModels.arenaSpokeModelId;
+    arenaInnerRingModelId_ = gSharedBattleModels.arenaInnerRingModelId;
+    arenaOuterRingModelId_ = gSharedBattleModels.arenaOuterRingModelId;
+    arenaColumnModelId_ = gSharedBattleModels.arenaColumnModelId;
+    arenaColumnCapModelId_ = gSharedBattleModels.arenaColumnCapModelId;
+    arenaDomeModelId_ = gSharedBattleModels.arenaDomeModelId;
+    arenaBarrierRingModelId_ = gSharedBattleModels.arenaBarrierRingModelId;
+    enemyFocusRingModelId_ = gSharedBattleModels.enemyFocusRingModelId;
+    enemyWeaponTrailModelId_ = gSharedBattleModels.enemyWeaponTrailModelId;
+    chargeWeakPointModelId_ = gSharedBattleModels.chargeWeakPointModelId;
     sparkParticles_.Initialize(dx, ctx_->srv, texture, particleTextureId_, 8192);
     sparkParticles_.SetEmission(1, 1000.0f);
     sparkParticles_.SetEmitterRadius(0.08f);
@@ -438,8 +484,6 @@ void GameScene::Initialize(const SceneContext &ctx) {
             ctx_->sound->Load(L"app/resources/sounds/explosion_boss.wav");
         soundsLoaded_ = true;
     }
-    showJoyConTutorial_ = true;
-
     cameraYaw_ = 0.0f;
     cameraPitch_ = 0.0f;
     isLockOn_ = true;
@@ -478,10 +522,19 @@ void GameScene::Initialize(const SceneContext &ctx) {
     SyncEnemyAnimation();
     UpdateSceneLighting();
     battleElapsedTime_ = 0.0f;
+    battleIntroActive_ = true;
+    battleIntroTimer_ = 0.0f;
+    battleIntroSparkEmitted_ = false;
+    titleDemoTimer_ = 0.0f;
+    titleDemoCounterTimer_ = 1.15f;
     battleResultRequested_ = false;
     victorySequenceActive_ = false;
     victorySequenceTimer_ = 0.0f;
     victoryClearTime_ = 0.0f;
+    defeatSequenceActive_ = false;
+    defeatSequenceTimer_ = 0.0f;
+    defeatImpactEmitted_ = false;
+    player_.SetDefeatPoseRatio(0.0f);
     counterCinematicActive_ = false;
     counterCinematicTimer_ = 0.0f;
     enemyAnimationFrozen_ = false;
@@ -499,22 +552,27 @@ void GameScene::Initialize(const SceneContext &ctx) {
 void GameScene::Update() {
     Input *input = ctx_->input;
 #ifdef _DEBUG
-    if (input->IsKeyTrigger(DIK_F7)) {
+    if (runMode_ == RunMode::Play && input->IsKeyTrigger(DIK_F7)) {
         sceneManager_->ChangeScene(std::make_unique<EnemyAnimationDebugScene>());
         return;
     }
-    if (input->IsKeyTrigger(DIK_F8) && !battleResultRequested_) {
+    if (runMode_ == RunMode::Play && input->IsKeyTrigger(DIK_F8) &&
+        !battleResultRequested_) {
         enemy_.TakeDamage(99999.0f);
     }
 #endif
-    if (input->IsKeyTrigger(DIK_F3)) {
+    if (runMode_ == RunMode::Play && input->IsKeyTrigger(DIK_F3)) {
         showCollisionDebug_ = !showCollisionDebug_;
-    }
-    if (input->IsKeyTrigger(DIK_F1)) {
-        showJoyConTutorial_ = !showJoyConTutorial_;
     }
 
     const float baseDeltaTime = ctx_->deltaTime;
+    if (battleIntroActive_) {
+        if (runMode_ == RunMode::TitleDemo) {
+            player_.UpdateJoyConCalibrationInput(input, baseDeltaTime);
+        }
+        UpdateBattleIntro(baseDeltaTime);
+        return;
+    }
     if (victorySequenceActive_) {
         sceneLightTime_ += baseDeltaTime;
         combatFeedback_.Update(baseDeltaTime, sceneLightTime_);
@@ -534,17 +592,31 @@ void GameScene::Update() {
         smokeParticles_.Update(baseDeltaTime);
         return;
     }
+    if (defeatSequenceActive_) {
+        sceneLightTime_ += baseDeltaTime;
+        combatFeedback_.Update(baseDeltaTime, sceneLightTime_);
+        UpdateDefeatSequence(baseDeltaTime);
+        UpdateBattleCamera();
+        camera_.UpdateMatrices();
+        ctx_->model->UpdateAnimation(playerModelId_, baseDeltaTime * 0.035f);
+        ctx_->model->UpdateAnimation(enemyModelId_, baseDeltaTime * 0.28f);
+        ApplyEnemyProceduralAnimation();
+        sparkParticles_.Update(baseDeltaTime);
+        explosionParticles_.Update(baseDeltaTime);
+        smokeParticles_.Update(baseDeltaTime);
+        return;
+    }
 
     combatFeedback_.Update(baseDeltaTime, sceneLightTime_);
     UpdateChargeWeakPointFocus(baseDeltaTime);
     const float gameplayDeltaTime = baseDeltaTime * ComputeGameplayTimeScale();
     const bool chargeFocusHoldingEnemyAttack =
         chargeWeakPointFocusRatio_ > 0.001f && IsChargeWeakPointFocusActive();
-    const float playerDeltaTime =
-        counterCinematicActive_ ? baseDeltaTime : gameplayDeltaTime;
+    const float playerDeltaTime = gameplayDeltaTime;
     const float enemyDeltaTime =
         counterCinematicActive_
-            ? (baseDeltaTime * counterTimeScale_)
+            ? (baseDeltaTime *
+               (std::min)(counterTimeScale_, ComputeGameplayTimeScale()))
             : (chargeFocusHoldingEnemyAttack ? baseDeltaTime
                                              : gameplayDeltaTime);
     UpdateCamera(input);
@@ -623,17 +695,18 @@ void GameScene::Update() {
     UpdateBattleCamera();
     camera_.UpdateMatrices();
 
-    UpdateCombat(gameplayDeltaTime);
-    if (!battleResultRequested_) {
+    if (runMode_ == RunMode::TitleDemo) {
+        UpdateTitleDemo(baseDeltaTime);
+    } else {
+        UpdateCombat(gameplayDeltaTime);
+    }
+    if (runMode_ == RunMode::Play && !battleResultRequested_) {
         if (enemy_.GetHP() <= 0.0f) {
             BeginVictorySequence();
             return;
         }
         if (player_.GetHP() <= 0.0f) {
-            battleResultRequested_ = true;
-            sceneManager_->ChangeScene(std::make_unique<BattleResultScene>(
-                BattleResultScene::ResultKind::GameOver, battleElapsedTime_,
-                selectedWeaponType_));
+            BeginDefeatSequence();
             return;
         }
     }
@@ -668,6 +741,7 @@ void GameScene::Draw() {
     sparkParticles_.Draw(camera_);
     explosionParticles_.Draw(camera_);
     DrawVictoryFlash();
+    DrawDefeatFlash();
 }
 
 void GameScene::DispatchCombatFeedback(const CombatFeedbackEvent &event) {
@@ -1038,9 +1112,97 @@ void GameScene::UpdateChargeWeakPointFocus(float deltaTime) {
 }
 
 void GameScene::DrawOverlay() {
+    if (runMode_ == RunMode::TitleDemo || battleIntroActive_) {
+        return;
+    }
     hud_.Draw(*ctx_);
     DrawChargeWeakPointTimeGauge();
-    DrawJoyConTutorial();
+}
+
+void GameScene::UpdateBattleIntro(float deltaTime) {
+    battleIntroTimer_ += deltaTime;
+    sceneLightTime_ += deltaTime;
+    combatFeedback_.Update(deltaTime, sceneLightTime_);
+
+    const float ratio =
+        std::clamp(battleIntroTimer_ / battleIntroDuration_, 0.0f, 1.0f);
+    if (ctx_ != nullptr && ctx_->postEffectRenderer != nullptr) {
+        ctx_->postEffectRenderer->SetVignettingEnabled(true);
+        ctx_->postEffectRenderer->SetVignettingStrength(0.42f + 0.18f * ratio);
+        ctx_->postEffectRenderer->SetRadialBlurCenter(0.5f, 0.48f);
+        ctx_->postEffectRenderer->SetRadialBlurSampleCount(18);
+        ctx_->postEffectRenderer->SetRadialBlurStrength(0.035f * (1.0f - ratio));
+        ctx_->postEffectRenderer->SetSceneDimStrength(0.18f * (1.0f - ratio));
+    }
+
+    if (!battleIntroSparkEmitted_ && battleIntroTimer_ >= 0.52f) {
+        battleIntroSparkEmitted_ = true;
+        const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
+        sparkParticles_.EmitBurst(
+            {enemyPos.x, enemyPos.y + 1.55f, enemyPos.z}, 260, 1.85f,
+            GPUParticleSystem::BurstStyle::Sparks,
+            {1.0f, 0.88f, 0.38f, 0.92f}, {0.0f, 1.0f, 0.0f}, 5.8f);
+        smokeParticles_.EmitBurst(
+            {enemyPos.x, enemyPos.y + 1.25f, enemyPos.z}, 70, 1.50f,
+            GPUParticleSystem::BurstStyle::Flash,
+            {1.0f, 0.78f, 0.22f, 0.72f}, {0.0f, 1.0f, 0.0f}, 0.65f);
+    }
+
+    const float introEnemyDelta = deltaTime * (0.05f + 0.15f * ratio);
+    ctx_->model->UpdateAnimation(playerModelId_, deltaTime * 0.04f);
+    ctx_->model->UpdateAnimation(enemyModelId_, introEnemyDelta);
+    ApplyEnemyProceduralAnimation();
+    UpdateSceneLighting();
+    UpdateBattleCamera();
+    camera_.UpdateMatrices();
+    sparkParticles_.Update(deltaTime);
+    explosionParticles_.Update(deltaTime);
+    smokeParticles_.Update(deltaTime);
+
+    if (battleIntroTimer_ >= battleIntroDuration_) {
+        battleIntroActive_ = false;
+        battleIntroTimer_ = battleIntroDuration_;
+        if (ctx_ != nullptr && ctx_->postEffectRenderer != nullptr) {
+            ctx_->postEffectRenderer->SetRadialBlurStrength(0.0f);
+            ctx_->postEffectRenderer->SetSceneDimStrength(0.0f);
+            ctx_->postEffectRenderer->SetVignettingStrength(0.20f);
+        }
+    }
+}
+
+void GameScene::UpdateTitleDemo(float deltaTime) {
+    titleDemoTimer_ += deltaTime;
+    titleDemoCounterTimer_ -= deltaTime;
+    if (titleDemoCounterTimer_ > 0.0f) {
+        return;
+    }
+
+    titleDemoCounterTimer_ = 1.35f + 0.55f *
+        (0.5f + 0.5f * std::sinf(titleDemoTimer_ * 1.7f));
+    const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
+    const XMFLOAT3 playerPos = player_.GetTransform().position;
+    enemy_.NotifyCountered(0.82f);
+    if (enemy_.GetHP() > 45.0f) {
+        enemy_.TakeDamage(3.0f);
+    }
+    player_.NotifyCounterSuccess(1);
+
+    CombatFeedbackEvent feedback{};
+    feedback.type = CombatFeedbackEventType::CounterSuccess;
+    feedback.position = enemyPos;
+    feedback.position.y += 1.15f;
+    feedback.direction = {enemyPos.x - playerPos.x, 0.0f,
+                          enemyPos.z - playerPos.z};
+    feedback.power = 2.2f;
+    feedback.swordIndex = 1;
+    DispatchCombatFeedback(feedback);
+    counterCinematicActive_ = true;
+    counterCinematicTimer_ = 0.34f;
+    SetEnemyAnimationFrozen(true);
+
+    if (titleDemoTimer_ > 28.0f) {
+        titleDemoTimer_ = 0.0f;
+    }
 }
 
 void GameScene::BeginVictorySequence() {
@@ -1071,6 +1233,79 @@ void GameScene::BeginVictorySequence() {
         {enemyPos.x, enemyPos.y + 1.25f, enemyPos.z}, 96, 1.35f,
         GPUParticleSystem::BurstStyle::Explosion,
         {1.0f, 0.84f, 0.32f, 0.72f}, {0.0f, 1.0f, 0.0f}, 1.15f);
+}
+
+void GameScene::BeginDefeatSequence() {
+    battleResultRequested_ = true;
+    defeatSequenceActive_ = true;
+    defeatSequenceTimer_ = 0.0f;
+    defeatImpactEmitted_ = false;
+    counterCinematicActive_ = false;
+    SetEnemyAnimationFrozen(false);
+    player_.SetDefeatPoseRatio(0.0f);
+
+    if (ctx_ != nullptr && ctx_->postEffectRenderer != nullptr) {
+        ctx_->postEffectRenderer->SetVignettingEnabled(true);
+        ctx_->postEffectRenderer->SetVignettingStrength(0.62f);
+        ctx_->postEffectRenderer->SetRadialBlurCenter(0.5f, 0.54f);
+        ctx_->postEffectRenderer->SetRadialBlurSampleCount(22);
+        ctx_->postEffectRenderer->SetRadialBlurStrength(0.040f);
+        ctx_->postEffectRenderer->SetSceneDimStrength(0.18f);
+    }
+
+    const XMFLOAT3 playerPos = player_.GetTransform().position;
+    explosionParticles_.EmitBurst(
+        {playerPos.x, playerPos.y + 1.05f, playerPos.z}, 180, 1.55f,
+        GPUParticleSystem::BurstStyle::Explosion,
+        {1.0f, 0.12f, 0.05f, 0.82f}, {0.0f, 1.0f, 0.0f}, 2.2f);
+    sparkParticles_.EmitBurst(
+        {playerPos.x, playerPos.y + 1.18f, playerPos.z}, 260, 1.35f,
+        GPUParticleSystem::BurstStyle::Sparks,
+        {1.0f, 0.32f, 0.16f, 0.92f}, {0.0f, 1.0f, 0.0f}, 5.2f);
+}
+
+void GameScene::UpdateDefeatSequence(float deltaTime) {
+    defeatSequenceTimer_ += deltaTime;
+    const float fallStart = 0.34f;
+    const float fallDuration = 1.22f;
+    const float fallRatio =
+        std::clamp((defeatSequenceTimer_ - fallStart) / fallDuration, 0.0f,
+                   1.0f);
+    player_.SetDefeatPoseRatio(fallRatio);
+
+    if (ctx_ != nullptr && ctx_->postEffectRenderer != nullptr) {
+        const float ratio =
+            std::clamp(defeatSequenceTimer_ / defeatSequenceDuration_, 0.0f,
+                       1.0f);
+        ctx_->postEffectRenderer->SetRadialBlurStrength(0.040f *
+                                                        (1.0f - ratio));
+        ctx_->postEffectRenderer->SetSceneDimStrength(0.18f + 0.22f * ratio);
+    }
+
+    if (!defeatImpactEmitted_ && defeatSequenceTimer_ >= 1.58f) {
+        defeatImpactEmitted_ = true;
+        const XMFLOAT3 playerPos = player_.GetTransform().position;
+        smokeParticles_.EmitBurst(
+            {playerPos.x, playerPos.y + 0.28f, playerPos.z}, 160, 2.15f,
+            GPUParticleSystem::BurstStyle::Smoke,
+            {0.18f, 0.17f, 0.16f, 0.88f}, {0.0f, 1.0f, 0.0f}, 0.85f);
+        sparkParticles_.EmitBurst(
+            {playerPos.x, playerPos.y + 0.42f, playerPos.z}, 180, 1.05f,
+            GPUParticleSystem::BurstStyle::Sparks,
+            {1.0f, 0.18f, 0.08f, 0.86f}, {0.0f, 1.0f, 0.0f}, 4.2f);
+    }
+
+    if (defeatSequenceTimer_ >= defeatSequenceDuration_) {
+        defeatSequenceActive_ = false;
+        player_.SetDefeatPoseRatio(0.0f);
+        if (ctx_ != nullptr && ctx_->postEffectRenderer != nullptr) {
+            ctx_->postEffectRenderer->SetRadialBlurStrength(0.0f);
+            ctx_->postEffectRenderer->SetSceneDimStrength(0.0f);
+        }
+        sceneManager_->ChangeScene(std::make_unique<BattleResultScene>(
+            BattleResultScene::ResultKind::GameOver, battleElapsedTime_,
+            selectedWeaponType_));
+    }
 }
 
 void GameScene::UpdateVictorySequence(float deltaTime) {
@@ -1167,10 +1402,50 @@ void GameScene::DrawVictoryFlash() {
     ctx_->sprite->PostDraw();
 }
 
+void GameScene::DrawDefeatFlash() {
+    if (!defeatSequenceActive_ || ctx_ == nullptr || ctx_->sprite == nullptr ||
+        ctx_->winApp == nullptr) {
+        return;
+    }
+
+    const auto pulse = [&](float center, float width, float peak) {
+        return (std::max)(
+            0.0f, (1.0f - std::fabs(defeatSequenceTimer_ - center) / width) *
+                      peak);
+    };
+    const float red =
+        (std::max)(pulse(0.08f, 0.22f, 0.72f), pulse(1.58f, 0.30f, 0.36f));
+    const float black =
+        std::clamp((defeatSequenceTimer_ - 1.55f) /
+                       (defeatSequenceDuration_ - 1.55f),
+                   0.0f, 0.72f);
+    const float w = static_cast<float>(ctx_->winApp->GetWidth());
+    const float h = static_cast<float>(ctx_->winApp->GetHeight());
+
+    ctx_->sprite->PreDraw();
+    if (red > 0.01f) {
+        Sprite flash{};
+        flash.textureId = 0;
+        flash.position = {0.0f, 0.0f};
+        flash.size = {w, h};
+        flash.color = {1.0f, 0.06f, 0.02f, red};
+        ctx_->sprite->DrawSprite(flash);
+    }
+    if (black > 0.01f) {
+        Sprite fade{};
+        fade.textureId = 0;
+        fade.position = {0.0f, 0.0f};
+        fade.size = {w, h};
+        fade.color = {0.0f, 0.0f, 0.0f, black};
+        ctx_->sprite->DrawSprite(fade);
+    }
+    ctx_->sprite->PostDraw();
+}
+
 void GameScene::DrawChargeWeakPointTimeGauge() {
-#ifndef IMGUI_DISABLED
     const float limit = enemy_.GetChargeWeakPointTimeLimitForPresentation();
-    if (limit <= 0.0001f || chargeWeakPointBroken_) {
+    if (limit <= 0.0001f || chargeWeakPointBroken_ || ctx_ == nullptr ||
+        ctx_->sprite == nullptr || ctx_->winApp == nullptr) {
         return;
     }
 
@@ -1182,166 +1457,59 @@ void GameScene::DrawChargeWeakPointTimeGauge() {
 
     const float screenW = static_cast<float>(ctx_->winApp->GetWidth());
     const float screenH = static_cast<float>(ctx_->winApp->GetHeight());
-    const ImVec2 center(screenW * 0.5f, screenH * 0.47f);
+    const XMFLOAT2 center(screenW * 0.5f, screenH * 0.47f);
     const float radius = std::clamp(screenH * 0.34f, 190.0f, 290.0f);
     const float thickness = std::clamp(radius * 0.075f, 14.0f, 22.0f);
-
-    ImDrawList *drawList = ImGui::GetForegroundDrawList();
-    drawList->AddCircleFilled(
-        center, radius + thickness * 0.72f,
-        ImGui::GetColorU32(ImVec4(0.0f, 0.0f, 0.0f, 0.08f * alpha)), 96);
-    drawList->AddCircle(
-        center, radius + thickness * 0.40f,
-        ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 0.14f * alpha)), 96,
-        2.0f);
-    drawList->AddCircle(
-        center, radius,
-        ImGui::GetColorU32(ImVec4(0.06f, 0.07f, 0.08f, 0.28f * alpha)), 96,
-        thickness);
 
     constexpr int kSegments = 96;
     const int litSegments =
         static_cast<int>(std::ceil(static_cast<float>(kSegments) * ratio));
-    const ImU32 progressColor =
+    const XMFLOAT4 progressColor =
         ratio < 0.28f
-            ? ImGui::GetColorU32(ImVec4(1.0f, 0.18f, 0.08f, 0.62f * alpha))
-            : ImGui::GetColorU32(ImVec4(0.20f, 0.92f, 1.0f, 0.58f * alpha));
+            ? XMFLOAT4{1.0f, 0.18f, 0.08f, 0.62f * alpha}
+            : XMFLOAT4{0.20f, 0.92f, 1.0f, 0.58f * alpha};
     const float startAngle = -kPi * 0.5f;
     const float elapsedAngle = (1.0f - ratio) * kPi * 2.0f;
     const float progressStartAngle = startAngle + elapsedAngle;
-    ImVec2 prev(center.x + std::cos(progressStartAngle) * radius,
-                center.y + std::sin(progressStartAngle) * radius);
-    for (int i = 1; i <= litSegments; ++i) {
+
+    auto drawBlock = [&](float x, float y, float size,
+                         const XMFLOAT4 &color) {
+        Sprite sprite{};
+        sprite.textureId = 0;
+        sprite.position = {x - size * 0.5f, y - size * 0.5f};
+        sprite.size = {size, size};
+        sprite.color = color;
+        ctx_->sprite->DrawSprite(sprite);
+    };
+
+    ctx_->sprite->PreDraw();
+    for (int i = 0; i < kSegments; ++i) {
+        const float t = static_cast<float>(i) / static_cast<float>(kSegments);
+        const float angle = startAngle + kPi * 2.0f * t;
+        const float x = center.x + std::cos(angle) * radius;
+        const float y = center.y + std::sin(angle) * radius;
+        drawBlock(x, y, thickness * 0.72f,
+                  {0.02f, 0.03f, 0.035f, 0.20f * alpha});
+    }
+    for (int i = 0; i < kSegments; i += 6) {
+        const float t = static_cast<float>(i) / static_cast<float>(kSegments);
+        const float angle = startAngle + kPi * 2.0f * t;
+        drawBlock(center.x + std::cos(angle) * (radius + thickness * 0.55f),
+                  center.y + std::sin(angle) * (radius + thickness * 0.55f),
+                  thickness * 0.38f,
+                  {1.0f, 1.0f, 1.0f, 0.13f * alpha});
+    }
+    for (int i = 0; i < litSegments; ++i) {
         const float t = static_cast<float>(i) / static_cast<float>(kSegments);
         const float angle = progressStartAngle + kPi * 2.0f * t;
-        const ImVec2 current(center.x + std::cos(angle) * radius,
-                             center.y + std::sin(angle) * radius);
-        drawList->AddLine(prev, current, progressColor, thickness);
-        prev = current;
+        const float pulse = 0.84f + 0.16f * std::sinf(sceneLightTime_ * 12.0f +
+                                                      static_cast<float>(i) * 0.17f);
+        XMFLOAT4 color = progressColor;
+        color.w *= pulse;
+        drawBlock(center.x + std::cos(angle) * radius,
+                  center.y + std::sin(angle) * radius, thickness, color);
     }
-#endif
-}
-
-void GameScene::DrawJoyConTutorial() {
-#ifndef IMGUI_DISABLED
-    if (!showJoyConTutorial_) {
-        return;
-    }
-
-    const ActionKind kind = enemy_.GetActionKind();
-    const ActionStep step = enemy_.GetActionStep();
-    constexpr float kReleaseCounterWindowDuration = 0.62f;
-    const bool chargeDirectionVisible =
-        !chargeWeakPointBroken_ &&
-        enemy_.GetChargeWeakPointTimeLimitForPresentation() > 0.0f;
-    const float releaseAnticipation = enemy_.GetReleaseAnticipationRatio();
-    const bool preReleaseCounterCueVisible =
-        !chargeDirectionVisible && step != ActionStep::Active &&
-        releaseAnticipation > 0.0f;
-    const bool activeReleaseCounterCueVisible =
-        step == ActionStep::Active &&
-        enemy_.GetActionTimerForPresentation() <=
-            kReleaseCounterWindowDuration;
-    const bool counterCueVisible =
-        !chargeWeakPointFailedThisAction_ &&
-        (kind == ActionKind::Smash || kind == ActionKind::Sweep) &&
-        (preReleaseCounterCueVisible || activeReleaseCounterCueVisible);
-    const bool redCueVisible =
-        (kind == ActionKind::Smash || kind == ActionKind::Sweep ||
-         kind == ActionKind::Shot) &&
-        !chargeDirectionVisible && !counterCueVisible &&
-        (step == ActionStep::Charge || step == ActionStep::Hold ||
-         step == ActionStep::Active);
-    const bool joyConMode = player_.UsesJoyConControls();
-
-    auto axisText = [](SwordCounterAxis axis) {
-        switch (axis) {
-        case SwordCounterAxis::Vertical:
-            return "VERTICAL slash";
-        case SwordCounterAxis::Horizontal:
-            return "HORIZONTAL slash";
-        default:
-            return "slash";
-        }
-    };
-    auto coloredLine = [](const ImVec4 &color, const char *label,
-                          const char *text) {
-        ImGui::PushStyleColor(ImGuiCol_Text, color);
-        ImGui::TextUnformatted(label);
-        ImGui::PopStyleColor();
-        ImGui::SameLine();
-        ImGui::TextWrapped("%s", text);
-    };
-
-    const char *mainTitle = "WATCH THE BOSS";
-    const char *mainText = "Stay ready. Do not swing until a clear cue appears.";
-    ImVec4 mainColor{0.90f, 0.92f, 0.96f, 1.0f};
-    if (chargeDirectionVisible) {
-        mainTitle = "FLOW LINE";
-        mainText = "Slash along the GREEN line. Same angle, either direction is OK.";
-        mainColor = {0.24f, 1.0f, 0.36f, 1.0f};
-    } else if (counterCueVisible) {
-        mainTitle = "COUNTER NOW";
-        const SwordCounterAxis axis = RequiredVisualCounterAxisForAction(kind);
-        mainText = axisText(axis);
-        mainColor = {0.24f, 1.0f, 0.36f, 1.0f};
-    } else if (redCueVisible) {
-        mainTitle = "DO NOT SLASH";
-        mainText = "RED means danger. Swinging now triggers an uncounterable hit.";
-        mainColor = {1.0f, 0.18f, 0.10f, 1.0f};
-    } else if (counterCinematicActive_) {
-        mainTitle = "PARRY HIT";
-        mainText = "Time is slow. Make one clean follow-up slash.";
-        mainColor = {0.36f, 0.88f, 1.0f, 1.0f};
-    }
-
-    ImGui::SetNextWindowPos(ImVec2(22.0f, 92.0f), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(520.0f, 378.0f), ImGuiCond_Always);
-    ImGui::SetNextWindowBgAlpha(0.84f);
-    ImGui::Begin("Battle Tutorial", nullptr,
-                 ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
-                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
-
-    ImGui::Text("BATTLE TUTORIAL  (%s)", joyConMode ? "JOY-CON" : "MOUSE");
-    ImGui::Separator();
-    ImGui::PushStyleColor(ImGuiCol_Text, mainColor);
-    ImGui::TextUnformatted(mainTitle);
-    ImGui::PopStyleColor();
-    ImGui::TextWrapped("%s", mainText);
-    ImGui::Spacing();
-
-    ImGui::TextUnformatted("CUES");
-    coloredLine({0.24f, 1.0f, 0.36f, 1.0f}, "GREEN",
-                "slash now. Match the line direction for counters.");
-    coloredLine({1.0f, 0.18f, 0.10f, 1.0f}, "RED",
-                "do not slash. Wait for the boss to commit.");
-    coloredLine({0.36f, 0.88f, 1.0f, 1.0f}, "SLOW",
-                "after a parry, take the free follow-up hit.");
-    ImGui::Spacing();
-
-    ImGui::TextUnformatted("DIRECTION RULE");
-    ImGui::BulletText("Vertical boss slash / vertical line: vertical slash.");
-    ImGui::BulletText("Horizontal boss slash / horizontal line: horizontal slash.");
-    ImGui::BulletText("Opposite direction on the same line still counts.");
-    ImGui::Spacing();
-
-    ImGui::TextUnformatted("CONTROLS");
-    if (joyConMode) {
-        ImGui::BulletText("Swing Joy-Con: slash.");
-        ImGui::BulletText("C: calibrate sensors.");
-        ImGui::BulletText("ZR: reset right Joy-Con pose.");
-        ImGui::BulletText("R: reset both Joy-Con poses.");
-        ImGui::BulletText("S / stick click: dodge.");
-    } else {
-        ImGui::BulletText("Hold Left Mouse Button and move: slash.");
-        ImGui::BulletText("Release Left Mouse Button: sword returns front.");
-        ImGui::BulletText("Space: dodge.");
-    }
-    ImGui::Separator();
-    ImGui::Text("F1: hide / show tutorial");
-
-    ImGui::End();
-#endif
+    ctx_->sprite->PostDraw();
 }
 
 void GameScene::DrawEnemyWeaponTrail() {

@@ -149,6 +149,83 @@ void GameScene::UpdateBattleCamera() {
         camera_.LookAt(lockOnLookAt_);
         return;
     }
+    if (battleIntroActive_) {
+        float toEnemyX = enemyPos.x - playerPos.x;
+        float toEnemyZ = enemyPos.z - playerPos.z;
+        const XMFLOAT2 line = NormalizeXZ(toEnemyX, toEnemyZ);
+        const float sideX = line.y;
+        const float sideZ = -line.x;
+        const float ratio =
+            Clamp01(battleIntroTimer_ / battleIntroDuration_);
+        const float push = ratio * ratio * (3.0f - 2.0f * ratio);
+        const DirectX::XMFLOAT3 startCameraPos = {
+            enemyPos.x - line.x * 10.2f + sideX * 0.35f,
+            enemyPos.y + 2.75f,
+            enemyPos.z - line.y * 10.2f + sideZ * 0.35f};
+        const DirectX::XMFLOAT3 endCameraPos = {
+            playerPos.x - line.x * 6.0f + sideX * 1.15f,
+            playerPos.y + 2.35f,
+            playerPos.z - line.y * 6.0f + sideZ * 1.15f};
+        const DirectX::XMFLOAT3 startLookAt = {
+            enemyPos.x, enemyPos.y + 1.70f, enemyPos.z};
+        const DirectX::XMFLOAT3 endLookAt = {
+            playerPos.x * 0.36f + enemyPos.x * 0.64f,
+            playerPos.y * 0.28f + enemyPos.y * 0.72f + 1.38f,
+            playerPos.z * 0.36f + enemyPos.z * 0.64f};
+        const DirectX::XMFLOAT3 desiredCameraPos =
+            Lerp(startCameraPos, endCameraPos, push);
+        const DirectX::XMFLOAT3 desiredLookAt = Lerp(startLookAt, endLookAt, push);
+        lockOnOrbitCameraPos_ = desiredCameraPos;
+        lockOnLookAt_ = desiredLookAt;
+        currentFovDeg_ = 48.0f + 24.0f * push;
+        camera_.SetPerspectiveFovDeg(currentFovDeg_);
+        camera_.SetPosition(lockOnOrbitCameraPos_);
+        camera_.LookAt(lockOnLookAt_);
+        return;
+    }
+    if (defeatSequenceActive_) {
+        float toEnemyX = enemyPos.x - playerPos.x;
+        float toEnemyZ = enemyPos.z - playerPos.z;
+        const XMFLOAT2 line = NormalizeXZ(toEnemyX, toEnemyZ);
+        const float sideX = line.y;
+        const float sideZ = -line.x;
+        const float ratio =
+            Clamp01(defeatSequenceTimer_ / defeatSequenceDuration_);
+        const float fall =
+            Clamp01((defeatSequenceTimer_ - 0.34f) / 1.22f);
+        const DirectX::XMFLOAT3 startCameraPos = {
+            playerPos.x - line.x * 5.0f + sideX * 1.85f,
+            playerPos.y + 1.85f,
+            playerPos.z - line.y * 5.0f + sideZ * 1.85f};
+        const DirectX::XMFLOAT3 fallCameraPos = {
+            playerPos.x - line.x * 4.3f + sideX * 3.2f,
+            playerPos.y + 0.78f,
+            playerPos.z - line.y * 4.3f + sideZ * 3.2f};
+        const DirectX::XMFLOAT3 startLookAt = {
+            playerPos.x, playerPos.y + 1.05f, playerPos.z};
+        const DirectX::XMFLOAT3 fallLookAt = {
+            playerPos.x + line.x * 0.42f,
+            playerPos.y + 0.46f - 0.16f * fall,
+            playerPos.z + line.y * 0.42f};
+        const float cutT = fall * fall * (3.0f - 2.0f * fall);
+        const DirectX::XMFLOAT3 desiredCameraPos =
+            Lerp(startCameraPos, fallCameraPos, cutT);
+        const DirectX::XMFLOAT3 desiredLookAt = Lerp(startLookAt, fallLookAt, cutT);
+        const float alpha = defeatSequenceTimer_ < 0.12f
+                                ? 1.0f
+                                : SaturatedAlpha(8.2f, ctx_->deltaTime);
+        lockOnOrbitCameraPos_ =
+            Lerp(lockOnOrbitCameraPos_, desiredCameraPos, alpha);
+        lockOnLookAt_ = Lerp(lockOnLookAt_, desiredLookAt, alpha);
+        targetFovDeg_ = 58.0f + 8.0f * ratio;
+        currentFovDeg_ +=
+            (targetFovDeg_ - currentFovDeg_) *
+            SaturatedAlpha(5.8f, ctx_->deltaTime);
+        camera_.SetPerspectiveFovDeg(currentFovDeg_);
+        camera_.SetPosition(lockOnOrbitCameraPos_);
+        camera_.LookAt(lockOnLookAt_);
+        return;
+    }
 
     // 謨�E�陦悟虚迥�E�諷九ｒ蜿門�E�・
     const ActionKind enemyActionKind = enemy_.GetActionKind();

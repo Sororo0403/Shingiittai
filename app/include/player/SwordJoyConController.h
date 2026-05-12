@@ -16,6 +16,7 @@ class SwordJoyConController {
     bool GetCounter() const { return state_.isCounter; }
     const DirectX::XMFLOAT4 &GetOrientation() { return state_.orientation; }
     SwordPose GetPose() const;
+    void ResetTracking(JoyCon *joyCon);
 
     void SetCounter(bool isCounter) { state_.isCounter = isCounter; }
 

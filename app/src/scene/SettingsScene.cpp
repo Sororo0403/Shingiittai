@@ -126,11 +126,11 @@ void SettingsScene::UpdateInput(Input *input) {
     }
 
     if ((selectedIndex_ == 1 &&
-         (input->IsKeyTrigger(DIK_RETURN) ||
-          input->IsKeyTrigger(DIK_SPACE) ||
+        (input->IsKeyTrigger(DIK_RETURN) ||
+         input->IsKeyTrigger(DIK_SPACE) ||
           (input->IsGamepadConnected() &&
            input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_A)))) ||
-        input->IsKeyTrigger(DIK_ESCAPE) ||
+        input->IsKeyTrigger(DIK_TAB) ||
         (input->IsGamepadConnected() &&
          input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_B))) {
         ReturnToModeSelect();

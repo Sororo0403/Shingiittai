@@ -121,4 +121,5 @@ class TextureManager {
     std::vector<Entry> textures_;
     std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> uploadBuffers_;
     std::unordered_map<std::wstring, uint32_t> filePathToTextureId_;
+    std::unordered_map<std::wstring, uint32_t> generatedTextureToId_;
 };

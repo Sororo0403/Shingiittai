@@ -2,10 +2,10 @@
 #include "DirectXCommon.h"
 #include "GameScene.h"
 #include "Input.h"
-#include "ModeSelectScene.h"
 #include "PostEffectRenderer.h"
 #include "SceneManager.h"
 #include "SpriteManager.h"
+#include "TitleScene.h"
 #include "TextureManager.h"
 #include "WinApp.h"
 #include <Xinput.h>
@@ -93,11 +93,11 @@ void BattleResultScene::Update() {
     }
 
     const bool menu =
-        input->IsKeyTrigger(DIK_ESCAPE) ||
+        input->IsKeyTrigger(DIK_TAB) ||
         (input->IsGamepadConnected() &&
          input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_B));
     if (menu) {
-        sceneManager_->ChangeScene(std::make_unique<ModeSelectScene>());
+        sceneManager_->ChangeScene(std::make_unique<TitleScene>());
     }
 }
 

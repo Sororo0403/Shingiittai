@@ -6,8 +6,8 @@
 using namespace DirectX;
 
 namespace {
-constexpr float kMouseSwordOrientationScale = 0.018f;
-constexpr float kMouseSwordMaxAngle = 1.05f;
+constexpr float kMouseSwordOrientationScale = 0.0065f;
+constexpr float kMouseSwordMaxAngle = 1.18f;
 constexpr float kMouseSlashMinDeltaSq = 6.0f * 6.0f;
 }
 
@@ -27,34 +27,24 @@ void SwordMouseController::Update(Input *input, float dt,
 }
 
 bool SwordMouseController::IsActive(Input *input) {
-    return input->IsMousePress(0);
+    (void)input;
+    return true;
 }
 
 void SwordMouseController::UpdateOrientation(Input *input, float dt) {
-    if (!input->IsMousePress(0)) {
+    (void)dt;
+    if (input->IsMouseTrigger(0)) {
         yaw_ = 0.0f;
         pitch_ = 0.0f;
-        state_.orientation = {0.0f, 0.0f, 0.0f, 1.0f};
-        mouseSpeed_ = 0.0f;
-        mouseDelta_ = {};
-        return;
     }
 
     const float dx = static_cast<float>(input->GetMouseDX());
     const float dy = static_cast<float>(input->GetMouseDY());
 
-    const float deltaLenSq = dx * dx + dy * dy;
-    if (deltaLenSq < kMouseSlashMinDeltaSq) {
-        yaw_ = 0.0f;
-        pitch_ = 0.0f;
-    } else {
-        yaw_ =
-            std::clamp(dx * kMouseSwordOrientationScale, -kMouseSwordMaxAngle,
-                       kMouseSwordMaxAngle);
-        pitch_ =
-            std::clamp(dy * kMouseSwordOrientationScale, -kMouseSwordMaxAngle,
-                       kMouseSwordMaxAngle);
-    }
+    yaw_ = std::clamp(yaw_ + dx * kMouseSwordOrientationScale,
+                      -kMouseSwordMaxAngle, kMouseSwordMaxAngle);
+    pitch_ = std::clamp(pitch_ + dy * kMouseSwordOrientationScale,
+                        -kMouseSwordMaxAngle, kMouseSwordMaxAngle);
 
     XMVECTOR qYaw = XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), yaw_);
     XMVECTOR qPitch =
@@ -73,14 +63,6 @@ void SwordMouseController::UpdateGuard(Input *input) {
 }
 
 void SwordMouseController::UpdateSlash(Input *input, float dt) {
-    if (!input->IsMousePress(0)) {
-        state_.isSlashMode = false;
-        state_.slashTimer = 0.0f;
-        mouseDelta_ = {};
-        mouseSpeed_ = 0.0f;
-        return;
-    }
-
     const float dx = static_cast<float>(input->GetMouseDX());
     const float dy = static_cast<float>(input->GetMouseDY());
     mouseDelta_ = {dx, dy};

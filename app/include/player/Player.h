@@ -37,6 +37,7 @@ class Player {
                 const DirectX::XMFLOAT3 &lookTarget, float cameraYaw,
                 bool forceRangedReflectMove = false,
                 float controlDeltaTime = -1.0f);
+    void UpdateJoyConCalibrationInput(Input *input, float deltaTime);
 
     void Draw(ModelManager *modelManager, const Camera &camera,
               bool drawBody = true);
@@ -107,6 +108,7 @@ class Player {
     }
     void NotifyCounterSuccess();
     void NotifyCounterSuccess(size_t swordIndex);
+    void SetDefeatPoseRatio(float ratio) { defeatPoseRatio_ = ratio; }
     bool UsesGamepadCameraLook() const {
         return gamepadControlMode_ == PlayerGamepadControlMode::Hunter;
     }
@@ -239,6 +241,7 @@ class Player {
     float greatSwordSwingTimer_ = 0.0f;
     float greatSwordSwingDamage_ = 18.0f;
     bool greatSwordFullChargeCounterReady_ = false;
+    float defeatPoseRatio_ = 0.0f;
     static constexpr float kGreatSwordMinSwingCharge = 0.32f;
     static constexpr float kGreatSwordChargeRate = 0.55f;
     static constexpr float kGreatSwordSwingDuration = 0.32f;
