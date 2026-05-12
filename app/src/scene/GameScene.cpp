@@ -211,6 +211,15 @@ void GameScene::Initialize(const SceneContext &ctx) {
     smokeParticles_.Initialize(dx, ctx_->srv, texture, particleTextureId_, 1536);
     smokeParticles_.SetEmission(1, 1000.0f);
     smokeParticles_.SetEmitterRadius(0.40f);
+
+    swordFlashParticles_.Initialize(dx, ctx_->srv, texture, particleTextureId_,
+                                    512);
+    swordFlashParticles_.SetEmission(1, 1000.0f);
+    swordFlashParticles_.SetEmitterRadius(0.06f);
+
+    swordTrailRenderer_.Initialize(dx);
+    swordTrailRenderer_.Reset();
+    prevSwordSlashStates_.fill(false);
     dx->EndUpload();
 
     texture->ReleaseUploadBuffers();
@@ -278,6 +287,7 @@ void GameScene::Update() {
 
     player_.Update(input, playerDeltaTime, enemy_.GetTransform().position,
                    cameraYaw_);
+    UpdateSwordVfx(baseDeltaTime);
     sceneLightTime_ += baseDeltaTime;
 
     enemy_.Update(BuildPlayerCombatObservation(), enemyDeltaTime);
@@ -296,6 +306,7 @@ void GameScene::Update() {
     sparkParticles_.Update(baseDeltaTime);
     explosionParticles_.Update(baseDeltaTime);
     smokeParticles_.Update(baseDeltaTime);
+    swordFlashParticles_.Update(baseDeltaTime);
 }
 
 void GameScene::Draw() {
@@ -308,10 +319,12 @@ void GameScene::Draw() {
         collisionDebugRenderer_.Draw(collisionManager_, camera_);
     }
     ctx_->model->PostDraw();
+    swordTrailRenderer_.Draw(camera_);
 
     sparkParticles_.Draw(camera_);
     explosionParticles_.Draw(camera_);
     smokeParticles_.Draw(camera_);
+    swordFlashParticles_.Draw(camera_);
 }
 
 void GameScene::DispatchCombatFeedback(const CombatFeedbackEvent &event) {
@@ -383,6 +396,100 @@ void GameScene::EmitCombatParticles(const CombatFeedbackEvent &event) {
                                   {0.38f, 0.34f, 0.31f, 1.0f}, direction, 0.66f);
         break;
     }
+}
+
+void GameScene::UpdateSwordVfx(float deltaTime) {
+    swordTrailRenderer_.Update(player_, deltaTime);
+
+    const auto swords = player_.GetSwords();
+    const auto slashStates = player_.GetSwordSlashStates();
+
+    bool hasStart = false;
+    DirectX::XMFLOAT3 flashPos{0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT3 flashDir{0.0f, 0.0f, 0.0f};
+    uint32_t flashCount = 0;
+    float flashRadius = 0.07f;
+    float flashSpeed = 1.8f;
+    DirectX::XMFLOAT4 flashColor{1.0f, 0.42f, 0.16f, 1.0f};
+
+    for (size_t i = 0; i < Player::kSwordCount; ++i) {
+        const bool isSlashing = slashStates[i];
+        const bool justStarted = isSlashing && !prevSwordSlashStates_[i];
+
+        if (justStarted && swords[i]) {
+            const DirectX::XMFLOAT3 root = swords[i]->GetBladeRootWorld();
+            const DirectX::XMFLOAT3 tip = swords[i]->GetBladeTipWorld();
+
+            DirectX::XMVECTOR rootV = DirectX::XMLoadFloat3(&root);
+            DirectX::XMVECTOR tipV = DirectX::XMLoadFloat3(&tip);
+            DirectX::XMVECTOR centerV = (rootV + tipV) * 0.5f;
+
+            DirectX::XMVECTOR dirV = tipV - rootV;
+            const float dirLenSq =
+                DirectX::XMVectorGetX(DirectX::XMVector3LengthSq(dirV));
+            if (dirLenSq > 0.0001f) {
+                dirV = DirectX::XMVector3Normalize(dirV);
+            } else {
+                dirV = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+            }
+
+            DirectX::XMFLOAT3 center{};
+            DirectX::XMFLOAT3 dir{};
+            DirectX::XMStoreFloat3(&center, centerV);
+            DirectX::XMStoreFloat3(&dir, dirV);
+
+            flashPos.x += center.x;
+            flashPos.y += center.y;
+            flashPos.z += center.z;
+
+            flashDir.x += dir.x;
+            flashDir.y += dir.y;
+            flashDir.z += dir.z;
+
+            hasStart = true;
+            flashCount += 36;
+        }
+
+        prevSwordSlashStates_[i] = isSlashing;
+    }
+
+    if (!hasStart) {
+        return;
+    }
+
+    const PlayerWeaponType weaponType = player_.GetWeaponType();
+    if (weaponType == PlayerWeaponType::Dual) {
+        flashCount += 12;
+        flashRadius = 0.055f;
+        flashSpeed = 1.65f;
+        flashColor = {0.72f, 0.20f, 1.0f, 1.0f};
+    } else if (weaponType == PlayerWeaponType::GreatSword) {
+        flashCount += 42;
+        flashRadius = 0.11f;
+        flashSpeed = 2.35f;
+        flashColor = {1.0f, 0.24f, 0.08f, 1.0f};
+    }
+
+    const float invCount =
+        1.0f / static_cast<float>(std::max<uint32_t>(1, flashCount / 36));
+    flashPos.x *= invCount;
+    flashPos.y *= invCount;
+    flashPos.z *= invCount;
+
+    DirectX::XMVECTOR dirV =
+        DirectX::XMVectorSet(flashDir.x, flashDir.y, flashDir.z, 0.0f);
+    const float dirLenSq =
+        DirectX::XMVectorGetX(DirectX::XMVector3LengthSq(dirV));
+    if (dirLenSq > 0.0001f) {
+        dirV = DirectX::XMVector3Normalize(dirV);
+    } else {
+        dirV = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+    }
+    DirectX::XMStoreFloat3(&flashDir, dirV);
+
+    swordFlashParticles_.EmitBurst(flashPos, flashCount, flashRadius,
+                                   GPUParticleSystem::BurstStyle::Sparks,
+                                   flashColor, flashDir, flashSpeed);
 }
 
 void GameScene::DrawOverlay() { hud_.Draw(*ctx_); }

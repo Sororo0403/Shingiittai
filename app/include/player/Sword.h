@@ -22,6 +22,12 @@ class Sword {
     OBB GetOBB() const;
     OBB GetCounterOBB() const;
 
+    DirectX::XMFLOAT3 GetBladeRootWorld() const;
+    DirectX::XMFLOAT3 GetBladeTipWorld() const;
+    DirectX::XMFLOAT3 GetBladeCenterWorld() const;
+    DirectX::XMFLOAT3 GetVisualBladeRootWorld() const;
+    DirectX::XMFLOAT3 GetVisualBladeTipWorld() const;
+
     bool IsSlashMode() const { return isSlashMode_; }
     bool IsGuard() const { return isGuard_; }
     bool CanSlashCounter() const { return isSlashMode_ && !isGuard_; }
@@ -37,6 +43,7 @@ class Sword {
     void NotifyCounterSuccess();
 
   private:
+    Transform BuildVisualTransform() const;
     void UpdateSlashFollowThrough(float deltaTime);
     void ApplySlashFollowThrough(Transform &drawTransform) const;
     void UpdateCounterObservation(float deltaTime);

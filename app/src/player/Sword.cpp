@@ -19,6 +19,19 @@ constexpr float kSlashFollowThroughMaxSurge = 0.26f;
 constexpr float kSlashFollowThroughMaxStretch = 0.14f;
 constexpr float kSlashFollowThroughMinDirLengthSq = 0.01f;
 constexpr float kSlashFollowThroughMinAngle = 0.001f;
+
+XMFLOAT3 GetBladePointWorld(const Transform &tf, float forwardDistance) {
+    XMVECTOR pos = XMLoadFloat3(&tf.position);
+    XMVECTOR rot = XMLoadFloat4(&tf.rotation);
+    rot = XMQuaternionNormalize(rot);
+
+    XMVECTOR forward = XMVector3Rotate(XMVectorSet(0, 0, 1, 0), rot);
+    XMVECTOR point = pos + forward * forwardDistance;
+
+    XMFLOAT3 result{};
+    XMStoreFloat3(&result, point);
+    return result;
+}
 }
 
 void Sword::Initialize(uint32_t modelId) {
@@ -101,7 +114,61 @@ OBB Sword::GetCounterOBB() const {
     return box;
 }
 
-void Sword::Draw(ModelManager *modelManager, const Camera &camera) {
+DirectX::XMFLOAT3 Sword::GetBladeRootWorld() const {
+    DirectX::XMVECTOR pos = DirectX::XMLoadFloat3(&tf_.position);
+    DirectX::XMVECTOR rot = DirectX::XMLoadFloat4(&tf_.rotation);
+    rot = DirectX::XMQuaternionNormalize(rot);
+
+    DirectX::XMVECTOR forward =
+        DirectX::XMVector3Rotate(DirectX::XMVectorSet(0, 0, 1, 0), rot);
+
+    // 根元をそのまま使うと扇形が大きくなりすぎるため、
+    // 少し剣先側に寄せる
+    DirectX::XMVECTOR root = pos + forward * 0.25f;
+
+    DirectX::XMFLOAT3 result{};
+    DirectX::XMStoreFloat3(&result, root);
+    return result;
+}
+
+DirectX::XMFLOAT3 Sword::GetBladeTipWorld() const {
+    DirectX::XMVECTOR pos = DirectX::XMLoadFloat3(&tf_.position);
+    DirectX::XMVECTOR rot = DirectX::XMLoadFloat4(&tf_.rotation);
+    rot = DirectX::XMQuaternionNormalize(rot);
+
+    DirectX::XMVECTOR forward =
+        DirectX::XMVector3Rotate(DirectX::XMVectorSet(0, 0, 1, 0), rot);
+
+    // 以前の 1.75f は長すぎる可能性が高い。
+    // まずは見た目確認用に短めへ。
+    DirectX::XMVECTOR tip = pos + forward * 1.05f;
+
+    DirectX::XMFLOAT3 result{};
+    DirectX::XMStoreFloat3(&result, tip);
+    return result;
+}
+
+DirectX::XMFLOAT3 Sword::GetBladeCenterWorld() const {
+    const XMFLOAT3 rootPos = GetBladeRootWorld();
+    const XMFLOAT3 tipPos = GetBladeTipWorld();
+
+    XMVECTOR root = XMLoadFloat3(&rootPos);
+    XMVECTOR tip = XMLoadFloat3(&tipPos);
+
+    XMFLOAT3 result{};
+    XMStoreFloat3(&result, (root + tip) * 0.5f);
+    return result;
+}
+
+DirectX::XMFLOAT3 Sword::GetVisualBladeRootWorld() const {
+    return GetBladePointWorld(BuildVisualTransform(), 0.25f);
+}
+
+DirectX::XMFLOAT3 Sword::GetVisualBladeTipWorld() const {
+    return GetBladePointWorld(BuildVisualTransform(), 1.05f);
+}
+
+Transform Sword::BuildVisualTransform() const {
     Transform drawTransform = tf_;
     drawTransform.scale.x *= kSwordVisualScaleMultiplier;
     drawTransform.scale.y *= kSwordVisualScaleMultiplier;
@@ -115,6 +182,11 @@ void Sword::Draw(ModelManager *modelManager, const Camera &camera) {
         drawTransform.scale.z *= 1.0f + 0.12f * recoveryReaction_;
     }
     ApplySlashFollowThrough(drawTransform);
+    return drawTransform;
+}
+
+void Sword::Draw(ModelManager *modelManager, const Camera &camera) {
+    Transform drawTransform = BuildVisualTransform();
 
     if (const Model *model = modelManager->GetModel(modelId_)) {
         modelManager->GetRenderer()->Draw(*model, drawTransform, camera);

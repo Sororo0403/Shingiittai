@@ -138,6 +138,7 @@
     <ClCompile Include="src\scene\GameSceneHud.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
+    <ClCompile Include="src\player\SwordTrailRenderer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\enemy\EnemyActionData.h">
@@ -191,6 +192,7 @@
     <ClInclude Include="include\scene\GameSceneHud.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
+    <ClInclude Include="include\player\SwordTrailRenderer.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="resources\models\boss\boss.bin">

@@ -14,6 +14,8 @@
 #include <cstdint>
 #include <string>
 #include "GameSceneHud.h"
+#include "SwordTrailRenderer.h"
+#include <array>
 
 class GameScene : public BaseScene {
   public:
@@ -37,6 +39,7 @@ class GameScene : public BaseScene {
     void EmitCombatParticles(const CombatFeedbackEvent &event);
     PlayerCombatObservation BuildPlayerCombatObservation() const;
     float ComputeGameplayTimeScale() const;
+    void UpdateSwordVfx(float deltaTime);
 
   private:
     PlayerWeaponType selectedWeaponType_ = PlayerWeaponType::Standard;
@@ -52,6 +55,9 @@ class GameScene : public BaseScene {
     GPUParticleSystem sparkParticles_;
     GPUParticleSystem explosionParticles_;
     GPUParticleSystem smokeParticles_;
+    GPUParticleSystem swordFlashParticles_;
+    SwordTrailRenderer swordTrailRenderer_;
+    std::array<bool, Player::kSwordCount> prevSwordSlashStates_{};
     uint32_t particleTextureId_ = 0;
     uint32_t playerModelId_ = 0;
     uint32_t enemyModelId_ = 0;

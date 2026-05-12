@@ -409,6 +409,12 @@
     <FxCompile Include="$(SolutionDir)engine\resources\shaders\posteffect\PostEffectVS.hlsl">
       <Filter>resources\shaders\posteffect</Filter>
     </FxCompile>
+    <FxCompile Include="resources\shaders\swordtrail\SwordTrailPS.hlsl">
+      <Filter>resources\shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="resources\shaders\swordtrail\SwordTrailVS.hlsl">
+      <Filter>resources\shaders</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="$(SolutionDir)engine\resources\shaders\model\Model.hlsli">
