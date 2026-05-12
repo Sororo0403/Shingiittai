@@ -60,6 +60,9 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\scene\BattleResultScene.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
     <ClCompile Include="src\enemy\EnemyMelee.cpp">
       <Filter>Source Files\enemy</Filter>
     </ClCompile>
@@ -143,6 +146,9 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\scene\BattleResultScene.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
     <ClInclude Include="include\enemy\EnemyActionData.h">
       <Filter>Header Files\enemy</Filter>
     </ClInclude>

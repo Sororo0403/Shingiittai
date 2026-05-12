@@ -62,14 +62,21 @@ void Enemy::UpdateNovaByStep(float deltaTime) {
 }
 
 void Enemy::UpdateShotCharge(float deltaTime) {
+    if (!shotWarpedToArenaEdge_) {
+        WarpToShotArenaEdge();
+        shotWarpedToArenaEdge_ = true;
+    }
+
     UpdateFacingToPlayerWithSpeed(
         deltaTime,
-        chargeTurnSpeed_ * ChargeTurnScaleAfterStance(stateTimer_, 0.48f));
+        chargeTurnSpeed_ * ChargeTurnScaleAfterStance(stateTimer_, 0.22f));
 
     if (stateTimer_ >= config_.attacks.shot.chargeTime) {
         LockCurrentFacing();
         ChangeActionStep(ActionStep::Active);
-        shotsRemaining_ = 1;
+        shotsRemaining_ =
+            (std::max)(config_.attacks.shot.minCount,
+                       config_.attacks.shot.maxCount);
         shotIntervalTimer_ = config_.attacks.shot.interval;
     }
 }
@@ -95,36 +102,40 @@ void Enemy::UpdateShotRecovery(float deltaTime) {
     }
 }
 
+void Enemy::WarpToShotArenaEdge() {
+    bullets_.erase(std::remove_if(bullets_.begin(), bullets_.end(),
+                                  [](const EnemyBullet &bullet) {
+                                      return bullet.isAlive &&
+                                             !bullet.isReflected;
+                                  }),
+                   bullets_.end());
+
+    float dirX = tf_.position.x - playerPos_.x;
+    float dirZ = tf_.position.z - playerPos_.z;
+    float lengthSq = dirX * dirX + dirZ * dirZ;
+    if (lengthSq <= 0.0001f) {
+        dirX = std::sinf(facingYaw_);
+        dirZ = std::cosf(facingYaw_);
+        lengthSq = dirX * dirX + dirZ * dirZ;
+    }
+
+    const float invLength = 1.0f / std::sqrt(lengthSq);
+    dirX *= invLength;
+    dirZ *= invLength;
+    const float edgeRadius = arenaClampRadius_ * 0.95f;
+    tf_.position.x = dirX * edgeRadius;
+    tf_.position.z = dirZ * edgeRadius;
+    ClampToArena();
+    UpdateFacingToPlayerWithSpeed(1.0f, 999.0f);
+    LockCurrentFacing();
+    UpdateParts();
+}
+
 void Enemy::SpawnBullet() {
     EnemyBullet bullet{};
 
     DirectX::XMFLOAT3 target = playerPos_;
     const DirectX::XMFLOAT3 &shotHandPos = leftHandTf_.position;
-    const float toPlayerX = playerPos_.x - shotHandPos.x;
-    const float toPlayerY = playerPos_.y - shotHandPos.y;
-    const float toPlayerZ = playerPos_.z - shotHandPos.z;
-    const float distance =
-        std::sqrt(toPlayerX * toPlayerX + toPlayerY * toPlayerY +
-                  toPlayerZ * toPlayerZ);
-    const float safeBulletSpeed =
-        (std::max)(config_.attacks.shot.bulletSpeed, 0.001f);
-    float leadTime = (distance / safeBulletSpeed) * shotLeadTimeScale_;
-    if (phase_ == BossPhase::Phase2) {
-        leadTime += phase2ShotLeadBonus_;
-    }
-    leadTime = (std::clamp)(leadTime, 0.0f, 0.85f);
-
-    target.x += playerObs_.velocity.x * leadTime;
-    target.y += playerObs_.velocity.y * leadTime;
-    target.z += playerObs_.velocity.z * leadTime;
-
-    if (phase_ == BossPhase::Phase2) {
-        const int lane = (shotsRemaining_ % 3) - 1;
-        const float rightX = std::cos(facingYaw_);
-        const float rightZ = -std::sin(facingYaw_);
-        target.x += rightX * phase2ShotFanOffset_ * static_cast<float>(lane);
-        target.z += rightZ * phase2ShotFanOffset_ * static_cast<float>(lane);
-    }
 
     float dirX = target.x - shotHandPos.x;
     float dirY = target.y - shotHandPos.y;
@@ -140,6 +151,8 @@ void Enemy::SpawnBullet() {
 
     bullet.position = shotHandPos;
     bullet.position.y += config_.attacks.shot.spawnHeightOffset;
+    bullet.position.x += dirX * 0.65f;
+    bullet.position.z += dirZ * 0.65f;
     bullet.velocity = {dirX * config_.attacks.shot.bulletSpeed,
                        dirY * config_.attacks.shot.bulletSpeed,
                        dirZ * config_.attacks.shot.bulletSpeed};
@@ -373,6 +386,7 @@ void Enemy::ReflectBullet(size_t index, const DirectX::XMFLOAT3 &targetPos) {
                        dirY * config_.attacks.shot.bulletSpeed,
                        dirZ * config_.attacks.shot.bulletSpeed};
     bullet.isReflected = true;
+    bullet.lifeTime = (std::max)(bullet.lifeTime, 1.35f);
 }
 
 void Enemy::ConsumeWave(size_t index) {

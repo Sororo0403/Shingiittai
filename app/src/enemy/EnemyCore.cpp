@@ -248,6 +248,7 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     runtime_.novaSkyBulletsSpawned = false;
     runtime_.novaRingsSpawned = 0;
     runtime_.novaRingTimer = 0.0f;
+    shotWarpedToArenaEdge_ = false;
     ResetPreAttackPresentationState();
     ResetRecoveryBranchState();
 

@@ -34,7 +34,8 @@ class Player {
                     PlayerWeaponType weaponType = PlayerWeaponType::Standard);
 
     void Update(Input *input, float deltaTime,
-                const DirectX::XMFLOAT3 &lookTarget, float cameraYaw);
+                const DirectX::XMFLOAT3 &lookTarget, float cameraYaw,
+                bool forceRangedReflectMove = false);
 
     void Draw(ModelManager *modelManager, const Camera &camera,
               bool drawBody = true);
@@ -140,7 +141,8 @@ class Player {
     DirectX::XMFLOAT2 ReadMovementInput(Input *input) const;
     bool UsesJoyConAutoMovement() const;
     void UpdateMovement(Input *input, float deltaTime, float cameraYaw,
-                        const DirectX::XMFLOAT3 &lookTarget);
+                        const DirectX::XMFLOAT3 &lookTarget,
+                        bool forceRangedReflectMove);
     void KeepDistanceFromTarget(const DirectX::XMFLOAT3 &target);
     void LookAt(const DirectX::XMFLOAT3 &target);
     void UpdateWeaponRules(Input *input, SwordPose &leftPose,

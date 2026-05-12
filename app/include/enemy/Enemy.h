@@ -230,8 +230,8 @@ struct EnemyAttackSet {
                                 {1.12f, 0.78f, 0.05f, 0.20f, 0.36f}, 1.52f},
                                {0.38f, 0.78f}, 0.48f},
                               0.2f, 0.8f, 0.30f, 0.28f, 0.72f};
-    EnemyShotConfig shot = {{7.0f, 3.0f, {1.05f, 1.05f, 1.05f}},
-                            1.82f, 0.92f, 0.01f, 1, 1, 7.2f, 2.3f, 0.2f};
+    EnemyShotConfig shot = {{7.0f, 3.0f, {1.55f, 1.55f, 1.55f}},
+                            0.72f, 0.82f, 0.58f, 3, 3, 6.6f, 3.0f, 0.08f};
     EnemyWaveConfig wave = {{8.0f, 3.0f, {2.25f, 0.95f, 2.6f}},
                             1.76f, 0.92f, 5.2f, 8.0f, 1.5f, 0.0f};
     EnemyNovaConfig nova{};
@@ -305,6 +305,7 @@ struct EnemyRuntimeState {
     std::vector<EnemyBullet> bullets{};
     int shotsRemaining = 0;
     float shotIntervalTimer = 0.0f;
+    bool shotWarpedToArenaEdge = false;
 
     WarpContext warp{};
     ChainContext chain{};
@@ -388,6 +389,9 @@ class Enemy {
     bool NotifyCountered();
     bool NotifyCountered(float vulnerabilityDuration);
     void FinishCounterRecoil();
+    void ApplyVictoryDefeatPose(float ratio,
+                                const DirectX::XMFLOAT3 &startPosition,
+                                const DirectX::XMFLOAT3 &playerPosition);
 
     const Transform &GetTransform() const { return tf_; }
     bool IsAlive() const { return !runtime_.deathFinished; }
@@ -407,6 +411,8 @@ class Enemy {
     ActionStep GetActionStep() const { return runtime_.action.step; }
     float GetActionTimerForPresentation() const { return runtime_.stateTimer; }
     float GetReleaseAnticipationRatio() const;
+    float GetChargeWeakPointTimeLimitForPresentation() const;
+    float GetChargeWeakPointTimeRemainingForPresentation() const;
     float GetTelegraphYaw() const;
     bool IsNovaImpactPending() const;
     bool IsNovaImpactWindow() const;
@@ -533,6 +539,7 @@ class Enemy {
 
     int &shotsRemaining_ = runtime_.shotsRemaining;
     float &shotIntervalTimer_ = runtime_.shotIntervalTimer;
+    bool &shotWarpedToArenaEdge_ = runtime_.shotWarpedToArenaEdge;
 
     WarpContext &warp_ = runtime_.warp;
     ChainContext &chain_ = runtime_.chain;
@@ -780,6 +787,7 @@ class Enemy {
     void UpdateShotFire(float deltaTime);
     void UpdateShotRecovery(float deltaTime);
 
+    void WarpToShotArenaEdge();
     void SpawnBullet();
     void UpdateBullets(float deltaTime);
 

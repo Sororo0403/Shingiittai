@@ -52,6 +52,7 @@ void CombatFeedbackDirector::Reset() {
         postEffectRenderer_->SetRadialBlurSampleCount(14);
         postEffectRenderer_->SetRandomMode(PostEffectRenderer::RandomMode::None);
         postEffectRenderer_->SetRandomStrength(0.0f);
+        postEffectRenderer_->SetSceneDimStrength(0.0f);
         postEffectRenderer_->SetVignettingStrength(baseVignetteStrength_);
     }
 }
@@ -106,6 +107,7 @@ void CombatFeedbackDirector::Update(float deltaTime, float sceneTime) {
         postEffectRenderer_->SetRandomMode(PostEffectRenderer::RandomMode::None);
         postEffectRenderer_->SetRandomStrength(0.0f);
     }
+    postEffectRenderer_->SetSceneDimStrength(0.0f);
 }
 
 void CombatFeedbackDirector::PushEvent(const CombatFeedbackEvent &event) {

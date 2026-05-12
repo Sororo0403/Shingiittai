@@ -1,4 +1,5 @@
 #include "GameScene.h"
+#include "BattleResultScene.h"
 #include "DirectXCommon.h"
 #include "EnemyAnimationDebugScene.h"
 #include "Input.h"
@@ -377,14 +378,14 @@ void GameScene::Initialize(const SceneContext &ctx) {
     chargeWeakPointModelId_ = model->CreatePlane(
         0, MakeArenaMaterial({1.0f, 0.96f, 0.78f, 0.92f}, false, 0.02f,
                              0.20f));
-    sparkParticles_.Initialize(dx, ctx_->srv, texture, particleTextureId_, 4096);
+    sparkParticles_.Initialize(dx, ctx_->srv, texture, particleTextureId_, 8192);
     sparkParticles_.SetEmission(1, 1000.0f);
     sparkParticles_.SetEmitterRadius(0.08f);
     explosionParticles_.Initialize(dx, ctx_->srv, texture, particleTextureId_,
-                                   2048);
+                                   8192);
     explosionParticles_.SetEmission(1, 1000.0f);
     explosionParticles_.SetEmitterRadius(0.25f);
-    smokeParticles_.Initialize(dx, ctx_->srv, texture, particleTextureId_, 2048);
+    smokeParticles_.Initialize(dx, ctx_->srv, texture, particleTextureId_, 4096);
     smokeParticles_.SetEmission(1, 1000.0f);
     smokeParticles_.SetEmitterRadius(0.40f);
     dx->EndUpload();
@@ -445,11 +446,18 @@ void GameScene::Initialize(const SceneContext &ctx) {
 
     SyncEnemyAnimation();
     UpdateSceneLighting();
+    battleElapsedTime_ = 0.0f;
+    battleResultRequested_ = false;
+    victorySequenceActive_ = false;
+    victorySequenceTimer_ = 0.0f;
+    victoryClearTime_ = 0.0f;
     counterCinematicActive_ = false;
     counterCinematicTimer_ = 0.0f;
     enemyAnimationFrozen_ = false;
     chargeWeakPointActionKind_ = ActionKind::None;
+    failedChargeWeakPointActionKind_ = ActionKind::None;
     chargeWeakPointBroken_ = false;
+    chargeWeakPointFailedThisAction_ = false;
     chargeWeakPointSlashCount_ = 0;
     previousChargeWeakPointSlashStates_.fill(false);
     previousSwordSoundStates_.fill(false);
@@ -463,6 +471,9 @@ void GameScene::Update() {
         sceneManager_->ChangeScene(std::make_unique<EnemyAnimationDebugScene>());
         return;
     }
+    if (input->IsKeyTrigger(DIK_F8) && !battleResultRequested_) {
+        enemy_.TakeDamage(99999.0f);
+    }
 #endif
     if (input->IsKeyTrigger(DIK_F3)) {
         showCollisionDebug_ = !showCollisionDebug_;
@@ -472,19 +483,54 @@ void GameScene::Update() {
     }
 
     const float baseDeltaTime = ctx_->deltaTime;
+    if (victorySequenceActive_) {
+        sceneLightTime_ += baseDeltaTime;
+        combatFeedback_.Update(baseDeltaTime, sceneLightTime_);
+        UpdateVictorySequence(baseDeltaTime);
+        const float victoryPoseRatio = std::clamp(
+            (victorySequenceTimer_ - 0.78f) / 2.35f, 0.0f, 1.0f);
+        enemy_.ApplyVictoryDefeatPose(
+            victoryPoseRatio, victoryEnemyStartPos_,
+            player_.GetTransform().position);
+        UpdateBattleCamera();
+        camera_.UpdateMatrices();
+        ctx_->model->UpdateAnimation(playerModelId_, baseDeltaTime * 0.08f);
+        ctx_->model->UpdateAnimation(enemyModelId_, baseDeltaTime * 0.002f);
+        ApplyEnemyProceduralAnimation();
+        sparkParticles_.Update(baseDeltaTime);
+        explosionParticles_.Update(baseDeltaTime);
+        smokeParticles_.Update(baseDeltaTime);
+        return;
+    }
+
     combatFeedback_.Update(baseDeltaTime, sceneLightTime_);
+    UpdateChargeWeakPointFocus(baseDeltaTime);
     const float gameplayDeltaTime = baseDeltaTime * ComputeGameplayTimeScale();
+    const bool chargeFocusHoldingEnemyAttack =
+        chargeWeakPointFocusRatio_ > 0.001f && IsChargeWeakPointFocusActive();
     const float playerDeltaTime =
         counterCinematicActive_ ? baseDeltaTime : gameplayDeltaTime;
-    const float enemyDeltaTime = counterCinematicActive_
-                                     ? (baseDeltaTime * counterTimeScale_)
-                                     : gameplayDeltaTime;
+    const float enemyDeltaTime =
+        counterCinematicActive_
+            ? (baseDeltaTime * counterTimeScale_)
+            : (chargeFocusHoldingEnemyAttack ? baseDeltaTime
+                                             : gameplayDeltaTime);
     UpdateCamera(input);
 
     ctx_->model->UpdateAnimation(playerModelId_, playerDeltaTime);
 
+    bool forceRangedReflectMove =
+        enemy_.GetActionKind() == ActionKind::Shot &&
+        (enemy_.GetActionStep() == ActionStep::Charge ||
+         enemy_.GetActionStep() == ActionStep::Active);
+    for (const auto &bullet : enemy_.GetBullets()) {
+        if (bullet.isAlive && !bullet.isReflected) {
+            forceRangedReflectMove = true;
+            break;
+        }
+    }
     player_.Update(input, playerDeltaTime, enemy_.GetTransform().position,
-                   cameraYaw_);
+                   cameraYaw_, forceRangedReflectMove);
     if (soundsLoaded_ && ctx_->sound != nullptr) {
         const auto slashStates = player_.GetSwordSlashStates();
         for (size_t i = 0; i < slashStates.size(); ++i) {
@@ -496,6 +542,7 @@ void GameScene::Update() {
     }
     hud_.Update(*ctx_, player_.GetHP(), enemy_.GetHP());
     sceneLightTime_ += baseDeltaTime;
+    battleElapsedTime_ += baseDeltaTime;
 
     const ActionKind previousEnemyActionKind = enemy_.GetActionKind();
     const ActionStep previousEnemyActionStep = enemy_.GetActionStep();
@@ -548,6 +595,19 @@ void GameScene::Update() {
     camera_.UpdateMatrices();
 
     UpdateCombat(gameplayDeltaTime);
+    if (!battleResultRequested_) {
+        if (enemy_.GetHP() <= 0.0f) {
+            BeginVictorySequence();
+            return;
+        }
+        if (player_.GetHP() <= 0.0f) {
+            battleResultRequested_ = true;
+            sceneManager_->ChangeScene(std::make_unique<BattleResultScene>(
+                BattleResultScene::ResultKind::GameOver, battleElapsedTime_,
+                selectedWeaponType_));
+            return;
+        }
+    }
     if (counterCinematicActive_) {
         counterCinematicTimer_ -= baseDeltaTime;
         if (counterCinematicTimer_ <= 0.0f) {
@@ -567,7 +627,9 @@ void GameScene::Draw() {
 
     DrawArena();
     player_.Draw(ctx_->model, camera_, !playerViewCamera_);
-    enemy_.Draw(ctx_->model, camera_);
+    if (!(victorySequenceActive_ && victoryFinalExplosionEmitted_)) {
+        enemy_.Draw(ctx_->model, camera_);
+    }
     if (showCollisionDebug_) {
         collisionDebugRenderer_.Draw(collisionManager_, camera_);
     }
@@ -576,6 +638,7 @@ void GameScene::Draw() {
     smokeParticles_.Draw(camera_);
     sparkParticles_.Draw(camera_);
     explosionParticles_.Draw(camera_);
+    DrawVictoryFlash();
 }
 
 void GameScene::DispatchCombatFeedback(const CombatFeedbackEvent &event) {
@@ -653,15 +716,19 @@ void GameScene::EmitEnemyActionParticles(ActionKind kind, ActionStep step) {
         origin.z += forward.z * 1.10f;
         switch (kind) {
         case ActionKind::Smash:
+            sparkParticles_.EmitBurst(origin, 128, 1.18f,
+                                      GPUParticleSystem::BurstStyle::Sparks,
+                                      {1.0f, 0.96f, 0.58f, 1.0f}, forward,
+                                      4.8f);
             explosionParticles_.EmitBurst(
-                origin, 72, 0.92f, GPUParticleSystem::BurstStyle::Explosion,
-                {1.0f, 0.42f, 0.08f, 0.96f}, forward, 3.2f);
+                origin, 46, 0.72f, GPUParticleSystem::BurstStyle::Explosion,
+                {1.0f, 0.42f, 0.08f, 0.82f}, forward, 2.4f);
             break;
         case ActionKind::Sweep:
-            sparkParticles_.EmitBurst(origin, 96, 1.10f,
+            sparkParticles_.EmitBurst(origin, 144, 1.22f,
                                       GPUParticleSystem::BurstStyle::Sparks,
-                                      {0.18f, 0.88f, 1.0f, 0.96f}, forward,
-                                      3.4f);
+                                      {0.72f, 0.98f, 1.0f, 1.0f}, forward,
+                                      4.8f);
             break;
         case ActionKind::Shot:
             sparkParticles_.EmitBurst(origin, 76, 0.72f,
@@ -709,8 +776,7 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
     const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
     const bool chargeDirectionVisible =
         !chargeWeakPointBroken_ &&
-        (kind == ActionKind::Smash || kind == ActionKind::Sweep) &&
-        (actionStep == ActionStep::Charge || actionStep == ActionStep::Hold);
+        enemy_.GetChargeWeakPointTimeLimitForPresentation() > 0.0f;
 
     if (chargeDirectionVisible && enemyWeakPointParticleTimer_ <= 0.0f) {
         const size_t directionIndex = static_cast<size_t>(std::clamp(
@@ -738,7 +804,51 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
                                   GPUParticleSystem::BurstStyle::SlashLine,
                                   cueColor, {slashDir.x, slashDir.y, 0.0f},
                                   0.86f);
-        enemyWeakPointParticleTimer_ = 0.050f;
+            enemyWeakPointParticleTimer_ = 0.050f;
+    }
+
+    constexpr float kReleaseCounterWindowDuration = 0.36f;
+    const float releaseAnticipation = enemy_.GetReleaseAnticipationRatio();
+    const bool preReleaseCounterCueVisible =
+        !chargeDirectionVisible && actionStep != ActionStep::Active &&
+        releaseAnticipation > 0.0f;
+    const bool activeReleaseCounterCueVisible =
+        actionStep == ActionStep::Active &&
+        enemy_.GetActionTimerForPresentation() <=
+            kReleaseCounterWindowDuration;
+    const bool releaseCounterCueVisible =
+        !chargeWeakPointFailedThisAction_ &&
+        (kind == ActionKind::Smash || kind == ActionKind::Sweep) &&
+        (preReleaseCounterCueVisible || activeReleaseCounterCueVisible);
+    if (releaseCounterCueVisible && enemyCueParticleTimer_ <= 0.0f) {
+        const float yaw = enemy_.GetTelegraphYaw();
+        const XMFLOAT3 forward = {std::sinf(yaw), 0.12f, std::cosf(yaw)};
+        XMFLOAT3 cuePos = enemyPos;
+        cuePos.x += forward.x * 1.18f;
+        cuePos.y += 1.28f;
+        cuePos.z += forward.z * 1.18f;
+        const XMFLOAT4 cueColor =
+            kind == ActionKind::Smash ? XMFLOAT4{1.0f, 0.90f, 0.30f, 0.88f}
+                                      : XMFLOAT4{0.46f, 0.96f, 1.0f, 0.88f};
+        const float cuePower =
+            activeReleaseCounterCueVisible
+                ? 1.0f
+                : std::clamp(0.64f + releaseAnticipation * 0.28f, 0.64f,
+                             0.92f);
+        sparkParticles_.EmitBurst(cuePos, activeReleaseCounterCueVisible ? 112 : 76,
+                                  0.90f * cuePower,
+                                  GPUParticleSystem::BurstStyle::Sparks,
+                                  cueColor, forward, 4.15f * cuePower);
+        const XMFLOAT4 flashColor =
+            kind == ActionKind::Smash ? XMFLOAT4{1.0f, 0.82f, 0.22f, 0.78f}
+                                      : XMFLOAT4{0.34f, 0.92f, 1.0f, 0.78f};
+        smokeParticles_.EmitBurst(cuePos,
+                                  activeReleaseCounterCueVisible ? 7 : 4,
+                                  activeReleaseCounterCueVisible ? 0.82f
+                                                                 : 0.62f,
+                                  GPUParticleSystem::BurstStyle::Flash,
+                                  flashColor, forward, 0.58f);
+        enemyCueParticleTimer_ = 0.070f;
     }
 
     if (enemySwordParticleTimer_ > 0.0f || ctx_->model == nullptr) {
@@ -780,9 +890,217 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
     }
 }
 
+bool GameScene::IsChargeWeakPointFocusActive() const {
+    return !chargeWeakPointBroken_ &&
+           enemy_.GetChargeWeakPointTimeLimitForPresentation() > 0.0f;
+}
+
+void GameScene::UpdateChargeWeakPointFocus(float deltaTime) {
+    const float target = IsChargeWeakPointFocusActive() ? 1.0f : 0.0f;
+    const float speed = target > chargeWeakPointFocusRatio_
+                            ? chargeWeakPointFocusInSpeed_
+                            : chargeWeakPointFocusOutSpeed_;
+    const float alpha = std::clamp(speed * deltaTime, 0.0f, 1.0f);
+    chargeWeakPointFocusRatio_ +=
+        (target - chargeWeakPointFocusRatio_) * alpha;
+
+    if (ctx_ == nullptr || ctx_->postEffectRenderer == nullptr) {
+        return;
+    }
+
+    const float focus = chargeWeakPointFocusRatio_;
+    if (focus <= 0.001f) {
+        ctx_->postEffectRenderer->SetSceneDimStrength(0.0f);
+        return;
+    }
+
+    ctx_->postEffectRenderer->SetRadialBlurCenter(0.5f, 0.48f);
+    ctx_->postEffectRenderer->SetRadialBlurSampleCount(20);
+    ctx_->postEffectRenderer->SetRadialBlurStrength(0.030f * focus);
+    ctx_->postEffectRenderer->SetVignettingStrength(0.20f + 0.72f * focus);
+    ctx_->postEffectRenderer->SetSceneDimStrength(0.42f * focus);
+}
+
 void GameScene::DrawOverlay() {
     hud_.Draw(*ctx_);
+    DrawChargeWeakPointTimeGauge();
     DrawJoyConTutorial();
+}
+
+void GameScene::BeginVictorySequence() {
+    battleResultRequested_ = true;
+    victorySequenceActive_ = true;
+    victorySequenceTimer_ = 0.0f;
+    victoryClearTime_ = battleElapsedTime_;
+    victoryFinalExplosionEmitted_ = false;
+    victoryEnemyStartPos_ = enemy_.GetTransform().position;
+    counterCinematicActive_ = false;
+    SetEnemyAnimationFrozen(false);
+
+    if (ctx_ != nullptr && ctx_->postEffectRenderer != nullptr) {
+        ctx_->postEffectRenderer->SetVignettingEnabled(true);
+        ctx_->postEffectRenderer->SetVignettingStrength(0.58f);
+        ctx_->postEffectRenderer->SetRadialBlurCenter(0.5f, 0.48f);
+        ctx_->postEffectRenderer->SetRadialBlurSampleCount(24);
+        ctx_->postEffectRenderer->SetRadialBlurStrength(0.055f);
+        ctx_->postEffectRenderer->SetSceneDimStrength(0.10f);
+    }
+
+    const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
+    sparkParticles_.EmitBurst(
+        {enemyPos.x, enemyPos.y + 1.45f, enemyPos.z}, 220, 1.85f,
+        GPUParticleSystem::BurstStyle::Flash, {1.0f, 0.96f, 0.82f, 0.95f},
+        {0.0f, 1.0f, 0.0f}, 0.72f);
+    explosionParticles_.EmitBurst(
+        {enemyPos.x, enemyPos.y + 1.25f, enemyPos.z}, 96, 1.35f,
+        GPUParticleSystem::BurstStyle::Explosion,
+        {1.0f, 0.84f, 0.32f, 0.72f}, {0.0f, 1.0f, 0.0f}, 1.15f);
+}
+
+void GameScene::UpdateVictorySequence(float deltaTime) {
+    victorySequenceTimer_ += deltaTime;
+    const float ratio =
+        std::clamp(victorySequenceTimer_ / victorySequenceDuration_, 0.0f,
+                   1.0f);
+
+    if (ctx_ != nullptr && ctx_->postEffectRenderer != nullptr) {
+        const float stepped = std::floor(ratio * 14.0f) / 14.0f;
+        const float blur = (1.0f - stepped) * 0.070f;
+        ctx_->postEffectRenderer->SetRadialBlurStrength(blur);
+        ctx_->postEffectRenderer->SetSceneDimStrength(0.10f + stepped * 0.18f);
+    }
+
+    if (!victoryFinalExplosionEmitted_ && victorySequenceTimer_ >= 3.90f) {
+        victoryFinalExplosionEmitted_ = true;
+        const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
+        explosionParticles_.EmitBurst(
+            {enemyPos.x, enemyPos.y + 1.05f, enemyPos.z}, 3200, 8.40f,
+            GPUParticleSystem::BurstStyle::Explosion,
+            {1.0f, 0.64f, 0.08f, 1.0f}, {0.0f, 1.0f, 0.0f}, 5.80f);
+        sparkParticles_.EmitBurst(
+            {enemyPos.x, enemyPos.y + 1.22f, enemyPos.z}, 3600, 9.20f,
+            GPUParticleSystem::BurstStyle::Sparks,
+            {1.0f, 0.98f, 0.58f, 1.0f}, {0.0f, 1.0f, 0.0f}, 12.4f);
+        smokeParticles_.EmitBurst(
+            {enemyPos.x, enemyPos.y + 1.12f, enemyPos.z}, 680, 6.80f,
+            GPUParticleSystem::BurstStyle::Flash,
+            {1.0f, 0.94f, 0.70f, 1.0f}, {0.0f, 1.0f, 0.0f}, 1.55f);
+    }
+
+    if (victorySequenceTimer_ >= victorySequenceDuration_) {
+        victorySequenceActive_ = false;
+        if (ctx_ != nullptr && ctx_->postEffectRenderer != nullptr) {
+            ctx_->postEffectRenderer->SetRadialBlurStrength(0.0f);
+            ctx_->postEffectRenderer->SetSceneDimStrength(0.0f);
+        }
+        sceneManager_->ChangeScene(std::make_unique<BattleResultScene>(
+            BattleResultScene::ResultKind::Clear, victoryClearTime_,
+            selectedWeaponType_));
+    }
+}
+
+void GameScene::DrawVictoryFlash() {
+    if (!victorySequenceActive_ || ctx_ == nullptr || ctx_->sprite == nullptr ||
+        ctx_->winApp == nullptr) {
+        return;
+    }
+
+    const float introPulse =
+        victorySequenceTimer_ < 0.82f
+            ? 0.56f + 0.44f * std::sin(victorySequenceTimer_ * 12.0f)
+            : 0.0f;
+    const float earlyFlash =
+        (std::max)(0.0f, 1.0f - victorySequenceTimer_ / 0.88f);
+    const auto flashPulse = [&](float center, float width, float peak) {
+        return (std::max)(
+            0.0f, (1.0f - std::fabs(victorySequenceTimer_ - center) / width) *
+                      peak);
+    };
+    const float fallFlash =
+        (std::max)(flashPulse(1.35f, 0.20f, 0.70f),
+                   flashPulse(2.25f, 0.22f, 0.80f));
+    const float preExplosionFlash = flashPulse(3.58f, 0.42f, 1.0f);
+    const float blink =
+        (std::max)(introPulse * introPulse,
+                   (std::max)(fallFlash, preExplosionFlash));
+    const float finalFlash =
+        victoryFinalExplosionEmitted_
+            ? (std::max)(
+                  0.0f,
+                  1.0f - (victorySequenceTimer_ - 3.90f) / 0.52f)
+            : 0.0f;
+    const float alpha =
+        std::clamp((std::max)(earlyFlash, (std::max)(blink, finalFlash)),
+                   0.0f, 1.0f);
+    if (alpha <= 0.01f) {
+        return;
+    }
+
+    Sprite flash{};
+    flash.textureId = 0;
+    flash.position = {0.0f, 0.0f};
+    flash.size = {static_cast<float>(ctx_->winApp->GetWidth()),
+                  static_cast<float>(ctx_->winApp->GetHeight())};
+    flash.color = {1.0f, 1.0f, 1.0f, alpha};
+
+    ctx_->sprite->PreDraw();
+    ctx_->sprite->DrawSprite(flash);
+    ctx_->sprite->PostDraw();
+}
+
+void GameScene::DrawChargeWeakPointTimeGauge() {
+#ifndef IMGUI_DISABLED
+    const float limit = enemy_.GetChargeWeakPointTimeLimitForPresentation();
+    if (limit <= 0.0001f || chargeWeakPointBroken_) {
+        return;
+    }
+
+    const float remaining =
+        enemy_.GetChargeWeakPointTimeRemainingForPresentation();
+    const float ratio = std::clamp(remaining / limit, 0.0f, 1.0f);
+    const float focus = std::clamp(chargeWeakPointFocusRatio_, 0.0f, 1.0f);
+    const float alpha = std::clamp(0.16f + focus * 0.34f, 0.0f, 0.50f);
+
+    const float screenW = static_cast<float>(ctx_->winApp->GetWidth());
+    const float screenH = static_cast<float>(ctx_->winApp->GetHeight());
+    const ImVec2 center(screenW * 0.5f, screenH * 0.47f);
+    const float radius = std::clamp(screenH * 0.34f, 190.0f, 290.0f);
+    const float thickness = std::clamp(radius * 0.075f, 14.0f, 22.0f);
+
+    ImDrawList *drawList = ImGui::GetForegroundDrawList();
+    drawList->AddCircleFilled(
+        center, radius + thickness * 0.72f,
+        ImGui::GetColorU32(ImVec4(0.0f, 0.0f, 0.0f, 0.08f * alpha)), 96);
+    drawList->AddCircle(
+        center, radius + thickness * 0.40f,
+        ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 0.14f * alpha)), 96,
+        2.0f);
+    drawList->AddCircle(
+        center, radius,
+        ImGui::GetColorU32(ImVec4(0.06f, 0.07f, 0.08f, 0.28f * alpha)), 96,
+        thickness);
+
+    constexpr int kSegments = 96;
+    const int litSegments =
+        static_cast<int>(std::ceil(static_cast<float>(kSegments) * ratio));
+    const ImU32 progressColor =
+        ratio < 0.28f
+            ? ImGui::GetColorU32(ImVec4(1.0f, 0.18f, 0.08f, 0.62f * alpha))
+            : ImGui::GetColorU32(ImVec4(0.20f, 0.92f, 1.0f, 0.58f * alpha));
+    const float startAngle = -kPi * 0.5f;
+    const float elapsedAngle = (1.0f - ratio) * kPi * 2.0f;
+    const float progressStartAngle = startAngle + elapsedAngle;
+    ImVec2 prev(center.x + std::cos(progressStartAngle) * radius,
+                center.y + std::sin(progressStartAngle) * radius);
+    for (int i = 1; i <= litSegments; ++i) {
+        const float t = static_cast<float>(i) / static_cast<float>(kSegments);
+        const float angle = progressStartAngle + kPi * 2.0f * t;
+        const ImVec2 current(center.x + std::cos(angle) * radius,
+                             center.y + std::sin(angle) * radius);
+        drawList->AddLine(prev, current, progressColor, thickness);
+        prev = current;
+    }
+#endif
 }
 
 void GameScene::DrawJoyConTutorial() {

@@ -16,6 +16,7 @@ constexpr CollisionManager::LayerMask kLayerEnemyAttack = 1u << 3;
 constexpr CollisionManager::LayerMask kLayerPlayerCounter = 1u << 4;
 constexpr CollisionManager::LayerMask kLayerEnemyProjectile = 1u << 5;
 constexpr CollisionManager::LayerMask kLayerReflectedProjectile = 1u << 6;
+constexpr float kReleaseCounterWindowDuration = 0.36f;
 
 CollisionManager::BodyId AddCollisionBody(
     CollisionManager &collisionManager, const OBB &box,
@@ -61,11 +62,12 @@ static bool IsNearXZ(const XMFLOAT3 &a, const XMFLOAT3 &b, float radius) {
 
 static bool IsChargeWeakPointWindow(ActionKind kind, ActionId id,
                                     ActionStep step) {
-    (void)id;
     if (!(kind == ActionKind::Smash || kind == ActionKind::Sweep)) {
         return false;
     }
-    return step == ActionStep::Charge || step == ActionStep::Hold;
+    return step == ActionStep::Hold ||
+           (kind == ActionKind::Smash && id == ActionId::DelaySmash &&
+            step == ActionStep::Charge);
 }
 
 static bool IsReadableChargeWeakPointHit(const OBB &swordHitBox,
@@ -133,7 +135,7 @@ static XMFLOAT2 MakeRandomChargeWeakPointDirection(
 
 static bool IsSlashAlongDirection(const Sword &sword,
                                   const XMFLOAT2 &requiredDirection,
-                                  float minAbsDot = 0.72f) {
+                                  float minAbsDot = 0.50f) {
     if (!sword.CanSlashCounter()) {
         return false;
     }
@@ -142,7 +144,7 @@ static bool IsSlashAlongDirection(const Sword &sword,
     float slashLenSq = slashDir.x * slashDir.x + slashDir.y * slashDir.y;
     float requiredLenSq = requiredDirection.x * requiredDirection.x +
                           requiredDirection.y * requiredDirection.y;
-    if (slashLenSq < 0.01f || requiredLenSq < 0.01f) {
+    if (slashLenSq < 0.0025f || requiredLenSq < 0.01f) {
         return false;
     }
 
@@ -311,10 +313,19 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     const bool isEnemyChargeWeakPointWindow =
         IsChargeWeakPointWindow(enemyActionKind, enemyActionId,
                                 enemyActionStep);
+    if (chargeWeakPointFailedThisAction_ &&
+        (enemyActionKind != failedChargeWeakPointActionKind_ ||
+         enemyActionStep == ActionStep::Recovery ||
+         enemyActionStep == ActionStep::None)) {
+        chargeWeakPointFailedThisAction_ = false;
+        failedChargeWeakPointActionKind_ = ActionKind::None;
+    }
     if (isEnemyChargeWeakPointWindow) {
         if (chargeWeakPointActionKind_ != enemyActionKind) {
             chargeWeakPointActionKind_ = enemyActionKind;
             chargeWeakPointBroken_ = false;
+            chargeWeakPointFailedThisAction_ = false;
+            failedChargeWeakPointActionKind_ = ActionKind::None;
             chargeWeakPointSlashCount_ = 0;
             chargeWeakPointRequiredDirections_[0] =
                 MakeRandomChargeWeakPointDirection();
@@ -324,20 +335,46 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             previousChargeWeakPointSlashStates_.fill(false);
         }
     } else {
+        if (chargeWeakPointActionKind_ != ActionKind::None &&
+            !chargeWeakPointBroken_ && chargeWeakPointSlashCount_ < 2) {
+            chargeWeakPointFailedThisAction_ = true;
+            failedChargeWeakPointActionKind_ = chargeWeakPointActionKind_;
+        }
         chargeWeakPointActionKind_ = ActionKind::None;
         chargeWeakPointBroken_ = false;
         chargeWeakPointSlashCount_ = 0;
         previousChargeWeakPointSlashStates_.fill(false);
     }
+    const bool isFailedChargeWeakPointRelease =
+        chargeWeakPointFailedThisAction_ &&
+        enemyActionKind == failedChargeWeakPointActionKind_ &&
+        enemyActionStep == ActionStep::Active;
+    const bool isEnemyMeleePreparationOrRelease =
+        (enemyActionKind == ActionKind::Smash ||
+         enemyActionKind == ActionKind::Sweep) &&
+        (enemyActionStep == ActionStep::Charge ||
+         enemyActionStep == ActionStep::Hold ||
+         enemyActionStep == ActionStep::Active);
+    const bool isPreReleaseCounterWindow =
+        isEnemyMeleePreparationOrRelease && !isEnemyChargeWeakPointWindow &&
+        !chargeWeakPointFailedThisAction_ &&
+        enemyActionStep != ActionStep::Active &&
+        enemy_.GetReleaseAnticipationRatio() > 0.0f;
+    const bool isReleaseCounterWindow =
+        isPreReleaseCounterWindow ||
+        (isEnemyMeleeCommitted &&
+         enemy_.GetActionTimerForPresentation() <=
+             kReleaseCounterWindowDuration);
+    const bool suppressNormalSlashHitDuringEnemyMelee =
+        isEnemyMeleePreparationOrRelease;
 
     const float enemyAttackDamage = enemy_.GetCurrentAttackDamage();
     const float enemyAttackKnockback = enemy_.GetCurrentAttackKnockback();
-    const bool isEnemyCounterWindow =
-        isEnemyMeleeCommitted;
+    const bool isEnemyCounterWindow = isReleaseCounterWindow;
     OBB enemyAttackBox{};
     CollisionManager::BodyId enemyAttackBody =
         CollisionManager::kInvalidBodyId;
-    if (isEnemyMeleeCommitted) {
+    if (isEnemyMeleeCommitted || isPreReleaseCounterWindow) {
         enemyAttackBox = enemy_.GetAttackOBB();
         enemyAttackBody =
             AddCollisionBody(collisionManager_, enemyAttackBox,
@@ -377,11 +414,13 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             canTouchChargeWeakPoint &&
             IsSlashAlongDirection(*sword, requiredChargeSlashDirection);
         const bool canSlashCounter =
+            !isFailedChargeWeakPointRelease &&
+            isReleaseCounterWindow &&
             playerHitCooldown_ <= 0.0f && isEnemyCounterWindow &&
             enemyAttackBody != CollisionManager::kInvalidBodyId &&
             IsNearXZ(player_.GetTransform().position, enemyAttackBox.center,
                      GetReadableMeleeRadius(enemyAttackBox) + 0.85f) &&
-            IsSlashTowardPoint(*sword, enemyAttackBox.center, 0.05f);
+            sword->CanSlashCounter();
 
         if (canSlashCounter) {
             triggerSuccessfulCounter(i, enemyAttackDamage, 0.2f);
@@ -435,7 +474,8 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             break;
         }
 
-        if (enemyHitCooldown_ <= 0.0f) {
+        if (enemyHitCooldown_ <= 0.0f &&
+            !suppressNormalSlashHitDuringEnemyMelee) {
             if (hitBody) {
                 const float swordDamage = swordAttackDamages[i];
                 enemy_.TakeDamage(swordDamage);
@@ -576,6 +616,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             FindSlashTowardPoint(swords, swordSlashStates, bullet.position,
                                  projectileCounterSwordIndex, 0.00f)) {
             enemy_.ReflectBullet(i, enemy_.GetTransform().position);
+            player_.NotifyAttackHit(projectileCounterSwordIndex, 0.0f);
             CombatFeedbackEvent feedback{};
             feedback.type = CombatFeedbackEventType::ProjectileReflect;
             feedback.position = bullet.position;
@@ -620,9 +661,17 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                 if (FindSlashTowardPoint(swords, swordSlashStates,
                                          bullet.position, counterSwordIndex,
                                          0.00f)) {
-                    triggerSuccessfulCounter(counterSwordIndex,
-                                             enemy_.GetBulletDamage() * 2.0f,
-                                             0.12f);
+                    enemy_.ReflectBullet(i, enemy_.GetTransform().position);
+                    player_.NotifyAttackHit(counterSwordIndex, 0.0f);
+                    CombatFeedbackEvent feedback{};
+                    feedback.type = CombatFeedbackEventType::ProjectileReflect;
+                    feedback.position = bullet.position;
+                    feedback.direction =
+                        DirectionFromTo(bullet.position,
+                                        enemy_.GetTransform().position);
+                    feedback.power = enemy_.GetBulletDamage() / 5.0f;
+                    DispatchCombatFeedback(feedback);
+                    continue;
                 } else {
                     player_.TakeDamage(enemy_.GetBulletDamage() *
                                        playerRecoveryDamageScale);

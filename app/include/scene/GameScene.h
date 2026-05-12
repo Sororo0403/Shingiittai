@@ -34,7 +34,11 @@ class GameScene : public BaseScene {
     void DrawEnemyFocusMarker();
     void DrawEnemyWeaponTrail();
     void DrawChargeWeakPoint();
+    void DrawChargeWeakPointTimeGauge();
     void DrawJoyConTutorial();
+    void DrawVictoryFlash();
+    void BeginVictorySequence();
+    void UpdateVictorySequence(float deltaTime);
     void SyncEnemyAnimation();
     void ApplyEnemyProceduralAnimation();
     void SetEnemyAnimationFrozen(bool frozen);
@@ -43,6 +47,8 @@ class GameScene : public BaseScene {
     void EmitCombatParticles(const CombatFeedbackEvent &event);
     void EmitEnemyActionParticles(ActionKind kind, ActionStep step);
     void EmitEnemyCueParticles(float deltaTime);
+    bool IsChargeWeakPointFocusActive() const;
+    void UpdateChargeWeakPointFocus(float deltaTime);
     PlayerCombatObservation BuildPlayerCombatObservation() const;
     float ComputeGameplayTimeScale() const;
 
@@ -178,6 +184,14 @@ class GameScene : public BaseScene {
     float playerViewLockOnLookHeight_ = 1.48f;
 
     float sceneLightTime_ = 0.0f;
+    float battleElapsedTime_ = 0.0f;
+    bool battleResultRequested_ = false;
+    bool victorySequenceActive_ = false;
+    float victorySequenceTimer_ = 0.0f;
+    float victorySequenceDuration_ = 5.45f;
+    float victoryClearTime_ = 0.0f;
+    bool victoryFinalExplosionEmitted_ = false;
+    DirectX::XMFLOAT3 victoryEnemyStartPos_ = {0.0f, 0.0f, 0.0f};
 
     bool counterCinematicActive_ = false;
     bool enemyAnimationFrozen_ = false;
@@ -192,8 +206,14 @@ class GameScene : public BaseScene {
     bool showCollisionDebug_ = false;
     bool showJoyConTutorial_ = true;
     ActionKind chargeWeakPointActionKind_ = ActionKind::None;
+    ActionKind failedChargeWeakPointActionKind_ = ActionKind::None;
     bool chargeWeakPointBroken_ = false;
+    bool chargeWeakPointFailedThisAction_ = false;
     int chargeWeakPointSlashCount_ = 0;
+    float chargeWeakPointFocusRatio_ = 0.0f;
+    float chargeWeakPointFocusInSpeed_ = 7.5f;
+    float chargeWeakPointFocusOutSpeed_ = 10.0f;
+    float chargeWeakPointFocusTimeScale_ = 0.28f;
     std::array<DirectX::XMFLOAT2, 2> chargeWeakPointRequiredDirections_ = {
         DirectX::XMFLOAT2{0.0f, -1.0f}, DirectX::XMFLOAT2{1.0f, 0.0f}};
     std::array<bool, Player::kSwordCount> previousChargeWeakPointSlashStates_{};

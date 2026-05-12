@@ -96,6 +96,34 @@ float Enemy::GetReleaseAnticipationRatio() const {
     return std::clamp(1.0f - remaining / cueWindow, 0.0f, 1.0f);
 }
 
+float Enemy::GetChargeWeakPointTimeLimitForPresentation() const {
+    if (!(action_.kind == ActionKind::Smash ||
+          action_.kind == ActionKind::Sweep)) {
+        return 0.0f;
+    }
+
+    if (action_.step == ActionStep::Hold) {
+        return currentHoldDuration_;
+    }
+
+    if (action_.kind != ActionKind::Smash ||
+        action_.id != ActionId::DelaySmash ||
+        action_.step != ActionStep::Charge) {
+        return 0.0f;
+    }
+
+    return GetCurrentSmashChargeTime();
+}
+
+float Enemy::GetChargeWeakPointTimeRemainingForPresentation() const {
+    const float limit = GetChargeWeakPointTimeLimitForPresentation();
+    if (limit <= 0.0f) {
+        return 0.0f;
+    }
+
+    return (std::max)(0.0f, limit - stateTimer_);
+}
+
 ActionId Enemy::MakeDefaultActionId(ActionKind kind) const {
     switch (kind) {
     case ActionKind::Smash:

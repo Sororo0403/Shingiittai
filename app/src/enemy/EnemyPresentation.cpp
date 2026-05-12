@@ -726,16 +726,23 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
 
         Transform bulletTf = tf_;
         bulletTf.position = bullet.position;
-        bulletTf.scale = {0.2f, 0.2f, 0.2f};
+        const float bulletYaw =
+            std::atan2(bullet.velocity.x, bullet.velocity.z);
+        DirectX::XMStoreFloat4(
+            &bulletTf.rotation,
+            DirectX::XMQuaternionRotationRollPitchYaw(0.0f, bulletYaw, 0.0f));
+        bulletTf.scale = bullet.isReflected
+                             ? DirectX::XMFLOAT3{0.52f, 0.52f, 0.86f}
+                             : DirectX::XMFLOAT3{0.72f, 0.72f, 1.15f};
         ModelDrawEffect bulletEffect{};
         bulletEffect.enabled = true;
         bulletEffect.additiveBlend = true;
         bulletEffect.color =
-            bullet.isReflected ? DirectX::XMFLOAT4{1.0f, 0.95f, 0.20f, 0.90f}
-                               : DirectX::XMFLOAT4{0.74f, 0.84f, 0.78f, 0.82f};
-        bulletEffect.intensity = bullet.isReflected ? 1.15f : 0.82f;
-        bulletEffect.fresnelPower = 1.4f;
-        bulletEffect.noiseAmount = 0.26f;
+            bullet.isReflected ? DirectX::XMFLOAT4{1.0f, 0.78f, 0.18f, 0.94f}
+                               : DirectX::XMFLOAT4{0.45f, 0.94f, 1.0f, 0.96f};
+        bulletEffect.intensity = bullet.isReflected ? 1.75f : 1.92f;
+        bulletEffect.fresnelPower = 1.05f;
+        bulletEffect.noiseAmount = 0.08f;
         bulletEffect.time = stateTimer_ + bullet.lifeTime;
         modelManager->SetDrawEffect(bulletEffect);
         modelManager->Draw(effectModelId, bulletTf, camera);
@@ -768,5 +775,104 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
     }
 
     modelManager->ClearDrawEffect();
+}
+
+void Enemy::ApplyVictoryDefeatPose(
+    float ratio, const DirectX::XMFLOAT3 &startPosition,
+    const DirectX::XMFLOAT3 &playerPosition) {
+    ratio = (std::clamp)(ratio, 0.0f, 1.0f);
+    const int frame =
+        (std::min)(3, static_cast<int>(std::floor(ratio * 4.0f)));
+
+    float awayX = startPosition.x - playerPosition.x;
+    float awayZ = startPosition.z - playerPosition.z;
+    float awayLen = std::sqrt(awayX * awayX + awayZ * awayZ);
+    if (awayLen < 0.0001f) {
+        awayLen = 1.0f;
+        awayZ = 1.0f;
+    }
+    awayX /= awayLen;
+    awayZ /= awayLen;
+    const float rightX = awayZ;
+    const float rightZ = -awayX;
+
+    float backDistance = 0.0f;
+    float lift = 0.0f;
+    float lateral = 0.0f;
+    float pitch = 0.0f;
+    float roll = 0.0f;
+    float fallPose = 0.0f;
+    switch (frame) {
+    case 0:
+        backDistance = 0.08f;
+        lift = 0.16f;
+        lateral = 0.00f;
+        pitch = -0.08f;
+        roll = 0.00f;
+        fallPose = 0.00f;
+        break;
+    case 1:
+        backDistance = 1.30f;
+        lift = 1.10f;
+        lateral = 0.24f;
+        pitch = -0.58f;
+        roll = 0.22f;
+        fallPose = 0.34f;
+        break;
+    case 2:
+        backDistance = 2.75f;
+        lift = 0.48f;
+        lateral = -0.18f;
+        pitch = -1.15f;
+        roll = -0.16f;
+        fallPose = 0.70f;
+        break;
+    default:
+        backDistance = 3.55f;
+        lift = -0.30f;
+        lateral = 0.04f;
+        pitch = -1.68f;
+        roll = 0.03f;
+        fallPose = 1.00f;
+        break;
+    }
+
+    tf_.position = startPosition;
+    tf_.position.x += awayX * backDistance + rightX * lateral;
+    tf_.position.z += awayZ * backDistance + rightZ * lateral;
+    tf_.position.y += lift;
+    const float maxRadius = arenaClampRadius_ - 0.75f;
+    const float distanceSq =
+        tf_.position.x * tf_.position.x + tf_.position.z * tf_.position.z;
+    if (distanceSq > maxRadius * maxRadius && distanceSq > 0.0001f) {
+        const float clampScale = maxRadius / std::sqrt(distanceSq);
+        tf_.position.x *= clampScale;
+        tf_.position.z *= clampScale;
+    }
+    tf_.scale = {1.0f + 0.05f * fallPose, 1.0f - 0.18f * fallPose,
+                 1.0f + 0.10f * fallPose};
+
+    const float yaw = std::atan2(-awayX, -awayZ);
+    DirectX::XMStoreFloat4(
+        &tf_.rotation,
+        DirectX::XMQuaternionRotationRollPitchYaw(pitch, yaw, roll));
+
+    bodyTf_ = tf_;
+    visualTf_ = tf_;
+    leftHandTf_ = tf_;
+    rightHandTf_ = tf_;
+
+    bodyTf_.position.y -= 0.18f * fallPose;
+    visualTf_.position.y += 0.12f * (1.0f - fallPose);
+    leftHandTf_.position.x += (-rightX) * (1.0f + 0.85f * fallPose) -
+                              awayX * (0.18f + 0.50f * fallPose);
+    leftHandTf_.position.z += (-rightZ) * (1.0f + 0.85f * fallPose) -
+                              awayZ * (0.18f + 0.50f * fallPose);
+    leftHandTf_.position.y += 0.58f - 0.72f * fallPose;
+    rightHandTf_.position.x += rightX * (1.15f + 0.95f * fallPose) +
+                               awayX * (0.10f + 0.38f * fallPose);
+    rightHandTf_.position.z += rightZ * (1.15f + 0.95f * fallPose) +
+                               awayZ * (0.10f + 0.38f * fallPose);
+    rightHandTf_.position.y += 0.84f - 0.80f * fallPose;
 }
 

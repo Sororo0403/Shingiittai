@@ -216,6 +216,8 @@ class PostEffectRenderer {
     /// </summary>
     void SetRandomSeed(float seed);
 
+    void SetSceneDimStrength(float strength);
+
   private:
     struct EffectConstBuffer {
         int32_t colorMode = 0;
@@ -242,7 +244,7 @@ class PostEffectRenderer {
         float randomSeed = 0.0f;
         float grayscaleWeights[3]{0.2125f, 0.7154f, 0.0721f};
         float sepiaTone[3]{1.20f, 1.00f, 0.80f};
-        float padding5 = 0.0f;
+        float sceneDimStrength = 0.0f;
     };
 
     void CreateRootSignature();
@@ -280,6 +282,7 @@ class PostEffectRenderer {
     float randomScale_ = 240.0f;
     float randomTime_ = 0.0f;
     float randomSeed_ = 0.0f;
+    float sceneDimStrength_ = 0.0f;
     int width_ = 1;
     int height_ = 1;
 };

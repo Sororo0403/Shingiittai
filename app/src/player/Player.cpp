@@ -69,7 +69,7 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId,
 }
 
 void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
-                    float cameraYaw) {
+                    float cameraYaw, bool forceRangedReflectMove) {
     if (input->IsKeyTrigger(DIK_C)) {
         leftJoyCon_.StartCalibration();
         rightJoyCon_.StartCalibration();
@@ -89,7 +89,8 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     rightJoyCon_.Update(deltaTime);
 
     UpdateDodgeInput(input, deltaTime, cameraYaw, lookTarget);
-    UpdateMovement(input, deltaTime, cameraYaw, lookTarget);
+    UpdateMovement(input, deltaTime, cameraYaw, lookTarget,
+                   forceRangedReflectMove);
     UpdateSwingCombo(deltaTime);
     UpdateOverSwing(deltaTime);
     KeepDistanceFromTarget(lookTarget);
@@ -493,7 +494,8 @@ void Player::UpdateDodgeInput(Input *input, float deltaTime, float cameraYaw,
 }
 
 void Player::UpdateMovement(Input *input, float deltaTime, float cameraYaw,
-                            const XMFLOAT3 &lookTarget) {
+                            const XMFLOAT3 &lookTarget,
+                            bool forceRangedReflectMove) {
     const XMFLOAT2 moveInput = ReadMovementInput(input);
     float inputX = moveInput.x;
     float inputZ = moveInput.y;
@@ -536,12 +538,26 @@ void Player::UpdateMovement(Input *input, float deltaTime, float cameraYaw,
                 ? 0.35f
                 : 1.0f;
 
-        worldMoveX = rightX * autoMoveOrbitDir_ * kJoyConAutoMoveOrbitSpeed *
-                         orbitScale +
-                     towardX * distancePush * kJoyConAutoMoveDistanceSpeed;
-        worldMoveZ = rightZ * autoMoveOrbitDir_ * kJoyConAutoMoveOrbitSpeed *
-                         orbitScale +
-                     towardZ * distancePush * kJoyConAutoMoveDistanceSpeed;
+        if (forceRangedReflectMove) {
+            const float retreatTargetDistance = 6.8f;
+            const float retreatNeed =
+                std::clamp(retreatTargetDistance - distance, 0.0f, 1.0f);
+            const float retreatSpeed = 4.8f * retreatNeed;
+            const float strafeSpeed = 2.35f;
+            worldMoveX = -towardX * retreatSpeed +
+                         rightX * autoMoveOrbitDir_ * strafeSpeed;
+            worldMoveZ = -towardZ * retreatSpeed +
+                         rightZ * autoMoveOrbitDir_ * strafeSpeed;
+        } else {
+            worldMoveX = rightX * autoMoveOrbitDir_ *
+                             kJoyConAutoMoveOrbitSpeed * orbitScale +
+                         towardX * distancePush *
+                             kJoyConAutoMoveDistanceSpeed;
+            worldMoveZ = rightZ * autoMoveOrbitDir_ *
+                             kJoyConAutoMoveOrbitSpeed * orbitScale +
+                         towardZ * distancePush *
+                             kJoyConAutoMoveDistanceSpeed;
+        }
     }
 
     float speedScale = 1.0f;
@@ -636,8 +652,7 @@ void Player::RegisterAttackHit(float damage) {
 }
 
 void Player::RegisterAttackWhiff() {
-    overSwingCount_ = (std::min)(overSwingCount_ + 1, kOverSwingMax);
-    overSwingResetTimer_ = kOverSwingResetDuration;
+    ResetOverSwing();
 }
 
 void Player::ResetOverSwing() {
@@ -941,33 +956,12 @@ void Player::ApplyHandRecovery(SwordPose &pose, float &timer,
 }
 
 float Player::GetSlashRecoveryDuration(bool hitConfirmed) const {
-    if (hitConfirmed) {
-        return GetHitConfirmRecoveryDuration();
-    }
-
-    const int level = std::clamp(overSwingCount_, 1, kOverSwingMax);
-
-    switch (weaponType_) {
-    case PlayerWeaponType::Dual:
-        return level == 1 ? 0.22f : (level == 2 ? 0.32f : 0.44f);
-    case PlayerWeaponType::GreatSword:
-        return level == 1 ? 0.48f : (level == 2 ? 0.68f : 0.90f);
-    case PlayerWeaponType::Standard:
-    default:
-        return level == 1 ? 0.30f : (level == 2 ? 0.46f : 0.62f);
-    }
+    (void)hitConfirmed;
+    return 0.0f;
 }
 
 float Player::GetHitConfirmRecoveryDuration() const {
-    switch (weaponType_) {
-    case PlayerWeaponType::Dual:
-        return 0.12f;
-    case PlayerWeaponType::GreatSword:
-        return 0.22f;
-    case PlayerWeaponType::Standard:
-    default:
-        return 0.14f;
-    }
+    return 0.0f;
 }
 
 float Player::GetSlashRecoveryRatio(float timer) const {

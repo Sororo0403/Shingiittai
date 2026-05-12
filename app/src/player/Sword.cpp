@@ -54,7 +54,16 @@ void Sword::Update(const Transform &transform, const SwordPose &pose,
     isJoyCon = pose.isJoyCon;
     slashDir_ = pose.slashDir;
     orientation_ = pose.orientation;
-    UpdateSlashFollowThrough(deltaTime);
+    if (isMouse) {
+        slashFollowThroughTimer_ = 0.0f;
+        slashFollowThroughStarted_ = false;
+        slashFollowThroughDir_ = {};
+        slashFollowThroughAngles_ = {};
+        slashFollowThroughRoll_ = 0.0f;
+        slashFollowThroughSurge_ = 0.0f;
+    } else {
+        UpdateSlashFollowThrough(deltaTime);
+    }
     UpdateCounterObservation(deltaTime);
 }
 

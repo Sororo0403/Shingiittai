@@ -204,7 +204,11 @@ static std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
 }
 
 float GameScene::ComputeGameplayTimeScale() const {
-    return combatFeedback_.GetGameplayTimeScale();
+    const float feedbackScale = combatFeedback_.GetGameplayTimeScale();
+    const float focusScale =
+        1.0f - (1.0f - chargeWeakPointFocusTimeScale_) *
+                   chargeWeakPointFocusRatio_;
+    return (std::min)(feedbackScale, focusScale);
 }
 
 void GameScene::SetEnemyAnimationFrozen(bool frozen) {

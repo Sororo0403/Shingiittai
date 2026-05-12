@@ -107,6 +107,49 @@ void GameScene::UpdateBattleCamera() {
     const DirectX::XMFLOAT3 &playerPos = playerTf.position;
     const DirectX::XMFLOAT3 &enemyPos = enemyTf.position;
 
+    if (victorySequenceActive_) {
+        float toEnemyX = enemyPos.x - playerPos.x;
+        float toEnemyZ = enemyPos.z - playerPos.z;
+        const XMFLOAT2 line = NormalizeXZ(toEnemyX, toEnemyZ);
+        const float sideX = line.y;
+        const float sideZ = -line.x;
+        const DirectX::XMFLOAT3 frontCameraPos = {
+            enemyPos.x - line.x * 8.2f,
+            enemyPos.y + 2.25f,
+            enemyPos.z - line.y * 8.2f};
+        const DirectX::XMFLOAT3 frontLookAt = {
+            enemyPos.x,
+            enemyPos.y + 1.45f,
+            enemyPos.z};
+        const DirectX::XMFLOAT3 fallCameraPos = {
+            enemyPos.x - line.x * 7.6f + sideX * 4.2f,
+            enemyPos.y + 0.92f,
+            enemyPos.z - line.y * 7.6f + sideZ * 4.2f};
+        const DirectX::XMFLOAT3 fallLookAt = {
+            enemyPos.x + line.x * 0.55f,
+            enemyPos.y + 0.95f,
+            enemyPos.z + line.y * 0.55f};
+        const float introMoveT = Clamp01(victorySequenceTimer_ / 0.72f);
+        const float cutT = introMoveT * introMoveT * (3.0f - 2.0f * introMoveT);
+        const DirectX::XMFLOAT3 desiredCameraPos =
+            Lerp(frontCameraPos, fallCameraPos, cutT);
+        const DirectX::XMFLOAT3 desiredLookAt = Lerp(frontLookAt, fallLookAt, cutT);
+        const float alpha =
+            victorySequenceTimer_ < 0.82f ? 1.0f
+                                           : SaturatedAlpha(9.5f, ctx_->deltaTime);
+        lockOnOrbitCameraPos_ =
+            Lerp(lockOnOrbitCameraPos_, desiredCameraPos, alpha);
+        lockOnLookAt_ = Lerp(lockOnLookAt_, desiredLookAt, alpha);
+        targetFovDeg_ = 52.0f + 4.0f * cutT;
+        currentFovDeg_ +=
+            (targetFovDeg_ - currentFovDeg_) *
+            SaturatedAlpha(5.8f, ctx_->deltaTime);
+        camera_.SetPerspectiveFovDeg(currentFovDeg_);
+        camera_.SetPosition(lockOnOrbitCameraPos_);
+        camera_.LookAt(lockOnLookAt_);
+        return;
+    }
+
     // 謨�E�陦悟虚迥�E�諷九ｒ蜿門�E�・
     const ActionKind enemyActionKind = enemy_.GetActionKind();
     const ActionStep enemyActionStep = enemy_.GetActionStep();
@@ -132,6 +175,7 @@ void GameScene::UpdateBattleCamera() {
         enemyActionKind == ActionKind::Wave;
     const bool isEnemyPhaseTransition = enemy_.IsPhaseTransitionActive();
     const float enemyPhaseTransitionRatio = enemy_.GetPhaseTransitionRatio();
+    const float chargeFocus = Clamp01(chargeWeakPointFocusRatio_);
 
     // =========================
     // FOV繧�E�繝ｼ繧�E�繝�Eヨ豎ｺ螳・
@@ -157,6 +201,10 @@ void GameScene::UpdateBattleCamera() {
     if (isEnemyPhaseTransition) {
         targetFovDeg_ = phaseTransitionFovDeg_;
     }
+    if (chargeFocus > 0.0f) {
+        targetFovDeg_ = targetFovDeg_ * (1.0f - chargeFocus) +
+                        58.0f * chargeFocus;
+    }
     if (playerViewCamera_) {
         targetFovDeg_ = isLockOn_ ? 82.0f : normalFovDeg_;
         if (isEnemyWideAction) {
@@ -171,6 +219,10 @@ void GameScene::UpdateBattleCamera() {
         }
         if (isEnemyPhaseTransition) {
             targetFovDeg_ = phaseTransitionFovDeg_;
+        }
+        if (chargeFocus > 0.0f) {
+            targetFovDeg_ = targetFovDeg_ * (1.0f - chargeFocus) +
+                            62.0f * chargeFocus;
         }
     }
 
@@ -252,6 +304,11 @@ void GameScene::UpdateBattleCamera() {
                 enemyPos.x, enemyPos.y + phaseTransitionLookAtHeight_,
                 enemyPos.z};
             lookAt = Lerp(lookAt, transitionLookAt, enemyPhaseTransitionRatio);
+        }
+        if (chargeFocus > 0.0f) {
+            const DirectX::XMFLOAT3 focusLookAt = {
+                enemyPos.x, enemyPos.y + 1.70f, enemyPos.z};
+            lookAt = Lerp(lookAt, focusLookAt, chargeFocus);
         }
 
         combatFeedback_.ApplyCameraImpulse(cameraPos, lookAt, sceneLightTime_);
@@ -370,7 +427,8 @@ void GameScene::UpdateBattleCamera() {
         if (isEnemyPhaseTransition) {
             usedRadius -= phaseTransitionPushIn_ * enemyPhaseTransitionRatio;
         }
-        usedRadius = Clamp(usedRadius, 4.2f, 7.4f);
+        usedRadius -= 1.20f * chargeFocus;
+        usedRadius = Clamp(usedRadius, 3.35f, 7.4f);
 
         // cameraYaw_ 縺�E�謨�E�譁E��蜷代Λ繧�E�繝ｳ縺�E�縺�E�蟾�E�縺�E�縲∝�E蠑ｧ荳翫・蟾�E�蜿�E�菴咲�E��E�繧呈ｱ�E�繧√ａE
         float lineYaw = std::atan2f(lineX, lineZ);
@@ -415,6 +473,8 @@ void GameScene::UpdateBattleCamera() {
             dynamicDistance +=
                 Clamp((enemyDistanceXZ - 5.0f) * 0.18f, 0.0f, 1.1f);
         }
+        dynamicDistance -= 1.85f * chargeFocus;
+        dynamicDistance = Clamp(dynamicDistance, 3.25f, 7.0f);
 
         cameraPos = {cameraTargetBase.x - forward.x * dynamicDistance +
                          right.x * cameraSideOffset_,
@@ -429,6 +489,13 @@ void GameScene::UpdateBattleCamera() {
             cameraPos.y += 0.12f * enemyPhaseTransitionRatio;
             cameraPos.z += forward.z * phaseTransitionPushIn_ *
                            enemyPhaseTransitionRatio;
+        }
+        if (chargeFocus > 0.0f) {
+            const DirectX::XMFLOAT3 focusCameraPos = {
+                enemyPos.x - forward.x * 3.25f + right.x * 0.36f,
+                enemyPos.y + 2.05f,
+                enemyPos.z - forward.z * 3.25f + right.z * 0.36f};
+            cameraPos = Lerp(cameraPos, focusCameraPos, chargeFocus * 0.72f);
         }
 
         // 髱槭Ο繝�Eけ譎ゅ・蜀・�E��E�逕ｨ迴�E�蝨�E�蛟､繧貞�E譛�E
@@ -479,6 +546,11 @@ void GameScene::UpdateBattleCamera() {
 
         float blend = enemyPhaseTransitionRatio;
         lookAt = Lerp(lookAt, transitionLookAt, blend);
+    }
+    if (chargeFocus > 0.0f) {
+        const DirectX::XMFLOAT3 focusLookAt = {
+            enemyPos.x, enemyPos.y + 1.70f, enemyPos.z};
+        lookAt = Lerp(lookAt, focusLookAt, chargeFocus);
     }
 
     combatFeedback_.ApplyCameraImpulse(cameraPos, lookAt, sceneLightTime_);
