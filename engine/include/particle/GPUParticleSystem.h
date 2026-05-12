@@ -19,6 +19,8 @@ class GPUParticleSystem {
         Sparks = 0,
         Explosion = 1,
         Smoke = 2,
+        SlashLine = 3,
+        Flash = 4,
     };
 
     ~GPUParticleSystem();

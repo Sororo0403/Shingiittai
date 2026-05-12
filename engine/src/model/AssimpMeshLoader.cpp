@@ -6,6 +6,7 @@
 #include "Vertex.h"
 #include <DirectXMath.h>
 #include <assimp/GltfMaterial.h>
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <functional>
@@ -91,6 +92,24 @@ void AssimpMeshLoader::LoadMeshes(const aiScene *scene, const std::string &path,
 
         ModelSubMesh subMesh{};
         subMesh.vertexCount = static_cast<uint32_t>(vertices.size());
+        subMesh.sourcePositions.reserve(vertices.size());
+        subMesh.sourceBoundsMin = vertices.front().position;
+        subMesh.sourceBoundsMax = vertices.front().position;
+        for (const Vertex &vertex : vertices) {
+            subMesh.sourcePositions.push_back(vertex.position);
+            subMesh.sourceBoundsMin.x =
+                (std::min)(subMesh.sourceBoundsMin.x, vertex.position.x);
+            subMesh.sourceBoundsMin.y =
+                (std::min)(subMesh.sourceBoundsMin.y, vertex.position.y);
+            subMesh.sourceBoundsMin.z =
+                (std::min)(subMesh.sourceBoundsMin.z, vertex.position.z);
+            subMesh.sourceBoundsMax.x =
+                (std::max)(subMesh.sourceBoundsMax.x, vertex.position.x);
+            subMesh.sourceBoundsMax.y =
+                (std::max)(subMesh.sourceBoundsMax.y, vertex.position.y);
+            subMesh.sourceBoundsMax.z =
+                (std::max)(subMesh.sourceBoundsMax.z, vertex.position.z);
+        }
 
         if (mesh->HasBones()) {
             for (unsigned int i = 0; i < mesh->mNumBones; i++) {

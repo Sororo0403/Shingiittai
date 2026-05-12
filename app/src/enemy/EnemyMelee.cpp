@@ -1,6 +1,13 @@
 #include "Enemy.h"
 
+#include <algorithm>
 #include <cmath>
+
+namespace {
+float ChargeTurnScaleAfterStance(float stateTimer, float stanceTime) {
+    return stateTimer < stanceTime ? 1.0f : 0.035f;
+}
+} // namespace
 
 void Enemy::UpdateSmashByStep(float deltaTime) {
     switch (action_.step) {
@@ -66,8 +73,12 @@ void Enemy::UpdateSmashCharge(float deltaTime) {
         stateTimer_ = 0.0f;
     }
 
+    const float stanceTime = (std::min)(trackingEnd, 0.46f);
     if (stateTimer_ < trackingEnd) {
-        UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_);
+        UpdateFacingToPlayerWithSpeed(
+            deltaTime,
+            chargeTurnSpeed_ *
+                ChargeTurnScaleAfterStance(stateTimer_, stanceTime));
     } else if (!hasTrackingLocked_) {
         LockCurrentFacing();
         hasTrackingLocked_ = true;
@@ -84,7 +95,7 @@ void Enemy::UpdateSmashCharge(float deltaTime) {
 
 void Enemy::UpdateSmashHold(float deltaTime) {
     if (fakeCommitActive_) {
-        UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_ * 0.35f);
+        UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_ * 0.035f);
         if (!IsFakeCommitFinished()) {
             return;
         }
@@ -127,7 +138,8 @@ void Enemy::UpdateSmashAttack(float deltaTime) {
         return;
     }
 
-    isAttackActive_ = true;
+    isAttackActive_ = stateTimer_ >= timing->activeStartTime &&
+                      stateTimer_ <= timing->activeEndTime;
     if (stateTimer_ >= timing->activeEndTime) {
         ChangeActionStep(ActionStep::Recovery);
     }
@@ -177,8 +189,12 @@ void Enemy::UpdateSweepCharge(float deltaTime) {
         stateTimer_ = 0.0f;
     }
 
+    const float stanceTime = (std::min)(trackingEnd, 0.42f);
     if (stateTimer_ < trackingEnd) {
-        UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_);
+        UpdateFacingToPlayerWithSpeed(
+            deltaTime,
+            chargeTurnSpeed_ *
+                ChargeTurnScaleAfterStance(stateTimer_, stanceTime));
     } else if (!hasTrackingLocked_) {
         LockCurrentFacing();
         hasTrackingLocked_ = true;
@@ -195,7 +211,7 @@ void Enemy::UpdateSweepCharge(float deltaTime) {
 
 void Enemy::UpdateSweepHold(float deltaTime) {
     if (fakeCommitActive_) {
-        UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_ * 0.30f);
+        UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_ * 0.035f);
         if (!IsFakeCommitFinished()) {
             return;
         }
@@ -238,7 +254,8 @@ void Enemy::UpdateSweepAttack(float deltaTime) {
         return;
     }
 
-    isAttackActive_ = true;
+    isAttackActive_ = stateTimer_ >= timing->activeStartTime &&
+                      stateTimer_ <= timing->activeEndTime;
     if (stateTimer_ >= timing->activeEndTime) {
         ChangeActionStep(ActionStep::Recovery);
     }

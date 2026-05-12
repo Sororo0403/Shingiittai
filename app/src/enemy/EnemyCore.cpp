@@ -1,5 +1,6 @@
 #include "Enemy.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 
@@ -145,18 +146,9 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
             hitReactionTimer_ = 0.0f;
         }
 
-        float dx = tf_.position.x - runtime_.playerPos.x;
-        float dz = tf_.position.z - runtime_.playerPos.z;
-        float length = std::sqrt(dx * dx + dz * dz);
-        if (length > 0.0001f) {
-            dx /= length;
-            dz /= length;
-            tf_.position.x += dx * hitReactionMoveSpeed_ * deltaTime;
-            tf_.position.z += dz * hitReactionMoveSpeed_ * deltaTime;
-        }
-
         UpdateBullets(deltaTime);
         UpdateWaves(deltaTime);
+        ClampToArena();
         UpdateParts();
         return;
     }
@@ -168,6 +160,7 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
     UpdateByAction(deltaTime);
     UpdateBullets(deltaTime);
     UpdateWaves(deltaTime);
+    ClampToArena();
     UpdateParts();
 }
 
@@ -218,6 +211,26 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
 
     action_.kind = kind;
     action_.id = MakeDefaultActionId(kind);
+    if (kind == ActionKind::Smash) {
+        float delayChance = config_.attacks.smash.delayChance;
+        if (playerObs_.isAttacking) {
+            delayChance += 0.28f;
+        }
+        if (playerObs_.justCounterEarly || counterMemory_.earlyCount > 0.6f) {
+            delayChance += 0.22f;
+        }
+        if (postCounterRhythmTimer_ > 0.0f || forceCounterBaitNext_) {
+            delayChance += 0.34f;
+        }
+        delayChance += counterMemory_.successCount * 0.07f;
+        delayChance = (std::clamp)(delayChance, 0.0f, 0.88f);
+
+        const float roll =
+            static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+        if (roll < delayChance) {
+            action_.id = ActionId::DelaySmash;
+        }
+    }
 
     if (kind == ActionKind::Nova) {
         novaPhase2Cooldown_ = novaPhase2CooldownDuration_;

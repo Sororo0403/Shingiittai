@@ -88,8 +88,6 @@ void Enemy::UpdateParts() {
         recoilProgress = Saturate(recoilProgress);
         const float recoil = recoilProgress * recoilProgress;
         bodyTf_.position.y += 0.015f * recoil;
-        visualTf_.position.x += (-forwardX) * 0.045f * recoil;
-        visualTf_.position.z += (-forwardZ) * 0.045f * recoil;
         visualPitch += counterRecoilPitchRad_ * recoil;
     }
 
@@ -103,17 +101,21 @@ void Enemy::UpdateParts() {
     if (tellActive_ || isTelegraphCharge) {
         const float chargePulse = tellActive_ ? (1.0f + 0.55f * pulse)
                                               : (0.72f + 0.42f * pulse);
-        bodyTf_.scale.x += 0.12f * chargePulse;
-        bodyTf_.scale.z += 0.12f * chargePulse;
-        bodyTf_.scale.y -= 0.06f * chargePulse;
-        bodyTf_.position.y += 0.05f * chargePulse;
-        rightHandTf_.scale.x += 0.18f * chargePulse;
-        rightHandTf_.scale.y += 0.18f * chargePulse;
-        rightHandTf_.scale.z += 0.18f * chargePulse;
-        rightHandTf_.position.y += 0.10f * chargePulse;
-        visualTf_.position.y += 0.035f * chargePulse;
-        visualTf_.scale.x += 0.026f * chargePulse;
-        visualTf_.scale.z += 0.026f * chargePulse;
+        const bool isMeleeCharge =
+            action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep;
+        const float bodyChargeScale = isMeleeCharge ? 0.24f : 0.12f;
+        const float handChargeScale = isMeleeCharge ? 0.36f : 0.18f;
+        bodyTf_.scale.x += bodyChargeScale * chargePulse;
+        bodyTf_.scale.z += bodyChargeScale * chargePulse;
+        bodyTf_.scale.y -= (isMeleeCharge ? 0.12f : 0.06f) * chargePulse;
+        bodyTf_.position.y += (isMeleeCharge ? 0.02f : 0.05f) * chargePulse;
+        rightHandTf_.scale.x += handChargeScale * chargePulse;
+        rightHandTf_.scale.y += handChargeScale * chargePulse;
+        rightHandTf_.scale.z += handChargeScale * chargePulse;
+        rightHandTf_.position.y += (isMeleeCharge ? 0.18f : 0.10f) * chargePulse;
+        visualTf_.position.y += (isMeleeCharge ? 0.055f : 0.035f) * chargePulse;
+        visualTf_.scale.x += (isMeleeCharge ? 0.050f : 0.026f) * chargePulse;
+        visualTf_.scale.z += (isMeleeCharge ? 0.050f : 0.026f) * chargePulse;
     }
 
     if (fakeCommitActive_) {
@@ -204,19 +206,40 @@ void Enemy::UpdateParts() {
 
     if (!suppressActionPresentation && action_.kind == ActionKind::Smash) {
         if (action_.step == ActionStep::Charge || action_.step == ActionStep::Hold) {
-            bodyTf_.position.y -= 0.10f;
-            bodyTf_.scale.y += 0.08f;
-            rightHandTf_.position.y += 1.90f;
-            rightHandTf_.position.x += (-forwardX) * 0.90f;
-            rightHandTf_.position.z += (-forwardZ) * 0.90f;
-            rightHandTf_.scale.x += 0.08f;
-            rightHandTf_.scale.y += 0.08f;
-            rightHandTf_.scale.z += 0.08f;
-            leftHandTf_.position.y += 0.15f;
-            visualTf_.position.x += (-forwardX) * 0.18f;
-            visualTf_.position.z += (-forwardZ) * 0.18f;
-            visualTf_.position.y -= 0.04f;
-            visualPitch -= 0.28f;
+            const bool isDelayBait =
+                action_.id == ActionId::DelaySmash || action_.step == ActionStep::Hold ||
+                fakeCommitActive_ || freezeHoldActive_;
+            bodyTf_.position.y -= 0.28f + 0.08f * pulse;
+            bodyTf_.scale.y += 0.24f;
+            bodyTf_.scale.x += 0.16f + 0.06f * pulse;
+            bodyTf_.scale.z += 0.16f + 0.06f * pulse;
+            rightHandTf_.position.y += 2.75f + 0.28f * pulse;
+            rightHandTf_.position.x += (-forwardX) * 1.48f;
+            rightHandTf_.position.z += (-forwardZ) * 1.48f;
+            rightHandTf_.scale.x += 0.34f + 0.18f * pulse;
+            rightHandTf_.scale.y += 0.34f + 0.18f * pulse;
+            rightHandTf_.scale.z += 0.34f + 0.18f * pulse;
+            leftHandTf_.position.y += 0.36f;
+            leftHandTf_.position.x += forwardX * 0.18f;
+            leftHandTf_.position.z += forwardZ * 0.18f;
+            visualTf_.position.x += (-forwardX) * 0.40f;
+            visualTf_.position.z += (-forwardZ) * 0.40f;
+            visualTf_.position.y -= 0.12f;
+            visualPitch -= 0.62f + 0.12f * pulse;
+            if (isDelayBait) {
+                bodyTf_.position.y -= 0.16f;
+                bodyTf_.position.x += (-forwardX) * (0.26f + 0.10f * pulse);
+                bodyTf_.position.z += (-forwardZ) * (0.26f + 0.10f * pulse);
+                bodyTf_.scale.x += 0.12f;
+                bodyTf_.scale.z += 0.12f;
+                rightHandTf_.position.y += 0.62f + 0.16f * pulse;
+                rightHandTf_.position.x += (-forwardX) * 0.52f + rightX * 0.18f;
+                rightHandTf_.position.z += (-forwardZ) * 0.52f + rightZ * 0.18f;
+                leftHandTf_.position.y += 0.22f;
+                leftHandTf_.position.x += forwardX * 0.28f;
+                leftHandTf_.position.z += forwardZ * 0.28f;
+                visualPitch -= 0.22f;
+            }
         } else if (action_.step == ActionStep::Active) {
             bodyTf_.position.x += forwardX * 0.18f;
             bodyTf_.position.z += forwardZ * 0.18f;
@@ -253,15 +276,39 @@ void Enemy::UpdateParts() {
         }
     } else if (!suppressActionPresentation && action_.kind == ActionKind::Sweep) {
         if (action_.step == ActionStep::Charge || action_.step == ActionStep::Hold) {
-            bodyTf_.position.x += rightX * 0.12f;
-            bodyTf_.position.z += rightZ * 0.12f;
-            rightHandTf_.position.x += rightX * 2.00f;
-            rightHandTf_.position.y += 0.25f;
-            rightHandTf_.position.z += rightZ * 2.00f;
-            leftHandTf_.position.x += (-rightX) * 0.25f;
-            leftHandTf_.position.z += (-rightZ) * 0.25f;
-            visualYaw += 0.18f;
-            visualRoll -= 0.18f;
+            const bool isWideTell =
+                action_.step == ActionStep::Hold || fakeCommitActive_ ||
+                freezeHoldActive_;
+            bodyTf_.position.y -= 0.24f + 0.06f * pulse;
+            bodyTf_.position.x += rightX * (0.44f + 0.10f * pulse);
+            bodyTf_.position.z += rightZ * (0.44f + 0.10f * pulse);
+            bodyTf_.scale.x += 0.20f + 0.04f * pulse;
+            bodyTf_.scale.z += 0.26f + 0.06f * pulse;
+            rightHandTf_.position.x += rightX * (3.20f + 0.34f * pulse);
+            rightHandTf_.position.y += 0.72f + 0.18f * pulse;
+            rightHandTf_.position.z += rightZ * (3.20f + 0.34f * pulse);
+            rightHandTf_.scale.x += 0.42f + 0.22f * pulse;
+            rightHandTf_.scale.y += 0.42f + 0.22f * pulse;
+            rightHandTf_.scale.z += 0.42f + 0.22f * pulse;
+            leftHandTf_.position.x += (-rightX) * 0.82f + (-forwardX) * 0.18f;
+            leftHandTf_.position.z += (-rightZ) * 0.82f + (-forwardZ) * 0.18f;
+            leftHandTf_.position.y += 0.16f;
+            visualTf_.position.x += rightX * 0.18f;
+            visualTf_.position.z += rightZ * 0.18f;
+            visualYaw += 0.62f + 0.18f * pulse;
+            visualRoll -= 0.62f + 0.18f * pulse;
+            if (isWideTell) {
+                bodyTf_.position.x += rightX * 0.28f;
+                bodyTf_.position.z += rightZ * 0.28f;
+                bodyTf_.scale.x += 0.10f;
+                bodyTf_.scale.z += 0.16f;
+                rightHandTf_.position.x += rightX * 0.72f;
+                rightHandTf_.position.z += rightZ * 0.72f;
+                leftHandTf_.position.x += (-rightX) * 0.34f;
+                leftHandTf_.position.z += (-rightZ) * 0.34f;
+                visualYaw += 0.20f;
+                visualRoll -= 0.18f;
+            }
         } else if (action_.step == ActionStep::Active) {
             bodyTf_.position.x += (-rightX) * 0.18f;
             bodyTf_.position.z += (-rightZ) * 0.18f;
@@ -283,32 +330,41 @@ void Enemy::UpdateParts() {
             bodyTf_.scale.x -= 0.04f;
             bodyTf_.scale.z -= 0.04f;
             bodyTf_.scale.y += 0.06f;
-            rightHandTf_.position.y += 0.45f;
-            rightHandTf_.position.x += forwardX * 1.30f;
-            rightHandTf_.position.z += forwardZ * 1.30f;
-            rightHandTf_.scale.x += 0.08f + 0.08f * pulse;
-            rightHandTf_.scale.y += 0.08f + 0.08f * pulse;
-            rightHandTf_.scale.z += 0.08f + 0.08f * pulse;
-            leftHandTf_.position.x += (-rightX) * 0.35f;
-            leftHandTf_.position.z += (-rightZ) * 0.35f;
+            leftHandTf_.position.y += 0.52f;
+            leftHandTf_.position.x += forwardX * 1.55f + (-rightX) * 0.28f;
+            leftHandTf_.position.z += forwardZ * 1.55f + (-rightZ) * 0.28f;
+            leftHandTf_.scale.x += 0.20f + 0.14f * pulse;
+            leftHandTf_.scale.y += 0.20f + 0.14f * pulse;
+            leftHandTf_.scale.z += 0.20f + 0.14f * pulse;
+            rightHandTf_.position.y += 0.22f;
+            rightHandTf_.position.x += (-forwardX) * 0.42f;
+            rightHandTf_.position.z += (-forwardZ) * 0.42f;
             visualTf_.position.x += (-forwardX) * 0.10f;
             visualTf_.position.z += (-forwardZ) * 0.10f;
             visualPitch -= 0.12f;
+            leftHandTf_.position.x += forwardX * 0.55f;
+            leftHandTf_.position.z += forwardZ * 0.55f;
+            rightHandTf_.position.x += (-rightX) * 0.32f;
+            rightHandTf_.position.z += (-rightZ) * 0.32f;
         } else if (action_.step == ActionStep::Active) {
-            rightHandTf_.position.y += 0.3f;
-            rightHandTf_.position.x += forwardX * 1.0f;
-            rightHandTf_.position.z += forwardZ * 1.0f;
+            leftHandTf_.position.y += 0.36f;
+            leftHandTf_.position.x += forwardX * 1.65f + (-rightX) * 0.24f;
+            leftHandTf_.position.z += forwardZ * 1.65f + (-rightZ) * 0.24f;
+            leftHandTf_.scale.x += 0.16f;
+            leftHandTf_.scale.y += 0.16f;
+            leftHandTf_.scale.z += 0.16f;
             visualTf_.position.x += forwardX * 0.12f;
             visualTf_.position.z += forwardZ * 0.12f;
         } else if (action_.step == ActionStep::Recovery) {
-            rightHandTf_.position.y += 0.2f;
-            rightHandTf_.position.x += forwardX * 0.4f;
-            rightHandTf_.position.z += forwardZ * 0.4f;
+            leftHandTf_.position.y += 0.16f;
+            leftHandTf_.position.x += forwardX * 0.54f;
+            leftHandTf_.position.z += forwardZ * 0.54f;
             visualPitch += 0.06f;
         }
     } else if (!suppressActionPresentation && action_.kind == ActionKind::Wave) {
         if (action_.step == ActionStep::Charge) {
-            rightHandTf_.position.y += 0.8f;
+            bodyTf_.position.y -= 0.12f + 0.04f * pulse;
+            rightHandTf_.position.y += 0.44f;
             rightHandTf_.position.x += forwardX * 0.6f;
             rightHandTf_.position.z += forwardZ * 0.6f;
             bodyTf_.scale.x += 0.06f + 0.06f * pulse;
@@ -319,7 +375,10 @@ void Enemy::UpdateParts() {
             visualTf_.position.y += 0.04f * pulse;
             visualTf_.scale.x += 0.02f * pulse;
             visualTf_.scale.z += 0.02f * pulse;
-            visualPitch -= 0.10f;
+            visualPitch += 0.26f;
+            leftHandTf_.position.y += 0.34f;
+            leftHandTf_.position.x += (-rightX) * 0.36f;
+            leftHandTf_.position.z += (-rightZ) * 0.36f;
         } else if (action_.step == ActionStep::Active) {
             rightHandTf_.position.y += 0.4f;
             rightHandTf_.position.x += forwardX * 1.0f;
@@ -507,47 +566,47 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         0.5f + 0.5f * std::sin(runtime_.stateTimer * 12.0f);
     const DirectX::XMFLOAT4 phaseTint =
         phase_ == BossPhase::Phase2
-            ? DirectX::XMFLOAT4{1.0f, 0.42f, 0.16f, 0.52f}
-            : DirectX::XMFLOAT4{0.72f, 0.48f, 0.30f, 0.34f};
+            ? DirectX::XMFLOAT4{0.78f, 0.58f, 0.42f, 0.18f}
+            : DirectX::XMFLOAT4{0.72f, 0.76f, 0.72f, 0.12f};
     DirectX::XMFLOAT4 actionTint = phaseTint;
-    float actionIntensity = 0.10f + 0.035f * actionPulse;
-    float actionNoise = 0.28f;
+    float actionIntensity = 0.025f + 0.010f * actionPulse;
+    float actionNoise = 0.08f;
 
     switch (action_.kind) {
     case ActionKind::Smash:
-        actionTint = {1.0f, 0.36f, 0.10f, 0.58f};
-        actionIntensity = 0.32f + 0.12f * actionPulse;
-        actionNoise = 0.38f;
+        actionTint = {0.86f, 0.54f, 0.32f, 0.20f};
+        actionIntensity = 0.055f + 0.020f * actionPulse;
+        actionNoise = 0.10f;
         break;
     case ActionKind::Sweep:
-        actionTint = {1.0f, 0.62f, 0.18f, 0.54f};
-        actionIntensity = 0.24f + 0.10f * actionPulse;
-        actionNoise = 0.34f;
+        actionTint = {0.86f, 0.66f, 0.38f, 0.18f};
+        actionIntensity = 0.050f + 0.018f * actionPulse;
+        actionNoise = 0.10f;
         break;
     case ActionKind::Shot:
-        actionTint = {0.68f, 0.78f, 0.78f, 0.46f};
-        actionIntensity = 0.20f + 0.10f * actionPulse;
-        actionNoise = 0.30f;
+        actionTint = {0.66f, 0.76f, 0.76f, 0.14f};
+        actionIntensity = 0.045f + 0.015f * actionPulse;
+        actionNoise = 0.08f;
         break;
     case ActionKind::Wave:
-        actionTint = {0.54f, 0.78f, 0.50f, 0.44f};
-        actionIntensity = 0.22f + 0.10f * actionPulse;
-        actionNoise = 0.34f;
+        actionTint = {0.58f, 0.72f, 0.54f, 0.14f};
+        actionIntensity = 0.045f + 0.015f * actionPulse;
+        actionNoise = 0.08f;
         break;
     case ActionKind::Nova:
-        actionTint = {1.0f, 0.28f, 0.06f, 0.82f};
-        actionIntensity = 0.58f + 0.18f * actionPulse;
-        actionNoise = 0.42f;
+        actionTint = {0.88f, 0.46f, 0.28f, 0.22f};
+        actionIntensity = 0.070f + 0.022f * actionPulse;
+        actionNoise = 0.12f;
         break;
     case ActionKind::Warp:
-        actionTint = {0.90f, 0.48f, 0.20f, 0.70f};
-        actionIntensity = 0.42f + 0.12f * actionPulse;
-        actionNoise = 0.36f;
+        actionTint = {0.72f, 0.58f, 0.42f, 0.18f};
+        actionIntensity = 0.060f + 0.018f * actionPulse;
+        actionNoise = 0.10f;
         break;
     case ActionKind::Stalk:
-        actionTint = {0.52f, 0.56f, 0.42f, 0.38f};
-        actionIntensity = 0.14f + 0.04f * actionPulse;
-        actionNoise = 0.24f;
+        actionTint = {0.58f, 0.60f, 0.52f, 0.12f};
+        actionIntensity = 0.030f + 0.010f * actionPulse;
+        actionNoise = 0.06f;
         break;
     default:
         break;
@@ -559,32 +618,32 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
          action_.kind == ActionKind::Shot || action_.kind == ActionKind::Wave ||
          action_.kind == ActionKind::Nova);
     if (isTelegraphCharge) {
-        actionTint = LerpColor(actionTint, {1.0f, 0.82f, 0.24f, 0.86f},
-                               0.12f + 0.12f * actionPulse);
-        actionIntensity = actionIntensity * 0.42f + 0.05f * actionPulse;
-        actionNoise += 0.06f + 0.04f * actionPulse;
+        actionTint = LerpColor(actionTint, {0.82f, 0.72f, 0.42f, 0.22f},
+                               0.08f + 0.08f * actionPulse);
+        actionIntensity = actionIntensity * 0.55f + 0.012f * actionPulse;
+        actionNoise += 0.02f + 0.01f * actionPulse;
     }
 
     if (IsPunishableRecovery()) {
         const float recoveryPulse =
             0.5f + 0.5f * std::sin(runtime_.stateTimer * 22.0f);
-        actionTint = LerpColor(actionTint, {1.0f, 0.92f, 0.24f, 0.88f},
+        actionTint = LerpColor(actionTint, {0.86f, 0.74f, 0.34f, 0.28f},
                                0.55f + 0.25f * recoveryPulse);
-        actionIntensity += 0.44f + 0.30f * recoveryPulse;
-        actionNoise += 0.18f + 0.10f * recoveryPulse;
+        actionIntensity += 0.10f + 0.05f * recoveryPulse;
+        actionNoise += 0.05f + 0.02f * recoveryPulse;
     }
 
     if (phaseTransitionActive_) {
         const float phaseRatio = GetPhaseTransitionRatio();
-        actionTint = LerpColor(actionTint, {1.0f, 0.48f, 0.12f, 0.76f},
+        actionTint = LerpColor(actionTint, {0.86f, 0.58f, 0.32f, 0.28f},
                                phaseRatio);
-        actionIntensity += 0.46f * phaseRatio;
-        actionNoise += 0.28f * phaseRatio;
+        actionIntensity += 0.12f * phaseRatio;
+        actionNoise += 0.06f * phaseRatio;
     }
 
     ModelDrawEffect hitEffect{};
     if (isHitFlashing) {
-        hitEffect.enabled = true;
+        hitEffect.enabled = false;
         hitEffect.additiveBlend = false;
         hitEffect.color = LerpColor({1.0f, 0.30f, 0.08f, 0.78f},
                                     {1.0f, 0.78f, 0.28f, 0.86f},
@@ -602,7 +661,7 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
     ModelDrawEffect warpEffect{};
 
     if (action_.kind == ActionKind::Warp) {
-        warpEffect.enabled = true;
+        warpEffect.enabled = false;
         warpEffect.additiveBlend = true;
         warpEffect.color = actionTint;
         warpEffect.intensity = (action_.step == ActionStep::Move) ? 0.92f : 0.62f;
@@ -623,12 +682,12 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         modelManager->SetDrawEffect(hitEffect);
     } else {
         ModelDrawEffect actionEffect{};
-        actionEffect.enabled = true;
+        actionEffect.enabled = false;
         actionEffect.additiveBlend = false;
         actionEffect.color = actionTint;
         actionEffect.intensity = (isTelegraphCharge || action_.step == ActionStep::Active)
-                                     ? actionIntensity * 0.52f
-                                     : actionIntensity;
+                                     ? actionIntensity * 0.32f
+                                     : actionIntensity * 0.50f;
         actionEffect.fresnelPower = 2.5f;
         actionEffect.noiseAmount = actionNoise;
         actionEffect.time = runtime_.stateTimer;

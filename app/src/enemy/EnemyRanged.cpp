@@ -4,6 +4,12 @@
 #include <cmath>
 #include <cstdlib>
 
+namespace {
+float ChargeTurnScaleAfterStance(float stateTimer, float stanceTime) {
+    return stateTimer < stanceTime ? 1.0f : 0.035f;
+}
+} // namespace
+
 void Enemy::UpdateShotByStep(float deltaTime) {
     switch (action_.step) {
     case ActionStep::Charge:
@@ -56,9 +62,12 @@ void Enemy::UpdateNovaByStep(float deltaTime) {
 }
 
 void Enemy::UpdateShotCharge(float deltaTime) {
-    UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_);
+    UpdateFacingToPlayerWithSpeed(
+        deltaTime,
+        chargeTurnSpeed_ * ChargeTurnScaleAfterStance(stateTimer_, 0.48f));
 
     if (stateTimer_ >= config_.attacks.shot.chargeTime) {
+        LockCurrentFacing();
         ChangeActionStep(ActionStep::Active);
         shotsRemaining_ = 1;
         shotIntervalTimer_ = config_.attacks.shot.interval;
@@ -90,9 +99,10 @@ void Enemy::SpawnBullet() {
     EnemyBullet bullet{};
 
     DirectX::XMFLOAT3 target = playerPos_;
-    const float toPlayerX = playerPos_.x - rightHandTf_.position.x;
-    const float toPlayerY = playerPos_.y - rightHandTf_.position.y;
-    const float toPlayerZ = playerPos_.z - rightHandTf_.position.z;
+    const DirectX::XMFLOAT3 &shotHandPos = leftHandTf_.position;
+    const float toPlayerX = playerPos_.x - shotHandPos.x;
+    const float toPlayerY = playerPos_.y - shotHandPos.y;
+    const float toPlayerZ = playerPos_.z - shotHandPos.z;
     const float distance =
         std::sqrt(toPlayerX * toPlayerX + toPlayerY * toPlayerY +
                   toPlayerZ * toPlayerZ);
@@ -116,9 +126,9 @@ void Enemy::SpawnBullet() {
         target.z += rightZ * phase2ShotFanOffset_ * static_cast<float>(lane);
     }
 
-    float dirX = target.x - rightHandTf_.position.x;
-    float dirY = target.y - rightHandTf_.position.y;
-    float dirZ = target.z - rightHandTf_.position.z;
+    float dirX = target.x - shotHandPos.x;
+    float dirY = target.y - shotHandPos.y;
+    float dirZ = target.z - shotHandPos.z;
     float length = std::sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
     if (length <= 0.0001f) {
         length = 1.0f;
@@ -128,7 +138,7 @@ void Enemy::SpawnBullet() {
     dirY /= length;
     dirZ /= length;
 
-    bullet.position = rightHandTf_.position;
+    bullet.position = shotHandPos;
     bullet.position.y += config_.attacks.shot.spawnHeightOffset;
     bullet.velocity = {dirX * config_.attacks.shot.bulletSpeed,
                        dirY * config_.attacks.shot.bulletSpeed,
@@ -156,7 +166,9 @@ void Enemy::UpdateBullets(float deltaTime) {
 }
 
 void Enemy::UpdateWaveCharge(float deltaTime) {
-    UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_);
+    UpdateFacingToPlayerWithSpeed(
+        deltaTime,
+        chargeTurnSpeed_ * ChargeTurnScaleAfterStance(stateTimer_, 0.48f));
 
     if (stateTimer_ >= config_.attacks.wave.chargeTime) {
         LockCurrentFacing();
@@ -178,7 +190,9 @@ void Enemy::UpdateWaveRecovery(float deltaTime) {
 }
 
 void Enemy::UpdateNovaCharge(float deltaTime) {
-    UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_ * 0.42f);
+    UpdateFacingToPlayerWithSpeed(
+        deltaTime,
+        chargeTurnSpeed_ * ChargeTurnScaleAfterStance(stateTimer_, 0.64f));
     if (stateTimer_ >= config_.attacks.nova.chargeTime) {
         LockCurrentFacing();
         runtime_.novaSkyBulletsSpawned = false;
@@ -190,10 +204,6 @@ void Enemy::UpdateNovaCharge(float deltaTime) {
 
 void Enemy::UpdateNovaActive(float deltaTime) {
     UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_ * 0.35f);
-
-    if (stateTimer_ < config_.attacks.nova.impactTime) {
-        return;
-    }
 
     if (!runtime_.novaSkyBulletsSpawned) {
         SpawnNovaSkyBullets();

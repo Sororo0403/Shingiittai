@@ -63,6 +63,15 @@ bool Enemy::ShouldEnterSweepHold() const {
 void Enemy::EnterHold(float duration) {
     holdConfigured_ = true;
     currentHoldDuration_ = duration;
+    if (playerObs_.isAttacking) {
+        currentHoldDuration_ += RandomRange(0.10f, 0.22f);
+    }
+    if (playerObs_.justCounterEarly || counterMemory_.earlyCount > 0.6f) {
+        currentHoldDuration_ += RandomRange(0.12f, 0.26f);
+    }
+    if (postCounterRhythmTimer_ > 0.0f || forceCounterBaitNext_) {
+        currentHoldDuration_ += RandomRange(0.14f, 0.30f);
+    }
 
     holdBranchType_ = HoldBranchType::None;
     holdBranchDecided_ = false;
@@ -108,6 +117,9 @@ void Enemy::DecideHoldBranch(ActionKind kind) {
 
     if (playerObs_.isCounterStance) {
         warpChance += 0.10f;
+    }
+    if (playerObs_.isAttacking) {
+        warpChance += 0.06f;
     }
 
     if (playerObs_.justCounterEarly || counterMemory_.earlyCount > 0.6f) {
@@ -163,6 +175,9 @@ bool Enemy::ShouldDoFakeCommit(ActionKind kind) const {
         if (playerObs_.isCounterStance) {
             chance += 0.18f;
         }
+        if (playerObs_.isAttacking) {
+            chance += 0.12f;
+        }
         if (counterMemory_.earlyCount > 0.6f) {
             chance += 0.12f;
         }
@@ -173,6 +188,9 @@ bool Enemy::ShouldDoFakeCommit(ActionKind kind) const {
         chance = sweepFakeCommitChance_;
         if (playerObs_.isCounterStance) {
             chance += 0.12f;
+        }
+        if (playerObs_.isAttacking) {
+            chance += 0.10f;
         }
         if (counterMemory_.earlyCount > 0.6f) {
             chance += 0.08f;
@@ -219,6 +237,12 @@ void Enemy::EnterFreezeHold(ActionKind kind) {
             RandomRange(sweepFreezeHoldTimeMin_, sweepFreezeHoldTimeMax_);
     } else {
         freezeHoldDuration_ = 0.0f;
+    }
+    if (playerObs_.isAttacking) {
+        freezeHoldDuration_ += RandomRange(0.08f, 0.18f);
+    }
+    if (postCounterRhythmTimer_ > 0.0f || forceCounterBaitNext_) {
+        freezeHoldDuration_ += RandomRange(0.10f, 0.24f);
     }
 }
 
@@ -455,6 +479,12 @@ float Enemy::GetAdaptiveHoldChance(ActionKind kind) const {
     chance += counterMemory_.counterStancePressure * 0.12f;
     chance += counterMemory_.successCount * 0.08f;
     chance += counterMemory_.earlyCount * 0.10f;
+    if (playerObs_.isAttacking) {
+        chance += 0.16f;
+    }
+    if (postCounterRhythmTimer_ > 0.0f || forceCounterBaitNext_) {
+        chance += 0.20f;
+    }
     chance = (std::clamp)(chance, 0.0f, 0.95f);
     return chance;
 }
@@ -463,16 +493,22 @@ float Enemy::GetAdaptiveChargeOffset(ActionKind kind) const {
     float offset = 0.0f;
     offset += counterMemory_.earlyCount * 0.035f;
     offset -= counterMemory_.lateCount * 0.015f;
+    if (playerObs_.isAttacking) {
+        offset += 0.06f;
+    }
 
     if (postCounterRhythmTimer_ > 0.0f) {
         if (kind == ActionKind::Smash) {
-            offset += 0.08f;
+            offset += 0.14f;
         } else if (kind == ActionKind::Sweep) {
-            offset += 0.05f;
+            offset += 0.10f;
         }
     }
+    if (forceCounterBaitNext_) {
+        offset += 0.12f;
+    }
 
-    return (std::clamp)(offset, -0.08f, 0.28f);
+    return (std::clamp)(offset, -0.08f, 0.42f);
 }
 
 bool Enemy::ShouldSnapReleaseFromRead() const {
@@ -602,52 +638,19 @@ ActionKind Enemy::SelectNeutralAction(float distance) const {
         return SelectNearPressureAction();
     }
 
-    if (phase_ == BossPhase::Phase2 && novaPhase2Cooldown_ <= 0.0f) {
-        float novaChance = (distance >= config_.core.farAttackDistance)
-                               ? novaPhase2FarChance_
-                               : novaPhase2NearChance_;
-        if (playerObs_.isGuarding || playerObs_.isCounterStance) {
-            novaChance += 0.08f;
-        }
-
-        const float roll =
-            static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-        if (roll < novaChance) {
-            return ActionKind::Nova;
-        }
-    }
-
-    int shotWeight = midShotWeight_ + neutralMidShotBonus_;
-    int waveWeight = midWaveWeight_ + neutralMidWaveBonus_;
-
-    if (phase_ == BossPhase::Phase2) {
-        shotWeight += phase2MidShotBonus_;
-        waveWeight += 8;
-    }
-
-    if (playerObs_.isGuarding) {
-        waveWeight += 12;
-        shotWeight += 6;
-    }
-
-    switch (PickWeightedIndex({shotWeight, waveWeight})) {
-    case 0:
-        return ActionKind::Shot;
-    default:
-        return ActionKind::Wave;
-    }
+    return ActionKind::Shot;
 }
 
 ActionKind Enemy::SelectNearPressureAction() const {
     int smashWeight = nearSmashWeight_;
     int sweepWeight = nearSweepWeight_;
 
-    if (phase_ == BossPhase::Phase2 && novaPhase2Cooldown_ <= 0.0f &&
-        closePressureTimer_ >= closePressureTimeThreshold_ * 0.85f) {
-        float roll = static_cast<float>(std::rand()) /
-                     static_cast<float>(RAND_MAX);
-        if (roll < novaPhase2NearChance_) {
-            return ActionKind::Nova;
+    if (forceCounterBaitNext_ || postCounterRhythmTimer_ > 0.0f ||
+        playerObs_.justCounterEarly) {
+        const float baitRoll =
+            static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+        if (baitRoll < 0.68f) {
+            return DecideAdaptiveCounterBaitAction();
         }
     }
 

@@ -50,9 +50,7 @@ class Player {
         return {leftSwordSlashMode_, rightSwordSlashMode_};
     }
     std::array<float, kSwordCount> GetSwordAttackDamages() const {
-        const float comboMultiplier = GetSwingComboDamageMultiplier();
-        return {leftSwordAttackDamage_ * comboMultiplier,
-                rightSwordAttackDamage_ * comboMultiplier};
+        return {leftSwordAttackDamage_, rightSwordAttackDamage_};
     }
     OBB GetOBB() const;
 
@@ -68,10 +66,15 @@ class Player {
     const Transform &GetTransform() const { return tf_; }
     bool IsDodging() const { return dodgeTimer_ > 0.0f; }
     bool IsDamageInvulnerable() const { return dodgeInvulnerableTimer_ > 0.0f; }
+    bool IsAttackRecovery() const {
+        return postSlashRecoveryTimer_ > 0.0f || leftSlashRecoveryTimer_ > 0.0f ||
+               rightSlashRecoveryTimer_ > 0.0f;
+    }
 
     float GetHP() const { return hp_; }
     void TakeDamage(float damage);
     void NotifyAttackHit(float damage);
+    void NotifyAttackHit(size_t swordIndex, float damage);
 
     void AddKnockback(const DirectX::XMFLOAT3 &velocity);
     const DirectX::XMFLOAT3 &GetVelocity() const { return velocity_; }
@@ -145,8 +148,14 @@ class Player {
                            bool hasRightJoyCon, bool useGamepadRightSword,
                            bool useHunterGamepadControls, float deltaTime);
     void ApplyHandRecovery(SwordPose &pose, float &timer, float deltaTime);
-    float GetSlashRecoveryDuration() const;
+    void RegisterAttackHit(float damage);
+    void RegisterAttackWhiff();
+    void ResetOverSwing();
+    void UpdateOverSwing(float deltaTime);
+    float GetSlashRecoveryDuration(bool hitConfirmed) const;
+    float GetHitConfirmRecoveryDuration() const;
     float GetSlashRecoveryRatio(float timer) const;
+    float GetAttackRecoveryRatio() const;
     float ComputeGreatSwordAttackDamage(float chargeRatio) const;
     float ComputeJoyConSwingDamageMultiplier(float angularVelocity) const;
     float GetSwingComboDamageMultiplier() const;
@@ -157,6 +166,8 @@ class Player {
     static constexpr float kArmLength = 1.0f;
     static constexpr float kSwingComboWindow = 1.35f;
     static constexpr int kSwingComboMax = 3;
+    static constexpr float kOverSwingResetDuration = 0.95f;
+    static constexpr int kOverSwingMax = 3;
 
     Transform tf_;
     uint32_t modelId_ = 0;
@@ -187,7 +198,7 @@ class Player {
     bool rightSwordVisible_ = false;
     bool isGuarding_ = false;
     float postSlashRecoveryTimer_ = 0.0f;
-    static constexpr float kPostSlashRecoveryDuration = 0.25f;
+    static constexpr float kPostSlashRecoveryDuration = 0.30f;
     float dodgeTimer_ = 0.0f;
     float dodgeCooldownTimer_ = 0.0f;
     float dodgeInvulnerableTimer_ = 0.0f;
@@ -206,10 +217,15 @@ class Player {
     static constexpr float kJoyConAutoMoveDistanceSpeed = 3.35f;
     float leftSlashRecoveryTimer_ = 0.0f;
     float rightSlashRecoveryTimer_ = 0.0f;
-    float leftSwordAttackDamage_ = 10.0f;
-    float rightSwordAttackDamage_ = 10.0f;
+    float leftSwordAttackDamage_ = 4.0f;
+    float rightSwordAttackDamage_ = 4.0f;
     bool prevLeftSwordSlashMode_ = false;
     bool prevRightSwordSlashMode_ = false;
+    bool leftSlashHitConfirmed_ = false;
+    bool rightSlashHitConfirmed_ = false;
+    float recoveryVulnerableFlashTimer_ = 0.0f;
+    int overSwingCount_ = 0;
+    float overSwingResetTimer_ = 0.0f;
     int swingComboCount_ = 0;
     float swingComboTimer_ = 0.0f;
 

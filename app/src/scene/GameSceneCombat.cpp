@@ -47,6 +47,125 @@ static XMFLOAT3 DirectionFromTo(const XMFLOAT3 &from, const XMFLOAT3 &to) {
     return {dx / length, dy / length, dz / length};
 }
 
+static float DistanceSqXZ(const XMFLOAT3 &a, const XMFLOAT3 &b) {
+    const float dx = a.x - b.x;
+    const float dz = a.z - b.z;
+    return dx * dx + dz * dz;
+}
+
+static bool IsNearXZ(const XMFLOAT3 &a, const XMFLOAT3 &b, float radius) {
+    return DistanceSqXZ(a, b) <= radius * radius;
+}
+
+static bool IsChargeWeakPointWindow(ActionKind kind, ActionId id,
+                                    ActionStep step) {
+    (void)id;
+    if (!(kind == ActionKind::Smash || kind == ActionKind::Sweep)) {
+        return false;
+    }
+    return step == ActionStep::Charge || step == ActionStep::Hold;
+}
+
+static bool IsReadableChargeWeakPointHit(const OBB &swordHitBox,
+                                         const XMFLOAT3 &enemyPosition) {
+    XMFLOAT3 weakPoint = enemyPosition;
+    weakPoint.y += 1.55f;
+    const float dx = swordHitBox.center.x - weakPoint.x;
+    const float dy = swordHitBox.center.y - weakPoint.y;
+    const float dz = swordHitBox.center.z - weakPoint.z;
+    return (dx * dx + dy * dy + dz * dz) <= (2.6f * 2.6f);
+}
+
+static bool IsSlashTowardPoint(const Sword &sword, const XMFLOAT3 &target,
+                               float minDot = 0.10f) {
+    if (!sword.CanSlashCounter()) {
+        return false;
+    }
+
+    const XMFLOAT2 slashDir = sword.GetSlashDirection();
+    float slashLenSq = slashDir.x * slashDir.x + slashDir.y * slashDir.y;
+    if (slashLenSq < 0.01f) {
+        return false;
+    }
+
+    const XMFLOAT3 &swordPos = sword.GetTransform().position;
+    float targetX = target.x - swordPos.x;
+    float targetY = target.y - swordPos.y;
+    float targetLenSq = targetX * targetX + targetY * targetY;
+    if (targetLenSq < 0.01f) {
+        return true;
+    }
+
+    const float invSlashLen = 1.0f / std::sqrt(slashLenSq);
+    const float invTargetLen = 1.0f / std::sqrt(targetLenSq);
+    const float dot = (slashDir.x * invSlashLen) * (targetX * invTargetLen) +
+                      (slashDir.y * invSlashLen) * (targetY * invTargetLen);
+    return dot >= minDot;
+}
+
+static XMFLOAT2 GetChargeWeakPointRequiredSlashDirection(ActionKind kind,
+                                                         int slashCount) {
+    if (kind == ActionKind::Smash) {
+        return slashCount == 0 ? XMFLOAT2{0.0f, -1.0f}
+                               : XMFLOAT2{1.0f, 0.0f};
+    }
+    if (kind == ActionKind::Sweep) {
+        return slashCount == 0 ? XMFLOAT2{1.0f, 0.0f}
+                               : XMFLOAT2{0.0f, -1.0f};
+    }
+    return {0.0f, -1.0f};
+}
+
+static bool IsSlashAlongDirection(const Sword &sword,
+                                  const XMFLOAT2 &requiredDirection,
+                                  float minAbsDot = 0.72f) {
+    if (!sword.CanSlashCounter()) {
+        return false;
+    }
+
+    XMFLOAT2 slashDir = sword.GetSlashDirection();
+    float slashLenSq = slashDir.x * slashDir.x + slashDir.y * slashDir.y;
+    float requiredLenSq = requiredDirection.x * requiredDirection.x +
+                          requiredDirection.y * requiredDirection.y;
+    if (slashLenSq < 0.01f || requiredLenSq < 0.01f) {
+        return false;
+    }
+
+    const float invSlashLen = 1.0f / std::sqrt(slashLenSq);
+    const float invRequiredLen = 1.0f / std::sqrt(requiredLenSq);
+    const float dot = slashDir.x * invSlashLen *
+                          requiredDirection.x * invRequiredLen +
+                      slashDir.y * invSlashLen *
+                          requiredDirection.y * invRequiredLen;
+    return std::fabs(dot) >= minAbsDot;
+}
+
+static bool FindSlashTowardPoint(
+    const std::array<const Sword *, Player::kSwordCount> &swords,
+    const std::array<bool, Player::kSwordCount> &slashStates,
+    const XMFLOAT3 &target, size_t &outSwordIndex, float minDot = 0.10f) {
+    for (size_t i = 0; i < swords.size(); ++i) {
+        const Sword *sword = swords[i];
+        if (sword == nullptr || !slashStates[i]) {
+            continue;
+        }
+        if (IsSlashTowardPoint(*sword, target, minDot)) {
+            outSwordIndex = i;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static float GetReadableMeleeRadius(const OBB &box) {
+    return (std::max)(box.size.x, box.size.z) * 0.55f + 0.75f;
+}
+
+static float GetReadableProjectileRadius(const XMFLOAT3 &size) {
+    return (std::max)(size.x, size.z) * 0.70f + 0.45f;
+}
+
 static XMFLOAT4 MakeYawRotation(float yaw) {
     XMFLOAT4 rotation{};
     XMStoreFloat4(&rotation,
@@ -65,30 +184,19 @@ static void TickCooldown(float &cooldown, float deltaTime) {
     }
 }
 
-static CounterAxis ToEnemyCounterAxis(SwordCounterAxis axis) {
-    switch (axis) {
-    case SwordCounterAxis::Vertical:
-        return CounterAxis::Vertical;
-    case SwordCounterAxis::Horizontal:
-        return CounterAxis::Horizontal;
-    default:
-        return CounterAxis::None;
-    }
-}
-
 PlayerCombatObservation GameScene::BuildPlayerCombatObservation() const {
     const auto slashStates = player_.GetSwordSlashStates();
 
     PlayerCombatObservation observation{};
     observation.position = player_.GetTransform().position;
     observation.velocity = player_.GetVelocity();
-    observation.isGuarding = player_.IsGuarding();
-    observation.isCounterStance = player_.IsCounterStance();
+    observation.isGuarding = false;
+    observation.isCounterStance = false;
     observation.justCountered = player_.JustCountered();
     observation.justCounterFailed = player_.JustCounterFailed();
     observation.justCounterEarly = player_.JustCounterEarly();
     observation.justCounterLate = player_.JustCounterLate();
-    observation.counterAxis = ToEnemyCounterAxis(player_.GetCounterAxis());
+    observation.counterAxis = CounterAxis::None;
 
     for (bool isSlashing : slashStates) {
         observation.isAttacking = observation.isAttacking || isSlashing;
@@ -101,16 +209,14 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     collisionManager_.Clear();
 
     const auto playerBox = player_.GetOBB();
-    const bool isPlayerGuarding = player_.IsGuarding();
-    const bool isPlayerCountering = player_.IsCounterStance();
     const bool isPlayerDodging = player_.IsDamageInvulnerable();
-    const float guardDamageMultiplier = player_.GetGuardDamageMultiplier();
+    const float playerRecoveryDamageScale =
+        player_.IsAttackRecovery() ? 1.65f : 1.0f;
     const auto enemyBodyBox = enemy_.GetBodyOBB();
     const auto enemyLeftHandBox = enemy_.GetLeftHandOBB();
     const auto enemyRightHandBox = enemy_.GetRightHandOBB();
-    const CollisionManager::BodyId playerBody =
-        AddCollisionBody(collisionManager_, playerBox, kLayerPlayer,
-                         kLayerEnemyAttack | kLayerEnemyProjectile);
+    AddCollisionBody(collisionManager_, playerBox, kLayerPlayer,
+                     kLayerEnemyAttack | kLayerEnemyProjectile);
     const CollisionManager::BodyId enemyBody =
         AddCollisionBody(collisionManager_, enemyBodyBox, kLayerEnemy,
                          kLayerPlayerAttack | kLayerReflectedProjectile);
@@ -123,29 +229,19 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     const std::array<CollisionManager::BodyId, 3> enemyHurtBodies = {
         enemyBody, enemyLeftHandBody, enemyRightHandBody};
     const ActionKind enemyActionKind = enemy_.GetActionKind();
+    const ActionId enemyActionId = enemy_.GetActionId();
     const ActionStep enemyActionStep = enemy_.GetActionStep();
     const auto swords = player_.GetSwords();
     const auto swordSlashStates = player_.GetSwordSlashStates();
     const auto swordAttackDamages = player_.GetSwordAttackDamages();
-    std::array<CollisionManager::BodyId, Player::kSwordCount> counterBodies{};
-    counterBodies.fill(CollisionManager::kInvalidBodyId);
-    for (size_t i = 0; i < swords.size(); ++i) {
-        const Sword *sword = swords[i];
-        if (sword == nullptr || !sword->IsCounterStance()) {
-            continue;
-        }
-        counterBodies[i] = AddCollisionBody(
-            collisionManager_, sword->GetCounterOBB(), kLayerPlayerCounter,
-            kLayerEnemyAttack | kLayerEnemyProjectile);
-    }
-
     bool startCounterCinematicThisFrame = false;
     bool stopCounterCinematicThisFrame = false;
     bool forceSyncEnemyAnimationThisFrame = false;
     auto triggerSuccessfulCounter = [&](size_t swordIndex, float enemyDamage,
                                         float hitCooldown) {
         const float counterDamage =
-            enemyDamage * player_.GetCounterDamageMultiplier();
+            (std::max)(enemyDamage * player_.GetCounterDamageMultiplier(),
+                       140.0f);
         const float vulnerabilityDuration =
             player_.GetCounterVulnerabilityDuration();
         player_.NotifyCounterSuccess(swordIndex);
@@ -153,7 +249,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             forceSyncEnemyAnimationThisFrame = true;
         }
         enemy_.TakeDamage(counterDamage);
-        player_.NotifyAttackHit(counterDamage);
+        player_.NotifyAttackHit(swordIndex, counterDamage);
         CombatFeedbackEvent feedback{};
         feedback.type = CombatFeedbackEventType::CounterSuccess;
         feedback.position = enemy_.GetTransform().position;
@@ -166,17 +262,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         DispatchCombatFeedback(feedback);
         playerHitCooldown_ = hitCooldown;
         startCounterCinematicThisFrame = true;
-    };
-    auto isCounterBodyHit = [&](CollisionManager::BodyId targetBody) {
-        for (CollisionManager::BodyId counterBody : counterBodies) {
-            if (counterBody == CollisionManager::kInvalidBodyId) {
-                continue;
-            }
-            if (collisionManager_.Test(targetBody, counterBody)) {
-                return true;
-            }
-        }
-        return false;
+        counterCinematicTimer_ = counterCinematicDuration_;
     };
     auto isEnemyHurtBodyHit = [&](CollisionManager::BodyId attackBody) {
         for (CollisionManager::BodyId targetBody : enemyHurtBodies) {
@@ -193,35 +279,50 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     TickCooldown(enemyHitCooldown_, gameplayDeltaTime);
     TickCooldown(playerHitCooldown_, gameplayDeltaTime);
 
-    const bool isEnemySmashCounterWindow =
+    const bool isEnemySmashCommitted =
         (enemyActionKind == ActionKind::Smash &&
          enemyActionStep == ActionStep::Active);
-    const bool isEnemySweepCounterWindow =
+    const bool isEnemySweepCommitted =
         (enemyActionKind == ActionKind::Sweep &&
          enemyActionStep == ActionStep::Active);
     const bool isEnemySmashMeleeWindow =
-        (enemyActionKind == ActionKind::Smash &&
-         enemyActionStep == ActionStep::Active);
+        isEnemySmashCommitted && enemy_.IsAttackActive();
     const bool isEnemySweepMeleeWindow =
-        (enemyActionKind == ActionKind::Sweep &&
-         enemyActionStep == ActionStep::Active);
+        isEnemySweepCommitted && enemy_.IsAttackActive();
     const bool isEnemyMeleeActive =
         isEnemySmashMeleeWindow || isEnemySweepMeleeWindow;
+    const bool isEnemyMeleeCommitted =
+        isEnemySmashCommitted || isEnemySweepCommitted;
+    const bool isEnemyChargeWeakPointWindow =
+        IsChargeWeakPointWindow(enemyActionKind, enemyActionId,
+                                enemyActionStep);
+    if (isEnemyChargeWeakPointWindow) {
+        if (chargeWeakPointActionKind_ != enemyActionKind) {
+            chargeWeakPointActionKind_ = enemyActionKind;
+            chargeWeakPointBroken_ = false;
+            chargeWeakPointSlashCount_ = 0;
+            previousChargeWeakPointSlashStates_.fill(false);
+        }
+    } else {
+        chargeWeakPointActionKind_ = ActionKind::None;
+        chargeWeakPointBroken_ = false;
+        chargeWeakPointSlashCount_ = 0;
+        previousChargeWeakPointSlashStates_.fill(false);
+    }
 
     const float enemyAttackDamage = enemy_.GetCurrentAttackDamage();
     const float enemyAttackKnockback = enemy_.GetCurrentAttackKnockback();
     const bool isEnemyCounterWindow =
-        isEnemySmashCounterWindow || isEnemySweepCounterWindow;
+        isEnemyMeleeCommitted;
     OBB enemyAttackBox{};
     CollisionManager::BodyId enemyAttackBody =
         CollisionManager::kInvalidBodyId;
-    if (isEnemyMeleeActive) {
+    if (isEnemyMeleeCommitted) {
         enemyAttackBox = enemy_.GetAttackOBB();
         enemyAttackBody =
             AddCollisionBody(collisionManager_, enemyAttackBox,
                              kLayerEnemyAttack,
-                             kLayerPlayer | kLayerPlayerAttack |
-                                 kLayerPlayerCounter);
+                             kLayerPlayer | kLayerPlayerAttack);
     }
 
     bool counterTriggeredThisFrame = false;
@@ -230,23 +331,35 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         if (sword == nullptr || !swordSlashStates[i]) {
             continue;
         }
+        const bool isFreshChargeWeakPointSlash =
+            !previousChargeWeakPointSlashStates_[i];
 
         const auto swordHitBox = sword->GetOBB();
         const CollisionManager::BodyId swordHitBody =
             AddCollisionBody(collisionManager_, swordHitBox,
                              kLayerPlayerAttack,
                              kLayerEnemy | kLayerEnemyAttack);
-        const SwordCounterAxis slashCounterAxis = sword->GetSlashCounterAxis();
-        const bool slashAxisMatches =
-            (isEnemySmashCounterWindow &&
-             slashCounterAxis == SwordCounterAxis::Vertical) ||
-            (isEnemySweepCounterWindow &&
-             slashCounterAxis == SwordCounterAxis::Horizontal);
+        const bool hitBody = isEnemyHurtBodyHit(swordHitBody);
+        const bool canTouchChargeWeakPoint =
+            enemyHitCooldown_ <= 0.0f && isEnemyChargeWeakPointWindow &&
+            !chargeWeakPointBroken_ &&
+            isFreshChargeWeakPointSlash &&
+            IsNearXZ(player_.GetTransform().position,
+                     enemy_.GetTransform().position, 5.2f) &&
+            (hitBody || IsReadableChargeWeakPointHit(
+                            swordHitBox, enemy_.GetTransform().position));
+        const XMFLOAT2 requiredChargeSlashDirection =
+            GetChargeWeakPointRequiredSlashDirection(enemyActionKind,
+                                                     chargeWeakPointSlashCount_);
+        const bool canBreakChargeWeakPoint =
+            canTouchChargeWeakPoint &&
+            IsSlashAlongDirection(*sword, requiredChargeSlashDirection);
         const bool canSlashCounter =
             playerHitCooldown_ <= 0.0f && isEnemyCounterWindow &&
-            slashAxisMatches &&
             enemyAttackBody != CollisionManager::kInvalidBodyId &&
-            collisionManager_.Test(swordHitBody, enemyAttackBody);
+            IsNearXZ(player_.GetTransform().position, enemyAttackBox.center,
+                     GetReadableMeleeRadius(enemyAttackBox) + 0.85f) &&
+            IsSlashTowardPoint(*sword, enemyAttackBox.center, 0.05f);
 
         if (canSlashCounter) {
             triggerSuccessfulCounter(i, enemyAttackDamage, 0.2f);
@@ -254,13 +367,36 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             break;
         }
 
-        const bool hitBody = isEnemyHurtBodyHit(swordHitBody);
+        if (canBreakChargeWeakPoint) {
+            chargeWeakPointSlashCount_ = 1;
+            chargeWeakPointBroken_ = true;
+            chargeWeakPointActionKind_ = ActionKind::None;
+            const float breakDamage = 78.0f + swordAttackDamages[i] * 1.25f;
+            if (enemy_.NotifyCountered(0.95f)) {
+                forceSyncEnemyAnimationThisFrame = true;
+            }
+            enemy_.TakeDamage(breakDamage);
+            player_.NotifyAttackHit(i, breakDamage);
+
+            CombatFeedbackEvent feedback{};
+            feedback.type = CombatFeedbackEventType::CounterSuccess;
+            feedback.position = enemy_.GetTransform().position;
+            feedback.position.y += 1.55f;
+            feedback.direction =
+                DirectionFromTo(player_.GetTransform().position,
+                                enemy_.GetTransform().position);
+            feedback.power = breakDamage / 12.0f;
+            feedback.swordIndex = i;
+            DispatchCombatFeedback(feedback);
+            enemyHitCooldown_ = 0.18f;
+            break;
+        }
 
         if (enemyHitCooldown_ <= 0.0f) {
             if (hitBody) {
                 const float swordDamage = swordAttackDamages[i];
                 enemy_.TakeDamage(swordDamage);
-                player_.NotifyAttackHit(swordDamage);
+                player_.NotifyAttackHit(i, swordDamage);
                 CombatFeedbackEvent feedback{};
                 feedback.type = CombatFeedbackEventType::PlayerSlashHit;
                 feedback.position = swordHitBox.center;
@@ -285,7 +421,8 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     if (isEnemyMeleeActive && !counterTriggeredThisFrame) {
         const bool bossHitPlayer =
             enemyAttackBody != CollisionManager::kInvalidBodyId &&
-            collisionManager_.Test(enemyAttackBody, playerBody);
+            IsNearXZ(player_.GetTransform().position, enemyAttackBox.center,
+                     GetReadableMeleeRadius(enemyAttackBox));
 
         if (bossHitPlayer && playerHitCooldown_ <= 0.0f) {
             const XMFLOAT2 knockbackDir = NormalizeXZ(
@@ -296,25 +433,9 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
 
             if (isPlayerDodging) {
                 playerHitCooldown_ = 0.08f;
-            } else if (isPlayerGuarding) {
-                enemy_.NotifyAttackGuarded();
-                player_.TakeDamage(enemyAttackDamage * guardDamageMultiplier);
-                player_.AddKnockback(
-                    {knockbackDir.x * (enemyAttackKnockback * 0.5f), 0.0f,
-                     knockbackDir.y * (enemyAttackKnockback * 0.5f)});
-                CombatFeedbackEvent feedback{};
-                feedback.type = CombatFeedbackEventType::PlayerGuard;
-                feedback.position = player_.GetTransform().position;
-                feedback.position.y += 1.0f;
-                feedback.direction =
-                    DirectionFromTo(enemy_.GetTransform().position,
-                                    player_.GetTransform().position);
-                feedback.power = enemyAttackDamage / 10.0f;
-                DispatchCombatFeedback(feedback);
-                playerHitCooldown_ = 0.2f;
             } else {
                 enemy_.NotifyAttackConnected();
-                player_.TakeDamage(enemyAttackDamage);
+                player_.TakeDamage(enemyAttackDamage * playerRecoveryDamageScale);
                 player_.AddKnockback(
                     {knockbackDir.x * enemyAttackKnockback, 0.0f,
                      knockbackDir.y * enemyAttackKnockback});
@@ -348,36 +469,28 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
 
             if (isPlayerDodging) {
                 playerHitCooldown_ = 0.08f;
-            } else if (isPlayerCountering) {
-                triggerSuccessfulCounter(0, novaDamage * 2.0f, 0.18f);
-            } else if (isPlayerGuarding) {
-                enemy_.NotifyAttackGuarded();
-                player_.TakeDamage(novaDamage * guardDamageMultiplier);
-                player_.AddKnockback(
-                    {knockbackDir.x * (novaKnockback * 0.55f), 0.0f,
-                     knockbackDir.y * (novaKnockback * 0.55f)});
-                CombatFeedbackEvent feedback{};
-                feedback.type = CombatFeedbackEventType::PlayerGuard;
-                feedback.position = playerPos;
-                feedback.position.y += 1.0f;
-                feedback.direction = {knockbackDir.x, 0.0f, knockbackDir.y};
-                feedback.power = novaDamage / 8.0f;
-                DispatchCombatFeedback(feedback);
-                playerHitCooldown_ = 0.45f;
             } else {
-                enemy_.NotifyAttackConnected();
-                player_.TakeDamage(novaDamage);
-                player_.AddKnockback(
-                    {knockbackDir.x * novaKnockback, 0.0f,
-                     knockbackDir.y * novaKnockback});
-                CombatFeedbackEvent feedback{};
-                feedback.type = CombatFeedbackEventType::PlayerDamaged;
-                feedback.position = playerPos;
-                feedback.position.y += 1.0f;
-                feedback.direction = {knockbackDir.x, 0.0f, knockbackDir.y};
-                feedback.power = novaDamage / 8.0f;
-                DispatchCombatFeedback(feedback);
-                playerHitCooldown_ = 0.55f;
+                size_t counterSwordIndex = swords.size();
+                if (FindSlashTowardPoint(swords, swordSlashStates,
+                                         enemy_.GetTransform().position,
+                                         counterSwordIndex, 0.00f)) {
+                    triggerSuccessfulCounter(counterSwordIndex, novaDamage * 2.0f,
+                                             0.18f);
+                } else {
+                    enemy_.NotifyAttackConnected();
+                    player_.TakeDamage(novaDamage * playerRecoveryDamageScale);
+                    player_.AddKnockback(
+                        {knockbackDir.x * novaKnockback, 0.0f,
+                         knockbackDir.y * novaKnockback});
+                    CombatFeedbackEvent feedback{};
+                    feedback.type = CombatFeedbackEventType::PlayerDamaged;
+                    feedback.position = playerPos;
+                    feedback.position.y += 1.0f;
+                    feedback.direction = {knockbackDir.x, 0.0f, knockbackDir.y};
+                    feedback.power = novaDamage / 8.0f;
+                    DispatchCombatFeedback(feedback);
+                    playerHitCooldown_ = 0.55f;
+                }
             }
         }
     }
@@ -404,6 +517,8 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         bulletBox.size = enemy_.GetBulletHitBoxSize();
         bulletBox.rotation =
             MakeYawRotation(std::atan2(bullet.velocity.x, bullet.velocity.z));
+        const float bulletThreatRadius =
+            GetReadableProjectileRadius(bulletBox.size);
         const CollisionManager::BodyId bulletBody = AddCollisionBody(
             collisionManager_, bulletBox,
             bullet.isReflected ? kLayerReflectedProjectile
@@ -411,8 +526,12 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             bullet.isReflected ? kLayerEnemy
                                : (kLayerPlayer | kLayerPlayerCounter));
 
-        if (!bullet.isReflected && isPlayerCountering &&
-            isCounterBodyHit(bulletBody)) {
+        size_t projectileCounterSwordIndex = swords.size();
+        if (!bullet.isReflected &&
+            IsNearXZ(bullet.position, player_.GetTransform().position,
+                     bulletThreatRadius + 0.85f) &&
+            FindSlashTowardPoint(swords, swordSlashStates, bullet.position,
+                                 projectileCounterSwordIndex, 0.00f)) {
             enemy_.ReflectBullet(i, enemy_.GetTransform().position);
             CombatFeedbackEvent feedback{};
             feedback.type = CombatFeedbackEventType::ProjectileReflect;
@@ -443,7 +562,8 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             continue;
         }
 
-        if (collisionManager_.Test(bulletBody, playerBody)) {
+        if (IsNearXZ(bullet.position, player_.GetTransform().position,
+                     bulletThreatRadius)) {
             if (isPlayerDodging) {
                 playerHitCooldown_ = 0.08f;
                 continue;
@@ -453,26 +573,16 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                 const XMFLOAT2 hitDir =
                     NormalizeXZ(bullet.velocity.x, bullet.velocity.z);
 
-                if (player_.IsCounterStance()) {
-                    triggerSuccessfulCounter(1, enemy_.GetBulletDamage() * 2.0f,
+                size_t counterSwordIndex = swords.size();
+                if (FindSlashTowardPoint(swords, swordSlashStates,
+                                         bullet.position, counterSwordIndex,
+                                         0.00f)) {
+                    triggerSuccessfulCounter(counterSwordIndex,
+                                             enemy_.GetBulletDamage() * 2.0f,
                                              0.12f);
-                } else if (isPlayerGuarding) {
-                    player_.TakeDamage(enemy_.GetBulletDamage() *
-                                       guardDamageMultiplier);
-                    player_.AddKnockback(
-                        {hitDir.x * (enemy_.GetBulletKnockback() * 0.5f),
-                         0.0f,
-                         hitDir.y * (enemy_.GetBulletKnockback() * 0.5f)});
-                    CombatFeedbackEvent feedback{};
-                    feedback.type = CombatFeedbackEventType::PlayerGuard;
-                    feedback.position = bullet.position;
-                    feedback.direction = {hitDir.x, 0.0f, hitDir.y};
-                    feedback.power = enemy_.GetBulletDamage() / 5.0f;
-                    DispatchCombatFeedback(feedback);
-                    enemy_.DestroyBullet(i);
-                    playerHitCooldown_ = 0.15f;
                 } else {
-                    player_.TakeDamage(enemy_.GetBulletDamage());
+                    player_.TakeDamage(enemy_.GetBulletDamage() *
+                                       playerRecoveryDamageScale);
                     player_.AddKnockback(
                         {hitDir.x * enemy_.GetBulletKnockback(), 0.0f,
                          hitDir.y * enemy_.GetBulletKnockback()});
@@ -504,6 +614,8 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         waveBox.size = enemy_.GetWaveHitBoxSize();
         waveBox.rotation =
             MakeYawRotation(std::atan2(wave.direction.x, wave.direction.z));
+        const float waveThreatRadius =
+            GetReadableProjectileRadius(waveBox.size);
         const CollisionManager::BodyId waveBody = AddCollisionBody(
             collisionManager_, waveBox,
             wave.isReflected ? kLayerReflectedProjectile
@@ -511,8 +623,12 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             wave.isReflected ? kLayerEnemy
                              : (kLayerPlayer | kLayerPlayerCounter));
 
-        if (!wave.isReflected && isPlayerCountering &&
-            isCounterBodyHit(waveBody)) {
+        size_t waveCounterSwordIndex = swords.size();
+        if (!wave.isReflected &&
+            IsNearXZ(wave.position, player_.GetTransform().position,
+                     waveThreatRadius + 0.85f) &&
+            FindSlashTowardPoint(swords, swordSlashStates, wave.position,
+                                 waveCounterSwordIndex, 0.00f)) {
             enemy_.ReflectWave(i, enemy_.GetTransform().position);
             CombatFeedbackEvent feedback{};
             feedback.type = CombatFeedbackEventType::ProjectileReflect;
@@ -543,7 +659,8 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             continue;
         }
 
-        if (collisionManager_.Test(waveBody, playerBody)) {
+        if (IsNearXZ(wave.position, player_.GetTransform().position,
+                     waveThreatRadius)) {
             if (isPlayerDodging) {
                 playerHitCooldown_ = 0.08f;
                 continue;
@@ -553,25 +670,16 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                 const XMFLOAT2 hitDir =
                     NormalizeXZ(wave.direction.x, wave.direction.z);
 
-                if (player_.IsCounterStance()) {
-                    triggerSuccessfulCounter(1, enemy_.GetWaveDamage() * 2.0f,
+                size_t counterSwordIndex = swords.size();
+                if (FindSlashTowardPoint(swords, swordSlashStates,
+                                         wave.position, counterSwordIndex,
+                                         0.00f)) {
+                    triggerSuccessfulCounter(counterSwordIndex,
+                                             enemy_.GetWaveDamage() * 2.0f,
                                              0.12f);
-                } else if (isPlayerGuarding) {
-                    player_.TakeDamage(enemy_.GetWaveDamage() *
-                                       guardDamageMultiplier);
-                    player_.AddKnockback(
-                        {hitDir.x * (enemy_.GetWaveKnockback() * 0.5f), 0.0f,
-                         hitDir.y * (enemy_.GetWaveKnockback() * 0.5f)});
-                    CombatFeedbackEvent feedback{};
-                    feedback.type = CombatFeedbackEventType::PlayerGuard;
-                    feedback.position = wave.position;
-                    feedback.direction = {hitDir.x, 0.0f, hitDir.y};
-                    feedback.power = enemy_.GetWaveDamage() / 5.0f;
-                    DispatchCombatFeedback(feedback);
-                    enemy_.DestroyWave(i);
-                    playerHitCooldown_ = 0.15f;
                 } else {
-                    player_.TakeDamage(enemy_.GetWaveDamage());
+                    player_.TakeDamage(enemy_.GetWaveDamage() *
+                                       playerRecoveryDamageScale);
                     player_.AddKnockback(
                         {hitDir.x * enemy_.GetWaveKnockback(), 0.0f,
                          hitDir.y * enemy_.GetWaveKnockback()});
@@ -591,16 +699,23 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         }
     }
 
+    previousChargeWeakPointSlashStates_ = swordSlashStates;
+
     if (startCounterCinematicThisFrame) {
         counterCinematicActive_ = true;
+        counterCinematicTimer_ = counterCinematicDuration_;
         SetEnemyAnimationFrozen(true);
     }
     if (stopCounterCinematicThisFrame) {
         counterCinematicActive_ = false;
+        counterCinematicTimer_ = 0.0f;
+        enemy_.FinishCounterRecoil();
         SetEnemyAnimationFrozen(false);
     }
     if (forceSyncEnemyAnimationThisFrame) {
         SyncEnemyAnimation();
-        SetEnemyAnimationFrozen(true);
+        if (counterCinematicActive_ || startCounterCinematicThisFrame) {
+            SetEnemyAnimationFrozen(true);
+        }
     }
 }

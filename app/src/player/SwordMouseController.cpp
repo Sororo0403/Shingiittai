@@ -14,7 +14,7 @@ SwordPose SwordMouseController::GetPose() const {
 void SwordMouseController::Update(Input *input, float dt,
                                   const Transform &swordPos) {
     UpdateOrientation(input, dt);
-    UpdateGuard(input);
+    state_.isGuard = false;
     state_.isCounter = false;
     UpdateSlash(input, dt);
     state_.UpdateSlashDir(swordPos);
@@ -22,8 +22,7 @@ void SwordMouseController::Update(Input *input, float dt,
 
 bool SwordMouseController::IsActive(Input *input) {
     return std::abs(input->GetMouseDX()) > 3 ||
-           std::abs(input->GetMouseDY()) > 3 || input->IsMousePress(0) ||
-           input->IsMousePress(1);
+           std::abs(input->GetMouseDY()) > 3 || input->IsMousePress(0);
 }
 
 void SwordMouseController::UpdateOrientation(Input *input, float dt) {
@@ -47,7 +46,8 @@ void SwordMouseController::UpdateOrientation(Input *input, float dt) {
 }
 
 void SwordMouseController::UpdateGuard(Input *input) {
-    state_.isGuard = input->IsMousePress(1);
+    (void)input;
+    state_.isGuard = false;
 }
 
 void SwordMouseController::UpdateSlash(Input *input, float dt) {

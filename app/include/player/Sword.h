@@ -24,7 +24,7 @@ class Sword {
 
     bool IsSlashMode() const { return isSlashMode_; }
     bool IsGuard() const { return isGuard_; }
-    bool CanSlashCounter() const { return isSlashMode_ && !isGuard_; }
+    bool CanSlashCounter() const { return isSlashMode_; }
 
     bool IsCounterStance() const { return isCounterStance_; }
     bool JustCountered() const { return justCountered_; }
@@ -33,6 +33,8 @@ class Sword {
     bool JustCounterLate() const { return justCounterLate_; }
 
     SwordCounterAxis GetCounterAxis() const { return counterAxis_; }
+    const DirectX::XMFLOAT2 &GetSlashDirection() const { return slashDir_; }
+    SwordCounterAxis GetSlashAxis() const;
     SwordCounterAxis GetSlashCounterAxis() const;
     void NotifyCounterSuccess();
 

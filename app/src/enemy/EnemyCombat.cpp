@@ -246,7 +246,7 @@ void Enemy::TakeDamage(float damage) {
         return;
     }
 
-    hitReactionTimer_ = hitReactionDuration_;
+    hitReactionTimer_ = (std::max)(hitReactionTimer_, hitReactionDuration_);
 }
 
 void Enemy::NotifyAttackConnected() { currentActionConnected_ = true; }
@@ -259,6 +259,14 @@ bool Enemy::NotifyCountered(float vulnerabilityDuration) {
     return ApplyCounterBreakReaction(vulnerabilityDuration);
 }
 
+void Enemy::FinishCounterRecoil() {
+    counterRecoilTimer_ = 0.0f;
+    if (hitReactionTimer_ > hitReactionDuration_) {
+        hitReactionTimer_ = hitReactionDuration_;
+    }
+    UpdateParts();
+}
+
 bool Enemy::ApplyCounterBreakReaction(float vulnerabilityDuration) {
     RegisterCounterSuccessReaction();
 
@@ -267,20 +275,6 @@ bool Enemy::ApplyCounterBreakReaction(float vulnerabilityDuration) {
     if (!isCounterBreakableAction) {
         return false;
     }
-
-    float dx = tf_.position.x - playerPos_.x;
-    float dz = tf_.position.z - playerPos_.z;
-    float length = std::sqrt(dx * dx + dz * dz);
-    if (length < 0.0001f) {
-        length = 1.0f;
-    }
-
-    dx /= length;
-    dz /= length;
-
-    constexpr float counterPushBack = 0.9f;
-    tf_.position.x += dx * counterPushBack;
-    tf_.position.z += dz * counterPushBack;
 
     EndAttack();
     counterRecoilTimer_ = counterRecoilDuration_;

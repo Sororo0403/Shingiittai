@@ -66,8 +66,8 @@ struct SwordControllerState {
     }
 
     static constexpr int kCounterFrames = 24;
-    static constexpr float kSlashThreshold = 520.0f;
-    static constexpr float kSlashTimeLimit = 1.0f;
+    static constexpr float kSlashThreshold = 1250.0f;
+    static constexpr float kSlashTimeLimit = 0.34f;
 
     DirectX::XMFLOAT4 orientation{0, 0, 0, 1};
     DirectX::XMFLOAT2 prevPos{};

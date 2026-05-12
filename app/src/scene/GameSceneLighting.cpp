@@ -63,24 +63,24 @@ void GameScene::UpdateSceneLighting() {
     }
 
     SceneLighting lighting{};
-    lighting.keyLightDirection = {-0.50f, -1.0f, 0.22f};
+    lighting.keyLightDirection = {-0.46f, -1.0f, 0.26f};
     lighting.keyLightColor = {
-        0.92f + actionColor.x * 0.08f,
-        0.84f + actionColor.y * 0.06f,
-        0.72f + actionColor.z * 0.04f,
+        1.08f + actionColor.x * 0.06f,
+        1.02f + actionColor.y * 0.05f,
+        0.92f + actionColor.z * 0.04f,
         1.0f,
     };
     lighting.fillLightDirection = {0.72f, -0.24f, -0.56f};
     lighting.fillLightColor = {
-        0.28f + actionColor.x * 0.04f,
-        0.34f + actionColor.y * 0.05f,
-        0.40f + actionColor.z * 0.06f,
-        0.56f,
+        0.36f + actionColor.x * 0.04f,
+        0.42f + actionColor.y * 0.04f,
+        0.50f + actionColor.z * 0.05f,
+        0.62f,
     };
     lighting.ambientColor = {
-        0.24f + actionColor.x * 0.018f,
-        0.23f + actionColor.y * 0.018f,
-        0.21f + actionColor.z * 0.018f,
+        0.30f + actionColor.x * 0.008f,
+        0.31f + actionColor.y * 0.008f,
+        0.31f + actionColor.z * 0.008f,
         1.0f,
     };
     lighting.lightingParams = {
@@ -97,10 +97,10 @@ void GameScene::UpdateSceneLighting() {
         6.40f,
     };
     lighting.pointLights[0].colorIntensity = {
-        0.66f,
-        0.82f,
-        1.0f,
-        1.20f * pulse,
+        0.52f,
+        0.62f,
+        0.74f,
+        0.72f * pulse,
     };
 
     lighting.pointLights[1].positionRange = {
@@ -110,10 +110,10 @@ void GameScene::UpdateSceneLighting() {
         6.30f,
     };
     lighting.pointLights[1].colorIntensity = {
-        2.20f + actionColor.x * 0.48f + 0.04f * colorPulse,
-        1.55f + actionColor.y * 0.24f,
-        1.05f + actionColor.z * 0.16f + 0.04f * (1.0f - colorPulse),
-        5.70f * actionBoost * enemyFocusBoost,
+        0.74f + actionColor.x * 0.04f + 0.01f * colorPulse,
+        0.74f + actionColor.y * 0.03f,
+        0.70f + actionColor.z * 0.03f + 0.01f * (1.0f - colorPulse),
+        0.95f * actionBoost * enemyFocusBoost,
     };
 
     ctx_->model->SetSceneLighting(lighting);

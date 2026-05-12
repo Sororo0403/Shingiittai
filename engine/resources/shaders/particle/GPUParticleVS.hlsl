@@ -40,10 +40,17 @@ ParticleVSOutput main(uint vertexId : SV_VertexID, uint instanceId : SV_Instance
                             ? float2(lerp(1.34f, 0.18f, ageRate), lerp(0.78f, 0.14f, ageRate))
                             : style < 1.5f
                                   ? float2(lerp(0.70f, 1.48f, ageRate), lerp(0.70f, 1.48f, ageRate))
+                            : style > 2.5f && style < 3.5f
+                                  ? float2(lerp(1.34f, 0.82f, ageRate), lerp(1.12f, 0.54f, ageRate))
+                            : style > 3.5f && style < 4.5f
+                                  ? float2(lerp(0.72f, 1.72f, ageRate), lerp(0.72f, 1.72f, ageRate))
                                   : float2(lerp(0.54f, 1.72f, ageRate), lerp(0.54f, 1.72f, ageRate));
     float2 local = kPositions[vertexId] * particle.scale * styleScale * pulse;
-    float roll = sin(particle.seed * 0.13f + particle.currentTime * 5.6f) * 0.95f +
-                 particle.currentTime * 0.55f;
+    float roll = style > 2.5f && style < 3.5f
+                     ? particle.padding.y +
+                           sin(particle.seed * 1.7f) * 0.055f
+                     : sin(particle.seed * 0.13f + particle.currentTime * 5.6f) * 0.95f +
+                           particle.currentTime * 0.55f;
     float s = sin(roll);
     float c = cos(roll);
     local = float2(local.x * c - local.y * s, local.x * s + local.y * c);

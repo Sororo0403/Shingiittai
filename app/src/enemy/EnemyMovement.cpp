@@ -3,6 +3,19 @@
 #include <cmath>
 #include <cstdlib>
 
+void Enemy::ClampToArena() {
+    const float radiusSq = arenaClampRadius_ * arenaClampRadius_;
+    const float distanceSq =
+        tf_.position.x * tf_.position.x + tf_.position.z * tf_.position.z;
+    if (distanceSq <= radiusSq || distanceSq <= 0.0001f) {
+        return;
+    }
+
+    const float scale = arenaClampRadius_ / std::sqrt(distanceSq);
+    tf_.position.x *= scale;
+    tf_.position.z *= scale;
+}
+
 void Enemy::UpdateStalkByStep(float deltaTime) {
     switch (action_.step) {
     case ActionStep::Move:

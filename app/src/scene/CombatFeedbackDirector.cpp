@@ -132,10 +132,10 @@ void CombatFeedbackDirector::PushEvent(const CombatFeedbackEvent &event) {
         fovKickDeg_ = (std::max)(fovKickDeg_, 2.6f);
         break;
     case CombatFeedbackEventType::CounterSuccess:
-        AddHitStop(0.150f, 0.06f);
-        AddCameraShake(0.28f, 0.052f, 0.032f);
-        AddPostFlash(0.24f, 0.040f, 0.070f, 0.10f);
-        fovKickDeg_ = (std::max)(fovKickDeg_, 4.5f);
+        AddHitStop(0.22f, 0.035f);
+        AddCameraShake(0.36f, 0.070f, 0.044f);
+        AddPostFlash(0.42f, 0.18f, 0.12f, 0.22f);
+        fovKickDeg_ = (std::max)(fovKickDeg_, 7.0f);
         break;
     case CombatFeedbackEventType::ProjectileReflect:
         AddHitStop(0.060f, 0.12f);

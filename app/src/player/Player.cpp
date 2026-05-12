@@ -30,10 +30,15 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId,
     postSlashRecoveryTimer_ = 0.0f;
     leftSlashRecoveryTimer_ = 0.0f;
     rightSlashRecoveryTimer_ = 0.0f;
-    leftSwordAttackDamage_ = 10.0f;
-    rightSwordAttackDamage_ = 10.0f;
+    leftSwordAttackDamage_ = 4.0f;
+    rightSwordAttackDamage_ = 4.0f;
     prevLeftSwordSlashMode_ = false;
     prevRightSwordSlashMode_ = false;
+    leftSlashHitConfirmed_ = false;
+    rightSlashHitConfirmed_ = false;
+    recoveryVulnerableFlashTimer_ = 0.0f;
+    overSwingCount_ = 0;
+    overSwingResetTimer_ = 0.0f;
     damageTakenScale_ = 1.0f;
     swingComboCount_ = 0;
     swingComboTimer_ = 0.0f;
@@ -86,6 +91,7 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     UpdateDodgeInput(input, deltaTime, cameraYaw, lookTarget);
     UpdateMovement(input, deltaTime, cameraYaw, lookTarget);
     UpdateSwingCombo(deltaTime);
+    UpdateOverSwing(deltaTime);
     KeepDistanceFromTarget(lookTarget);
     LookAt(lookTarget);
 
@@ -168,12 +174,26 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     leftSwordSlashMode_ = leftPose.isSlashMode;
     rightSwordSlashMode_ = rightPose.isSlashMode;
     if (prevLeftSwordSlashMode_ && !leftSwordSlashMode_) {
+        if (!leftSlashHitConfirmed_) {
+            RegisterAttackWhiff();
+        }
         leftSlashRecoveryTimer_ =
-            (std::max)(leftSlashRecoveryTimer_, GetSlashRecoveryDuration());
+            (std::max)(leftSlashRecoveryTimer_,
+                       GetSlashRecoveryDuration(leftSlashHitConfirmed_));
+        leftSlashHitConfirmed_ = false;
+    } else if (!prevLeftSwordSlashMode_ && leftSwordSlashMode_) {
+        leftSlashHitConfirmed_ = false;
     }
     if (prevRightSwordSlashMode_ && !rightSwordSlashMode_) {
+        if (!rightSlashHitConfirmed_) {
+            RegisterAttackWhiff();
+        }
         rightSlashRecoveryTimer_ =
-            (std::max)(rightSlashRecoveryTimer_, GetSlashRecoveryDuration());
+            (std::max)(rightSlashRecoveryTimer_,
+                       GetSlashRecoveryDuration(rightSlashHitConfirmed_));
+        rightSlashHitConfirmed_ = false;
+    } else if (!prevRightSwordSlashMode_ && rightSwordSlashMode_) {
+        rightSlashHitConfirmed_ = false;
     }
     prevLeftSwordSlashMode_ = leftSwordSlashMode_;
     prevRightSwordSlashMode_ = rightSwordSlashMode_;
@@ -183,13 +203,22 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     leftSwordVisible_ = weaponType_ == PlayerWeaponType::Dual;
     rightSwordVisible_ = hasRightJoyCon || useGamepadRightSword ||
                          useMouseRightSword;
-    isGuarding_ = leftPose.isGuard || rightPose.isGuard;
+    isGuarding_ = false;
+    if (IsAttackRecovery()) {
+        recoveryVulnerableFlashTimer_ += deltaTime;
+    } else {
+        recoveryVulnerableFlashTimer_ = 0.0f;
+    }
 
 }
 
 void Player::Draw(ModelManager *modelManager, const Camera &camera,
                   bool drawBody) {
     const bool isInPostSlashRecovery = postSlashRecoveryTimer_ > 0.0f;
+    const float attackRecoveryRatio = GetAttackRecoveryRatio();
+    const bool isAttackRecovery = attackRecoveryRatio > 0.0f;
+    const float vulnerablePulse =
+        0.5f + 0.5f * std::sinf(recoveryVulnerableFlashTimer_ * 30.0f);
     const float recoveryRatio =
         (kPostSlashRecoveryDuration > 0.0f)
             ? std::clamp(postSlashRecoveryTimer_ / kPostSlashRecoveryDuration,
@@ -207,6 +236,17 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
         playerVisual.position.z += std::cosf(phase * 1.37f) * shake;
 
     }
+    if (isAttackRecovery) {
+        const float phase = recoveryVulnerableFlashTimer_ * 42.0f;
+        const float shake = (0.020f + 0.045f * vulnerablePulse) *
+                            attackRecoveryRatio;
+        playerVisual.position.x += std::sinf(phase) * shake;
+        playerVisual.position.z += std::cosf(phase * 1.53f) * shake;
+        playerVisual.position.y -= 0.055f * attackRecoveryRatio;
+        playerVisual.scale.x *= 1.0f + 0.045f * attackRecoveryRatio;
+        playerVisual.scale.y *= 1.0f - 0.075f * attackRecoveryRatio;
+        playerVisual.scale.z *= 1.0f + 0.045f * attackRecoveryRatio;
+    }
     if (dodgeTimer_ > 0.0f) {
         const float dodgeRatio =
             std::clamp(dodgeTimer_ / kDodgeDuration, 0.0f, 1.0f);
@@ -221,15 +261,52 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
     }
 
     if (drawBody) {
+        if (isAttackRecovery) {
+            ModelDrawEffect recoveryEffect{};
+            recoveryEffect.enabled = true;
+            recoveryEffect.additiveBlend = false;
+            recoveryEffect.color = {1.0f, 0.08f, 0.02f, 0.82f};
+            recoveryEffect.intensity =
+                0.42f + 0.48f * vulnerablePulse * attackRecoveryRatio;
+            recoveryEffect.fresnelPower = 1.35f;
+            recoveryEffect.noiseAmount = 0.34f + 0.18f * vulnerablePulse;
+            recoveryEffect.time = recoveryVulnerableFlashTimer_;
+            modelManager->SetDrawEffect(recoveryEffect);
+        }
         modelManager->Draw(modelId_, playerVisual, camera);
+        if (isAttackRecovery) {
+            modelManager->ClearDrawEffect();
+        }
     }
     modelManager->ClearDrawEffect();
 
+    auto drawSwordWithRecovery = [&](Sword &sword, float recoveryRatio) {
+        if (recoveryRatio > 0.0f) {
+            ModelDrawEffect recoveryEffect{};
+            recoveryEffect.enabled = true;
+            recoveryEffect.additiveBlend = true;
+            recoveryEffect.color = {0.18f, 0.78f, 1.0f, 0.72f};
+            recoveryEffect.intensity =
+                0.42f + 0.26f * vulnerablePulse * recoveryRatio;
+            recoveryEffect.fresnelPower = 1.0f;
+            recoveryEffect.noiseAmount = 0.10f;
+            recoveryEffect.time = recoveryVulnerableFlashTimer_;
+            modelManager->SetDrawEffect(recoveryEffect);
+        }
+        sword.Draw(modelManager, camera);
+        if (recoveryRatio > 0.0f) {
+            modelManager->ClearDrawEffect();
+        }
+    };
+
     if (leftSwordVisible_) {
-        leftSword_.Draw(modelManager, camera);
+        drawSwordWithRecovery(leftSword_, GetSlashRecoveryRatio(leftSlashRecoveryTimer_));
     }
     if (rightSwordVisible_) {
-        rightSword_.Draw(modelManager, camera);
+        const float rightRecoveryRatio =
+            (std::max)(GetSlashRecoveryRatio(rightSlashRecoveryTimer_),
+                       recoveryRatio);
+        drawSwordWithRecovery(rightSword_, rightRecoveryRatio);
     }
 
     modelManager->ClearDrawEffect();
@@ -471,6 +548,9 @@ void Player::UpdateMovement(Input *input, float deltaTime, float cameraYaw,
     if (IsHunterGamepadAttacking()) {
         speedScale = weaponType_ == PlayerWeaponType::GreatSword ? 0.18f : 0.35f;
     }
+    if (IsAttackRecovery()) {
+        speedScale *= weaponType_ == PlayerWeaponType::GreatSword ? 0.24f : 0.38f;
+    }
 
     if (dodgeTimer_ > 0.0f) {
         velocity_.x = dodgeDirection_.x * kDodgeSpeed;
@@ -521,7 +601,30 @@ void Player::TakeDamage(float damage) {
 }
 
 void Player::NotifyAttackHit(float damage) {
+    RegisterAttackHit(damage);
+}
+
+void Player::NotifyAttackHit(size_t swordIndex, float damage) {
+    RegisterAttackHit(damage);
+    const float hitRecovery = GetHitConfirmRecoveryDuration();
+    postSlashRecoveryTimer_ = 0.0f;
+
+    if (swordIndex == 0) {
+        leftSlashHitConfirmed_ = true;
+        if (leftSlashRecoveryTimer_ > hitRecovery) {
+            leftSlashRecoveryTimer_ = hitRecovery;
+        }
+    } else if (swordIndex == 1) {
+        rightSlashHitConfirmed_ = true;
+        if (rightSlashRecoveryTimer_ > hitRecovery) {
+            rightSlashRecoveryTimer_ = hitRecovery;
+        }
+    }
+}
+
+void Player::RegisterAttackHit(float damage) {
     (void)damage;
+    ResetOverSwing();
     if (swingComboTimer_ <= 0.0f) {
         swingComboCount_ = 0;
     }
@@ -532,11 +635,31 @@ void Player::NotifyAttackHit(float damage) {
     swingComboTimer_ = kSwingComboWindow;
 }
 
-float Player::GetSwingComboDamageMultiplier() const {
-    if (swingComboCount_ <= 0 || swingComboTimer_ <= 0.0f) {
-        return 1.0f;
+void Player::RegisterAttackWhiff() {
+    overSwingCount_ = (std::min)(overSwingCount_ + 1, kOverSwingMax);
+    overSwingResetTimer_ = kOverSwingResetDuration;
+}
+
+void Player::ResetOverSwing() {
+    overSwingCount_ = 0;
+    overSwingResetTimer_ = 0.0f;
+}
+
+void Player::UpdateOverSwing(float deltaTime) {
+    if (overSwingResetTimer_ <= 0.0f) {
+        overSwingCount_ = 0;
+        return;
     }
-    return 1.0f + 0.08f * static_cast<float>(swingComboCount_);
+
+    overSwingResetTimer_ -= deltaTime;
+    if (overSwingResetTimer_ <= 0.0f) {
+        overSwingResetTimer_ = 0.0f;
+        overSwingCount_ = 0;
+    }
+}
+
+float Player::GetSwingComboDamageMultiplier() const {
+    return 1.0f;
 }
 
 void Player::UpdateSwingCombo(float deltaTime) {
@@ -569,7 +692,7 @@ void Player::AddKnockback(const DirectX::XMFLOAT3 &velocity) {
 }
 
 bool Player::IsGuarding() const {
-    return isGuarding_;
+    return false;
 }
 
 float Player::GetGuardDamageMultiplier() const {
@@ -585,29 +708,29 @@ float Player::GetGuardDamageMultiplier() const {
 }
 
 float Player::GetCounterDamageMultiplier() const {
-    float multiplier = 1.0f;
+    float multiplier = 10.5f;
     switch (weaponType_) {
     case PlayerWeaponType::Dual:
-        multiplier = 0.85f;
+        multiplier = 9.0f;
         break;
     case PlayerWeaponType::GreatSword:
-        multiplier = greatSwordFullChargeCounterReady_ ? 4.0f : 1.45f;
+        multiplier = greatSwordFullChargeCounterReady_ ? 16.0f : 12.0f;
         break;
     case PlayerWeaponType::Standard:
     default:
-        multiplier = 1.0f;
+        multiplier = 10.5f;
         break;
     }
 
-    return multiplier * GetSwingComboDamageMultiplier();
+    return multiplier;
 }
 
 float Player::GetCounterVulnerabilityDuration() const {
     if (weaponType_ == PlayerWeaponType::GreatSword &&
         greatSwordFullChargeCounterReady_) {
-        return 1.35f;
+        return 1.65f;
     }
-    return 0.35f;
+    return 1.35f;
 }
 
 void Player::NotifyCounterSuccess() {
@@ -621,6 +744,12 @@ void Player::NotifyCounterSuccess() {
         greatSwordFullChargeCounterReady_) {
         greatSwordCharge_ = 0.0f;
     }
+    postSlashRecoveryTimer_ = 0.0f;
+    leftSlashRecoveryTimer_ = 0.0f;
+    rightSlashRecoveryTimer_ = 0.0f;
+    leftSlashHitConfirmed_ = true;
+    rightSlashHitConfirmed_ = true;
+    ResetOverSwing();
     greatSwordFullChargeCounterReady_ = false;
 }
 
@@ -635,6 +764,15 @@ void Player::NotifyCounterSuccess(size_t swordIndex) {
         greatSwordFullChargeCounterReady_) {
         greatSwordCharge_ = 0.0f;
     }
+    postSlashRecoveryTimer_ = 0.0f;
+    if (swordIndex == 0) {
+        leftSlashRecoveryTimer_ = 0.0f;
+        leftSlashHitConfirmed_ = true;
+    } else if (swordIndex == 1) {
+        rightSlashRecoveryTimer_ = 0.0f;
+        rightSlashHitConfirmed_ = true;
+    }
+    ResetOverSwing();
     greatSwordFullChargeCounterReady_ = false;
 }
 
@@ -679,8 +817,8 @@ void Player::UpdateWeaponRules(Input *input, SwordPose &leftPose,
                                bool useHunterGamepadControls,
                                float deltaTime) {
     (void)input;
-    leftSwordAttackDamage_ = 10.0f;
-    rightSwordAttackDamage_ = 10.0f;
+    leftSwordAttackDamage_ = 4.0f;
+    rightSwordAttackDamage_ = 4.0f;
     auto applyJoyConSwingDamage = [&]() {
         if (hasLeftJoyCon && leftPose.isSlashMode) {
             leftSwordAttackDamage_ *= ComputeJoyConSwingDamageMultiplier(
@@ -700,8 +838,8 @@ void Player::UpdateWeaponRules(Input *input, SwordPose &leftPose,
     }
 
     if (weaponType_ == PlayerWeaponType::Dual) {
-        leftSwordAttackDamage_ = 7.0f;
-        rightSwordAttackDamage_ = 7.0f;
+        leftSwordAttackDamage_ = 3.0f;
+        rightSwordAttackDamage_ = 3.0f;
         leftPose.isGuard = false;
         rightPose.isGuard = false;
 
@@ -802,25 +940,55 @@ void Player::ApplyHandRecovery(SwordPose &pose, float &timer,
     pose.isCounter = false;
 }
 
-float Player::GetSlashRecoveryDuration() const {
+float Player::GetSlashRecoveryDuration(bool hitConfirmed) const {
+    if (hitConfirmed) {
+        return GetHitConfirmRecoveryDuration();
+    }
+
+    const int level = std::clamp(overSwingCount_, 1, kOverSwingMax);
+
     switch (weaponType_) {
     case PlayerWeaponType::Dual:
-        return 0.16f;
+        return level == 1 ? 0.22f : (level == 2 ? 0.32f : 0.44f);
     case PlayerWeaponType::GreatSword:
-        return 0.55f;
+        return level == 1 ? 0.48f : (level == 2 ? 0.68f : 0.90f);
     case PlayerWeaponType::Standard:
     default:
-        return 0.25f;
+        return level == 1 ? 0.30f : (level == 2 ? 0.46f : 0.62f);
+    }
+}
+
+float Player::GetHitConfirmRecoveryDuration() const {
+    switch (weaponType_) {
+    case PlayerWeaponType::Dual:
+        return 0.12f;
+    case PlayerWeaponType::GreatSword:
+        return 0.22f;
+    case PlayerWeaponType::Standard:
+    default:
+        return 0.14f;
     }
 }
 
 float Player::GetSlashRecoveryRatio(float timer) const {
-    const float duration = GetSlashRecoveryDuration();
+    const float duration = GetSlashRecoveryDuration(false);
     if (duration <= 0.0f) {
         return 0.0f;
     }
 
     return std::clamp(timer / duration, 0.0f, 1.0f);
+}
+
+float Player::GetAttackRecoveryRatio() const {
+    float ratio = 0.0f;
+    if (kPostSlashRecoveryDuration > 0.0f) {
+        ratio = (std::max)(ratio, std::clamp(postSlashRecoveryTimer_ /
+                                                 kPostSlashRecoveryDuration,
+                                             0.0f, 1.0f));
+    }
+    ratio = (std::max)(ratio, GetSlashRecoveryRatio(leftSlashRecoveryTimer_));
+    ratio = (std::max)(ratio, GetSlashRecoveryRatio(rightSlashRecoveryTimer_));
+    return ratio;
 }
 
 float Player::ComputeGreatSwordAttackDamage(float chargeRatio) const {

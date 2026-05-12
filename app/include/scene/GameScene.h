@@ -11,6 +11,7 @@
 #include "PlayerWeaponType.h"
 #include "Transform.h"
 #include <DirectXMath.h>
+#include <array>
 #include <cstdint>
 #include <string>
 #include "GameSceneHud.h"
@@ -30,16 +31,32 @@ class GameScene : public BaseScene {
     void UpdateBattleCamera();
     void UpdateSceneLighting();
     void DrawArena();
+    void DrawEnemyFocusMarker();
+    void DrawEnemyWeaponTrail();
+    void DrawChargeWeakPoint();
+    void DrawJoyConTutorial();
     void SyncEnemyAnimation();
     void ApplyEnemyProceduralAnimation();
     void SetEnemyAnimationFrozen(bool frozen);
     void UpdateCombat(float gameplayDeltaTime);
     void DispatchCombatFeedback(const CombatFeedbackEvent &event);
     void EmitCombatParticles(const CombatFeedbackEvent &event);
+    void EmitEnemyActionParticles(ActionKind kind, ActionStep step);
+    void EmitEnemyCueParticles(float deltaTime);
     PlayerCombatObservation BuildPlayerCombatObservation() const;
     float ComputeGameplayTimeScale() const;
 
   private:
+    struct EnemyWeaponTrailSample {
+        DirectX::XMFLOAT3 root = {0.0f, 0.0f, 0.0f};
+        DirectX::XMFLOAT3 tip = {0.0f, 0.0f, 0.0f};
+        DirectX::XMFLOAT4 color = {1.0f, 1.0f, 1.0f, 1.0f};
+        ActionKind kind = ActionKind::None;
+        float thickness = 0.0f;
+        float age = 0.0f;
+        bool active = false;
+    };
+
     PlayerWeaponType selectedWeaponType_ = PlayerWeaponType::Standard;
 
     Camera camera_;
@@ -66,6 +83,25 @@ class GameScene : public BaseScene {
     uint32_t arenaColumnCapModelId_ = 0;
     uint32_t arenaDomeModelId_ = 0;
     uint32_t arenaBarrierRingModelId_ = 0;
+    uint32_t enemyFocusRingModelId_ = 0;
+    uint32_t enemyWeaponTrailModelId_ = 0;
+    uint32_t chargeWeakPointModelId_ = 0;
+    uint32_t slashSoundId_ = 0;
+    uint32_t enemyReleaseSoundId_ = 0;
+    uint32_t hitSoundId_ = 0;
+    uint32_t counterSoundId_ = 0;
+    uint32_t damageSoundId_ = 0;
+    bool soundsLoaded_ = false;
+    std::array<bool, Player::kSwordCount> previousSwordSoundStates_{};
+    std::array<EnemyWeaponTrailSample, 6> enemyWeaponTrailSamples_{};
+    uint32_t enemyWeaponTrailSampleCursor_ = 0;
+    float enemyWeaponTrailSampleTimer_ = 0.0f;
+    float enemyWeaponTrailLastDrawTime_ = 0.0f;
+    ActionKind enemyWeaponTrailLastKind_ = ActionKind::None;
+    ActionStep enemyWeaponTrailLastStep_ = ActionStep::None;
+    float enemyCueParticleTimer_ = 0.0f;
+    float enemyWeakPointParticleTimer_ = 0.0f;
+    float enemySwordParticleTimer_ = 0.0f;
     uint32_t arenaNoiseTextureId_ = 0;
     std::string enemyAnimationName_{};
     bool enemyAnimationLoop_ = true;
@@ -145,6 +181,8 @@ class GameScene : public BaseScene {
 
     bool counterCinematicActive_ = false;
     bool enemyAnimationFrozen_ = false;
+    float counterCinematicTimer_ = 0.0f;
+    float counterCinematicDuration_ = 0.85f;
     float counterTimeScale_ = 0.05f;
     float counterCameraShakeX_ = 0.035f;
     float counterCameraShakeY_ = 0.020f;
@@ -152,5 +190,10 @@ class GameScene : public BaseScene {
 
     float damageMultiplier_ = 2.0f;
     bool showCollisionDebug_ = false;
+    bool showJoyConTutorial_ = true;
+    ActionKind chargeWeakPointActionKind_ = ActionKind::None;
+    bool chargeWeakPointBroken_ = false;
+    int chargeWeakPointSlashCount_ = 0;
+    std::array<bool, Player::kSwordCount> previousChargeWeakPointSlashStates_{};
 
 };

@@ -125,8 +125,49 @@ Transform Sword::BuildVisualTransform() const {
 
 void Sword::Draw(ModelManager *modelManager, const Camera &camera) {
     const Transform drawTransform = BuildVisualTransform();
-    if (const Model *model = modelManager->GetModel(modelId_)) {
-        modelManager->GetRenderer()->Draw(*model, drawTransform, camera);
+    if (modelManager->GetModel(modelId_) != nullptr) {
+        Transform outlineTransform = drawTransform;
+        outlineTransform.scale.x *= 1.22f;
+        outlineTransform.scale.y *= 1.22f;
+        outlineTransform.scale.z *= 1.04f;
+
+        ModelDrawEffect outlineEffect{};
+        outlineEffect.enabled = true;
+        outlineEffect.additiveBlend = false;
+        outlineEffect.disableCulling = true;
+        outlineEffect.color = {0.00f, 0.02f, 0.04f, 0.96f};
+        outlineEffect.intensity = 0.34f;
+        outlineEffect.fresnelPower = 0.85f;
+        outlineEffect.noiseAmount = 0.0f;
+        modelManager->SetDrawEffect(outlineEffect);
+        modelManager->Draw(modelId_, outlineTransform, camera);
+
+        ModelDrawEffect coreEffect{};
+        coreEffect.enabled = true;
+        coreEffect.additiveBlend = false;
+        coreEffect.disableCulling = true;
+        coreEffect.color = {0.88f, 0.98f, 1.0f, 1.0f};
+        coreEffect.intensity = 0.68f;
+        coreEffect.fresnelPower = 1.05f;
+        coreEffect.noiseAmount = 0.02f;
+        modelManager->SetDrawEffect(coreEffect);
+        modelManager->Draw(modelId_, drawTransform, camera);
+
+        Transform glowTransform = drawTransform;
+        glowTransform.scale.x *= 1.08f;
+        glowTransform.scale.y *= 1.08f;
+
+        ModelDrawEffect glowEffect{};
+        glowEffect.enabled = true;
+        glowEffect.additiveBlend = true;
+        glowEffect.disableCulling = true;
+        glowEffect.color = {0.28f, 0.76f, 1.0f, 0.62f};
+        glowEffect.intensity = isSlashMode_ ? 0.58f : 0.34f;
+        glowEffect.fresnelPower = 1.0f;
+        glowEffect.noiseAmount = isSlashMode_ ? 0.08f : 0.02f;
+        modelManager->SetDrawEffect(glowEffect);
+        modelManager->Draw(modelId_, glowTransform, camera);
+        modelManager->ClearDrawEffect();
     }
 }
 
@@ -304,6 +345,10 @@ SwordCounterAxis Sword::ComputeSlashAxis() const {
 }
 
 SwordCounterAxis Sword::GetSlashCounterAxis() const {
+    return GetSlashAxis();
+}
+
+SwordCounterAxis Sword::GetSlashAxis() const {
     if (!CanSlashCounter()) {
         return SwordCounterAxis::None;
     }

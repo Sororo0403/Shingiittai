@@ -13,14 +13,10 @@ SwordPose SwordJoyConController::GetPose() const {
 void SwordJoyConController::Update(JoyCon *joyCon, float dt,
                                    const Transform &swordPos) {
     UpdateOrientation(joyCon, dt);
-    UpdateGuard(joyCon);
-    UpdateCounter(joyCon);
-    if (state_.isCounter) {
-        state_.isSlashMode = false;
-        state_.slashTimer = 0.0f;
-    } else {
-        UpdateSlash(dt);
-    }
+    state_.isGuard = false;
+    state_.isCounter = false;
+    state_.counterTimer = SwordControllerState::kCounterFrames;
+    UpdateSlash(dt);
     state_.UpdateSlashDir(swordPos);
 }
 
@@ -29,8 +25,7 @@ bool SwordJoyConController::IsActive(const JoyCon *joyCon) const {
         return false;
     }
 
-    const int guardButton = joyCon->IsLeft() ? JSL_BUTTON_ZL : JSL_BUTTON_ZR;
-    return angularVelocity_ > 30.0f || joyCon->IsButtonPress(guardButton);
+    return angularVelocity_ > 30.0f;
 }
 
 void SwordJoyConController::UpdateOrientation(JoyCon *joyCon, float dt) {
@@ -53,33 +48,14 @@ void SwordJoyConController::UpdateOrientation(JoyCon *joyCon, float dt) {
 }
 
 void SwordJoyConController::UpdateGuard(JoyCon *joyCon) {
-    if (joyCon == nullptr || !joyCon->IsConnected()) {
-        state_.isGuard = false;
-        return;
-    }
-
-    const int guardButton = joyCon->IsLeft() ? JSL_BUTTON_ZL : JSL_BUTTON_ZR;
-    state_.isGuard = joyCon->IsButtonPress(guardButton);
+    (void)joyCon;
+    state_.isGuard = false;
 }
 
 void SwordJoyConController::UpdateCounter(JoyCon *joyCon) {
-    if (joyCon == nullptr || !joyCon->IsConnected()) {
-        state_.isCounter = false;
-        state_.counterTimer = SwordControllerState::kCounterFrames;
-        return;
-    }
-
-    const int shoulderCounter = joyCon->IsLeft() ? JSMASK_L : JSMASK_R;
-    const bool counterTriggered =
-        joyCon->IsButtonTrigger(shoulderCounter) ||
-        joyCon->IsButtonTrigger(JSMASK_SL) ||
-        joyCon->IsButtonTrigger(JSMASK_SR);
-    if (counterTriggered) {
-        state_.isCounter = true;
-        state_.counterTimer = SwordControllerState::kCounterFrames;
-    }
-
-    state_.UpdateCounter();
+    (void)joyCon;
+    state_.isCounter = false;
+    state_.counterTimer = SwordControllerState::kCounterFrames;
 }
 
 void SwordJoyConController::UpdateSlash(float dt) {
