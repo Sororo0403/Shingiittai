@@ -502,8 +502,8 @@ void Player::UpdateMovement(Input *input, float deltaTime, float cameraYaw,
     float cosYaw = std::cosf(cameraYaw);
     float worldMoveX = sinYaw * inputZ + cosYaw * inputX;
     float worldMoveZ = cosYaw * inputZ - sinYaw * inputX;
-    const bool useAutoMovement = UsesJoyConAutoMovement();
-    const bool hasManualMove = inputX * inputX + inputZ * inputZ > 0.04f;
+    const bool useAutoMovement = true;
+    const bool hasManualMove = false;
     if (useAutoMovement && !hasManualMove) {
         autoMoveOrbitTimer_ -= deltaTime;
         if (autoMoveOrbitTimer_ <= 0.0f) {

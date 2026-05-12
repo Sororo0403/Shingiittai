@@ -12,9 +12,29 @@ OBB Enemy::MakeOBB(const Transform &tf, const DirectX::XMFLOAT3 &size) const {
     return box;
 }
 
-OBB Enemy::GetBodyOBB() const { return MakeOBB(bodyTf_, bodySize_); }
-OBB Enemy::GetLeftHandOBB() const { return MakeOBB(leftHandTf_, handSize_); }
-OBB Enemy::GetRightHandOBB() const { return MakeOBB(rightHandTf_, handSize_); }
+OBB Enemy::GetBodyOBB() const {
+    DirectX::XMFLOAT3 generousSize = bodySize_;
+    generousSize.x *= 1.45f;
+    generousSize.y *= 1.22f;
+    generousSize.z *= 1.45f;
+    return MakeOBB(bodyTf_, generousSize);
+}
+
+OBB Enemy::GetLeftHandOBB() const {
+    DirectX::XMFLOAT3 generousSize = handSize_;
+    generousSize.x *= 1.55f;
+    generousSize.y *= 1.35f;
+    generousSize.z *= 1.55f;
+    return MakeOBB(leftHandTf_, generousSize);
+}
+
+OBB Enemy::GetRightHandOBB() const {
+    DirectX::XMFLOAT3 generousSize = handSize_;
+    generousSize.x *= 1.55f;
+    generousSize.y *= 1.35f;
+    generousSize.z *= 1.55f;
+    return MakeOBB(rightHandTf_, generousSize);
+}
 
 OBB Enemy::GetAttackOBB() const {
     switch (action_.kind) {

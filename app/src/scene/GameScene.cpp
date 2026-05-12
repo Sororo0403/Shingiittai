@@ -182,19 +182,6 @@ bool TryGetEnemySwordMeshSegment(const Model &model, const Transform &transform,
     return false;
 }
 
-XMFLOAT2 GetChargeWeakPointRequiredSlashDirection(ActionKind kind,
-                                                  int slashCount) {
-    if (kind == ActionKind::Smash) {
-        return slashCount == 0 ? XMFLOAT2{0.0f, -1.0f}
-                               : XMFLOAT2{1.0f, 0.0f};
-    }
-    if (kind == ActionKind::Sweep) {
-        return slashCount == 0 ? XMFLOAT2{1.0f, 0.0f}
-                               : XMFLOAT2{0.0f, -1.0f};
-    }
-    return {0.0f, -1.0f};
-}
-
 float GetChargeStanceSettleTime(ActionKind kind) {
     switch (kind) {
     case ActionKind::Smash:
@@ -726,9 +713,11 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
         (actionStep == ActionStep::Charge || actionStep == ActionStep::Hold);
 
     if (chargeDirectionVisible && enemyWeakPointParticleTimer_ <= 0.0f) {
+        const size_t directionIndex = static_cast<size_t>(std::clamp(
+            chargeWeakPointSlashCount_, 0,
+            static_cast<int>(chargeWeakPointRequiredDirections_.size() - 1)));
         const XMFLOAT2 slashDir =
-            GetChargeWeakPointRequiredSlashDirection(kind,
-                                                     chargeWeakPointSlashCount_);
+            chargeWeakPointRequiredDirections_[directionIndex];
         XMFLOAT3 cuePos = enemyPos;
         const XMFLOAT3 cameraPos = camera_.GetPosition();
         float toCameraX = cameraPos.x - enemyPos.x;

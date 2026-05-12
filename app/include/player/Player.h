@@ -210,11 +210,11 @@ class Player {
     float autoMoveOrbitDir_ = 1.0f;
     float autoMoveOrbitTimer_ = 0.0f;
     float autoDodgeSide_ = 1.0f;
-    static constexpr float kJoyConAutoMoveIdealDistance = 3.35f;
-    static constexpr float kJoyConAutoMoveNearDistance = 2.75f;
-    static constexpr float kJoyConAutoMoveFarDistance = 4.15f;
-    static constexpr float kJoyConAutoMoveOrbitSpeed = 1.75f;
-    static constexpr float kJoyConAutoMoveDistanceSpeed = 3.35f;
+    static constexpr float kJoyConAutoMoveIdealDistance = 2.45f;
+    static constexpr float kJoyConAutoMoveNearDistance = 1.75f;
+    static constexpr float kJoyConAutoMoveFarDistance = 3.05f;
+    static constexpr float kJoyConAutoMoveOrbitSpeed = 0.85f;
+    static constexpr float kJoyConAutoMoveDistanceSpeed = 4.20f;
     float leftSlashRecoveryTimer_ = 0.0f;
     float rightSlashRecoveryTimer_ = 0.0f;
     float leftSwordAttackDamage_ = 4.0f;

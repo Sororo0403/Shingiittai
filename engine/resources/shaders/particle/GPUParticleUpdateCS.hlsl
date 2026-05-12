@@ -95,12 +95,12 @@ void Respawn(uint index, inout Particle particle)
             slashDir = float2(1.0f, 0.0f);
         }
         float2 slashNormal = float2(-slashDir.y, slashDir.x);
-        float along = (r0 - 0.5f) * emitterRadius * 2.0f;
-        float across = (r1 - 0.5f) * emitterRadius * 0.18f;
+        float along = (r0 - 0.5f) * emitterRadius * 0.28f;
+        float across = (r1 - 0.5f) * emitterRadius * 0.08f;
         particle.translate = emitterTranslate +
                              float3(slashDir.x * along + slashNormal.x * across,
                                     slashDir.y * along + slashNormal.y * across,
-                                    (r2 - 0.5f) * emitterRadius * 0.08f);
+                                    (r2 - 0.5f) * emitterRadius * 0.03f);
         particle.velocity = float3(slashDir.x, slashDir.y, 0.0f) *
                             (0.08f + r3 * 0.18f) * emitterDirectionSpeed.w;
     } else if (emitterStyle == 4u)
@@ -164,14 +164,14 @@ void Respawn(uint index, inout Particle particle)
 
     float scale = emitterStyle == 0u ? (0.022f + r0 * 0.036f)
                   : emitterStyle == 1u ? (0.20f + r0 * 0.30f)
-                  : emitterStyle == 3u ? (0.044f + r0 * 0.042f)
+                  : emitterStyle == 3u ? (0.066f + r0 * 0.052f)
                   : emitterStyle == 4u ? (0.30f + r0 * 0.30f)
                                        : (0.32f + r0 * 0.48f);
     particle.scale = emitterStyle == 0u
                          ? float2(scale * (3.4f + r3 * 2.9f), scale * 0.26f)
                          : emitterStyle == 3u
-                               ? float2(scale * (5.6f + r3 * 3.8f),
-                                        scale * (0.24f + r4 * 0.12f))
+                               ? float2(scale * (8.8f + r3 * 3.8f),
+                                        scale * (0.18f + r4 * 0.10f))
                          : float2(scale * (0.90f + r3 * 0.36f), scale);
     particle.seed += 19.19f + time.x;
     particle.padding.x = (float) emitterStyle;

@@ -68,7 +68,7 @@ OBB Sword::GetOBB() const {
     const Transform hitTransform = BuildVisualTransform();
     float hitBoxDepth = kSwordLength * hitTransform.scale.z;
     if (isSlashMode_) {
-        hitBoxDepth += kSlashHitDepthExtension * hitTransform.scale.z * 0.64f;
+        hitBoxDepth += kSlashHitDepthExtension * hitTransform.scale.z;
     }
 
     const float forwardOffset = hitBoxDepth * 0.5f;
@@ -78,8 +78,9 @@ OBB Sword::GetOBB() const {
     XMVECTOR center = pos + forward * forwardOffset;
 
     XMStoreFloat3(&box.center, center);
-    box.size = {size_.x * hitTransform.scale.x * 1.02f,
-                size_.y * hitTransform.scale.y * 1.02f, hitBoxDepth};
+    const float slashWidthScale = isSlashMode_ ? 1.75f : 1.14f;
+    box.size = {size_.x * hitTransform.scale.x * slashWidthScale,
+                size_.y * hitTransform.scale.y * slashWidthScale, hitBoxDepth};
     box.rotation = hitTransform.rotation;
     return box;
 }

@@ -1,6 +1,8 @@
 #include "GameScene.h"
+#include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdlib>
 
 using namespace DirectX;
 
@@ -103,17 +105,30 @@ static bool IsSlashTowardPoint(const Sword &sword, const XMFLOAT3 &target,
     return dot >= minDot;
 }
 
-static XMFLOAT2 GetChargeWeakPointRequiredSlashDirection(ActionKind kind,
-                                                         int slashCount) {
-    if (kind == ActionKind::Smash) {
-        return slashCount == 0 ? XMFLOAT2{0.0f, -1.0f}
-                               : XMFLOAT2{1.0f, 0.0f};
+static XMFLOAT2 MakeRandomChargeWeakPointDirection(
+    const XMFLOAT2 *previousDirection = nullptr) {
+    constexpr float kDiagonal = 0.70710678f;
+    static const std::array<XMFLOAT2, 4> kDirections = {
+        XMFLOAT2{1.0f, 0.0f}, XMFLOAT2{kDiagonal, kDiagonal},
+        XMFLOAT2{0.0f, 1.0f}, XMFLOAT2{kDiagonal, -kDiagonal}};
+
+    int directionIndex = std::rand() % static_cast<int>(kDirections.size());
+    if (previousDirection == nullptr) {
+        return kDirections[static_cast<size_t>(directionIndex)];
     }
-    if (kind == ActionKind::Sweep) {
-        return slashCount == 0 ? XMFLOAT2{1.0f, 0.0f}
-                               : XMFLOAT2{0.0f, -1.0f};
+
+    for (int attempt = 0; attempt < 6; ++attempt) {
+        const XMFLOAT2 candidate = kDirections[static_cast<size_t>(directionIndex)];
+        const float dot = candidate.x * previousDirection->x +
+                          candidate.y * previousDirection->y;
+        if (std::fabs(dot) < 0.98f) {
+            return candidate;
+        }
+        directionIndex = std::rand() % static_cast<int>(kDirections.size());
     }
-    return {0.0f, -1.0f};
+
+    return kDirections[static_cast<size_t>(
+        (directionIndex + 1) % static_cast<int>(kDirections.size()))];
 }
 
 static bool IsSlashAlongDirection(const Sword &sword,
@@ -301,6 +316,11 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             chargeWeakPointActionKind_ = enemyActionKind;
             chargeWeakPointBroken_ = false;
             chargeWeakPointSlashCount_ = 0;
+            chargeWeakPointRequiredDirections_[0] =
+                MakeRandomChargeWeakPointDirection();
+            chargeWeakPointRequiredDirections_[1] =
+                MakeRandomChargeWeakPointDirection(
+                    &chargeWeakPointRequiredDirections_[0]);
             previousChargeWeakPointSlashStates_.fill(false);
         }
     } else {
@@ -348,10 +368,12 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                      enemy_.GetTransform().position, 5.2f) &&
             (hitBody || IsReadableChargeWeakPointHit(
                             swordHitBox, enemy_.GetTransform().position));
+        const size_t requiredDirectionIndex = static_cast<size_t>(std::clamp(
+            chargeWeakPointSlashCount_, 0,
+            static_cast<int>(chargeWeakPointRequiredDirections_.size() - 1)));
         const XMFLOAT2 requiredChargeSlashDirection =
-            GetChargeWeakPointRequiredSlashDirection(enemyActionKind,
-                                                     chargeWeakPointSlashCount_);
-        const bool canBreakChargeWeakPoint =
+            chargeWeakPointRequiredDirections_[requiredDirectionIndex];
+        const bool canMatchChargeWeakPoint =
             canTouchChargeWeakPoint &&
             IsSlashAlongDirection(*sword, requiredChargeSlashDirection);
         const bool canSlashCounter =
@@ -367,8 +389,29 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             break;
         }
 
-        if (canBreakChargeWeakPoint) {
-            chargeWeakPointSlashCount_ = 1;
+        if (canMatchChargeWeakPoint) {
+            ++chargeWeakPointSlashCount_;
+            if (chargeWeakPointSlashCount_ < 2) {
+                chargeWeakPointRequiredDirections_[static_cast<size_t>(
+                    chargeWeakPointSlashCount_)] =
+                    MakeRandomChargeWeakPointDirection(
+                        &chargeWeakPointRequiredDirections_[static_cast<size_t>(
+                            chargeWeakPointSlashCount_ - 1)]);
+
+                CombatFeedbackEvent feedback{};
+                feedback.type = CombatFeedbackEventType::PlayerSlashHit;
+                feedback.position = swordHitBox.center;
+                feedback.direction =
+                    DirectionFromTo(player_.GetTransform().position,
+                                    enemy_.GetTransform().position);
+                feedback.power = 3.0f;
+                feedback.swordIndex = i;
+                DispatchCombatFeedback(feedback);
+                player_.NotifyAttackHit(i, 0.0f);
+                enemyHitCooldown_ = 0.12f;
+                break;
+            }
+
             chargeWeakPointBroken_ = true;
             chargeWeakPointActionKind_ = ActionKind::None;
             const float breakDamage = 78.0f + swordAttackDamages[i] * 1.25f;

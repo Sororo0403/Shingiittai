@@ -194,6 +194,8 @@ class GameScene : public BaseScene {
     ActionKind chargeWeakPointActionKind_ = ActionKind::None;
     bool chargeWeakPointBroken_ = false;
     int chargeWeakPointSlashCount_ = 0;
+    std::array<DirectX::XMFLOAT2, 2> chargeWeakPointRequiredDirections_ = {
+        DirectX::XMFLOAT2{0.0f, -1.0f}, DirectX::XMFLOAT2{1.0f, 0.0f}};
     std::array<bool, Player::kSwordCount> previousChargeWeakPointSlashStates_{};
 
 };
