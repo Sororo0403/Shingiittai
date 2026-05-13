@@ -272,6 +272,20 @@ void Enemy::TakeDamage(float damage) {
     hitReactionTimer_ = (std::max)(hitReactionTimer_, hitReactionDuration_);
 }
 
+void Enemy::SetPhase2DebugHealth() {
+    if (deathFinished_ || isDying_) {
+        return;
+    }
+
+    const float phase2Hp =
+        config_.core.maxHp * config_.core.phase2HealthRatioThreshold;
+    hp_ = (std::max)(1.0f, phase2Hp);
+    hitReactionTimer_ = 0.0f;
+    counterRecoilTimer_ = 0.0f;
+    UpdateBossPhase();
+    UpdateParts();
+}
+
 void Enemy::NotifyAttackConnected() { currentActionConnected_ = true; }
 
 void Enemy::NotifyAttackGuarded() { currentActionGuarded_ = true; }

@@ -294,6 +294,70 @@ void GameScene::SyncEnemyAnimation() {
     enemyAnimationLoop_ = shouldLoop;
 }
 
+void GameScene::UpdatePhaseTransitionEnemyAnimation(float deltaTime) {
+    if (ctx_ == nullptr || ctx_->model == nullptr) {
+        return;
+    }
+
+    ModelManager *modelManager = ctx_->model;
+    Model *enemyModel = modelManager->GetModel(enemyModelId_);
+    if (enemyModel == nullptr || enemyModel->animations.empty()) {
+        return;
+    }
+
+    if (!HasAnimation(enemyModel, kBossAnimPhaseChange)) {
+        SyncEnemyAnimation();
+        SetEnemyAnimationFrozen(false);
+        modelManager->UpdateAnimation(enemyModelId_, deltaTime * 0.35f);
+        return;
+    }
+
+    if (enemyAnimationName_ != kBossAnimPhaseChange || enemyAnimationLoop_) {
+        modelManager->PlayAnimation(enemyModelId_, kBossAnimPhaseChange, false);
+        enemyAnimationName_ = kBossAnimPhaseChange;
+        enemyAnimationLoop_ = false;
+    }
+
+    const auto clipIt = enemyModel->animations.find(kBossAnimPhaseChange);
+    if (clipIt == enemyModel->animations.end() || clipIt->second.duration <= 0.0f) {
+        modelManager->UpdateAnimation(enemyModelId_, 0.0f);
+        return;
+    }
+
+    const float ratio = Clamp01(enemy_.GetPhaseTransitionRatio());
+    constexpr float kReleaseStart = 0.88f;
+    constexpr float kReleaseDuration = 0.05f;
+    constexpr float kChargeClipStart = 0.00f;
+    constexpr float kChargeClipEnd = 0.30f;
+    constexpr float kReleaseClipStart = 0.36f;
+    constexpr float kReleaseClipEnd = 0.99f;
+
+    float clipRatio = 0.0f;
+    if (ratio < kReleaseStart) {
+        const float charge = Smooth01(ratio / kReleaseStart);
+        clipRatio =
+            kChargeClipStart + (kChargeClipEnd - kChargeClipStart) * charge;
+    } else if (ratio < kReleaseStart + kReleaseDuration) {
+        const float release =
+            Smooth01((ratio - kReleaseStart) / kReleaseDuration);
+        clipRatio =
+            kReleaseClipStart + (kReleaseClipEnd - kReleaseClipStart) * release;
+    } else {
+        const float settle =
+            Smooth01((ratio - kReleaseStart - kReleaseDuration) /
+                     (1.0f - kReleaseStart - kReleaseDuration));
+        clipRatio = kReleaseClipEnd + (1.0f - kReleaseClipEnd) * settle;
+    }
+
+    enemyModel->animationTime =
+        clipIt->second.duration * std::clamp(clipRatio, 0.0f, 1.0f);
+    enemyModel->isLoop = false;
+    enemyModel->isPlaying = false;
+    enemyModel->animationFinished = ratio >= 1.0f;
+    enemyAnimationFrozen_ = false;
+    modelManager->UpdateAnimation(enemyModelId_, 0.0f);
+}
+
 void GameScene::ApplyEnemyProceduralAnimation() {
     if (ctx_ == nullptr || ctx_->model == nullptr) {
         return;

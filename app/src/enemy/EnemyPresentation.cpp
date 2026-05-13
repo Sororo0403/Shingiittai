@@ -30,8 +30,6 @@ void Enemy::UpdateParts() {
     float visualPitch = 0.0f;
     float visualRoll = 0.0f;
     const float pulse = 0.5f + 0.5f * std::sin(runtime_.stateTimer * 18.0f);
-    const float phasePulse =
-        0.5f + 0.5f * std::sin(runtime_.phaseTransitionTimer * 16.0f);
     const bool isDelaySmashWhiffPunish =
         action_.kind == ActionKind::Smash &&
         action_.step == ActionStep::Recovery &&
@@ -156,32 +154,51 @@ void Enemy::UpdateParts() {
         if (t > 1.0f) {
             t = 1.0f;
         }
+        constexpr float kReleaseStart = 0.88f;
+        constexpr float kReleaseDuration = 0.05f;
+        const float charge = Saturate(t / kReleaseStart);
+        const float chargeEase = charge * charge * (3.0f - 2.0f * charge);
+        const float release = Saturate((t - kReleaseStart) / kReleaseDuration);
+        const float releaseEase = release * release * (3.0f - 2.0f * release);
+        const float hold = chargeEase * (1.0f - releaseEase);
+        const float snap = std::sin(release * 3.14159265f);
+        const float tremble =
+            hold * (0.5f + 0.5f * std::sin(runtime_.phaseTransitionTimer * 34.0f));
 
-        bodyTf_.position.y -= 0.18f + 0.06f * phasePulse;
-        bodyTf_.scale.x += 0.18f + 0.10f * phasePulse;
-        bodyTf_.scale.y -= 0.14f * (1.0f - t * 0.35f);
-        bodyTf_.scale.z += 0.18f + 0.10f * phasePulse;
+        bodyTf_.position.y -= 0.26f * hold - 0.10f * releaseEase;
+        bodyTf_.scale.x += -0.24f * hold + 0.46f * releaseEase + 0.10f * snap;
+        bodyTf_.scale.y += -0.30f * hold + 0.28f * releaseEase;
+        bodyTf_.scale.z += -0.24f * hold + 0.46f * releaseEase + 0.10f * snap;
 
-        rightHandTf_.position.y += 0.95f + 0.18f * phasePulse;
-        rightHandTf_.position.x += rightX * 0.55f + (-forwardX) * 0.18f;
-        rightHandTf_.position.z += rightZ * 0.55f + (-forwardZ) * 0.18f;
-        rightHandTf_.scale.x += 0.18f + 0.08f * phasePulse;
-        rightHandTf_.scale.y += 0.18f + 0.08f * phasePulse;
-        rightHandTf_.scale.z += 0.18f + 0.08f * phasePulse;
+        rightHandTf_.position.y += 0.54f * hold + 0.74f * releaseEase;
+        rightHandTf_.position.x += (-rightX) * 0.46f * hold +
+                                   rightX * 0.96f * releaseEase;
+        rightHandTf_.position.z += (-rightZ) * 0.46f * hold +
+                                   rightZ * 0.96f * releaseEase;
+        rightHandTf_.position.x += (-forwardX) * 0.12f * hold;
+        rightHandTf_.position.z += (-forwardZ) * 0.12f * hold;
+        rightHandTf_.scale.x += 0.08f * hold + 0.22f * releaseEase;
+        rightHandTf_.scale.y += 0.08f * hold + 0.22f * releaseEase;
+        rightHandTf_.scale.z += 0.08f * hold + 0.22f * releaseEase;
 
-        leftHandTf_.position.y += 0.68f + 0.12f * phasePulse;
-        leftHandTf_.position.x += (-rightX) * 0.42f + forwardX * 0.12f;
-        leftHandTf_.position.z += (-rightZ) * 0.42f + forwardZ * 0.12f;
-        leftHandTf_.scale.x += 0.12f;
-        leftHandTf_.scale.y += 0.12f;
-        leftHandTf_.scale.z += 0.12f;
+        leftHandTf_.position.y += 0.46f * hold + 0.60f * releaseEase;
+        leftHandTf_.position.x += rightX * 0.38f * hold +
+                                  (-rightX) * 0.78f * releaseEase;
+        leftHandTf_.position.z += rightZ * 0.38f * hold +
+                                  (-rightZ) * 0.78f * releaseEase;
+        leftHandTf_.position.x += (-forwardX) * 0.10f * hold;
+        leftHandTf_.position.z += (-forwardZ) * 0.10f * hold;
+        leftHandTf_.scale.x += 0.06f * hold + 0.18f * releaseEase;
+        leftHandTf_.scale.y += 0.06f * hold + 0.18f * releaseEase;
+        leftHandTf_.scale.z += 0.06f * hold + 0.18f * releaseEase;
 
-        visualTf_.position.y += 0.08f * phasePulse;
-        visualTf_.scale.x += 0.06f + 0.04f * phasePulse;
-        visualTf_.scale.y += 0.03f;
-        visualTf_.scale.z += 0.06f + 0.04f * phasePulse;
-        visualPitch -= 0.12f;
-        visualRoll += 0.10f * phasePulse;
+        visualTf_.position.y += -0.10f * hold + 0.20f * snap;
+        visualTf_.position.x += (tremble - 0.5f * hold) * 0.018f;
+        visualTf_.scale.x += -0.10f * hold + 0.20f * releaseEase + 0.08f * snap;
+        visualTf_.scale.y += -0.14f * hold + 0.18f * releaseEase;
+        visualTf_.scale.z += -0.10f * hold + 0.20f * releaseEase + 0.08f * snap;
+        visualPitch -= 0.18f * hold - 0.14f * releaseEase;
+        visualRoll += 0.08f * tremble + 0.12f * snap;
     }
 
     if (!suppressActionPresentation && action_.kind == ActionKind::None &&

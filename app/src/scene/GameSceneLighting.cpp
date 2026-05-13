@@ -1,5 +1,6 @@
 #include "GameScene.h"
 #include "ModelManager.h"
+#include <algorithm>
 #include <cmath>
 
 using namespace DirectX;
@@ -20,7 +21,7 @@ void GameScene::UpdateSceneLighting() {
     const bool effectFocus =
         (isAttackKind &&
          (actionStep == ActionStep::Charge || actionStep == ActionStep::Active)) ||
-        enemy_.IsNovaImpactWindow();
+        enemy_.IsNovaImpactWindow() || enemy_.IsPhaseTransitionActive();
     XMFLOAT3 accentAnchor = enemy_.GetTransform().position;
     if (actionKind == ActionKind::Warp) {
         accentAnchor = enemy_.GetWarpTargetPos();
@@ -60,6 +61,12 @@ void GameScene::UpdateSceneLighting() {
         break;
     default:
         break;
+    }
+    if (enemy_.IsPhaseTransitionActive()) {
+        const float ratio = enemy_.GetPhaseTransitionRatio();
+        const float release =
+            std::clamp((ratio - 0.88f) / 0.05f, 0.0f, 1.0f);
+        actionColor = {1.0f, 0.24f + 0.30f * release, 0.05f, 1.0f};
     }
 
     SceneLighting lighting{};

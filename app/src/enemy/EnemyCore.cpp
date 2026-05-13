@@ -83,6 +83,7 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
         if (phaseTransitionTimer_ >= phaseTransitionDuration_) {
             phaseTransitionActive_ = false;
             phaseTransitionTimer_ = 0.0f;
+            SetIsPhaseChanging(false);
             stateTimer_ = 0.0f;
         }
         return;

@@ -86,6 +86,11 @@ XMFLOAT3 Lerp(const XMFLOAT3 &a, const XMFLOAT3 &b, float t) {
             a.z + (b.z - a.z) * t};
 }
 
+float SmoothStep01(float value) {
+    const float t = std::clamp(value, 0.0f, 1.0f);
+    return t * t * (3.0f - 2.0f * t);
+}
+
 XMVECTOR SkinSourcePosition(const Model &model, const ModelSubMesh &subMesh,
                             uint32_t vertexIndex) {
     const XMVECTOR source =
@@ -536,6 +541,9 @@ void GameScene::Initialize(const SceneContext &ctx) {
     battleIntroActive_ = true;
     battleIntroTimer_ = 0.0f;
     battleIntroSparkEmitted_ = false;
+    phaseTransitionWasActive_ = false;
+    phaseTransitionReleaseEmitted_ = false;
+    phaseTransitionLoopTimer_ = 0.0f;
     titleDemoTimer_ = 0.0f;
     titleDemoCounterTimer_ = 1.15f;
     battleResultRequested_ = false;
@@ -570,6 +578,10 @@ void GameScene::Update() {
     if (runMode_ == RunMode::Play && input->IsKeyTrigger(DIK_F8) &&
         !battleResultRequested_) {
         enemy_.TakeDamage(99999.0f);
+    }
+    if (runMode_ == RunMode::Play && input->IsKeyTrigger(DIK_F6) &&
+        !battleResultRequested_) {
+        enemy_.SetPhase2DebugHealth();
     }
 #endif
     if (runMode_ == RunMode::Play && input->IsKeyTrigger(DIK_F3)) {
@@ -617,6 +629,12 @@ void GameScene::Update() {
         smokeParticles_.Update(baseDeltaTime);
         return;
     }
+    if (enemy_.IsPhaseTransitionActive()) {
+        UpdatePhaseTransitionCinematic(baseDeltaTime);
+        return;
+    }
+    phaseTransitionWasActive_ = false;
+    phaseTransitionReleaseEmitted_ = false;
 
     combatFeedback_.Update(baseDeltaTime, sceneLightTime_);
     UpdateChargeWeakPointFocus(baseDeltaTime);
@@ -711,6 +729,12 @@ void GameScene::Update() {
         UpdateTitleDemo(baseDeltaTime);
     } else {
         UpdateCombat(gameplayDeltaTime);
+    }
+    if (enemy_.IsPhaseTransitionActive() && !phaseTransitionWasActive_) {
+        phaseTransitionWasActive_ = true;
+        phaseTransitionReleaseEmitted_ = false;
+        phaseTransitionLoopTimer_ = 0.0f;
+        EmitPhaseTransitionStartEffects();
     }
     if (runMode_ == RunMode::Play && !battleResultRequested_) {
         if (enemy_.GetHP() <= 0.0f) {
@@ -1191,6 +1215,11 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
         enemyCueParticleTimer_ = releaseCounterCueVisible ? 0.070f : 0.085f;
     }
 
+    const bool drawEnemySwordAfterimages = false;
+    if (!drawEnemySwordAfterimages) {
+        return;
+    }
+
     if (enemySwordParticleTimer_ > 0.0f || ctx_->model == nullptr) {
         return;
     }
@@ -1267,6 +1296,130 @@ void GameScene::DrawOverlay() {
     }
     hud_.Draw(*ctx_);
     DrawChargeWeakPointTimeGauge();
+}
+
+void GameScene::UpdatePhaseTransitionCinematic(float deltaTime) {
+    if (!phaseTransitionWasActive_) {
+        phaseTransitionWasActive_ = true;
+        phaseTransitionReleaseEmitted_ = false;
+        phaseTransitionLoopTimer_ = 0.0f;
+        EmitPhaseTransitionStartEffects();
+    }
+
+    sceneLightTime_ += deltaTime;
+    combatFeedback_.Update(deltaTime, sceneLightTime_);
+    UpdateChargeWeakPointFocus(deltaTime);
+
+    const float ratio = enemy_.GetPhaseTransitionRatio();
+    constexpr float kReleaseStart = 0.88f;
+    constexpr float kReleaseDuration = 0.05f;
+    const float charge = SmoothStep01(ratio / kReleaseStart);
+    const float release = SmoothStep01((ratio - kReleaseStart) / kReleaseDuration);
+    const float hold = charge * (1.0f - release);
+    if (ctx_ != nullptr && ctx_->postEffectRenderer != nullptr) {
+        ctx_->postEffectRenderer->SetVignettingEnabled(true);
+        ctx_->postEffectRenderer->SetVignettingStrength(0.30f + 0.42f * hold);
+        ctx_->postEffectRenderer->SetRadialBlurCenter(0.5f, 0.48f);
+        ctx_->postEffectRenderer->SetRadialBlurSampleCount(20);
+        ctx_->postEffectRenderer->SetRadialBlurStrength(
+            0.010f + 0.026f * hold + 0.036f * release);
+        ctx_->postEffectRenderer->SetSceneDimStrength(0.10f + 0.18f * hold);
+    }
+
+    enemy_.Update(BuildPlayerCombatObservation(), deltaTime);
+    ctx_->model->UpdateAnimation(playerModelId_, deltaTime * 0.025f);
+    UpdatePhaseTransitionEnemyAnimation(deltaTime);
+    ApplyEnemyProceduralAnimation();
+    UpdateSceneLighting();
+    hud_.Update(*ctx_, player_.GetHP(), enemy_.GetHP());
+    UpdateBattleCamera();
+    camera_.UpdateMatrices();
+
+    EmitPhaseTransitionLoopEffects(deltaTime);
+    if (!phaseTransitionReleaseEmitted_ && ratio >= kReleaseStart) {
+        phaseTransitionReleaseEmitted_ = true;
+        EmitPhaseTransitionReleaseEffects();
+    }
+
+    sparkParticles_.Update(deltaTime);
+    explosionParticles_.Update(deltaTime);
+    smokeParticles_.Update(deltaTime);
+    swordFlashParticles_.Update(deltaTime);
+
+    if (!enemy_.IsPhaseTransitionActive()) {
+        phaseTransitionWasActive_ = false;
+        phaseTransitionReleaseEmitted_ = false;
+        if (ctx_ != nullptr && ctx_->postEffectRenderer != nullptr) {
+            ctx_->postEffectRenderer->SetRadialBlurStrength(0.0f);
+            ctx_->postEffectRenderer->SetSceneDimStrength(0.0f);
+            ctx_->postEffectRenderer->SetVignettingStrength(0.24f);
+        }
+    }
+}
+
+void GameScene::EmitPhaseTransitionStartEffects() {
+    const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
+    const XMFLOAT3 origin{enemyPos.x, enemyPos.y + 1.18f, enemyPos.z};
+    smokeParticles_.EmitBurst(origin, 96, 1.20f,
+                              GPUParticleSystem::BurstStyle::Flash,
+                              {1.0f, 0.52f, 0.12f, 0.86f},
+                              {0.0f, 1.0f, 0.0f}, 0.62f);
+    sparkParticles_.EmitBurst(origin, 240, 1.85f,
+                              GPUParticleSystem::BurstStyle::Sparks,
+                              {1.0f, 0.72f, 0.24f, 0.96f},
+                              {0.0f, 1.0f, 0.0f}, 3.2f);
+    if (soundsLoaded_ && ctx_ != nullptr && ctx_->sound != nullptr) {
+        ctx_->sound->Play(enemyReleaseSoundId_);
+    }
+}
+
+void GameScene::EmitPhaseTransitionLoopEffects(float deltaTime) {
+    phaseTransitionLoopTimer_ -= deltaTime;
+    if (phaseTransitionLoopTimer_ > 0.0f) {
+        return;
+    }
+    phaseTransitionLoopTimer_ = 0.070f;
+
+    const float ratio = enemy_.GetPhaseTransitionRatio();
+    constexpr float kReleaseStart = 0.88f;
+    constexpr float kReleaseDuration = 0.05f;
+    const float charge = SmoothStep01(ratio / kReleaseStart);
+    const float release = SmoothStep01((ratio - kReleaseStart) / kReleaseDuration);
+    const float hold = charge * (1.0f - release);
+    const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
+    const XMFLOAT3 origin{enemyPos.x, enemyPos.y + 1.28f, enemyPos.z};
+    const uint32_t sparkCount =
+        static_cast<uint32_t>(44.0f + 72.0f * hold);
+    sparkParticles_.EmitBurst(origin, sparkCount, 0.70f + 0.60f * hold,
+                              GPUParticleSystem::BurstStyle::Sparks,
+                              {1.0f, 0.28f, 0.04f, 0.86f},
+                              {0.0f, 1.0f, 0.0f}, 2.4f + 2.0f * hold);
+    if (hold > 0.35f) {
+        smokeParticles_.EmitBurst(origin, 5, 0.70f,
+                                  GPUParticleSystem::BurstStyle::Flash,
+                                  {1.0f, 0.20f, 0.04f, 0.52f},
+                                  {0.0f, 1.0f, 0.0f}, 0.38f);
+    }
+}
+
+void GameScene::EmitPhaseTransitionReleaseEffects() {
+    const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
+    const XMFLOAT3 origin{enemyPos.x, enemyPos.y + 1.30f, enemyPos.z};
+    explosionParticles_.EmitBurst(origin, 180, 1.75f,
+                                  GPUParticleSystem::BurstStyle::Explosion,
+                                  {1.0f, 0.30f, 0.05f, 0.92f},
+                                  {0.0f, 1.0f, 0.0f}, 3.0f);
+    sparkParticles_.EmitBurst(origin, 380, 2.40f,
+                              GPUParticleSystem::BurstStyle::Sparks,
+                              {1.0f, 0.86f, 0.30f, 1.0f},
+                              {0.0f, 1.0f, 0.0f}, 7.0f);
+    smokeParticles_.EmitBurst(origin, 92, 1.90f,
+                              GPUParticleSystem::BurstStyle::Flash,
+                              {1.0f, 0.58f, 0.12f, 0.76f},
+                              {0.0f, 1.0f, 0.0f}, 1.0f);
+    if (soundsLoaded_ && ctx_ != nullptr && ctx_->sound != nullptr) {
+        ctx_->sound->Play(explosionSoundId_);
+    }
 }
 
 void GameScene::UpdateBattleIntro(float deltaTime) {

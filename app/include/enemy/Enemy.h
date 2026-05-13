@@ -385,6 +385,7 @@ class Enemy {
 
     void Draw(ModelManager *modelManager, const Camera &camera);
     void TakeDamage(float damage);
+    void SetPhase2DebugHealth();
     void ConsumeBullet(size_t index);
     void ConsumeWave(size_t index);
     void NotifyAttackConnected();
@@ -574,7 +575,7 @@ class Enemy {
     EnemyConfig config_{};
     bool &phaseTransitionActive_ = runtime_.phaseTransitionActive;
     float &phaseTransitionTimer_ = runtime_.phaseTransitionTimer;
-    float phaseTransitionDuration_ = 0.90f;
+    float phaseTransitionDuration_ = 3.40f;
 
     bool &holdConfigured_ = runtime_.holdConfigured;
     float &currentHoldDuration_ = runtime_.currentHoldDuration;
