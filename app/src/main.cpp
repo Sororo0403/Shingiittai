@@ -13,9 +13,95 @@
 #include "TitleScene.h"
 #include "WeaponSelectScene.h"
 #include "WinApp.h"
+#include <Windows.h>
+#include <filesystem>
 #include <memory>
+#include <string>
+
+namespace {
+class HandUdpSenderProcess {
+  public:
+    ~HandUdpSenderProcess() { Stop(); }
+
+    void Start() {
+        if (IsDisabled()) {
+            return;
+        }
+
+        const std::filesystem::path repoRoot = ResolveRepoRoot();
+        const std::filesystem::path scriptPath =
+            repoRoot / L"tools" / L"hand_tracking" / L"hand_udp_sender.py";
+        const std::filesystem::path modelPath =
+            L"C:\\models\\hand_landmarker.task";
+
+        if (!std::filesystem::exists(scriptPath) ||
+            !std::filesystem::exists(modelPath)) {
+            return;
+        }
+
+        std::wstring command = L"py -3.11 \"" + scriptPath.wstring() +
+                               L"\" --model \"" + modelPath.wstring() + L"\"";
+
+        STARTUPINFOW startupInfo{};
+        startupInfo.cb = sizeof(startupInfo);
+        PROCESS_INFORMATION processInfo{};
+        const BOOL started = CreateProcessW(
+            nullptr, command.data(), nullptr, nullptr, FALSE,
+            CREATE_NEW_CONSOLE, nullptr, repoRoot.wstring().c_str(),
+            &startupInfo, &processInfo);
+        if (!started) {
+            return;
+        }
+
+        processInfo_ = processInfo;
+        isRunning_ = true;
+    }
+
+  private:
+    static bool IsDisabled() {
+        wchar_t value[8]{};
+        const DWORD length = GetEnvironmentVariableW(
+            L"SHINGIITTAI_DISABLE_HAND_CAMERA", value,
+            static_cast<DWORD>(std::size(value)));
+        return length > 0 && value[0] == L'1';
+    }
+
+    static std::filesystem::path ResolveRepoRoot() {
+        std::filesystem::path sourcePath = std::filesystem::path(__FILE__);
+        if (!sourcePath.is_absolute()) {
+            sourcePath = std::filesystem::current_path() / sourcePath;
+        }
+
+        return sourcePath.parent_path().parent_path().parent_path();
+    }
+
+    void Stop() {
+        if (!isRunning_) {
+            return;
+        }
+
+        DWORD exitCode = 0;
+        if (GetExitCodeProcess(processInfo_.hProcess, &exitCode) &&
+            exitCode == STILL_ACTIVE) {
+            TerminateProcess(processInfo_.hProcess, 0);
+            WaitForSingleObject(processInfo_.hProcess, 1000);
+        }
+
+        CloseHandle(processInfo_.hThread);
+        CloseHandle(processInfo_.hProcess);
+        processInfo_ = {};
+        isRunning_ = false;
+    }
+
+    PROCESS_INFORMATION processInfo_{};
+    bool isRunning_ = false;
+};
+}
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
+    HandUdpSenderProcess handUdpSenderProcess;
+    handUdpSenderProcess.Start();
+
     // WinApp初期化
     WinApp winApp;
     winApp.Initialize(hInstance, nCmdShow, 1280, 720, L"3145_身技一体");

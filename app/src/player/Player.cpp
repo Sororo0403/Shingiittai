@@ -99,6 +99,7 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
         gamepadControlMode_ == PlayerGamepadControlMode::Hunter;
     const bool useMouseRightSword =
         !hasLeftJoyCon && !hasRightJoyCon && !useGamepadRightSword;
+    const bool useUdpRightSword = useMouseRightSword;
 
     SwordPose leftPose = MakeIdleSwordPose(true);
     if (hasLeftJoyCon) {
@@ -117,6 +118,15 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     } else if (useGamepadRightSword) {
         rightPose =
             UpdateGamepadSword(input, inputDeltaTime, rightSword_.GetTransform());
+    } else if (useUdpRightSword) {
+        swordUdpController_.Update(inputDeltaTime);
+        if (swordUdpController_.IsActive()) {
+            rightPose = swordUdpController_.GetPose();
+        } else {
+            swordMouseController_.Update(input, inputDeltaTime,
+                                         rightSword_.GetTransform());
+            rightPose = swordMouseController_.GetPose();
+        }
     } else if (useMouseRightSword) {
         swordMouseController_.Update(input, inputDeltaTime,
                                      rightSword_.GetTransform());

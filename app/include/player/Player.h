@@ -6,6 +6,7 @@
 #include "SwordControllerState.h"
 #include "SwordJoyConController.h"
 #include "SwordMouseController.h"
+#include "SwordUdpController.h"
 #include "Transform.h"
 #include <array>
 #include <cstdint>
@@ -190,6 +191,7 @@ class Player {
     SwordJoyConController leftSwordJoyConController_;
     SwordJoyConController rightSwordJoyConController_;
     SwordMouseController swordMouseController_;
+    SwordUdpController swordUdpController_;
     SwordControllerState gamepadSwordState_{};
     PlayerGamepadControlMode gamepadControlMode_ =
         PlayerGamepadControlMode::Hunter;

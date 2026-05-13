@@ -141,6 +141,9 @@
     <ClCompile Include="src\player\SwordMouseController.cpp">
       <Filter>Source Files\player</Filter>
     </ClCompile>
+    <ClCompile Include="src\player\SwordUdpController.cpp">
+      <Filter>Source Files\player</Filter>
+    </ClCompile>
     <ClCompile Include="src\scene\GameSceneHud.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
@@ -202,6 +205,9 @@
       <Filter>Header Files\player</Filter>
     </ClInclude>
     <ClInclude Include="include\player\SwordMouseController.h">
+      <Filter>Header Files\player</Filter>
+    </ClInclude>
+    <ClInclude Include="include\player\SwordUdpController.h">
       <Filter>Header Files\player</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\GameSceneHud.h">
