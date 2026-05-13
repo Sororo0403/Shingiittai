@@ -1,12 +1,14 @@
 #include "WeaponSelectScene.h"
+#include "CalibrationScene.h"
 #include "DirectXCommon.h"
 #include "Input.h"
-#include "GameScene.h"
 #include "ModelManager.h"
+#include "PostEffectRenderer.h"
 #include "SceneManager.h"
 #include "SpriteManager.h"
 #include "TextureManager.h"
 #include "WinApp.h"
+#include <Xinput.h>
 #include <algorithm>
 #include <cmath>
 #include <memory>
@@ -14,126 +16,132 @@
 using namespace DirectX;
 
 namespace {
-PlayerWeaponType ToWeaponType(int index) {
-    switch (index) {
-    case 1:
-        return PlayerWeaponType::Dual;
-    case 2:
-        return PlayerWeaponType::GreatSword;
-    case 0:
-    default:
-        return PlayerWeaponType::Standard;
-    }
-}
+constexpr float kTransitionDuration = 0.34f;
 
 XMFLOAT4 MakeColor(float r, float g, float b, float a = 1.0f) {
     return {r, g, b, a};
 }
+
+float SmoothStep(float t) { return t * t * (3.0f - 2.0f * t); }
 
 XMFLOAT4 MakeQuat(float pitch, float yaw, float roll) {
     XMFLOAT4 q{};
     XMStoreFloat4(&q, XMQuaternionRotationRollPitchYaw(pitch, yaw, roll));
     return q;
 }
-
 } // namespace
 
 void WeaponSelectScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
     selectedIndex_ = 0;
-    startRequested_ = false;
-    requestedWeaponType_ = PlayerWeaponType::Standard;
     sceneTime_ = 0.0f;
-    selectionFlashTimer_ = 0.0f;
-    readyTimer_ = 0.0f;
-    tilePulse_.fill(0.0f);
+    transitionTimer_ = 0.0f;
+    startRequested_ = false;
+    pulseTimers_.fill(0.0f);
 
     const float aspect = static_cast<float>(ctx_->winApp->GetWidth()) /
                          static_cast<float>(ctx_->winApp->GetHeight());
     camera_.Initialize(aspect);
     camera_.SetMode(CameraMode::LookAt);
-    camera_.SetPerspectiveFovDeg(42.0f);
+    camera_.SetPerspectiveFovDeg(39.0f);
     UpdateCamera();
 
     ctx_->dxCommon->BeginUpload();
     backgroundImage_ =
-        LoadTextImage(L"app/resources/select/weapon_select_bg.png");
-    titleImage_ = LoadTextImage(L"app/resources/text/weapon_title.png");
+        LoadTextureImage(L"app/resources/select/weapon_select_bg.png");
+    titleImage_ = LoadTextureImage(L"app/resources/text/input_title.png");
+    controlsImage_ =
+        LoadTextureImage(L"app/resources/text/weapon_controls.png");
+    readyImage_ = LoadTextureImage(L"app/resources/text/weapon_ready.png");
     weaponNameImages_[0] =
-        LoadTextImage(L"app/resources/text/weapon_standard.png");
-    weaponNameImages_[1] = LoadTextImage(L"app/resources/text/weapon_dual.png");
+        LoadTextureImage(L"app/resources/text/input_kbm.png");
+    weaponNameImages_[1] =
+        LoadTextureImage(L"app/resources/text/input_joycon.png");
     weaponNameImages_[2] =
-        LoadTextImage(L"app/resources/text/weapon_great.png");
+        LoadTextureImage(L"app/resources/text/input_hand.png");
     weaponDescImages_[0] =
-        LoadTextImage(L"app/resources/text/weapon_standard_desc.png");
+        LoadTextureImage(L"app/resources/text/input_ready_kbm.png");
     weaponDescImages_[1] =
-        LoadTextImage(L"app/resources/text/weapon_dual_desc.png");
+        LoadTextureImage(L"app/resources/text/input_ready_joycon.png");
     weaponDescImages_[2] =
-        LoadTextImage(L"app/resources/text/weapon_great_desc.png");
+        LoadTextureImage(L"app/resources/text/input_ready_hand.png");
     weaponBottomImages_[0] =
-        LoadTextImage(L"app/resources/text/weapon_bottom_standard.png");
+        LoadTextureImage(L"app/resources/text/input_ready_kbm.png");
     weaponBottomImages_[1] =
-        LoadTextImage(L"app/resources/text/weapon_bottom_dual.png");
+        LoadTextureImage(L"app/resources/text/input_ready_joycon.png");
     weaponBottomImages_[2] =
-        LoadTextImage(L"app/resources/text/weapon_bottom_great.png");
-    controlsImage_ = LoadTextImage(L"app/resources/text/weapon_controls.png");
-    readyImage_ = LoadTextImage(L"app/resources/text/weapon_ready.png");
+        LoadTextureImage(L"app/resources/text/input_ready_hand.png");
     swordModelId_ = ctx_->model->Load(L"app/resources/models/player/sword.glb");
     ctx_->dxCommon->EndUpload();
     ctx_->texture->ReleaseUploadBuffers();
 
+    ctx_->postEffectRenderer->SetColorMode(PostEffectRenderer::ColorMode::None);
+    ctx_->postEffectRenderer->SetRadialBlurStrength(0.0f);
+    ctx_->postEffectRenderer->SetSceneDimStrength(0.0f);
+    ctx_->postEffectRenderer->SetVignettingStrength(0.0f);
+    ctx_->postEffectRenderer->SetVignettingEnabled(false);
     UpdateLighting();
 }
 
 void WeaponSelectScene::Update() {
     sceneTime_ += ctx_->deltaTime;
-    if (selectionFlashTimer_ > 0.0f) {
-        selectionFlashTimer_ =
-            (std::max)(0.0f, selectionFlashTimer_ - ctx_->deltaTime);
-    }
-    for (float &pulse : tilePulse_) {
-        pulse = (std::max)(0.0f, pulse - ctx_->deltaTime * 2.4f);
+    for (float &pulse : pulseTimers_) {
+        pulse = (std::max)(0.0f, pulse - ctx_->deltaTime * 3.0f);
     }
 
-    if (!startRequested_) {
-        UpdateSelection(ctx_->input);
-    } else {
-        readyTimer_ += ctx_->deltaTime;
-        if (readyTimer_ >= 0.72f) {
+    const float w = static_cast<float>(ctx_->winApp->GetWidth());
+    const float h = static_cast<float>(ctx_->winApp->GetHeight());
+    Layout(w, h);
+
+    if (startRequested_) {
+        transitionTimer_ += ctx_->deltaTime;
+        if (transitionTimer_ >= kTransitionDuration) {
             sceneManager_->ChangeScene(
-                std::make_unique<GameScene>(requestedWeaponType_));
+                std::make_unique<CalibrationScene>(SelectedControlType()));
         }
+        return;
     }
 
+    UpdateSelection(ctx_->input);
     UpdateCamera();
     UpdateLighting();
 }
 
-void WeaponSelectScene::Draw() {}
+void WeaponSelectScene::Draw() {
+    const float w = static_cast<float>(ctx_->winApp->GetWidth());
+    const float h = static_cast<float>(ctx_->winApp->GetHeight());
 
-void WeaponSelectScene::DrawOverlay() {
-    ctx_->dxCommon->SetBackBufferRenderTarget(false, true);
     ctx_->sprite->PreDraw();
-    DrawUiBase();
+    DrawBackground(w, h);
+    DrawCards(w, h);
     ctx_->sprite->PostDraw();
 
-    ctx_->dxCommon->SetBackBufferRenderTarget(false, true);
-    DrawModels();
+    DrawModelPreviews();
 
-    ctx_->dxCommon->SetBackBufferRenderTarget(false, false);
     ctx_->sprite->PreDraw();
-    DrawUiOverlay();
+    DrawLabels(w, h);
+    DrawStartTransition(w, h);
     ctx_->sprite->PostDraw();
 }
 
-void WeaponSelectScene::StartGame(PlayerWeaponType weaponType) {
-    requestedWeaponType_ = weaponType;
-    startRequested_ = true;
-    readyTimer_ = 0.0f;
+WeaponSelectScene::Image
+WeaponSelectScene::LoadTextureImage(const std::wstring &path) {
+    Image image{};
+    image.textureId = ctx_->texture->Load(path);
+    image.width = static_cast<float>(ctx_->texture->GetWidth(image.textureId));
+    image.height =
+        static_cast<float>(ctx_->texture->GetHeight(image.textureId));
+    return image;
 }
 
 void WeaponSelectScene::UpdateSelection(Input *input) {
     int nextIndex = selectedIndex_;
+    for (int i = 0; i < kWeaponCount; ++i) {
+        if (IsMouseOver(cardRects_[i])) {
+            nextIndex = i;
+        }
+    }
+
     if (input->IsKeyTrigger(DIK_LEFT) || input->IsKeyTrigger(DIK_A)) {
         nextIndex = (selectedIndex_ + kWeaponCount - 1) % kWeaponCount;
     }
@@ -142,9 +150,11 @@ void WeaponSelectScene::UpdateSelection(Input *input) {
     }
     if (input->IsKeyTrigger(DIK_1)) {
         nextIndex = 0;
-    } else if (input->IsKeyTrigger(DIK_2)) {
+    }
+    if (input->IsKeyTrigger(DIK_2)) {
         nextIndex = 1;
-    } else if (input->IsKeyTrigger(DIK_3)) {
+    }
+    if (input->IsKeyTrigger(DIK_3)) {
         nextIndex = 2;
     }
 
@@ -159,129 +169,217 @@ void WeaponSelectScene::UpdateSelection(Input *input) {
 
     if (nextIndex != selectedIndex_) {
         selectedIndex_ = nextIndex;
-        selectionFlashTimer_ = 0.18f;
-        tilePulse_[selectedIndex_] = 1.0f;
+        pulseTimers_[selectedIndex_] = 1.0f;
+    }
+
+    if (input->IsMouseTrigger(0)) {
+        for (int i = 0; i < kWeaponCount; ++i) {
+            if (IsMouseOver(cardRects_[i])) {
+                selectedIndex_ = i;
+                BeginStart();
+                return;
+            }
+        }
     }
 
     if (input->IsKeyTrigger(DIK_RETURN) || input->IsKeyTrigger(DIK_SPACE) ||
         (input->IsGamepadConnected() &&
          input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_A))) {
-        StartGame(ToWeaponType(selectedIndex_));
+        BeginStart();
+    }
+}
+
+void WeaponSelectScene::BeginStart() {
+    startRequested_ = true;
+    transitionTimer_ = 0.0f;
+}
+
+void WeaponSelectScene::Layout(float screenWidth, float screenHeight) {
+    const float cardW = (std::min)(330.0f, screenWidth * 0.25f);
+    const float cardH = (std::min)(390.0f, screenHeight * 0.55f);
+    const float gap = (std::max)(34.0f, screenWidth * 0.035f);
+    const float totalW = cardW * static_cast<float>(kWeaponCount) +
+                         gap * static_cast<float>(kWeaponCount - 1);
+    const float startX = (screenWidth - totalW) * 0.5f;
+    const float y = screenHeight * 0.19f;
+
+    for (int i = 0; i < kWeaponCount; ++i) {
+        cardRects_[i] = {startX + i * (cardW + gap), y, cardW, cardH};
+    }
+}
+
+bool WeaponSelectScene::IsMouseOver(const ButtonRect &rect) const {
+    POINT cursor{};
+    if (!GetCursorPos(&cursor)) {
+        return false;
+    }
+    if (!ScreenToClient(ctx_->winApp->GetHwnd(), &cursor)) {
+        return false;
+    }
+
+    const float x = static_cast<float>(cursor.x);
+    const float y = static_cast<float>(cursor.y);
+    return x >= rect.x && x <= rect.x + rect.w && y >= rect.y &&
+           y <= rect.y + rect.h;
+}
+
+InputControlType WeaponSelectScene::SelectedControlType() const {
+    switch (selectedIndex_) {
+    case 2:
+        return InputControlType::Hand;
+    case 1:
+        return InputControlType::JoyCon;
+    default:
+        return InputControlType::KeyboardMouse;
     }
 }
 
 void WeaponSelectScene::UpdateCamera() {
-    camera_.SetPosition({0.0f, 2.6f, -8.4f});
+    camera_.SetPosition({0.0f, 2.5f, -8.2f});
     camera_.LookAt({0.0f, 1.05f, 0.0f});
     camera_.UpdateMatrices();
 }
 
 void WeaponSelectScene::UpdateLighting() {
     SceneLighting lighting{};
-    lighting.keyLightDirection = {-0.25f, -1.0f, 0.22f};
-    lighting.keyLightColor = {1.35f, 1.20f, 0.92f, 1.0f};
-    lighting.fillLightDirection = {0.75f, -0.20f, -0.65f};
-    lighting.fillLightColor = {0.24f, 0.44f, 0.70f, 0.60f};
-    lighting.ambientColor = {0.20f, 0.20f, 0.23f, 1.0f};
-    lighting.lightingParams = {72.0f, 0.55f, 4.6f, 0.20f};
-    lighting.pointLights[0].positionRange = {0.0f, 2.8f, -1.5f, 8.5f};
-    lighting.pointLights[0].colorIntensity = {1.0f, 0.36f, 0.20f, 1.6f};
-    lighting.pointLights[1].positionRange = {0.0f, 1.6f, 1.8f, 8.0f};
-    lighting.pointLights[1].colorIntensity = {0.18f, 0.55f, 1.0f, 1.0f};
+    lighting.keyLightDirection = {-0.20f, -1.0f, 0.26f};
+    lighting.keyLightColor = {1.32f, 1.18f, 0.92f, 1.0f};
+    lighting.fillLightDirection = {0.75f, -0.30f, -0.58f};
+    lighting.fillLightColor = {0.18f, 0.46f, 0.78f, 0.70f};
+    lighting.ambientColor = {0.18f, 0.18f, 0.20f, 1.0f};
+    lighting.lightingParams = {78.0f, 0.60f, 4.8f, 0.24f};
+    lighting.pointLights[0].positionRange = {0.0f, 2.5f, -1.4f, 8.2f};
+    lighting.pointLights[0].colorIntensity = {1.0f, 0.38f, 0.14f, 1.65f};
+    lighting.pointLights[1].positionRange = {0.0f, 1.7f, 1.8f, 8.0f};
+    lighting.pointLights[1].colorIntensity = {0.12f, 0.50f, 1.0f, 1.05f};
     ctx_->model->SetSceneLighting(lighting);
 }
 
-void WeaponSelectScene::DrawModels() {
+void WeaponSelectScene::DrawBackground(float screenWidth, float screenHeight) {
+    DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
+             MakeColor(0.96f, 0.97f, 0.98f, 1.0f));
+    DrawImage(backgroundImage_, 0.0f, 0.0f,
+              (std::max)(screenWidth / (std::max)(backgroundImage_.width, 1.0f),
+                         screenHeight /
+                             (std::max)(backgroundImage_.height, 1.0f)),
+              0.78f);
+    DrawRect(0.0f, 0.0f, screenWidth, 96.0f,
+             MakeColor(0.03f, 0.03f, 0.035f, 0.86f));
+    DrawRect(0.0f, 88.0f, screenWidth, 6.0f,
+             MakeColor(1.0f, 0.82f, 0.02f, 0.98f));
+    DrawRect(0.0f, screenHeight - 126.0f, screenWidth, 126.0f,
+             MakeColor(0.02f, 0.02f, 0.025f, 0.88f));
+}
+
+void WeaponSelectScene::DrawCards(float, float) {
+    for (int i = 0; i < kWeaponCount; ++i) {
+        const ButtonRect &rect = cardRects_[i];
+        const bool selected = i == selectedIndex_;
+        const float pulse = pulseTimers_[i];
+        const float lift = selected ? 10.0f : 0.0f;
+        const XMFLOAT4 body =
+            selected ? MakeColor(0.98f, 0.985f, 0.99f, 0.92f)
+                     : MakeColor(0.88f, 0.90f, 0.93f, 0.64f);
+        DrawRect(rect.x, rect.y - lift, rect.w, rect.h, body);
+        DrawRect(rect.x, rect.y + rect.h - lift - 8.0f, rect.w, 8.0f,
+                 MakeColor(0.02f, 0.02f, 0.025f, selected ? 0.90f : 0.45f));
+        DrawRect(rect.x, rect.y - lift, rect.w, 8.0f,
+                 WeaponColor(i, selected ? 0.95f : 0.42f));
+
+        if (selected) {
+            const float frame = 6.0f + pulse * 4.0f;
+            const XMFLOAT4 color = MakeColor(1.0f, 0.82f, 0.02f, 1.0f);
+            DrawRect(rect.x - frame, rect.y - lift - frame,
+                     rect.w + frame * 2.0f, frame, color);
+            DrawRect(rect.x - frame, rect.y + rect.h - lift,
+                     rect.w + frame * 2.0f, frame, color);
+            DrawRect(rect.x - frame, rect.y - lift - frame, frame,
+                     rect.h + frame * 2.0f, color);
+            DrawRect(rect.x + rect.w, rect.y - lift - frame, frame,
+                     rect.h + frame * 2.0f, color);
+        }
+    }
+}
+
+void WeaponSelectScene::DrawModelPreviews() {
     ctx_->model->PreDraw();
     for (int i = 0; i < kWeaponCount; ++i) {
-        const int swordCount = i == 1 ? 2 : 1;
-        const float selectedBoost = i == selectedIndex_ ? 1.0f : 0.0f;
         ModelDrawEffect effect{};
         effect.enabled = true;
-        effect.color = WeaponColor(i, 0.80f);
-        effect.intensity = 0.20f + selectedBoost * 0.70f;
-        effect.fresnelPower = 2.8f;
-        effect.noiseAmount = 0.0f;
-        effect.time = 0.0f;
         effect.disableCulling = true;
+        effect.additiveBlend = i == selectedIndex_;
+        effect.color = WeaponColor(i, i == selectedIndex_ ? 0.72f : 0.42f);
+        effect.intensity = i == selectedIndex_ ? 0.62f : 0.18f;
+        effect.fresnelPower = 1.6f;
         ctx_->model->SetDrawEffect(effect);
 
-        for (int s = 0; s < swordCount; ++s) {
-            ctx_->model->Draw(swordModelId_, MakeSwordTransform(i, s), camera_);
+        const int swordCount = 2;
+        for (int swordIndex = 0; swordIndex < swordCount; ++swordIndex) {
+            ctx_->model->Draw(swordModelId_, MakeSwordTransform(i, swordIndex),
+                              camera_);
         }
     }
     ctx_->model->ClearDrawEffect();
     ctx_->model->PostDraw();
 }
 
-void WeaponSelectScene::DrawUiBase() {
-    const float w = static_cast<float>(ctx_->winApp->GetWidth());
-    const float h = static_cast<float>(ctx_->winApp->GetHeight());
+void WeaponSelectScene::DrawLabels(float screenWidth, float screenHeight) {
+    const float titleScale =
+        (std::min)(1.0f, (screenWidth * 0.38f) /
+                             (std::max)(titleImage_.width, 1.0f));
+    DrawImage(titleImage_, (screenWidth - titleImage_.width * titleScale) * 0.5f,
+              13.0f, titleScale, 1.0f);
 
-    DrawRect(0.0f, 0.0f, w, h, MakeColor(0.985f, 0.988f, 0.992f, 1.0f));
-    DrawStretchImage(backgroundImage_, 0.0f, 0.0f, w, h, 1.0f);
-
-    const float cardW = 330.0f;
-    const float cardH = 360.0f;
-    const float cardY = 132.0f;
-    const float startX = (w - cardW * 3.0f - 42.0f * 2.0f) * 0.5f;
     for (int i = 0; i < kWeaponCount; ++i) {
-        const float x = startX + i * (cardW + 42.0f);
+        const ButtonRect &rect = cardRects_[i];
         const bool selected = i == selectedIndex_;
-        XMFLOAT4 base = selected ? MakeColor(1.0f, 1.0f, 1.0f, 0.92f)
-                                 : MakeColor(0.95f, 0.96f, 0.97f, 0.72f);
-        DrawRect(x, cardY, cardW, cardH, base);
-        DrawRect(x + 10.0f, cardY + 10.0f, cardW - 20.0f, cardH - 20.0f,
-                 MakeColor(1.0f, 1.0f, 1.0f, selected ? 0.42f : 0.28f));
-        DrawRect(x, cardY, cardW, 10.0f,
-                 MakeColor(0.06f, 0.06f, 0.07f, selected ? 0.92f : 0.30f));
-        if (selected) {
-            DrawRect(x - 8.0f, cardY - 8.0f, cardW + 16.0f, 8.0f,
-                     MakeColor(1.0f, 0.86f, 0.05f, 1.0f));
-            DrawRect(x - 8.0f, cardY + cardH, cardW + 16.0f, 8.0f,
-                     MakeColor(1.0f, 0.86f, 0.05f, 1.0f));
-            DrawRect(x - 8.0f, cardY - 8.0f, 8.0f, cardH + 16.0f,
-                     MakeColor(1.0f, 0.86f, 0.05f, 1.0f));
-            DrawRect(x + cardW, cardY - 8.0f, 8.0f, cardH + 16.0f,
-                     MakeColor(1.0f, 0.86f, 0.05f, 1.0f));
-        }
+        const float lift = selected ? 10.0f : 0.0f;
+        const Image &name = weaponNameImages_[i];
+        const Image &desc = weaponDescImages_[i];
+        const float nameScale =
+            (std::min)(1.0f, (rect.w * 0.70f) / (std::max)(name.width, 1.0f));
+        const float descScale =
+            (std::min)(1.0f, (rect.w * 0.82f) / (std::max)(desc.width, 1.0f));
+        DrawImage(name, rect.x + (rect.w - name.width * nameScale) * 0.5f,
+                  rect.y + rect.h - lift - 102.0f, nameScale,
+                  selected ? 1.0f : 0.70f);
+        DrawImage(desc, rect.x + (rect.w - desc.width * descScale) * 0.5f,
+                  rect.y + rect.h - lift - 43.0f, descScale,
+                  selected ? 1.0f : 0.62f);
     }
 
-    DrawRect(0, 540, w, 180, MakeColor(0.98f, 0.985f, 0.99f, 0.72f));
-    DrawRect(0, 540, w, 5, MakeColor(0.06f, 0.06f, 0.07f, 0.86f));
-    DrawRect(0, 548, w, 5, MakeColor(1.0f, 0.86f, 0.05f, 0.95f));
+    const Image &bottom = weaponBottomImages_[selectedIndex_];
+    const float bottomScale =
+        (std::min)(1.0f, (screenWidth * 0.56f) /
+                             (std::max)(bottom.width, 1.0f));
+    DrawImage(bottom, 58.0f, screenHeight - 88.0f, bottomScale, 1.0f);
+
+    const float controlsScale =
+        (std::min)(1.0f, (screenWidth * 0.32f) /
+                             (std::max)(controlsImage_.width, 1.0f));
+    DrawImage(controlsImage_,
+              screenWidth - controlsImage_.width * controlsScale - 52.0f,
+              screenHeight - 78.0f, controlsScale, 0.82f);
 }
 
-void WeaponSelectScene::DrawUiOverlay() {
-    const float w = static_cast<float>(ctx_->winApp->GetWidth());
-
-    DrawImage(titleImage_, (w - titleImage_.width) * 0.5f, 18.0f);
-
-    const float cardW = 330.0f;
-    const float cardY = 132.0f;
-    const float startX = (w - cardW * 3.0f - 42.0f * 2.0f) * 0.5f;
-    for (int i = 0; i < kWeaponCount; ++i) {
-        const float x = startX + i * (cardW + 42.0f);
-        const TextImage &name = weaponNameImages_[i];
-        const TextImage &desc = weaponDescImages_[i];
-        DrawImage(name, x + (cardW - name.width) * 0.5f, cardY + 266.0f);
-        DrawImage(desc, x + (cardW - desc.width) * 0.5f, cardY + 326.0f);
+void WeaponSelectScene::DrawStartTransition(float screenWidth,
+                                            float screenHeight) {
+    if (!startRequested_) {
+        return;
     }
 
-    const TextImage &bottom = weaponBottomImages_[selectedIndex_];
-    DrawImage(bottom, 72.0f, 594.0f);
-    DrawImage(controlsImage_, w - controlsImage_.width - 70.0f, 624.0f, 1.0f,
-              0.82f);
-
-    if (startRequested_) {
-        const float t = std::clamp(readyTimer_ / 0.72f, 0.0f, 1.0f);
-        const float bandY = 292.0f + std::sinf(t * XM_PI) * -18.0f;
-        DrawRect(-30.0f, bandY, w + 60.0f, 96.0f,
-                 MakeColor(1.0f, 0.82f, 0.00f, 0.98f));
-        DrawRect(-30.0f, bandY + 74.0f, w + 60.0f, 16.0f,
-                 MakeColor(0.92f, 0.02f, 0.02f, 1.0f));
-        DrawImage(readyImage_, (w - readyImage_.width) * 0.5f, bandY + 13.0f);
-    }
+    const float t =
+        std::clamp(transitionTimer_ / kTransitionDuration, 0.0f, 1.0f);
+    const float eased = SmoothStep(t);
+    const float bandY = screenHeight * 0.43f - 52.0f;
+    DrawRect(0.0f, bandY, screenWidth, 104.0f,
+             MakeColor(1.0f, 0.82f, 0.02f, 0.96f));
+    DrawRect(0.0f, bandY + 78.0f, screenWidth, 16.0f,
+             MakeColor(0.88f, 0.02f, 0.02f, 0.98f));
+    DrawImage(readyImage_, (screenWidth - readyImage_.width) * 0.5f,
+              bandY + 15.0f, 1.0f, 1.0f);
+    DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
+             MakeColor(0.0f, 0.0f, 0.0f, eased * 0.36f));
 }
 
 void WeaponSelectScene::DrawRect(float x, float y, float w, float h,
@@ -294,17 +392,7 @@ void WeaponSelectScene::DrawRect(float x, float y, float w, float h,
     ctx_->sprite->DrawSprite(sprite);
 }
 
-WeaponSelectScene::TextImage
-WeaponSelectScene::LoadTextImage(const std::wstring &path) {
-    TextImage image{};
-    image.textureId = ctx_->texture->Load(path);
-    image.width = static_cast<float>(ctx_->texture->GetWidth(image.textureId));
-    image.height =
-        static_cast<float>(ctx_->texture->GetHeight(image.textureId));
-    return image;
-}
-
-void WeaponSelectScene::DrawImage(const TextImage &image, float x, float y,
+void WeaponSelectScene::DrawImage(const Image &image, float x, float y,
                                   float scale, float alpha) {
     if (image.width <= 0.0f || image.height <= 0.0f) {
         return;
@@ -318,56 +406,38 @@ void WeaponSelectScene::DrawImage(const TextImage &image, float x, float y,
     ctx_->sprite->DrawSprite(sprite);
 }
 
-void WeaponSelectScene::DrawStretchImage(const TextImage &image, float x,
-                                         float y, float w, float h,
-                                         float alpha) {
-    if (image.width <= 0.0f || image.height <= 0.0f || w <= 0.0f ||
-        h <= 0.0f) {
-        return;
-    }
-
-    Sprite sprite{};
-    sprite.position = {x, y};
-    sprite.size = {w, h};
-    sprite.color = {1.0f, 1.0f, 1.0f, alpha};
-    sprite.textureId = image.textureId;
-    ctx_->sprite->DrawSprite(sprite);
-}
-
 Transform WeaponSelectScene::MakeSwordTransform(int weaponIndex,
                                                 int swordIndex) const {
-    Transform tf{};
-    const float x = (static_cast<float>(weaponIndex) - 1.0f) * 2.2f;
+    Transform transform{};
+    const float centerOffset =
+        static_cast<float>(weaponIndex) -
+        (static_cast<float>(kWeaponCount - 1) * 0.5f);
+    const float baseX = centerOffset * 2.2f;
     const bool selected = weaponIndex == selectedIndex_;
-    tf.position = {x, 1.02f + (selected ? 0.08f : 0.0f), 1.15f};
+    const float sway =
+        selected ? std::sinf(sceneTime_ * 2.6f + weaponIndex) * 0.05f : 0.0f;
+    transform.position = {baseX, 1.08f + (selected ? 0.07f : 0.0f) + sway,
+                          1.12f};
 
-    float scale = selected ? 2.85f : 2.25f;
-    if (weaponIndex == 2) {
-        scale *= 1.55f;
-    }
-    tf.scale = {scale, scale, scale};
+    float scale = selected ? 2.95f : 2.35f;
+    transform.scale = {scale, scale, scale};
 
-    const float yaw = 0.0f;
     float roll = 0.0f;
     if (weaponIndex == 1) {
         roll = swordIndex == 0 ? -0.58f : 0.58f;
-        tf.position.x += swordIndex == 0 ? -0.36f : 0.36f;
-    } else if (weaponIndex == 2) {
-        roll = -0.18f;
-        tf.position.y -= 0.12f;
+        transform.position.x += swordIndex == 0 ? -0.34f : 0.34f;
     }
-    tf.rotation = MakeQuat(0.72f, yaw, roll);
-    return tf;
+
+    transform.rotation = MakeQuat(0.72f, 0.0f, roll);
+    return transform;
 }
 
 XMFLOAT4 WeaponSelectScene::WeaponColor(int index, float alpha) const {
     switch (index) {
     case 1:
-        return MakeColor(0.10f, 0.48f, 1.0f, alpha);
-    case 2:
-        return MakeColor(0.78f, 0.36f, 0.08f, alpha);
+        return MakeColor(0.10f, 0.52f, 1.0f, alpha);
     case 0:
     default:
-        return MakeColor(0.95f, 0.08f, 0.10f, alpha);
+        return MakeColor(0.92f, 0.02f, 0.05f, alpha);
     }
 }

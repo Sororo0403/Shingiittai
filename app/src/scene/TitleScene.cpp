@@ -7,6 +7,7 @@
 #include "SpriteManager.h"
 #include "TextureManager.h"
 #include "WinApp.h"
+#include "WeaponSelectScene.h"
 #include <Xinput.h>
 #include <algorithm>
 #include <cmath>
@@ -37,7 +38,7 @@ void TitleScene::Initialize(const SceneContext &ctx) {
     ctx_->dxCommon->EndUpload();
     ctx_->texture->ReleaseUploadBuffers();
 
-    demoScene_ = std::make_unique<GameScene>(PlayerWeaponType::Standard,
+    demoScene_ = std::make_unique<GameScene>(PlayerWeaponType::Dual,
                                              GameScene::RunMode::TitleDemo);
     demoScene_->SetSceneManager(sceneManager_);
     demoScene_->Initialize(ctx);
@@ -53,7 +54,7 @@ void TitleScene::Update() {
     if (startRequested_) {
         fadeTimer_ += ctx_->deltaTime;
         if (fadeTimer_ >= kFadeDuration) {
-            sceneManager_->ChangeScene(std::make_unique<GameScene>());
+            sceneManager_->ChangeScene(std::make_unique<WeaponSelectScene>());
         }
         return;
     }

@@ -4,6 +4,7 @@
 #include "PlayerWeaponType.h"
 #include "Sword.h"
 #include "SwordControllerState.h"
+#include "SwordInputCalibration.h"
 #include "SwordJoyConController.h"
 #include "SwordMouseController.h"
 #include "SwordUdpController.h"
@@ -33,6 +34,7 @@ class Player {
 
     void Initialize(uint32_t playerModelId, uint32_t swordModelId,
                     PlayerWeaponType weaponType = PlayerWeaponType::Standard);
+    void SetInputCalibration(const SwordInputCalibration &calibration);
 
     void Update(Input *input, float deltaTime,
                 const DirectX::XMFLOAT3 &lookTarget, float cameraYaw,
@@ -124,6 +126,7 @@ class Player {
     SwordPose UpdateGamepadSword(Input *input, float deltaTime,
                                  const Transform &swordTransform);
     SwordPose UpdateHunterGamepadSword(Input *input, float deltaTime);
+    SwordPose UpdateKeyboardLeftSword(Input *input, float deltaTime);
     void UpdateGamepadSwordOrientation(Input *input, float deltaTime);
     void UpdateGamepadSwordGuard(Input *input);
     void UpdateGamepadSwordSlash(Input *input, float deltaTime);
@@ -155,7 +158,8 @@ class Player {
     void UpdateWeaponRules(Input *input, SwordPose &leftPose,
                            SwordPose &rightPose, bool hasLeftJoyCon,
                            bool hasRightJoyCon, bool useGamepadRightSword,
-                           bool useHunterGamepadControls, float deltaTime);
+                           bool useHunterGamepadControls,
+                           bool useDualUdpControls, float deltaTime);
     void ApplyHandRecovery(SwordPose &pose, float &timer, float deltaTime);
     void RegisterAttackHit(float damage);
     void RegisterAttackWhiff();
@@ -192,7 +196,10 @@ class Player {
     SwordJoyConController rightSwordJoyConController_;
     SwordMouseController swordMouseController_;
     SwordUdpController swordUdpController_;
+    SwordInputCalibration inputCalibration_{};
+    bool applyJoyConBaseOnNextUpdate_ = false;
     SwordControllerState gamepadSwordState_{};
+    SwordControllerState keyboardLeftSwordState_{};
     PlayerGamepadControlMode gamepadControlMode_ =
         PlayerGamepadControlMode::Hunter;
     HunterGamepadAttackKind hunterGamepadAttackKind_ =

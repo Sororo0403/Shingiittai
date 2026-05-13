@@ -63,6 +63,9 @@
     <ClCompile Include="src\scene\BattleResultScene.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
+    <ClCompile Include="src\scene\CalibrationScene.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
     <ClCompile Include="src\enemy\EnemyMelee.cpp">
       <Filter>Source Files\enemy</Filter>
     </ClCompile>
@@ -126,6 +129,9 @@
     <ClCompile Include="src\scene\TitleScene.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
+    <ClCompile Include="src\scene\TipScene.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
     <ClCompile Include="src\scene\WeaponSelectScene.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
@@ -156,10 +162,16 @@
     <ClInclude Include="include\scene\BattleResultScene.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
+    <ClInclude Include="include\scene\CalibrationScene.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
     <ClInclude Include="include\enemy\EnemyActionData.h">
       <Filter>Header Files\enemy</Filter>
     </ClInclude>
     <ClInclude Include="include\player\SwordControllerState.h">
+      <Filter>Header Files\player</Filter>
+    </ClInclude>
+    <ClInclude Include="include\player\SwordInputCalibration.h">
       <Filter>Header Files\player</Filter>
     </ClInclude>
     <ClInclude Include="include\player\SwordPose.h">
@@ -217,6 +229,12 @@
       <Filter>Header Files\player</Filter>
     </ClInclude>
     <ClInclude Include="include\player\SwordTrailRenderer.h" />
+    <ClInclude Include="include\player\InputControlType.h">
+      <Filter>Header Files\player</Filter>
+    </ClInclude>
+    <ClInclude Include="include\scene\TipScene.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="resources\models\boss\boss.bin">
@@ -283,6 +301,42 @@
       <Filter>Resources\Menu</Filter>
     </None>
     <None Include="resources\text\weapon_bottom_dual.png">
+      <Filter>Resources\Text</Filter>
+    </None>
+    <None Include="resources\text\input_hand.png">
+      <Filter>Resources\Text</Filter>
+    </None>
+    <None Include="resources\text\input_joycon.png">
+      <Filter>Resources\Text</Filter>
+    </None>
+    <None Include="resources\text\input_kbm.png">
+      <Filter>Resources\Text</Filter>
+    </None>
+    <None Include="resources\text\input_ready_hand.png">
+      <Filter>Resources\Text</Filter>
+    </None>
+    <None Include="resources\text\input_ready_joycon.png">
+      <Filter>Resources\Text</Filter>
+    </None>
+    <None Include="resources\text\input_ready_kbm.png">
+      <Filter>Resources\Text</Filter>
+    </None>
+    <None Include="resources\text\input_title.png">
+      <Filter>Resources\Text</Filter>
+    </None>
+    <None Include="resources\text\tip_body.png">
+      <Filter>Resources\Text</Filter>
+    </None>
+    <None Include="resources\text\tip_hand.png">
+      <Filter>Resources\Text</Filter>
+    </None>
+    <None Include="resources\text\tip_joycon.png">
+      <Filter>Resources\Text</Filter>
+    </None>
+    <None Include="resources\text\tip_kbm.png">
+      <Filter>Resources\Text</Filter>
+    </None>
+    <None Include="resources\text\tip_title.png">
       <Filter>Resources\Text</Filter>
     </None>
     <None Include="resources\text\weapon_bottom_great.png">

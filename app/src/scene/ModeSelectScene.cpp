@@ -8,6 +8,7 @@
 #include "SpriteManager.h"
 #include "TextureManager.h"
 #include "TitleScene.h"
+#include "WeaponSelectScene.h"
 #include "WinApp.h"
 #include <Xinput.h>
 #include <algorithm>
@@ -56,7 +57,8 @@ void ModeSelectScene::Update() {
         transitionTimer_ += ctx_->deltaTime;
         if (transitionTimer_ >= kTransitionDuration) {
             if (nextScene_ == NextScene::Game) {
-                sceneManager_->ChangeScene(std::make_unique<GameScene>());
+                sceneManager_->ChangeScene(
+                    std::make_unique<WeaponSelectScene>());
             } else if (nextScene_ == NextScene::Settings) {
                 sceneManager_->ChangeScene(std::make_unique<SettingsScene>());
             }

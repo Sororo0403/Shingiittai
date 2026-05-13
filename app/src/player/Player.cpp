@@ -50,6 +50,7 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId,
     dualNextManualLeft_ = true;
     gamepadControlMode_ = PlayerGamepadControlMode::Hunter;
     gamepadSwordState_ = {};
+    keyboardLeftSwordState_ = {};
     gamepadSwordYaw_ = 0.0f;
     gamepadSwordPitch_ = 0.0f;
     hunterGamepadAttackKind_ = HunterGamepadAttackKind::None;
@@ -67,6 +68,12 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId,
                       MakeIdleSwordPose(true), 0.0f);
     rightSword_.Update(BuildSwordTransform(MakeIdleSwordPose(false), false),
                        MakeIdleSwordPose(false), 0.0f);
+}
+
+void Player::SetInputCalibration(const SwordInputCalibration &calibration) {
+    inputCalibration_ = calibration;
+    swordUdpController_.SetCalibration(inputCalibration_);
+    applyJoyConBaseOnNextUpdate_ = inputCalibration_.resetJoyConBaseOnStart;
 }
 
 void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
@@ -90,22 +97,30 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     KeepDistanceFromTarget(lookTarget);
     LookAt(lookTarget);
 
-    const bool hasLeftJoyCon = leftJoyCon_.IsConnected();
-    const bool hasRightJoyCon = rightJoyCon_.IsConnected();
-    const bool useGamepadRightSword =
-        !hasLeftJoyCon && !hasRightJoyCon && input->IsGamepadConnected();
-    const bool useHunterGamepadControls =
-        useGamepadRightSword &&
-        gamepadControlMode_ == PlayerGamepadControlMode::Hunter;
-    const bool useMouseRightSword =
-        !hasLeftJoyCon && !hasRightJoyCon && !useGamepadRightSword;
-    const bool useUdpRightSword = useMouseRightSword;
+    const InputControlType controlType = inputCalibration_.controlType;
+    const bool useKeyboardMouse =
+        controlType == InputControlType::KeyboardMouse;
+    const bool useJoyCon = controlType == InputControlType::JoyCon;
+    const bool useUdpSword = controlType == InputControlType::Hand;
+    const bool hasLeftJoyCon = useJoyCon && leftJoyCon_.IsConnected();
+    const bool hasRightJoyCon = useJoyCon && rightJoyCon_.IsConnected();
+    const bool useGamepadRightSword = false;
+    const bool useHunterGamepadControls = false;
+    const bool useMouseRightSword = useKeyboardMouse;
+    if (useUdpSword) {
+        swordUdpController_.Update(inputDeltaTime);
+    }
 
     SwordPose leftPose = MakeIdleSwordPose(true);
     if (hasLeftJoyCon) {
         leftSwordJoyConController_.Update(&leftJoyCon_, inputDeltaTime,
                                           leftSword_.GetTransform());
         leftPose = leftSwordJoyConController_.GetPose();
+    } else if (useUdpSword && weaponType_ == PlayerWeaponType::Dual &&
+               swordUdpController_.IsActive(1)) {
+        leftPose = swordUdpController_.GetPose(1);
+    } else if (useKeyboardMouse) {
+        leftPose = UpdateKeyboardLeftSword(input, inputDeltaTime);
     }
 
     SwordPose rightPose = MakeIdleSwordPose(false);
@@ -118,14 +133,9 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     } else if (useGamepadRightSword) {
         rightPose =
             UpdateGamepadSword(input, inputDeltaTime, rightSword_.GetTransform());
-    } else if (useUdpRightSword) {
-        swordUdpController_.Update(inputDeltaTime);
-        if (swordUdpController_.IsActive()) {
-            rightPose = swordUdpController_.GetPose();
-        } else {
-            swordMouseController_.Update(input, inputDeltaTime,
-                                         rightSword_.GetTransform());
-            rightPose = swordMouseController_.GetPose();
+    } else if (useUdpSword) {
+        if (swordUdpController_.IsActive(0)) {
+            rightPose = swordUdpController_.GetPose(0);
         }
     } else if (useMouseRightSword) {
         swordMouseController_.Update(input, inputDeltaTime,
@@ -135,7 +145,9 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
 
     UpdateWeaponRules(input, leftPose, rightPose, hasLeftJoyCon,
                       hasRightJoyCon, useGamepadRightSword,
-                      useHunterGamepadControls, deltaTime);
+                      useHunterGamepadControls,
+                      useUdpSword || useKeyboardMouse,
+                      deltaTime);
 
     if (postSlashRecoveryTimer_ > 0.0f) {
         postSlashRecoveryTimer_ -= deltaTime;
@@ -208,8 +220,7 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     leftSwordSlashDir_ = leftPose.slashDir;
     rightSwordSlashDir_ = rightPose.slashDir;
     leftSwordVisible_ = weaponType_ == PlayerWeaponType::Dual;
-    rightSwordVisible_ = hasRightJoyCon || useGamepadRightSword ||
-                         useMouseRightSword;
+    rightSwordVisible_ = true;
     isGuarding_ = false;
     if (IsAttackRecovery()) {
         recoveryVulnerableFlashTimer_ += deltaTime;
@@ -244,6 +255,14 @@ void Player::UpdateJoyConCalibrationInput(Input *input, float deltaTime) {
 
     leftJoyCon_.Update(deltaTime);
     rightJoyCon_.Update(deltaTime);
+
+    if (applyJoyConBaseOnNextUpdate_) {
+        leftJoyCon_.SetBaseOrientation();
+        rightJoyCon_.SetBaseOrientation();
+        leftSwordJoyConController_.ResetTracking(&leftJoyCon_);
+        rightSwordJoyConController_.ResetTracking(&rightJoyCon_);
+        applyJoyConBaseOnNextUpdate_ = false;
+    }
 }
 
 void Player::Draw(ModelManager *modelManager, const Camera &camera,
@@ -872,11 +891,55 @@ SwordPose Player::MakeMirroredSwordPose(const SwordPose &source) const {
     return pose;
 }
 
+SwordPose Player::UpdateKeyboardLeftSword(Input *input, float deltaTime) {
+    float dirX = 0.0f;
+    float dirY = 0.0f;
+    if (input->IsKeyPress(DIK_A)) {
+        dirX -= 1.0f;
+    }
+    if (input->IsKeyPress(DIK_D)) {
+        dirX += 1.0f;
+    }
+    if (input->IsKeyPress(DIK_W)) {
+        dirY -= 1.0f;
+    }
+    if (input->IsKeyPress(DIK_S)) {
+        dirY += 1.0f;
+    }
+
+    const bool slashTriggered =
+        input->IsKeyTrigger(DIK_A) || input->IsKeyTrigger(DIK_D) ||
+        input->IsKeyTrigger(DIK_W) || input->IsKeyTrigger(DIK_S);
+    const float lenSq = dirX * dirX + dirY * dirY;
+    if (lenSq > 0.0001f) {
+        const float invLen = 1.0f / std::sqrt(lenSq);
+        dirX *= invLen;
+        dirY *= invLen;
+        keyboardLeftSwordState_.slashDir = {dirX, dirY};
+
+        const float yaw = dirX * 0.82f;
+        const float pitch = -dirY * 0.72f;
+        XMVECTOR qYaw = XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), yaw);
+        XMVECTOR qPitch =
+            XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), pitch);
+        XMVECTOR q = XMQuaternionNormalize(XMQuaternionMultiply(qPitch, qYaw));
+        XMStoreFloat4(&keyboardLeftSwordState_.orientation, q);
+    }
+
+    keyboardLeftSwordState_.isGuard = false;
+    keyboardLeftSwordState_.isCounter = false;
+    keyboardLeftSwordState_.counterTimer = SwordControllerState::kCounterFrames;
+    keyboardLeftSwordState_.UpdateSlash(
+        slashTriggered ? SwordControllerState::kSlashThreshold + 1.0f : 0.0f,
+        deltaTime);
+    return keyboardLeftSwordState_.ToPose();
+}
+
 void Player::UpdateWeaponRules(Input *input, SwordPose &leftPose,
                                SwordPose &rightPose, bool hasLeftJoyCon,
                                bool hasRightJoyCon, bool useGamepadRightSword,
                                bool useHunterGamepadControls,
-                               float deltaTime) {
+                               bool useDualUdpControls, float deltaTime) {
     (void)input;
     leftSwordAttackDamage_ = 4.0f;
     rightSwordAttackDamage_ = 4.0f;
@@ -906,7 +969,8 @@ void Player::UpdateWeaponRules(Input *input, SwordPose &leftPose,
 
         const bool singlePointerControl =
             !hasLeftJoyCon && !hasRightJoyCon &&
-            (!useGamepadRightSword || useHunterGamepadControls);
+            (!useGamepadRightSword || useHunterGamepadControls) &&
+            !useDualUdpControls;
         if (singlePointerControl && rightPose.isSlashMode) {
             if (dualNextManualLeft_ && leftSlashRecoveryTimer_ <= 0.0f) {
                 leftPose = MakeMirroredSwordPose(rightPose);

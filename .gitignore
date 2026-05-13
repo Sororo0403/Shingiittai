@@ -363,6 +363,7 @@ FodyWeavers.xsd
 
 # imgui
 /imgui.ini
+/app/imgui.ini
 
 # track resources
 !resources/
@@ -373,4 +374,3 @@ FodyWeavers.xsd
 !externals/**
 !engine/externals/assimp/bin/
 !engine/externals/assimp/bin/assimp-vc145-mt.dll
-/app/imgui.ini

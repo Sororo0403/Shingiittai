@@ -104,6 +104,7 @@
     <ClCompile Include="src\player\SwordSlashArcRenderer.cpp" />
     <ClCompile Include="src\player\SwordTrailRenderer.cpp" />
     <ClCompile Include="src\scene\BattleResultScene.cpp" />
+    <ClCompile Include="src\scene\CalibrationScene.cpp" />
     <ClCompile Include="src\scene\GameSceneHud.cpp" />
     <ClCompile Include="src\enemy\EnemyMelee.cpp" />
     <ClCompile Include="src\enemy\EnemyRanged.cpp" />
@@ -126,6 +127,7 @@
     <ClCompile Include="src\scene\ModeSelectScene.cpp" />
     <ClCompile Include="src\scene\SettingsScene.cpp" />
     <ClCompile Include="src\scene\TitleScene.cpp" />
+    <ClCompile Include="src\scene\TipScene.cpp" />
     <ClCompile Include="src\scene\WeaponSelectScene.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\player\Sword.cpp" />
@@ -136,10 +138,13 @@
   <ItemGroup>
     <ClInclude Include="include\player\SwordSlashArcRenderer.h" />
     <ClInclude Include="include\player\SwordTrailRenderer.h" />
+    <ClInclude Include="include\player\InputControlType.h" />
     <ClInclude Include="include\scene\BattleResultScene.h" />
+    <ClInclude Include="include\scene\CalibrationScene.h" />
     <ClInclude Include="include\scene\GameSceneHud.h" />
     <ClInclude Include="include\enemy\EnemyActionData.h" />
     <ClInclude Include="include\player\SwordControllerState.h" />
+    <ClInclude Include="include\player\SwordInputCalibration.h" />
     <ClInclude Include="include\player\SwordPose.h" />
     <ClInclude Include="include\enemy\Bullet.h" />
     <ClInclude Include="include\enemy\Enemy.h" />
@@ -149,6 +154,7 @@
     <ClInclude Include="include\scene\ModeSelectScene.h" />
     <ClInclude Include="include\scene\SettingsScene.h" />
     <ClInclude Include="include\scene\TitleScene.h" />
+    <ClInclude Include="include\scene\TipScene.h" />
     <ClInclude Include="include\scene\WeaponSelectScene.h" />
     <ClInclude Include="include\player\Player.h" />
     <ClInclude Include="include\player\PlayerWeaponType.h" />
@@ -193,6 +199,18 @@
     <None Include="resources\menu\settings_title.png" />
     <None Include="resources\menu\volume.png" />
     <None Include="resources\text\weapon_bottom_dual.png" />
+    <None Include="resources\text\input_hand.png" />
+    <None Include="resources\text\input_joycon.png" />
+    <None Include="resources\text\input_kbm.png" />
+    <None Include="resources\text\input_ready_hand.png" />
+    <None Include="resources\text\input_ready_joycon.png" />
+    <None Include="resources\text\input_ready_kbm.png" />
+    <None Include="resources\text\input_title.png" />
+    <None Include="resources\text\tip_body.png" />
+    <None Include="resources\text\tip_hand.png" />
+    <None Include="resources\text\tip_joycon.png" />
+    <None Include="resources\text\tip_kbm.png" />
+    <None Include="resources\text\tip_title.png" />
     <None Include="resources\text\weapon_bottom_great.png" />
     <None Include="resources\text\weapon_bottom_standard.png" />
     <None Include="resources\text\weapon_controls.png" />

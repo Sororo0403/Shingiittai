@@ -8,6 +8,7 @@
 #include "Enemy.h"
 #include "GPUParticleSystem.h"
 #include "Player.h"
+#include "SwordInputCalibration.h"
 #include "PlayerWeaponType.h"
 #include "Transform.h"
 #include <DirectXMath.h>
@@ -26,9 +27,11 @@ class GameScene : public BaseScene {
         TitleDemo,
     };
 
-    explicit GameScene(PlayerWeaponType weaponType = PlayerWeaponType::Standard,
-                       RunMode runMode = RunMode::Play)
-        : selectedWeaponType_(weaponType), runMode_(runMode) {}
+    explicit GameScene(PlayerWeaponType weaponType = PlayerWeaponType::Dual,
+                       RunMode runMode = RunMode::Play,
+                       const SwordInputCalibration &inputCalibration = {})
+        : selectedWeaponType_(weaponType), runMode_(runMode),
+          inputCalibration_(inputCalibration) {}
 
     void Initialize(const SceneContext &ctx) override;
     void Update() override;
@@ -82,8 +85,9 @@ class GameScene : public BaseScene {
         bool active = false;
     };
 
-    PlayerWeaponType selectedWeaponType_ = PlayerWeaponType::Standard;
+    PlayerWeaponType selectedWeaponType_ = PlayerWeaponType::Dual;
     RunMode runMode_ = RunMode::Play;
+    SwordInputCalibration inputCalibration_{};
 
     Camera camera_;
 

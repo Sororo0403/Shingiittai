@@ -1,7 +1,11 @@
 #pragma once
+#include "SwordInputCalibration.h"
 #include "SwordControllerState.h"
 #include "SwordPose.h"
+#include <array>
 #include <cstdint>
+#include <cstddef>
+#include <string>
 
 class SwordUdpController {
   public:
@@ -13,30 +17,52 @@ class SwordUdpController {
 
     void Update(float dt);
 
-    bool IsActive() const { return hasPacket_ && staleTimer_ < kStaleSeconds; }
-    SwordPose GetPose() const;
-    float GetMotionSpeed() const { return motionSpeed_; }
+    bool IsActive(size_t handIndex = 0) const;
+    SwordPose GetPose(size_t handIndex = 0) const;
+    float GetMotionSpeed(size_t handIndex = 0) const;
+    float GetRawMotionSpeed(size_t handIndex = 0) const;
+    bool GetHandCenter(size_t handIndex, float &x, float &y) const;
+    void SetCalibration(const SwordInputCalibration &calibration);
 
   private:
-    bool EnsureSocket();
-    void ReceivePackets();
-    void ApplyHand(float dt);
-    void CloseSocket();
-
     static constexpr uint16_t kPort = 5005;
     static constexpr float kStaleSeconds = 0.25f;
+    static constexpr size_t kMaxHands = 2;
 
-    SwordControllerState state_{};
+    struct HandState {
+        SwordControllerState state{};
+        bool hasPacket = false;
+        int valid = 0;
+        float x = 0.5f;
+        float y = 0.5f;
+        float dx = 0.0f;
+        float dy = 0.0f;
+        float speed = 0.0f;
+        float confidence = 0.0f;
+        float angle = 0.0f;
+        float grip = 1.0f;
+        float wristSpeed = 0.0f;
+        float staleTimer = kStaleSeconds;
+        float motionSpeed = 0.0f;
+        bool filterReady = false;
+        float filteredX = 0.5f;
+        float filteredY = 0.5f;
+        float filteredDx = 0.0f;
+        float filteredDy = 0.0f;
+        float filteredSpeed = 0.0f;
+        float stableSlashDirX = 1.0f;
+        float stableSlashDirY = 0.0f;
+    };
+
+    bool EnsureSocket();
+    void ReceivePackets();
+    void ApplyHand(size_t handIndex, float dt);
+    void CloseSocket();
+    HandState *FindHand(const std::string &tag);
+    const HandState *GetHand(size_t handIndex) const;
+
     uintptr_t socket_ = UINTPTR_MAX;
     bool socketReady_ = false;
-    bool hasPacket_ = false;
-    int valid_ = 0;
-    float handX_ = 0.5f;
-    float handY_ = 0.5f;
-    float handDx_ = 0.0f;
-    float handDy_ = 0.0f;
-    float handSpeed_ = 0.0f;
-    float confidence_ = 0.0f;
-    float staleTimer_ = kStaleSeconds;
-    float motionSpeed_ = 0.0f;
+    SwordInputCalibration calibration_{};
+    std::array<HandState, kMaxHands> hands_{};
 };
