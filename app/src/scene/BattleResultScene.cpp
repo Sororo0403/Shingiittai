@@ -21,6 +21,10 @@ using namespace DirectX;
 
 namespace {
 constexpr const char *kRankingPath = "app/resources/result/clear_ranking.txt";
+constexpr float kHandSwingStartSpeed = 0.78f;
+constexpr float kHandSwingResetSpeed = 0.32f;
+constexpr int kRequiredHandSwings = 3;
+constexpr float kHandIdleMenuSeconds = 5.0f;
 
 XMFLOAT4 Color(float r, float g, float b, float a = 1.0f) {
     return {r, g, b, a};
@@ -30,12 +34,23 @@ float SmoothStep(float t) { return t * t * (3.0f - 2.0f * t); }
 } // namespace
 
 BattleResultScene::BattleResultScene(ResultKind resultKind, float clearTime,
-                                     PlayerWeaponType weaponType)
+                                     PlayerWeaponType weaponType,
+                                     const SwordInputCalibration &inputCalibration)
     : resultKind_(resultKind), weaponType_(weaponType),
+      inputCalibration_(inputCalibration),
       clearTime_((std::max)(0.0f, clearTime)) {}
 
 void BattleResultScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
+    sceneTime_ = 0.0f;
+    handIdleTimer_ = 0.0f;
+    handSwingCount_ = 0;
+    handSwingArmed_ = true;
+
+    if (inputCalibration_.controlType == InputControlType::Hand) {
+        handController_.SetCalibration(inputCalibration_);
+    }
+
     ctx_->postEffectRenderer->SetColorMode(PostEffectRenderer::ColorMode::None);
     ctx_->postEffectRenderer->SetVignettingEnabled(true);
     ctx_->postEffectRenderer->SetVignettingStrength(0.30f);
@@ -82,13 +97,19 @@ void BattleResultScene::Update() {
     sceneTime_ += ctx_->deltaTime;
     Input *input = ctx_->input;
 
+    if (inputCalibration_.controlType == InputControlType::Hand) {
+        UpdateHandResultInput(ctx_->deltaTime);
+        return;
+    }
+
     const bool retry =
         input->IsKeyTrigger(DIK_RETURN) || input->IsKeyTrigger(DIK_SPACE) ||
         input->IsMouseTrigger(0) ||
         (input->IsGamepadConnected() &&
          input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_A));
     if (retry) {
-        sceneManager_->ChangeScene(std::make_unique<GameScene>(weaponType_));
+        sceneManager_->ChangeScene(std::make_unique<GameScene>(
+            weaponType_, GameScene::RunMode::Play, inputCalibration_));
         return;
     }
 
@@ -97,6 +118,34 @@ void BattleResultScene::Update() {
         (input->IsGamepadConnected() &&
          input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_B));
     if (menu) {
+        sceneManager_->ChangeScene(std::make_unique<TitleScene>());
+    }
+}
+
+void BattleResultScene::UpdateHandResultInput(float deltaTime) {
+    handController_.Update(deltaTime);
+
+    const float speed =
+        (std::max)(handController_.GetRawMotionSpeed(0),
+                   handController_.GetRawMotionSpeed(1));
+    if (handSwingArmed_ && speed >= kHandSwingStartSpeed) {
+        ++handSwingCount_;
+        handSwingArmed_ = false;
+    }
+    if (speed <= kHandSwingResetSpeed) {
+        handSwingArmed_ = true;
+        handIdleTimer_ += deltaTime;
+    } else {
+        handIdleTimer_ = 0.0f;
+    }
+
+    if (handSwingCount_ >= kRequiredHandSwings) {
+        sceneManager_->ChangeScene(std::make_unique<GameScene>(
+            weaponType_, GameScene::RunMode::Play, inputCalibration_));
+        return;
+    }
+
+    if (handIdleTimer_ >= kHandIdleMenuSeconds) {
         sceneManager_->ChangeScene(std::make_unique<TitleScene>());
     }
 }
@@ -112,6 +161,7 @@ void BattleResultScene::Draw() {
     } else {
         DrawGameOver(w, h);
     }
+    DrawHandInputStatus(w, h);
     ctx_->sprite->PostDraw();
 }
 
@@ -230,6 +280,34 @@ void BattleResultScene::DrawGameOver(float screenWidth, float screenHeight) {
               screenHeight * 0.47f, 0.86f);
     DrawImage(retryLabel_, screenWidth * 0.30f, screenHeight * 0.70f, 0.88f);
     DrawImage(menuLabel_, screenWidth * 0.58f, screenHeight * 0.70f, 0.88f);
+}
+
+void BattleResultScene::DrawHandInputStatus(float screenWidth,
+                                            float screenHeight) {
+    if (inputCalibration_.controlType != InputControlType::Hand) {
+        return;
+    }
+
+    const float unit = 52.0f;
+    const float gap = 18.0f;
+    const float startX =
+        (screenWidth - unit * 3.0f - gap * 2.0f) * 0.5f;
+    const float swingY = screenHeight * 0.805f;
+    for (int i = 0; i < kRequiredHandSwings; ++i) {
+        DrawRect(startX + static_cast<float>(i) * (unit + gap), swingY, unit,
+                 10.0f,
+                 i < handSwingCount_ ? Color(0.12f, 0.78f, 0.36f, 1.0f)
+                                     : Color(0.20f, 0.24f, 0.28f, 1.0f));
+    }
+
+    const float barWidth = screenWidth * 0.34f;
+    const float barX = (screenWidth - barWidth) * 0.5f;
+    const float barY = screenHeight * 0.845f;
+    const float progress =
+        (std::min)(handIdleTimer_ / kHandIdleMenuSeconds, 1.0f);
+    DrawRect(barX, barY, barWidth, 8.0f, Color(0.16f, 0.18f, 0.20f, 0.90f));
+    DrawRect(barX, barY, barWidth * progress, 8.0f,
+             Color(0.95f, 0.72f, 0.18f, 0.95f));
 }
 
 void BattleResultScene::DrawImage(const Image &image, float x, float y,

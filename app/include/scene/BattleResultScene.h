@@ -1,6 +1,8 @@
 #pragma once
 #include "BaseScene.h"
 #include "PlayerWeaponType.h"
+#include "SwordInputCalibration.h"
+#include "SwordUdpController.h"
 #include <DirectXMath.h>
 #include <array>
 #include <cstdint>
@@ -15,7 +17,8 @@ class BattleResultScene : public BaseScene {
     };
 
     BattleResultScene(ResultKind resultKind, float clearTime,
-                      PlayerWeaponType weaponType);
+                      PlayerWeaponType weaponType,
+                      const SwordInputCalibration &inputCalibration = {});
 
     void Initialize(const SceneContext &ctx) override;
     void Update() override;
@@ -33,9 +36,11 @@ class BattleResultScene : public BaseScene {
     void LoadRanking();
     void SaveRanking() const;
     void RegisterClearTime();
+    void UpdateHandResultInput(float deltaTime);
     void DrawBackground(float screenWidth, float screenHeight);
     void DrawClear(float screenWidth, float screenHeight);
     void DrawGameOver(float screenWidth, float screenHeight);
+    void DrawHandInputStatus(float screenWidth, float screenHeight);
     void DrawImage(const Image &image, float x, float y, float scale = 1.0f,
                    float alpha = 1.0f);
     void DrawRect(float x, float y, float w, float h,
@@ -51,8 +56,13 @@ class BattleResultScene : public BaseScene {
 
     ResultKind resultKind_ = ResultKind::GameOver;
     PlayerWeaponType weaponType_ = PlayerWeaponType::Standard;
+    SwordInputCalibration inputCalibration_{};
+    SwordUdpController handController_;
     float clearTime_ = 0.0f;
     float sceneTime_ = 0.0f;
+    float handIdleTimer_ = 0.0f;
+    int handSwingCount_ = 0;
+    bool handSwingArmed_ = true;
     bool registered_ = false;
     bool newRecord_ = false;
     int newRecordIndex_ = -1;

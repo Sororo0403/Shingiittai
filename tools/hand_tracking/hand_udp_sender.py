@@ -16,7 +16,8 @@ from mediapipe.tasks.python import vision
 
 
 PALM_INDICES = (0, 5, 9, 13, 17)
-TRACKING_INDICES = tuple(range(21))
+TRACKING_INDICES = PALM_INDICES
+DETECTION_GRACE_SECONDS = 0.18
 
 
 def clamp01(value):
@@ -70,21 +71,29 @@ def main():
     if not capture.isOpened():
         raise RuntimeError(f"Could not open camera {args.camera}")
 
+    capture.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    capture.set(cv2.CAP_PROP_FPS, 60)
+    capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
     base_options = python.BaseOptions(model_asset_path=args.model)
     options = vision.HandLandmarkerOptions(
         base_options=base_options,
-        running_mode=vision.RunningMode.IMAGE,
+        running_mode=vision.RunningMode.VIDEO,
         num_hands=args.max_hands,
-        min_hand_detection_confidence=0.55,
-        min_hand_presence_confidence=0.55,
-        min_tracking_confidence=0.55,
+        min_hand_detection_confidence=0.45,
+        min_hand_presence_confidence=0.45,
+        min_tracking_confidence=0.45,
     )
     landmarker = vision.HandLandmarker.create_from_options(options)
 
     max_hands = max(1, min(args.max_hands, 2))
     prev_positions = [(0.5, 0.5) for _ in range(max_hands)]
     prev_landmarks = [None for _ in range(max_hands)]
+    missing_timers = [DETECTION_GRACE_SECONDS for _ in range(max_hands)]
+    start_time = time.perf_counter()
     prev_time = time.perf_counter()
+    last_timestamp_ms = -1
 
     try:
         while True:
@@ -95,9 +104,11 @@ def main():
             frame = cv2.flip(frame, 1)
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-            result = landmarker.detect(image)
-
             now = time.perf_counter()
+            timestamp_ms = max(last_timestamp_ms + 1, int((now - start_time) * 1000))
+            last_timestamp_ms = timestamp_ms
+            result = landmarker.detect_for_video(image, timestamp_ms)
+
             dt = max(now - prev_time, 1.0 / 120.0)
             prev_time = now
 
@@ -123,35 +134,46 @@ def main():
             height, width = frame.shape[:2]
             colors = [(30, 240, 90), (80, 180, 255)]
             for hand_index in range(max_hands):
-                valid = hand_index < len(detected_hands)
+                detected = hand_index < len(detected_hands)
                 prev_x, prev_y = prev_positions[hand_index]
                 x = prev_x
                 y = prev_y
                 confidence = 0.0
                 points = None
 
-                if valid:
+                if detected:
                     hand = detected_hands[hand_index]
                     x = hand["x"]
                     y = hand["y"]
                     confidence = hand["confidence"]
                     points = hand["points"]
                     valid_count += 1
+                    missing_timers[hand_index] = 0.0
 
                     for landmark in hand["landmarks"]:
                         px = int(max(0, min(width - 1, landmark.x * width)))
                         py = int(max(0, min(height - 1, landmark.y * height)))
                         cv2.circle(frame, (px, py), 4, colors[hand_index], -1)
+                else:
+                    missing_timers[hand_index] += dt
+
+                valid = detected or (
+                    prev_landmarks[hand_index] is not None
+                    and missing_timers[hand_index] <= DETECTION_GRACE_SECONDS
+                )
 
                 dx = x - prev_x
                 dy = y - prev_y
                 landmark_dx, landmark_dy, landmark_speed = get_average_motion(
                     points, prev_landmarks[hand_index], dt
-                ) if valid else (0.0, 0.0, 0.0)
+                ) if detected else (0.0, 0.0, 0.0)
                 speed = max(math.sqrt(dx * dx + dy * dy) / dt, landmark_speed)
                 prev_positions[hand_index] = (x, y)
-                prev_landmarks[hand_index] = points if valid else None
-                speeds.append(speed if valid else 0.0)
+                if detected:
+                    prev_landmarks[hand_index] = points
+                elif not valid:
+                    prev_landmarks[hand_index] = None
+                speeds.append(speed if detected else 0.0)
 
                 packet = (
                     f"HAND{hand_index + 1} {1 if valid else 0} "

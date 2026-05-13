@@ -1608,7 +1608,7 @@ void GameScene::UpdateDefeatSequence(float deltaTime) {
         }
         sceneManager_->ChangeScene(std::make_unique<BattleResultScene>(
             BattleResultScene::ResultKind::GameOver, battleElapsedTime_,
-            selectedWeaponType_));
+            selectedWeaponType_, inputCalibration_));
     }
 }
 
@@ -1653,7 +1653,7 @@ void GameScene::UpdateVictorySequence(float deltaTime) {
         }
         sceneManager_->ChangeScene(std::make_unique<BattleResultScene>(
             BattleResultScene::ResultKind::Clear, victoryClearTime_,
-            selectedWeaponType_));
+            selectedWeaponType_, inputCalibration_));
     }
 }
 
