@@ -19,6 +19,8 @@ static const std::string kBossAnimShot =
     "\xE5\xBC\xBE\xE7\x99\xBA\xE5\xB0\x84";
 static const std::string kBossAnimTeleport =
     "\xE3\x83\x86\xE3\x83\xAC\xE3\x83\x9D\xE3\x83\xBC\xE3\x83\x88";
+static const std::string kBossAnimPhaseChange =
+    "\xE7\xAC\xAC\xE4\xBA\x8C\xE5\xBD\xA2\xE6\x85\x8B\xE7\xA7\xBB\xE8\xA1\x8C";
 static const std::string kBossBoneBase =
     "\xE3\x83\x9C\xE3\x83\xBC\xE3\x83\xB3";
 
@@ -187,6 +189,13 @@ static std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
 
     case ActionKind::None:
     default:
+        if (enemy.GetIsPhaseChanging()) {
+            outLoop = false;
+            if (HasAnimation(model, kBossAnimPhaseChange)) {
+                return kBossAnimPhaseChange;
+            }
+        }
+
         if (HasAnimation(model, kBossAnimIdle)) {
             return kBossAnimIdle;
         }
@@ -259,6 +268,7 @@ void GameScene::SyncEnemyAnimation() {
 
     bool shouldLoop = true;
     std::string nextAnimation = PickEnemyAnimation(enemyModel, enemy_, shouldLoop);
+
     if (nextAnimation.empty()) {
         if (!enemyAnimationName_.empty() ||
             !enemyModel->currentAnimation.empty()) {

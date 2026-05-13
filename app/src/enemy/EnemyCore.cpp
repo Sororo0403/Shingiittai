@@ -363,6 +363,7 @@ void Enemy::UpdateBossPhase() {
     const float hpRatio = hp_ / config_.core.maxHp;
     if (hpRatio <= config_.core.phase2HealthRatioThreshold) {
         EndAttack();
+        SetIsPhaseChanging(true);
         phase_ = BossPhase::Phase2;
         phaseTransitionActive_ = true;
         phaseTransitionTimer_ = 0.0f;

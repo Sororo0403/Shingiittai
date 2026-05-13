@@ -11,6 +11,7 @@ enum class ActionKind {
     Nova,
     Warp,
     Stalk,
+    PhaseTransition,
 };
 
 enum class ActionId {
