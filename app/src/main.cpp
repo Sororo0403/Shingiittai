@@ -42,18 +42,44 @@ class HandUdpSenderProcess {
         std::wstring command = L"py -3.11 \"" + scriptPath.wstring() +
                                L"\" --model \"" + modelPath.wstring() + L"\"";
 
+        HANDLE jobHandle = CreateJobObjectW(nullptr, nullptr);
+        if (jobHandle != nullptr) {
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION limitInfo{};
+            limitInfo.BasicLimitInformation.LimitFlags =
+                JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            if (!SetInformationJobObject(jobHandle,
+                                         JobObjectExtendedLimitInformation,
+                                         &limitInfo, sizeof(limitInfo))) {
+                CloseHandle(jobHandle);
+                jobHandle = nullptr;
+            }
+        }
+
         STARTUPINFOW startupInfo{};
         startupInfo.cb = sizeof(startupInfo);
         PROCESS_INFORMATION processInfo{};
         const BOOL started = CreateProcessW(
             nullptr, command.data(), nullptr, nullptr, FALSE,
-            CREATE_NEW_CONSOLE, nullptr, repoRoot.wstring().c_str(),
+            CREATE_NEW_CONSOLE | CREATE_SUSPENDED, nullptr,
+            repoRoot.wstring().c_str(),
             &startupInfo, &processInfo);
         if (!started) {
+            if (jobHandle != nullptr) {
+                CloseHandle(jobHandle);
+            }
             return;
         }
 
+        if (jobHandle != nullptr &&
+            !AssignProcessToJobObject(jobHandle, processInfo.hProcess)) {
+            CloseHandle(jobHandle);
+            jobHandle = nullptr;
+        }
+
+        ResumeThread(processInfo.hThread);
+
         processInfo_ = processInfo;
+        jobHandle_ = jobHandle;
         isRunning_ = true;
     }
 
@@ -80,11 +106,17 @@ class HandUdpSenderProcess {
             return;
         }
 
-        DWORD exitCode = 0;
-        if (GetExitCodeProcess(processInfo_.hProcess, &exitCode) &&
-            exitCode == STILL_ACTIVE) {
-            TerminateProcess(processInfo_.hProcess, 0);
+        if (jobHandle_ != nullptr) {
+            CloseHandle(jobHandle_);
+            jobHandle_ = nullptr;
             WaitForSingleObject(processInfo_.hProcess, 1000);
+        } else {
+            DWORD exitCode = 0;
+            if (GetExitCodeProcess(processInfo_.hProcess, &exitCode) &&
+                exitCode == STILL_ACTIVE) {
+                TerminateProcess(processInfo_.hProcess, 0);
+                WaitForSingleObject(processInfo_.hProcess, 1000);
+            }
         }
 
         CloseHandle(processInfo_.hThread);
@@ -94,6 +126,7 @@ class HandUdpSenderProcess {
     }
 
     PROCESS_INFORMATION processInfo_{};
+    HANDLE jobHandle_ = nullptr;
     bool isRunning_ = false;
 };
 }
