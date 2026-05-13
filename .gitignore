@@ -373,3 +373,4 @@ FodyWeavers.xsd
 !externals/**
 !engine/externals/assimp/bin/
 !engine/externals/assimp/bin/assimp-vc145-mt.dll
+/app/imgui.ini
