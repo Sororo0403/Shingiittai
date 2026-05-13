@@ -1,5 +1,6 @@
 #include "Enemy.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 
@@ -116,6 +117,12 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
     } else {
         farDistanceTimer_ = 0.0f;
     }
+    if (novaPhase2Cooldown_ > 0.0f) {
+        novaPhase2Cooldown_ -= deltaTime;
+        if (novaPhase2Cooldown_ < 0.0f) {
+            novaPhase2Cooldown_ = 0.0f;
+        }
+    }
 
     runtime_.lastDistanceToPlayer = currentDistance;
 
@@ -139,18 +146,9 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
             hitReactionTimer_ = 0.0f;
         }
 
-        float dx = tf_.position.x - runtime_.playerPos.x;
-        float dz = tf_.position.z - runtime_.playerPos.z;
-        float length = std::sqrt(dx * dx + dz * dz);
-        if (length > 0.0001f) {
-            dx /= length;
-            dz /= length;
-            tf_.position.x += dx * hitReactionMoveSpeed_ * deltaTime;
-            tf_.position.z += dz * hitReactionMoveSpeed_ * deltaTime;
-        }
-
         UpdateBullets(deltaTime);
         UpdateWaves(deltaTime);
+        ClampToArena();
         UpdateParts();
         return;
     }
@@ -162,6 +160,7 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
     UpdateByAction(deltaTime);
     UpdateBullets(deltaTime);
     UpdateWaves(deltaTime);
+    ClampToArena();
     UpdateParts();
 }
 
@@ -183,6 +182,9 @@ void Enemy::UpdateByAction(float deltaTime) {
         break;
     case ActionKind::Wave:
         UpdateWaveByStep(deltaTime);
+        break;
+    case ActionKind::Nova:
+        UpdateNovaByStep(deltaTime);
         break;
     case ActionKind::Warp:
         UpdateWarpByStep(deltaTime);
@@ -209,32 +211,29 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
 
     action_.kind = kind;
     action_.id = MakeDefaultActionId(kind);
-
     if (kind == ActionKind::Smash) {
-        float r = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-        float useDelayChance = config_.attacks.smash.delayChance;
-        if (playerObs_.isCounterStance) {
-            useDelayChance += 0.20f;
+        float delayChance = config_.attacks.smash.delayChance;
+        if (playerObs_.isAttacking) {
+            delayChance += 0.28f;
         }
-        if (phase_ == BossPhase::Phase2) {
-            useDelayChance += phase2DelaySmashBonus_;
+        if (playerObs_.justCounterEarly || counterMemory_.earlyCount > 0.6f) {
+            delayChance += 0.22f;
         }
+        if (postCounterRhythmTimer_ > 0.0f || forceCounterBaitNext_) {
+            delayChance += 0.34f;
+        }
+        delayChance += counterMemory_.successCount * 0.07f;
+        delayChance = (std::clamp)(delayChance, 0.0f, 0.88f);
 
-        if (r < useDelayChance) {
+        const float roll =
+            static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+        if (roll < delayChance) {
             action_.id = ActionId::DelaySmash;
         }
     }
 
-    if (kind == ActionKind::Sweep) {
-        float r = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-        float useDoubleChance = config_.attacks.sweep.doubleChance;
-        if (IsCounterFailObserved()) {
-            useDoubleChance += 0.20f;
-        }
-
-        if (r < useDoubleChance) {
-            action_.id = ActionId::DoubleSweep;
-        }
+    if (kind == ActionKind::Nova) {
+        novaPhase2Cooldown_ = novaPhase2CooldownDuration_;
     }
 
     action_.step = step;
@@ -246,6 +245,13 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     isDoubleSweepSecondStage_ = false;
     currentActionConnected_ = false;
     currentActionGuarded_ = false;
+    dualCounterStage_ = 0;
+    dualCounterFirstHand_ = (std::rand() % 2) == 0;
+    dualCounterStageResolved_ = false;
+    runtime_.novaSkyBulletsSpawned = false;
+    runtime_.novaRingsSpawned = 0;
+    runtime_.novaRingTimer = 0.0f;
+    shotWarpedToArenaEdge_ = false;
     ResetPreAttackPresentationState();
     ResetRecoveryBranchState();
 
@@ -269,6 +275,7 @@ bool Enemy::TryBeginTacticAction(ActionKind kind) {
     case ActionKind::Sweep:
     case ActionKind::Shot:
     case ActionKind::Wave:
+    case ActionKind::Nova:
         BeginAction(kind, ActionStep::Charge);
         return true;
     case ActionKind::Warp:
@@ -327,6 +334,12 @@ void Enemy::EndAttack() {
     isDoubleSweepSecondStage_ = false;
     currentActionConnected_ = false;
     currentActionGuarded_ = false;
+    dualCounterStage_ = 0;
+    dualCounterFirstHand_ = true;
+    dualCounterStageResolved_ = false;
+    runtime_.novaSkyBulletsSpawned = false;
+    runtime_.novaRingsSpawned = 0;
+    runtime_.novaRingTimer = 0.0f;
 
     if (postCounterRhythmTimer_ <= 0.0f) {
         counterMemory_.consecutiveSuccess = 0;
@@ -339,34 +352,6 @@ void Enemy::EndAttack() {
 }
 
 void Enemy::FinishCurrentAction() {
-    const ActionKind finishedKind = action_.kind;
-
-    if (TryContinueChain()) {
-        return;
-    }
-
-    if (TryBranchFromRecovery(finishedKind)) {
-        if (recoveryBranchType_ == RecoveryBranchType::Recommit ||
-            recoveryBranchType_ == RecoveryBranchType::DelayedSecond) {
-            const ActionKind nextKind = recoveryFollowupKind_;
-            const ActionStep nextStep = recoveryFollowupStep_;
-
-            EndAttack();
-            if (nextKind == ActionKind::Smash || nextKind == ActionKind::Sweep) {
-                tactic_ = TacticState::Melee;
-            }
-
-            recoveryFollowupKind_ = nextKind;
-            recoveryFollowupStep_ = nextStep;
-            return;
-        }
-        return;
-    }
-
-    if (TryStartBackWarpPostAction(finishedKind)) {
-        return;
-    }
-
     EndAttack();
 }
 

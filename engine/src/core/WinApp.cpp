@@ -14,6 +14,12 @@ LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wParam,
     }
 
     switch (msg) {
+    case WM_SETCURSOR:
+        if (LOWORD(lParam) == HTCLIENT) {
+            SetCursor(nullptr);
+            return TRUE;
+        }
+        break;
     case WM_DESTROY:
         PostQuitMessage(0);
         return 0;
@@ -28,7 +34,7 @@ void WinApp::Initialize(HINSTANCE hInstance, int nCmdShow, int width,
     wc.lpfnWndProc = WindowProc;
     wc.hInstance = hInstance;
     wc.lpszClassName = kClassName;
-    wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+    wc.hCursor = nullptr;
 
     // ウィンドウクラス登録
     ATOM atom = RegisterClass(&wc);
@@ -51,6 +57,8 @@ void WinApp::Initialize(HINSTANCE hInstance, int nCmdShow, int width,
     }
 
     ShowWindow(hwnd_, nCmdShow);
+    while (ShowCursor(FALSE) >= 0) {
+    }
     UpdateClientSize();
 }
 

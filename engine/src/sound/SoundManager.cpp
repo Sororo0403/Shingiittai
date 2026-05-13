@@ -4,6 +4,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <cwctype>
 
 SoundManager::~SoundManager() {
     if (masterVoice_) {
@@ -24,11 +25,22 @@ void SoundManager::Initialize() {
 }
 
 uint32_t SoundManager::Load(const std::wstring &path) {
+    std::wstring key = std::filesystem::path(path).lexically_normal().wstring();
+#ifdef _WIN32
+    std::transform(key.begin(), key.end(), key.begin(),
+                   [](wchar_t c) { return static_cast<wchar_t>(towlower(c)); });
+#endif
+    auto cached = pathToSoundId_.find(key);
+    if (cached != pathToSoundId_.end()) {
+        return cached->second;
+    }
+
     SoundResource res{};
     res.wav = LoadWavPcm16(path);
 
     sounds_.push_back(std::move(res));
     uint32_t soundId = static_cast<uint32_t>(sounds_.size() - 1);
+    pathToSoundId_[key] = soundId;
 
     return soundId;
 }

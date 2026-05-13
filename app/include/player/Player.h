@@ -34,9 +34,13 @@ class Player {
                     PlayerWeaponType weaponType = PlayerWeaponType::Standard);
 
     void Update(Input *input, float deltaTime,
-                const DirectX::XMFLOAT3 &lookTarget, float cameraYaw);
+                const DirectX::XMFLOAT3 &lookTarget, float cameraYaw,
+                bool forceRangedReflectMove = false,
+                float controlDeltaTime = -1.0f);
+    void UpdateJoyConCalibrationInput(Input *input, float deltaTime);
 
-    void Draw(ModelManager *modelManager, const Camera &camera);
+    void Draw(ModelManager *modelManager, const Camera &camera,
+              bool drawBody = true);
 
     const Sword &GetSword() const { return rightSword_; }
     const Sword &GetLeftSword() const { return leftSword_; }
@@ -63,9 +67,17 @@ class Player {
     float GetGreatSwordChargeRatio() const { return greatSwordCharge_; }
     PlayerWeaponType GetWeaponType() const { return weaponType_; }
     const Transform &GetTransform() const { return tf_; }
+    bool IsDodging() const { return dodgeTimer_ > 0.0f; }
+    bool IsDamageInvulnerable() const { return dodgeInvulnerableTimer_ > 0.0f; }
+    bool IsAttackRecovery() const {
+        return postSlashRecoveryTimer_ > 0.0f || leftSlashRecoveryTimer_ > 0.0f ||
+               rightSlashRecoveryTimer_ > 0.0f;
+    }
 
     float GetHP() const { return hp_; }
     void TakeDamage(float damage);
+    void NotifyAttackHit(float damage);
+    void NotifyAttackHit(size_t swordIndex, float damage);
 
     void AddKnockback(const DirectX::XMFLOAT3 &velocity);
     const DirectX::XMFLOAT3 &GetVelocity() const { return velocity_; }
@@ -96,8 +108,12 @@ class Player {
     }
     void NotifyCounterSuccess();
     void NotifyCounterSuccess(size_t swordIndex);
+    void SetDefeatPoseRatio(float ratio) { defeatPoseRatio_ = ratio; }
     bool UsesGamepadCameraLook() const {
         return gamepadControlMode_ == PlayerGamepadControlMode::Hunter;
+    }
+    bool UsesJoyConControls() const {
+        return leftJoyCon_.IsConnected() || rightJoyCon_.IsConnected();
     }
 
   private:
@@ -112,6 +128,7 @@ class Player {
     void UpdateGamepadSwordSlash(Input *input, float deltaTime);
     void UpdateHunterGamepadSwordOrientation();
     void UpdateHunterGamepadSwordGuard(Input *input);
+    void UpdateHunterGamepadSwordCounter(Input *input);
     void UpdateHunterGamepadSwordSlash(Input *input, float deltaTime);
     void BeginHunterGamepadAttack(HunterGamepadAttackKind attackKind);
     HunterGamepadAttackKind ReadHunterGamepadAttack(Input *input) const;
@@ -124,7 +141,14 @@ class Player {
     DirectX::XMFLOAT2 GetHunterGamepadSlashDir(
         HunterGamepadAttackKind attackKind) const;
     void ToggleGamepadControlMode();
-    void UpdateMovement(Input *input, float deltaTime, float cameraYaw);
+    void UpdateDodgeInput(Input *input, float deltaTime, float cameraYaw,
+                          const DirectX::XMFLOAT3 &lookTarget);
+    bool IsDodgeInputTriggered(Input *input) const;
+    DirectX::XMFLOAT2 ReadMovementInput(Input *input) const;
+    bool UsesJoyConAutoMovement() const;
+    void UpdateMovement(Input *input, float deltaTime, float cameraYaw,
+                        const DirectX::XMFLOAT3 &lookTarget,
+                        bool forceRangedReflectMove);
     void KeepDistanceFromTarget(const DirectX::XMFLOAT3 &target);
     void LookAt(const DirectX::XMFLOAT3 &target);
     void UpdateWeaponRules(Input *input, SwordPose &leftPose,
@@ -132,13 +156,26 @@ class Player {
                            bool hasRightJoyCon, bool useGamepadRightSword,
                            bool useHunterGamepadControls, float deltaTime);
     void ApplyHandRecovery(SwordPose &pose, float &timer, float deltaTime);
-    float GetSlashRecoveryDuration() const;
+    void RegisterAttackHit(float damage);
+    void RegisterAttackWhiff();
+    void ResetOverSwing();
+    void UpdateOverSwing(float deltaTime);
+    float GetSlashRecoveryDuration(bool hitConfirmed) const;
+    float GetHitConfirmRecoveryDuration() const;
     float GetSlashRecoveryRatio(float timer) const;
+    float GetAttackRecoveryRatio() const;
     float ComputeGreatSwordAttackDamage(float chargeRatio) const;
+    float ComputeJoyConSwingDamageMultiplier(float angularVelocity) const;
+    float GetSwingComboDamageMultiplier() const;
+    void UpdateSwingCombo(float deltaTime);
 
   private:
     static constexpr float kHandHeight = 1.0f;
     static constexpr float kArmLength = 1.0f;
+    static constexpr float kSwingComboWindow = 1.35f;
+    static constexpr int kSwingComboMax = 3;
+    static constexpr float kOverSwingResetDuration = 0.95f;
+    static constexpr int kOverSwingMax = 3;
 
     Transform tf_;
     uint32_t modelId_ = 0;
@@ -160,6 +197,7 @@ class Player {
         HunterGamepadAttackKind::None;
     float hunterGamepadAttackTimer_ = 0.0f;
     float hunterGamepadAttackDuration_ = 0.0f;
+    bool hunterNextSideSlashLeft_ = true;
     bool leftSwordSlashMode_ = false;
     bool rightSwordSlashMode_ = false;
     DirectX::XMFLOAT2 leftSwordSlashDir_{};
@@ -168,18 +206,42 @@ class Player {
     bool rightSwordVisible_ = false;
     bool isGuarding_ = false;
     float postSlashRecoveryTimer_ = 0.0f;
-    static constexpr float kPostSlashRecoveryDuration = 0.25f;
+    static constexpr float kPostSlashRecoveryDuration = 0.30f;
+    float dodgeTimer_ = 0.0f;
+    float dodgeCooldownTimer_ = 0.0f;
+    float dodgeInvulnerableTimer_ = 0.0f;
+    DirectX::XMFLOAT2 dodgeDirection_ = {0.0f, -1.0f};
+    static constexpr float kDodgeDuration = 0.34f;
+    static constexpr float kDodgeInvulnerableDuration = 0.24f;
+    static constexpr float kDodgeCooldownDuration = 0.46f;
+    static constexpr float kDodgeSpeed = 8.8f;
+    float autoMoveOrbitDir_ = 1.0f;
+    float autoMoveOrbitTimer_ = 0.0f;
+    float autoDodgeSide_ = 1.0f;
+    static constexpr float kJoyConAutoMoveIdealDistance = 2.45f;
+    static constexpr float kJoyConAutoMoveNearDistance = 1.75f;
+    static constexpr float kJoyConAutoMoveFarDistance = 3.05f;
+    static constexpr float kJoyConAutoMoveOrbitSpeed = 0.85f;
+    static constexpr float kJoyConAutoMoveDistanceSpeed = 4.20f;
     float leftSlashRecoveryTimer_ = 0.0f;
     float rightSlashRecoveryTimer_ = 0.0f;
-    float leftSwordAttackDamage_ = 10.0f;
-    float rightSwordAttackDamage_ = 10.0f;
+    float leftSwordAttackDamage_ = 4.0f;
+    float rightSwordAttackDamage_ = 4.0f;
     bool prevLeftSwordSlashMode_ = false;
     bool prevRightSwordSlashMode_ = false;
+    bool leftSlashHitConfirmed_ = false;
+    bool rightSlashHitConfirmed_ = false;
+    float recoveryVulnerableFlashTimer_ = 0.0f;
+    int overSwingCount_ = 0;
+    float overSwingResetTimer_ = 0.0f;
+    int swingComboCount_ = 0;
+    float swingComboTimer_ = 0.0f;
 
     float greatSwordCharge_ = 0.0f;
     float greatSwordSwingTimer_ = 0.0f;
     float greatSwordSwingDamage_ = 18.0f;
     bool greatSwordFullChargeCounterReady_ = false;
+    float defeatPoseRatio_ = 0.0f;
     static constexpr float kGreatSwordMinSwingCharge = 0.32f;
     static constexpr float kGreatSwordChargeRate = 0.55f;
     static constexpr float kGreatSwordSwingDuration = 0.32f;

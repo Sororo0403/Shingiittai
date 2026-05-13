@@ -5,6 +5,12 @@
 
 using namespace DirectX;
 
+namespace {
+constexpr float kMouseSwordOrientationScale = 0.0065f;
+constexpr float kMouseSwordMaxAngle = 1.18f;
+constexpr float kMouseSlashMinDeltaSq = 6.0f * 6.0f;
+}
+
 SwordPose SwordMouseController::GetPose() const {
     SwordPose pose = state_.ToPose();
     pose.isMouse = true;
@@ -13,27 +19,32 @@ SwordPose SwordMouseController::GetPose() const {
 
 void SwordMouseController::Update(Input *input, float dt,
                                   const Transform &swordPos) {
+    (void)swordPos;
     UpdateOrientation(input, dt);
-    UpdateGuard(input);
+    state_.isGuard = false;
     state_.isCounter = false;
     UpdateSlash(input, dt);
-    state_.UpdateSlashDir(swordPos);
 }
 
 bool SwordMouseController::IsActive(Input *input) {
-    return std::abs(input->GetMouseDX()) > 3 ||
-           std::abs(input->GetMouseDY()) > 3 || input->IsMousePress(0) ||
-           input->IsMousePress(1);
+    (void)input;
+    return true;
 }
 
 void SwordMouseController::UpdateOrientation(Input *input, float dt) {
+    (void)dt;
+    if (input->IsMouseTrigger(0)) {
+        yaw_ = 0.0f;
+        pitch_ = 0.0f;
+    }
+
     const float dx = static_cast<float>(input->GetMouseDX());
     const float dy = static_cast<float>(input->GetMouseDY());
 
-    const float sensitivity = 0.003f;
-    yaw_ += dx * sensitivity;
-    pitch_ += dy * sensitivity;
-    pitch_ = std::clamp(pitch_, -1.2f, 1.2f);
+    yaw_ = std::clamp(yaw_ + dx * kMouseSwordOrientationScale,
+                      -kMouseSwordMaxAngle, kMouseSwordMaxAngle);
+    pitch_ = std::clamp(pitch_ + dy * kMouseSwordOrientationScale,
+                        -kMouseSwordMaxAngle, kMouseSwordMaxAngle);
 
     XMVECTOR qYaw = XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), yaw_);
     XMVECTOR qPitch =
@@ -47,7 +58,8 @@ void SwordMouseController::UpdateOrientation(Input *input, float dt) {
 }
 
 void SwordMouseController::UpdateGuard(Input *input) {
-    state_.isGuard = input->IsMousePress(1);
+    (void)input;
+    state_.isGuard = false;
 }
 
 void SwordMouseController::UpdateSlash(Input *input, float dt) {
@@ -57,5 +69,9 @@ void SwordMouseController::UpdateSlash(Input *input, float dt) {
 
     const float speed = std::sqrt(dx * dx + dy * dy);
     mouseSpeed_ = (dt > 0.0f) ? speed / dt : 0.0f;
+    if (speed * speed >= kMouseSlashMinDeltaSq) {
+        const float invLength = 1.0f / speed;
+        state_.slashDir = {dx * invLength, -dy * invLength};
+    }
     state_.UpdateSlash(mouseSpeed_, dt);
 }

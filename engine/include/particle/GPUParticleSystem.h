@@ -19,6 +19,8 @@ class GPUParticleSystem {
         Sparks = 0,
         Explosion = 1,
         Smoke = 2,
+        SlashLine = 3,
+        Flash = 4,
     };
 
     ~GPUParticleSystem();
@@ -131,18 +133,22 @@ class GPUParticleSystem {
     Microsoft::WRL::ComPtr<ID3D12Resource> particleUploadResource_;
     D3D12_GPU_DESCRIPTOR_HANDLE particleSrvGpuHandle_{};
     D3D12_CPU_DESCRIPTOR_HANDLE particleSrvCpuHandle_{};
+    uint32_t particleSrvIndex_ = UINT32_MAX;
     D3D12_GPU_DESCRIPTOR_HANDLE particleUavGpuHandle_{};
     D3D12_CPU_DESCRIPTOR_HANDLE particleUavCpuHandle_{};
+    uint32_t particleUavIndex_ = UINT32_MAX;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> freeListResource_;
     Microsoft::WRL::ComPtr<ID3D12Resource> freeListUploadResource_;
     D3D12_GPU_DESCRIPTOR_HANDLE freeListUavGpuHandle_{};
     D3D12_CPU_DESCRIPTOR_HANDLE freeListUavCpuHandle_{};
+    uint32_t freeListUavIndex_ = UINT32_MAX;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> freeListIndexResource_;
     Microsoft::WRL::ComPtr<ID3D12Resource> freeListIndexUploadResource_;
     D3D12_GPU_DESCRIPTOR_HANDLE freeListIndexUavGpuHandle_{};
     D3D12_CPU_DESCRIPTOR_HANDLE freeListIndexUavCpuHandle_{};
+    uint32_t freeListIndexUavIndex_ = UINT32_MAX;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> updateConstantBuffer_;
     Microsoft::WRL::ComPtr<ID3D12Resource> emitterConstantBuffer_;

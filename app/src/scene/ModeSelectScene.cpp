@@ -146,7 +146,7 @@ void ModeSelectScene::UpdateSelection(Input *input) {
         ActivateSelection();
     }
 
-    if (input->IsKeyTrigger(DIK_ESCAPE) ||
+    if (input->IsKeyTrigger(DIK_TAB) ||
         (input->IsGamepadConnected() &&
          input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_B))) {
         sceneManager_->ChangeScene(std::make_unique<TitleScene>());

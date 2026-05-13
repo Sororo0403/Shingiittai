@@ -65,6 +65,15 @@ class TextureManager {
                                       uint32_t height = 512);
 
     /// <summary>
+    /// 明るいアリーナ床用の手続き石材テクスチャを生成する
+    /// </summary>
+    /// <param name="width">テクスチャ幅</param>
+    /// <param name="height">テクスチャ高さ</param>
+    /// <returns>生成されたテクスチャのID</returns>
+    uint32_t CreateArenaStoneTexture(uint32_t width = 512,
+                                     uint32_t height = 512);
+
+    /// <summary>
     /// ロード時に使った一時UploadBufferを解放
     /// </summary>
     void ReleaseUploadBuffers();
@@ -112,4 +121,5 @@ class TextureManager {
     std::vector<Entry> textures_;
     std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> uploadBuffers_;
     std::unordered_map<std::wstring, uint32_t> filePathToTextureId_;
+    std::unordered_map<std::wstring, uint32_t> generatedTextureToId_;
 };

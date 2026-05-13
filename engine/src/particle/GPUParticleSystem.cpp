@@ -26,6 +26,8 @@ void GPUParticleSystem::Initialize(DirectXCommon *dxCommon,
                                    TextureManager *textureManager,
                                    uint32_t textureId,
                                    uint32_t maxParticles) {
+    ReleaseResources();
+
     dxCommon_ = dxCommon;
     srvManager_ = srvManager;
     textureManager_ = textureManager;
@@ -355,9 +357,9 @@ void GPUParticleSystem::CreateParticleBuffer(
         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     dxCommon_->GetCommandList()->ResourceBarrier(1, &toSrv);
 
-    const UINT srvIndex = srvManager_->Allocate();
-    particleSrvCpuHandle_ = srvManager_->GetCpuHandle(srvIndex);
-    particleSrvGpuHandle_ = srvManager_->GetGpuHandle(srvIndex);
+    particleSrvIndex_ = srvManager_->Allocate();
+    particleSrvCpuHandle_ = srvManager_->GetCpuHandle(particleSrvIndex_);
+    particleSrvGpuHandle_ = srvManager_->GetGpuHandle(particleSrvIndex_);
 
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
     srvDesc.Format = DXGI_FORMAT_UNKNOWN;
@@ -370,9 +372,9 @@ void GPUParticleSystem::CreateParticleBuffer(
     device->CreateShaderResourceView(particleResource_.Get(), &srvDesc,
                                      particleSrvCpuHandle_);
 
-    const UINT uavIndex = srvManager_->Allocate();
-    particleUavCpuHandle_ = srvManager_->GetCpuHandle(uavIndex);
-    particleUavGpuHandle_ = srvManager_->GetGpuHandle(uavIndex);
+    particleUavIndex_ = srvManager_->Allocate();
+    particleUavCpuHandle_ = srvManager_->GetCpuHandle(particleUavIndex_);
+    particleUavGpuHandle_ = srvManager_->GetGpuHandle(particleUavIndex_);
 
     D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
     uavDesc.Format = DXGI_FORMAT_UNKNOWN;
@@ -426,9 +428,9 @@ void GPUParticleSystem::CreateFreeListBuffers() {
         D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     dxCommon_->GetCommandList()->ResourceBarrier(1, &freeListToUav);
 
-    const UINT uavIndex = srvManager_->Allocate();
-    freeListUavCpuHandle_ = srvManager_->GetCpuHandle(uavIndex);
-    freeListUavGpuHandle_ = srvManager_->GetGpuHandle(uavIndex);
+    freeListUavIndex_ = srvManager_->Allocate();
+    freeListUavCpuHandle_ = srvManager_->GetCpuHandle(freeListUavIndex_);
+    freeListUavGpuHandle_ = srvManager_->GetGpuHandle(freeListUavIndex_);
 
     D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
     uavDesc.Format = DXGI_FORMAT_UNKNOWN;
@@ -474,9 +476,11 @@ void GPUParticleSystem::CreateFreeListBuffers() {
         D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     dxCommon_->GetCommandList()->ResourceBarrier(1, &freeListIndexToUav);
 
-    const UINT indexUavIndex = srvManager_->Allocate();
-    freeListIndexUavCpuHandle_ = srvManager_->GetCpuHandle(indexUavIndex);
-    freeListIndexUavGpuHandle_ = srvManager_->GetGpuHandle(indexUavIndex);
+    freeListIndexUavIndex_ = srvManager_->Allocate();
+    freeListIndexUavCpuHandle_ =
+        srvManager_->GetCpuHandle(freeListIndexUavIndex_);
+    freeListIndexUavGpuHandle_ =
+        srvManager_->GetGpuHandle(freeListIndexUavIndex_);
 
     D3D12_UNORDERED_ACCESS_VIEW_DESC indexUavDesc{};
     indexUavDesc.Format = DXGI_FORMAT_UNKNOWN;
@@ -529,6 +533,25 @@ void GPUParticleSystem::CreateConstantBuffers() {
 }
 
 void GPUParticleSystem::ReleaseResources() {
+    if (srvManager_) {
+        if (particleSrvIndex_ != UINT32_MAX) {
+            srvManager_->Free(particleSrvIndex_);
+            particleSrvIndex_ = UINT32_MAX;
+        }
+        if (particleUavIndex_ != UINT32_MAX) {
+            srvManager_->Free(particleUavIndex_);
+            particleUavIndex_ = UINT32_MAX;
+        }
+        if (freeListUavIndex_ != UINT32_MAX) {
+            srvManager_->Free(freeListUavIndex_);
+            freeListUavIndex_ = UINT32_MAX;
+        }
+        if (freeListIndexUavIndex_ != UINT32_MAX) {
+            srvManager_->Free(freeListIndexUavIndex_);
+            freeListIndexUavIndex_ = UINT32_MAX;
+        }
+    }
+
     if (updateConstantBuffer_ && mappedUpdateCB_) {
         updateConstantBuffer_->Unmap(0, nullptr);
         mappedUpdateCB_ = nullptr;

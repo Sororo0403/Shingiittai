@@ -103,6 +103,7 @@
   <ItemGroup>
     <ClCompile Include="src\player\SwordSlashArcRenderer.cpp" />
     <ClCompile Include="src\player\SwordTrailRenderer.cpp" />
+    <ClCompile Include="src\scene\BattleResultScene.cpp" />
     <ClCompile Include="src\scene\GameSceneHud.cpp" />
     <ClCompile Include="src\enemy\EnemyMelee.cpp" />
     <ClCompile Include="src\enemy\EnemyRanged.cpp" />
@@ -116,6 +117,7 @@
     <ClCompile Include="src\enemy\Bullet.cpp" />
     <ClCompile Include="src\player\Player.cpp" />
     <ClCompile Include="src\scene\CombatFeedbackDirector.cpp" />
+    <ClCompile Include="src\scene\EnemyAnimationDebugScene.cpp" />
     <ClCompile Include="src\scene\GameScene.cpp" />
     <ClCompile Include="src\scene\GameSceneAnimation.cpp" />
     <ClCompile Include="src\scene\GameSceneCamera.cpp" />
@@ -133,6 +135,7 @@
   <ItemGroup>
     <ClInclude Include="include\player\SwordSlashArcRenderer.h" />
     <ClInclude Include="include\player\SwordTrailRenderer.h" />
+    <ClInclude Include="include\scene\BattleResultScene.h" />
     <ClInclude Include="include\scene\GameSceneHud.h" />
     <ClInclude Include="include\enemy\EnemyActionData.h" />
     <ClInclude Include="include\player\SwordControllerState.h" />
@@ -140,6 +143,7 @@
     <ClInclude Include="include\enemy\Bullet.h" />
     <ClInclude Include="include\enemy\Enemy.h" />
     <ClInclude Include="include\scene\CombatFeedbackDirector.h" />
+    <ClInclude Include="include\scene\EnemyAnimationDebugScene.h" />
     <ClInclude Include="include\scene\GameScene.h" />
     <ClInclude Include="include\scene\ModeSelectScene.h" />
     <ClInclude Include="include\scene\SettingsScene.h" />
@@ -167,7 +171,7 @@
   <ItemGroup>
     <None Include="resources\models\boss\boss.bin" />
     <None Include="resources\models\boss\boss.gltf" />
-    <None Include="resources\models\boss\bossBody.png" />
+    <None Include="resources\models\boss\boss.png" />
     <None Include="resources\models\bullet\bullet.mtl" />
     <None Include="resources\models\bullet\bullet.obj" />
     <None Include="resources\models\bullet\bullet.png" />

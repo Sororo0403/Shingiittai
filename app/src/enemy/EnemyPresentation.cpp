@@ -42,6 +42,10 @@ void Enemy::UpdateParts() {
     const float forwardZ = std::cos(usedYaw);
     const float rightX = std::cos(usedYaw);
     const float rightZ = -std::sin(usedYaw);
+    const bool suppressAttackBodyMotion =
+        action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
+        action_.kind == ActionKind::Shot || action_.kind == ActionKind::Wave ||
+        action_.kind == ActionKind::Nova;
 
     bodyTf_ = tf_;
     bodyTf_.position = tf_.position;
@@ -84,24 +88,34 @@ void Enemy::UpdateParts() {
         recoilProgress = Saturate(recoilProgress);
         const float recoil = recoilProgress * recoilProgress;
         bodyTf_.position.y += 0.015f * recoil;
-        visualTf_.position.x += (-forwardX) * 0.045f * recoil;
-        visualTf_.position.z += (-forwardZ) * 0.045f * recoil;
         visualPitch += counterRecoilPitchRad_ * recoil;
     }
 
     const bool suppressActionPresentation = (counterRecoilTimer_ > 0.0f);
+    const bool isTelegraphCharge =
+        action_.step == ActionStep::Charge &&
+        (action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
+         action_.kind == ActionKind::Shot || action_.kind == ActionKind::Wave ||
+         action_.kind == ActionKind::Nova);
 
-    if (tellActive_) {
-        bodyTf_.scale.x += 0.10f * pulse;
-        bodyTf_.scale.z += 0.10f * pulse;
-        bodyTf_.scale.y -= 0.06f * pulse;
-        bodyTf_.position.y += 0.05f * pulse;
-        rightHandTf_.scale.x += 0.12f * pulse;
-        rightHandTf_.scale.y += 0.12f * pulse;
-        rightHandTf_.scale.z += 0.12f * pulse;
-        visualTf_.position.y += 0.03f * pulse;
-        visualTf_.scale.x += 0.02f * pulse;
-        visualTf_.scale.z += 0.02f * pulse;
+    if (tellActive_ || isTelegraphCharge) {
+        const float chargePulse = tellActive_ ? (1.0f + 0.55f * pulse)
+                                              : (0.72f + 0.42f * pulse);
+        const bool isMeleeCharge =
+            action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep;
+        const float bodyChargeScale = isMeleeCharge ? 0.24f : 0.12f;
+        const float handChargeScale = isMeleeCharge ? 0.36f : 0.18f;
+        bodyTf_.scale.x += bodyChargeScale * chargePulse;
+        bodyTf_.scale.z += bodyChargeScale * chargePulse;
+        bodyTf_.scale.y -= (isMeleeCharge ? 0.12f : 0.06f) * chargePulse;
+        bodyTf_.position.y += (isMeleeCharge ? 0.02f : 0.05f) * chargePulse;
+        rightHandTf_.scale.x += handChargeScale * chargePulse;
+        rightHandTf_.scale.y += handChargeScale * chargePulse;
+        rightHandTf_.scale.z += handChargeScale * chargePulse;
+        rightHandTf_.position.y += (isMeleeCharge ? 0.18f : 0.10f) * chargePulse;
+        visualTf_.position.y += (isMeleeCharge ? 0.055f : 0.035f) * chargePulse;
+        visualTf_.scale.x += (isMeleeCharge ? 0.050f : 0.026f) * chargePulse;
+        visualTf_.scale.z += (isMeleeCharge ? 0.050f : 0.026f) * chargePulse;
     }
 
     if (fakeCommitActive_) {
@@ -192,19 +206,40 @@ void Enemy::UpdateParts() {
 
     if (!suppressActionPresentation && action_.kind == ActionKind::Smash) {
         if (action_.step == ActionStep::Charge || action_.step == ActionStep::Hold) {
-            bodyTf_.position.y -= 0.10f;
-            bodyTf_.scale.y += 0.08f;
-            rightHandTf_.position.y += 1.90f;
-            rightHandTf_.position.x += (-forwardX) * 0.90f;
-            rightHandTf_.position.z += (-forwardZ) * 0.90f;
-            rightHandTf_.scale.x += 0.08f;
-            rightHandTf_.scale.y += 0.08f;
-            rightHandTf_.scale.z += 0.08f;
-            leftHandTf_.position.y += 0.15f;
-            visualTf_.position.x += (-forwardX) * 0.18f;
-            visualTf_.position.z += (-forwardZ) * 0.18f;
-            visualTf_.position.y -= 0.04f;
-            visualPitch -= 0.28f;
+            const bool isDelayBait =
+                action_.id == ActionId::DelaySmash || action_.step == ActionStep::Hold ||
+                fakeCommitActive_ || freezeHoldActive_;
+            bodyTf_.position.y -= 0.28f + 0.08f * pulse;
+            bodyTf_.scale.y += 0.24f;
+            bodyTf_.scale.x += 0.16f + 0.06f * pulse;
+            bodyTf_.scale.z += 0.16f + 0.06f * pulse;
+            rightHandTf_.position.y += 2.75f + 0.28f * pulse;
+            rightHandTf_.position.x += (-forwardX) * 1.48f;
+            rightHandTf_.position.z += (-forwardZ) * 1.48f;
+            rightHandTf_.scale.x += 0.34f + 0.18f * pulse;
+            rightHandTf_.scale.y += 0.34f + 0.18f * pulse;
+            rightHandTf_.scale.z += 0.34f + 0.18f * pulse;
+            leftHandTf_.position.y += 0.36f;
+            leftHandTf_.position.x += forwardX * 0.18f;
+            leftHandTf_.position.z += forwardZ * 0.18f;
+            visualTf_.position.x += (-forwardX) * 0.40f;
+            visualTf_.position.z += (-forwardZ) * 0.40f;
+            visualTf_.position.y -= 0.12f;
+            visualPitch -= 0.62f + 0.12f * pulse;
+            if (isDelayBait) {
+                bodyTf_.position.y -= 0.16f;
+                bodyTf_.position.x += (-forwardX) * (0.26f + 0.10f * pulse);
+                bodyTf_.position.z += (-forwardZ) * (0.26f + 0.10f * pulse);
+                bodyTf_.scale.x += 0.12f;
+                bodyTf_.scale.z += 0.12f;
+                rightHandTf_.position.y += 0.62f + 0.16f * pulse;
+                rightHandTf_.position.x += (-forwardX) * 0.52f + rightX * 0.18f;
+                rightHandTf_.position.z += (-forwardZ) * 0.52f + rightZ * 0.18f;
+                leftHandTf_.position.y += 0.22f;
+                leftHandTf_.position.x += forwardX * 0.28f;
+                leftHandTf_.position.z += forwardZ * 0.28f;
+                visualPitch -= 0.22f;
+            }
         } else if (action_.step == ActionStep::Active) {
             bodyTf_.position.x += forwardX * 0.18f;
             bodyTf_.position.z += forwardZ * 0.18f;
@@ -241,15 +276,39 @@ void Enemy::UpdateParts() {
         }
     } else if (!suppressActionPresentation && action_.kind == ActionKind::Sweep) {
         if (action_.step == ActionStep::Charge || action_.step == ActionStep::Hold) {
-            bodyTf_.position.x += rightX * 0.12f;
-            bodyTf_.position.z += rightZ * 0.12f;
-            rightHandTf_.position.x += rightX * 2.00f;
-            rightHandTf_.position.y += 0.25f;
-            rightHandTf_.position.z += rightZ * 2.00f;
-            leftHandTf_.position.x += (-rightX) * 0.25f;
-            leftHandTf_.position.z += (-rightZ) * 0.25f;
-            visualYaw += 0.18f;
-            visualRoll -= 0.18f;
+            const bool isWideTell =
+                action_.step == ActionStep::Hold || fakeCommitActive_ ||
+                freezeHoldActive_;
+            bodyTf_.position.y -= 0.24f + 0.06f * pulse;
+            bodyTf_.position.x += rightX * (0.44f + 0.10f * pulse);
+            bodyTf_.position.z += rightZ * (0.44f + 0.10f * pulse);
+            bodyTf_.scale.x += 0.20f + 0.04f * pulse;
+            bodyTf_.scale.z += 0.26f + 0.06f * pulse;
+            rightHandTf_.position.x += rightX * (3.20f + 0.34f * pulse);
+            rightHandTf_.position.y += 0.72f + 0.18f * pulse;
+            rightHandTf_.position.z += rightZ * (3.20f + 0.34f * pulse);
+            rightHandTf_.scale.x += 0.42f + 0.22f * pulse;
+            rightHandTf_.scale.y += 0.42f + 0.22f * pulse;
+            rightHandTf_.scale.z += 0.42f + 0.22f * pulse;
+            leftHandTf_.position.x += (-rightX) * 0.82f + (-forwardX) * 0.18f;
+            leftHandTf_.position.z += (-rightZ) * 0.82f + (-forwardZ) * 0.18f;
+            leftHandTf_.position.y += 0.16f;
+            visualTf_.position.x += rightX * 0.18f;
+            visualTf_.position.z += rightZ * 0.18f;
+            visualYaw += 0.62f + 0.18f * pulse;
+            visualRoll -= 0.62f + 0.18f * pulse;
+            if (isWideTell) {
+                bodyTf_.position.x += rightX * 0.28f;
+                bodyTf_.position.z += rightZ * 0.28f;
+                bodyTf_.scale.x += 0.10f;
+                bodyTf_.scale.z += 0.16f;
+                rightHandTf_.position.x += rightX * 0.72f;
+                rightHandTf_.position.z += rightZ * 0.72f;
+                leftHandTf_.position.x += (-rightX) * 0.34f;
+                leftHandTf_.position.z += (-rightZ) * 0.34f;
+                visualYaw += 0.20f;
+                visualRoll -= 0.18f;
+            }
         } else if (action_.step == ActionStep::Active) {
             bodyTf_.position.x += (-rightX) * 0.18f;
             bodyTf_.position.z += (-rightZ) * 0.18f;
@@ -271,32 +330,53 @@ void Enemy::UpdateParts() {
             bodyTf_.scale.x -= 0.04f;
             bodyTf_.scale.z -= 0.04f;
             bodyTf_.scale.y += 0.06f;
-            rightHandTf_.position.y += 0.45f;
-            rightHandTf_.position.x += forwardX * 1.30f;
-            rightHandTf_.position.z += forwardZ * 1.30f;
-            rightHandTf_.scale.x += 0.08f + 0.08f * pulse;
-            rightHandTf_.scale.y += 0.08f + 0.08f * pulse;
-            rightHandTf_.scale.z += 0.08f + 0.08f * pulse;
-            leftHandTf_.position.x += (-rightX) * 0.35f;
-            leftHandTf_.position.z += (-rightZ) * 0.35f;
+            leftHandTf_.position.y += 0.48f;
+            leftHandTf_.position.x += forwardX * 1.02f + (-rightX) * 0.48f;
+            leftHandTf_.position.z += forwardZ * 1.02f + (-rightZ) * 0.48f;
+            leftHandTf_.scale.x += 0.20f + 0.14f * pulse;
+            leftHandTf_.scale.y += 0.20f + 0.14f * pulse;
+            leftHandTf_.scale.z += 0.20f + 0.14f * pulse;
+            rightHandTf_.position.y += 0.44f;
+            rightHandTf_.position.x += forwardX * 0.72f + rightX * 0.52f;
+            rightHandTf_.position.z += forwardZ * 0.72f + rightZ * 0.52f;
+            rightHandTf_.scale.x += 0.10f + 0.08f * pulse;
+            rightHandTf_.scale.y += 0.10f + 0.08f * pulse;
+            rightHandTf_.scale.z += 0.10f + 0.08f * pulse;
             visualTf_.position.x += (-forwardX) * 0.10f;
             visualTf_.position.z += (-forwardZ) * 0.10f;
             visualPitch -= 0.12f;
         } else if (action_.step == ActionStep::Active) {
-            rightHandTf_.position.y += 0.3f;
-            rightHandTf_.position.x += forwardX * 1.0f;
-            rightHandTf_.position.z += forwardZ * 1.0f;
+            const bool handStage = IsDualCounterHandStage();
+            if (handStage) {
+                leftHandTf_.position.y += 0.44f;
+                leftHandTf_.position.x += forwardX * 1.82f + (-rightX) * 0.24f;
+                leftHandTf_.position.z += forwardZ * 1.82f + (-rightZ) * 0.24f;
+                leftHandTf_.scale.x += 0.20f;
+                leftHandTf_.scale.y += 0.20f;
+                leftHandTf_.scale.z += 0.20f;
+                visualYaw -= 0.18f;
+            } else {
+                rightHandTf_.position.y += 0.38f;
+                rightHandTf_.position.x += forwardX * 1.92f + rightX * 0.18f;
+                rightHandTf_.position.z += forwardZ * 1.92f + rightZ * 0.18f;
+                rightHandTf_.scale.x += 0.18f;
+                rightHandTf_.scale.y += 0.18f;
+                rightHandTf_.scale.z += 0.18f;
+                visualYaw += 0.24f;
+                visualRoll -= 0.22f;
+            }
             visualTf_.position.x += forwardX * 0.12f;
             visualTf_.position.z += forwardZ * 0.12f;
         } else if (action_.step == ActionStep::Recovery) {
-            rightHandTf_.position.y += 0.2f;
-            rightHandTf_.position.x += forwardX * 0.4f;
-            rightHandTf_.position.z += forwardZ * 0.4f;
+            leftHandTf_.position.y += 0.16f;
+            leftHandTf_.position.x += forwardX * 0.54f;
+            leftHandTf_.position.z += forwardZ * 0.54f;
             visualPitch += 0.06f;
         }
     } else if (!suppressActionPresentation && action_.kind == ActionKind::Wave) {
         if (action_.step == ActionStep::Charge) {
-            rightHandTf_.position.y += 0.8f;
+            bodyTf_.position.y -= 0.12f + 0.04f * pulse;
+            rightHandTf_.position.y += 0.44f;
             rightHandTf_.position.x += forwardX * 0.6f;
             rightHandTf_.position.z += forwardZ * 0.6f;
             bodyTf_.scale.x += 0.06f + 0.06f * pulse;
@@ -307,7 +387,10 @@ void Enemy::UpdateParts() {
             visualTf_.position.y += 0.04f * pulse;
             visualTf_.scale.x += 0.02f * pulse;
             visualTf_.scale.z += 0.02f * pulse;
-            visualPitch -= 0.10f;
+            visualPitch += 0.26f;
+            leftHandTf_.position.y += 0.34f;
+            leftHandTf_.position.x += (-rightX) * 0.36f;
+            leftHandTf_.position.z += (-rightZ) * 0.36f;
         } else if (action_.step == ActionStep::Active) {
             rightHandTf_.position.y += 0.4f;
             rightHandTf_.position.x += forwardX * 1.0f;
@@ -319,6 +402,55 @@ void Enemy::UpdateParts() {
             rightHandTf_.position.x += forwardX * 0.4f;
             rightHandTf_.position.z += forwardZ * 0.4f;
             visualPitch += 0.06f;
+        }
+    } else if (!suppressActionPresentation && action_.kind == ActionKind::Nova) {
+        const float novaPulse = 0.5f + 0.5f * std::sin(runtime_.stateTimer * 28.0f);
+        if (action_.step == ActionStep::Charge) {
+            bodyTf_.position.y -= 0.14f;
+            bodyTf_.scale.x += 0.18f + 0.12f * novaPulse;
+            bodyTf_.scale.z += 0.18f + 0.12f * novaPulse;
+            bodyTf_.scale.y -= 0.08f;
+            rightHandTf_.position.y += 1.25f + 0.16f * novaPulse;
+            leftHandTf_.position.y += 1.00f + 0.12f * novaPulse;
+            rightHandTf_.position.x += rightX * 0.50f + (-forwardX) * 0.26f;
+            rightHandTf_.position.z += rightZ * 0.50f + (-forwardZ) * 0.26f;
+            leftHandTf_.position.x += (-rightX) * 0.50f + (-forwardX) * 0.18f;
+            leftHandTf_.position.z += (-rightZ) * 0.50f + (-forwardZ) * 0.18f;
+            visualTf_.position.y += 0.08f * novaPulse;
+            visualPitch -= 0.18f;
+            visualRoll += 0.14f * novaPulse;
+        } else if (action_.step == ActionStep::Active) {
+            const float impactTime = config_.attacks.nova.impactTime;
+            const float riseT =
+                impactTime > 0.0001f
+                    ? std::clamp(runtime_.stateTimer / impactTime, 0.0f, 1.0f)
+                    : 1.0f;
+            const float afterImpactT =
+                std::clamp((runtime_.stateTimer - impactTime) / 0.22f, 0.0f, 1.0f);
+            const float jumpHeight =
+                runtime_.stateTimer < impactTime
+                    ? std::sin(riseT * 1.57079633f) * 1.95f
+                    : (1.0f - afterImpactT) * 1.95f;
+            const float impactSquash = 1.0f - afterImpactT;
+            visualTf_.position.y += jumpHeight;
+            bodyTf_.position.y += jumpHeight * 0.35f - 0.14f * impactSquash;
+            bodyTf_.scale.x += 0.34f + 0.28f * impactSquash;
+            bodyTf_.scale.z += 0.34f + 0.28f * impactSquash;
+            bodyTf_.scale.y -= 0.08f * impactSquash;
+            rightHandTf_.position.y += 1.70f + jumpHeight * 0.35f;
+            leftHandTf_.position.y += 1.52f + jumpHeight * 0.35f;
+            rightHandTf_.position.x += rightX * 0.95f + forwardX * 0.24f;
+            rightHandTf_.position.z += rightZ * 0.95f + forwardZ * 0.24f;
+            leftHandTf_.position.x += (-rightX) * 0.95f + forwardX * 0.24f;
+            leftHandTf_.position.z += (-rightZ) * 0.95f + forwardZ * 0.24f;
+            visualTf_.scale.x += 0.08f * novaPulse + 0.10f * impactSquash;
+            visualTf_.scale.z += 0.08f * novaPulse + 0.10f * impactSquash;
+            visualPitch += 0.20f - 0.28f * riseT;
+        } else if (action_.step == ActionStep::Recovery) {
+            bodyTf_.position.y -= 0.06f;
+            rightHandTf_.position.y += 0.36f;
+            leftHandTf_.position.y += 0.30f;
+            visualPitch += 0.08f;
         }
     } else if (!suppressActionPresentation && action_.kind == ActionKind::Warp) {
         if (action_.step == ActionStep::Start) {
@@ -410,6 +542,16 @@ void Enemy::UpdateParts() {
         visualRoll += 0.04f * pulse;
     }
 
+    if (suppressAttackBodyMotion) {
+        bodyTf_.position.x = tf_.position.x;
+        bodyTf_.position.z = tf_.position.z;
+        visualTf_.position.x = tf_.position.x;
+        visualTf_.position.z = tf_.position.z;
+        visualYaw = usedYaw;
+        visualPitch = 0.0f;
+        visualRoll = 0.0f;
+    }
+
     DirectX::XMVECTOR hitboxRot =
         DirectX::XMQuaternionRotationRollPitchYaw(0.0f, usedYaw, 0.0f);
     DirectX::XMStoreFloat4(&bodyTf_.rotation, hitboxRot);
@@ -436,65 +578,91 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         0.5f + 0.5f * std::sin(runtime_.stateTimer * 12.0f);
     const DirectX::XMFLOAT4 phaseTint =
         phase_ == BossPhase::Phase2
-            ? DirectX::XMFLOAT4{1.0f, 0.42f, 0.16f, 0.52f}
-            : DirectX::XMFLOAT4{0.72f, 0.48f, 0.30f, 0.34f};
+            ? DirectX::XMFLOAT4{0.78f, 0.58f, 0.42f, 0.18f}
+            : DirectX::XMFLOAT4{0.72f, 0.76f, 0.72f, 0.12f};
     DirectX::XMFLOAT4 actionTint = phaseTint;
-    float actionIntensity = 0.10f + 0.035f * actionPulse;
-    float actionNoise = 0.28f;
+    float actionIntensity = 0.025f + 0.010f * actionPulse;
+    float actionNoise = 0.08f;
 
     switch (action_.kind) {
     case ActionKind::Smash:
-        actionTint = {1.0f, 0.36f, 0.10f, 0.58f};
-        actionIntensity = 0.32f + 0.12f * actionPulse;
-        actionNoise = 0.38f;
+        actionTint = {0.86f, 0.54f, 0.32f, 0.20f};
+        actionIntensity = 0.055f + 0.020f * actionPulse;
+        actionNoise = 0.10f;
         break;
     case ActionKind::Sweep:
-        actionTint = {1.0f, 0.62f, 0.18f, 0.54f};
-        actionIntensity = 0.24f + 0.10f * actionPulse;
-        actionNoise = 0.34f;
+        actionTint = {0.86f, 0.66f, 0.38f, 0.18f};
+        actionIntensity = 0.050f + 0.018f * actionPulse;
+        actionNoise = 0.10f;
         break;
     case ActionKind::Shot:
-        actionTint = {0.68f, 0.78f, 0.78f, 0.46f};
-        actionIntensity = 0.20f + 0.10f * actionPulse;
-        actionNoise = 0.30f;
+        actionTint = {0.66f, 0.76f, 0.76f, 0.14f};
+        actionIntensity = 0.045f + 0.015f * actionPulse;
+        actionNoise = 0.08f;
         break;
     case ActionKind::Wave:
-        actionTint = {0.54f, 0.78f, 0.50f, 0.44f};
-        actionIntensity = 0.22f + 0.10f * actionPulse;
-        actionNoise = 0.34f;
+        actionTint = {0.58f, 0.72f, 0.54f, 0.14f};
+        actionIntensity = 0.045f + 0.015f * actionPulse;
+        actionNoise = 0.08f;
+        break;
+    case ActionKind::Nova:
+        actionTint = {0.88f, 0.46f, 0.28f, 0.22f};
+        actionIntensity = 0.070f + 0.022f * actionPulse;
+        actionNoise = 0.12f;
         break;
     case ActionKind::Warp:
-        actionTint = {0.90f, 0.48f, 0.20f, 0.70f};
-        actionIntensity = 0.58f + 0.18f * actionPulse;
-        actionNoise = 0.62f;
+        actionTint = {0.72f, 0.58f, 0.42f, 0.18f};
+        actionIntensity = 0.060f + 0.018f * actionPulse;
+        actionNoise = 0.10f;
         break;
     case ActionKind::Stalk:
-        actionTint = {0.52f, 0.56f, 0.42f, 0.38f};
-        actionIntensity = 0.14f + 0.04f * actionPulse;
-        actionNoise = 0.24f;
+        actionTint = {0.58f, 0.60f, 0.52f, 0.12f};
+        actionIntensity = 0.030f + 0.010f * actionPulse;
+        actionNoise = 0.06f;
         break;
     default:
         break;
     }
 
+    const bool isTelegraphCharge =
+        action_.step == ActionStep::Charge &&
+        (action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
+         action_.kind == ActionKind::Shot || action_.kind == ActionKind::Wave ||
+         action_.kind == ActionKind::Nova);
+    if (isTelegraphCharge) {
+        actionTint = LerpColor(actionTint, {0.82f, 0.72f, 0.42f, 0.22f},
+                               0.08f + 0.08f * actionPulse);
+        actionIntensity = actionIntensity * 0.55f + 0.012f * actionPulse;
+        actionNoise += 0.02f + 0.01f * actionPulse;
+    }
+
+    if (IsPunishableRecovery()) {
+        const float recoveryPulse =
+            0.5f + 0.5f * std::sin(runtime_.stateTimer * 22.0f);
+        actionTint = LerpColor(actionTint, {0.86f, 0.74f, 0.34f, 0.28f},
+                               0.55f + 0.25f * recoveryPulse);
+        actionIntensity += 0.10f + 0.05f * recoveryPulse;
+        actionNoise += 0.05f + 0.02f * recoveryPulse;
+    }
+
     if (phaseTransitionActive_) {
         const float phaseRatio = GetPhaseTransitionRatio();
-        actionTint = LerpColor(actionTint, {1.0f, 0.48f, 0.12f, 0.76f},
+        actionTint = LerpColor(actionTint, {0.86f, 0.58f, 0.32f, 0.28f},
                                phaseRatio);
-        actionIntensity += 0.46f * phaseRatio;
-        actionNoise += 0.28f * phaseRatio;
+        actionIntensity += 0.12f * phaseRatio;
+        actionNoise += 0.06f * phaseRatio;
     }
 
     ModelDrawEffect hitEffect{};
     if (isHitFlashing) {
-        hitEffect.enabled = true;
+        hitEffect.enabled = false;
         hitEffect.additiveBlend = false;
         hitEffect.color = LerpColor({1.0f, 0.30f, 0.08f, 0.78f},
                                     {1.0f, 0.78f, 0.28f, 0.86f},
                                     actionPulse);
         hitEffect.intensity = 0.42f + 0.72f * hitFlash;
         hitEffect.fresnelPower = 1.8f;
-        hitEffect.noiseAmount = 0.52f;
+        hitEffect.noiseAmount = 0.30f;
         hitEffect.time = runtime_.stateTimer;
     }
 
@@ -505,12 +673,12 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
     ModelDrawEffect warpEffect{};
 
     if (action_.kind == ActionKind::Warp) {
-        warpEffect.enabled = true;
+        warpEffect.enabled = false;
         warpEffect.additiveBlend = true;
         warpEffect.color = actionTint;
-        warpEffect.intensity = (action_.step == ActionStep::Move) ? 1.38f : 0.88f;
+        warpEffect.intensity = (action_.step == ActionStep::Move) ? 0.92f : 0.62f;
         warpEffect.fresnelPower = 1.9f;
-        warpEffect.noiseAmount = 0.84f;
+        warpEffect.noiseAmount = 0.42f;
         warpEffect.time = stateTimer_;
 
         if (isHitFlashing) {
@@ -526,10 +694,12 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         modelManager->SetDrawEffect(hitEffect);
     } else {
         ModelDrawEffect actionEffect{};
-        actionEffect.enabled = true;
+        actionEffect.enabled = false;
         actionEffect.additiveBlend = false;
         actionEffect.color = actionTint;
-        actionEffect.intensity = actionIntensity;
+        actionEffect.intensity = (isTelegraphCharge || action_.step == ActionStep::Active)
+                                     ? actionIntensity * 0.32f
+                                     : actionIntensity * 0.50f;
         actionEffect.fresnelPower = 2.5f;
         actionEffect.noiseAmount = actionNoise;
         actionEffect.time = runtime_.stateTimer;
@@ -568,16 +738,23 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
 
         Transform bulletTf = tf_;
         bulletTf.position = bullet.position;
-        bulletTf.scale = {0.2f, 0.2f, 0.2f};
+        const float bulletYaw =
+            std::atan2(bullet.velocity.x, bullet.velocity.z);
+        DirectX::XMStoreFloat4(
+            &bulletTf.rotation,
+            DirectX::XMQuaternionRotationRollPitchYaw(0.0f, bulletYaw, 0.0f));
+        bulletTf.scale = bullet.isReflected
+                             ? DirectX::XMFLOAT3{0.52f, 0.52f, 0.86f}
+                             : DirectX::XMFLOAT3{0.72f, 0.72f, 1.15f};
         ModelDrawEffect bulletEffect{};
         bulletEffect.enabled = true;
         bulletEffect.additiveBlend = true;
         bulletEffect.color =
-            bullet.isReflected ? DirectX::XMFLOAT4{1.0f, 0.95f, 0.20f, 0.90f}
-                               : DirectX::XMFLOAT4{0.74f, 0.84f, 0.78f, 0.82f};
-        bulletEffect.intensity = bullet.isReflected ? 1.15f : 0.82f;
-        bulletEffect.fresnelPower = 1.4f;
-        bulletEffect.noiseAmount = 0.26f;
+            bullet.isReflected ? DirectX::XMFLOAT4{1.0f, 0.78f, 0.18f, 0.94f}
+                               : DirectX::XMFLOAT4{0.45f, 0.94f, 1.0f, 0.96f};
+        bulletEffect.intensity = bullet.isReflected ? 1.75f : 1.92f;
+        bulletEffect.fresnelPower = 1.05f;
+        bulletEffect.noiseAmount = 0.08f;
         bulletEffect.time = stateTimer_ + bullet.lifeTime;
         modelManager->SetDrawEffect(bulletEffect);
         modelManager->Draw(effectModelId, bulletTf, camera);
@@ -591,6 +768,10 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
         Transform waveTf = tf_;
         waveTf.position = wave.position;
         waveTf.scale = {0.6f, 0.2f, 1.2f};
+        const float waveYaw = std::atan2(wave.direction.x, wave.direction.z);
+        DirectX::XMStoreFloat4(
+            &waveTf.rotation,
+            DirectX::XMQuaternionRotationRollPitchYaw(0.0f, waveYaw, 0.0f));
         ModelDrawEffect waveEffect{};
         waveEffect.enabled = true;
         waveEffect.additiveBlend = true;
@@ -606,5 +787,104 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
     }
 
     modelManager->ClearDrawEffect();
+}
+
+void Enemy::ApplyVictoryDefeatPose(
+    float ratio, const DirectX::XMFLOAT3 &startPosition,
+    const DirectX::XMFLOAT3 &playerPosition) {
+    ratio = (std::clamp)(ratio, 0.0f, 1.0f);
+    const int frame =
+        (std::min)(3, static_cast<int>(std::floor(ratio * 4.0f)));
+
+    float awayX = startPosition.x - playerPosition.x;
+    float awayZ = startPosition.z - playerPosition.z;
+    float awayLen = std::sqrt(awayX * awayX + awayZ * awayZ);
+    if (awayLen < 0.0001f) {
+        awayLen = 1.0f;
+        awayZ = 1.0f;
+    }
+    awayX /= awayLen;
+    awayZ /= awayLen;
+    const float rightX = awayZ;
+    const float rightZ = -awayX;
+
+    float backDistance = 0.0f;
+    float lift = 0.0f;
+    float lateral = 0.0f;
+    float pitch = 0.0f;
+    float roll = 0.0f;
+    float fallPose = 0.0f;
+    switch (frame) {
+    case 0:
+        backDistance = 0.08f;
+        lift = 0.16f;
+        lateral = 0.00f;
+        pitch = -0.08f;
+        roll = 0.00f;
+        fallPose = 0.00f;
+        break;
+    case 1:
+        backDistance = 1.30f;
+        lift = 1.10f;
+        lateral = 0.24f;
+        pitch = -0.58f;
+        roll = 0.22f;
+        fallPose = 0.34f;
+        break;
+    case 2:
+        backDistance = 2.75f;
+        lift = 0.48f;
+        lateral = -0.18f;
+        pitch = -1.15f;
+        roll = -0.16f;
+        fallPose = 0.70f;
+        break;
+    default:
+        backDistance = 3.55f;
+        lift = -0.30f;
+        lateral = 0.04f;
+        pitch = -1.68f;
+        roll = 0.03f;
+        fallPose = 1.00f;
+        break;
+    }
+
+    tf_.position = startPosition;
+    tf_.position.x += awayX * backDistance + rightX * lateral;
+    tf_.position.z += awayZ * backDistance + rightZ * lateral;
+    tf_.position.y += lift;
+    const float maxRadius = arenaClampRadius_ - 0.75f;
+    const float distanceSq =
+        tf_.position.x * tf_.position.x + tf_.position.z * tf_.position.z;
+    if (distanceSq > maxRadius * maxRadius && distanceSq > 0.0001f) {
+        const float clampScale = maxRadius / std::sqrt(distanceSq);
+        tf_.position.x *= clampScale;
+        tf_.position.z *= clampScale;
+    }
+    tf_.scale = {1.0f + 0.05f * fallPose, 1.0f - 0.18f * fallPose,
+                 1.0f + 0.10f * fallPose};
+
+    const float yaw = std::atan2(-awayX, -awayZ);
+    DirectX::XMStoreFloat4(
+        &tf_.rotation,
+        DirectX::XMQuaternionRotationRollPitchYaw(pitch, yaw, roll));
+
+    bodyTf_ = tf_;
+    visualTf_ = tf_;
+    leftHandTf_ = tf_;
+    rightHandTf_ = tf_;
+
+    bodyTf_.position.y -= 0.18f * fallPose;
+    visualTf_.position.y += 0.12f * (1.0f - fallPose);
+    leftHandTf_.position.x += (-rightX) * (1.0f + 0.85f * fallPose) -
+                              awayX * (0.18f + 0.50f * fallPose);
+    leftHandTf_.position.z += (-rightZ) * (1.0f + 0.85f * fallPose) -
+                              awayZ * (0.18f + 0.50f * fallPose);
+    leftHandTf_.position.y += 0.58f - 0.72f * fallPose;
+    rightHandTf_.position.x += rightX * (1.15f + 0.95f * fallPose) +
+                               awayX * (0.10f + 0.38f * fallPose);
+    rightHandTf_.position.z += rightZ * (1.15f + 0.95f * fallPose) +
+                               awayZ * (0.10f + 0.38f * fallPose);
+    rightHandTf_.position.y += 0.84f - 0.80f * fallPose;
 }
 

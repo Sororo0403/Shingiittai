@@ -91,6 +91,9 @@ struct ModelSubMesh {
     uint32_t textureId = 0;
     uint32_t materialId = 0;
     uint32_t vertexCount = 0;
+    std::vector<DirectX::XMFLOAT3> sourcePositions;
+    DirectX::XMFLOAT3 sourceBoundsMin = {0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT3 sourceBoundsMax = {0.0f, 0.0f, 0.0f};
 
     std::unordered_map<std::string, JointWeightData> skinClusterData;
     SkinCluster skinCluster;

@@ -15,10 +15,6 @@
 #include "WinApp.h"
 #include <memory>
 
-#ifndef IMGUI_DISABLED
-#include "ImguiManager.h"
-#endif // IMGUI_DISABLED
-
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     // WinApp初期化
     WinApp winApp;
@@ -34,7 +30,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
 
     // SrvManager
     SrvManager srvManager;
-    srvManager.Initialize(&dxCommon, 512);
+    srvManager.Initialize(&dxCommon, 4096);
     dxCommon.RegisterSceneColorSRV(&srvManager);
     dxCommon.CreateDepthStencilSrv(&srvManager);
 
@@ -66,12 +62,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     spriteManager.Initialize(&dxCommon, &textureManager, &srvManager, width,
                              height);
 
-#ifndef IMGUI_DISABLED
-    // ImguiManager
-    ImguiManager imguiManager;
-    imguiManager.Initialize(&winApp, &dxCommon, &srvManager);
-#endif // IMGUI_DISABLED
-
     SceneContext sceneCtx{};
     sceneCtx.input = &input;
     sceneCtx.winApp = &winApp;
@@ -84,16 +74,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     sceneCtx.postEffectRenderer = &postEffectRenderer;
     sceneCtx.deltaTime = 0.0f;
 
-#ifndef IMGUI_DISABLED
-    sceneCtx.imgui = &imguiManager;
-#endif // IMGUI_DISABLED
-
     // SceneManager
     SceneManager sceneManager;
     sceneManager.Initialize(sceneCtx);
-    // sceneManager.ChangeScene(std::make_unique<GameScene>());
-    // sceneManager.ChangeScene(std::make_unique<ModeSelectScene>());
-    // sceneManager.ChangeScene(std::make_unique<WeaponSelectScene>());
     sceneManager.ChangeScene(std::make_unique<TitleScene>());
 
     // 高精細タイマの周波数を取得
@@ -119,6 +102,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
 
         // 入力更新
         input.Update(deltaTime);
+        if (input.IsKeyTrigger(DIK_ESCAPE)) {
+            break;
+        }
 
         // Scene 更新
         sceneManager.Update();
@@ -126,11 +112,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
         // 描画
         dxCommon.BeginFrame();
         spriteManager.BeginFrame();
-
-#ifndef IMGUI_DISABLED
-        ID3D12GraphicsCommandList *cmdList = dxCommon.GetCommandList();
-        imguiManager.Begin(cmdList);
-#endif // IMGUI_DISABLED
 
         dxCommon.BeginScenePass();
         sceneManager.Draw();
@@ -143,10 +124,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
         dxCommon.TransitionDepthToWrite();
 
         sceneManager.DrawOverlay();
-
-#ifndef IMGUI_DISABLED
-        imguiManager.End(cmdList);
-#endif // IMGUI_DISABLED
 
         dxCommon.EndFrame();
     }

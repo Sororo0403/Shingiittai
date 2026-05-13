@@ -8,6 +8,7 @@ enum class ActionKind {
     Sweep,
     Shot,
     Wave,
+    Nova,
     Warp,
     Stalk,
 };
@@ -24,6 +25,7 @@ enum class ActionId {
 
     Shot,
     Wave,
+    Nova,
 
     WarpApproach,
     WarpEscape,

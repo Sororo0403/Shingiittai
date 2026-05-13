@@ -60,6 +60,9 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\scene\BattleResultScene.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
     <ClCompile Include="src\enemy\EnemyMelee.cpp">
       <Filter>Source Files\enemy</Filter>
     </ClCompile>
@@ -94,6 +97,9 @@
       <Filter>Source Files\player</Filter>
     </ClCompile>
     <ClCompile Include="src\scene\CombatFeedbackDirector.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\scene\EnemyAnimationDebugScene.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
     <ClCompile Include="src\scene\GameScene.cpp">
@@ -144,6 +150,9 @@
     <ClCompile Include="src\player\SwordTrailRenderer.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\scene\BattleResultScene.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
     <ClInclude Include="include\enemy\EnemyActionData.h">
       <Filter>Header Files\enemy</Filter>
     </ClInclude>
@@ -160,6 +169,9 @@
       <Filter>Header Files\enemy</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\CombatFeedbackDirector.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="include\scene\EnemyAnimationDebugScene.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\GameScene.h">
@@ -207,7 +219,7 @@
     <None Include="resources\models\boss\boss.gltf">
       <Filter>Resources\Model\boss</Filter>
     </None>
-    <None Include="resources\models\boss\bossBody.png">
+    <None Include="resources\models\boss\boss.png">
       <Filter>Resources\Model\boss</Filter>
     </None>
     <None Include="resources\models\bullet\bullet.mtl">

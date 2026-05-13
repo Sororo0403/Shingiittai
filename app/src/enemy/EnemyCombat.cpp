@@ -12,9 +12,29 @@ OBB Enemy::MakeOBB(const Transform &tf, const DirectX::XMFLOAT3 &size) const {
     return box;
 }
 
-OBB Enemy::GetBodyOBB() const { return MakeOBB(bodyTf_, bodySize_); }
-OBB Enemy::GetLeftHandOBB() const { return MakeOBB(leftHandTf_, handSize_); }
-OBB Enemy::GetRightHandOBB() const { return MakeOBB(rightHandTf_, handSize_); }
+OBB Enemy::GetBodyOBB() const {
+    DirectX::XMFLOAT3 generousSize = bodySize_;
+    generousSize.x *= 1.45f;
+    generousSize.y *= 1.22f;
+    generousSize.z *= 1.45f;
+    return MakeOBB(bodyTf_, generousSize);
+}
+
+OBB Enemy::GetLeftHandOBB() const {
+    DirectX::XMFLOAT3 generousSize = handSize_;
+    generousSize.x *= 1.55f;
+    generousSize.y *= 1.35f;
+    generousSize.z *= 1.55f;
+    return MakeOBB(leftHandTf_, generousSize);
+}
+
+OBB Enemy::GetRightHandOBB() const {
+    DirectX::XMFLOAT3 generousSize = handSize_;
+    generousSize.x *= 1.55f;
+    generousSize.y *= 1.35f;
+    generousSize.z *= 1.55f;
+    return MakeOBB(rightHandTf_, generousSize);
+}
 
 OBB Enemy::GetAttackOBB() const {
     switch (action_.kind) {
@@ -22,6 +42,9 @@ OBB Enemy::GetAttackOBB() const {
         return GetSmashAttackOBB();
     case ActionKind::Sweep:
         return GetSweepAttackOBB();
+    case ActionKind::Shot:
+        return MakeOBB(IsDualCounterHandStage() ? leftHandTf_ : rightHandTf_,
+                       GetCurrentAttackHitBoxSize());
     default:
         return OBB{};
     }
@@ -31,16 +54,14 @@ OBB Enemy::GetSmashAttackOBB() const {
     const float usedYaw = ShouldUseLockedAttackYaw() ? lockedAttackYaw_ : facingYaw_;
     const float forwardX = std::sin(usedYaw);
     const float forwardZ = std::cos(usedYaw);
-    const float rightX = std::cos(usedYaw);
-    const float rightZ = -std::sin(usedYaw);
 
     Transform attackTf{};
     attackTf.scale = {1.0f, 1.0f, 1.0f};
-    attackTf.rotation = rightHandTf_.rotation;
-    attackTf.position = rightHandTf_.position;
-    attackTf.position.x += forwardX * 0.50f + rightX * 0.08f;
-    attackTf.position.y += 0.05f;
-    attackTf.position.z += forwardZ * 0.50f + rightZ * 0.08f;
+    attackTf.rotation = bodyTf_.rotation;
+    attackTf.position = tf_.position;
+    attackTf.position.x += forwardX * 1.05f;
+    attackTf.position.y += 0.04f;
+    attackTf.position.z += forwardZ * 1.05f;
 
     return MakeOBB(attackTf, GetCurrentAttackHitBoxSize());
 }
@@ -49,20 +70,14 @@ OBB Enemy::GetSweepAttackOBB() const {
     const float usedYaw = ShouldUseLockedAttackYaw() ? lockedAttackYaw_ : facingYaw_;
     const float forwardX = std::sin(usedYaw);
     const float forwardZ = std::cos(usedYaw);
-    const float rightX = std::cos(usedYaw);
-    const float rightZ = -std::sin(usedYaw);
-    const float handDirX = rightHandTf_.position.x - bodyTf_.position.x;
-    const float handDirZ = rightHandTf_.position.z - bodyTf_.position.z;
-    const float sideDot = handDirX * rightX + handDirZ * rightZ;
-    const float sideSign = (sideDot >= 0.0f) ? 1.0f : -1.0f;
 
     Transform attackTf{};
     attackTf.scale = {1.0f, 1.0f, 1.0f};
-    attackTf.rotation = rightHandTf_.rotation;
-    attackTf.position = rightHandTf_.position;
-    attackTf.position.x += rightX * (0.28f * sideSign) + forwardX * 0.24f;
+    attackTf.rotation = bodyTf_.rotation;
+    attackTf.position = tf_.position;
+    attackTf.position.x += forwardX * 0.42f;
     attackTf.position.y += 0.04f;
-    attackTf.position.z += rightZ * (0.28f * sideSign) + forwardZ * 0.24f;
+    attackTf.position.z += forwardZ * 0.42f;
 
     return MakeOBB(attackTf, GetCurrentAttackHitBoxSize());
 }
@@ -80,6 +95,80 @@ float Enemy::GetCurrentAttackKnockback() const {
 DirectX::XMFLOAT3 Enemy::GetCurrentAttackHitBoxSize() const {
     const AttackParam *param = GetCurrentAttackParam();
     return param ? param->hitBoxSize : DirectX::XMFLOAT3{0.1f, 0.1f, 0.1f};
+}
+
+bool Enemy::IsNovaImpactPending() const {
+    return action_.kind == ActionKind::Nova && action_.step == ActionStep::Active &&
+           stateTimer_ < config_.attacks.nova.impactTime;
+}
+
+bool Enemy::IsNovaImpactWindow() const {
+    if (action_.kind != ActionKind::Nova || action_.step != ActionStep::Active) {
+        return false;
+    }
+
+    const float start = config_.attacks.nova.impactTime;
+    const float end = start + config_.attacks.nova.impactWindow;
+    return stateTimer_ >= start && stateTimer_ <= end;
+}
+
+float Enemy::GetNovaImpactRadius() const {
+    return config_.attacks.nova.impactRadius;
+}
+
+float Enemy::GetNovaImpactDamage() const {
+    return config_.attacks.nova.impactDamage;
+}
+
+float Enemy::GetNovaImpactKnockback() const {
+    return config_.attacks.nova.impactKnockback;
+}
+
+bool Enemy::IsPunishableRecovery() const {
+    switch (action_.kind) {
+    case ActionKind::Smash:
+    case ActionKind::Sweep:
+    case ActionKind::Shot:
+    case ActionKind::Wave:
+    case ActionKind::Nova:
+        return action_.step == ActionStep::Recovery && hitReactionTimer_ <= 0.0f;
+    default:
+        return false;
+    }
+}
+
+float Enemy::GetRecoveryProgressForPresentation() const {
+    if (action_.step != ActionStep::Recovery) {
+        return 0.0f;
+    }
+
+    float duration = 1.0f;
+    switch (action_.kind) {
+    case ActionKind::Smash:
+    case ActionKind::Sweep:
+        if (const AttackTimingParam *timing = GetCurrentAttackTiming()) {
+            duration = timing->totalTime - timing->recoveryStartTime;
+        }
+        duration += (action_.kind == ActionKind::Smash) ? 0.18f : 0.16f;
+        break;
+    case ActionKind::Shot:
+        duration = config_.attacks.shot.recoveryTime + 0.18f;
+        break;
+    case ActionKind::Wave:
+        duration = config_.attacks.wave.recoveryTime + 0.18f;
+        break;
+    case ActionKind::Nova:
+        duration = config_.attacks.nova.recoveryTime + 0.25f;
+        break;
+    default:
+        duration = 1.0f;
+        break;
+    }
+
+    if (duration <= 0.0001f) {
+        return 1.0f;
+    }
+    return (std::clamp)(stateTimer_ / duration, 0.0f, 1.0f);
 }
 
 float Enemy::GetDistanceToPlayer() const {
@@ -110,6 +199,8 @@ AttackParam *Enemy::GetCurrentAttackParam() {
         return &config_.attacks.shot.attack;
     case ActionKind::Wave:
         return &config_.attacks.wave.attack;
+    case ActionKind::Nova:
+        return &config_.attacks.wave.attack;
     default:
         return nullptr;
     }
@@ -124,6 +215,8 @@ const AttackParam *Enemy::GetCurrentAttackParam() const {
     case ActionKind::Shot:
         return &config_.attacks.shot.attack;
     case ActionKind::Wave:
+        return &config_.attacks.wave.attack;
+    case ActionKind::Nova:
         return &config_.attacks.wave.attack;
     default:
         return nullptr;
@@ -176,12 +269,103 @@ void Enemy::TakeDamage(float damage) {
         return;
     }
 
-    hitReactionTimer_ = hitReactionDuration_;
+    hitReactionTimer_ = (std::max)(hitReactionTimer_, hitReactionDuration_);
 }
 
 void Enemy::NotifyAttackConnected() { currentActionConnected_ = true; }
 
 void Enemy::NotifyAttackGuarded() { currentActionGuarded_ = true; }
+
+void Enemy::ForcePunishRelease() {
+    if (!(action_.kind == ActionKind::Smash ||
+          action_.kind == ActionKind::Sweep ||
+          action_.kind == ActionKind::Shot)) {
+        return;
+    }
+    if (!(action_.step == ActionStep::Charge ||
+          action_.step == ActionStep::Hold ||
+          action_.step == ActionStep::Active)) {
+        return;
+    }
+
+    if (!hasTrackingLocked_) {
+        LockCurrentFacing();
+        hasTrackingLocked_ = true;
+    }
+    ChangeActionStep(ActionStep::Active);
+    if (action_.kind == ActionKind::Shot) {
+        dualCounterStage_ = 0;
+        dualCounterStageResolved_ = false;
+    }
+    const AttackTimingParam *timing = GetCurrentAttackTiming();
+    if (timing != nullptr) {
+        stateTimer_ = timing->activeStartTime;
+        isAttackActive_ = true;
+    } else if (action_.kind == ActionKind::Shot) {
+        stateTimer_ = 0.20f;
+        isAttackActive_ = true;
+    }
+}
+
+bool Enemy::IsDualCounterAction() const {
+    return action_.kind == ActionKind::Shot &&
+           (action_.step == ActionStep::Charge ||
+            action_.step == ActionStep::Active);
+}
+
+bool Enemy::IsDualCounterWindow() const {
+    return action_.kind == ActionKind::Shot && action_.step == ActionStep::Active &&
+           !dualCounterStageResolved_ && stateTimer_ >= 0.14f &&
+           stateTimer_ <= 0.72f;
+}
+
+bool Enemy::IsDualCounterHandStage() const {
+    if (dualCounterStage_ <= 0) {
+        return dualCounterFirstHand_;
+    }
+    return !dualCounterFirstHand_;
+}
+
+bool Enemy::NotifyDualCountered() {
+    if (action_.kind != ActionKind::Shot || action_.step != ActionStep::Active) {
+        return false;
+    }
+
+    currentActionGuarded_ = true;
+    dualCounterStageResolved_ = true;
+    isAttackActive_ = false;
+
+    if (dualCounterStage_ <= 0) {
+        dualCounterStage_ = 1;
+        stateTimer_ = 0.0f;
+        dualCounterStageResolved_ = false;
+        LockCurrentFacing();
+        return false;
+    }
+
+    return ApplyCounterBreakReaction(0.95f);
+}
+
+void Enemy::NotifyDualStrikeLanded() {
+    if (action_.kind != ActionKind::Shot || action_.step != ActionStep::Active) {
+        NotifyAttackConnected();
+        return;
+    }
+
+    NotifyAttackConnected();
+    dualCounterStageResolved_ = true;
+    isAttackActive_ = false;
+
+    if (dualCounterStage_ <= 0) {
+        dualCounterStage_ = 1;
+        stateTimer_ = 0.0f;
+        dualCounterStageResolved_ = false;
+        LockCurrentFacing();
+        return;
+    }
+
+    ChangeActionStep(ActionStep::Recovery);
+}
 
 bool Enemy::NotifyCountered() { return ApplyCounterBreakReaction(); }
 
@@ -189,28 +373,23 @@ bool Enemy::NotifyCountered(float vulnerabilityDuration) {
     return ApplyCounterBreakReaction(vulnerabilityDuration);
 }
 
+void Enemy::FinishCounterRecoil() {
+    counterRecoilTimer_ = 0.0f;
+    if (hitReactionTimer_ > hitReactionDuration_) {
+        hitReactionTimer_ = hitReactionDuration_;
+    }
+    UpdateParts();
+}
+
 bool Enemy::ApplyCounterBreakReaction(float vulnerabilityDuration) {
     RegisterCounterSuccessReaction();
 
     const bool isCounterBreakableAction =
-        action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep;
+        action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
+        action_.kind == ActionKind::Shot;
     if (!isCounterBreakableAction) {
         return false;
     }
-
-    float dx = tf_.position.x - playerPos_.x;
-    float dz = tf_.position.z - playerPos_.z;
-    float length = std::sqrt(dx * dx + dz * dz);
-    if (length < 0.0001f) {
-        length = 1.0f;
-    }
-
-    dx /= length;
-    dz /= length;
-
-    constexpr float counterPushBack = 0.9f;
-    tf_.position.x += dx * counterPushBack;
-    tf_.position.z += dz * counterPushBack;
 
     EndAttack();
     counterRecoilTimer_ = counterRecoilDuration_;

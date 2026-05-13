@@ -27,6 +27,7 @@ float4 main(PostEffectVSOutput input) : SV_TARGET
                                   vignettingStrength, vignettingScale,
                                   vignettingPower);
     }
+    outputColor.rgb *= 1.0f - saturate(sceneDimStrength) * 0.62f;
 
     outputColor = ApplyEdgeEffect(outputColor, renderTexture, depthTexture,
                                   textureSampler, input.uv, edgeMode);

@@ -190,7 +190,7 @@ class DirectXCommon {
   private:
     static constexpr UINT kSwapChainBufferCount = 2;
     static constexpr UINT kSceneRtvIndex = kSwapChainBufferCount;
-    static constexpr float kClearColor[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    static constexpr float kClearColor[4] = {0.025f, 0.022f, 0.020f, 1.0f};
 
     Microsoft::WRL::ComPtr<IDXGIFactory7> factory_;
     Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain_;

@@ -1,6 +1,7 @@
 #pragma once
 #include "SoundVoiceCallback.h"
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include <wrl.h>
 #include <xaudio2.h>
@@ -65,6 +66,7 @@ class SoundManager {
     };
 
     std::vector<SoundResource> sounds_;
+    std::unordered_map<std::wstring, uint32_t> pathToSoundId_;
 
     SoundVoiceCallback voiceCallback_;
 };

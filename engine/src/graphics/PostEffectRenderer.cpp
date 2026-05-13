@@ -160,6 +160,11 @@ void PostEffectRenderer::SetRandomSeed(float seed) {
     UpdateConstantBuffer();
 }
 
+void PostEffectRenderer::SetSceneDimStrength(float strength) {
+    sceneDimStrength_ = std::clamp(strength, 0.0f, 1.0f);
+    UpdateConstantBuffer();
+}
+
 void PostEffectRenderer::CreateRootSignature() {
     CD3DX12_DESCRIPTOR_RANGE textureRange{};
     textureRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
@@ -281,4 +286,5 @@ void PostEffectRenderer::UpdateConstantBuffer() {
     mappedConstBuffer_->sepiaTone[0] = sepiaTone_[0];
     mappedConstBuffer_->sepiaTone[1] = sepiaTone_[1];
     mappedConstBuffer_->sepiaTone[2] = sepiaTone_[2];
+    mappedConstBuffer_->sceneDimStrength = sceneDimStrength_;
 }

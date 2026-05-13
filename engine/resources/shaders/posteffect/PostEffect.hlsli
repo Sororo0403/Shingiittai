@@ -33,7 +33,7 @@ cbuffer PostEffectConstants : register(b0)
     float randomSeed;
     float3 grayscaleWeights;
     float3 sepiaTone;
-    float padding5;
+    float sceneDimStrength;
 };
 
 #endif // POST_EFFECT_HLSLI
