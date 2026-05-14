@@ -40,15 +40,16 @@ if ($python -and (Test-Python311 $python.Source)) {
 } elseif ($py -and (Test-Python311 $py.Source @("-3.11"))) {
     $basePython = $py.Source
     $basePythonArgs = @("-3.11")
-} elseif ($python) {
-    $basePython = $python.Source
-    $basePythonArgs = @()
 } else {
-    throw "Python 3.11 is required to build the Release hand tracking helper."
+    throw "Python 3.11 is required to build the Release hand tracking helper. Install Python 3.11 and confirm 'py -3.11 --version' works."
 }
 
 if (-not (Test-Path $venvPython)) {
     Invoke-BasePython -m venv $venv
+}
+
+if (-not (Test-Python311 $venvPython)) {
+    throw "The hand tracking virtual environment must use Python 3.11. Delete '$venv' and rebuild with Python 3.11 installed."
 }
 
 Invoke-VenvPython -m pip install --upgrade pip
