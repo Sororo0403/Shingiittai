@@ -564,7 +564,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
 
                 CombatFeedbackEvent feedback{};
                 feedback.type = CombatFeedbackEventType::PlayerSlashHit;
-                feedback.position = sword->GetSlashFeedbackPointWorld();
+                feedback.position = swordHitBox.center;
                 feedback.direction =
                     DirectionFromTo(player_.GetTransform().position,
                                     enemy_.GetTransform().position);
@@ -607,7 +607,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                 player_.NotifyAttackHit(i, swordDamage);
                 CombatFeedbackEvent feedback{};
                 feedback.type = CombatFeedbackEventType::PlayerSlashHit;
-                feedback.position = sword->GetSlashFeedbackPointWorld();
+                feedback.position = swordHitBox.center;
                 feedback.direction =
                     DirectionFromTo(player_.GetTransform().position,
                                     enemy_.GetTransform().position);

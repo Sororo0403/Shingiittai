@@ -7,7 +7,7 @@
 using namespace DirectX;
 
 namespace {
-constexpr float kSwordVisualScaleMultiplier = 4.2f;
+constexpr float kSwordVisualScaleMultiplier = 3.0f;
 constexpr float kSlashFollowThroughDuration = 0.16f;
 constexpr float kSlashFollowThroughPixelsPerSecond = 3000.0f;
 constexpr float kSlashFollowThroughMouseSensitivity = 0.003f;
@@ -67,16 +67,7 @@ void Sword::Update(const Transform &transform, const SwordPose &pose,
     isJoyCon = pose.isJoyCon;
     slashDir_ = pose.slashDir;
     orientation_ = pose.orientation;
-    if (isMouse) {
-        slashFollowThroughTimer_ = 0.0f;
-        slashFollowThroughStarted_ = false;
-        slashFollowThroughDir_ = {};
-        slashFollowThroughAngles_ = {};
-        slashFollowThroughRoll_ = 0.0f;
-        slashFollowThroughSurge_ = 0.0f;
-    } else {
-        UpdateSlashFollowThrough(deltaTime);
-    }
+    UpdateSlashFollowThrough(deltaTime);
     UpdateCounterObservation(deltaTime);
 }
 
@@ -87,44 +78,38 @@ void Sword::SetRecoveryReaction(float reaction) {
 OBB Sword::GetOBB() const {
     OBB box;
 
-    const Transform hitTransform = BuildVisualTransform();
-    float hitBoxDepth = kSwordLength * hitTransform.scale.z;
+    float hitBoxDepth = size_.z;
+    float forwardOffset = kSwordLength * 0.5f;
     if (isSlashMode_) {
-        hitBoxDepth += kSlashHitDepthExtension * hitTransform.scale.z;
+        hitBoxDepth += kSlashHitDepthExtension;
+        forwardOffset += kSlashHitDepthExtension * 0.5f;
     }
 
-    const float forwardOffset = hitBoxDepth * 0.5f;
-    XMVECTOR pos = XMLoadFloat3(&hitTransform.position);
-    XMVECTOR rot = XMLoadFloat4(&hitTransform.rotation);
+    XMVECTOR pos = XMLoadFloat3(&tf_.position);
+    XMVECTOR rot = XMLoadFloat4(&tf_.rotation);
     XMVECTOR forward = XMVector3Rotate(XMVectorSet(0, 0, 1, 0), rot);
     XMVECTOR center = pos + forward * forwardOffset;
 
     XMStoreFloat3(&box.center, center);
-    const float slashWidthScale = isSlashMode_ ? 1.75f : 1.14f;
-    box.size = {size_.x * hitTransform.scale.x * slashWidthScale,
-                size_.y * hitTransform.scale.y * slashWidthScale, hitBoxDepth};
-    box.rotation = hitTransform.rotation;
+    box.size = size_;
+    box.size.z = hitBoxDepth;
+    box.rotation = tf_.rotation;
     return box;
 }
 
 OBB Sword::GetCounterOBB() const {
     OBB box;
 
-    const Transform hitTransform = BuildVisualTransform();
-    const float counterDepth = kSwordLength * hitTransform.scale.z * 0.92f;
-
-    XMVECTOR pos = XMLoadFloat3(&hitTransform.position);
-    XMVECTOR rot = XMLoadFloat4(&hitTransform.rotation);
+    XMVECTOR pos = XMLoadFloat3(&tf_.position);
+    XMVECTOR rot = XMLoadFloat4(&tf_.rotation);
 
     XMVECTOR forward = XMVector3Rotate(XMVectorSet(0, 0, 1, 0), rot);
-    XMVECTOR center = pos + forward * (counterDepth * 0.5f);
+    XMVECTOR center = pos + forward * 0.9f;
 
     XMStoreFloat3(&box.center, center);
 
-    box.size = {(std::max)(counterSize_.x, size_.x * hitTransform.scale.x * 1.22f),
-                (std::max)(counterSize_.y, size_.y * hitTransform.scale.y * 1.18f),
-                counterDepth};
-    box.rotation = hitTransform.rotation;
+    box.size = counterSize_;
+    box.rotation = tf_.rotation;
 
     return box;
 }
@@ -183,14 +168,6 @@ DirectX::XMFLOAT3 Sword::GetVisualBladeTipWorld() const {
     return GetBladePointWorld(BuildVisualTransform(), 1.05f);
 }
 
-DirectX::XMFLOAT3 Sword::GetSlashFeedbackPointWorld() const {
-    float forwardOffset = kSwordLength * 0.5f;
-    if (isSlashMode_) {
-        forwardOffset += kSlashHitDepthExtension * 0.5f;
-    }
-    return GetBladePointWorld(tf_, forwardOffset);
-}
-
 Transform Sword::BuildVisualTransform() const {
     Transform drawTransform = tf_;
     drawTransform.scale.x *= kSwordVisualScaleMultiplier;
@@ -209,50 +186,10 @@ Transform Sword::BuildVisualTransform() const {
 }
 
 void Sword::Draw(ModelManager *modelManager, const Camera &camera) {
-    const Transform drawTransform = BuildVisualTransform();
-    if (modelManager->GetModel(modelId_) != nullptr) {
-        Transform outlineTransform = drawTransform;
-        outlineTransform.scale.x *= 1.22f;
-        outlineTransform.scale.y *= 1.22f;
-        outlineTransform.scale.z *= 1.04f;
+    Transform drawTransform = BuildVisualTransform();
 
-        ModelDrawEffect outlineEffect{};
-        outlineEffect.enabled = true;
-        outlineEffect.additiveBlend = false;
-        outlineEffect.disableCulling = true;
-        outlineEffect.color = {0.00f, 0.02f, 0.04f, 0.96f};
-        outlineEffect.intensity = 0.34f;
-        outlineEffect.fresnelPower = 0.85f;
-        outlineEffect.noiseAmount = 0.0f;
-        modelManager->SetDrawEffect(outlineEffect);
-        modelManager->Draw(modelId_, outlineTransform, camera);
-
-        ModelDrawEffect coreEffect{};
-        coreEffect.enabled = true;
-        coreEffect.additiveBlend = false;
-        coreEffect.disableCulling = true;
-        coreEffect.color = {0.88f, 0.98f, 1.0f, 1.0f};
-        coreEffect.intensity = 0.68f;
-        coreEffect.fresnelPower = 1.05f;
-        coreEffect.noiseAmount = 0.02f;
-        modelManager->SetDrawEffect(coreEffect);
-        modelManager->Draw(modelId_, drawTransform, camera);
-
-        Transform glowTransform = drawTransform;
-        glowTransform.scale.x *= 1.08f;
-        glowTransform.scale.y *= 1.08f;
-
-        ModelDrawEffect glowEffect{};
-        glowEffect.enabled = true;
-        glowEffect.additiveBlend = true;
-        glowEffect.disableCulling = true;
-        glowEffect.color = {0.28f, 0.76f, 1.0f, 0.62f};
-        glowEffect.intensity = isSlashMode_ ? 0.58f : 0.34f;
-        glowEffect.fresnelPower = 1.0f;
-        glowEffect.noiseAmount = isSlashMode_ ? 0.08f : 0.02f;
-        modelManager->SetDrawEffect(glowEffect);
-        modelManager->Draw(modelId_, glowTransform, camera);
-        modelManager->ClearDrawEffect();
+    if (const Model *model = modelManager->GetModel(modelId_)) {
+        modelManager->GetRenderer()->Draw(*model, drawTransform, camera);
     }
 }
 

@@ -27,7 +27,6 @@ class Sword {
     DirectX::XMFLOAT3 GetBladeCenterWorld() const;
     DirectX::XMFLOAT3 GetVisualBladeRootWorld() const;
     DirectX::XMFLOAT3 GetVisualBladeTipWorld() const;
-    DirectX::XMFLOAT3 GetSlashFeedbackPointWorld() const;
 
     bool IsSlashMode() const { return isSlashMode_; }
     bool IsGuard() const { return isGuard_; }

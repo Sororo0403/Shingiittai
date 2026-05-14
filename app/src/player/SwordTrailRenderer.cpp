@@ -31,6 +31,35 @@ XMFLOAT3 Lerp(const XMFLOAT3 &a, const XMFLOAT3 &b, float t) {
             a.z + (b.z - a.z) * t};
 }
 
+XMFLOAT3 MakeSlashGhostOffset(const Sword &sword,
+                              PlayerWeaponType weaponType) {
+    XMFLOAT2 slashDir = sword.GetSlashDirection();
+    float dirLenSq = slashDir.x * slashDir.x + slashDir.y * slashDir.y;
+    if (dirLenSq <= 0.0001f) {
+        slashDir = {0.75f, -0.35f};
+        dirLenSq = slashDir.x * slashDir.x + slashDir.y * slashDir.y;
+    }
+
+    const float invLen = 1.0f / std::sqrt(dirLenSq);
+    slashDir.x *= invLen;
+    slashDir.y *= invLen;
+
+    float length = 0.42f;
+    switch (weaponType) {
+    case PlayerWeaponType::Dual:
+        length = 0.34f;
+        break;
+    case PlayerWeaponType::GreatSword:
+        length = 0.62f;
+        break;
+    case PlayerWeaponType::Standard:
+    default:
+        break;
+    }
+
+    return {-slashDir.x * length, slashDir.y * length, -0.08f * length};
+}
+
 float DistanceSq(const XMFLOAT3 &a, const XMFLOAT3 &b) {
     return LengthSq(Sub(a, b));
 }
@@ -174,6 +203,12 @@ void SwordTrailRenderer::UpdateOneSword(size_t index, const Sword *sword,
         const XMFLOAT3 root = sword->GetVisualBladeRootWorld();
         const XMFLOAT3 tip = sword->GetVisualBladeTipWorld();
 
+        if (justStarted) {
+            const XMFLOAT3 ghostOffset =
+                MakeSlashGhostOffset(*sword, weaponType);
+            AddSample(trail, Add(root, ghostOffset), Add(tip, ghostOffset),
+                      true);
+        }
         AddSample(trail, root, tip, justStarted);
     }
 
@@ -293,12 +328,12 @@ XMFLOAT4 SwordTrailRenderer::GetTrailColor(PlayerWeaponType weaponType,
                                            float alpha) const {
     switch (weaponType) {
     case PlayerWeaponType::Dual:
-        return {0.70f, 0.18f, 1.00f, 0.55f * alpha};
+        return {0.84f, 0.30f, 1.00f, 0.82f * alpha};
     case PlayerWeaponType::GreatSword:
-        return {1.00f, 0.18f, 0.08f, 0.72f * alpha};
+        return {1.00f, 0.26f, 0.12f, 0.86f * alpha};
     case PlayerWeaponType::Standard:
     default:
-        return {0.86f, 0.22f, 1.00f, 0.58f * alpha};
+        return {0.92f, 0.24f, 1.00f, 0.88f * alpha};
     }
 }
 
@@ -363,7 +398,7 @@ void SwordTrailRenderer::CreatePipelineState() {
     D3D12_BLEND_DESC blend = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
     blend.RenderTarget[0].BlendEnable = TRUE;
     blend.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
-    blend.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+    blend.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
     blend.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
     blend.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
     blend.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
