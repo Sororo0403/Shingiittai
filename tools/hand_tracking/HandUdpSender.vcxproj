@@ -37,7 +37,10 @@
   </PropertyGroup>
   <ItemGroup>
     <None Include="hand_udp_sender.py" />
+    <None Include="build-hand-udp-exe.ps1" />
+    <None Include="models\hand_landmarker.task" />
     <None Include="requirements-hand-udp.txt" />
+    <None Include="setup-hand-udp.ps1" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

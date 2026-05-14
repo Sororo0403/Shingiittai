@@ -369,6 +369,12 @@ FodyWeavers.xsd
 !resources/
 !resources/**
 
+# Python packaged hand-tracking output
+/tools/hand_tracking/build/
+/tools/hand_tracking/dist/
+/tools/hand_tracking/.venv/
+*.spec
+
 # track externals
 !externals/
 !externals/**

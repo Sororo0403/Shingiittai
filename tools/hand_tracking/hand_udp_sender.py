@@ -39,6 +39,12 @@ DEBUG_RAW_POINT_COLOR = (0, 220, 255)
 DEBUG_PREDICTED_COLOR = (240, 180, 80)
 
 
+def default_model_path():
+    return os.path.join(
+        os.path.dirname(__file__), "models", "hand_landmarker.task"
+    )
+
+
 def clamp01(value):
     return max(0.0, min(1.0, value))
 
@@ -488,7 +494,7 @@ def parse_args():
     parser.add_argument("--port", type=int, default=5005)
     parser.add_argument("--camera", type=int, default=0)
     parser.add_argument("--max-hands", type=int, default=2)
-    parser.add_argument("--model", default=r"C:\models\hand_landmarker.task")
+    parser.add_argument("--model", default=default_model_path())
     return parser.parse_args()
 
 

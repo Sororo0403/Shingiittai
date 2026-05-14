@@ -183,6 +183,14 @@ DirectX::XMFLOAT3 Sword::GetVisualBladeTipWorld() const {
     return GetBladePointWorld(BuildVisualTransform(), 1.05f);
 }
 
+DirectX::XMFLOAT3 Sword::GetSlashFeedbackPointWorld() const {
+    float forwardOffset = kSwordLength * 0.5f;
+    if (isSlashMode_) {
+        forwardOffset += kSlashHitDepthExtension * 0.5f;
+    }
+    return GetBladePointWorld(tf_, forwardOffset);
+}
+
 Transform Sword::BuildVisualTransform() const {
     Transform drawTransform = tf_;
     drawTransform.scale.x *= kSwordVisualScaleMultiplier;

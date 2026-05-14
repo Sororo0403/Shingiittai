@@ -19,6 +19,19 @@
 #include <string>
 
 namespace {
+std::filesystem::path ResolveExecutableDirectory() {
+    std::wstring path(MAX_PATH, L'\0');
+    DWORD length =
+        GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
+    while (length == path.size()) {
+        path.resize(path.size() * 2, L'\0');
+        length =
+            GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
+    }
+    path.resize(length);
+    return std::filesystem::path(path).parent_path();
+}
+
 class HandUdpSenderProcess {
   public:
     ~HandUdpSenderProcess() { Stop(); }
@@ -28,19 +41,39 @@ class HandUdpSenderProcess {
             return;
         }
 
-        const std::filesystem::path repoRoot = ResolveRepoRoot();
-        const std::filesystem::path scriptPath =
-            repoRoot / L"tools" / L"hand_tracking" / L"hand_udp_sender.py";
+        const std::filesystem::path runtimeRoot = ResolveRuntimeRoot();
         const std::filesystem::path modelPath =
-            L"C:\\models\\hand_landmarker.task";
+            runtimeRoot / L"tools" / L"hand_tracking" / L"models" /
+            L"hand_landmarker.task";
 
-        if (!std::filesystem::exists(scriptPath) ||
-            !std::filesystem::exists(modelPath)) {
+        if (!std::filesystem::exists(modelPath)) {
             return;
         }
 
-        std::wstring command = L"py -3.11 \"" + scriptPath.wstring() +
-                               L"\" --model \"" + modelPath.wstring() + L"\"";
+        const std::filesystem::path packagedExe =
+            runtimeRoot / L"tools" / L"hand_tracking" / L"hand_udp_sender" /
+            L"hand_udp_sender.exe";
+        const std::filesystem::path scriptPath =
+            runtimeRoot / L"tools" / L"hand_tracking" / L"hand_udp_sender.py";
+        const std::filesystem::path venvPython =
+            runtimeRoot / L"tools" / L"hand_tracking" / L".venv" / L"Scripts" /
+            L"python.exe";
+
+        std::wstring command;
+        if (std::filesystem::exists(packagedExe)) {
+            command = L"\"" + packagedExe.wstring() + L"\" --model \"" +
+                      modelPath.wstring() + L"\"";
+        } else if (std::filesystem::exists(scriptPath) &&
+                   std::filesystem::exists(venvPython)) {
+            command = L"\"" + venvPython.wstring() + L"\" \"" +
+                      scriptPath.wstring() + L"\" --model \"" +
+                      modelPath.wstring() + L"\"";
+        } else if (std::filesystem::exists(scriptPath)) {
+            command = L"py -3.11 \"" + scriptPath.wstring() + L"\" --model \"" +
+                      modelPath.wstring() + L"\"";
+        } else {
+            return;
+        }
 
         HANDLE jobHandle = CreateJobObjectW(nullptr, nullptr);
         if (jobHandle != nullptr) {
@@ -61,7 +94,7 @@ class HandUdpSenderProcess {
         const BOOL started = CreateProcessW(
             nullptr, command.data(), nullptr, nullptr, FALSE,
             CREATE_NEW_CONSOLE | CREATE_SUSPENDED, nullptr,
-            repoRoot.wstring().c_str(),
+            runtimeRoot.wstring().c_str(),
             &startupInfo, &processInfo);
         if (!started) {
             if (jobHandle != nullptr) {
@@ -101,6 +134,16 @@ class HandUdpSenderProcess {
         return sourcePath.parent_path().parent_path().parent_path();
     }
 
+    static std::filesystem::path ResolveRuntimeRoot() {
+        const std::filesystem::path executableDir = ResolveExecutableDirectory();
+        if (std::filesystem::exists(executableDir / L"tools" /
+                                    L"hand_tracking" /
+                                    L"hand_udp_sender.py")) {
+            return executableDir;
+        }
+        return ResolveRepoRoot();
+    }
+
     void Stop() {
         if (!isRunning_) {
             return;
@@ -132,6 +175,8 @@ class HandUdpSenderProcess {
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
+    SetCurrentDirectoryW(ResolveExecutableDirectory().wstring().c_str());
+
     HandUdpSenderProcess handUdpSenderProcess;
     handUdpSenderProcess.Start();
 

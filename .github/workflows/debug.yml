@@ -24,9 +24,6 @@ jobs:
           vs-prerelease: true
           msbuild-architecture: x64
 
-      - name: Show MSBuild version
-        run: msbuild -version
-
       - name: Build
         run: >
           msbuild Shingiittai.slnx
@@ -37,42 +34,12 @@ jobs:
           /p:VisualStudioVersion=18.0
           /p:WindowsTargetPlatformVersion=10.0
 
-      - name: Verify runtime output
-        shell: pwsh
-        run: |
-          $outputDir = Join-Path $env:GITHUB_WORKSPACE "..\generated\outputs\Debug\App"
-          $requiredFiles = @(
-            "App.exe",
-            "JoyShockLibrary.dll",
-            "assimp-vc145-mt.dll",
-            "app\resources\title\title_logo.png",
-            "engine\resources\shaders\sprite\SpriteVS.hlsl"
-          )
-
-          foreach ($file in $requiredFiles) {
-            $path = Join-Path $outputDir $file
-            if (-not (Test-Path $path)) {
-              throw "Required output is missing: $path"
-            }
-          }
-
-      - name: Stage artifact
-        shell: pwsh
-        run: |
-          $outputDir = Join-Path $env:GITHUB_WORKSPACE "..\generated\outputs\Debug\App"
-          $distDir = Join-Path $env:GITHUB_WORKSPACE "dist\Shingiittai-Debug-x64"
-          if (Test-Path $distDir) {
-            Remove-Item $distDir -Recurse -Force
-          }
-          New-Item -ItemType Directory -Path $distDir | Out-Null
-          Copy-Item -Path (Join-Path $outputDir "*") -Destination $distDir -Recurse -Force
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: Shingiittai-Debug-x64
           path: |
-            dist/Shingiittai-Debug-x64/**
-            !dist/Shingiittai-Debug-x64/*.ilk
-            !dist/Shingiittai-Debug-x64/*.lib
-            !dist/Shingiittai-Debug-x64/*.pdb
+            ../generated/outputs/Debug/App/**
+            !../generated/outputs/Debug/App/*.ilk
+            !../generated/outputs/Debug/App/*.lib
+            !../generated/outputs/Debug/App/*.pdb

@@ -224,16 +224,36 @@
     <None Include="resources\text\weapon_title.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Target Name="BuildHandTrackingHelper"
+          BeforeTargets="CopyRuntimeDlls"
+          Condition="'$(Configuration)' == 'Release'"
+          Inputs="$(SolutionDir)tools\hand_tracking\build-hand-udp-exe.ps1;$(SolutionDir)tools\hand_tracking\hand_udp_sender.py;$(SolutionDir)tools\hand_tracking\requirements-hand-udp.txt;$(SolutionDir)tools\hand_tracking\models\hand_landmarker.task"
+          Outputs="$(SolutionDir)tools\hand_tracking\dist\hand_udp_sender\hand_udp_sender.exe">
+    <Message Text="Building hand tracking helper for Release output." Importance="High" />
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(SolutionDir)tools\hand_tracking\build-hand-udp-exe.ps1&quot;" />
+  </Target>
   <Target Name="CopyRuntimeDlls" AfterTargets="Build">
     <ItemGroup>
       <RuntimeDll Include="$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\JoyShockLibrary.dll" Condition="Exists('$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\JoyShockLibrary.dll')" />
       <RuntimeDll Include="$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" Condition="Exists('$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll')" />
       <AppResource Include="$(ProjectDir)resources\**\*" />
       <EngineResource Include="$(ProjectDir)..\engine\resources\**\*" />
+      <HandTrackingScript Include="$(SolutionDir)tools\hand_tracking\hand_udp_sender.py" />
+      <HandTrackingScript Include="$(SolutionDir)tools\hand_tracking\build-hand-udp-exe.ps1" />
+      <HandTrackingScript Include="$(SolutionDir)tools\hand_tracking\requirements-hand-udp.txt" />
+      <HandTrackingScript Include="$(SolutionDir)tools\hand_tracking\setup-hand-udp.ps1" />
+      <HandTrackingModel Include="$(SolutionDir)tools\hand_tracking\models\**\*" />
+      <HandTrackingExe Include="$(SolutionDir)tools\hand_tracking\dist\hand_udp_sender\**\*" />
+      <StaleRuntimeDir Include="$(TargetDir)resources\app" Condition="Exists('$(TargetDir)resources\app')" />
+      <StaleRuntimeDir Include="$(TargetDir)resources\engine" Condition="Exists('$(TargetDir)resources\engine')" />
     </ItemGroup>
+    <RemoveDir Directories="@(StaleRuntimeDir)" Condition="'@(StaleRuntimeDir)' != ''" />
     <Copy SourceFiles="@(RuntimeDll)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" Condition="'@(RuntimeDll)' != ''" />
     <Copy SourceFiles="@(AppResource)" DestinationFiles="@(AppResource->'$(TargetDir)app\resources\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" Condition="'@(AppResource)' != ''" />
     <Copy SourceFiles="@(EngineResource)" DestinationFiles="@(EngineResource->'$(TargetDir)engine\resources\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" Condition="'@(EngineResource)' != ''" />
+    <Copy SourceFiles="@(HandTrackingScript)" DestinationFolder="$(TargetDir)tools\hand_tracking\" SkipUnchangedFiles="true" Condition="'@(HandTrackingScript)' != ''" />
+    <Copy SourceFiles="@(HandTrackingModel)" DestinationFiles="@(HandTrackingModel->'$(TargetDir)tools\hand_tracking\models\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" Condition="'@(HandTrackingModel)' != ''" />
+    <Copy SourceFiles="@(HandTrackingExe)" DestinationFiles="@(HandTrackingExe->'$(TargetDir)tools\hand_tracking\hand_udp_sender\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" Condition="'@(HandTrackingExe)' != ''" />
   </Target>
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
