@@ -12,16 +12,25 @@ using namespace DirectX;
 namespace {
 constexpr float kHandYawRange = 1.15f;
 constexpr float kHandPitchRange = 0.95f;
-constexpr float kHandSpeedDeadzone = 0.35f;
+constexpr float kHandSpeedDeadzone = 0.34f;
 constexpr float kHandSpeedToSwordSpeed = 2300.0f;
 constexpr float kHandMinConfidence = 0.28f;
-constexpr float kHandNoiseFrameDelta = 0.16f;
-constexpr float kHandPositionFollow = 0.38f;
-constexpr float kHandNoisyPositionFollow = 0.08f;
-constexpr float kHandVelocityFollow = 0.32f;
-constexpr float kHandNoisyVelocityDecay = 0.55f;
-constexpr float kSlashDirMinFrameDelta = 0.0025f;
-constexpr float kSlashDirStartRatio = 0.72f;
+constexpr float kHandNoiseFrameDelta = 0.22f;
+constexpr float kHandPositionFollow = 0.62f;
+constexpr float kHandNoisyPositionFollow = 0.16f;
+constexpr float kHandVelocityFollow = 0.58f;
+constexpr float kHandNoisyVelocityDecay = 0.72f;
+constexpr float kHandPositionLead = 1.35f;
+constexpr float kHandMaxLead = 0.075f;
+constexpr float kSlashDirMinFrameDelta = 0.0055f;
+constexpr float kSlashDirStartRatio = 0.90f;
+constexpr size_t kSlashDirectionMinSamples = 3;
+constexpr float kSlashDirectionMinStability = 0.74f;
+constexpr float kSlashDirectionResetRatio = 0.35f;
+constexpr float kHandRestSpeedMultiplier = 2.2f;
+constexpr float kHandRestSpeedPadding = 0.16f;
+constexpr float kReturnRecoverySeconds = 0.22f;
+constexpr float kReturnRecoveryOppositeDot = -0.62f;
 
 SOCKET ToSocket(uintptr_t value) {
     return static_cast<SOCKET>(value);
@@ -57,7 +66,7 @@ float SwordUdpController::GetRawMotionSpeed(size_t handIndex) const {
     if (hand == nullptr || !IsActive(handIndex)) {
         return 0.0f;
     }
-    return (std::max)(hand->speed, hand->wristSpeed);
+    return hand->speed;
 }
 
 bool SwordUdpController::GetHandCenter(size_t handIndex, float &x,
@@ -78,6 +87,10 @@ void SwordUdpController::SetCalibration(
     for (HandState &hand : hands_) {
         hand.filterReady = false;
         hand.motionSpeed = 0.0f;
+        hand.motionDirectionCount = 0;
+        hand.motionDirectionCursor = 0;
+        hand.directionStability = 0.0f;
+        hand.returnRecoveryTimer = 0.0f;
         hand.state.UpdateSlash(0.0f, 1.0f);
     }
 }
@@ -209,13 +222,17 @@ void SwordUdpController::ApplyHand(size_t handIndex, float dt) {
     if (!IsActive(handIndex)) {
         hand->motionSpeed = 0.0f;
         hand->filterReady = false;
+        hand->motionDirectionCount = 0;
+        hand->motionDirectionCursor = 0;
+        hand->directionStability = 0.0f;
+        hand->returnRecoveryTimer = 0.0f;
         hand->state.UpdateSlash(0.0f, dt);
         return;
     }
 
     const float rawDeltaLength =
         std::sqrt(hand->dx * hand->dx + hand->dy * hand->dy);
-    const float rawSpeed = (std::max)(hand->speed, hand->wristSpeed);
+    const float rawSpeed = hand->speed;
     const bool noisyPacket =
         hand->confidence < kHandMinConfidence ||
         rawDeltaLength > kHandNoiseFrameDelta;
@@ -226,6 +243,10 @@ void SwordUdpController::ApplyHand(size_t handIndex, float dt) {
         hand->filteredDx = 0.0f;
         hand->filteredDy = 0.0f;
         hand->filteredSpeed = 0.0f;
+        hand->motionDirectionCount = 0;
+        hand->motionDirectionCursor = 0;
+        hand->directionStability = 0.0f;
+        hand->returnRecoveryTimer = 0.0f;
         hand->filterReady = true;
     }
 
@@ -251,10 +272,16 @@ void SwordUdpController::ApplyHand(size_t handIndex, float dt) {
         calibration_.hasHandNeutral
             ? calibration_.handNeutral[handIndex]
             : DirectX::XMFLOAT2{0.5f, 0.5f};
+    const float leadX = std::clamp(hand->filteredDx * kHandPositionLead,
+                                   -kHandMaxLead, kHandMaxLead);
+    const float leadY = std::clamp(hand->filteredDy * kHandPositionLead,
+                                   -kHandMaxLead, kHandMaxLead);
+    const float ledX = noisyPacket ? hand->filteredX : hand->filteredX + leadX;
+    const float ledY = noisyPacket ? hand->filteredY : hand->filteredY + leadY;
     const float calibratedX =
-        std::clamp(0.5f + hand->filteredX - neutral.x, 0.0f, 1.0f);
+        std::clamp(0.5f + ledX - neutral.x, 0.0f, 1.0f);
     const float calibratedY =
-        std::clamp(0.5f + hand->filteredY - neutral.y, 0.0f, 1.0f);
+        std::clamp(0.5f + ledY - neutral.y, 0.0f, 1.0f);
 
     const float yaw = (calibratedX - 0.5f) * 2.0f * kHandYawRange;
     const float pitch = (calibratedY - 0.5f) * 2.0f * kHandPitchRange;
@@ -266,22 +293,83 @@ void SwordUdpController::ApplyHand(size_t handIndex, float dt) {
 
     const float filteredDeltaLength = std::sqrt(
         hand->filteredDx * hand->filteredDx + hand->filteredDy * hand->filteredDy);
+    const float calibratedDeadzone =
+        calibration_.hasHandRestSpeed
+            ? calibration_.handRestSpeed[handIndex] * kHandRestSpeedMultiplier +
+                  kHandRestSpeedPadding
+            : kHandSpeedDeadzone;
+    const float speedDeadzone = (std::max)(kHandSpeedDeadzone, calibratedDeadzone);
     const float effectiveSpeed =
-        (std::max)(hand->filteredSpeed - kHandSpeedDeadzone, 0.0f);
+        (std::max)(hand->filteredSpeed - speedDeadzone, 0.0f);
     hand->motionSpeed = effectiveSpeed * kHandSpeedToSwordSpeed;
+
+    if (!noisyPacket && filteredDeltaLength > kSlashDirMinFrameDelta) {
+        const float invLength = 1.0f / filteredDeltaLength;
+        const float currentDirX = hand->filteredDx * invLength;
+        const float currentDirY = hand->filteredDy * invLength;
+        hand->motionDirX[hand->motionDirectionCursor] = currentDirX;
+        hand->motionDirY[hand->motionDirectionCursor] = currentDirY;
+        hand->motionDirectionCursor =
+            (hand->motionDirectionCursor + 1) % kMotionDirectionHistorySize;
+        if (hand->motionDirectionCount < kMotionDirectionHistorySize) {
+            ++hand->motionDirectionCount;
+        }
+
+        float dotTotal = 0.0f;
+        for (size_t i = 0; i < hand->motionDirectionCount; ++i) {
+            dotTotal += currentDirX * hand->motionDirX[i] +
+                        currentDirY * hand->motionDirY[i];
+        }
+        hand->directionStability = std::clamp(
+            dotTotal / static_cast<float>(hand->motionDirectionCount), -1.0f,
+            1.0f);
+    } else if (hand->motionSpeed <
+               SwordControllerState::kSlashThreshold *
+                   kSlashDirectionResetRatio) {
+        hand->motionDirectionCount = 0;
+        hand->motionDirectionCursor = 0;
+        hand->directionStability = 0.0f;
+    }
 
     const bool stableSlashCandidate =
         !noisyPacket && filteredDeltaLength > kSlashDirMinFrameDelta &&
+        hand->motionDirectionCount >= kSlashDirectionMinSamples &&
+        hand->directionStability >= kSlashDirectionMinStability &&
         hand->motionSpeed >
             SwordControllerState::kSlashThreshold * kSlashDirStartRatio;
-    if (stableSlashCandidate && !hand->state.isSlashMode) {
+    float candidateDirX = hand->stableSlashDirX;
+    float candidateDirY = hand->stableSlashDirY;
+    if (filteredDeltaLength > kSlashDirMinFrameDelta) {
         const float invLength = 1.0f / filteredDeltaLength;
-        hand->stableSlashDirX = hand->filteredDx * invLength;
-        hand->stableSlashDirY = hand->filteredDy * invLength;
+        candidateDirX = hand->filteredDx * invLength;
+        candidateDirY = hand->filteredDy * invLength;
+    }
+    const float returnDot = candidateDirX * hand->lastSlashDirX +
+                            candidateDirY * hand->lastSlashDirY;
+    const bool isReturnMotion =
+        hand->returnRecoveryTimer > 0.0f &&
+        returnDot <= kReturnRecoveryOppositeDot;
+    const bool canStartSlash = stableSlashCandidate && !isReturnMotion;
+    if (canStartSlash && !hand->state.isSlashMode) {
+        hand->stableSlashDirX = candidateDirX;
+        hand->stableSlashDirY = candidateDirY;
     }
 
     hand->state.slashDir = {hand->stableSlashDirX, -hand->stableSlashDirY};
-    hand->state.UpdateSlash(hand->motionSpeed, dt);
+    const bool wasSlashing = hand->state.isSlashMode;
+    const float slashMotionSpeed =
+        (hand->state.isSlashMode || canStartSlash) ? hand->motionSpeed : 0.0f;
+    hand->state.UpdateSlash(slashMotionSpeed, dt);
+    if (!wasSlashing && hand->state.isSlashMode) {
+        hand->lastSlashDirX = hand->stableSlashDirX;
+        hand->lastSlashDirY = hand->stableSlashDirY;
+        hand->returnRecoveryTimer = 0.0f;
+    } else if (wasSlashing && !hand->state.isSlashMode) {
+        hand->returnRecoveryTimer = kReturnRecoverySeconds;
+    } else if (hand->returnRecoveryTimer > 0.0f) {
+        hand->returnRecoveryTimer =
+            (std::max)(0.0f, hand->returnRecoveryTimer - dt);
+    }
     (void)hand->confidence;
 }
 

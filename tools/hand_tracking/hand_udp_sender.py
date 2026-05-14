@@ -11,17 +11,211 @@ os.environ.setdefault(
 
 import cv2
 import mediapipe as mp
+import numpy as np
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
 
 PALM_INDICES = (0, 5, 9, 13, 17)
-TRACKING_INDICES = PALM_INDICES
+HAND_ANCHOR_WRIST_WEIGHT = 0.70
+HAND_ANCHOR_BBOX_WEIGHT = 0.30
 DETECTION_GRACE_SECONDS = 0.18
+MAX_TRACKED_STEP_PER_SECOND = 9.0
+MAX_TRACKED_STEP = 0.24
+MIN_TRACKED_STEP = 0.08
+CENTER_FILTER_MIN_CUTOFF = 3.4
+CENTER_FILTER_BETA = 34.0
+POINT_FILTER_MIN_CUTOFF = 3.2
+POINT_FILTER_BETA = 28.0
+FILTER_D_CUTOFF = 1.0
+MOTION_HISTORY_SECONDS = 0.035
+MOTION_HISTORY_MIN_SPEED = 0.16
+KALMAN_PROCESS_NOISE = 0.018
+KALMAN_MEASUREMENT_NOISE = 0.020
+KALMAN_ERROR = 0.08
+DEBUG_TRAIL_SECONDS = 0.45
+DEBUG_TRAIL_MIN_ALPHA = 0.25
+DEBUG_RAW_POINT_COLOR = (0, 220, 255)
+DEBUG_PREDICTED_COLOR = (240, 180, 80)
 
 
 def clamp01(value):
     return max(0.0, min(1.0, value))
+
+
+def one_euro_alpha(cutoff, dt):
+    tau = 1.0 / (2.0 * math.pi * cutoff)
+    return 1.0 / (1.0 + tau / max(dt, 1.0 / 240.0))
+
+
+class OneEuroValueFilter:
+    def __init__(self, min_cutoff, beta, d_cutoff):
+        self.min_cutoff = min_cutoff
+        self.beta = beta
+        self.d_cutoff = d_cutoff
+        self.value = 0.0
+        self.derivative = 0.0
+        self.ready = False
+
+    def reset(self):
+        self.ready = False
+        self.derivative = 0.0
+
+    def apply(self, value, dt):
+        if not self.ready:
+            self.value = value
+            self.derivative = 0.0
+            self.ready = True
+            return value
+
+        raw_derivative = (value - self.value) / max(dt, 1.0 / 240.0)
+        d_alpha = one_euro_alpha(self.d_cutoff, dt)
+        self.derivative = (
+            self.derivative + d_alpha * (raw_derivative - self.derivative)
+        )
+        cutoff = self.min_cutoff + self.beta * abs(self.derivative)
+        alpha = one_euro_alpha(cutoff, dt)
+        self.value = self.value + alpha * (value - self.value)
+        return self.value
+
+
+class PointFilter:
+    def __init__(self, min_cutoff, beta, d_cutoff):
+        self.x = OneEuroValueFilter(min_cutoff, beta, d_cutoff)
+        self.y = OneEuroValueFilter(min_cutoff, beta, d_cutoff)
+
+    def reset(self):
+        self.x.reset()
+        self.y.reset()
+
+    def apply(self, point, dt):
+        return clamp01(self.x.apply(point[0], dt)), clamp01(self.y.apply(point[1], dt))
+
+
+class PointListFilter:
+    def __init__(self, min_cutoff, beta, d_cutoff):
+        self.min_cutoff = min_cutoff
+        self.beta = beta
+        self.d_cutoff = d_cutoff
+        self.filters = []
+
+    def reset(self):
+        for point_filter in self.filters:
+            point_filter.reset()
+
+    def apply(self, points, dt):
+        if len(self.filters) != len(points):
+            self.filters = [
+                PointFilter(self.min_cutoff, self.beta, self.d_cutoff)
+                for _ in points
+            ]
+
+        return [
+            point_filter.apply(point, dt)
+            for point_filter, point in zip(self.filters, points)
+        ]
+
+
+class MotionHistory:
+    def __init__(self, window_seconds):
+        self.window_seconds = window_seconds
+        self.samples = []
+
+    def reset(self):
+        self.samples = []
+
+    def apply(self, dx, dy, speed, dt):
+        self.samples = [
+            (age + dt, sample_dx, sample_dy, sample_speed)
+            for age, sample_dx, sample_dy, sample_speed in self.samples
+            if age + dt <= self.window_seconds
+        ]
+
+        current_length = math.sqrt(dx * dx + dy * dy)
+        if speed >= MOTION_HISTORY_MIN_SPEED or current_length > 0.0015:
+            self.samples.append((0.0, dx, dy, speed))
+
+        if not self.samples:
+            return dx, dy, speed
+
+        weighted_dx = 0.0
+        weighted_dy = 0.0
+        weighted_length = 0.0
+        weighted_speed = 0.0
+        total_weight = 0.0
+        for age, sample_dx, sample_dy, sample_speed in self.samples:
+            recency = max(0.0, 1.0 - age / self.window_seconds)
+            weight = 0.18 + recency * recency
+            weighted_dx += sample_dx * weight
+            weighted_dy += sample_dy * weight
+            weighted_length += math.sqrt(sample_dx * sample_dx + sample_dy * sample_dy) * weight
+            weighted_speed += sample_speed * weight
+            total_weight += weight
+
+        if total_weight <= 0.0:
+            return dx, dy, speed
+
+        avg_dx = weighted_dx / total_weight
+        avg_dy = weighted_dy / total_weight
+        avg_length = weighted_length / total_weight
+        avg_speed = weighted_speed / total_weight
+        direction_length = math.sqrt(avg_dx * avg_dx + avg_dy * avg_dy)
+        if direction_length <= 0.000001:
+            return dx, dy, speed
+
+        target_length = max(current_length, avg_length)
+        return (
+            avg_dx / direction_length * target_length,
+            avg_dy / direction_length * target_length,
+            max(speed, avg_speed),
+        )
+
+
+class CenterKalmanFilter:
+    def __init__(self):
+        self.filter = cv2.KalmanFilter(4, 2)
+        self.filter.measurementMatrix = np.array(
+            [[1, 0, 0, 0], [0, 1, 0, 0]], np.float32
+        )
+        self.filter.processNoiseCov = np.eye(4, dtype=np.float32) * KALMAN_PROCESS_NOISE
+        self.filter.measurementNoiseCov = (
+            np.eye(2, dtype=np.float32) * KALMAN_MEASUREMENT_NOISE
+        )
+        self.filter.errorCovPost = np.eye(4, dtype=np.float32) * KALMAN_ERROR
+        self.ready = False
+
+    def reset(self):
+        self.ready = False
+        self.filter.errorCovPost = np.eye(4, dtype=np.float32) * KALMAN_ERROR
+
+    def configure_transition(self, dt):
+        safe_dt = max(dt, 1.0 / 240.0)
+        self.filter.transitionMatrix = np.array(
+            [[1, 0, safe_dt, 0], [0, 1, 0, safe_dt], [0, 0, 1, 0], [0, 0, 0, 1]],
+            np.float32,
+        )
+
+    def apply(self, point, dt):
+        self.configure_transition(dt)
+        x = np.float32(clamp01(point[0]))
+        y = np.float32(clamp01(point[1]))
+        if not self.ready:
+            self.filter.statePost = np.array([[x], [y], [0], [0]], np.float32)
+            self.ready = True
+            return float(x), float(y)
+
+        self.filter.predict()
+        corrected = self.filter.correct(np.array([[x], [y]], np.float32))
+        return clamp01(float(corrected[0, 0])), clamp01(float(corrected[1, 0]))
+
+    def predict(self, dt):
+        if not self.ready:
+            return None
+
+        self.configure_transition(dt)
+        predicted = self.filter.predict()
+        self.filter.statePost = predicted
+        return clamp01(float(predicted[0, 0])), clamp01(float(predicted[1, 0]))
 
 
 def average_landmark(landmarks, indices):
@@ -30,26 +224,262 @@ def average_landmark(landmarks, indices):
     return clamp01(x), clamp01(y)
 
 
+def stable_palm_center(landmarks):
+    avg_x, avg_y = average_landmark(landmarks, PALM_INDICES)
+    xs = sorted(landmarks[index].x for index in PALM_INDICES)
+    ys = sorted(landmarks[index].y for index in PALM_INDICES)
+    median_x = xs[len(xs) // 2]
+    median_y = ys[len(ys) // 2]
+    return clamp01(avg_x * 0.65 + median_x * 0.35), clamp01(
+        avg_y * 0.65 + median_y * 0.35
+    )
+
+
+def landmark_bbox_center(landmarks):
+    xs = [clamp01(landmark.x) for landmark in landmarks]
+    ys = [clamp01(landmark.y) for landmark in landmarks]
+    return (min(xs) + max(xs)) * 0.5, (min(ys) + max(ys)) * 0.5
+
+
 def copy_landmark_points(landmarks):
     return [(clamp01(landmark.x), clamp01(landmark.y)) for landmark in landmarks]
 
 
-def get_average_motion(points, prev_points, dt):
+def copy_palm_points(landmarks):
+    return [
+        (clamp01(landmarks[index].x), clamp01(landmarks[index].y))
+        for index in PALM_INDICES
+    ]
+
+
+def handedness_score(handedness):
+    if not handedness:
+        return 1.0
+    return clamp01(max(category.score for category in handedness))
+
+
+def distance_sq(a, b):
+    dx = a[0] - b[0]
+    dy = a[1] - b[1]
+    return dx * dx + dy * dy
+
+
+def limit_step(prev_x, prev_y, x, y, max_step):
+    dx = x - prev_x
+    dy = y - prev_y
+    distance = math.sqrt(dx * dx + dy * dy)
+    if distance <= max_step or distance <= 0.000001:
+        return x, y
+
+    scale = max_step / distance
+    return prev_x + dx * scale, prev_y + dy * scale
+
+
+def limit_points_motion(points, prev_points, max_step):
     if prev_points is None:
+        return points
+
+    limited = []
+    for point, prev_point in zip(points, prev_points):
+        limited.append(
+            limit_step(prev_point[0], prev_point[1], point[0], point[1], max_step)
+        )
+    return limited
+
+
+def landmark_point(landmark):
+    return clamp01(landmark.x), clamp01(landmark.y)
+
+
+def midpoint(a, b):
+    return (a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5
+
+
+def blend_points(weighted_points):
+    total_weight = sum(weight for _, weight in weighted_points)
+    if total_weight <= 0.0:
+        return 0.5, 0.5
+
+    x = sum(point[0] * weight for point, weight in weighted_points) / total_weight
+    y = sum(point[1] * weight for point, weight in weighted_points) / total_weight
+    return clamp01(x), clamp01(y)
+
+
+def build_control_center(hand_landmarks):
+    wrist = landmark_point(hand_landmarks[0])
+    bbox_center = landmark_bbox_center(hand_landmarks)
+    return blend_points(
+        (
+            (wrist, HAND_ANCHOR_WRIST_WEIGHT),
+            (bbox_center, HAND_ANCHOR_BBOX_WEIGHT),
+        )
+    )
+
+
+def build_motion_points(hand_landmarks):
+    palm = stable_palm_center(hand_landmarks)
+    wrist = landmark_point(hand_landmarks[0])
+
+    points = [
+        palm,
+        palm,
+        midpoint(palm, wrist),
+        wrist,
+        wrist,
+    ]
+    points.extend([wrist, midpoint(wrist, palm), palm, palm])
+    return points
+
+
+def assign_detected_hands(
+    detected_hands, prev_positions, prev_landmarks, missing_timers, max_hands
+):
+    assigned = [None for _ in range(max_hands)]
+    if not detected_hands:
+        return assigned
+
+    unused_detections = set(range(len(detected_hands)))
+    active_slots = [
+        index
+        for index in range(max_hands)
+        if prev_landmarks[index] is not None
+        and missing_timers[index] <= DETECTION_GRACE_SECONDS * 2.0
+    ]
+    pairs = []
+    for slot in active_slots:
+        for detection_index in unused_detections:
+            hand = detected_hands[detection_index]
+            pairs.append(
+                (
+                    distance_sq(prev_positions[slot], (hand["x"], hand["y"])),
+                    slot,
+                    detection_index,
+                )
+            )
+
+    used_slots = set()
+    for _, slot, detection_index in sorted(pairs):
+        if slot in used_slots or detection_index not in unused_detections:
+            continue
+        assigned[slot] = detected_hands[detection_index]
+        used_slots.add(slot)
+        unused_detections.remove(detection_index)
+
+    empty_slots = [index for index in range(max_hands) if assigned[index] is None]
+    new_hands = sorted(
+        (detected_hands[index] for index in unused_detections),
+        key=lambda hand: hand["x"],
+        reverse=True,
+    )
+    for slot, hand in zip(empty_slots, new_hands):
+        assigned[slot] = hand
+
+    return assigned
+
+
+def get_average_motion(points, prev_points, dt):
+    if points is None or prev_points is None or len(points) != len(prev_points):
         return 0.0, 0.0, 0.0
 
-    dx_total = 0.0
-    dy_total = 0.0
-    speed_total = 0.0
-    for index in TRACKING_INDICES:
-        dx = points[index][0] - prev_points[index][0]
-        dy = points[index][1] - prev_points[index][1]
-        dx_total += dx
-        dy_total += dy
-        speed_total += math.sqrt(dx * dx + dy * dy)
+    deltas = []
+    for point, prev_point in zip(points, prev_points):
+        dx = point[0] - prev_point[0]
+        dy = point[1] - prev_point[1]
+        deltas.append((dx, dy, math.sqrt(dx * dx + dy * dy)))
 
-    count = float(len(TRACKING_INDICES))
-    return dx_total / count, dy_total / count, speed_total / count / dt
+    lengths = sorted(delta[2] for delta in deltas)
+    median_length = lengths[len(lengths) // 2]
+    max_kept_length = max(median_length * 2.4, 0.018)
+    kept = [delta for delta in deltas if delta[2] <= max_kept_length]
+    if len(kept) < max(3, len(deltas) // 2):
+        kept = deltas
+
+    dx_values = sorted(delta[0] for delta in kept)
+    dy_values = sorted(delta[1] for delta in kept)
+    median_dx = dx_values[len(dx_values) // 2]
+    median_dy = dy_values[len(dy_values) // 2]
+    mean_dx = sum(delta[0] for delta in kept) / len(kept)
+    mean_dy = sum(delta[1] for delta in kept) / len(kept)
+
+    dx = mean_dx * 0.45 + median_dx * 0.55
+    dy = mean_dy * 0.45 + median_dy * 0.55
+    speed = sum(delta[2] for delta in kept) / len(kept) / dt
+    return dx, dy, speed
+
+
+def to_pixel(point, width, height):
+    x = int(round(clamp01(point[0]) * (width - 1)))
+    y = int(round(clamp01(point[1]) * (height - 1)))
+    return x, y
+
+
+def blend_color(color, alpha):
+    base = 35
+    return tuple(int(base * (1.0 - alpha) + channel * alpha) for channel in color)
+
+
+def draw_debug_point(frame, point, color, label=None, radius=7, filled=True):
+    height, width = frame.shape[:2]
+    pixel = to_pixel(point, width, height)
+    cv2.circle(frame, pixel, radius, color, -1 if filled else 2, cv2.LINE_AA)
+    cv2.circle(frame, pixel, radius + 2, (20, 20, 20), 1, cv2.LINE_AA)
+    if label:
+        cv2.putText(
+            frame,
+            label,
+            (pixel[0] + 9, pixel[1] - 9),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.42,
+            color,
+            1,
+            cv2.LINE_AA,
+        )
+
+
+def draw_hand_bbox(frame, landmarks, color):
+    height, width = frame.shape[:2]
+    xs = [clamp01(landmark.x) for landmark in landmarks]
+    ys = [clamp01(landmark.y) for landmark in landmarks]
+    left, top = to_pixel((min(xs), min(ys)), width, height)
+    right, bottom = to_pixel((max(xs), max(ys)), width, height)
+    cv2.rectangle(
+        frame,
+        (left, top),
+        (right, bottom),
+        color,
+        2,
+        cv2.LINE_AA,
+    )
+
+
+def update_debug_trail(trail, point, dt):
+    trail[:] = [
+        (age + dt, sample)
+        for age, sample in trail
+        if age + dt <= DEBUG_TRAIL_SECONDS
+    ]
+    trail.insert(0, (0.0, point))
+
+
+def draw_debug_trail(frame, trail, color):
+    if len(trail) < 2:
+        return
+
+    height, width = frame.shape[:2]
+    for index in range(len(trail) - 1):
+        age = max(trail[index][0], trail[index + 1][0])
+        life = max(0.0, 1.0 - age / DEBUG_TRAIL_SECONDS)
+        alpha = DEBUG_TRAIL_MIN_ALPHA + life * (1.0 - DEBUG_TRAIL_MIN_ALPHA)
+        line_color = blend_color(color, alpha)
+        thickness = 1 + int(life * 3.0)
+        cv2.line(
+            frame,
+            to_pixel(trail[index][1], width, height),
+            to_pixel(trail[index + 1][1], width, height),
+            line_color,
+            thickness,
+            cv2.LINE_AA,
+        )
 
 
 def parse_args():
@@ -91,6 +521,19 @@ def main():
     prev_positions = [(0.5, 0.5) for _ in range(max_hands)]
     prev_landmarks = [None for _ in range(max_hands)]
     missing_timers = [DETECTION_GRACE_SECONDS for _ in range(max_hands)]
+    center_filters = [
+        PointFilter(CENTER_FILTER_MIN_CUTOFF, CENTER_FILTER_BETA, FILTER_D_CUTOFF)
+        for _ in range(max_hands)
+    ]
+    center_kalman_filters = [CenterKalmanFilter() for _ in range(max_hands)]
+    point_filters = [
+        PointListFilter(POINT_FILTER_MIN_CUTOFF, POINT_FILTER_BETA, FILTER_D_CUTOFF)
+        for _ in range(max_hands)
+    ]
+    motion_histories = [
+        MotionHistory(MOTION_HISTORY_SECONDS) for _ in range(max_hands)
+    ]
+    center_trails = [[] for _ in range(max_hands)]
     start_time = time.perf_counter()
     prev_time = time.perf_counter()
     last_timestamp_ms = -1
@@ -114,39 +557,74 @@ def main():
 
             detected_hands = []
             if result.hand_landmarks:
-                for hand_landmarks in result.hand_landmarks[:max_hands]:
-                    wrist = hand_landmarks[0]
-                    center_x, center_y = average_landmark(hand_landmarks, PALM_INDICES)
+                for hand_index, hand_landmarks in enumerate(
+                    result.hand_landmarks[:max_hands]
+                ):
+                    center_x, center_y = build_control_center(hand_landmarks)
+                    handedness = (
+                        result.handedness[hand_index]
+                        if result.handedness and hand_index < len(result.handedness)
+                        else None
+                    )
                     detected_hands.append(
                         {
                             "landmarks": hand_landmarks,
-                            "points": copy_landmark_points(hand_landmarks),
+                            "points": build_motion_points(hand_landmarks),
                             "x": center_x,
                             "y": center_y,
-                            "confidence": clamp01(1.0 - abs(hand_landmarks[9].z - wrist.z)),
+                            "confidence": max(0.65, handedness_score(handedness)),
                         }
                     )
 
-            detected_hands.sort(key=lambda hand: hand["x"], reverse=True)
+            assigned_hands = assign_detected_hands(
+                detected_hands, prev_positions, prev_landmarks, missing_timers, max_hands
+            )
 
             speeds = []
             valid_count = 0
             height, width = frame.shape[:2]
             colors = [(30, 240, 90), (80, 180, 255)]
+            debug_rows = []
+
             for hand_index in range(max_hands):
-                detected = hand_index < len(detected_hands)
+                hand = assigned_hands[hand_index]
+                detected = hand is not None
                 prev_x, prev_y = prev_positions[hand_index]
                 x = prev_x
                 y = prev_y
+                raw_x = x
+                raw_y = y
                 confidence = 0.0
                 points = None
+                predicted_only = False
 
                 if detected:
-                    hand = detected_hands[hand_index]
                     x = hand["x"]
                     y = hand["y"]
+                    raw_x = x
+                    raw_y = y
                     confidence = hand["confidence"]
                     points = hand["points"]
+                    draw_hand_bbox(frame, hand["landmarks"], colors[hand_index])
+                    draw_debug_point(
+                        frame,
+                        (raw_x, raw_y),
+                        DEBUG_RAW_POINT_COLOR,
+                        "raw",
+                        radius=4,
+                    )
+                    max_step = max(
+                        MIN_TRACKED_STEP,
+                        min(MAX_TRACKED_STEP, MAX_TRACKED_STEP_PER_SECOND * dt),
+                    )
+                    if prev_landmarks[hand_index] is not None:
+                        x, y = limit_step(prev_x, prev_y, x, y, max_step)
+                        points = limit_points_motion(
+                            points, prev_landmarks[hand_index], max_step
+                        )
+                    x, y = center_kalman_filters[hand_index].apply((x, y), dt)
+                    x, y = center_filters[hand_index].apply((x, y), dt)
+                    points = point_filters[hand_index].apply(points, dt)
                     valid_count += 1
                     missing_timers[hand_index] = 0.0
 
@@ -161,25 +639,64 @@ def main():
                     prev_landmarks[hand_index] is not None
                     and missing_timers[hand_index] <= DETECTION_GRACE_SECONDS
                 )
+                if not detected and valid:
+                    predicted = center_kalman_filters[hand_index].predict(dt)
+                    if predicted is not None:
+                        x, y = predicted
+                        predicted_only = True
 
                 dx = x - prev_x
                 dy = y - prev_y
                 landmark_dx, landmark_dy, landmark_speed = get_average_motion(
                     points, prev_landmarks[hand_index], dt
                 ) if detected else (0.0, 0.0, 0.0)
-                speed = max(math.sqrt(dx * dx + dy * dy) / dt, landmark_speed)
+                if detected:
+                    landmark_dx, landmark_dy, landmark_speed = motion_histories[
+                        hand_index
+                    ].apply(landmark_dx, landmark_dy, landmark_speed, dt)
+                center_speed = math.sqrt(dx * dx + dy * dy) / dt
+                speed = center_speed
                 prev_positions[hand_index] = (x, y)
                 if detected:
                     prev_landmarks[hand_index] = points
                 elif not valid:
                     prev_landmarks[hand_index] = None
-                speeds.append(speed if detected else 0.0)
+                    center_trails[hand_index] = []
+                    center_filters[hand_index].reset()
+                    center_kalman_filters[hand_index].reset()
+                    point_filters[hand_index].reset()
+                    motion_histories[hand_index].reset()
+                speeds.append(speed if valid else 0.0)
+
+                if valid:
+                    update_debug_trail(center_trails[hand_index], (x, y), dt)
+                    draw_debug_trail(frame, center_trails[hand_index], colors[hand_index])
+                    draw_debug_point(
+                        frame,
+                        (x, y),
+                        DEBUG_PREDICTED_COLOR if predicted_only else colors[hand_index],
+                        "send" if detected else "pred",
+                        radius=7,
+                        filled=detected,
+                    )
+                    debug_rows.append(
+                        (
+                            hand_index,
+                            detected,
+                            speed,
+                            confidence,
+                            raw_x,
+                            raw_y,
+                            x,
+                            y,
+                        )
+                    )
 
                 packet = (
                     f"HAND{hand_index + 1} {1 if valid else 0} "
-                    f"{x:.6f} {y:.6f} {landmark_dx:.6f} {landmark_dy:.6f} "
+                    f"{x:.6f} {y:.6f} {dx:.6f} {dy:.6f} "
                     f"{speed:.6f} {confidence:.6f} "
-                    f"0.000000 1.000000 {landmark_speed:.6f}"
+                    f"0.000000 1.000000 {center_speed:.6f}"
                 )
                 sock.sendto(packet.encode("ascii"), target)
 
@@ -196,6 +713,33 @@ def main():
                 2,
                 cv2.LINE_AA,
             )
+            for row_index, row in enumerate(debug_rows):
+                (
+                    hand_index,
+                    detected,
+                    speed,
+                    confidence,
+                    raw_x,
+                    raw_y,
+                    x,
+                    y,
+                ) = row
+                status = "detect" if detected else "predict"
+                cv2.putText(
+                    frame,
+                    (
+                        f"H{hand_index + 1} {status} "
+                        f"raw=({raw_x:.2f},{raw_y:.2f}) "
+                        f"send=({x:.2f},{y:.2f}) "
+                        f"v={speed:.2f} conf={confidence:.2f}"
+                    ),
+                    (12, 56 + row_index * 22),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.48,
+                    colors[hand_index],
+                    1,
+                    cv2.LINE_AA,
+                )
             cv2.imshow("Hand UDP Sender", frame)
             if cv2.waitKey(1) & 0xFF == 27:
                 break

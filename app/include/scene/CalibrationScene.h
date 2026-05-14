@@ -28,6 +28,7 @@ class CalibrationScene : public BaseScene {
 
     Image LoadTextureImage(const std::wstring &path);
     void UpdateJoyConStability(float deltaTime);
+    void UpdateHandRestNoise(bool stable);
     void FinishCalibration();
     bool IsMouseStable() const;
     bool IsHandStable() const;
@@ -51,6 +52,9 @@ class CalibrationScene : public BaseScene {
 
     float sceneTime_ = 0.0f;
     float stableTimer_ = 0.0f;
+    std::array<float, 2> handRestSpeedSum_{};
+    std::array<float, 2> handRestSpeedMax_{};
+    std::array<int, 2> handRestSpeedSamples_{};
     float leftJoyConAngularSpeed_ = 0.0f;
     float rightJoyConAngularSpeed_ = 0.0f;
     DirectX::XMFLOAT4 prevLeftJoyConOrientation_{0, 0, 0, 1};

@@ -85,6 +85,7 @@ void CalibrationScene::Update() {
 
     const bool stable =
         IsMouseStable() && IsHandStable() && IsJoyConStable();
+    UpdateHandRestNoise(stable);
     if (stable) {
         stableTimer_ += ctx_->deltaTime;
     } else {
@@ -145,6 +146,32 @@ void CalibrationScene::UpdateJoyConStability(float deltaTime) {
               prevRightJoyConOrientation_, rightJoyConAngularSpeed_);
 }
 
+void CalibrationScene::UpdateHandRestNoise(bool stable) {
+    if (controlType_ != InputControlType::Hand) {
+        return;
+    }
+
+    if (!stable) {
+        handRestSpeedSum_.fill(0.0f);
+        handRestSpeedMax_.fill(0.0f);
+        handRestSpeedSamples_.fill(0);
+        return;
+    }
+
+    for (size_t i = 0; i < handRestSpeedSum_.size(); ++i) {
+        float x = 0.0f;
+        float y = 0.0f;
+        if (!handController_.GetHandCenter(i, x, y)) {
+            continue;
+        }
+
+        const float speed = handController_.GetRawMotionSpeed(i);
+        handRestSpeedSum_[i] += speed;
+        handRestSpeedMax_[i] = (std::max)(handRestSpeedMax_[i], speed);
+        ++handRestSpeedSamples_[i];
+    }
+}
+
 void CalibrationScene::FinishCalibration() {
     finished_ = true;
     inputCalibration_.controlType = controlType_;
@@ -163,6 +190,20 @@ void CalibrationScene::FinishCalibration() {
         }
     }
     inputCalibration_.hasHandNeutral = hasHandNeutral;
+
+    bool hasHandRestSpeed = false;
+    for (size_t i = 0; i < inputCalibration_.handRestSpeed.size(); ++i) {
+        if (handRestSpeedSamples_[i] <= 0) {
+            continue;
+        }
+
+        const float average =
+            handRestSpeedSum_[i] / static_cast<float>(handRestSpeedSamples_[i]);
+        inputCalibration_.handRestSpeed[i] =
+            (std::max)(average, handRestSpeedMax_[i] * 0.72f);
+        hasHandRestSpeed = true;
+    }
+    inputCalibration_.hasHandRestSpeed = hasHandRestSpeed;
 
     sceneManager_->ChangeScene(std::make_unique<TipScene>(inputCalibration_));
 }

@@ -28,6 +28,7 @@ class SwordUdpController {
     static constexpr uint16_t kPort = 5005;
     static constexpr float kStaleSeconds = 0.25f;
     static constexpr size_t kMaxHands = 2;
+    static constexpr size_t kMotionDirectionHistorySize = 4;
 
     struct HandState {
         SwordControllerState state{};
@@ -52,6 +53,14 @@ class SwordUdpController {
         float filteredSpeed = 0.0f;
         float stableSlashDirX = 1.0f;
         float stableSlashDirY = 0.0f;
+        std::array<float, kMotionDirectionHistorySize> motionDirX{};
+        std::array<float, kMotionDirectionHistorySize> motionDirY{};
+        size_t motionDirectionCount = 0;
+        size_t motionDirectionCursor = 0;
+        float directionStability = 0.0f;
+        float lastSlashDirX = 1.0f;
+        float lastSlashDirY = 0.0f;
+        float returnRecoveryTimer = 0.0f;
     };
 
     bool EnsureSocket();
