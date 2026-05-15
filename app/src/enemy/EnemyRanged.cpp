@@ -27,6 +27,23 @@ void Enemy::UpdateShotByStep(float deltaTime) {
     }
 }
 
+void Enemy::UpdateBladeClashByStep(float deltaTime) {
+    switch (action_.step) {
+    case ActionStep::Charge:
+        UpdateBladeClashCharge(deltaTime);
+        break;
+    case ActionStep::Active:
+        UpdateBladeClashActive(deltaTime);
+        break;
+    case ActionStep::Recovery:
+        UpdateBladeClashRecovery(deltaTime);
+        break;
+    default:
+        EndAttack();
+        break;
+    }
+}
+
 void Enemy::UpdateWaveByStep(float deltaTime) {
     switch (action_.step) {
     case ActionStep::Charge:
@@ -37,6 +54,23 @@ void Enemy::UpdateWaveByStep(float deltaTime) {
         break;
     case ActionStep::Recovery:
         UpdateWaveRecovery(deltaTime);
+        break;
+    default:
+        EndAttack();
+        break;
+    }
+}
+
+void Enemy::UpdateCageByStep(float deltaTime) {
+    switch (action_.step) {
+    case ActionStep::Charge:
+        UpdateCageCharge(deltaTime);
+        break;
+    case ActionStep::Active:
+        UpdateCageFire(deltaTime);
+        break;
+    case ActionStep::Recovery:
+        UpdateCageRecovery(deltaTime);
         break;
     default:
         EndAttack();
@@ -103,6 +137,45 @@ void Enemy::UpdateShotFire(float deltaTime) {
 void Enemy::UpdateShotRecovery(float deltaTime) {
     UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_ * 0.25f);
     if (stateTimer_ >= config_.attacks.shot.recoveryTime + 0.18f) {
+        EndAttack();
+    }
+}
+
+void Enemy::UpdateBladeClashCharge(float deltaTime) {
+    UpdateFacingToPlayerWithSpeed(
+        deltaTime,
+        chargeTurnSpeed_ * ChargeTurnScaleAfterStance(stateTimer_, 0.36f));
+
+    const float dx = playerPos_.x - tf_.position.x;
+    const float dz = playerPos_.z - tf_.position.z;
+    const float distanceSq = dx * dx + dz * dz;
+    if (distanceSq > 2.65f * 2.65f) {
+        const float distance = std::sqrt(distanceSq);
+        const float moveSpeed = phase_ == BossPhase::Phase2 ? 3.55f : 3.18f;
+        tf_.position.x += (dx / distance) * moveSpeed * deltaTime;
+        tf_.position.z += (dz / distance) * moveSpeed * deltaTime;
+        ClampToArena();
+    }
+
+    if (stateTimer_ >= config_.attacks.bladeClash.chargeTime) {
+        LockCurrentFacing();
+        dualCounterStage_ = 0;
+        dualCounterStageResolved_ = false;
+        ChangeActionStep(ActionStep::Active);
+    }
+}
+
+void Enemy::UpdateBladeClashActive(float deltaTime) {
+    (void)deltaTime;
+    isAttackActive_ = IsBladeClashWindow();
+    if (stateTimer_ >= config_.attacks.bladeClash.activeTime) {
+        ChangeActionStep(ActionStep::Recovery);
+    }
+}
+
+void Enemy::UpdateBladeClashRecovery(float deltaTime) {
+    UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_ * 0.25f);
+    if (stateTimer_ >= config_.attacks.bladeClash.recoveryTime + 0.18f) {
         EndAttack();
     }
 }
@@ -207,6 +280,37 @@ void Enemy::UpdateWaveRecovery(float deltaTime) {
     }
 }
 
+void Enemy::UpdateCageCharge(float deltaTime) {
+    UpdateFacingToPlayerWithSpeed(
+        deltaTime,
+        chargeTurnSpeed_ * ChargeTurnScaleAfterStance(stateTimer_, 0.54f));
+
+    if (stateTimer_ >= config_.attacks.cage.chargeTime) {
+        LockCurrentFacing();
+        runtime_.cageTrapSpawned = false;
+        ChangeActionStep(ActionStep::Active);
+    }
+}
+
+void Enemy::UpdateCageFire(float deltaTime) {
+    (void)deltaTime;
+    if (!runtime_.cageTrapSpawned) {
+        SpawnCageTrap();
+        runtime_.cageTrapSpawned = true;
+    }
+
+    if (stateTimer_ >= config_.attacks.cage.activeTime) {
+        ChangeActionStep(ActionStep::Recovery);
+    }
+}
+
+void Enemy::UpdateCageRecovery(float deltaTime) {
+    UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_ * 0.22f);
+    if (stateTimer_ >= config_.attacks.cage.recoveryTime + 0.18f) {
+        EndAttack();
+    }
+}
+
 void Enemy::UpdateNovaCharge(float deltaTime) {
     UpdateFacingToPlayerWithSpeed(
         deltaTime,
@@ -262,12 +366,15 @@ void Enemy::SpawnWave() {
         wave.position.x += forwardX * config_.attacks.wave.spawnForwardOffset;
         wave.position.z += forwardZ * config_.attacks.wave.spawnForwardOffset;
         wave.direction = {forwardX, 0.0f, forwardZ};
+        wave.hitBoxSize = config_.attacks.wave.attack.hitBoxSize;
         wave.speed = config_.attacks.wave.speed;
         if (phase_ == BossPhase::Phase2) {
             wave.speed *= 1.12f;
         }
         wave.traveledDistance = 0.0f;
         wave.maxDistance = config_.attacks.wave.maxDistance;
+        wave.damage = config_.attacks.wave.attack.damage;
+        wave.knockback = config_.attacks.wave.attack.knockback;
         wave.isAlive = true;
 
         waves_.push_back(wave);
@@ -304,13 +411,68 @@ void Enemy::SpawnNovaRing(int ringIndex) {
         wave.position.y = tf_.position.y + config_.attacks.wave.spawnHeightOffset;
         wave.position.z += dirZ * spawnRadius;
         wave.direction = {dirX, 0.0f, dirZ};
+        wave.hitBoxSize = config_.attacks.wave.attack.hitBoxSize;
         wave.speed = config_.attacks.nova.waveSpeed *
                      (1.0f + 0.08f * static_cast<float>(ringIndex));
         wave.traveledDistance = 0.0f;
         wave.maxDistance = config_.attacks.nova.waveMaxDistance;
+        wave.damage = config_.attacks.wave.attack.damage;
+        wave.knockback = config_.attacks.wave.attack.knockback;
         wave.isAlive = true;
         waves_.push_back(wave);
     }
+}
+
+void Enemy::SpawnCageTrap() {
+    EnemyCage cage{};
+    cage.center = playerPos_;
+    cage.center.y = tf_.position.y;
+    cage.radius = config_.attacks.cage.radius;
+    cage.height = config_.attacks.cage.height;
+    cage.lifeTime = config_.attacks.cage.duration;
+    cage.maxLifeTime = config_.attacks.cage.duration;
+    cage.breakValue = config_.attacks.cage.breakValue;
+    cage.maxBreakValue = config_.attacks.cage.breakValue;
+    cage.hitCooldown = 0.0f;
+    cage.barCount = (std::max)(6, config_.attacks.cage.barCount);
+    if (phase_ == BossPhase::Phase2) {
+        cage.radius *= 0.92f;
+        cage.barCount += 4;
+        cage.lifeTime += 0.55f;
+        cage.maxLifeTime = cage.lifeTime;
+        cage.breakValue += 1.0f;
+        cage.maxBreakValue = cage.breakValue;
+    }
+    cage.isActive = true;
+    runtime_.cage = cage;
+}
+
+void Enemy::UpdateCageTrap(float deltaTime) {
+    if (!runtime_.cage.isActive) {
+        return;
+    }
+
+    runtime_.cage.hitCooldown =
+        (std::max)(0.0f, runtime_.cage.hitCooldown - deltaTime);
+    runtime_.cage.lifeTime -= deltaTime;
+    if (runtime_.cage.lifeTime <= 0.0f) {
+        runtime_.cage.lifeTime = 0.0f;
+        runtime_.cage.isActive = false;
+    }
+}
+
+bool Enemy::DamageCage(float amount) {
+    if (!runtime_.cage.isActive || runtime_.cage.hitCooldown > 0.0f) {
+        return false;
+    }
+
+    runtime_.cage.breakValue -= (std::max)(0.0f, amount);
+    runtime_.cage.hitCooldown = 0.18f;
+    if (runtime_.cage.breakValue <= 0.0f) {
+        runtime_.cage.breakValue = 0.0f;
+        runtime_.cage.isActive = false;
+    }
+    return true;
 }
 
 void Enemy::SpawnNovaSkyBullets() {
@@ -425,7 +587,7 @@ void Enemy::ReflectWave(size_t index, const DirectX::XMFLOAT3 &targetPos) {
     dirX /= length;
     dirZ /= length;
     wave.direction = {dirX, 0.0f, dirZ};
-    wave.speed = config_.attacks.wave.speed;
+    wave.speed = (std::max)(wave.speed, config_.attacks.wave.speed);
     wave.traveledDistance = 0.0f;
     wave.isReflected = true;
 }

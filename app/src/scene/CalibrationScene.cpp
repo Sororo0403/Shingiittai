@@ -48,6 +48,11 @@ void CalibrationScene::Initialize(const SceneContext &ctx) {
     stableTimer_ = 0.0f;
     finished_ = false;
 
+    if (controlType_ == InputControlType::Hand &&
+        ctx_->requestHandTrackingStart) {
+        ctx_->requestHandTrackingStart();
+    }
+
     if (controlType_ == InputControlType::JoyCon) {
         leftJoyCon_.Initialize(true);
         rightJoyCon_.Initialize(false);

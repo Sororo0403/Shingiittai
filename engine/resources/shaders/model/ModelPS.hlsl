@@ -51,6 +51,10 @@ float4 main(ModelVSOutput input) : SV_TARGET
     }
 
     float4 finalColor = texColor * color;
+    if (effectParams.z < -0.5f)
+    {
+        finalColor.a = 1.0f;
+    }
 
     float dissolveEdgeRate = 0.0f;
     if (enableDissolve != 0)

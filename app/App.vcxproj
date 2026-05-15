@@ -157,7 +157,6 @@
     <ClInclude Include="include\scene\TipScene.h" />
     <ClInclude Include="include\scene\WeaponSelectScene.h" />
     <ClInclude Include="include\player\Player.h" />
-    <ClInclude Include="include\player\PlayerWeaponType.h" />
     <ClInclude Include="include\player\Sword.h" />
     <ClInclude Include="include\player\SwordJoyConController.h" />
     <ClInclude Include="include\player\SwordMouseController.h" />
@@ -198,7 +197,6 @@
     <None Include="resources\menu\settings_help.png" />
     <None Include="resources\menu\settings_title.png" />
     <None Include="resources\menu\volume.png" />
-    <None Include="resources\text\weapon_bottom_dual.png" />
     <None Include="resources\text\input_hand.png" />
     <None Include="resources\text\input_joycon.png" />
     <None Include="resources\text\input_kbm.png" />
@@ -211,17 +209,8 @@
     <None Include="resources\text\tip_joycon.png" />
     <None Include="resources\text\tip_kbm.png" />
     <None Include="resources\text\tip_title.png" />
-    <None Include="resources\text\weapon_bottom_great.png" />
-    <None Include="resources\text\weapon_bottom_standard.png" />
     <None Include="resources\text\weapon_controls.png" />
-    <None Include="resources\text\weapon_dual.png" />
-    <None Include="resources\text\weapon_dual_desc.png" />
-    <None Include="resources\text\weapon_great.png" />
-    <None Include="resources\text\weapon_great_desc.png" />
     <None Include="resources\text\weapon_ready.png" />
-    <None Include="resources\text\weapon_standard.png" />
-    <None Include="resources\text\weapon_standard_desc.png" />
-    <None Include="resources\text\weapon_title.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <Target Name="BuildHandTrackingHelper"

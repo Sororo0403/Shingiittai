@@ -34,10 +34,8 @@ float SmoothStep(float t) { return t * t * (3.0f - 2.0f * t); }
 } // namespace
 
 BattleResultScene::BattleResultScene(ResultKind resultKind, float clearTime,
-                                     PlayerWeaponType weaponType,
                                      const SwordInputCalibration &inputCalibration)
-    : resultKind_(resultKind), weaponType_(weaponType),
-      inputCalibration_(inputCalibration),
+    : resultKind_(resultKind), inputCalibration_(inputCalibration),
       clearTime_((std::max)(0.0f, clearTime)) {}
 
 void BattleResultScene::Initialize(const SceneContext &ctx) {
@@ -109,7 +107,7 @@ void BattleResultScene::Update() {
          input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_A));
     if (retry) {
         sceneManager_->ChangeScene(std::make_unique<GameScene>(
-            weaponType_, GameScene::RunMode::Play, inputCalibration_));
+            GameScene::RunMode::Play, inputCalibration_));
         return;
     }
 
@@ -141,7 +139,7 @@ void BattleResultScene::UpdateHandResultInput(float deltaTime) {
 
     if (handSwingCount_ >= kRequiredHandSwings) {
         sceneManager_->ChangeScene(std::make_unique<GameScene>(
-            weaponType_, GameScene::RunMode::Play, inputCalibration_));
+            GameScene::RunMode::Play, inputCalibration_));
         return;
     }
 

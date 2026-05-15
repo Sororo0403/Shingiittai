@@ -73,11 +73,27 @@ struct EnemyBullet {
 struct EnemyWave {
     DirectX::XMFLOAT3 position = {0.0f, 0.0f, 0.0f};
     DirectX::XMFLOAT3 direction = {0.0f, 0.0f, 1.0f};
+    DirectX::XMFLOAT3 hitBoxSize = {2.25f, 0.95f, 2.6f};
     float speed = 0.0f;
     float traveledDistance = 0.0f;
     float maxDistance = 0.0f;
+    float damage = 0.0f;
+    float knockback = 0.0f;
     bool isAlive = false;
     bool isReflected = false;
+};
+
+struct EnemyCage {
+    DirectX::XMFLOAT3 center = {0.0f, 0.0f, 0.0f};
+    float radius = 0.0f;
+    float height = 0.0f;
+    float lifeTime = 0.0f;
+    float maxLifeTime = 0.0f;
+    float breakValue = 0.0f;
+    float maxBreakValue = 0.0f;
+    float hitCooldown = 0.0f;
+    int barCount = 0;
+    bool isActive = false;
 };
 
 struct WarpTrailGhost {
@@ -189,6 +205,13 @@ struct EnemyShotConfig {
     float spawnHeightOffset = 0.0f;
 };
 
+struct EnemyBladeClashConfig {
+    AttackParam attack{};
+    float chargeTime = 0.0f;
+    float activeTime = 0.0f;
+    float recoveryTime = 0.0f;
+};
+
 struct EnemyWaveConfig {
     AttackParam attack{};
     float chargeTime = 0.0f;
@@ -197,6 +220,18 @@ struct EnemyWaveConfig {
     float maxDistance = 0.0f;
     float spawnForwardOffset = 0.0f;
     float spawnHeightOffset = 0.0f;
+};
+
+struct EnemyCageConfig {
+    AttackParam attack{};
+    float chargeTime = 0.0f;
+    float activeTime = 0.0f;
+    float recoveryTime = 0.0f;
+    float radius = 0.0f;
+    float duration = 0.0f;
+    float height = 0.0f;
+    float breakValue = 0.0f;
+    int barCount = 0;
 };
 
 struct EnemyNovaConfig {
@@ -232,8 +267,13 @@ struct EnemyAttackSet {
                               0.2f, 0.8f, 0.30f, 0.28f, 0.72f};
     EnemyShotConfig shot = {{7.0f, 3.0f, {1.55f, 1.55f, 1.55f}},
                             0.72f, 0.82f, 0.58f, 3, 3, 6.6f, 3.0f, 0.08f};
+    EnemyBladeClashConfig bladeClash = {
+        {8.0f, 4.0f, {1.75f, 1.60f, 1.95f}}, 0.72f, 0.88f, 0.78f};
     EnemyWaveConfig wave = {{8.0f, 3.0f, {2.25f, 0.95f, 2.6f}},
                             1.76f, 0.92f, 5.2f, 8.0f, 1.5f, 0.0f};
+    EnemyCageConfig cage = {{6.0f, 2.5f, {0.95f, 2.2f, 0.95f}},
+                            1.05f, 0.18f, 0.78f, 1.08f, 3.8f, 1.55f, 3.0f,
+                            8};
     EnemyNovaConfig nova{};
 };
 
@@ -312,6 +352,7 @@ struct EnemyRuntimeState {
     bool isVisible = true;
 
     std::vector<EnemyWave> waves{};
+    EnemyCage cage{};
 
     int farActionIndex = 0;
     int nearActionIndex = 0;
@@ -357,6 +398,7 @@ struct EnemyRuntimeState {
     bool novaSkyBulletsSpawned = false;
     int novaRingsSpawned = 0;
     float novaRingTimer = 0.0f;
+    bool cageTrapSpawned = false;
 
     CounterAdaptMemory counterMemory{};
     float postCounterRhythmTimer = 0.0f;
@@ -386,6 +428,7 @@ class Enemy {
     void Draw(ModelManager *modelManager, const Camera &camera);
     void TakeDamage(float damage);
     void SetPhase2DebugHealth();
+    void ForceDebugBladeClash();
     void ConsumeBullet(size_t index);
     void ConsumeWave(size_t index);
     void NotifyAttackConnected();
@@ -393,6 +436,7 @@ class Enemy {
     void ForcePunishRelease();
     bool NotifyDualCountered();
     void NotifyDualStrikeLanded();
+    void ResolveBladeClash(bool playerWon);
     bool NotifyCountered();
     bool NotifyCountered(float vulnerabilityDuration);
     void FinishCounterRecoil();
@@ -451,6 +495,9 @@ class Enemy {
     bool IsDualCounterAction() const;
     bool IsDualCounterWindow() const;
     bool IsDualCounterHandStage() const;
+    bool IsBladeClashAction() const;
+    bool IsBladeClashWindow() const;
+    void NotifyBladeClashLanded();
 
     float GetDistanceToPlayer() const;
 
@@ -470,6 +517,8 @@ class Enemy {
     bool IsWarpCollisionDisabled() const { return runtime_.warp.collisionDisabled; }
 
     const std::vector<EnemyWave> &GetWaves() const { return runtime_.waves; }
+    const EnemyCage &GetCage() const { return runtime_.cage; }
+    bool DamageCage(float amount);
     void DestroyWave(size_t index);
     void ReflectWave(size_t index, const DirectX::XMFLOAT3 &targetPos);
 
@@ -767,7 +816,9 @@ class Enemy {
     void UpdateSmashByStep(float deltaTime);
     void UpdateSweepByStep(float deltaTime);
     void UpdateShotByStep(float deltaTime);
+    void UpdateBladeClashByStep(float deltaTime);
     void UpdateWaveByStep(float deltaTime);
+    void UpdateCageByStep(float deltaTime);
     void UpdateNovaByStep(float deltaTime);
     void UpdateWarpByStep(float deltaTime);
     void UpdateIdle(float deltaTime);
@@ -803,6 +854,9 @@ class Enemy {
     void UpdateShotCharge(float deltaTime);
     void UpdateShotFire(float deltaTime);
     void UpdateShotRecovery(float deltaTime);
+    void UpdateBladeClashCharge(float deltaTime);
+    void UpdateBladeClashActive(float deltaTime);
+    void UpdateBladeClashRecovery(float deltaTime);
 
     void WarpToShotArenaEdge();
     void SpawnBullet();
@@ -837,9 +891,14 @@ class Enemy {
     void UpdateWaveCharge(float deltaTime);
     void UpdateWaveFire(float deltaTime);
     void UpdateWaveRecovery(float deltaTime);
+    void UpdateCageCharge(float deltaTime);
+    void UpdateCageFire(float deltaTime);
+    void UpdateCageRecovery(float deltaTime);
 
     void SpawnWave();
+    void SpawnCageTrap();
     void UpdateWaves(float deltaTime);
+    void UpdateCageTrap(float deltaTime);
     void UpdateNovaCharge(float deltaTime);
     void UpdateNovaActive(float deltaTime);
     void UpdateNovaRecovery(float deltaTime);

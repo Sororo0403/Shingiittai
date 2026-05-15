@@ -78,8 +78,7 @@ void TipScene::Update() {
 
     if (ShouldStart()) {
         sceneManager_->ChangeScene(std::make_unique<GameScene>(
-            PlayerWeaponType::Dual, GameScene::RunMode::Play,
-            inputCalibration_));
+            GameScene::RunMode::Play, inputCalibration_));
     }
 }
 

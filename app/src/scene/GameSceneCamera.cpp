@@ -249,7 +249,8 @@ void GameScene::UpdateBattleCamera() {
          enemyActionStep == ActionStep::Recovery);
     const bool isEnemyWideAction =
         enemyActionKind == ActionKind::Nova ||
-        enemyActionKind == ActionKind::Wave;
+        enemyActionKind == ActionKind::Wave ||
+        enemyActionKind == ActionKind::Cage;
     const bool isEnemyPhaseTransition = enemy_.IsPhaseTransitionActive();
     const float enemyPhaseTransitionRatio = enemy_.GetPhaseTransitionRatio();
     const float chargeFocus = Clamp01(chargeWeakPointFocusRatio_);
@@ -271,7 +272,10 @@ void GameScene::UpdateBattleCamera() {
         targetFovDeg_ = 76.5f;
     } else if (isEnemyPressureAction) {
         targetFovDeg_ = 71.5f;
-    } else if (enemyActionKind == ActionKind::Shot) {
+    } else if (bladeClashActive_) {
+        targetFovDeg_ = 54.0f;
+    } else if (enemyActionKind == ActionKind::Shot ||
+               enemyActionKind == ActionKind::BladeClash) {
         targetFovDeg_ = 74.5f;
     }
 
@@ -288,7 +292,10 @@ void GameScene::UpdateBattleCamera() {
             targetFovDeg_ = 86.0f;
         } else if (isEnemyPressureAction) {
             targetFovDeg_ = 80.0f;
-        } else if (enemyActionKind == ActionKind::Shot) {
+        } else if (bladeClashActive_) {
+            targetFovDeg_ = 58.0f;
+        } else if (enemyActionKind == ActionKind::Shot ||
+                   enemyActionKind == ActionKind::BladeClash) {
             targetFovDeg_ = 84.0f;
         }
         if (isEnemyWarpStart || isEnemyWarpMove || isEnemyWarpEnd) {
@@ -310,6 +317,122 @@ void GameScene::UpdateBattleCamera() {
     const float fovAlpha = SaturatedAlpha(usedFovLerpSpeed, ctx_->deltaTime);
     currentFovDeg_ += (targetFovDeg_ - currentFovDeg_) * fovAlpha;
     camera_.SetPerspectiveFovDeg(currentFovDeg_ + combatFeedback_.GetFovKickDeg());
+
+    if (bladeClashActive_) {
+        const DirectX::XMFLOAT3 playerPosNow = player_.GetTransform().position;
+        const DirectX::XMFLOAT3 enemyPosNow = enemy_.GetTransform().position;
+        const XMFLOAT2 line = NormalizeXZ(enemyPosNow.x - playerPosNow.x,
+                                          enemyPosNow.z - playerPosNow.z);
+        const XMFLOAT3 right = {line.y, 0.0f, -line.x};
+        const float gaugeProgress = Clamp01((bladeClashGauge_ + 1.0f) * 0.5f);
+        const XMFLOAT3 mid = {
+            bladeClashCenter_.x + line.x * (gaugeProgress - 0.5f) * 0.18f,
+            bladeClashCenter_.y + 0.06f,
+            bladeClashCenter_.z + line.y * (gaugeProgress - 0.5f) * 0.18f};
+        const float push = Clamp01(bladeClashCameraPush_);
+        const float pulse = push * push * (3.0f - 2.0f * push);
+        const float impact = Clamp01(bladeClashImpactPulse_);
+        const float tension = 0.35f + std::abs(bladeClashGauge_) * 0.32f;
+        const float shakePhase = sceneLightTime_ * (34.0f + 18.0f * impact);
+        const float shake = (0.018f + 0.034f * impact) * tension;
+        DirectX::XMFLOAT3 cameraPos = {
+            mid.x + right.x * (3.95f - 0.48f * pulse) -
+                line.x * (0.42f + 0.64f * pulse) +
+                right.x * std::sinf(shakePhase) * shake,
+            mid.y + 0.24f + 0.12f * pulse +
+                std::cosf(shakePhase * 1.31f) * shake * 0.42f,
+            mid.z + right.z * (3.95f - 0.48f * pulse) -
+                line.y * (0.42f + 0.64f * pulse) +
+                right.z * std::sinf(shakePhase) * shake};
+        DirectX::XMFLOAT3 lookAt = {
+            mid.x + line.x * (0.18f + 0.34f * pulse),
+            mid.y - 0.05f + 0.05f * impact,
+            mid.z + line.y * (0.18f + 0.34f * pulse)};
+        cameraYaw_ = std::atan2f(line.x, line.y);
+        combatFeedback_.ApplyCameraImpulse(cameraPos, lookAt, sceneLightTime_);
+        camera_.SetPosition(cameraPos);
+        camera_.LookAt(lookAt);
+        return;
+    }
+
+    if (bladeClashFinishActive_) {
+        const XMFLOAT2 line =
+            bladeClashFinishPlayerWon_
+                ? NormalizeXZ(bladeClashDirection_.x, bladeClashDirection_.z)
+                : NormalizeXZ(enemyPos.x - playerPos.x,
+                              enemyPos.z - playerPos.z);
+        const XMFLOAT3 right = {line.y, 0.0f, -line.x};
+        const float ratio =
+            Clamp01(bladeClashFinishTimer_ / bladeClashFinishDuration_);
+        const float strike = std::sinf(Clamp01(ratio / 0.18f) * kPi);
+        const float hold = 1.0f - Clamp01((ratio - 0.10f) / 0.30f);
+        const XMFLOAT3 center =
+            bladeClashFinishPlayerWon_
+                ? XMFLOAT3{bladeClashFinishCenter_.x,
+                           bladeClashFinishCenter_.y + 0.06f,
+                           bladeClashFinishCenter_.z}
+                : XMFLOAT3{(playerPos.x + enemyPos.x) * 0.5f,
+                           playerPos.y + 1.18f,
+                           (playerPos.z + enemyPos.z) * 0.5f};
+        if (bladeClashFinishPlayerWon_) {
+            const XMFLOAT3 arrival = bladeClashFinishPlayerEnd_;
+            const float arrivalBias = 0.74f + 0.20f * Clamp01(ratio / 0.26f);
+            const XMFLOAT3 finishCenter = {
+                enemyPos.x + (arrival.x - enemyPos.x) * arrivalBias,
+                playerPos.y + 1.18f,
+                enemyPos.z + (arrival.z - enemyPos.z) * arrivalBias};
+            const float shake = (0.055f * strike + 0.014f * hold) * 0.78f;
+            const float phase = sceneLightTime_ * 44.0f;
+            XMFLOAT3 cameraPos = {
+                arrival.x + right.x * 1.55f + line.x * 3.25f +
+                    right.x * std::sinf(phase) * shake,
+                finishCenter.y + 0.42f +
+                    std::cosf(phase * 1.27f) * shake * 0.5f,
+                arrival.z + right.z * 1.55f + line.y * 3.25f +
+                    right.z * std::sinf(phase) * shake};
+            XMFLOAT3 lookAt = {
+                finishCenter.x + right.x * 0.18f - line.x * 0.18f,
+                finishCenter.y + 0.86f,
+                finishCenter.z + right.z * 0.18f - line.y * 0.18f};
+            cameraYaw_ = std::atan2f(line.x, line.y);
+            targetFovDeg_ = 52.0f;
+            currentFovDeg_ += (targetFovDeg_ - currentFovDeg_) *
+                              SaturatedAlpha(7.0f, ctx_->deltaTime);
+            camera_.SetPerspectiveFovDeg(currentFovDeg_ +
+                                         combatFeedback_.GetFovKickDeg());
+            combatFeedback_.ApplyCameraImpulse(cameraPos, lookAt,
+                                               sceneLightTime_);
+            camera_.SetPosition(cameraPos);
+            camera_.LookAt(lookAt);
+            return;
+        }
+        const float sideDistance = bladeClashFinishPlayerWon_ ? 4.25f : 5.35f;
+        const float backDistance = bladeClashFinishPlayerWon_ ? 3.10f : 1.15f;
+        const float heightBoost = bladeClashFinishPlayerWon_ ? 0.92f : 1.10f;
+        const float shake = (0.040f * strike + 0.014f * hold) *
+                            (bladeClashFinishPlayerWon_ ? 0.72f : 0.92f);
+        const float phase = sceneLightTime_ * 44.0f;
+        XMFLOAT3 cameraPos = {
+            center.x + right.x * sideDistance - line.x * backDistance +
+                right.x * std::sinf(phase) * shake,
+            center.y + heightBoost + std::cosf(phase * 1.27f) * shake * 0.5f,
+            center.z + right.z * sideDistance - line.y * backDistance +
+                right.z * std::sinf(phase) * shake};
+        XMFLOAT3 lookAt = {
+            center.x + line.x * (bladeClashFinishPlayerWon_ ? 0.34f : 0.12f),
+            center.y + (bladeClashFinishPlayerWon_ ? 0.02f : 0.04f),
+            center.z + line.y * (bladeClashFinishPlayerWon_ ? 0.34f : 0.12f)};
+        cameraYaw_ = std::atan2f(line.x, line.y);
+        targetFovDeg_ = bladeClashFinishPlayerWon_ ? 57.0f : 70.0f;
+        currentFovDeg_ += (targetFovDeg_ - currentFovDeg_) *
+                          SaturatedAlpha(7.0f, ctx_->deltaTime);
+        camera_.SetPerspectiveFovDeg(currentFovDeg_ +
+                                     combatFeedback_.GetFovKickDeg());
+        combatFeedback_.ApplyCameraImpulse(cameraPos, lookAt, sceneLightTime_);
+        camera_.SetPosition(cameraPos);
+        camera_.LookAt(lookAt);
+        return;
+    }
 
     if (playerViewCamera_) {
         const DirectX::XMFLOAT3 playerEye = {
@@ -498,7 +621,8 @@ void GameScene::UpdateBattleCamera() {
             usedRadius -= 0.45f;
         } else if (isEnemyWideAction) {
             usedRadius += 0.85f;
-        } else if (enemyActionKind == ActionKind::Shot) {
+        } else if (enemyActionKind == ActionKind::Shot ||
+                   enemyActionKind == ActionKind::BladeClash) {
             usedRadius += 0.35f;
         }
         if (isEnemyPhaseTransition) {

@@ -1,6 +1,5 @@
 #pragma once
 #include "BaseScene.h"
-#include "PlayerWeaponType.h"
 #include "SwordInputCalibration.h"
 #include "SwordUdpController.h"
 #include <DirectXMath.h>
@@ -17,7 +16,6 @@ class BattleResultScene : public BaseScene {
     };
 
     BattleResultScene(ResultKind resultKind, float clearTime,
-                      PlayerWeaponType weaponType,
                       const SwordInputCalibration &inputCalibration = {});
 
     void Initialize(const SceneContext &ctx) override;
@@ -55,7 +53,6 @@ class BattleResultScene : public BaseScene {
     static constexpr int kMaxRanking = 5;
 
     ResultKind resultKind_ = ResultKind::GameOver;
-    PlayerWeaponType weaponType_ = PlayerWeaponType::Standard;
     SwordInputCalibration inputCalibration_{};
     SwordUdpController handController_;
     float clearTime_ = 0.0f;

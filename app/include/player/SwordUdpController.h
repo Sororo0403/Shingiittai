@@ -26,7 +26,7 @@ class SwordUdpController {
 
   private:
     static constexpr uint16_t kPort = 5005;
-    static constexpr float kStaleSeconds = 0.25f;
+    static constexpr float kStaleSeconds = 0.45f;
     static constexpr size_t kMaxHands = 2;
     static constexpr size_t kMotionDirectionHistorySize = 4;
 
@@ -61,9 +61,12 @@ class SwordUdpController {
         float lastSlashDirX = 1.0f;
         float lastSlashDirY = 0.0f;
         float returnRecoveryTimer = 0.0f;
+        float lostSlashGraceTimer = 0.0f;
+        float lastActiveMotionSpeed = 0.0f;
     };
 
     bool EnsureSocket();
+    bool HasFreshTracking(size_t handIndex) const;
     void ReceivePackets();
     void ApplyHand(size_t handIndex, float dt);
     void CloseSocket();

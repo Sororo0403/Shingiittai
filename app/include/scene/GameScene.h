@@ -9,7 +9,6 @@
 #include "GPUParticleSystem.h"
 #include "Player.h"
 #include "SwordInputCalibration.h"
-#include "PlayerWeaponType.h"
 #include "Transform.h"
 #include <DirectXMath.h>
 #include <array>
@@ -27,11 +26,9 @@ class GameScene : public BaseScene {
         TitleDemo,
     };
 
-    explicit GameScene(PlayerWeaponType weaponType = PlayerWeaponType::Dual,
-                       RunMode runMode = RunMode::Play,
+    explicit GameScene(RunMode runMode = RunMode::Play,
                        const SwordInputCalibration &inputCalibration = {})
-        : selectedWeaponType_(weaponType), runMode_(runMode),
-          inputCalibration_(inputCalibration) {}
+        : runMode_(runMode), inputCalibration_(inputCalibration) {}
 
     void Initialize(const SceneContext &ctx) override;
     void Update() override;
@@ -47,6 +44,7 @@ class GameScene : public BaseScene {
     void DrawEnemyWeaponTrail();
     void DrawChargeWeakPoint();
     void DrawChargeWeakPointTimeGauge();
+    void DrawBladeClashGauge();
     void DrawVictoryFlash();
     void DrawDefeatFlash();
     void UpdateBattleIntro(float deltaTime);
@@ -73,6 +71,10 @@ class GameScene : public BaseScene {
     PlayerCombatObservation BuildPlayerCombatObservation() const;
     float ComputeGameplayTimeScale() const;
     void UpdateSwordVfx(float deltaTime);
+    void ApplyEnemyCageConstraint();
+    void BeginBladeClash(size_t swordIndex);
+    void UpdateBladeClash(float deltaTime);
+    void ResolveBladeClash(bool playerWon);
 
   private:
     struct EnemyWeaponTrailSample {
@@ -85,7 +87,6 @@ class GameScene : public BaseScene {
         bool active = false;
     };
 
-    PlayerWeaponType selectedWeaponType_ = PlayerWeaponType::Dual;
     RunMode runMode_ = RunMode::Play;
     SwordInputCalibration inputCalibration_{};
 
@@ -104,6 +105,8 @@ class GameScene : public BaseScene {
     SwordTrailRenderer swordTrailRenderer_;
     SwordSlashArcRenderer swordSlashArcRenderer_;
     std::array<bool, Player::kSwordCount> prevSwordSlashStates_{};
+    std::array<bool, Player::kSwordCount> cageSlashPreviousStates_{};
+    std::array<bool, Player::kSwordCount> bladeClashPreviousSlashStates_{};
     uint32_t particleTextureId_ = 0;
     uint32_t playerModelId_ = 0;
     uint32_t enemyModelId_ = 0;
@@ -243,6 +246,30 @@ class GameScene : public BaseScene {
     float counterCameraShakeX_ = 0.035f;
     float counterCameraShakeY_ = 0.020f;
     float counterCameraShakeFrequency_ = 18.0f;
+    bool bladeClashActive_ = false;
+    float bladeClashGauge_ = 0.0f;
+    float bladeClashTimer_ = 0.0f;
+    float bladeClashDuration_ = 4.8f;
+    float bladeClashEnemyPushSpeed_ = 0.29f;
+    float bladeClashSlashPush_ = 0.22f;
+    DirectX::XMFLOAT3 bladeClashPlayerLosePos_ = {0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT3 bladeClashPlayerWinPos_ = {0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT3 bladeClashPlayerFixedPos_ = {0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT3 bladeClashCenter_ = {0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT3 bladeClashDirection_ = {0.0f, 0.0f, 1.0f};
+    float bladeClashCameraPush_ = 0.0f;
+    float bladeClashImpactPulse_ = 0.0f;
+    float bladeClashEnemySurgeTimer_ = 0.0f;
+    float bladeClashChainTimer_ = 0.0f;
+    int bladeClashSlashChain_ = 0;
+    bool bladeClashFinishActive_ = false;
+    bool bladeClashFinishPlayerWon_ = false;
+    bool bladeClashFinishImpactEmitted_ = false;
+    float bladeClashFinishTimer_ = 0.0f;
+    float bladeClashFinishDuration_ = 1.65f;
+    DirectX::XMFLOAT3 bladeClashFinishCenter_ = {0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT3 bladeClashFinishPlayerStart_ = {0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT3 bladeClashFinishPlayerEnd_ = {0.0f, 0.0f, 0.0f};
 
     float damageMultiplier_ = 2.0f;
     bool showCollisionDebug_ = false;

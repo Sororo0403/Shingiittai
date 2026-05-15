@@ -15,7 +15,7 @@ constexpr float kHandPitchRange = 0.95f;
 constexpr float kHandSpeedDeadzone = 0.34f;
 constexpr float kHandSpeedToSwordSpeed = 2300.0f;
 constexpr float kHandMinConfidence = 0.28f;
-constexpr float kHandNoiseFrameDelta = 0.22f;
+constexpr float kHandNoiseFrameDelta = 0.32f;
 constexpr float kHandPositionFollow = 0.62f;
 constexpr float kHandNoisyPositionFollow = 0.16f;
 constexpr float kHandVelocityFollow = 0.58f;
@@ -31,6 +31,8 @@ constexpr float kHandRestSpeedMultiplier = 2.2f;
 constexpr float kHandRestSpeedPadding = 0.16f;
 constexpr float kReturnRecoverySeconds = 0.22f;
 constexpr float kReturnRecoveryOppositeDot = -0.62f;
+constexpr float kLostSlashGraceSeconds = 0.16f;
+constexpr float kLostSlashSpeedDecay = 0.82f;
 
 SOCKET ToSocket(uintptr_t value) {
     return static_cast<SOCKET>(value);
@@ -47,8 +49,9 @@ SwordUdpController::~SwordUdpController() {
 
 bool SwordUdpController::IsActive(size_t handIndex) const {
     const HandState *hand = GetHand(handIndex);
-    return hand != nullptr && hand->hasPacket &&
-           hand->staleTimer < kStaleSeconds && hand->valid != 0;
+    return HasFreshTracking(handIndex) ||
+           (hand != nullptr && hand->lostSlashGraceTimer > 0.0f &&
+            hand->state.isSlashMode);
 }
 
 SwordPose SwordUdpController::GetPose(size_t handIndex) const {
@@ -91,6 +94,8 @@ void SwordUdpController::SetCalibration(
         hand.motionDirectionCursor = 0;
         hand.directionStability = 0.0f;
         hand.returnRecoveryTimer = 0.0f;
+        hand.lostSlashGraceTimer = 0.0f;
+        hand.lastActiveMotionSpeed = 0.0f;
         hand.state.UpdateSlash(0.0f, 1.0f);
     }
 }
@@ -145,6 +150,12 @@ bool SwordUdpController::EnsureSocket() {
     socket_ = static_cast<uintptr_t>(udpSocket);
     socketReady_ = true;
     return true;
+}
+
+bool SwordUdpController::HasFreshTracking(size_t handIndex) const {
+    const HandState *hand = GetHand(handIndex);
+    return hand != nullptr && hand->hasPacket &&
+           hand->staleTimer < kStaleSeconds && hand->valid != 0;
 }
 
 void SwordUdpController::ReceivePackets() {
@@ -219,13 +230,26 @@ void SwordUdpController::ApplyHand(size_t handIndex, float dt) {
     hand->state.isCounter = false;
     hand->state.counterTimer = SwordControllerState::kCounterFrames;
 
-    if (!IsActive(handIndex)) {
+    if (!HasFreshTracking(handIndex)) {
+        if (hand->lostSlashGraceTimer > 0.0f && hand->state.isSlashMode) {
+            hand->lostSlashGraceTimer =
+                (std::max)(0.0f, hand->lostSlashGraceTimer - dt);
+            hand->lastActiveMotionSpeed *= kLostSlashSpeedDecay;
+            hand->motionSpeed = (std::max)(
+                hand->lastActiveMotionSpeed,
+                SwordControllerState::kSlashThreshold * 0.55f);
+            hand->state.UpdateSlash(hand->motionSpeed, dt);
+            return;
+        }
+
         hand->motionSpeed = 0.0f;
         hand->filterReady = false;
         hand->motionDirectionCount = 0;
         hand->motionDirectionCursor = 0;
         hand->directionStability = 0.0f;
         hand->returnRecoveryTimer = 0.0f;
+        hand->lostSlashGraceTimer = 0.0f;
+        hand->lastActiveMotionSpeed = 0.0f;
         hand->state.UpdateSlash(0.0f, dt);
         return;
     }
@@ -369,6 +393,13 @@ void SwordUdpController::ApplyHand(size_t handIndex, float dt) {
     } else if (hand->returnRecoveryTimer > 0.0f) {
         hand->returnRecoveryTimer =
             (std::max)(0.0f, hand->returnRecoveryTimer - dt);
+    }
+    if (hand->state.isSlashMode) {
+        hand->lostSlashGraceTimer = kLostSlashGraceSeconds;
+        hand->lastActiveMotionSpeed = hand->motionSpeed;
+    } else {
+        hand->lostSlashGraceTimer = 0.0f;
+        hand->lastActiveMotionSpeed = 0.0f;
     }
     (void)hand->confidence;
 }

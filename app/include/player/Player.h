@@ -1,7 +1,6 @@
 #pragma once
 #include "Camera.h"
 #include "JoyCon.h"
-#include "PlayerWeaponType.h"
 #include "Sword.h"
 #include "SwordControllerState.h"
 #include "SwordInputCalibration.h"
@@ -32,8 +31,7 @@ class Player {
   public:
     static constexpr size_t kSwordCount = 2;
 
-    void Initialize(uint32_t playerModelId, uint32_t swordModelId,
-                    PlayerWeaponType weaponType = PlayerWeaponType::Standard);
+    void Initialize(uint32_t playerModelId, uint32_t swordModelId);
     void SetInputCalibration(const SwordInputCalibration &calibration);
 
     void Update(Input *input, float deltaTime,
@@ -43,7 +41,7 @@ class Player {
     void UpdateJoyConCalibrationInput(Input *input, float deltaTime);
 
     void Draw(ModelManager *modelManager, const Camera &camera,
-              bool drawBody = true);
+              bool drawBody = true, bool forceOpaque = false);
 
     const Sword &GetSword() const { return rightSword_; }
     const Sword &GetLeftSword() const { return leftSword_; }
@@ -67,9 +65,17 @@ class Player {
     float GetGuardDamageMultiplier() const;
     float GetCounterDamageMultiplier() const;
     float GetCounterVulnerabilityDuration() const;
-    float GetGreatSwordChargeRatio() const { return greatSwordCharge_; }
-    PlayerWeaponType GetWeaponType() const { return weaponType_; }
     const Transform &GetTransform() const { return tf_; }
+    void SetPosition(const DirectX::XMFLOAT3 &position) { tf_.position = position; }
+    void LockPosition(const DirectX::XMFLOAT3 &position) {
+        tf_.position = position;
+        velocity_ = {0.0f, 0.0f, 0.0f};
+        knockbackVelocity_ = {0.0f, 0.0f, 0.0f};
+        dodgeTimer_ = 0.0f;
+    }
+    void SetYaw(float yaw);
+    void SetCinematicBladeClashPose(const DirectX::XMFLOAT3 &position,
+                                    float yaw, float pushRatio);
     bool IsDodging() const { return dodgeTimer_ > 0.0f; }
     bool IsDamageInvulnerable() const { return dodgeInvulnerableTimer_ > 0.0f; }
     bool IsAttackRecovery() const {
@@ -112,6 +118,10 @@ class Player {
     void NotifyCounterSuccess();
     void NotifyCounterSuccess(size_t swordIndex);
     void SetDefeatPoseRatio(float ratio) { defeatPoseRatio_ = ratio; }
+    void SetBladeClashPose(bool active, float pushRatio = 0.5f) {
+        bladeClashPoseActive_ = active;
+        bladeClashPosePushRatio_ = pushRatio;
+    }
     bool UsesGamepadCameraLook() const {
         return gamepadControlMode_ == PlayerGamepadControlMode::Hunter;
     }
@@ -169,7 +179,6 @@ class Player {
     float GetHitConfirmRecoveryDuration() const;
     float GetSlashRecoveryRatio(float timer) const;
     float GetAttackRecoveryRatio() const;
-    float ComputeGreatSwordAttackDamage(float chargeRatio) const;
     float ComputeJoyConSwingDamageMultiplier(float angularVelocity) const;
     float GetSwingComboDamageMultiplier() const;
     void UpdateSwingCombo(float deltaTime);
@@ -184,7 +193,6 @@ class Player {
 
     Transform tf_;
     uint32_t modelId_ = 0;
-    PlayerWeaponType weaponType_ = PlayerWeaponType::Standard;
 
     DirectX::XMFLOAT3 size_ = {0.5f, 1.0f, 0.5f};
 
@@ -246,14 +254,9 @@ class Player {
     int swingComboCount_ = 0;
     float swingComboTimer_ = 0.0f;
 
-    float greatSwordCharge_ = 0.0f;
-    float greatSwordSwingTimer_ = 0.0f;
-    float greatSwordSwingDamage_ = 18.0f;
-    bool greatSwordFullChargeCounterReady_ = false;
     float defeatPoseRatio_ = 0.0f;
-    static constexpr float kGreatSwordMinSwingCharge = 0.32f;
-    static constexpr float kGreatSwordChargeRate = 0.55f;
-    static constexpr float kGreatSwordSwingDuration = 0.32f;
+    bool bladeClashPoseActive_ = false;
+    float bladeClashPosePushRatio_ = 0.5f;
 
     bool dualNextManualLeft_ = true;
 

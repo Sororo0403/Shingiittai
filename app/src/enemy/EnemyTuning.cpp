@@ -65,8 +65,14 @@ float Enemy::GetReleaseAnticipationRatio() const {
         case ActionKind::Shot:
             releaseTime = config_.attacks.shot.chargeTime;
             break;
+        case ActionKind::BladeClash:
+            releaseTime = config_.attacks.bladeClash.chargeTime;
+            break;
         case ActionKind::Wave:
             releaseTime = config_.attacks.wave.chargeTime;
+            break;
+        case ActionKind::Cage:
+            releaseTime = config_.attacks.cage.chargeTime;
             break;
         case ActionKind::Nova:
             releaseTime = config_.attacks.nova.chargeTime;
@@ -132,8 +138,12 @@ ActionId Enemy::MakeDefaultActionId(ActionKind kind) const {
         return ActionId::Sweep;
     case ActionKind::Shot:
         return ActionId::Shot;
+    case ActionKind::BladeClash:
+        return ActionId::BladeClash;
     case ActionKind::Wave:
         return ActionId::Wave;
+    case ActionKind::Cage:
+        return ActionId::Cage;
     case ActionKind::Nova:
         return ActionId::Nova;
     case ActionKind::Warp:

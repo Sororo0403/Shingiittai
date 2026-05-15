@@ -207,9 +207,6 @@
     <ClInclude Include="include\player\Player.h">
       <Filter>Header Files\player</Filter>
     </ClInclude>
-    <ClInclude Include="include\player\PlayerWeaponType.h">
-      <Filter>Header Files\player</Filter>
-    </ClInclude>
     <ClInclude Include="include\player\Sword.h">
       <Filter>Header Files\player</Filter>
     </ClInclude>
@@ -300,9 +297,6 @@
     <None Include="resources\menu\volume.png">
       <Filter>Resources\Menu</Filter>
     </None>
-    <None Include="resources\text\weapon_bottom_dual.png">
-      <Filter>Resources\Text</Filter>
-    </None>
     <None Include="resources\text\input_hand.png">
       <Filter>Resources\Text</Filter>
     </None>
@@ -339,37 +333,10 @@
     <None Include="resources\text\tip_title.png">
       <Filter>Resources\Text</Filter>
     </None>
-    <None Include="resources\text\weapon_bottom_great.png">
-      <Filter>Resources\Text</Filter>
-    </None>
-    <None Include="resources\text\weapon_bottom_standard.png">
-      <Filter>Resources\Text</Filter>
-    </None>
     <None Include="resources\text\weapon_controls.png">
       <Filter>Resources\Text</Filter>
     </None>
-    <None Include="resources\text\weapon_dual.png">
-      <Filter>Resources\Text</Filter>
-    </None>
-    <None Include="resources\text\weapon_dual_desc.png">
-      <Filter>Resources\Text</Filter>
-    </None>
-    <None Include="resources\text\weapon_great.png">
-      <Filter>Resources\Text</Filter>
-    </None>
-    <None Include="resources\text\weapon_great_desc.png">
-      <Filter>Resources\Text</Filter>
-    </None>
     <None Include="resources\text\weapon_ready.png">
-      <Filter>Resources\Text</Filter>
-    </None>
-    <None Include="resources\text\weapon_standard.png">
-      <Filter>Resources\Text</Filter>
-    </None>
-    <None Include="resources\text\weapon_standard_desc.png">
-      <Filter>Resources\Text</Filter>
-    </None>
-    <None Include="resources\text\weapon_title.png">
       <Filter>Resources\Text</Filter>
     </None>
   </ItemGroup>

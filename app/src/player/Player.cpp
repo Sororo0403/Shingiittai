@@ -11,10 +11,8 @@ namespace {
 constexpr float kPlayerVisualScaleMultiplier = 1.45f;
 }
 
-void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId,
-                        PlayerWeaponType weaponType) {
+void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
     modelId_ = playerModelId;
-    weaponType_ = weaponType;
 
     tf_.position = {0, 0, 0};
     tf_.scale = {1, 1, 1};
@@ -42,11 +40,9 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId,
     damageTakenScale_ = 3.34f;
     swingComboCount_ = 0;
     swingComboTimer_ = 0.0f;
-    greatSwordCharge_ = 0.0f;
-    greatSwordSwingTimer_ = 0.0f;
-    greatSwordSwingDamage_ = 18.0f;
-    greatSwordFullChargeCounterReady_ = false;
     defeatPoseRatio_ = 0.0f;
+    bladeClashPoseActive_ = false;
+    bladeClashPosePushRatio_ = 0.5f;
     dualNextManualLeft_ = true;
     gamepadControlMode_ = PlayerGamepadControlMode::Hunter;
     gamepadSwordState_ = {};
@@ -116,8 +112,7 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
         leftSwordJoyConController_.Update(&leftJoyCon_, inputDeltaTime,
                                           leftSword_.GetTransform());
         leftPose = leftSwordJoyConController_.GetPose();
-    } else if (useUdpSword && weaponType_ == PlayerWeaponType::Dual &&
-               swordUdpController_.IsActive(1)) {
+    } else if (useUdpSword && swordUdpController_.IsActive(1)) {
         leftPose = swordUdpController_.GetPose(1);
     } else if (useKeyboardMouse) {
         leftPose = UpdateKeyboardLeftSword(input, inputDeltaTime);
@@ -148,6 +143,33 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
                       useHunterGamepadControls,
                       useUdpSword || useKeyboardMouse,
                       deltaTime);
+
+    if (bladeClashPoseActive_) {
+        const float push = std::clamp(bladeClashPosePushRatio_, 0.0f, 1.0f);
+        const float leanPitch = -0.11f - 0.15f * push;
+        auto makeClashOrientation = [&](bool isLeft) {
+            const float inwardYaw = isLeft ? 0.28f + 0.10f * push
+                                           : -0.28f - 0.10f * push;
+            const float roll = isLeft ? -0.22f : 0.22f;
+            XMVECTOR qPitch =
+                XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), leanPitch);
+            XMVECTOR qYaw =
+                XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), inwardYaw);
+            XMVECTOR qRoll =
+                XMQuaternionRotationAxis(XMVectorSet(0, 0, 1, 0), roll);
+            DirectX::XMFLOAT4 result{};
+            XMStoreFloat4(&result, XMQuaternionNormalize(XMQuaternionMultiply(
+                                       XMQuaternionMultiply(qPitch, qYaw),
+                                       qRoll)));
+            return result;
+        };
+        leftPose.orientation = makeClashOrientation(true);
+        rightPose.orientation = makeClashOrientation(false);
+        leftPose.isGuard = false;
+        rightPose.isGuard = false;
+        leftPose.isCounter = false;
+        rightPose.isCounter = false;
+    }
 
     if (postSlashRecoveryTimer_ > 0.0f) {
         postSlashRecoveryTimer_ -= deltaTime;
@@ -219,7 +241,7 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
 
     leftSwordSlashDir_ = leftPose.slashDir;
     rightSwordSlashDir_ = rightPose.slashDir;
-    leftSwordVisible_ = weaponType_ == PlayerWeaponType::Dual;
+    leftSwordVisible_ = true;
     rightSwordVisible_ = true;
     isGuarding_ = false;
     if (IsAttackRecovery()) {
@@ -266,7 +288,7 @@ void Player::UpdateJoyConCalibrationInput(Input *input, float deltaTime) {
 }
 
 void Player::Draw(ModelManager *modelManager, const Camera &camera,
-                  bool drawBody) {
+                  bool drawBody, bool forceOpaque) {
     const bool isInPostSlashRecovery = postSlashRecoveryTimer_ > 0.0f;
     const float attackRecoveryRatio = GetAttackRecoveryRatio();
     const bool isAttackRecovery = attackRecoveryRatio > 0.0f;
@@ -327,7 +349,30 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
     }
 
     if (drawBody) {
-        if (isAttackRecovery) {
+        if (forceOpaque) {
+            Transform glowVisual = playerVisual;
+            glowVisual.scale.x *= 1.055f;
+            glowVisual.scale.y *= 1.045f;
+            glowVisual.scale.z *= 1.055f;
+
+            ModelDrawEffect glowEffect{};
+            glowEffect.enabled = true;
+            glowEffect.additiveBlend = true;
+            glowEffect.disableCulling = true;
+            glowEffect.forceOpaqueMaterial = true;
+            glowEffect.color = {1.0f, 0.78f, 0.28f, 0.72f};
+            glowEffect.intensity = 1.18f;
+            glowEffect.fresnelPower = 0.95f;
+            glowEffect.time = recoveryVulnerableFlashTimer_;
+            modelManager->SetDrawEffect(glowEffect);
+            modelManager->Draw(modelId_, glowVisual, camera);
+        }
+        if (forceOpaque) {
+            ModelDrawEffect opaqueEffect{};
+            opaqueEffect.forceOpaqueMaterial = true;
+            modelManager->SetDrawEffect(opaqueEffect);
+        }
+        if (isAttackRecovery && !forceOpaque) {
             ModelDrawEffect recoveryEffect{};
             recoveryEffect.enabled = true;
             recoveryEffect.additiveBlend = false;
@@ -340,14 +385,21 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
             modelManager->SetDrawEffect(recoveryEffect);
         }
         modelManager->Draw(modelId_, playerVisual, camera);
-        if (isAttackRecovery) {
+        if (isAttackRecovery && !forceOpaque) {
             modelManager->ClearDrawEffect();
         }
     }
-    modelManager->ClearDrawEffect();
+    if (!forceOpaque) {
+        modelManager->ClearDrawEffect();
+    }
 
     auto drawSwordWithRecovery = [&](Sword &sword, float recoveryRatio) {
-        if (recoveryRatio > 0.0f) {
+        if (forceOpaque) {
+            ModelDrawEffect opaqueEffect{};
+            opaqueEffect.forceOpaqueMaterial = true;
+            modelManager->SetDrawEffect(opaqueEffect);
+        }
+        if (recoveryRatio > 0.0f && !forceOpaque) {
             ModelDrawEffect recoveryEffect{};
             recoveryEffect.enabled = true;
             recoveryEffect.additiveBlend = true;
@@ -360,7 +412,7 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
             modelManager->SetDrawEffect(recoveryEffect);
         }
         sword.Draw(modelManager, camera);
-        if (recoveryRatio > 0.0f) {
+        if (recoveryRatio > 0.0f && !forceOpaque) {
             modelManager->ClearDrawEffect();
         }
     };
@@ -397,6 +449,52 @@ void Player::LookAt(const XMFLOAT3 &target) {
 
     XMVECTOR q = XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), yaw_);
     XMStoreFloat4(&tf_.rotation, q);
+}
+
+void Player::SetYaw(float yaw) {
+    yaw_ = yaw;
+    XMVECTOR q = XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), yaw_);
+    XMStoreFloat4(&tf_.rotation, q);
+}
+
+void Player::SetCinematicBladeClashPose(const XMFLOAT3 &position, float yaw,
+                                        float pushRatio) {
+    LockPosition(position);
+    SetYaw(yaw);
+
+    bladeClashPoseActive_ = true;
+    bladeClashPosePushRatio_ = std::clamp(pushRatio, 0.0f, 1.0f);
+
+    const float push = bladeClashPosePushRatio_;
+    const float leanPitch = -0.11f - 0.15f * push;
+    auto makeClashPose = [&](bool isLeft) {
+        SwordPose pose = MakeIdleSwordPose(isLeft);
+        const float inwardYaw = isLeft ? 0.28f + 0.10f * push
+                                       : -0.28f - 0.10f * push;
+        const float roll = isLeft ? -0.22f : 0.22f;
+        XMVECTOR qPitch =
+            XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), leanPitch);
+        XMVECTOR qYaw =
+            XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), inwardYaw);
+        XMVECTOR qRoll =
+            XMQuaternionRotationAxis(XMVectorSet(0, 0, 1, 0), roll);
+        XMStoreFloat4(&pose.orientation,
+                      XMQuaternionNormalize(XMQuaternionMultiply(
+                          XMQuaternionMultiply(qPitch, qYaw), qRoll)));
+        pose.isGuard = false;
+        pose.isCounter = false;
+        pose.isSlashMode = false;
+        return pose;
+    };
+
+    SwordPose leftPose = makeClashPose(true);
+    SwordPose rightPose = makeClashPose(false);
+    leftSword_.Update(BuildSwordTransform(leftPose, true), leftPose, 0.0f);
+    rightSword_.Update(BuildSwordTransform(rightPose, false), rightPose, 0.0f);
+    leftSwordVisible_ = true;
+    rightSwordVisible_ = true;
+    leftSwordSlashMode_ = false;
+    rightSwordSlashMode_ = false;
 }
 
 void Player::KeepDistanceFromTarget(const DirectX::XMFLOAT3 &target) {
@@ -627,10 +725,10 @@ void Player::UpdateMovement(Input *input, float deltaTime, float cameraYaw,
 
     float speedScale = 1.0f;
     if (IsHunterGamepadAttacking()) {
-        speedScale = weaponType_ == PlayerWeaponType::GreatSword ? 0.18f : 0.35f;
+        speedScale = 0.35f;
     }
     if (IsAttackRecovery()) {
-        speedScale *= weaponType_ == PlayerWeaponType::GreatSword ? 0.24f : 0.38f;
+        speedScale *= 0.38f;
     }
 
     if (dodgeTimer_ > 0.0f) {
@@ -776,40 +874,14 @@ bool Player::IsGuarding() const {
 }
 
 float Player::GetGuardDamageMultiplier() const {
-    switch (weaponType_) {
-    case PlayerWeaponType::Dual:
-        return 1.0f;
-    case PlayerWeaponType::GreatSword:
-        return std::clamp(0.80f - greatSwordCharge_ * 0.45f, 0.35f, 0.80f);
-    case PlayerWeaponType::Standard:
-    default:
-        return 0.25f;
-    }
+    return 1.0f;
 }
 
 float Player::GetCounterDamageMultiplier() const {
-    float multiplier = 10.5f;
-    switch (weaponType_) {
-    case PlayerWeaponType::Dual:
-        multiplier = 9.0f;
-        break;
-    case PlayerWeaponType::GreatSword:
-        multiplier = greatSwordFullChargeCounterReady_ ? 16.0f : 12.0f;
-        break;
-    case PlayerWeaponType::Standard:
-    default:
-        multiplier = 10.5f;
-        break;
-    }
-
-    return multiplier;
+    return 9.0f;
 }
 
 float Player::GetCounterVulnerabilityDuration() const {
-    if (weaponType_ == PlayerWeaponType::GreatSword &&
-        greatSwordFullChargeCounterReady_) {
-        return 1.65f;
-    }
     return 1.35f;
 }
 
@@ -820,17 +892,12 @@ void Player::NotifyCounterSuccess() {
     if (rightSword_.IsCounterStance()) {
         rightSword_.NotifyCounterSuccess();
     }
-    if (weaponType_ == PlayerWeaponType::GreatSword &&
-        greatSwordFullChargeCounterReady_) {
-        greatSwordCharge_ = 0.0f;
-    }
     postSlashRecoveryTimer_ = 0.0f;
     leftSlashRecoveryTimer_ = 0.0f;
     rightSlashRecoveryTimer_ = 0.0f;
     leftSlashHitConfirmed_ = true;
     rightSlashHitConfirmed_ = true;
     ResetOverSwing();
-    greatSwordFullChargeCounterReady_ = false;
 }
 
 void Player::NotifyCounterSuccess(size_t swordIndex) {
@@ -840,10 +907,6 @@ void Player::NotifyCounterSuccess(size_t swordIndex) {
         rightSword_.NotifyCounterSuccess();
     }
 
-    if (weaponType_ == PlayerWeaponType::GreatSword &&
-        greatSwordFullChargeCounterReady_) {
-        greatSwordCharge_ = 0.0f;
-    }
     postSlashRecoveryTimer_ = 0.0f;
     if (swordIndex == 0) {
         leftSlashRecoveryTimer_ = 0.0f;
@@ -853,7 +916,6 @@ void Player::NotifyCounterSuccess(size_t swordIndex) {
         rightSlashHitConfirmed_ = true;
     }
     ResetOverSwing();
-    greatSwordFullChargeCounterReady_ = false;
 }
 
 Transform Player::BuildSwordTransform(const SwordPose &pose, bool isLeft) const {
@@ -954,99 +1016,32 @@ void Player::UpdateWeaponRules(Input *input, SwordPose &leftPose,
         }
     };
 
-    if (weaponType_ == PlayerWeaponType::Standard) {
-        leftPose = MakeIdleSwordPose(true);
-        leftSwordAttackDamage_ = 0.0f;
-        applyJoyConSwingDamage();
-        return;
+    leftSwordAttackDamage_ = 3.0f;
+    rightSwordAttackDamage_ = 3.0f;
+    leftPose.isGuard = false;
+    rightPose.isGuard = false;
+
+    const bool singlePointerControl =
+        !hasLeftJoyCon && !hasRightJoyCon &&
+        (!useGamepadRightSword || useHunterGamepadControls) &&
+        !useDualUdpControls;
+    if (singlePointerControl && rightPose.isSlashMode) {
+        if (dualNextManualLeft_ && leftSlashRecoveryTimer_ <= 0.0f) {
+            leftPose = MakeMirroredSwordPose(rightPose);
+            rightPose.isSlashMode = false;
+        } else if (rightSlashRecoveryTimer_ <= 0.0f) {
+            leftPose = MakeIdleSwordPose(true);
+        } else if (leftSlashRecoveryTimer_ <= 0.0f) {
+            leftPose = MakeMirroredSwordPose(rightPose);
+            rightPose.isSlashMode = false;
+        } else {
+            leftPose = MakeIdleSwordPose(true);
+            rightPose.isSlashMode = false;
+        }
     }
 
-    if (weaponType_ == PlayerWeaponType::Dual) {
-        leftSwordAttackDamage_ = 3.0f;
-        rightSwordAttackDamage_ = 3.0f;
-        leftPose.isGuard = false;
-        rightPose.isGuard = false;
-
-        const bool singlePointerControl =
-            !hasLeftJoyCon && !hasRightJoyCon &&
-            (!useGamepadRightSword || useHunterGamepadControls) &&
-            !useDualUdpControls;
-        if (singlePointerControl && rightPose.isSlashMode) {
-            if (dualNextManualLeft_ && leftSlashRecoveryTimer_ <= 0.0f) {
-                leftPose = MakeMirroredSwordPose(rightPose);
-                rightPose.isSlashMode = false;
-            } else if (rightSlashRecoveryTimer_ <= 0.0f) {
-                leftPose = MakeIdleSwordPose(true);
-            } else if (leftSlashRecoveryTimer_ <= 0.0f) {
-                leftPose = MakeMirroredSwordPose(rightPose);
-                rightPose.isSlashMode = false;
-            } else {
-                leftPose = MakeIdleSwordPose(true);
-                rightPose.isSlashMode = false;
-            }
-        }
-
-        (void)deltaTime;
-        applyJoyConSwingDamage();
-        return;
-    }
-
-    if (weaponType_ == PlayerWeaponType::GreatSword) {
-        leftPose = MakeIdleSwordPose(true);
-        leftSwordAttackDamage_ = 0.0f;
-
-        if (greatSwordSwingTimer_ > 0.0f) {
-            greatSwordSwingTimer_ -= deltaTime;
-            if (greatSwordSwingTimer_ < 0.0f) {
-                greatSwordSwingTimer_ = 0.0f;
-            }
-        }
-
-        if (rightPose.isGuard) {
-            greatSwordCharge_ += deltaTime * kGreatSwordChargeRate;
-            greatSwordCharge_ = std::clamp(greatSwordCharge_, 0.0f, 1.0f);
-        }
-
-        if (rightPose.isCounter && greatSwordCharge_ >= 0.98f) {
-            greatSwordFullChargeCounterReady_ = true;
-        }
-
-        if (rightPose.isSlashMode) {
-            const bool startsSwing = !prevRightSwordSlashMode_ &&
-                                     greatSwordSwingTimer_ <= 0.0f;
-            const bool canStartSwing =
-                useHunterGamepadControls ||
-                greatSwordCharge_ >= kGreatSwordMinSwingCharge;
-            if (startsSwing && canStartSwing) {
-                const float swingCharge =
-                    useHunterGamepadControls
-                        ? (std::max)(greatSwordCharge_,
-                                     kGreatSwordMinSwingCharge)
-                        : greatSwordCharge_;
-                greatSwordSwingDamage_ =
-                    ComputeGreatSwordAttackDamage(swingCharge);
-                greatSwordFullChargeCounterReady_ = swingCharge >= 0.98f;
-                greatSwordSwingTimer_ =
-                    useHunterGamepadControls
-                        ? (std::max)(hunterGamepadAttackDuration_ -
-                                         hunterGamepadAttackTimer_,
-                                     kGreatSwordSwingDuration)
-                        : kGreatSwordSwingDuration;
-                greatSwordCharge_ = 0.0f;
-            }
-
-            if (greatSwordSwingTimer_ <= 0.0f) {
-                rightPose.isSlashMode = false;
-                greatSwordFullChargeCounterReady_ = false;
-            } else {
-                rightSwordAttackDamage_ = greatSwordSwingDamage_;
-            }
-        } else if (greatSwordSwingTimer_ > 0.0f) {
-            rightPose.isSlashMode = true;
-            rightSwordAttackDamage_ = greatSwordSwingDamage_;
-        }
-        applyJoyConSwingDamage();
-    }
+    (void)deltaTime;
+    applyJoyConSwingDamage();
 }
 
 void Player::ApplyHandRecovery(SwordPose &pose, float &timer,
@@ -1093,11 +1088,6 @@ float Player::GetAttackRecoveryRatio() const {
     ratio = (std::max)(ratio, GetSlashRecoveryRatio(leftSlashRecoveryTimer_));
     ratio = (std::max)(ratio, GetSlashRecoveryRatio(rightSlashRecoveryTimer_));
     return ratio;
-}
-
-float Player::ComputeGreatSwordAttackDamage(float chargeRatio) const {
-    const float t = std::clamp(chargeRatio, 0.0f, 1.0f);
-    return 18.0f + 52.0f * t * t;
 }
 
 SwordPose Player::UpdateGamepadSword(Input *input, float deltaTime,
@@ -1291,15 +1281,14 @@ float Player::GetHunterGamepadAttackRatio() const {
 
 float Player::GetHunterGamepadAttackDuration(
     HunterGamepadAttackKind attackKind) const {
-    const bool isGreatSword = weaponType_ == PlayerWeaponType::GreatSword;
     switch (attackKind) {
     case HunterGamepadAttackKind::Overhead:
-        return isGreatSword ? 0.72f : 0.46f;
+        return 0.46f;
     case HunterGamepadAttackKind::Thrust:
-        return isGreatSword ? 0.58f : 0.34f;
+        return 0.34f;
     case HunterGamepadAttackKind::SideLeft:
     case HunterGamepadAttackKind::SideRight:
-        return isGreatSword ? 0.64f : 0.38f;
+        return 0.38f;
     default:
         return 0.0f;
     }

@@ -7,7 +7,9 @@ enum class ActionKind {
     Smash,
     Sweep,
     Shot,
+    BladeClash,
     Wave,
+    Cage,
     Nova,
     Warp,
     Stalk,
@@ -25,7 +27,9 @@ enum class ActionId {
     AdvanceSweep,
 
     Shot,
+    BladeClash,
     Wave,
+    Cage,
     Nova,
 
     WarpApproach,

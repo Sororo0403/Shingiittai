@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 
 class Input;
 class WinApp;
@@ -35,6 +36,7 @@ struct SceneContext {
     RenderTexture *renderTexture = nullptr;
     PostEffectRenderer *postEffectRenderer = nullptr;
     SkyboxRenderer *skyboxRenderer = nullptr;
+    std::function<void()> requestHandTrackingStart{};
     float deltaTime = 0.0f;
 
 #ifdef _DEBUG

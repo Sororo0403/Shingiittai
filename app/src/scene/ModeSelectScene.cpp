@@ -105,12 +105,6 @@ ModeSelectScene::LoadMenuImage(const std::wstring &path) {
 }
 
 void ModeSelectScene::UpdateSelection(Input *input) {
-    for (int i = 0; i < kButtonCount; ++i) {
-        if (IsMouseOver(buttons_[i])) {
-            selectedIndex_ = i;
-        }
-    }
-
     if (input->IsKeyTrigger(DIK_UP) || input->IsKeyTrigger(DIK_LEFT) ||
         input->IsKeyTrigger(DIK_W) || input->IsKeyTrigger(DIK_A)) {
         selectedIndex_ = (selectedIndex_ + kButtonCount - 1) % kButtonCount;
@@ -129,16 +123,6 @@ void ModeSelectScene::UpdateSelection(Input *input) {
         if (input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_DOWN) ||
             input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_RIGHT)) {
             selectedIndex_ = (selectedIndex_ + 1) % kButtonCount;
-        }
-    }
-
-    if (input->IsMouseTrigger(0)) {
-        for (int i = 0; i < kButtonCount; ++i) {
-            if (IsMouseOver(buttons_[i])) {
-                selectedIndex_ = i;
-                ActivateSelection();
-                return;
-            }
         }
     }
 

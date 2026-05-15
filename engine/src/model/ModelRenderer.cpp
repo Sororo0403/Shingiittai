@@ -135,7 +135,8 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
         sceneDst->effectParams = {
             currentEffect_.enabled ? currentEffect_.intensity : 0.0f,
             currentEffect_.fresnelPower,
-            currentEffect_.noiseAmount,
+            currentEffect_.forceOpaqueMaterial ? -1.0f
+                                               : currentEffect_.noiseAmount,
             currentEffect_.time,
         };
         sceneDst->keyLightDirection = {
@@ -174,13 +175,15 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
         const Material &material =
             materialManager_->GetMaterial(subMesh.materialId);
 
+        const bool forceOpaqueMaterial = currentEffect_.forceOpaqueMaterial;
         if (currentEffect_.enabled && currentEffect_.additiveBlend) {
             if (currentEffect_.disableCulling) {
                 cmd->SetPipelineState(additiveNoCullPSO_.Get());
             } else {
                 cmd->SetPipelineState(additivePSO_.Get());
             }
-        } else if (material.color.w < 1.0f || currentEffect_.enabled) {
+        } else if (!forceOpaqueMaterial &&
+                   (material.color.w < 1.0f || currentEffect_.enabled)) {
             cmd->SetPipelineState(transparentPSO_.Get());
         } else {
             cmd->SetPipelineState(opaquePSO_.Get());

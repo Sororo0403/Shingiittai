@@ -37,6 +37,9 @@ class HandUdpSenderProcess {
     ~HandUdpSenderProcess() { Stop(); }
 
     void Start() {
+        if (isRunning_) {
+            return;
+        }
         if (IsDisabled()) {
             return;
         }
@@ -178,7 +181,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     SetCurrentDirectoryW(ResolveExecutableDirectory().wstring().c_str());
 
     HandUdpSenderProcess handUdpSenderProcess;
-    handUdpSenderProcess.Start();
 
     // WinApp初期化
     WinApp winApp;
@@ -236,6 +238,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     sceneCtx.texture = &textureManager;
     sceneCtx.dxCommon = &dxCommon;
     sceneCtx.postEffectRenderer = &postEffectRenderer;
+    sceneCtx.requestHandTrackingStart = [&handUdpSenderProcess]() {
+        handUdpSenderProcess.Start();
+    };
     sceneCtx.deltaTime = 0.0f;
 
     // SceneManager

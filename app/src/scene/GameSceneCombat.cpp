@@ -56,6 +56,17 @@ static float DistanceSqXZ(const XMFLOAT3 &a, const XMFLOAT3 &b) {
     return dx * dx + dz * dz;
 }
 
+static XMFLOAT3 Lerp3(const XMFLOAT3 &from, const XMFLOAT3 &to, float t) {
+    return {from.x + (to.x - from.x) * t,
+            from.y + (to.y - from.y) * t,
+            from.z + (to.z - from.z) * t};
+}
+
+static float SmoothStep01(float t) {
+    t = std::clamp(t, 0.0f, 1.0f);
+    return t * t * (3.0f - 2.0f * t);
+}
+
 static bool IsNearXZ(const XMFLOAT3 &a, const XMFLOAT3 &b, float radius) {
     return DistanceSqXZ(a, b) <= radius * radius;
 }
@@ -168,11 +179,6 @@ static SwordCounterAxis RequiredCounterAxisForAction(ActionKind kind) {
     }
 }
 
-static SwordCounterAxis RequiredDualCounterAxis(const Enemy &enemy) {
-    return enemy.IsDualCounterHandStage() ? SwordCounterAxis::Horizontal
-                                          : SwordCounterAxis::Vertical;
-}
-
 static bool IsSlashAxisMatched(const Sword &sword,
                                SwordCounterAxis requiredAxis) {
     if (requiredAxis == SwordCounterAxis::None) {
@@ -246,8 +252,236 @@ PlayerCombatObservation GameScene::BuildPlayerCombatObservation() const {
     return observation;
 }
 
+void GameScene::BeginBladeClash(size_t swordIndex) {
+    if (bladeClashActive_) {
+        return;
+    }
+
+    const XMFLOAT3 playerPos = player_.GetTransform().position;
+    const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
+    XMFLOAT2 toEnemy =
+        NormalizeXZ(enemyPos.x - playerPos.x, enemyPos.z - playerPos.z);
+    bladeClashDirection_ = {toEnemy.x, 0.0f, toEnemy.y};
+    bladeClashPlayerWinPos_ = {enemyPos.x - toEnemy.x * 1.25f, playerPos.y,
+                               enemyPos.z - toEnemy.y * 1.25f};
+    bladeClashPlayerLosePos_ = {enemyPos.x - toEnemy.x * 2.36f, playerPos.y,
+                                enemyPos.z - toEnemy.y * 2.36f};
+    bladeClashPlayerFixedPos_ = {enemyPos.x - toEnemy.x * 1.86f, playerPos.y,
+                                 enemyPos.z - toEnemy.y * 1.86f};
+    bladeClashCenter_ = {enemyPos.x - toEnemy.x * 1.42f,
+                         playerPos.y + 1.10f,
+                         enemyPos.z - toEnemy.y * 1.42f};
+    bladeClashGauge_ = 0.0f;
+    bladeClashTimer_ = bladeClashDuration_;
+    bladeClashCameraPush_ = 0.0f;
+    bladeClashImpactPulse_ = 0.18f;
+    bladeClashEnemySurgeTimer_ = 0.0f;
+    bladeClashChainTimer_ = 0.0f;
+    bladeClashSlashChain_ = 0;
+    bladeClashPreviousSlashStates_ = player_.GetSwordSlashStates();
+    bladeClashActive_ = true;
+    player_.LockPosition(bladeClashPlayerFixedPos_);
+    player_.SetBladeClashPose(true, 0.5f);
+    counterCinematicActive_ = false;
+    counterCinematicTimer_ = 0.0f;
+    SetEnemyAnimationFrozen(true);
+    player_.NotifyCounterSuccess(swordIndex);
+
+    sparkParticles_.EmitBurst(bladeClashCenter_, 22, 0.16f,
+                              GPUParticleSystem::BurstStyle::Sparks,
+                              {0.90f, 0.98f, 1.0f, 0.60f},
+                              bladeClashDirection_, 1.05f);
+}
+
+void GameScene::UpdateBladeClash(float deltaTime) {
+    if (!bladeClashActive_) {
+        return;
+    }
+
+    const auto slashStates = player_.GetSwordSlashStates();
+    const auto swords = player_.GetSwords();
+    bool slashLanded = false;
+    for (size_t i = 0; i < slashStates.size(); ++i) {
+        const bool slashStarted = slashStates[i] && !bladeClashPreviousSlashStates_[i];
+        bladeClashPreviousSlashStates_[i] = slashStates[i];
+        if (!slashStarted || swords[i] == nullptr) {
+            continue;
+        }
+
+        slashLanded = true;
+        if (bladeClashChainTimer_ > 0.0f) {
+            bladeClashSlashChain_ = (std::min)(bladeClashSlashChain_ + 1, 5);
+        } else {
+            bladeClashSlashChain_ = 1;
+        }
+        bladeClashChainTimer_ = 0.42f;
+        const float chainBonus =
+            static_cast<float>((std::max)(bladeClashSlashChain_ - 1, 0)) * 0.020f;
+        bladeClashGauge_ += bladeClashSlashPush_ + chainBonus;
+        bladeClashCameraPush_ =
+            (std::min)(bladeClashCameraPush_ + 0.64f, 1.0f);
+        bladeClashImpactPulse_ = 1.0f;
+        player_.NotifyAttackHit(i, 0.0f);
+
+        XMFLOAT3 sparkPos = bladeClashCenter_;
+        sparkPos.x += bladeClashDirection_.x * 0.10f;
+        sparkPos.y += 0.14f;
+        sparkPos.z += bladeClashDirection_.z * 0.10f;
+        sparkParticles_.EmitBurst(sparkPos, 16, 0.11f,
+                                  GPUParticleSystem::BurstStyle::Sparks,
+                                  {0.90f, 0.98f, 1.0f, 0.62f},
+                                  bladeClashDirection_, 1.08f);
+    }
+
+    if (bladeClashChainTimer_ > 0.0f) {
+        bladeClashChainTimer_ = (std::max)(0.0f, bladeClashChainTimer_ - deltaTime);
+    } else {
+        bladeClashSlashChain_ = 0;
+    }
+
+    bladeClashEnemySurgeTimer_ += deltaTime;
+    if (bladeClashEnemySurgeTimer_ >= 0.62f) {
+        bladeClashEnemySurgeTimer_ -= 0.62f;
+        bladeClashImpactPulse_ = (std::max)(bladeClashImpactPulse_, 0.48f);
+        XMFLOAT3 surgeSpark = bladeClashCenter_;
+        surgeSpark.x -= bladeClashDirection_.x * 0.12f;
+        surgeSpark.y += 0.10f;
+        surgeSpark.z -= bladeClashDirection_.z * 0.12f;
+        sparkParticles_.EmitBurst(surgeSpark, 8, 0.08f,
+                                  GPUParticleSystem::BurstStyle::Sparks,
+                                  {1.0f, 0.48f, 0.18f, 0.42f},
+                                  {-bladeClashDirection_.x, 0.0f,
+                                   -bladeClashDirection_.z},
+                                  0.64f);
+    }
+
+    const float elapsedRatio =
+        bladeClashDuration_ > 0.0001f
+            ? std::clamp(1.0f - bladeClashTimer_ / bladeClashDuration_, 0.0f, 1.0f)
+            : 1.0f;
+    const float enemySurge =
+        0.78f + 0.22f * std::sinf(bladeClashEnemySurgeTimer_ * 10.1f);
+    const float lowTimePressure =
+        bladeClashTimer_ < 1.35f ? (1.35f - bladeClashTimer_) * 0.26f : 0.0f;
+    bladeClashGauge_ -=
+        (bladeClashEnemyPushSpeed_ + elapsedRatio * 0.08f + lowTimePressure) *
+        enemySurge * deltaTime;
+    bladeClashGauge_ = std::clamp(bladeClashGauge_, -1.1f, 1.1f);
+    bladeClashCameraPush_ =
+        (std::max)(0.0f, bladeClashCameraPush_ - deltaTime * 3.1f);
+    bladeClashImpactPulse_ =
+        (std::max)(0.0f, bladeClashImpactPulse_ - deltaTime * (slashLanded ? 2.2f : 3.0f));
+    bladeClashTimer_ -= deltaTime;
+
+    const float progress = SmoothStep01((bladeClashGauge_ + 1.0f) * 0.5f);
+    bladeClashPlayerFixedPos_ =
+        Lerp3(bladeClashPlayerLosePos_, bladeClashPlayerWinPos_, progress);
+    bladeClashCenter_ = {
+        bladeClashPlayerFixedPos_.x + bladeClashDirection_.x *
+                                        (0.74f + 0.22f * progress),
+        bladeClashPlayerFixedPos_.y + 1.10f + 0.04f * bladeClashImpactPulse_,
+        bladeClashPlayerFixedPos_.z + bladeClashDirection_.z *
+                                        (0.74f + 0.22f * progress)};
+    player_.LockPosition(bladeClashPlayerFixedPos_);
+    player_.SetBladeClashPose(true, progress);
+
+    if (bladeClashGauge_ >= 1.0f) {
+        ResolveBladeClash(true);
+    } else if (bladeClashGauge_ <= -1.0f || bladeClashTimer_ <= 0.0f) {
+        ResolveBladeClash(false);
+    }
+}
+
+void GameScene::ResolveBladeClash(bool playerWon) {
+    if (!bladeClashActive_) {
+        return;
+    }
+
+    bladeClashActive_ = false;
+    bladeClashPreviousSlashStates_.fill(false);
+    bladeClashCameraPush_ = 0.0f;
+    bladeClashImpactPulse_ = 0.0f;
+    bladeClashEnemySurgeTimer_ = 0.0f;
+    bladeClashChainTimer_ = 0.0f;
+    bladeClashSlashChain_ = 0;
+    bladeClashFinishActive_ = true;
+    bladeClashFinishPlayerWon_ = playerWon;
+    bladeClashFinishImpactEmitted_ = !playerWon;
+    bladeClashFinishTimer_ = 0.0f;
+    bladeClashFinishCenter_ =
+        playerWon ? XMFLOAT3{enemy_.GetTransform().position.x,
+                             enemy_.GetTransform().position.y + 1.22f,
+                             enemy_.GetTransform().position.z}
+                  : XMFLOAT3{(player_.GetTransform().position.x +
+                              enemy_.GetTransform().position.x) *
+                                 0.5f,
+                             player_.GetTransform().position.y + 1.10f,
+                             (player_.GetTransform().position.z +
+                              enemy_.GetTransform().position.z) *
+                                 0.5f};
+    bladeClashFinishPlayerStart_ = player_.GetTransform().position;
+    bladeClashFinishPlayerEnd_ =
+        playerWon ? XMFLOAT3{enemy_.GetTransform().position.x +
+                                 bladeClashDirection_.x * 5.15f,
+                             player_.GetTransform().position.y,
+                             enemy_.GetTransform().position.z +
+                                 bladeClashDirection_.z * 5.15f}
+                  : player_.GetTransform().position;
+    player_.SetBladeClashPose(false);
+    SetEnemyAnimationFrozen(false);
+    enemy_.ResolveBladeClash(playerWon);
+
+    const XMFLOAT3 playerPos = player_.GetTransform().position;
+    const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
+    CombatFeedbackEvent feedback{};
+    feedback.position = bladeClashCenter_;
+    feedback.direction =
+        playerWon ? DirectionFromTo(playerPos, enemyPos)
+                  : DirectionFromTo(enemyPos, playerPos);
+
+    if (playerWon) {
+        const float damage = 185.0f * damageMultiplier_;
+        enemy_.TakeDamage(damage);
+        player_.NotifyAttackHit(damage);
+        feedback.type = CombatFeedbackEventType::CounterSuccess;
+        feedback.power = damage / 18.0f;
+        DispatchCombatFeedback(feedback);
+        enemyHitCooldown_ = 0.22f;
+        return;
+    }
+
+    constexpr float clashLossDamage = 25.0f;
+    XMFLOAT3 sweepCenter = playerPos;
+    sweepCenter.y += 1.05f;
+    explosionParticles_.EmitBurst(
+        sweepCenter, 96, 1.18f, GPUParticleSystem::BurstStyle::SlashLine,
+        {1.0f, 0.32f, 0.06f, 0.88f},
+        {bladeClashDirection_.z, -0.04f, -bladeClashDirection_.x}, 1.46f);
+    swordFlashParticles_.EmitBurst(
+        sweepCenter, 8, 0.62f, GPUParticleSystem::BurstStyle::Flash,
+        {1.0f, 0.48f, 0.12f, 0.68f},
+        {-bladeClashDirection_.x, 0.0f, -bladeClashDirection_.z}, 0.32f);
+    sparkParticles_.EmitBurst(
+        sweepCenter, 38, 0.34f, GPUParticleSystem::BurstStyle::Sparks,
+        {1.0f, 0.46f, 0.12f, 0.72f},
+        {-bladeClashDirection_.x, 0.06f, -bladeClashDirection_.z}, 1.18f);
+    player_.TakeDamage(clashLossDamage);
+    player_.AddKnockback({-bladeClashDirection_.x * 24.0f, 0.0f,
+                          -bladeClashDirection_.z * 24.0f});
+    feedback.type = CombatFeedbackEventType::PlayerDamaged;
+    feedback.power = 8.0f;
+    DispatchCombatFeedback(feedback);
+    playerHitCooldown_ = 0.55f;
+}
+
 void GameScene::UpdateCombat(float gameplayDeltaTime) {
     collisionManager_.Clear();
+
+    if (bladeClashActive_) {
+        UpdateBladeClash(gameplayDeltaTime);
+        previousChargeWeakPointSlashStates_ = player_.GetSwordSlashStates();
+        return;
+    }
 
     const auto playerBox = player_.GetOBB();
     const bool isPlayerDodging = player_.IsDamageInvulnerable();
@@ -334,13 +568,13 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         isEnemySmashMeleeWindow || isEnemySweepMeleeWindow;
     const bool isEnemyMeleeCommitted =
         isEnemySmashCommitted || isEnemySweepCommitted;
-    const bool isEnemyDualCommitted =
-        enemyActionKind == ActionKind::Shot &&
+    const bool isEnemyBladeClashCommitted =
+        enemyActionKind == ActionKind::BladeClash &&
         enemyActionStep == ActionStep::Active;
-    const bool isEnemyDualCounterWindow =
-        isEnemyDualCommitted && enemy_.IsDualCounterWindow();
-    const bool isEnemyDualStrikeActive =
-        isEnemyDualCommitted && enemy_.IsAttackActive();
+    const bool isEnemyBladeClashCounterWindow =
+        isEnemyBladeClashCommitted && enemy_.IsBladeClashWindow();
+    const bool isEnemyBladeClashStrikeActive =
+        isEnemyBladeClashCommitted && enemy_.IsAttackActive();
     if (enemyRedPunishUncounterable_ &&
         (!(enemyActionKind == ActionKind::Smash ||
            enemyActionKind == ActionKind::Sweep) ||
@@ -390,7 +624,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     const bool isEnemyMeleePreparationOrRelease =
         (enemyActionKind == ActionKind::Smash ||
          enemyActionKind == ActionKind::Sweep ||
-         enemyActionKind == ActionKind::Shot) &&
+         enemyActionKind == ActionKind::BladeClash) &&
         (enemyActionStep == ActionStep::Charge ||
          enemyActionStep == ActionStep::Hold ||
          enemyActionStep == ActionStep::Active);
@@ -407,7 +641,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
          (isEnemyMeleeCommitted &&
           enemy_.GetActionTimerForPresentation() <=
               kReleaseCounterWindowDuration) ||
-         isEnemyDualCounterWindow);
+         isEnemyBladeClashCounterWindow);
     const bool suppressNormalSlashHitDuringEnemyMelee =
         isEnemyMeleePreparationOrRelease;
 
@@ -418,7 +652,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     CollisionManager::BodyId enemyAttackBody =
         CollisionManager::kInvalidBodyId;
     if (isEnemyMeleeCommitted || isPreReleaseCounterWindow ||
-        isEnemyDualCommitted) {
+        isEnemyBladeClashCommitted) {
         enemyAttackBox = enemy_.GetAttackOBB();
         enemyAttackBody =
             AddCollisionBody(collisionManager_, enemyAttackBox,
@@ -428,7 +662,8 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
 
     const bool isBadSlashPunishWindow =
         isEnemyMeleePreparationOrRelease && !isEnemyChargeWeakPointWindow &&
-        !isReleaseCounterWindow && !enemyRedPunishUncounterable_;
+        enemyActionKind != ActionKind::BladeClash && !isReleaseCounterWindow &&
+        !enemyRedPunishUncounterable_;
     if (isBadSlashPunishWindow && playerHitCooldown_ <= 0.0f) {
         for (size_t i = 0; i < swordSlashStates.size(); ++i) {
             if (!swordSlashStates[i] || previousChargeWeakPointSlashStates_[i]) {
@@ -459,8 +694,8 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                                 player_.GetTransform().position);
             feedback.power = enemyAttackDamage / 8.0f;
             DispatchCombatFeedback(feedback);
-            if (enemyActionKind == ActionKind::Shot) {
-                enemy_.NotifyDualStrikeLanded();
+            if (enemyActionKind == ActionKind::BladeClash) {
+                enemy_.NotifyBladeClashLanded();
             } else {
                 enemy_.NotifyAttackConnected();
             }
@@ -502,7 +737,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             IsSlashAlongDirection(*sword, requiredChargeSlashDirection);
         const bool canSlashCounter =
             !isFailedChargeWeakPointRelease &&
-            enemyActionKind != ActionKind::Shot &&
+            enemyActionKind != ActionKind::BladeClash &&
             isReleaseCounterWindow &&
             playerHitCooldown_ <= 0.0f && isEnemyCounterWindow &&
             enemyAttackBody != CollisionManager::kInvalidBodyId &&
@@ -510,13 +745,14 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                      GetReadableMeleeRadius(enemyAttackBox) + 0.85f) &&
             IsSlashAxisMatched(*sword,
                                RequiredCounterAxisForAction(enemyActionKind));
-        const bool canDualCounter =
-            enemyActionKind == ActionKind::Shot && isEnemyDualCounterWindow &&
+        const bool canBladeClashCounter =
+            enemyActionKind == ActionKind::BladeClash &&
+            isEnemyBladeClashCounterWindow &&
             playerHitCooldown_ <= 0.0f &&
             enemyAttackBody != CollisionManager::kInvalidBodyId &&
             IsNearXZ(player_.GetTransform().position, enemyAttackBox.center,
                      GetReadableMeleeRadius(enemyAttackBox) + 0.95f) &&
-            IsSlashAxisMatched(*sword, RequiredDualCounterAxis(enemy_));
+            isFreshChargeWeakPointSlash && sword->CanSlashCounter();
 
         if (canSlashCounter) {
             triggerSuccessfulCounter(i, enemyAttackDamage, 0.2f);
@@ -524,31 +760,8 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             break;
         }
 
-        if (canDualCounter) {
-            const bool finalCounter = enemy_.NotifyDualCountered();
-            if (finalCounter) {
-                forceSyncEnemyAnimationThisFrame = true;
-            }
-            const float counterDamage =
-                finalCounter ? 115.0f : 32.0f;
-            enemy_.TakeDamage(counterDamage);
-            player_.NotifyCounterSuccess(i);
-            player_.NotifyAttackHit(i, counterDamage);
-
-            CombatFeedbackEvent feedback{};
-            feedback.type = CombatFeedbackEventType::CounterSuccess;
-            feedback.position = enemyAttackBox.center;
-            feedback.direction =
-                DirectionFromTo(player_.GetTransform().position,
-                                enemyAttackBox.center);
-            feedback.power = finalCounter ? 8.0f : 3.0f;
-            feedback.swordIndex = i;
-            DispatchCombatFeedback(feedback);
-            playerHitCooldown_ = finalCounter ? 0.20f : 0.10f;
-            if (finalCounter) {
-                startCounterCinematicThisFrame = true;
-                counterCinematicTimer_ = counterCinematicDuration_;
-            }
+        if (canBladeClashCounter) {
+            BeginBladeClash(i);
             counterTriggeredThisFrame = true;
             break;
         }
@@ -626,7 +839,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         }
     }
 
-    if ((isEnemyMeleeActive || isEnemyDualStrikeActive) &&
+    if ((isEnemyMeleeActive || isEnemyBladeClashStrikeActive) &&
         !counterTriggeredThisFrame) {
         const bool bossHitPlayer =
             enemyAttackBody != CollisionManager::kInvalidBodyId &&
@@ -643,8 +856,8 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             if (isPlayerDodging) {
                 playerHitCooldown_ = 0.08f;
             } else {
-                if (isEnemyDualStrikeActive) {
-                    enemy_.NotifyDualStrikeLanded();
+                if (isEnemyBladeClashStrikeActive) {
+                    enemy_.NotifyBladeClashLanded();
                 } else {
                     enemy_.NotifyAttackConnected();
                 }
@@ -833,7 +1046,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
 
         OBB waveBox{};
         waveBox.center = wave.position;
-        waveBox.size = enemy_.GetWaveHitBoxSize();
+        waveBox.size = wave.hitBoxSize;
         waveBox.rotation =
             MakeYawRotation(std::atan2(wave.direction.x, wave.direction.z));
         const float waveThreatRadius =
@@ -857,7 +1070,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             feedback.position = wave.position;
             feedback.direction = DirectionFromTo(wave.position,
                                                 enemy_.GetTransform().position);
-            feedback.power = enemy_.GetWaveDamage() / 5.0f;
+            feedback.power = wave.damage / 5.0f;
             DispatchCombatFeedback(feedback);
             continue;
         }
@@ -865,7 +1078,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         if (wave.isReflected) {
             if (isEnemyHurtBodyHit(waveBody) &&
                 enemyHitCooldown_ <= 0.0f) {
-                const float damage = enemy_.GetWaveDamage() * damageMultiplier_;
+                const float damage = wave.damage * damageMultiplier_;
                 enemy_.TakeDamage(damage);
                 player_.NotifyAttackHit(damage);
                 enemy_.DestroyWave(i);
@@ -897,19 +1110,18 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                                          wave.position, counterSwordIndex,
                                          0.00f)) {
                     triggerSuccessfulCounter(counterSwordIndex,
-                                             enemy_.GetWaveDamage() * 2.0f,
+                                             wave.damage * 2.0f,
                                              0.12f);
                 } else {
-                    player_.TakeDamage(enemy_.GetWaveDamage() *
-                                       playerRecoveryDamageScale);
+                    player_.TakeDamage(wave.damage * playerRecoveryDamageScale);
                     player_.AddKnockback(
-                        {hitDir.x * enemy_.GetWaveKnockback(), 0.0f,
-                         hitDir.y * enemy_.GetWaveKnockback()});
+                        {hitDir.x * wave.knockback, 0.0f,
+                         hitDir.y * wave.knockback});
                     CombatFeedbackEvent feedback{};
                     feedback.type = CombatFeedbackEventType::PlayerDamaged;
                     feedback.position = wave.position;
                     feedback.direction = {hitDir.x, 0.0f, hitDir.y};
-                    feedback.power = enemy_.GetWaveDamage() / 5.0f;
+                    feedback.power = wave.damage / 5.0f;
                     DispatchCombatFeedback(feedback);
                     enemy_.DestroyWave(i);
                     playerHitCooldown_ = 0.35f;

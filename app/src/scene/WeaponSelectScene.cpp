@@ -190,6 +190,10 @@ void WeaponSelectScene::UpdateSelection(Input *input) {
 }
 
 void WeaponSelectScene::BeginStart() {
+    if (SelectedControlType() == InputControlType::Hand &&
+        ctx_->requestHandTrackingStart) {
+        ctx_->requestHandTrackingStart();
+    }
     startRequested_ = true;
     transitionTimer_ = 0.0f;
 }

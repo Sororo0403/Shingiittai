@@ -46,54 +46,6 @@ float SmoothStep(float edge0, float edge1, float x) {
     return t * t * (3.0f - 2.0f * t);
 }
 
-float GetArcLife(PlayerWeaponType weaponType) {
-    switch (weaponType) {
-    case PlayerWeaponType::Dual:
-        return 0.13f;
-    case PlayerWeaponType::GreatSword:
-        return 0.20f;
-    case PlayerWeaponType::Standard:
-    default:
-        return 0.16f;
-    }
-}
-
-float GetArcRadius(PlayerWeaponType weaponType) {
-    switch (weaponType) {
-    case PlayerWeaponType::Dual:
-        return 2.10f;
-    case PlayerWeaponType::GreatSword:
-        return 3.15f;
-    case PlayerWeaponType::Standard:
-    default:
-        return 2.55f;
-    }
-}
-
-float GetArcThickness(PlayerWeaponType weaponType) {
-    switch (weaponType) {
-    case PlayerWeaponType::Dual:
-        return 0.20f;
-    case PlayerWeaponType::GreatSword:
-        return 0.34f;
-    case PlayerWeaponType::Standard:
-    default:
-        return 0.26f;
-    }
-}
-
-XMFLOAT4 GetArcColor(PlayerWeaponType weaponType) {
-    switch (weaponType) {
-    case PlayerWeaponType::Dual:
-        return {0.32f, 0.62f, 1.00f, 0.86f};
-    case PlayerWeaponType::GreatSword:
-        return {0.20f, 0.72f, 1.00f, 0.94f};
-    case PlayerWeaponType::Standard:
-    default:
-        return {0.24f, 0.68f, 1.00f, 0.90f};
-    }
-}
-
 XMFLOAT3 PointOnArc(const XMFLOAT3 &center, const XMFLOAT3 &axisA,
                    const XMFLOAT3 &axisB, float angle, float radius) {
     return Add(center,
@@ -123,7 +75,6 @@ void SwordSlashArcRenderer::Emit(const XMFLOAT3 &root, const XMFLOAT3 &tip,
                                  const XMFLOAT3 &playerPosition,
                                  const XMFLOAT3 &targetPosition,
                                  const Camera &camera,
-                                 PlayerWeaponType weaponType,
                                  size_t swordIndex) {
     ArcInstance &arc = arcs_[nextArc_];
     nextArc_ = (nextArc_ + 1) % arcs_.size();
@@ -152,18 +103,18 @@ void SwordSlashArcRenderer::Emit(const XMFLOAT3 &root, const XMFLOAT3 &tip,
                                       Scale(cameraUp, 0.28f)),
                                   worldUp);
 
-    const float radius = GetArcRadius(weaponType);
+    constexpr float radius = 2.10f;
     arc.center = Add(playerPosition, Scale(attackDir, radius * 0.58f));
     arc.center = Add(arc.center, Scale(attackRight, radius * 0.16f));
     arc.center = Add(arc.center, Scale(Sub(bladeCenter, playerPosition), 0.18f));
-    arc.center.y += weaponType == PlayerWeaponType::GreatSword ? 1.14f : 0.98f;
+    arc.center.y += 0.98f;
     arc.axisA = arcA;
     arc.axisB = arcB;
     arc.radius = radius;
-    arc.thickness = GetArcThickness(weaponType);
-    arc.life = GetArcLife(weaponType);
+    arc.thickness = 0.20f;
+    arc.life = 0.13f;
     arc.age = 0.0f;
-    arc.color = GetArcColor(weaponType);
+    arc.color = {0.32f, 0.62f, 1.00f, 0.86f};
     arc.startAngle = -0.82f * kPi;
     arc.endAngle = -0.05f * kPi;
     arc.isLine = false;

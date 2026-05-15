@@ -19,9 +19,17 @@ from mediapipe.tasks.python import vision
 PALM_INDICES = (0, 5, 9, 13, 17)
 HAND_ANCHOR_WRIST_WEIGHT = 0.70
 HAND_ANCHOR_BBOX_WEIGHT = 0.30
-DETECTION_GRACE_SECONDS = 0.18
-MAX_TRACKED_STEP_PER_SECOND = 9.0
-MAX_TRACKED_STEP = 0.24
+DETECTION_GRACE_SECONDS = 0.32
+PREDICTED_HAND_CONFIDENCE = 0.38
+FRAME_EXIT_MARGIN = 0.035
+MIN_IN_FRAME_LANDMARK_RATIO = 0.48
+MIN_IN_FRAME_PALM_POINTS = 3
+DISTANCE_REFERENCE_HAND_SIZE = 0.20
+DISTANCE_SCALE_MIN = 0.65
+DISTANCE_SCALE_MAX = 2.45
+DISTANCE_SCALE_FOLLOW = 0.35
+MAX_TRACKED_STEP_PER_SECOND = 16.0
+MAX_TRACKED_STEP = 0.34
 MIN_TRACKED_STEP = 0.08
 CENTER_FILTER_MIN_CUTOFF = 3.4
 CENTER_FILTER_BETA = 34.0
@@ -256,6 +264,58 @@ def copy_palm_points(landmarks):
         (clamp01(landmarks[index].x), clamp01(landmarks[index].y))
         for index in PALM_INDICES
     ]
+
+
+def landmark_in_frame(landmark, margin=FRAME_EXIT_MARGIN):
+    return (
+        -margin <= landmark.x <= 1.0 + margin
+        and -margin <= landmark.y <= 1.0 + margin
+    )
+
+
+def hand_is_reliable_in_frame(landmarks):
+    xs = [landmark.x for landmark in landmarks]
+    ys = [landmark.y for landmark in landmarks]
+    if (
+        max(xs) < -FRAME_EXIT_MARGIN
+        or min(xs) > 1.0 + FRAME_EXIT_MARGIN
+        or max(ys) < -FRAME_EXIT_MARGIN
+        or min(ys) > 1.0 + FRAME_EXIT_MARGIN
+    ):
+        return False
+
+    in_frame_count = sum(1 for landmark in landmarks if landmark_in_frame(landmark))
+    palm_in_frame_count = sum(
+        1 for index in PALM_INDICES if landmark_in_frame(landmarks[index])
+    )
+    in_frame_ratio = in_frame_count / max(1, len(landmarks))
+    return (
+        in_frame_ratio >= MIN_IN_FRAME_LANDMARK_RATIO
+        and palm_in_frame_count >= MIN_IN_FRAME_PALM_POINTS
+    )
+
+
+def landmark_distance(a, b):
+    dx = a.x - b.x
+    dy = a.y - b.y
+    return math.sqrt(dx * dx + dy * dy)
+
+
+def hand_apparent_size(landmarks):
+    xs = [landmark.x for landmark in landmarks]
+    ys = [landmark.y for landmark in landmarks]
+    bbox_w = max(xs) - min(xs)
+    bbox_h = max(ys) - min(ys)
+    bbox_diag = math.sqrt(bbox_w * bbox_w + bbox_h * bbox_h)
+    palm_width = landmark_distance(landmarks[5], landmarks[17])
+    palm_length = landmark_distance(landmarks[0], landmarks[9])
+    return max(0.001, palm_width * 0.50 + palm_length * 0.30 + bbox_diag * 0.20)
+
+
+def distance_motion_scale(landmarks):
+    apparent_size = hand_apparent_size(landmarks)
+    raw_scale = DISTANCE_REFERENCE_HAND_SIZE / apparent_size
+    return max(DISTANCE_SCALE_MIN, min(DISTANCE_SCALE_MAX, raw_scale))
 
 
 def handedness_score(handedness):
@@ -517,9 +577,9 @@ def main():
         base_options=base_options,
         running_mode=vision.RunningMode.VIDEO,
         num_hands=args.max_hands,
-        min_hand_detection_confidence=0.45,
-        min_hand_presence_confidence=0.45,
-        min_tracking_confidence=0.45,
+        min_hand_detection_confidence=0.35,
+        min_hand_presence_confidence=0.35,
+        min_tracking_confidence=0.35,
     )
     landmarker = vision.HandLandmarker.create_from_options(options)
 
@@ -539,6 +599,7 @@ def main():
     motion_histories = [
         MotionHistory(MOTION_HISTORY_SECONDS) for _ in range(max_hands)
     ]
+    distance_scales = [1.0 for _ in range(max_hands)]
     center_trails = [[] for _ in range(max_hands)]
     start_time = time.perf_counter()
     prev_time = time.perf_counter()
@@ -566,6 +627,9 @@ def main():
                 for hand_index, hand_landmarks in enumerate(
                     result.hand_landmarks[:max_hands]
                 ):
+                    if not hand_is_reliable_in_frame(hand_landmarks):
+                        continue
+
                     center_x, center_y = build_control_center(hand_landmarks)
                     handedness = (
                         result.handedness[hand_index]
@@ -578,6 +642,7 @@ def main():
                             "points": build_motion_points(hand_landmarks),
                             "x": center_x,
                             "y": center_y,
+                            "motion_scale": distance_motion_scale(hand_landmarks),
                             "confidence": max(0.65, handedness_score(handedness)),
                         }
                     )
@@ -601,6 +666,7 @@ def main():
                 raw_x = x
                 raw_y = y
                 confidence = 0.0
+                motion_scale = distance_scales[hand_index]
                 points = None
                 predicted_only = False
 
@@ -610,6 +676,12 @@ def main():
                     raw_x = x
                     raw_y = y
                     confidence = hand["confidence"]
+                    motion_scale = (
+                        motion_scale
+                        + (hand["motion_scale"] - motion_scale)
+                        * DISTANCE_SCALE_FOLLOW
+                    )
+                    distance_scales[hand_index] = motion_scale
                     points = hand["points"]
                     draw_hand_bbox(frame, hand["landmarks"], colors[hand_index])
                     draw_debug_point(
@@ -650,6 +722,7 @@ def main():
                     if predicted is not None:
                         x, y = predicted
                         predicted_only = True
+                        confidence = PREDICTED_HAND_CONFIDENCE
 
                 dx = x - prev_x
                 dy = y - prev_y
@@ -660,12 +733,23 @@ def main():
                     landmark_dx, landmark_dy, landmark_speed = motion_histories[
                         hand_index
                     ].apply(landmark_dx, landmark_dy, landmark_speed, dt)
-                center_speed = math.sqrt(dx * dx + dy * dy) / dt
-                speed = center_speed
+                center_len = math.sqrt(dx * dx + dy * dy)
+                landmark_len = math.sqrt(landmark_dx * landmark_dx + landmark_dy * landmark_dy)
+                motion_dx = dx
+                motion_dy = dy
+                if detected and landmark_len > center_len * 0.60:
+                    motion_dx = landmark_dx
+                    motion_dy = landmark_dy
+                packet_dx = motion_dx * motion_scale
+                packet_dy = motion_dy * motion_scale
+                center_speed = center_len / dt
+                motion_speed = max(center_speed, landmark_speed)
+                speed = motion_speed * motion_scale
                 prev_positions[hand_index] = (x, y)
                 if detected:
                     prev_landmarks[hand_index] = points
                 elif not valid:
+                    distance_scales[hand_index] = 1.0
                     prev_landmarks[hand_index] = None
                     center_trails[hand_index] = []
                     center_filters[hand_index].reset()
@@ -695,14 +779,15 @@ def main():
                             raw_y,
                             x,
                             y,
+                            motion_scale,
                         )
                     )
 
                 packet = (
                     f"HAND{hand_index + 1} {1 if valid else 0} "
-                    f"{x:.6f} {y:.6f} {dx:.6f} {dy:.6f} "
+                    f"{x:.6f} {y:.6f} {packet_dx:.6f} {packet_dy:.6f} "
                     f"{speed:.6f} {confidence:.6f} "
-                    f"0.000000 1.000000 {center_speed:.6f}"
+                    f"0.000000 1.000000 {speed:.6f}"
                 )
                 sock.sendto(packet.encode("ascii"), target)
 
@@ -729,6 +814,7 @@ def main():
                     raw_y,
                     x,
                     y,
+                    motion_scale,
                 ) = row
                 status = "detect" if detected else "predict"
                 cv2.putText(
@@ -737,7 +823,8 @@ def main():
                         f"H{hand_index + 1} {status} "
                         f"raw=({raw_x:.2f},{raw_y:.2f}) "
                         f"send=({x:.2f},{y:.2f}) "
-                        f"v={speed:.2f} conf={confidence:.2f}"
+                        f"v={speed:.2f} scale={motion_scale:.2f} "
+                        f"conf={confidence:.2f}"
                     ),
                     (12, 56 + row_index * 22),
                     cv2.FONT_HERSHEY_SIMPLEX,

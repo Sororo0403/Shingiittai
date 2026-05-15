@@ -38,8 +38,7 @@ void TitleScene::Initialize(const SceneContext &ctx) {
     ctx_->dxCommon->EndUpload();
     ctx_->texture->ReleaseUploadBuffers();
 
-    demoScene_ = std::make_unique<GameScene>(PlayerWeaponType::Dual,
-                                             GameScene::RunMode::TitleDemo);
+    demoScene_ = std::make_unique<GameScene>(GameScene::RunMode::TitleDemo);
     demoScene_->SetSceneManager(sceneManager_);
     demoScene_->Initialize(ctx);
 }

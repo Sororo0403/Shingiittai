@@ -161,6 +161,7 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
     UpdateByAction(deltaTime);
     UpdateBullets(deltaTime);
     UpdateWaves(deltaTime);
+    UpdateCageTrap(deltaTime);
     ClampToArena();
     UpdateParts();
 }
@@ -181,8 +182,14 @@ void Enemy::UpdateByAction(float deltaTime) {
     case ActionKind::Shot:
         UpdateShotByStep(deltaTime);
         break;
+    case ActionKind::BladeClash:
+        UpdateBladeClashByStep(deltaTime);
+        break;
     case ActionKind::Wave:
         UpdateWaveByStep(deltaTime);
+        break;
+    case ActionKind::Cage:
+        UpdateCageByStep(deltaTime);
         break;
     case ActionKind::Nova:
         UpdateNovaByStep(deltaTime);
@@ -252,6 +259,7 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     runtime_.novaSkyBulletsSpawned = false;
     runtime_.novaRingsSpawned = 0;
     runtime_.novaRingTimer = 0.0f;
+    runtime_.cageTrapSpawned = false;
     shotWarpedToArenaEdge_ = false;
     ResetPreAttackPresentationState();
     ResetRecoveryBranchState();
@@ -270,12 +278,27 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     }
 }
 
+void Enemy::ForceDebugBladeClash() {
+    if (deathFinished_ || isDying_) {
+        return;
+    }
+
+    UpdateFacingToPlayerWithSpeed(1.0f, 999.0f);
+    BeginAction(ActionKind::BladeClash, ActionStep::Active);
+    LockCurrentFacing();
+    dualCounterStage_ = 0;
+    dualCounterStageResolved_ = false;
+    UpdateParts();
+}
+
 bool Enemy::TryBeginTacticAction(ActionKind kind) {
     switch (kind) {
     case ActionKind::Smash:
     case ActionKind::Sweep:
     case ActionKind::Shot:
+    case ActionKind::BladeClash:
     case ActionKind::Wave:
+    case ActionKind::Cage:
     case ActionKind::Nova:
         BeginAction(kind, ActionStep::Charge);
         return true;

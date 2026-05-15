@@ -45,6 +45,8 @@ OBB Enemy::GetAttackOBB() const {
     case ActionKind::Shot:
         return MakeOBB(IsDualCounterHandStage() ? leftHandTf_ : rightHandTf_,
                        GetCurrentAttackHitBoxSize());
+    case ActionKind::BladeClash:
+        return MakeOBB(bodyTf_, GetCurrentAttackHitBoxSize());
     default:
         return OBB{};
     }
@@ -129,7 +131,9 @@ bool Enemy::IsPunishableRecovery() const {
     case ActionKind::Smash:
     case ActionKind::Sweep:
     case ActionKind::Shot:
+    case ActionKind::BladeClash:
     case ActionKind::Wave:
+    case ActionKind::Cage:
     case ActionKind::Nova:
         return action_.step == ActionStep::Recovery && hitReactionTimer_ <= 0.0f;
     default:
@@ -154,8 +158,14 @@ float Enemy::GetRecoveryProgressForPresentation() const {
     case ActionKind::Shot:
         duration = config_.attacks.shot.recoveryTime + 0.18f;
         break;
+    case ActionKind::BladeClash:
+        duration = config_.attacks.bladeClash.recoveryTime + 0.18f;
+        break;
     case ActionKind::Wave:
         duration = config_.attacks.wave.recoveryTime + 0.18f;
+        break;
+    case ActionKind::Cage:
+        duration = config_.attacks.cage.recoveryTime + 0.18f;
         break;
     case ActionKind::Nova:
         duration = config_.attacks.nova.recoveryTime + 0.25f;
@@ -197,8 +207,12 @@ AttackParam *Enemy::GetCurrentAttackParam() {
         return &config_.attacks.sweep.melee.base.attack;
     case ActionKind::Shot:
         return &config_.attacks.shot.attack;
+    case ActionKind::BladeClash:
+        return &config_.attacks.bladeClash.attack;
     case ActionKind::Wave:
         return &config_.attacks.wave.attack;
+    case ActionKind::Cage:
+        return &config_.attacks.cage.attack;
     case ActionKind::Nova:
         return &config_.attacks.wave.attack;
     default:
@@ -214,8 +228,12 @@ const AttackParam *Enemy::GetCurrentAttackParam() const {
         return &config_.attacks.sweep.melee.base.attack;
     case ActionKind::Shot:
         return &config_.attacks.shot.attack;
+    case ActionKind::BladeClash:
+        return &config_.attacks.bladeClash.attack;
     case ActionKind::Wave:
         return &config_.attacks.wave.attack;
+    case ActionKind::Cage:
+        return &config_.attacks.cage.attack;
     case ActionKind::Nova:
         return &config_.attacks.wave.attack;
     default:
@@ -327,6 +345,19 @@ bool Enemy::IsDualCounterAction() const {
             action_.step == ActionStep::Active);
 }
 
+bool Enemy::IsBladeClashAction() const {
+    return action_.kind == ActionKind::BladeClash &&
+           (action_.step == ActionStep::Charge ||
+            action_.step == ActionStep::Active);
+}
+
+bool Enemy::IsBladeClashWindow() const {
+    return action_.kind == ActionKind::BladeClash &&
+           action_.step == ActionStep::Active && !dualCounterStageResolved_ &&
+           stateTimer_ >= 0.12f &&
+           stateTimer_ <= config_.attacks.bladeClash.activeTime;
+}
+
 bool Enemy::IsDualCounterWindow() const {
     return action_.kind == ActionKind::Shot && action_.step == ActionStep::Active &&
            !dualCounterStageResolved_ && stateTimer_ >= 0.14f &&
@@ -381,6 +412,31 @@ void Enemy::NotifyDualStrikeLanded() {
     ChangeActionStep(ActionStep::Recovery);
 }
 
+void Enemy::NotifyBladeClashLanded() {
+    if (action_.kind != ActionKind::BladeClash ||
+        action_.step != ActionStep::Active) {
+        NotifyAttackConnected();
+        return;
+    }
+
+    NotifyAttackConnected();
+    dualCounterStageResolved_ = true;
+    isAttackActive_ = false;
+    ChangeActionStep(ActionStep::Recovery);
+}
+
+void Enemy::ResolveBladeClash(bool playerWon) {
+    if (playerWon) {
+        ApplyCounterBreakReaction(1.15f);
+        return;
+    }
+
+    NotifyAttackConnected();
+    EndAttack();
+    UpdateFacingToPlayer();
+    UpdateParts();
+}
+
 bool Enemy::NotifyCountered() { return ApplyCounterBreakReaction(); }
 
 bool Enemy::NotifyCountered(float vulnerabilityDuration) {
@@ -400,7 +456,8 @@ bool Enemy::ApplyCounterBreakReaction(float vulnerabilityDuration) {
 
     const bool isCounterBreakableAction =
         action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
-        action_.kind == ActionKind::Shot;
+        action_.kind == ActionKind::Shot ||
+        action_.kind == ActionKind::BladeClash;
     if (!isCounterBreakableAction) {
         return false;
     }

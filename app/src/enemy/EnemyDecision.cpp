@@ -38,11 +38,14 @@ CounterReadAxis Enemy::GetCounterReadAxis(ActionKind kind) const {
     case ActionKind::Sweep:
         return CounterReadAxis::Horizontal;
     case ActionKind::Wave:
+    case ActionKind::Cage:
         return CounterReadAxis::Radial;
     case ActionKind::Nova:
         return CounterReadAxis::Radial;
     case ActionKind::Shot:
         return CounterReadAxis::Projectile;
+    case ActionKind::BladeClash:
+        return CounterReadAxis::None;
     default:
         return CounterReadAxis::None;
     }
@@ -271,8 +274,14 @@ void Enemy::ResetRecoveryBranchState() {
 bool Enemy::TryBranchFromRecovery(ActionKind finishedKind) {
     ResetRecoveryBranchState();
 
-    if (!(finishedKind == ActionKind::Smash || finishedKind == ActionKind::Sweep ||
-          finishedKind == ActionKind::Shot)) {
+    if (!(finishedKind == ActionKind::Smash ||
+          finishedKind == ActionKind::Sweep ||
+          finishedKind == ActionKind::Shot ||
+          finishedKind == ActionKind::BladeClash)) {
+        return false;
+    }
+
+    if (finishedKind == ActionKind::BladeClash) {
         return false;
     }
 
@@ -576,6 +585,10 @@ void Enemy::UpdateIdle(float deltaTime) {
 
 TacticState Enemy::DecideTactic() const {
     const float distance = GetDistanceToPlayer();
+    if (runtime_.cage.isActive) {
+        return TacticState::Ranged;
+    }
+
     const bool canWarp = !IsWarpSuspendedForPresentation();
     const bool isNear = distance <= config_.core.nearAttackDistance;
     const bool isFar = distance >= config_.core.farAttackDistance;
@@ -634,16 +647,60 @@ bool Enemy::TryBeginStalkAction(float chance, float repeatScale) {
 }
 
 ActionKind Enemy::SelectNeutralAction(float distance) const {
+    if (runtime_.cage.isActive) {
+        return lastActionKind_ == ActionKind::BladeClash
+                   ? ActionKind::Wave
+                   : ActionKind::BladeClash;
+    }
+
     if (distance <= config_.core.nearAttackDistance) {
         return SelectNearPressureAction();
     }
 
-    return ActionKind::Stalk;
+    int stalkWeight = 36;
+    int bladeClashWeight = distance >= config_.core.farAttackDistance ? 10 : 18;
+    int waveWeight = distance >= config_.core.farAttackDistance ? 24 : 14;
+    int cageWeight = distance >= config_.core.farAttackDistance ? 46 : 26;
+    int novaWeight =
+        (phase_ == BossPhase::Phase2 && novaPhase2Cooldown_ <= 0.0f) ? 10 : 0;
+
+    if (lastActionKind_ == ActionKind::Stalk) {
+        stalkWeight /= 2;
+    } else if (lastActionKind_ == ActionKind::Wave) {
+        waveWeight /= 2;
+    } else if (lastActionKind_ == ActionKind::BladeClash) {
+        bladeClashWeight /= 3;
+    } else if (lastActionKind_ == ActionKind::Cage) {
+        cageWeight /= 2;
+    } else if (lastActionKind_ == ActionKind::Nova) {
+        novaWeight = 0;
+    }
+
+    if (playerObs_.isAttacking || playerObs_.isCounterStance) {
+        bladeClashWeight += 12;
+        cageWeight += 8;
+    }
+
+    switch (PickWeightedIndex(
+        {stalkWeight, bladeClashWeight, waveWeight, cageWeight, novaWeight})) {
+    case 1:
+        return ActionKind::BladeClash;
+    case 2:
+        return ActionKind::Wave;
+    case 3:
+        return ActionKind::Cage;
+    case 4:
+        return ActionKind::Nova;
+    default:
+        return ActionKind::Stalk;
+    }
 }
 
 ActionKind Enemy::SelectNearPressureAction() const {
     int smashWeight = nearSmashWeight_;
     int sweepWeight = nearSweepWeight_;
+    int bladeClashWeight = 18;
+    int cageWeight = 28;
 
     if (forceCounterBaitNext_ || postCounterRhythmTimer_ > 0.0f ||
         playerObs_.justCounterEarly) {
@@ -657,33 +714,51 @@ ActionKind Enemy::SelectNearPressureAction() const {
     if (phase_ == BossPhase::Phase2) {
         smashWeight += phase2NearSmashBonus_;
         sweepWeight += phase2NearSweepBonus_;
+        bladeClashWeight += 6;
+        cageWeight += 8;
     }
 
     if (postCounterRhythmTimer_ > 0.0f) {
         smashWeight = static_cast<int>(smashWeight * 0.7f);
         sweepWeight = static_cast<int>(sweepWeight * 0.7f);
+        bladeClashWeight += 10;
+        cageWeight = static_cast<int>(cageWeight * 0.8f);
     }
 
     if (playerObs_.isAttacking) {
         sweepWeight += 10;
+        bladeClashWeight += 12;
+        cageWeight += 10;
     }
     if (playerObs_.isGuarding) {
         sweepWeight += 4;
+        cageWeight += 4;
     }
     if (playerObs_.isCounterStance) {
         smashWeight -= 6;
         sweepWeight += 4;
+        bladeClashWeight += 12;
+        cageWeight += 8;
     }
 
     if (lastActionKind_ == ActionKind::Smash) {
         smashWeight /= 2;
     } else if (lastActionKind_ == ActionKind::Sweep) {
         sweepWeight /= 2;
+    } else if (lastActionKind_ == ActionKind::BladeClash) {
+        bladeClashWeight /= 3;
+    } else if (lastActionKind_ == ActionKind::Cage) {
+        cageWeight = 0;
     }
 
-    switch (PickWeightedIndex({smashWeight, sweepWeight})) {
+    switch (PickWeightedIndex(
+        {smashWeight, sweepWeight, bladeClashWeight, cageWeight})) {
     case 0:
         return ActionKind::Smash;
+    case 2:
+        return ActionKind::BladeClash;
+    case 3:
+        return ActionKind::Cage;
     default:
         return ActionKind::Sweep;
     }
@@ -693,6 +768,12 @@ ActionKind Enemy::SelectChaseAction() const { return ActionKind::Stalk; }
 
 void Enemy::BeginNeutralAction() {
     const float distance = GetDistanceToPlayer();
+
+    if (runtime_.cage.isActive) {
+        stalkRepeatCount_ = 0;
+        TryBeginTacticAction(SelectNeutralAction(distance));
+        return;
+    }
 
     if (distance <= config_.core.nearAttackDistance) {
         BeginPressureAction();

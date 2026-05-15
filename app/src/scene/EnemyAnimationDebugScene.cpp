@@ -41,8 +41,10 @@ struct SkillPreview {
 
 const SkillPreview kSkillPreviews[] = {
     {"Smash", ActionKind::Smash}, {"Sweep", ActionKind::Sweep},
-    {"Shot", ActionKind::Shot},   {"Wave", ActionKind::Wave},
-    {"Nova", ActionKind::Nova},   {"Warp", ActionKind::Warp},
+    {"Shot", ActionKind::Shot},   {"BladeClash", ActionKind::BladeClash},
+    {"Wave", ActionKind::Wave},   {"Cage", ActionKind::Cage},
+    {"Nova", ActionKind::Nova},
+    {"Warp", ActionKind::Warp},
     {"Stalk", ActionKind::Stalk},
 };
 
@@ -141,11 +143,13 @@ std::string PickSkillAnimation(const Model *model, ActionKind kind) {
     case ActionKind::Sweep:
         return HasAnimation(model, kBossAnimSweep) ? kBossAnimSweep : std::string{};
     case ActionKind::Shot:
+    case ActionKind::BladeClash:
         if (HasAnimation(model, kBossAnimShot)) {
             return kBossAnimShot;
         }
         return HasAnimation(model, kBossAnimWave) ? kBossAnimWave : std::string{};
     case ActionKind::Wave:
+    case ActionKind::Cage:
     case ActionKind::Nova:
         return HasAnimation(model, kBossAnimWave) ? kBossAnimWave : std::string{};
     case ActionKind::Warp:
@@ -439,7 +443,9 @@ float EnemyAnimationDebugScene::GetSelectedSkillDuration() const {
     case ActionKind::Stalk:
         return 1.20f;
     case ActionKind::Shot:
+    case ActionKind::BladeClash:
     case ActionKind::Wave:
+    case ActionKind::Cage:
         return 1.45f;
     case ActionKind::Smash:
     case ActionKind::Sweep:
@@ -557,7 +563,9 @@ void EnemyAnimationDebugScene::ApplySelectedSkillPose() {
         break;
 
     case ActionKind::Shot:
+    case ActionKind::BladeClash:
     case ActionKind::Wave:
+    case ActionKind::Cage:
         if (step == ActionStep::Charge) {
             PoseBoneTree(*enemyModel, chest, -0.05f, 0.03f * pulse,
                          0.04f * pulse);

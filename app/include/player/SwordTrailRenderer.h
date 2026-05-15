@@ -47,24 +47,20 @@ class SwordTrailRenderer {
     void EnsureVertexCapacity(uint32_t vertexCount);
 
     void UpdateOneSword(size_t index, const Sword *sword, bool isSlashing,
-                        PlayerWeaponType weaponType, float damage,
-                        float deltaTime);
+                        float damage, float deltaTime);
 
     void AddSample(TrailState &trail, const DirectX::XMFLOAT3 &root,
                    const DirectX::XMFLOAT3 &tip, bool force);
-    void BuildVertices(PlayerWeaponType weaponType);
+    void BuildVertices();
 
-    DirectX::XMFLOAT4 GetTrailColor(PlayerWeaponType weaponType,
-                                    float alpha) const;
+    DirectX::XMFLOAT4 GetTrailColor(float alpha) const;
 
   private:
     static constexpr size_t kSwordCount = Player::kSwordCount;
     static constexpr uint32_t kInitialMaxVertices = 256;
     static constexpr uint32_t kMaxSamplesPerSword = 18;
 
-    static constexpr float kTrailLifeNormal = 0.18f;
-    static constexpr float kTrailLifeDual = 0.14f;
-    static constexpr float kTrailLifeGreatSword = 0.30f;
+    static constexpr float kTrailLife = 0.10f;
     static constexpr float kMinAddDistance = 0.035f;
 
     DirectXCommon *dxCommon_ = nullptr;
@@ -83,5 +79,4 @@ class SwordTrailRenderer {
     uint32_t vertexCount_ = 0;
 
     std::array<TrailState, kSwordCount> trails_{};
-    PlayerWeaponType lastWeaponType_ = PlayerWeaponType::Standard;
 };

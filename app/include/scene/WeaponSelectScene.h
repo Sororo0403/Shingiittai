@@ -2,7 +2,6 @@
 #include "BaseScene.h"
 #include "Camera.h"
 #include "InputControlType.h"
-#include "PlayerWeaponType.h"
 #include "Sprite.h"
 #include "Transform.h"
 #include <DirectXMath.h>

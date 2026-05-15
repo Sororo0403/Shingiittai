@@ -31,8 +31,7 @@ XMFLOAT3 Lerp(const XMFLOAT3 &a, const XMFLOAT3 &b, float t) {
             a.z + (b.z - a.z) * t};
 }
 
-XMFLOAT3 MakeSlashGhostOffset(const Sword &sword,
-                              PlayerWeaponType weaponType) {
+XMFLOAT3 MakeSlashGhostOffset(const Sword &sword) {
     XMFLOAT2 slashDir = sword.GetSlashDirection();
     float dirLenSq = slashDir.x * slashDir.x + slashDir.y * slashDir.y;
     if (dirLenSq <= 0.0001f) {
@@ -44,19 +43,7 @@ XMFLOAT3 MakeSlashGhostOffset(const Sword &sword,
     slashDir.x *= invLen;
     slashDir.y *= invLen;
 
-    float length = 0.42f;
-    switch (weaponType) {
-    case PlayerWeaponType::Dual:
-        length = 0.34f;
-        break;
-    case PlayerWeaponType::GreatSword:
-        length = 0.62f;
-        break;
-    case PlayerWeaponType::Standard:
-    default:
-        break;
-    }
-
+    constexpr float length = 0.34f;
     return {-slashDir.x * length, slashDir.y * length, -0.08f * length};
 }
 
@@ -74,45 +61,9 @@ XMFLOAT3 NormalizeSafe(const XMFLOAT3 &v, const XMFLOAT3 &fallback) {
     return Scale(v, invLength);
 }
 
-float GetTrailLife(PlayerWeaponType weaponType) {
-    switch (weaponType) {
-    case PlayerWeaponType::Dual:
-        return 0.10f;
-    case PlayerWeaponType::GreatSword:
-        return 0.20f;
-    case PlayerWeaponType::Standard:
-    default:
-        return 0.13f;
-    }
-}
-
 float SmoothStep(float edge0, float edge1, float x) {
     const float t = std::clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
     return t * t * (3.0f - 2.0f * t);
-}
-
-float GetTrailRootBias(PlayerWeaponType weaponType) {
-    switch (weaponType) {
-    case PlayerWeaponType::Dual:
-        return 0.58f;
-    case PlayerWeaponType::GreatSword:
-        return 0.46f;
-    case PlayerWeaponType::Standard:
-    default:
-        return 0.54f;
-    }
-}
-
-float GetTrailTipExtension(PlayerWeaponType weaponType) {
-    switch (weaponType) {
-    case PlayerWeaponType::Dual:
-        return 0.08f;
-    case PlayerWeaponType::GreatSword:
-        return 0.18f;
-    case PlayerWeaponType::Standard:
-    default:
-        return 0.12f;
-    }
 }
 
 } // namespace
@@ -133,18 +84,15 @@ void SwordTrailRenderer::Reset() {
 }
 
 void SwordTrailRenderer::Update(const Player &player, float deltaTime) {
-    lastWeaponType_ = player.GetWeaponType();
-
     const auto swords = player.GetSwords();
     const auto slashStates = player.GetSwordSlashStates();
     const auto damages = player.GetSwordAttackDamages();
 
     for (size_t i = 0; i < kSwordCount; ++i) {
-        UpdateOneSword(i, swords[i], slashStates[i], player.GetWeaponType(),
-                       damages[i], deltaTime);
+        UpdateOneSword(i, swords[i], slashStates[i], damages[i], deltaTime);
     }
 
-    BuildVertices(player.GetWeaponType());
+    BuildVertices();
 }
 
 void SwordTrailRenderer::Draw(const Camera &camera) {
@@ -168,9 +116,8 @@ void SwordTrailRenderer::Draw(const Camera &camera) {
 }
 
 void SwordTrailRenderer::UpdateOneSword(size_t index, const Sword *sword,
-                                        bool isSlashing,
-                                        PlayerWeaponType weaponType,
-                                        float damage, float deltaTime) {
+                                        bool isSlashing, float damage,
+                                        float deltaTime) {
     (void)damage;
 
     if (index >= trails_.size()) {
@@ -179,7 +126,7 @@ void SwordTrailRenderer::UpdateOneSword(size_t index, const Sword *sword,
 
     TrailState &trail = trails_[index];
 
-    const float trailLife = GetTrailLife(weaponType);
+    const float trailLife = kTrailLife;
 
     for (TrailSample &sample : trail.samples) {
         sample.age += deltaTime;
@@ -205,7 +152,7 @@ void SwordTrailRenderer::UpdateOneSword(size_t index, const Sword *sword,
 
         if (justStarted) {
             const XMFLOAT3 ghostOffset =
-                MakeSlashGhostOffset(*sword, weaponType);
+                MakeSlashGhostOffset(*sword);
             AddSample(trail, Add(root, ghostOffset), Add(tip, ghostOffset),
                       true);
         }
@@ -241,7 +188,7 @@ void SwordTrailRenderer::AddSample(TrailState &trail,
     }
 }
 
-void SwordTrailRenderer::BuildVertices(PlayerWeaponType weaponType) {
+void SwordTrailRenderer::BuildVertices() {
     vertexCount_ = 0;
 
     uint32_t requiredVertexCount = 0;
@@ -261,7 +208,7 @@ void SwordTrailRenderer::BuildVertices(PlayerWeaponType weaponType) {
         return;
     }
 
-    const float trailLife = GetTrailLife(weaponType);
+    const float trailLife = kTrailLife;
 
     for (const TrailState &trail : trails_) {
         if (trail.samples.size() < 2) {
@@ -271,8 +218,8 @@ void SwordTrailRenderer::BuildVertices(PlayerWeaponType weaponType) {
         for (size_t i = 1; i < trail.samples.size(); ++i) {
             const TrailSample &a = trail.samples[i - 1];
             const TrailSample &b = trail.samples[i];
-            const float rootBias = GetTrailRootBias(weaponType);
-            const float tipExtension = GetTrailTipExtension(weaponType);
+            constexpr float rootBias = 0.58f;
+            constexpr float tipExtension = 0.08f;
 
             const XMFLOAT3 dirA = NormalizeSafe(Sub(a.tip, a.root),
                                                 {0.0f, 1.0f, 0.0f});
@@ -294,8 +241,8 @@ void SwordTrailRenderer::BuildVertices(PlayerWeaponType weaponType) {
                            static_cast<float>(i) /
                                static_cast<float>(trail.samples.size()));
 
-            const XMFLOAT4 colorA = GetTrailColor(weaponType, segmentFade);
-            const XMFLOAT4 colorB = GetTrailColor(weaponType, segmentFade);
+            const XMFLOAT4 colorA = GetTrailColor(segmentFade);
+            const XMFLOAT4 colorB = GetTrailColor(segmentFade);
 
             const float vA = static_cast<float>(i - 1) /
                              static_cast<float>(
@@ -324,17 +271,8 @@ void SwordTrailRenderer::BuildVertices(PlayerWeaponType weaponType) {
     }
 }
 
-XMFLOAT4 SwordTrailRenderer::GetTrailColor(PlayerWeaponType weaponType,
-                                           float alpha) const {
-    switch (weaponType) {
-    case PlayerWeaponType::Dual:
-        return {0.84f, 0.30f, 1.00f, 0.82f * alpha};
-    case PlayerWeaponType::GreatSword:
-        return {1.00f, 0.26f, 0.12f, 0.86f * alpha};
-    case PlayerWeaponType::Standard:
-    default:
-        return {0.92f, 0.24f, 1.00f, 0.88f * alpha};
-    }
+XMFLOAT4 SwordTrailRenderer::GetTrailColor(float alpha) const {
+    return {0.84f, 0.30f, 1.00f, 0.82f * alpha};
 }
 
 void SwordTrailRenderer::CreateRootSignature() {

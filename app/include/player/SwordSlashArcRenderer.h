@@ -1,6 +1,5 @@
 #pragma once
 #include "Camera.h"
-#include "PlayerWeaponType.h"
 #include <DirectXMath.h>
 #include <array>
 #include <cstddef>
@@ -19,7 +18,7 @@ class SwordSlashArcRenderer {
     void Emit(const DirectX::XMFLOAT3 &root, const DirectX::XMFLOAT3 &tip,
               const DirectX::XMFLOAT3 &playerPosition,
               const DirectX::XMFLOAT3 &targetPosition, const Camera &camera,
-              PlayerWeaponType weaponType, size_t swordIndex);
+              size_t swordIndex);
     void EmitHitLine(const DirectX::XMFLOAT3 &position,
                      const DirectX::XMFLOAT3 &direction, const Camera &camera,
                      float power);
