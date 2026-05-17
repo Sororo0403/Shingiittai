@@ -1,12 +1,14 @@
 #include "WeaponSelectScene.h"
 #include "CalibrationScene.h"
 #include "DirectXCommon.h"
+#include "HandRegistrationScene.h"
 #include "Input.h"
 #include "ModelManager.h"
 #include "PostEffectRenderer.h"
 #include "SceneManager.h"
 #include "SpriteManager.h"
 #include "TextureManager.h"
+#include "TipScene.h"
 #include "WinApp.h"
 #include <Xinput.h>
 #include <algorithm>
@@ -92,8 +94,19 @@ void WeaponSelectScene::Update() {
     if (startRequested_) {
         transitionTimer_ += ctx_->deltaTime;
         if (transitionTimer_ >= kTransitionDuration) {
-            sceneManager_->ChangeScene(
-                std::make_unique<CalibrationScene>(SelectedControlType()));
+            const InputControlType selectedType = SelectedControlType();
+            if (selectedType == InputControlType::Hand) {
+                sceneManager_->ChangeScene(
+                    std::make_unique<HandRegistrationScene>());
+            } else if (selectedType == InputControlType::JoyCon) {
+                sceneManager_->ChangeScene(
+                    std::make_unique<CalibrationScene>(selectedType));
+            } else {
+                SwordInputCalibration calibration{};
+                calibration.controlType = selectedType;
+                sceneManager_->ChangeScene(
+                    std::make_unique<TipScene>(calibration));
+            }
         }
         return;
     }

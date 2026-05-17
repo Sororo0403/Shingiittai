@@ -1,7 +1,7 @@
 #include "TitleScene.h"
-#include "CalibrationScene.h"
 #include "DirectXCommon.h"
 #include "GameScene.h"
+#include "HandRegistrationScene.h"
 #include "Input.h"
 #include "PostEffectRenderer.h"
 #include "SceneManager.h"
@@ -69,8 +69,8 @@ void TitleScene::Update() {
         fadeTimer_ += ctx_->deltaTime;
         if (fadeTimer_ >= kFadeDuration) {
             if (cameraStartRequested_) {
-                sceneManager_->ChangeScene(std::make_unique<CalibrationScene>(
-                    InputControlType::Hand));
+                sceneManager_->ChangeScene(
+                    std::make_unique<HandRegistrationScene>());
             } else {
                 sceneManager_->ChangeScene(
                     std::make_unique<WeaponSelectScene>());

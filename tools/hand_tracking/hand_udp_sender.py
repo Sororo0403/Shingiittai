@@ -46,6 +46,11 @@ DEBUG_TRAIL_MIN_ALPHA = 0.25
 DEBUG_RAW_POINT_COLOR = (0, 220, 255)
 DEBUG_PREDICTED_COLOR = (240, 180, 80)
 PREVIEW_CHUNK_BYTES = 1150
+CONTROL_COMMAND_BYTES = 128
+HAND_IDENTITY_MIN_SEPARATION = 0.16
+HAND_IDENTITY_ACTIVE_ANCHOR_WEIGHT = 0.10
+HAND_IDENTITY_RECOVER_ANCHOR_WEIGHT = 1.15
+HAND_IDENTITY_LABEL_MISMATCH_PENALTY = 0.18
 
 
 def default_model_path():
@@ -325,6 +330,14 @@ def handedness_score(handedness):
     return clamp01(max(category.score for category in handedness))
 
 
+def handedness_label(handedness):
+    if not handedness:
+        return None
+    best = max(handedness, key=lambda category: category.score)
+    label = getattr(best, "category_name", "") or getattr(best, "display_name", "")
+    return label if label else None
+
+
 def distance_sq(a, b):
     dx = a[0] - b[0]
     dy = a[1] - b[1]
@@ -398,27 +411,90 @@ def build_motion_points(hand_landmarks):
     return points
 
 
+def register_initial_hand_identity(detected_hands, identity_anchors, identity_labels):
+    if len(detected_hands) < 2 or identity_anchors[0] is not None:
+        return
+
+    ordered = sorted(detected_hands, key=lambda hand: hand["x"], reverse=True)
+    if abs(ordered[0]["x"] - ordered[1]["x"]) < HAND_IDENTITY_MIN_SEPARATION:
+        return
+
+    for slot, hand in enumerate(ordered[:2]):
+        identity_anchors[slot] = (hand["x"], hand["y"])
+        identity_labels[slot] = hand.get("label")
+
+
+def hand_assignment_cost(
+    slot,
+    hand,
+    prev_positions,
+    prev_landmarks,
+    missing_timers,
+    identity_anchors,
+    identity_labels,
+):
+    active = (
+        prev_landmarks[slot] is not None
+        and missing_timers[slot] <= DETECTION_GRACE_SECONDS * 2.0
+    )
+    has_anchor = identity_anchors[slot] is not None
+
+    cost = 0.0
+    if active:
+        cost += distance_sq(prev_positions[slot], (hand["x"], hand["y"]))
+    if has_anchor:
+        anchor_weight = (
+            HAND_IDENTITY_ACTIVE_ANCHOR_WEIGHT
+            if active
+            else HAND_IDENTITY_RECOVER_ANCHOR_WEIGHT
+        )
+        cost += anchor_weight * distance_sq(identity_anchors[slot], (hand["x"], hand["y"]))
+
+    label = hand.get("label")
+    if identity_labels[slot] and label and identity_labels[slot] != label:
+        cost += HAND_IDENTITY_LABEL_MISMATCH_PENALTY
+
+    return cost
+
+
 def assign_detected_hands(
-    detected_hands, prev_positions, prev_landmarks, missing_timers, max_hands
+    detected_hands,
+    prev_positions,
+    prev_landmarks,
+    missing_timers,
+    max_hands,
+    identity_anchors,
+    identity_labels,
 ):
     assigned = [None for _ in range(max_hands)]
     if not detected_hands:
         return assigned
 
     unused_detections = set(range(len(detected_hands)))
-    active_slots = [
+    trackable_slots = [
         index
         for index in range(max_hands)
-        if prev_landmarks[index] is not None
-        and missing_timers[index] <= DETECTION_GRACE_SECONDS * 2.0
+        if (
+            prev_landmarks[index] is not None
+            and missing_timers[index] <= DETECTION_GRACE_SECONDS * 2.0
+        )
+        or identity_anchors[index] is not None
     ]
     pairs = []
-    for slot in active_slots:
+    for slot in trackable_slots:
         for detection_index in unused_detections:
             hand = detected_hands[detection_index]
             pairs.append(
                 (
-                    distance_sq(prev_positions[slot], (hand["x"], hand["y"])),
+                    hand_assignment_cost(
+                        slot,
+                        hand,
+                        prev_positions,
+                        prev_landmarks,
+                        missing_timers,
+                        identity_anchors,
+                        identity_labels,
+                    ),
                     slot,
                     detection_index,
                 )
@@ -433,15 +509,96 @@ def assign_detected_hands(
         unused_detections.remove(detection_index)
 
     empty_slots = [index for index in range(max_hands) if assigned[index] is None]
-    new_hands = sorted(
-        (detected_hands[index] for index in unused_detections),
-        key=lambda hand: hand["x"],
-        reverse=True,
-    )
-    for slot, hand in zip(empty_slots, new_hands):
-        assigned[slot] = hand
+    if empty_slots:
+        if any(identity_anchors[slot] is not None for slot in empty_slots):
+            recovery_pairs = []
+            for slot in empty_slots:
+                if identity_anchors[slot] is None:
+                    continue
+                for detection_index in unused_detections:
+                    recovery_pairs.append(
+                        (
+                            hand_assignment_cost(
+                                slot,
+                                detected_hands[detection_index],
+                                prev_positions,
+                                prev_landmarks,
+                                missing_timers,
+                                identity_anchors,
+                                identity_labels,
+                            ),
+                            slot,
+                            detection_index,
+                        )
+                    )
+            for _, slot, detection_index in sorted(recovery_pairs):
+                if assigned[slot] is not None or detection_index not in unused_detections:
+                    continue
+                assigned[slot] = detected_hands[detection_index]
+                unused_detections.remove(detection_index)
+
+        remaining_slots = [
+            index for index in range(max_hands) if assigned[index] is None
+        ]
+        new_hands = sorted(
+            (detected_hands[index] for index in unused_detections),
+            key=lambda hand: hand["x"],
+            reverse=True,
+        )
+        for slot, hand in zip(remaining_slots, new_hands):
+            assigned[slot] = hand
 
     return assigned
+
+
+def create_control_socket(port):
+    control_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    control_sock.setblocking(False)
+    try:
+        control_sock.bind(("127.0.0.1", port))
+    except OSError:
+        control_sock.close()
+        return None
+    return control_sock
+
+
+def poll_registration_commands(control_sock):
+    if control_sock is None:
+        return False, None
+
+    should_reset = False
+    register_slot = None
+    while True:
+        try:
+            data, _ = control_sock.recvfrom(CONTROL_COMMAND_BYTES)
+        except BlockingIOError:
+            break
+        except OSError:
+            break
+        command = data.strip().decode("ascii", errors="ignore")
+        if command == "SGREGISTER_RESET":
+            should_reset = True
+            register_slot = None
+        elif command.startswith("SGREGISTER_SLOT"):
+            parts = command.split()
+            if len(parts) >= 2:
+                try:
+                    register_slot = int(parts[1])
+                except ValueError:
+                    register_slot = None
+    return should_reset, register_slot
+
+
+def try_register_single_hand(detected_hands, register_slot, identity_anchors, identity_labels):
+    if register_slot is None or register_slot < 0 or register_slot >= len(identity_anchors):
+        return None
+    if len(detected_hands) != 1:
+        return register_slot
+
+    hand = detected_hands[0]
+    identity_anchors[register_slot] = (hand["x"], hand["y"])
+    identity_labels[register_slot] = hand.get("label")
+    return None
 
 
 def get_average_motion(points, prev_points, dt):
@@ -559,6 +716,7 @@ def parse_args():
     parser.add_argument("--preview-height", type=int, default=240)
     parser.add_argument("--preview-fps", type=float, default=20.0)
     parser.add_argument("--preview-quality", type=int, default=62)
+    parser.add_argument("--control-port", type=int, default=5007)
     parser.add_argument("--show-window", action="store_true")
     parser.add_argument("--camera", type=int, default=0)
     parser.add_argument("--max-hands", type=int, default=2)
@@ -607,6 +765,7 @@ def main():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     target = (args.host, args.port)
     preview_target = (args.preview_host, args.preview_port)
+    control_sock = create_control_socket(args.control_port)
     preview_state = {"frame_id": 0, "last_time": 0.0}
 
     capture = cv2.VideoCapture(args.camera)
@@ -647,6 +806,9 @@ def main():
     ]
     distance_scales = [1.0 for _ in range(max_hands)]
     center_trails = [[] for _ in range(max_hands)]
+    identity_anchors = [None for _ in range(max_hands)]
+    identity_labels = [None for _ in range(max_hands)]
+    pending_register_slot = None
     start_time = time.perf_counter()
     prev_time = time.perf_counter()
     last_timestamp_ms = -1
@@ -668,6 +830,27 @@ def main():
 
             dt = max(now - prev_time, 1.0 / 120.0)
             prev_time = now
+
+            should_reset, register_slot = poll_registration_commands(control_sock)
+            if should_reset:
+                prev_positions = [(0.5, 0.5) for _ in range(max_hands)]
+                prev_landmarks = [None for _ in range(max_hands)]
+                missing_timers = [DETECTION_GRACE_SECONDS for _ in range(max_hands)]
+                distance_scales = [1.0 for _ in range(max_hands)]
+                center_trails = [[] for _ in range(max_hands)]
+                identity_anchors = [None for _ in range(max_hands)]
+                identity_labels = [None for _ in range(max_hands)]
+                pending_register_slot = None
+                for filter_ in center_filters:
+                    filter_.reset()
+                for filter_ in center_kalman_filters:
+                    filter_.reset()
+                for filter_ in point_filters:
+                    filter_.reset()
+                for history in motion_histories:
+                    history.reset()
+            if register_slot is not None:
+                pending_register_slot = register_slot
 
             detected_hands = []
             if result.hand_landmarks:
@@ -691,11 +874,46 @@ def main():
                             "y": center_y,
                             "motion_scale": distance_motion_scale(hand_landmarks),
                             "confidence": max(0.65, handedness_score(handedness)),
+                            "label": handedness_label(handedness),
                         }
                     )
 
+            requested_register_slot = pending_register_slot
+            pending_register_slot = try_register_single_hand(
+                detected_hands,
+                pending_register_slot,
+                identity_anchors,
+                identity_labels,
+            )
+            if (
+                requested_register_slot is not None
+                and pending_register_slot is None
+                and len(detected_hands) == 1
+            ):
+                registered_hand = detected_hands[0]
+                for index in range(max_hands):
+                    prev_landmarks[index] = None
+                    missing_timers[index] = DETECTION_GRACE_SECONDS
+                    center_trails[index] = []
+                    center_filters[index].reset()
+                    center_kalman_filters[index].reset()
+                    point_filters[index].reset()
+                    motion_histories[index].reset()
+                prev_positions[requested_register_slot] = (
+                    registered_hand["x"],
+                    registered_hand["y"],
+                )
+                prev_landmarks[requested_register_slot] = registered_hand["points"]
+                missing_timers[requested_register_slot] = 0.0
+
             assigned_hands = assign_detected_hands(
-                detected_hands, prev_positions, prev_landmarks, missing_timers, max_hands
+                detected_hands,
+                prev_positions,
+                prev_landmarks,
+                missing_timers,
+                max_hands,
+                identity_anchors,
+                identity_labels,
             )
 
             speeds = []
@@ -832,6 +1050,8 @@ def main():
     finally:
         landmarker.close()
         capture.release()
+        if control_sock is not None:
+            control_sock.close()
         if args.show_window:
             cv2.destroyAllWindows()
 

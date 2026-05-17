@@ -125,6 +125,7 @@
     <ClCompile Include="src\scene\GameSceneCamera.cpp" />
     <ClCompile Include="src\scene\GameSceneCombat.cpp" />
     <ClCompile Include="src\scene\GameSceneLighting.cpp" />
+    <ClCompile Include="src\scene\HandRegistrationScene.cpp" />
     <ClCompile Include="src\scene\ModeSelectScene.cpp" />
     <ClCompile Include="src\scene\SettingsScene.cpp" />
     <ClCompile Include="src\scene\TitleScene.cpp" />
@@ -154,6 +155,7 @@
     <ClInclude Include="include\scene\EnemyAnimationDebugScene.h" />
     <ClInclude Include="include\scene\GameScene.h" />
     <ClInclude Include="include\scene\ModeSelectScene.h" />
+    <ClInclude Include="include\scene\HandRegistrationScene.h" />
     <ClInclude Include="include\scene\SettingsScene.h" />
     <ClInclude Include="include\scene\TitleScene.h" />
     <ClInclude Include="include\scene\TipScene.h" />

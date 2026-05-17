@@ -153,6 +153,9 @@
     <ClCompile Include="src\scene\GameSceneHud.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
+    <ClCompile Include="src\scene\HandRegistrationScene.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
     <ClCompile Include="src\player\SwordSlashArcRenderer.cpp">
       <Filter>Source Files\player</Filter>
     </ClCompile>
@@ -223,6 +226,9 @@
       <Filter>Header Files\player</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\GameSceneHud.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="include\scene\HandRegistrationScene.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
     <ClInclude Include="include\player\SwordSlashArcRenderer.h">

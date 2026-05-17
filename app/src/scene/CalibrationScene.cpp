@@ -1,14 +1,11 @@
 #include "CalibrationScene.h"
 #include "DirectXCommon.h"
-#include "GameScene.h"
-#include "Input.h"
 #include "PostEffectRenderer.h"
 #include "SceneManager.h"
 #include "SpriteManager.h"
-#include "TipScene.h"
 #include "TextureManager.h"
+#include "TipScene.h"
 #include "WinApp.h"
-#include <Xinput.h>
 #include <algorithm>
 #include <cmath>
 #include <memory>
@@ -17,11 +14,7 @@ using namespace DirectX;
 
 namespace {
 constexpr float kRequiredStillTime = 3.0f;
-constexpr float kHandStableSpeed = 0.22f;
 constexpr float kJoyConStableDegreesPerSecond = 18.0f;
-constexpr float kMouseStablePixels = 2.0f;
-constexpr uint32_t kCameraPreviewWidth = 320;
-constexpr uint32_t kCameraPreviewHeight = 240;
 
 XMFLOAT4 Color(float r, float g, float b, float a = 1.0f) {
     return {r, g, b, a};
@@ -49,13 +42,6 @@ void CalibrationScene::Initialize(const SceneContext &ctx) {
     sceneTime_ = 0.0f;
     stableTimer_ = 0.0f;
     finished_ = false;
-    handPreviewCenters_.fill({0.5f, 0.5f});
-    handPreviewVisible_.fill(false);
-
-    if (controlType_ == InputControlType::Hand &&
-        ctx_->requestHandTrackingStart) {
-        ctx_->requestHandTrackingStart();
-    }
 
     if (controlType_ == InputControlType::JoyCon) {
         leftJoyCon_.Initialize(true);
@@ -67,9 +53,6 @@ void CalibrationScene::Initialize(const SceneContext &ctx) {
     ctx_->dxCommon->BeginUpload();
     backgroundImage_ =
         LoadTextureImage(L"app/resources/select/weapon_select_bg.png");
-    cameraPreviewTextureId_ =
-        ctx_->texture->CreateDynamicTexture(kCameraPreviewWidth,
-                                            kCameraPreviewHeight);
     for (int i = 0; i < 10; ++i) {
         digitImages_[static_cast<size_t>(i)] =
             LoadTextureImage(L"app/resources/result/char_" +
@@ -86,28 +69,13 @@ void CalibrationScene::Initialize(const SceneContext &ctx) {
 void CalibrationScene::Update() {
     sceneTime_ += ctx_->deltaTime;
 
-    if (controlType_ == InputControlType::Hand) {
-        handController_.Update(ctx_->deltaTime);
-        cameraPreviewReceiver_.Update();
-        for (size_t i = 0; i < handPreviewCenters_.size(); ++i) {
-            float x = handPreviewCenters_[i].x;
-            float y = handPreviewCenters_[i].y;
-            handPreviewVisible_[i] = handController_.GetHandCenter(i, x, y);
-            if (handPreviewVisible_[i]) {
-                handPreviewCenters_[i] = {x, y};
-            }
-        }
-    }
     if (controlType_ == InputControlType::JoyCon) {
         leftJoyCon_.Update(ctx_->deltaTime);
         rightJoyCon_.Update(ctx_->deltaTime);
         UpdateJoyConStability(ctx_->deltaTime);
     }
 
-    const bool stable =
-        IsMouseStable() && IsHandStable() && IsJoyConStable();
-    UpdateHandRestNoise(stable);
-    if (stable) {
+    if (IsJoyConStable()) {
         stableTimer_ += ctx_->deltaTime;
     } else {
         stableTimer_ = 0.0f;
@@ -122,35 +90,14 @@ void CalibrationScene::Draw() {
     const float w = static_cast<float>(ctx_->winApp->GetWidth());
     const float h = static_cast<float>(ctx_->winApp->GetHeight());
 
-    if (controlType_ == InputControlType::Hand) {
-        uint32_t previewWidth = 0;
-        uint32_t previewHeight = 0;
-        if (cameraPreviewReceiver_.ConsumeFrame(
-                cameraPreviewPixels_, previewWidth, previewHeight) &&
-            previewWidth == kCameraPreviewWidth &&
-            previewHeight == kCameraPreviewHeight) {
-            hasCameraPreviewFrame_ = ctx_->texture->UpdateDynamicTexture(
-                cameraPreviewTextureId_, cameraPreviewPixels_.data(),
-                previewWidth, previewHeight);
-        }
-    }
-
     ctx_->sprite->PreDraw();
     DrawBackground(w, h);
-    DrawHandCameraPreview(w, h);
     DrawProgress(w, h);
     DrawStatusBars(w, h);
     ctx_->sprite->PostDraw();
 }
 
-void CalibrationScene::DrawOverlay() {
-    const float w = static_cast<float>(ctx_->winApp->GetWidth());
-    const float h = static_cast<float>(ctx_->winApp->GetHeight());
-
-    ctx_->sprite->PreDraw();
-    DrawCameraUseNotice(w, h);
-    ctx_->sprite->PostDraw();
-}
+void CalibrationScene::DrawOverlay() {}
 
 CalibrationScene::Image
 CalibrationScene::LoadTextureImage(const std::wstring &path) {
@@ -190,32 +137,6 @@ void CalibrationScene::UpdateJoyConStability(float deltaTime) {
               prevRightJoyConOrientation_, rightJoyConAngularSpeed_);
 }
 
-void CalibrationScene::UpdateHandRestNoise(bool stable) {
-    if (controlType_ != InputControlType::Hand) {
-        return;
-    }
-
-    if (!stable) {
-        handRestSpeedSum_.fill(0.0f);
-        handRestSpeedMax_.fill(0.0f);
-        handRestSpeedSamples_.fill(0);
-        return;
-    }
-
-    for (size_t i = 0; i < handRestSpeedSum_.size(); ++i) {
-        float x = 0.0f;
-        float y = 0.0f;
-        if (!handController_.GetHandCenter(i, x, y)) {
-            continue;
-        }
-
-        const float speed = handController_.GetRawMotionSpeed(i);
-        handRestSpeedSum_[i] += speed;
-        handRestSpeedMax_[i] = (std::max)(handRestSpeedMax_[i], speed);
-        ++handRestSpeedSamples_[i];
-    }
-}
-
 void CalibrationScene::FinishCalibration() {
     finished_ = true;
     inputCalibration_.controlType = controlType_;
@@ -223,67 +144,10 @@ void CalibrationScene::FinishCalibration() {
     const bool hasLeftJoyCon = leftJoyCon_.IsConnected();
     const bool hasRightJoyCon = rightJoyCon_.IsConnected();
     inputCalibration_.resetJoyConBaseOnStart = hasLeftJoyCon || hasRightJoyCon;
-
-    bool hasHandNeutral = false;
-    for (size_t i = 0; i < inputCalibration_.handNeutral.size(); ++i) {
-        float x = 0.5f;
-        float y = 0.5f;
-        if (handController_.GetHandCenter(i, x, y)) {
-            inputCalibration_.handNeutral[i] = {x, y};
-            hasHandNeutral = true;
-        }
-    }
-    inputCalibration_.hasHandNeutral = hasHandNeutral;
-
-    bool hasHandRestSpeed = false;
-    for (size_t i = 0; i < inputCalibration_.handRestSpeed.size(); ++i) {
-        if (handRestSpeedSamples_[i] <= 0) {
-            continue;
-        }
-
-        const float average =
-            handRestSpeedSum_[i] / static_cast<float>(handRestSpeedSamples_[i]);
-        inputCalibration_.handRestSpeed[i] =
-            (std::max)(average, handRestSpeedMax_[i] * 0.72f);
-        hasHandRestSpeed = true;
-    }
-    inputCalibration_.hasHandRestSpeed = hasHandRestSpeed;
+    inputCalibration_.hasHandNeutral = false;
+    inputCalibration_.hasHandRestSpeed = false;
 
     sceneManager_->ChangeScene(std::make_unique<TipScene>(inputCalibration_));
-}
-
-bool CalibrationScene::IsMouseStable() const {
-    const float dx = static_cast<float>(ctx_->input->GetMouseDX());
-    const float dy = static_cast<float>(ctx_->input->GetMouseDY());
-    const bool keyboardStill =
-        !ctx_->input->IsKeyPress(DIK_W) && !ctx_->input->IsKeyPress(DIK_A) &&
-        !ctx_->input->IsKeyPress(DIK_S) && !ctx_->input->IsKeyPress(DIK_D) &&
-        !ctx_->input->IsMousePress(0);
-    return controlType_ != InputControlType::KeyboardMouse ||
-           (keyboardStill &&
-            dx * dx + dy * dy <= kMouseStablePixels * kMouseStablePixels);
-}
-
-bool CalibrationScene::IsHandStable() const {
-    if (controlType_ != InputControlType::Hand) {
-        return true;
-    }
-
-    bool hasHand = false;
-    bool stable = true;
-    for (size_t i = 0; i < inputCalibration_.handNeutral.size(); ++i) {
-        float x = 0.0f;
-        float y = 0.0f;
-        if (!handController_.GetHandCenter(i, x, y)) {
-            continue;
-        }
-
-        hasHand = true;
-        stable = stable && handController_.GetRawMotionSpeed(i) <=
-                               kHandStableSpeed;
-    }
-
-    return hasHand && stable;
 }
 
 bool CalibrationScene::IsJoyConStable() const {
@@ -335,47 +199,6 @@ void CalibrationScene::DrawBackground(float screenWidth, float screenHeight) {
              140.0f + pulse * 16.0f, Color(0.10f, 0.54f, 1.0f, 0.88f));
 }
 
-void CalibrationScene::DrawHandCameraPreview(float screenWidth,
-                                             float screenHeight) {
-    if (controlType_ != InputControlType::Hand) {
-        return;
-    }
-
-    const float previewW = (std::min)(screenWidth * 0.58f, 540.0f);
-    const float previewH = previewW * 0.75f;
-    const float x = (screenWidth - previewW) * 0.5f;
-    const float y = screenHeight * 0.17f;
-    const float pulse = 0.5f + 0.5f * std::sinf(sceneTime_ * 5.2f);
-
-    DrawRect(x - 8.0f, y - 8.0f, previewW + 16.0f, previewH + 16.0f,
-             Color(0.015f, 0.018f, 0.024f, 0.94f));
-    DrawRect(x, y, previewW, previewH, Color(0.035f, 0.040f, 0.050f, 0.96f));
-
-    if (hasCameraPreviewFrame_) {
-        Sprite preview{};
-        preview.position = {x, y};
-        preview.size = {previewW, previewH};
-        preview.color = {1.0f, 1.0f, 1.0f, 0.96f};
-        preview.textureId = cameraPreviewTextureId_;
-        ctx_->sprite->DrawSprite(preview);
-        DrawRect(x, y, previewW, previewH, Color(0.02f, 0.04f, 0.06f, 0.16f));
-    }
-
-    for (size_t i = 0; i < handPreviewCenters_.size(); ++i) {
-        const bool visible = handPreviewVisible_[i];
-        const XMFLOAT2 center = handPreviewCenters_[i];
-        const float handX = x + center.x * previewW;
-        const float handY = y + center.y * previewH;
-        const XMFLOAT4 color =
-            i == 0 ? Color(0.20f, 1.0f, 0.42f, visible ? 0.92f : 0.24f)
-                   : Color(0.18f, 0.62f, 1.0f, visible ? 0.92f : 0.24f);
-        const float size = visible ? 34.0f + pulse * 6.0f : 20.0f;
-        DrawRect(handX - size * 0.5f, handY - 3.0f, size, 6.0f, color);
-        DrawRect(handX - 3.0f, handY - size * 0.5f, 6.0f, size, color);
-        DrawRect(handX - 8.0f, handY - 8.0f, 16.0f, 16.0f, color);
-    }
-}
-
 void CalibrationScene::DrawProgress(float screenWidth, float screenHeight) {
     const float progress =
         std::clamp(stableTimer_ / kRequiredStillTime, 0.0f, 1.0f);
@@ -401,48 +224,21 @@ void CalibrationScene::DrawStatusBars(float screenWidth, float screenHeight) {
     const float panelW = screenWidth * 0.58f;
     const float x = (screenWidth - panelW) * 0.5f;
     const float y = screenHeight * 0.84f;
-    const float segmentW = panelW / 3.0f - 8.0f;
-    const bool states[3] = {IsMouseStable(), IsHandStable(), IsJoyConStable()};
-    for (int i = 0; i < 3; ++i) {
+    const float segmentW = panelW / 2.0f - 8.0f;
+
+    const bool states[2] = {
+        leftJoyCon_.IsConnected() && !leftJoyCon_.IsCalibrating() &&
+            leftJoyConAngularSpeed_ <= kJoyConStableDegreesPerSecond,
+        rightJoyCon_.IsConnected() && !rightJoyCon_.IsCalibrating() &&
+            rightJoyConAngularSpeed_ <= kJoyConStableDegreesPerSecond};
+
+    for (int i = 0; i < 2; ++i) {
         const XMFLOAT4 color =
             states[i] ? Color(0.10f, 0.74f, 0.36f, 0.92f)
                       : Color(0.80f, 0.12f, 0.10f, 0.88f);
-        DrawRect(x + static_cast<float>(i) * (segmentW + 12.0f), y, segmentW,
+        DrawRect(x + static_cast<float>(i) * (segmentW + 16.0f), y, segmentW,
                  12.0f, color);
     }
-}
-
-void CalibrationScene::DrawCameraUseNotice(float, float) {
-    if (controlType_ != InputControlType::Hand) {
-        return;
-    }
-
-    const float x = 22.0f;
-    const float y = 22.0f;
-    const float intro = 1.0f - std::clamp(sceneTime_ / 2.2f, 0.0f, 1.0f);
-    const float pulse = 0.50f + 0.50f * std::sinf(sceneTime_ * 6.0f);
-    const float panelAlpha = 0.72f + intro * 0.20f;
-    DrawRect(x, y, 210.0f, 52.0f, Color(0.02f, 0.025f, 0.032f, panelAlpha));
-    DrawRect(x, y + 49.0f, 210.0f, 3.0f,
-             Color(0.10f, 0.58f, 1.0f, 0.86f));
-
-    DrawRect(x + 16.0f, y + 19.0f, 33.0f, 20.0f,
-             Color(0.90f, 0.94f, 1.0f, 0.94f));
-    DrawRect(x + 22.0f, y + 12.0f, 15.0f, 8.0f,
-             Color(0.90f, 0.94f, 1.0f, 0.94f));
-    DrawRect(x + 26.0f, y + 23.0f, 13.0f, 11.0f,
-             Color(0.07f, 0.11f, 0.17f, 0.94f));
-    DrawRect(x + 52.0f, y + 24.0f, 14.0f, 10.0f,
-             Color(0.90f, 0.94f, 1.0f, 0.94f));
-
-    DrawRect(x + 82.0f, y + 17.0f, 104.0f, 4.0f,
-             Color(0.94f, 0.96f, 1.0f, 0.76f));
-    DrawRect(x + 82.0f, y + 27.0f, 82.0f, 4.0f,
-             Color(0.94f, 0.96f, 1.0f, 0.58f));
-    DrawRect(x + 82.0f, y + 37.0f, 58.0f, 4.0f,
-             Color(0.94f, 0.96f, 1.0f, 0.42f));
-    DrawRect(x + 193.0f, y + 12.0f, 7.0f, 7.0f,
-             Color(1.0f, 0.14f, 0.08f, 0.58f + pulse * 0.42f));
 }
 
 void CalibrationScene::DrawRect(float x, float y, float w, float h,
