@@ -185,8 +185,12 @@ Transform Sword::BuildVisualTransform() const {
     return drawTransform;
 }
 
-void Sword::Draw(ModelManager *modelManager, const Camera &camera) {
+void Sword::Draw(ModelManager *modelManager, const Camera &camera,
+                 float visualScale) {
     Transform drawTransform = BuildVisualTransform();
+    drawTransform.scale.x *= visualScale;
+    drawTransform.scale.y *= visualScale;
+    drawTransform.scale.z *= visualScale;
 
     if (const Model *model = modelManager->GetModel(modelId_)) {
         modelManager->GetRenderer()->Draw(*model, drawTransform, camera);

@@ -22,6 +22,8 @@ class TextureManager {
     struct Entry {
         Texture texture;
         uint32_t srvIndex = 0;
+        Microsoft::WRL::ComPtr<ID3D12Resource> dynamicUploadBuffer;
+        bool dynamic = false;
     };
 
   public:
@@ -46,6 +48,17 @@ class TextureManager {
     /// <param name="size">画像データのバイトサイズ</param>
     /// <returns>生成されたテクスチャのID</returns>
     uint32_t LoadFromMemory(const uint8_t *data, size_t size);
+
+    /// <summary>
+    /// CPUから毎フレーム更新できるRGBA8テクスチャを作成する
+    /// </summary>
+    uint32_t CreateDynamicTexture(uint32_t width, uint32_t height);
+
+    /// <summary>
+    /// CreateDynamicTextureで作成したテクスチャの中身をRGBA8で更新する
+    /// </summary>
+    bool UpdateDynamicTexture(uint32_t textureId, const uint8_t *rgbaPixels,
+                              uint32_t width, uint32_t height);
 
     /// <summary>
     /// ディゾルブなどに使うグレースケールノイズテクスチャを生成する

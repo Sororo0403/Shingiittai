@@ -38,7 +38,6 @@ class WeaponSelectScene : public BaseScene {
     void UpdateSelection(Input *input);
     void BeginStart();
     void Layout(float screenWidth, float screenHeight);
-    bool IsMouseOver(const ButtonRect &rect) const;
     InputControlType SelectedControlType() const;
     void UpdateCamera();
     void UpdateLighting();

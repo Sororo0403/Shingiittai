@@ -266,6 +266,11 @@ bool Enemy::ShouldUseLockedAttackYaw() const {
 }
 
 void Enemy::TakeDamage(float damage) {
+    TakeDamageDeferTransitions(damage);
+    ResolveDeferredDamageTransitions();
+}
+
+void Enemy::TakeDamageDeferTransitions(float damage) {
     if (deathFinished_ || isDying_) {
         return;
     }
@@ -273,6 +278,16 @@ void Enemy::TakeDamage(float damage) {
     hp_ -= damage;
     if (hp_ < 0.0f) {
         hp_ = 0.0f;
+    }
+
+    if (hp_ > 0.0f) {
+        hitReactionTimer_ = (std::max)(hitReactionTimer_, hitReactionDuration_);
+    }
+}
+
+void Enemy::ResolveDeferredDamageTransitions() {
+    if (deathFinished_ || isDying_) {
+        return;
     }
 
     UpdateBossPhase();

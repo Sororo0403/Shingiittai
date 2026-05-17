@@ -41,7 +41,8 @@ class Player {
     void UpdateJoyConCalibrationInput(Input *input, float deltaTime);
 
     void Draw(ModelManager *modelManager, const Camera &camera,
-              bool drawBody = true, bool forceOpaque = false);
+              bool drawBody = true, bool forceOpaque = false,
+              float visualScale = 1.0f);
 
     const Sword &GetSword() const { return rightSword_; }
     const Sword &GetLeftSword() const { return leftSword_; }

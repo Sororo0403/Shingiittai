@@ -124,6 +124,7 @@ void DirectXCommon::Resize(int width, int height) {
     CreateViewport(width, height);
     CreateScissor(width, height);
     CreateDepthStencil(width, height);
+    UpdateSceneColorSrv();
     UpdateDepthStencilSrv();
 }
 
@@ -190,7 +191,15 @@ void DirectXCommon::RegisterSceneColorSRV(SrvManager *srvManager) {
         throw std::runtime_error("RegisterSceneColorSRV: srvManager is null");
     }
 
+    srvManager_ = srvManager;
     sceneSrvIndex_ = srvManager->Allocate();
+    UpdateSceneColorSrv();
+}
+
+void DirectXCommon::UpdateSceneColorSrv() {
+    if (!srvManager_ || sceneSrvIndex_ == UINT_MAX || !sceneColorBuffer_) {
+        return;
+    }
 
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
     srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -198,8 +207,9 @@ void DirectXCommon::RegisterSceneColorSRV(SrvManager *srvManager) {
     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     srvDesc.Texture2D.MipLevels = 1;
 
-    device_->CreateShaderResourceView(sceneColorBuffer_.Get(), &srvDesc,
-                                      srvManager->GetCpuHandle(sceneSrvIndex_));
+    device_->CreateShaderResourceView(
+        sceneColorBuffer_.Get(), &srvDesc,
+        srvManager_->GetCpuHandle(sceneSrvIndex_));
 }
 
 void DirectXCommon::TransitionDepthToShaderResource() {

@@ -179,6 +179,7 @@ class DirectXCommon {
     /// 深度ステンシルバッファを生成する
     /// </summary>
     void CreateDepthStencil(int width, int height);
+    void UpdateSceneColorSrv();
     void UpdateDepthStencilSrv();
     D3D12_CPU_DESCRIPTOR_HANDLE GetBackBufferRtvHandle() const;
     D3D12_CPU_DESCRIPTOR_HANDLE GetSceneRtvHandle() const;
@@ -190,7 +191,7 @@ class DirectXCommon {
   private:
     static constexpr UINT kSwapChainBufferCount = 2;
     static constexpr UINT kSceneRtvIndex = kSwapChainBufferCount;
-    static constexpr float kClearColor[4] = {0.025f, 0.022f, 0.020f, 1.0f};
+    static constexpr float kClearColor[4] = {0.040f, 0.050f, 0.088f, 1.0f};
 
     Microsoft::WRL::ComPtr<IDXGIFactory7> factory_;
     Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain_;

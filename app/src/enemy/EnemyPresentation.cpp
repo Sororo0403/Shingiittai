@@ -588,7 +588,8 @@ void Enemy::UpdateParts() {
     DirectX::XMStoreFloat4(&visualTf_.rotation, visualRot);
 }
 
-void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
+void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
+                 float visualScale) {
     if (runtime_.deathFinished) {
         return;
     }
@@ -744,7 +745,35 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera) {
     }
 
     auto drawEnemyVisual = [&](const Transform &visual) {
-        modelManager->Draw(modelId_, visual, camera);
+        Transform scaledVisual = visual;
+        scaledVisual.scale.x *= visualScale;
+        scaledVisual.scale.y *= visualScale;
+        scaledVisual.scale.z *= visualScale;
+        if (visualScale > 1.01f && !isHitFlashing) {
+            Transform rimVisual = scaledVisual;
+            rimVisual.scale.x *= 1.045f;
+            rimVisual.scale.y *= 1.035f;
+            rimVisual.scale.z *= 1.045f;
+            ModelDrawEffect rimEffect{};
+            rimEffect.enabled = true;
+            rimEffect.additiveBlend = true;
+            rimEffect.disableCulling = true;
+            rimEffect.color = {1.0f, 0.82f, 0.42f, 0.58f};
+            rimEffect.intensity = 1.10f + 0.28f * actionPulse;
+            rimEffect.fresnelPower = 0.82f;
+            rimEffect.noiseAmount = 0.04f;
+            rimEffect.time = runtime_.stateTimer;
+            modelManager->SetDrawEffect(rimEffect);
+            modelManager->Draw(modelId_, rimVisual, camera);
+            ModelDrawEffect finishEffect{};
+            finishEffect.enabled = true;
+            finishEffect.color = {1.0f, 0.96f, 0.84f, 0.38f};
+            finishEffect.intensity = 0.34f;
+            finishEffect.fresnelPower = 1.45f;
+            finishEffect.time = runtime_.stateTimer;
+            modelManager->SetDrawEffect(finishEffect);
+        }
+        modelManager->Draw(modelId_, scaledVisual, camera);
     };
 
     if (isVisible_ && !isWarpMoveHidden) {

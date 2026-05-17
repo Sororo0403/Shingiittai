@@ -284,7 +284,8 @@ void GameScene::BeginBladeClash(size_t swordIndex) {
     player_.SetBladeClashPose(true, 0.5f);
     counterCinematicActive_ = false;
     counterCinematicTimer_ = 0.0f;
-    SetEnemyAnimationFrozen(true);
+    SetEnemyAnimationFrozen(false);
+    SyncEnemyAnimation();
     player_.NotifyCounterSuccess(swordIndex);
 
     sparkParticles_.EmitBurst(bladeClashCenter_, 22, 0.16f,
@@ -407,6 +408,8 @@ void GameScene::ResolveBladeClash(bool playerWon) {
     bladeClashFinishActive_ = true;
     bladeClashFinishPlayerWon_ = playerWon;
     bladeClashFinishImpactEmitted_ = !playerWon;
+    bladeClashFinishSkidEmitted_ = !playerWon;
+    bladeClashFinishPendingEnemyTransition_ = false;
     bladeClashFinishTimer_ = 0.0f;
     bladeClashFinishCenter_ =
         playerWon ? XMFLOAT3{enemy_.GetTransform().position.x,
@@ -422,13 +425,13 @@ void GameScene::ResolveBladeClash(bool playerWon) {
     bladeClashFinishPlayerStart_ = player_.GetTransform().position;
     bladeClashFinishPlayerEnd_ =
         playerWon ? XMFLOAT3{enemy_.GetTransform().position.x +
-                                 bladeClashDirection_.x * 5.15f,
+                                 bladeClashDirection_.x * 8.45f,
                              player_.GetTransform().position.y,
                              enemy_.GetTransform().position.z +
-                                 bladeClashDirection_.z * 5.15f}
+                                 bladeClashDirection_.z * 8.45f}
                   : player_.GetTransform().position;
     player_.SetBladeClashPose(false);
-    SetEnemyAnimationFrozen(false);
+    SetEnemyAnimationFrozen(playerWon);
     enemy_.ResolveBladeClash(playerWon);
 
     const XMFLOAT3 playerPos = player_.GetTransform().position;
@@ -441,12 +444,12 @@ void GameScene::ResolveBladeClash(bool playerWon) {
 
     if (playerWon) {
         const float damage = 185.0f * damageMultiplier_;
-        enemy_.TakeDamage(damage);
+        enemy_.TakeDamageDeferTransitions(damage);
         player_.NotifyAttackHit(damage);
+        bladeClashFinishPendingEnemyTransition_ = true;
         feedback.type = CombatFeedbackEventType::CounterSuccess;
         feedback.power = damage / 18.0f;
         DispatchCombatFeedback(feedback);
-        enemyHitCooldown_ = 0.22f;
         return;
     }
 

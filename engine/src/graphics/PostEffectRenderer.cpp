@@ -39,6 +39,37 @@ void PostEffectRenderer::Resize(int width, int height) {
     UpdateConstantBuffer();
 }
 
+void PostEffectRenderer::ResetEffects() {
+    colorMode_ = ColorMode::None;
+    filterMode_ = FilterMode::None;
+    edgeMode_ = EdgeMode::None;
+    enableVignetting_ = false;
+    vignettingStrength_ = 0.0f;
+    vignettingScale_ = 16.0f;
+    vignettingPower_ = 0.8f;
+    grayscaleWeights_[0] = 0.2125f;
+    grayscaleWeights_[1] = 0.7154f;
+    grayscaleWeights_[2] = 0.0721f;
+    sepiaTone_[0] = 1.20f;
+    sepiaTone_[1] = 1.00f;
+    sepiaTone_[2] = 0.80f;
+    luminanceEdgeThreshold_ = 0.2f;
+    depthEdgeThreshold_ = 0.02f;
+    nearZ_ = 0.1f;
+    farZ_ = 100.0f;
+    radialBlurCenter_[0] = 0.5f;
+    radialBlurCenter_[1] = 0.5f;
+    radialBlurStrength_ = 0.0f;
+    radialBlurSampleCount_ = 10;
+    randomMode_ = RandomMode::None;
+    randomStrength_ = 0.0f;
+    randomScale_ = 240.0f;
+    randomTime_ = 0.0f;
+    randomSeed_ = 0.0f;
+    sceneDimStrength_ = 0.0f;
+    UpdateConstantBuffer();
+}
+
 void PostEffectRenderer::Draw(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle,
                               D3D12_GPU_DESCRIPTOR_HANDLE depthHandle) {
     auto commandList = dxCommon_->GetCommandList();

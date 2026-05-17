@@ -62,19 +62,39 @@ class HandUdpSenderProcess {
             runtimeRoot / L"tools" / L"hand_tracking" / L".venv" / L"Scripts" /
             L"python.exe";
 
-        std::wstring command;
-        if (std::filesystem::exists(packagedExe)) {
-            command = L"\"" + packagedExe.wstring() + L"\" --model \"" +
-                      modelPath.wstring() + L"\"";
-        } else if (std::filesystem::exists(scriptPath) &&
-                   std::filesystem::exists(venvPython)) {
-            command = L"\"" + venvPython.wstring() + L"\" \"" +
-                      scriptPath.wstring() + L"\" --model \"" +
-                      modelPath.wstring() + L"\"";
+        std::wstring scriptCommand;
+        if (std::filesystem::exists(scriptPath) &&
+            std::filesystem::exists(venvPython)) {
+            scriptCommand = L"\"" + venvPython.wstring() + L"\" \"" +
+                            scriptPath.wstring() + L"\" --model \"" +
+                            modelPath.wstring() + L"\"";
         } else if (std::filesystem::exists(scriptPath)) {
-            command = L"py -3.11 \"" + scriptPath.wstring() + L"\" --model \"" +
-                      modelPath.wstring() + L"\"";
+            scriptCommand = L"py -3.11 \"" + scriptPath.wstring() +
+                            L"\" --model \"" + modelPath.wstring() + L"\"";
+        }
+
+        std::wstring packagedCommand;
+        if (std::filesystem::exists(packagedExe)) {
+            packagedCommand = L"\"" + packagedExe.wstring() + L"\" --model \"" +
+                              modelPath.wstring() + L"\"";
+        }
+
+        std::wstring command;
+#ifdef _DEBUG
+        if (!scriptCommand.empty()) {
+            command = scriptCommand;
         } else {
+            command = packagedCommand;
+        }
+#else
+        if (!packagedCommand.empty()) {
+            command = packagedCommand;
+        } else {
+            command = scriptCommand;
+        }
+#endif
+
+        if (command.empty()) {
             return;
         }
 
@@ -93,10 +113,12 @@ class HandUdpSenderProcess {
 
         STARTUPINFOW startupInfo{};
         startupInfo.cb = sizeof(startupInfo);
+        startupInfo.dwFlags = STARTF_USESHOWWINDOW;
+        startupInfo.wShowWindow = SW_HIDE;
         PROCESS_INFORMATION processInfo{};
         const BOOL started = CreateProcessW(
             nullptr, command.data(), nullptr, nullptr, FALSE,
-            CREATE_NEW_CONSOLE | CREATE_SUSPENDED, nullptr,
+            CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr,
             runtimeRoot.wstring().c_str(),
             &startupInfo, &processInfo);
         if (!started) {
@@ -185,6 +207,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     // WinApp初期化
     WinApp winApp;
     winApp.Initialize(hInstance, nCmdShow, 1280, 720, L"3145_身技一体");
+    winApp.BringToFront();
 
     // クライアント領域の幅と高さ
     int width = winApp.GetWidth();
@@ -238,8 +261,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     sceneCtx.texture = &textureManager;
     sceneCtx.dxCommon = &dxCommon;
     sceneCtx.postEffectRenderer = &postEffectRenderer;
-    sceneCtx.requestHandTrackingStart = [&handUdpSenderProcess]() {
+    sceneCtx.requestHandTrackingStart = [&handUdpSenderProcess, &winApp]() {
         handUdpSenderProcess.Start();
+        winApp.BringToFront();
     };
     sceneCtx.deltaTime = 0.0f;
 
@@ -273,6 +297,20 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
         input.Update(deltaTime);
         if (input.IsKeyTrigger(DIK_ESCAPE)) {
             break;
+        }
+        if (input.IsKeyTrigger(DIK_F11)) {
+            winApp.ToggleFullscreen();
+        }
+
+        const int currentWidth = winApp.GetWidth();
+        const int currentHeight = winApp.GetHeight();
+        if (currentWidth > 0 && currentHeight > 0 &&
+            (currentWidth != width || currentHeight != height)) {
+            width = currentWidth;
+            height = currentHeight;
+            dxCommon.Resize(width, height);
+            postEffectRenderer.Resize(width, height);
+            spriteManager.Resize(width, height);
         }
 
         // Scene 更新

@@ -30,7 +30,6 @@ void GameScene::UpdateSceneLighting() {
     }
 
     const float pulse = 0.96f + 0.04f * std::sinf(sceneLightTime_ * 2.4f);
-    const float colorPulse = 0.5f + 0.5f * std::sinf(sceneLightTime_ * 3.1f);
     const float actionBoost =
         actionKind == ActionKind::Nova   ? 1.22f
         : actionKind == ActionKind::Warp ? 1.12f
@@ -72,7 +71,7 @@ void GameScene::UpdateSceneLighting() {
     default:
         break;
     }
-    if (enemy_.IsPhaseTransitionActive()) {
+    if (enemy_.IsPhaseTransitionActive() && !bladeClashFinishActive_) {
         const float ratio = enemy_.GetPhaseTransitionRatio();
         const float release =
             std::clamp((ratio - 0.88f) / 0.05f, 0.0f, 1.0f);
@@ -82,22 +81,22 @@ void GameScene::UpdateSceneLighting() {
     SceneLighting lighting{};
     lighting.keyLightDirection = {-0.46f, -1.0f, 0.26f};
     lighting.keyLightColor = {
-        1.08f + actionColor.x * 0.06f,
-        1.02f + actionColor.y * 0.05f,
-        0.92f + actionColor.z * 0.04f,
+        1.24f + actionColor.x * 0.07f,
+        1.12f + actionColor.y * 0.05f,
+        0.98f + actionColor.z * 0.03f,
         1.0f,
     };
     lighting.fillLightDirection = {0.72f, -0.24f, -0.56f};
     lighting.fillLightColor = {
-        0.36f + actionColor.x * 0.04f,
-        0.42f + actionColor.y * 0.04f,
-        0.50f + actionColor.z * 0.05f,
-        0.62f,
+        0.34f + actionColor.x * 0.04f,
+        0.34f + actionColor.y * 0.03f,
+        0.40f + actionColor.z * 0.03f,
+        0.52f,
     };
     lighting.ambientColor = {
-        0.30f + actionColor.x * 0.008f,
-        0.31f + actionColor.y * 0.008f,
-        0.31f + actionColor.z * 0.008f,
+        0.21f + actionColor.x * 0.010f,
+        0.23f + actionColor.y * 0.010f,
+        0.27f + actionColor.z * 0.010f,
         1.0f,
     };
     lighting.lightingParams = {
@@ -111,13 +110,13 @@ void GameScene::UpdateSceneLighting() {
         playerPos.x,
         playerPos.y + 3.35f,
         playerPos.z - 0.10f,
-        6.40f,
+        7.20f,
     };
     lighting.pointLights[0].colorIntensity = {
-        0.52f,
-        0.62f,
+        1.0f,
         0.74f,
-        0.72f * pulse,
+        0.42f,
+        1.12f * pulse,
     };
 
     lighting.pointLights[1].positionRange = {
@@ -127,10 +126,10 @@ void GameScene::UpdateSceneLighting() {
         6.30f,
     };
     lighting.pointLights[1].colorIntensity = {
-        0.74f + actionColor.x * 0.04f + 0.01f * colorPulse,
-        0.74f + actionColor.y * 0.03f,
-        0.70f + actionColor.z * 0.03f + 0.01f * (1.0f - colorPulse),
-        0.95f * actionBoost * enemyFocusBoost,
+        1.0f + actionColor.x * 0.04f,
+        0.82f + actionColor.y * 0.03f,
+        0.52f + actionColor.z * 0.02f,
+        1.18f * actionBoost * enemyFocusBoost,
     };
 
     if (bladeClashFinishActive_ && bladeClashFinishPlayerWon_) {
@@ -141,35 +140,35 @@ void GameScene::UpdateSceneLighting() {
                 : 1.0f;
         const float impact =
             1.0f - std::clamp((ratio - 0.58f) / 0.42f, 0.0f, 1.0f);
-        lighting.keyLightDirection = {-0.18f, -0.82f, 0.54f};
-        lighting.keyLightColor = {1.34f, 1.14f, 0.76f, 1.0f};
-        lighting.fillLightDirection = {0.64f, -0.18f, -0.74f};
-        lighting.fillLightColor = {0.18f, 0.34f, 0.58f, 0.42f};
-        lighting.ambientColor = {0.20f, 0.21f, 0.23f, 1.0f};
-        lighting.lightingParams = {88.0f, 0.58f, 1.05f, 0.12f};
+        lighting.keyLightDirection = {-0.16f, -0.86f, 0.48f};
+        lighting.keyLightColor = {1.94f, 1.84f, 1.62f, 1.0f};
+        lighting.fillLightDirection = {0.66f, -0.16f, -0.72f};
+        lighting.fillLightColor = {0.80f, 0.82f, 0.88f, 0.72f};
+        lighting.ambientColor = {0.36f, 0.37f, 0.40f, 1.0f};
+        lighting.lightingParams = {112.0f, 0.74f, 1.48f, 0.22f};
         lighting.pointLights[0].positionRange = {
             playerPos.x - bladeClashDirection_.x * 0.70f,
-            playerPos.y + 1.55f,
+            playerPos.y + 1.72f,
             playerPos.z - bladeClashDirection_.z * 0.70f,
-            8.80f,
+            10.80f,
         };
         lighting.pointLights[0].colorIntensity = {
             1.0f,
-            0.74f,
-            0.28f,
-            2.10f + 0.65f * impact,
+            0.92f,
+            0.72f,
+            4.05f + 1.20f * impact,
         };
         lighting.pointLights[1].positionRange = {
             enemyPos.x,
-            enemyPos.y + 1.90f,
+            enemyPos.y + 2.05f,
             enemyPos.z,
-            5.40f,
+            8.20f,
         };
         lighting.pointLights[1].colorIntensity = {
-            0.18f,
-            0.36f,
-            0.72f,
+            1.0f,
+            0.90f,
             0.70f,
+            2.70f,
         };
     }
 

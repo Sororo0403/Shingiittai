@@ -157,6 +157,9 @@
       <Filter>Source Files\player</Filter>
     </ClCompile>
     <ClCompile Include="src\player\SwordTrailRenderer.cpp" />
+    <ClCompile Include="src\player\HandCameraPreviewReceiver.cpp">
+      <Filter>Source Files\player</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\scene\BattleResultScene.h">
@@ -226,6 +229,9 @@
       <Filter>Header Files\player</Filter>
     </ClInclude>
     <ClInclude Include="include\player\SwordTrailRenderer.h" />
+    <ClInclude Include="include\player\HandCameraPreviewReceiver.h">
+      <Filter>Header Files\player</Filter>
+    </ClInclude>
     <ClInclude Include="include\player\InputControlType.h">
       <Filter>Header Files\player</Filter>
     </ClInclude>

@@ -425,8 +425,11 @@ class Enemy {
     // 新版：観測情報ごと渡す
     void Update(const PlayerCombatObservation &playerObs, float deltaTime);
 
-    void Draw(ModelManager *modelManager, const Camera &camera);
+    void Draw(ModelManager *modelManager, const Camera &camera,
+              float visualScale = 1.0f);
     void TakeDamage(float damage);
+    void TakeDamageDeferTransitions(float damage);
+    void ResolveDeferredDamageTransitions();
     void SetPhase2DebugHealth();
     void ForceDebugBladeClash();
     void ConsumeBullet(size_t index);

@@ -1,4 +1,5 @@
 #include "TitleScene.h"
+#include "CalibrationScene.h"
 #include "DirectXCommon.h"
 #include "GameScene.h"
 #include "Input.h"
@@ -32,6 +33,12 @@ void TitleScene::Initialize(const SceneContext &ctx) {
     sceneTime_ = 0.0f;
     fadeTimer_ = 0.0f;
     startRequested_ = false;
+    cameraStartRequested_ = false;
+    waitingForCameraReady_ = false;
+
+    if (ctx_->requestHandTrackingStart) {
+        ctx_->requestHandTrackingStart();
+    }
 
     ctx_->dxCommon->BeginUpload();
     logoImage_ = LoadTitleImage(L"app/resources/title/title_simple.png");
@@ -50,27 +57,52 @@ void TitleScene::Update() {
         demoScene_->Update();
     }
 
+    handWarmupController_.Update(ctx_->deltaTime);
+
+    if (waitingForCameraReady_ && IsCameraReady()) {
+        startRequested_ = true;
+        waitingForCameraReady_ = false;
+        fadeTimer_ = 0.0f;
+    }
+
     if (startRequested_) {
         fadeTimer_ += ctx_->deltaTime;
         if (fadeTimer_ >= kFadeDuration) {
-            sceneManager_->ChangeScene(std::make_unique<WeaponSelectScene>());
+            if (cameraStartRequested_) {
+                sceneManager_->ChangeScene(std::make_unique<CalibrationScene>(
+                    InputControlType::Hand));
+            } else {
+                sceneManager_->ChangeScene(
+                    std::make_unique<WeaponSelectScene>());
+            }
         }
         return;
     }
 
+    if (IsCameraShortcutTriggered(*ctx_->input)) {
+        cameraStartRequested_ = true;
+        return;
+    }
+
     if (IsAnyButtonTriggered(*ctx_->input)) {
+        if (cameraStartRequested_ && !IsCameraReady()) {
+            waitingForCameraReady_ = true;
+            return;
+        }
         startRequested_ = true;
         fadeTimer_ = 0.0f;
     }
 }
 
 void TitleScene::Draw() {
-    const float w = static_cast<float>(ctx_->winApp->GetWidth());
-    const float h = static_cast<float>(ctx_->winApp->GetHeight());
-
     if (demoScene_) {
         demoScene_->Draw();
     }
+}
+
+void TitleScene::DrawOverlay() {
+    const float w = static_cast<float>(ctx_->winApp->GetWidth());
+    const float h = static_cast<float>(ctx_->winApp->GetHeight());
 
     ctx_->sprite->PreDraw();
 
@@ -82,6 +114,8 @@ void TitleScene::Draw() {
     const float logoY = (h - logoImage_.height * logoScale) * 0.5f;
     DrawImage(logoImage_, logoX, logoY, 1.0f, logoScale);
 
+    DrawCameraModeBadge(w, h);
+
     if (startRequested_) {
         const float fadeT =
             std::clamp(fadeTimer_ / kFadeDuration, 0.0f, 1.0f);
@@ -91,8 +125,6 @@ void TitleScene::Draw() {
 
     ctx_->sprite->PostDraw();
 }
-
-void TitleScene::DrawOverlay() {}
 
 TitleScene::Image TitleScene::LoadTitleImage(const std::wstring &path) {
     Image image{};
@@ -131,9 +163,44 @@ void TitleScene::DrawImage(const Image &image, float x, float y, float alpha,
     ctx_->sprite->DrawSprite(sprite);
 }
 
+void TitleScene::DrawCameraModeBadge(float, float) {
+    if (!cameraStartRequested_) {
+        return;
+    }
+
+    const bool ready = IsCameraReady();
+    const float x = 18.0f;
+    const float y = 18.0f;
+    const float pulse = 0.55f + 0.45f * std::sinf(sceneTime_ * 5.4f);
+    DrawRect(x, y, 94.0f, 42.0f, MakeColor(0.02f, 0.025f, 0.035f, 0.78f));
+    DrawRect(x, y + 39.0f, 78.0f, 3.0f,
+             MakeColor(0.10f, 0.58f, 1.0f, 0.92f));
+    DrawRect(x + 15.0f, y + 15.0f, 31.0f, 19.0f,
+             MakeColor(0.86f, 0.92f, 1.0f, 0.92f));
+    DrawRect(x + 21.0f, y + 9.0f, 14.0f, 7.0f,
+             MakeColor(0.86f, 0.92f, 1.0f, 0.92f));
+    DrawRect(x + 24.0f, y + 19.0f, 13.0f, 10.0f,
+             MakeColor(0.08f, 0.12f, 0.18f, 0.92f));
+    DrawRect(x + 49.0f, y + 19.0f, 13.0f, 10.0f,
+             MakeColor(0.86f, 0.92f, 1.0f, 0.92f));
+    DrawRect(x + 66.0f, y + 10.0f, 8.0f, 8.0f,
+             ready ? MakeColor(0.20f, 1.0f, 0.42f, 0.92f)
+                   : MakeColor(1.0f, 0.12f, 0.08f, 0.55f + pulse * 0.45f));
+    DrawRect(x + 66.0f, y + 26.0f, ready ? 18.0f : 8.0f + pulse * 10.0f,
+             4.0f,
+             ready ? MakeColor(0.20f, 1.0f, 0.42f, 0.88f)
+                   : MakeColor(0.10f, 0.58f, 1.0f, 0.60f));
+    if (waitingForCameraReady_) {
+        DrawRect(x, y + 46.0f, 94.0f, 4.0f,
+                 MakeColor(0.08f, 0.10f, 0.13f, 0.84f));
+        DrawRect(x, y + 46.0f, 28.0f + pulse * 46.0f, 4.0f,
+                 MakeColor(1.0f, 0.82f, 0.18f, 0.92f));
+    }
+}
+
 bool TitleScene::IsAnyButtonTriggered(const Input &input) const {
     for (int dik = 0; dik < 256; ++dik) {
-        if (dik == DIK_C || dik == DIK_R) {
+        if (dik == DIK_F1 || dik == DIK_C || dik == DIK_R) {
             continue;
         }
         if (input.IsKeyTrigger(dik)) {
@@ -163,4 +230,12 @@ bool TitleScene::IsAnyButtonTriggered(const Input &input) const {
 
     return input.IsGamepadLeftTriggerTrigger() ||
            input.IsGamepadRightTriggerTrigger();
+}
+
+bool TitleScene::IsCameraShortcutTriggered(const Input &input) const {
+    return input.IsKeyTrigger(DIK_F1);
+}
+
+bool TitleScene::IsCameraReady() const {
+    return handWarmupController_.HasRecentPacket();
 }

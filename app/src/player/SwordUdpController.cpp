@@ -84,6 +84,15 @@ bool SwordUdpController::GetHandCenter(size_t handIndex, float &x,
     return true;
 }
 
+bool SwordUdpController::HasRecentPacket() const {
+    for (const HandState &hand : hands_) {
+        if (hand.hasPacket && hand.staleTimer < kStaleSeconds) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void SwordUdpController::SetCalibration(
     const SwordInputCalibration &calibration) {
     calibration_ = calibration;

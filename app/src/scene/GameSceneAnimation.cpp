@@ -281,13 +281,24 @@ void GameScene::SyncEnemyAnimation() {
 
     bool shouldLoop = true;
     std::string nextAnimation{};
-    if (bladeClashFinishActive_) {
-        shouldLoop = false;
-        if (!bladeClashFinishPlayerWon_ && HasAnimation(enemyModel, kBossAnimSweep)) {
+    if (bladeClashActive_) {
+        shouldLoop = true;
+        if (HasAnimation(enemyModel, kBossAnimSweep)) {
             nextAnimation = kBossAnimSweep;
-        } else if (bladeClashFinishPlayerWon_ &&
-                   HasAnimation(enemyModel, kBossAnimSmash)) {
-            nextAnimation = kBossAnimSmash;
+        } else if (HasAnimation(enemyModel, kBossAnimShot)) {
+            nextAnimation = kBossAnimShot;
+        } else if (HasAnimation(enemyModel, kBossAnimIdle)) {
+            nextAnimation = kBossAnimIdle;
+        }
+    } else if (bladeClashFinishActive_) {
+        if (bladeClashFinishPlayerWon_) {
+            shouldLoop = true;
+            if (HasAnimation(enemyModel, kBossAnimIdle)) {
+                nextAnimation = kBossAnimIdle;
+            }
+        } else if (HasAnimation(enemyModel, kBossAnimSweep)) {
+            shouldLoop = false;
+            nextAnimation = kBossAnimSweep;
         } else if (HasAnimation(enemyModel, kBossAnimIdle)) {
             shouldLoop = true;
             nextAnimation = kBossAnimIdle;
@@ -444,6 +455,36 @@ void GameScene::ApplyEnemyProceduralAnimation() {
                  0.020f * pulse * idleMotion, 0.0f);
     PoseBoneTree(*enemyModel, headTip, 0.020f * slowPulse * idleMotion, 0.0f,
                  0.0f);
+
+    if (bladeClashActive_) {
+        const float gaugeProgress = Clamp01((bladeClashGauge_ + 1.0f) * 0.5f);
+        const float enemyPressure = Clamp01(1.0f - gaugeProgress);
+        const float timePressure =
+            bladeClashDuration_ > 0.0001f
+                ? Clamp01(1.0f - bladeClashTimer_ / bladeClashDuration_)
+                : 0.0f;
+        const float impact = Clamp01(bladeClashImpactPulse_);
+        const float surge =
+            0.5f + 0.5f * std::sinf(bladeClashEnemySurgeTimer_ * 13.0f);
+        const float menace =
+            0.58f + enemyPressure * 0.34f + timePressure * 0.18f;
+        const float tremble =
+            std::sinf(sceneLightTime_ * (32.0f + 18.0f * impact)) *
+            (0.04f + 0.08f * impact + 0.04f * enemyPressure);
+
+        PoseBoneTree(*enemyModel, root, -0.06f * menace + tremble * 0.24f,
+                     0.03f * surge, -0.04f * surge);
+        PoseBoneTree(*enemyModel, spine, -0.32f * menace + tremble,
+                     -0.12f + 0.05f * surge, -0.18f * surge);
+        PoseBoneTree(*enemyModel, chest, -0.42f * menace + tremble * 1.2f,
+                     -0.18f + 0.08f * surge, -0.26f * surge);
+        PoseBoneTree(*enemyModel, head, -0.18f * menace + tremble * 0.45f,
+                     -0.08f + 0.04f * surge, 0.06f * surge);
+        poseArms(-0.72f * menace + tremble * 1.35f,
+                 0.18f - 0.30f * surge,
+                 -0.82f * menace - 0.18f * surge);
+        return;
+    }
 
     if (bladeClashFinishActive_) {
         const float ratio =

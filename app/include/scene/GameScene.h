@@ -40,11 +40,13 @@ class GameScene : public BaseScene {
     void UpdateBattleCamera();
     void UpdateSceneLighting();
     void DrawArena();
+    void DrawBladeClashFinishBackdrop();
     void DrawEnemyFocusMarker();
     void DrawEnemyWeaponTrail();
     void DrawChargeWeakPoint();
     void DrawChargeWeakPointTimeGauge();
     void DrawBladeClashGauge();
+    void DrawBladeClashFinishFrame();
     void DrawVictoryFlash();
     void DrawDefeatFlash();
     void UpdateBattleIntro(float deltaTime);
@@ -265,8 +267,10 @@ class GameScene : public BaseScene {
     bool bladeClashFinishActive_ = false;
     bool bladeClashFinishPlayerWon_ = false;
     bool bladeClashFinishImpactEmitted_ = false;
+    bool bladeClashFinishSkidEmitted_ = false;
+    bool bladeClashFinishPendingEnemyTransition_ = false;
     float bladeClashFinishTimer_ = 0.0f;
-    float bladeClashFinishDuration_ = 1.65f;
+    float bladeClashFinishDuration_ = 2.05f;
     DirectX::XMFLOAT3 bladeClashFinishCenter_ = {0.0f, 0.0f, 0.0f};
     DirectX::XMFLOAT3 bladeClashFinishPlayerStart_ = {0.0f, 0.0f, 0.0f};
     DirectX::XMFLOAT3 bladeClashFinishPlayerEnd_ = {0.0f, 0.0f, 0.0f};

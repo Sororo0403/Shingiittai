@@ -75,11 +75,7 @@ void WeaponSelectScene::Initialize(const SceneContext &ctx) {
     ctx_->dxCommon->EndUpload();
     ctx_->texture->ReleaseUploadBuffers();
 
-    ctx_->postEffectRenderer->SetColorMode(PostEffectRenderer::ColorMode::None);
-    ctx_->postEffectRenderer->SetRadialBlurStrength(0.0f);
-    ctx_->postEffectRenderer->SetSceneDimStrength(0.0f);
-    ctx_->postEffectRenderer->SetVignettingStrength(0.0f);
-    ctx_->postEffectRenderer->SetVignettingEnabled(false);
+    ctx_->postEffectRenderer->ResetEffects();
     UpdateLighting();
 }
 
@@ -136,11 +132,6 @@ WeaponSelectScene::LoadTextureImage(const std::wstring &path) {
 
 void WeaponSelectScene::UpdateSelection(Input *input) {
     int nextIndex = selectedIndex_;
-    for (int i = 0; i < kWeaponCount; ++i) {
-        if (IsMouseOver(cardRects_[i])) {
-            nextIndex = i;
-        }
-    }
 
     if (input->IsKeyTrigger(DIK_LEFT) || input->IsKeyTrigger(DIK_A)) {
         nextIndex = (selectedIndex_ + kWeaponCount - 1) % kWeaponCount;
@@ -172,16 +163,6 @@ void WeaponSelectScene::UpdateSelection(Input *input) {
         pulseTimers_[selectedIndex_] = 1.0f;
     }
 
-    if (input->IsMouseTrigger(0)) {
-        for (int i = 0; i < kWeaponCount; ++i) {
-            if (IsMouseOver(cardRects_[i])) {
-                selectedIndex_ = i;
-                BeginStart();
-                return;
-            }
-        }
-    }
-
     if (input->IsKeyTrigger(DIK_RETURN) || input->IsKeyTrigger(DIK_SPACE) ||
         (input->IsGamepadConnected() &&
          input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_A))) {
@@ -210,21 +191,6 @@ void WeaponSelectScene::Layout(float screenWidth, float screenHeight) {
     for (int i = 0; i < kWeaponCount; ++i) {
         cardRects_[i] = {startX + i * (cardW + gap), y, cardW, cardH};
     }
-}
-
-bool WeaponSelectScene::IsMouseOver(const ButtonRect &rect) const {
-    POINT cursor{};
-    if (!GetCursorPos(&cursor)) {
-        return false;
-    }
-    if (!ScreenToClient(ctx_->winApp->GetHwnd(), &cursor)) {
-        return false;
-    }
-
-    const float x = static_cast<float>(cursor.x);
-    const float y = static_cast<float>(cursor.y);
-    return x >= rect.x && x <= rect.x + rect.w && y >= rect.y &&
-           y <= rect.y + rect.h;
 }
 
 InputControlType WeaponSelectScene::SelectedControlType() const {

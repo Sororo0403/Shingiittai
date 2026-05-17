@@ -103,6 +103,7 @@
   <ItemGroup>
     <ClCompile Include="src\player\SwordSlashArcRenderer.cpp" />
     <ClCompile Include="src\player\SwordTrailRenderer.cpp" />
+    <ClCompile Include="src\player\HandCameraPreviewReceiver.cpp" />
     <ClCompile Include="src\scene\BattleResultScene.cpp" />
     <ClCompile Include="src\scene\CalibrationScene.cpp" />
     <ClCompile Include="src\scene\GameSceneHud.cpp" />
@@ -138,6 +139,7 @@
   <ItemGroup>
     <ClInclude Include="include\player\SwordSlashArcRenderer.h" />
     <ClInclude Include="include\player\SwordTrailRenderer.h" />
+    <ClInclude Include="include\player\HandCameraPreviewReceiver.h" />
     <ClInclude Include="include\player\InputControlType.h" />
     <ClInclude Include="include\scene\BattleResultScene.h" />
     <ClInclude Include="include\scene\CalibrationScene.h" />

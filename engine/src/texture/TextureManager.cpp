@@ -196,6 +196,88 @@ uint32_t TextureManager::LoadFromMemory(const uint8_t *data, size_t size) {
     return id;
 }
 
+uint32_t TextureManager::CreateDynamicTexture(uint32_t width, uint32_t height) {
+    width = (std::max)(width, 1u);
+    height = (std::max)(height, 1u);
+
+    Texture texture;
+    auto texDesc = CD3DX12_RESOURCE_DESC::Tex2D(
+        DXGI_FORMAT_R8G8B8A8_UNORM, static_cast<UINT64>(width),
+        static_cast<UINT>(height), 1, 1);
+
+    CD3DX12_HEAP_PROPERTIES defaultHeap(D3D12_HEAP_TYPE_DEFAULT);
+    ThrowIfFailed(dxCommon_->GetDevice()->CreateCommittedResource(
+                      &defaultHeap, D3D12_HEAP_FLAG_NONE, &texDesc,
+                      D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr,
+                      IID_PPV_ARGS(&texture.resource)),
+                  "Create dynamic texture resource failed");
+
+    const UINT64 uploadSize =
+        GetRequiredIntermediateSize(texture.resource.Get(), 0, 1);
+    ComPtr<ID3D12Resource> uploadBuffer;
+    CD3DX12_HEAP_PROPERTIES uploadHeap(D3D12_HEAP_TYPE_UPLOAD);
+    auto uploadDesc = CD3DX12_RESOURCE_DESC::Buffer(uploadSize);
+    ThrowIfFailed(dxCommon_->GetDevice()->CreateCommittedResource(
+                      &uploadHeap, D3D12_HEAP_FLAG_NONE, &uploadDesc,
+                      D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                      IID_PPV_ARGS(&uploadBuffer)),
+                  "Create dynamic texture upload buffer failed");
+
+    const uint32_t srvIndex = srvManager_->Allocate();
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+    srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MostDetailedMip = 0;
+    srvDesc.Texture2D.MipLevels = 1;
+
+    dxCommon_->GetDevice()->CreateShaderResourceView(
+        texture.resource.Get(), &srvDesc, srvManager_->GetCpuHandle(srvIndex));
+
+    texture.width = static_cast<int>(width);
+    texture.height = static_cast<int>(height);
+    textures_.push_back(
+        {std::move(texture), srvIndex, std::move(uploadBuffer), true});
+    return static_cast<uint32_t>(textures_.size() - 1);
+}
+
+bool TextureManager::UpdateDynamicTexture(uint32_t textureId,
+                                          const uint8_t *rgbaPixels,
+                                          uint32_t width, uint32_t height) {
+    if (textureId >= textures_.size() || rgbaPixels == nullptr) {
+        return false;
+    }
+
+    Entry &entry = textures_[textureId];
+    if (!entry.dynamic || !entry.dynamicUploadBuffer ||
+        entry.texture.width != static_cast<int>(width) ||
+        entry.texture.height != static_cast<int>(height) ||
+        !dxCommon_->IsCommandListRecording()) {
+        return false;
+    }
+
+    D3D12_SUBRESOURCE_DATA subresource{};
+    subresource.pData = rgbaPixels;
+    subresource.RowPitch = static_cast<LONG_PTR>(width) * 4;
+    subresource.SlicePitch = subresource.RowPitch * height;
+
+    ID3D12GraphicsCommandList *cmdList = dxCommon_->GetCommandList();
+    auto toCopyDest = CD3DX12_RESOURCE_BARRIER::Transition(
+        entry.texture.resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+        D3D12_RESOURCE_STATE_COPY_DEST);
+    cmdList->ResourceBarrier(1, &toCopyDest);
+
+    UpdateSubresources(cmdList, entry.texture.resource.Get(),
+                       entry.dynamicUploadBuffer.Get(), 0, 0, 1,
+                       &subresource);
+
+    auto toShaderResource = CD3DX12_RESOURCE_BARRIER::Transition(
+        entry.texture.resource.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    cmdList->ResourceBarrier(1, &toShaderResource);
+    return true;
+}
+
 uint32_t TextureManager::CreateNoiseTexture(uint32_t width, uint32_t height) {
     width = (std::max)(width, 1u);
     height = (std::max)(height, 1u);

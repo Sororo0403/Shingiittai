@@ -45,6 +45,7 @@ DEBUG_TRAIL_SECONDS = 0.45
 DEBUG_TRAIL_MIN_ALPHA = 0.25
 DEBUG_RAW_POINT_COLOR = (0, 220, 255)
 DEBUG_PREDICTED_COLOR = (240, 180, 80)
+PREVIEW_CHUNK_BYTES = 1150
 
 
 def default_model_path():
@@ -552,16 +553,61 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Send MediaPipe hand motion over UDP.")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=5005)
+    parser.add_argument("--preview-host", default="127.0.0.1")
+    parser.add_argument("--preview-port", type=int, default=5006)
+    parser.add_argument("--preview-width", type=int, default=320)
+    parser.add_argument("--preview-height", type=int, default=240)
+    parser.add_argument("--preview-fps", type=float, default=20.0)
+    parser.add_argument("--preview-quality", type=int, default=62)
+    parser.add_argument("--show-window", action="store_true")
     parser.add_argument("--camera", type=int, default=0)
     parser.add_argument("--max-hands", type=int, default=2)
     parser.add_argument("--model", default=default_model_path())
     return parser.parse_args()
 
 
+def send_preview_frame(sock, target, frame, args, state, now):
+    interval = 1.0 / max(args.preview_fps, 1.0)
+    if now - state["last_time"] < interval:
+        return
+
+    preview = cv2.resize(
+        frame,
+        (max(1, args.preview_width), max(1, args.preview_height)),
+        interpolation=cv2.INTER_AREA,
+    )
+    ok, encoded = cv2.imencode(
+        ".jpg",
+        preview,
+        [cv2.IMWRITE_JPEG_QUALITY, max(1, min(95, args.preview_quality))],
+    )
+    if not ok:
+        return
+
+    data = encoded.tobytes()
+    if not data:
+        return
+
+    state["frame_id"] = (state["frame_id"] + 1) & 0xFFFFFFFF
+    frame_id = state["frame_id"]
+    chunk_count = math.ceil(len(data) / PREVIEW_CHUNK_BYTES)
+    for chunk_index in range(chunk_count):
+        start = chunk_index * PREVIEW_CHUNK_BYTES
+        end = min(start + PREVIEW_CHUNK_BYTES, len(data))
+        header = (
+            f"SGCAM {frame_id} {chunk_index} {chunk_count} {len(data)}\n"
+        ).encode("ascii")
+        sock.sendto(header + data[start:end], target)
+
+    state["last_time"] = now
+
+
 def main():
     args = parse_args()
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     target = (args.host, args.port)
+    preview_target = (args.preview_host, args.preview_port)
+    preview_state = {"frame_id": 0, "last_time": 0.0}
 
     capture = cv2.VideoCapture(args.camera)
     if not capture.isOpened():
@@ -612,6 +658,7 @@ def main():
                 break
 
             frame = cv2.flip(frame, 1)
+            camera_preview_frame = frame.copy()
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
             now = time.perf_counter()
@@ -655,7 +702,6 @@ def main():
             valid_count = 0
             height, width = frame.shape[:2]
             colors = [(30, 240, 90), (80, 180, 255)]
-            debug_rows = []
 
             for hand_index in range(max_hands):
                 hand = assigned_hands[hand_index]
@@ -688,7 +734,6 @@ def main():
                         frame,
                         (raw_x, raw_y),
                         DEBUG_RAW_POINT_COLOR,
-                        "raw",
                         radius=4,
                     )
                     max_step = max(
@@ -765,22 +810,8 @@ def main():
                         frame,
                         (x, y),
                         DEBUG_PREDICTED_COLOR if predicted_only else colors[hand_index],
-                        "send" if detected else "pred",
                         radius=7,
                         filled=detected,
-                    )
-                    debug_rows.append(
-                        (
-                            hand_index,
-                            detected,
-                            speed,
-                            confidence,
-                            raw_x,
-                            raw_y,
-                            x,
-                            y,
-                            motion_scale,
-                        )
                     )
 
                 packet = (
@@ -791,55 +822,18 @@ def main():
                 )
                 sock.sendto(packet.encode("ascii"), target)
 
-            cv2.putText(
-                frame,
-                (
-                    f"UDP {args.host}:{args.port} hands={valid_count} "
-                    f"R={speeds[0]:.2f} L={(speeds[1] if max_hands > 1 else 0.0):.2f}"
-                ),
-                (12, 28),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                (30, 240, 90) if valid_count > 0 else (60, 60, 240),
-                2,
-                cv2.LINE_AA,
+            send_preview_frame(
+                sock, preview_target, camera_preview_frame, args, preview_state, now
             )
-            for row_index, row in enumerate(debug_rows):
-                (
-                    hand_index,
-                    detected,
-                    speed,
-                    confidence,
-                    raw_x,
-                    raw_y,
-                    x,
-                    y,
-                    motion_scale,
-                ) = row
-                status = "detect" if detected else "predict"
-                cv2.putText(
-                    frame,
-                    (
-                        f"H{hand_index + 1} {status} "
-                        f"raw=({raw_x:.2f},{raw_y:.2f}) "
-                        f"send=({x:.2f},{y:.2f}) "
-                        f"v={speed:.2f} scale={motion_scale:.2f} "
-                        f"conf={confidence:.2f}"
-                    ),
-                    (12, 56 + row_index * 22),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.48,
-                    colors[hand_index],
-                    1,
-                    cv2.LINE_AA,
-                )
-            cv2.imshow("Hand UDP Sender", frame)
-            if cv2.waitKey(1) & 0xFF == 27:
-                break
+            if args.show_window:
+                cv2.imshow("Hand UDP Sender", frame)
+                if cv2.waitKey(1) & 0xFF == 27:
+                    break
     finally:
         landmarker.close()
         capture.release()
-        cv2.destroyAllWindows()
+        if args.show_window:
+            cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":

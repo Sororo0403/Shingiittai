@@ -288,7 +288,7 @@ void Player::UpdateJoyConCalibrationInput(Input *input, float deltaTime) {
 }
 
 void Player::Draw(ModelManager *modelManager, const Camera &camera,
-                  bool drawBody, bool forceOpaque) {
+                  bool drawBody, bool forceOpaque, float visualScale) {
     const bool isInPostSlashRecovery = postSlashRecoveryTimer_ > 0.0f;
     const float attackRecoveryRatio = GetAttackRecoveryRatio();
     const bool isAttackRecovery = attackRecoveryRatio > 0.0f;
@@ -301,9 +301,9 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
             : 0.0f;
 
     Transform playerVisual = tf_;
-    playerVisual.scale.x *= kPlayerVisualScaleMultiplier;
-    playerVisual.scale.y *= kPlayerVisualScaleMultiplier;
-    playerVisual.scale.z *= kPlayerVisualScaleMultiplier;
+    playerVisual.scale.x *= kPlayerVisualScaleMultiplier * visualScale;
+    playerVisual.scale.y *= kPlayerVisualScaleMultiplier * visualScale;
+    playerVisual.scale.z *= kPlayerVisualScaleMultiplier * visualScale;
     if (isInPostSlashRecovery) {
         const float phase = (1.0f - recoveryRatio) * 64.0f;
         const float shake = 0.035f * recoveryRatio;
@@ -349,27 +349,62 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
     }
 
     if (drawBody) {
+        if (!forceOpaque) {
+            Transform rimVisual = playerVisual;
+            rimVisual.scale.x *= 1.045f;
+            rimVisual.scale.y *= 1.035f;
+            rimVisual.scale.z *= 1.045f;
+
+            ModelDrawEffect rimEffect{};
+            rimEffect.enabled = true;
+            rimEffect.additiveBlend = true;
+            rimEffect.disableCulling = true;
+            rimEffect.color = {1.0f, 0.82f, 0.42f, 0.34f};
+            rimEffect.intensity = 0.46f;
+            rimEffect.fresnelPower = 0.82f;
+            rimEffect.time = recoveryVulnerableFlashTimer_;
+            modelManager->SetDrawEffect(rimEffect);
+            modelManager->Draw(modelId_, rimVisual, camera);
+            modelManager->ClearDrawEffect();
+        }
         if (forceOpaque) {
+            const float animePulse =
+                0.5f + 0.5f * std::sinf(recoveryVulnerableFlashTimer_ * 18.0f);
             Transform glowVisual = playerVisual;
-            glowVisual.scale.x *= 1.055f;
-            glowVisual.scale.y *= 1.045f;
-            glowVisual.scale.z *= 1.055f;
+            glowVisual.scale.x *= 1.115f;
+            glowVisual.scale.y *= 1.095f;
+            glowVisual.scale.z *= 1.115f;
 
             ModelDrawEffect glowEffect{};
             glowEffect.enabled = true;
             glowEffect.additiveBlend = true;
             glowEffect.disableCulling = true;
             glowEffect.forceOpaqueMaterial = true;
-            glowEffect.color = {1.0f, 0.78f, 0.28f, 0.72f};
-            glowEffect.intensity = 1.18f;
-            glowEffect.fresnelPower = 0.95f;
+            glowEffect.color = {1.0f, 0.98f, 0.86f, 0.88f};
+            glowEffect.intensity = 1.72f + 0.28f * animePulse;
+            glowEffect.fresnelPower = 0.70f;
             glowEffect.time = recoveryVulnerableFlashTimer_;
             modelManager->SetDrawEffect(glowEffect);
             modelManager->Draw(modelId_, glowVisual, camera);
+
+            Transform warmGlowVisual = playerVisual;
+            warmGlowVisual.scale.x *= 1.055f;
+            warmGlowVisual.scale.y *= 1.045f;
+            warmGlowVisual.scale.z *= 1.055f;
+            glowEffect.color = {1.0f, 0.82f, 0.28f, 0.58f};
+            glowEffect.intensity = 0.92f + 0.18f * animePulse;
+            glowEffect.fresnelPower = 1.05f;
+            modelManager->SetDrawEffect(glowEffect);
+            modelManager->Draw(modelId_, warmGlowVisual, camera);
         }
         if (forceOpaque) {
             ModelDrawEffect opaqueEffect{};
+            opaqueEffect.enabled = true;
             opaqueEffect.forceOpaqueMaterial = true;
+            opaqueEffect.color = {1.0f, 0.96f, 0.84f, 0.18f};
+            opaqueEffect.intensity = 0.20f;
+            opaqueEffect.fresnelPower = 2.0f;
+            opaqueEffect.time = recoveryVulnerableFlashTimer_;
             modelManager->SetDrawEffect(opaqueEffect);
         }
         if (isAttackRecovery && !forceOpaque) {
@@ -395,6 +430,18 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
 
     auto drawSwordWithRecovery = [&](Sword &sword, float recoveryRatio) {
         if (forceOpaque) {
+            ModelDrawEffect bladeGlow{};
+            bladeGlow.enabled = true;
+            bladeGlow.additiveBlend = true;
+            bladeGlow.disableCulling = true;
+            bladeGlow.forceOpaqueMaterial = true;
+            bladeGlow.color = {1.0f, 0.88f, 0.30f, 0.78f};
+            bladeGlow.intensity = 1.45f;
+            bladeGlow.fresnelPower = 0.72f;
+            bladeGlow.time = recoveryVulnerableFlashTimer_;
+            modelManager->SetDrawEffect(bladeGlow);
+            sword.Draw(modelManager, camera, visualScale * 1.12f);
+
             ModelDrawEffect opaqueEffect{};
             opaqueEffect.forceOpaqueMaterial = true;
             modelManager->SetDrawEffect(opaqueEffect);
@@ -411,7 +458,7 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
             recoveryEffect.time = recoveryVulnerableFlashTimer_;
             modelManager->SetDrawEffect(recoveryEffect);
         }
-        sword.Draw(modelManager, camera);
+        sword.Draw(modelManager, camera, visualScale);
         if (recoveryRatio > 0.0f && !forceOpaque) {
             modelManager->ClearDrawEffect();
         }
@@ -466,18 +513,19 @@ void Player::SetCinematicBladeClashPose(const XMFLOAT3 &position, float yaw,
     bladeClashPosePushRatio_ = std::clamp(pushRatio, 0.0f, 1.0f);
 
     const float push = bladeClashPosePushRatio_;
-    const float leanPitch = -0.11f - 0.15f * push;
-    auto makeClashPose = [&](bool isLeft) {
+    auto makeFinishPose = [&](bool isLeft) {
         SwordPose pose = MakeIdleSwordPose(isLeft);
-        const float inwardYaw = isLeft ? 0.28f + 0.10f * push
-                                       : -0.28f - 0.10f * push;
-        const float roll = isLeft ? -0.22f : 0.22f;
+        const float side = isLeft ? -1.0f : 1.0f;
+        const float swingOut = 0.72f + 0.28f * push;
+        const float yawOut = side * (1.92f + 0.38f * swingOut);
+        const float pitchDown = 0.22f + 0.20f * swingOut;
+        const float rollThrough = side * (0.78f + 0.38f * swingOut);
         XMVECTOR qPitch =
-            XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), leanPitch);
+            XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), pitchDown);
         XMVECTOR qYaw =
-            XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), inwardYaw);
+            XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), yawOut);
         XMVECTOR qRoll =
-            XMQuaternionRotationAxis(XMVectorSet(0, 0, 1, 0), roll);
+            XMQuaternionRotationAxis(XMVectorSet(0, 0, 1, 0), rollThrough);
         XMStoreFloat4(&pose.orientation,
                       XMQuaternionNormalize(XMQuaternionMultiply(
                           XMQuaternionMultiply(qPitch, qYaw), qRoll)));
@@ -487,8 +535,8 @@ void Player::SetCinematicBladeClashPose(const XMFLOAT3 &position, float yaw,
         return pose;
     };
 
-    SwordPose leftPose = makeClashPose(true);
-    SwordPose rightPose = makeClashPose(false);
+    SwordPose leftPose = makeFinishPose(true);
+    SwordPose rightPose = makeFinishPose(false);
     leftSword_.Update(BuildSwordTransform(leftPose, true), leftPose, 0.0f);
     rightSword_.Update(BuildSwordTransform(rightPose, false), rightPose, 0.0f);
     leftSwordVisible_ = true;

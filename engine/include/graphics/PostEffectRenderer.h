@@ -49,6 +49,11 @@ class PostEffectRenderer {
     void Resize(int width, int height);
 
     /// <summary>
+    /// 全ポストエフェクトを無効状態へ戻す
+    /// </summary>
+    void ResetEffects();
+
+    /// <summary>
     /// 指定SRVを全画面へ描画する
     /// </summary>
     void Draw(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle,

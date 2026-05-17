@@ -16,7 +16,8 @@ class Sword {
                 float deltaTime);
     void SetRecoveryReaction(float reaction);
 
-    void Draw(ModelManager *modelManager, const Camera &camera);
+    void Draw(ModelManager *modelManager, const Camera &camera,
+              float visualScale = 1.0f);
 
     const Transform &GetTransform() const { return tf_; }
     OBB GetOBB() const;

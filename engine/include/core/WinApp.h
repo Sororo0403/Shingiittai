@@ -45,6 +45,18 @@ class WinApp {
     /// <returns>ウィンドウハンドル</returns>
     HWND GetHwnd() const { return hwnd_; }
 
+    /// <summary>
+    /// ゲームウィンドウを前面へ移動する
+    /// </summary>
+    void BringToFront();
+
+    /// <summary>
+    /// ボーダーレスフルスクリーンを切り替える
+    /// </summary>
+    void ToggleFullscreen();
+
+    bool IsFullscreen() const { return fullscreen_; }
+
   private:
     /// <summary>
     /// 現在のクライアント領域サイズを更新する
@@ -65,4 +77,7 @@ class WinApp {
     int height_;
 
     HWND hwnd_ = nullptr;
+    WINDOWPLACEMENT windowedPlacement_{sizeof(WINDOWPLACEMENT)};
+    DWORD windowedStyle_ = 0;
+    bool fullscreen_ = false;
 };

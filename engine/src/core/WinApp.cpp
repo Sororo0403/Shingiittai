@@ -56,7 +56,11 @@ void WinApp::Initialize(HINSTANCE hInstance, int nCmdShow, int width,
         throw std::runtime_error("CreateWindowEx failed");
     }
 
+    windowedStyle_ = static_cast<DWORD>(GetWindowLongPtr(hwnd_, GWL_STYLE));
+    GetWindowPlacement(hwnd_, &windowedPlacement_);
+
     ShowWindow(hwnd_, nCmdShow);
+    BringToFront();
     while (ShowCursor(FALSE) >= 0) {
     }
     UpdateClientSize();
@@ -97,4 +101,57 @@ void WinApp::UpdateClientSize() {
 
     width_ = clientRect.right - clientRect.left;
     height_ = clientRect.bottom - clientRect.top;
+}
+
+void WinApp::BringToFront() {
+    if (!hwnd_) {
+        return;
+    }
+
+    ShowWindow(hwnd_, SW_SHOWNORMAL);
+    SetWindowPos(hwnd_, HWND_TOPMOST, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+    SetWindowPos(hwnd_, HWND_NOTOPMOST, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+    BringWindowToTop(hwnd_);
+    SetForegroundWindow(hwnd_);
+    SetFocus(hwnd_);
+}
+
+void WinApp::ToggleFullscreen() {
+    if (!hwnd_) {
+        return;
+    }
+
+    if (!fullscreen_) {
+        windowedStyle_ = static_cast<DWORD>(GetWindowLongPtr(hwnd_, GWL_STYLE));
+        windowedPlacement_.length = sizeof(WINDOWPLACEMENT);
+        GetWindowPlacement(hwnd_, &windowedPlacement_);
+
+        HMONITOR monitor = MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST);
+        MONITORINFO monitorInfo{sizeof(MONITORINFO)};
+        if (!GetMonitorInfoW(monitor, &monitorInfo)) {
+            return;
+        }
+
+        SetWindowLongPtr(hwnd_, GWL_STYLE,
+                         static_cast<LONG_PTR>(windowedStyle_ &
+                                               ~WS_OVERLAPPEDWINDOW));
+        SetWindowPos(hwnd_, HWND_TOP, monitorInfo.rcMonitor.left,
+                     monitorInfo.rcMonitor.top,
+                     monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
+                     monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
+                     SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+        fullscreen_ = true;
+    } else {
+        SetWindowLongPtr(hwnd_, GWL_STYLE, static_cast<LONG_PTR>(windowedStyle_));
+        SetWindowPlacement(hwnd_, &windowedPlacement_);
+        SetWindowPos(hwnd_, HWND_TOP, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER |
+                         SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+        fullscreen_ = false;
+    }
+
+    BringToFront();
+    UpdateClientSize();
 }
