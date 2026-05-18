@@ -123,10 +123,8 @@ void SwordSlashArcRenderer::Emit(const XMFLOAT3 &root, const XMFLOAT3 &tip,
 
 void SwordSlashArcRenderer::EmitHitLine(const XMFLOAT3 &position,
                                         const XMFLOAT3 &direction,
-                                        const Camera &camera, float power) {
-    ArcInstance &arc = arcs_[nextArc_];
-    nextArc_ = (nextArc_ + 1) % arcs_.size();
-
+                                        const Camera &camera, float power,
+                                        const XMFLOAT2 &slashDirection) {
     const XMFLOAT3 cameraForward =
         NormalizeSafe(Sub(camera.GetTarget(), camera.GetPosition()),
                       {0.0f, 0.0f, 1.0f});
@@ -146,23 +144,77 @@ void SwordSlashArcRenderer::EmitHitLine(const XMFLOAT3 &position,
     XMFLOAT3 lineDir = NormalizeSafe(Add(Scale(screenDiagonal, 0.62f),
                                          Scale(hitDir, 0.38f)),
                                      screenDiagonal);
+    const float slashDirLenSq =
+        slashDirection.x * slashDirection.x + slashDirection.y * slashDirection.y;
+    if (slashDirLenSq > 0.010f) {
+        const float invSlashDirLen = 1.0f / std::sqrt(slashDirLenSq);
+        const XMFLOAT2 normalizedSlashDir{
+            slashDirection.x * invSlashDirLen,
+            slashDirection.y * invSlashDirLen};
+        lineDir = NormalizeSafe(
+            Add(Scale(cameraRight, normalizedSlashDir.x),
+                Scale(cameraUp, normalizedSlashDir.y)),
+            lineDir);
+    }
     XMFLOAT3 lineNormal =
         NormalizeSafe(Cross(cameraForward, lineDir), cameraUp);
 
     const float clampedPower = std::clamp(power, 0.6f, 4.0f);
-    arc.center = Add(position, Scale(lineDir, 0.18f));
-    arc.center.y += 0.30f;
-    arc.axisA = lineDir;
-    arc.axisB = lineNormal;
-    arc.radius = 1.85f + clampedPower * 0.28f;
-    arc.thickness = 0.030f + clampedPower * 0.010f;
-    arc.life = 0.115f;
-    arc.age = 0.0f;
-    arc.color = {0.34f, 0.78f, 1.0f, 0.92f};
-    arc.startAngle = 0.0f;
-    arc.endAngle = 0.0f;
-    arc.isLine = true;
-    arc.active = true;
+
+    auto emitStroke = [&](const XMFLOAT3 &axis, float alongOffset,
+                          float normalOffset, float heightOffset,
+                          float halfLength, float thickness, float life,
+                          float delay, const XMFLOAT4 &color) {
+        ArcInstance &arc = arcs_[nextArc_];
+        nextArc_ = (nextArc_ + 1) % arcs_.size();
+
+        const XMFLOAT3 strokeNormal =
+            NormalizeSafe(Cross(cameraForward, axis), lineNormal);
+        arc.center = Add(position, Scale(axis, alongOffset));
+        arc.center = Add(arc.center, Scale(strokeNormal, normalOffset));
+        arc.center.y += heightOffset;
+        arc.axisA = axis;
+        arc.axisB = strokeNormal;
+        arc.radius = halfLength;
+        arc.thickness = thickness;
+        arc.life = life;
+        arc.age = -delay;
+        arc.color = color;
+        arc.startAngle = 0.0f;
+        arc.endAngle = 0.0f;
+        arc.isLine = true;
+        arc.active = true;
+    };
+
+    emitStroke(lineDir, -0.12f, 0.00f, 0.50f,
+               3.88f + clampedPower * 0.70f,
+               0.155f + clampedPower * 0.025f, 0.195f, 0.0f,
+               {0.82f, 0.82f, 1.00f, 0.42f});
+    emitStroke(lineDir, -0.10f, 0.00f, 0.52f,
+               4.15f + clampedPower * 0.74f,
+               0.060f + clampedPower * 0.010f, 0.138f, 0.0f,
+               {1.00f, 0.98f, 1.00f, 1.00f});
+    emitStroke(lineDir, -0.34f, -0.055f, 0.47f,
+               3.38f + clampedPower * 0.60f,
+               0.090f + clampedPower * 0.012f, 0.172f, 0.018f,
+               {0.96f, 0.84f, 1.00f, 0.50f});
+
+    const XMFLOAT3 shardUp =
+        NormalizeSafe(Add(Scale(lineNormal, 0.78f), Scale(lineDir, 0.22f)),
+                      lineNormal);
+    const XMFLOAT3 shardDown =
+        NormalizeSafe(Add(Scale(lineNormal, -0.68f), Scale(lineDir, 0.34f)),
+                      Scale(lineNormal, -1.0f));
+    const XMFLOAT3 shardBack =
+        NormalizeSafe(Add(Scale(cameraUp, 0.64f), Scale(lineDir, -0.28f)),
+                      cameraUp);
+
+    emitStroke(shardUp, 0.22f, 0.02f, 0.52f, 1.05f + clampedPower * 0.12f,
+               0.018f, 0.108f, 0.0f, {0.94f, 0.97f, 1.0f, 0.78f});
+    emitStroke(shardDown, 0.16f, -0.02f, 0.48f, 0.72f + clampedPower * 0.08f,
+               0.014f, 0.095f, 0.010f, {0.86f, 0.92f, 1.0f, 0.62f});
+    emitStroke(shardBack, 0.10f, 0.00f, 0.58f, 0.78f + clampedPower * 0.08f,
+               0.012f, 0.088f, 0.016f, {1.0f, 1.0f, 1.0f, 0.66f});
 }
 
 void SwordSlashArcRenderer::Update(float deltaTime) {
@@ -209,6 +261,9 @@ void SwordSlashArcRenderer::BuildVertices() {
         }
 
         const float ageRate = std::clamp(arc.age / arc.life, 0.0f, 1.0f);
+        if (arc.age < 0.0f) {
+            continue;
+        }
         const float grow = SmoothStep(0.0f, 0.20f, ageRate);
         const float fade = 1.0f - SmoothStep(0.46f, 1.0f, ageRate);
         if (arc.isLine) {
@@ -355,7 +410,7 @@ void SwordSlashArcRenderer::CreatePipelineState() {
     pso.BlendState = blend;
 
     D3D12_DEPTH_STENCIL_DESC depth = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
-    depth.DepthEnable = TRUE;
+    depth.DepthEnable = FALSE;
     depth.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
     depth.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
     pso.DepthStencilState = depth;

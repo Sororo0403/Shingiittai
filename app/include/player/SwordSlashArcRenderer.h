@@ -21,7 +21,8 @@ class SwordSlashArcRenderer {
               size_t swordIndex);
     void EmitHitLine(const DirectX::XMFLOAT3 &position,
                      const DirectX::XMFLOAT3 &direction, const Camera &camera,
-                     float power);
+                     float power,
+                     const DirectX::XMFLOAT2 &slashDirection = {0.0f, 0.0f});
     void Update(float deltaTime);
     void Draw(const Camera &camera);
 
@@ -59,7 +60,7 @@ class SwordSlashArcRenderer {
     void BuildVertices();
 
   private:
-    static constexpr size_t kMaxArcs = 12;
+    static constexpr size_t kMaxArcs = 24;
     static constexpr uint32_t kSegments = 28;
     static constexpr uint32_t kInitialMaxVertices = kMaxArcs * kSegments * 6;
 
