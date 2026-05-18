@@ -87,6 +87,15 @@ void Enemy::UpdateFacingToPlayer() {
     facingYaw_ = std::atan2(dx, dz);
 }
 
+void Enemy::FaceTargetImmediately(const DirectX::XMFLOAT3 &targetPosition) {
+    playerPos_ = targetPosition;
+    const float dx = targetPosition.x - tf_.position.x;
+    const float dz = targetPosition.z - tf_.position.z;
+    facingYaw_ = std::atan2(dx, dz);
+    lockedAttackYaw_ = facingYaw_;
+    UpdateParts();
+}
+
 void Enemy::LockCurrentFacing() { lockedAttackYaw_ = facingYaw_; }
 
 float Enemy::NormalizeAngle(float angle) const {

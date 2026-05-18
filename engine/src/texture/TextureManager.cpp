@@ -452,6 +452,217 @@ uint32_t TextureManager::CreateRustedMetalTexture(uint32_t width,
     return id;
 }
 
+uint32_t TextureManager::CreatePatinatedMetalTexture(uint32_t width,
+                                                     uint32_t height) {
+    width = (std::max)(width, 1u);
+    height = (std::max)(height, 1u);
+    const std::wstring cacheKey =
+        MakeGeneratedTextureKey(L"patinated_metal", width, height);
+    auto cached = generatedTextureToId_.find(cacheKey);
+    if (cached != generatedTextureToId_.end()) {
+        return cached->second;
+    }
+
+    std::vector<uint32_t> pixels(static_cast<size_t>(width) * height);
+    constexpr uint32_t seed = 0x6A9D42F1u;
+
+    for (uint32_t y = 0; y < height; ++y) {
+        for (uint32_t x = 0; x < width; ++x) {
+            const float u = static_cast<float>(x) / static_cast<float>(width);
+            const float v = static_cast<float>(y) / static_cast<float>(height);
+
+            const float broadWear =
+                ValueNoise(u * 5.5f, v * 5.5f, seed + 11u);
+            const float fineWear =
+                ValueNoise(u * 42.0f, v * 42.0f, seed + 31u);
+            const float pitting =
+                ValueNoise(u * 92.0f, v * 92.0f, seed + 67u);
+            const float grime =
+                ValueNoise(u * 13.0f + 3.0f, v * 19.0f, seed + 103u);
+            const float scratchNoise =
+                ValueNoise(u * 170.0f, v * 30.0f, seed + 149u);
+
+            const float panelLineX =
+                1.0f - Smoothstep(0.010f, 0.024f,
+                                   std::fabs(std::fmod(u * 5.0f, 1.0f) -
+                                             0.5f));
+            const float panelLineY =
+                1.0f - Smoothstep(0.010f, 0.024f,
+                                   std::fabs(std::fmod(v * 4.0f, 1.0f) -
+                                             0.5f));
+            const float panelLine = Saturate((panelLineX + panelLineY) * 0.32f);
+
+            const float scratchBand =
+                std::pow(Saturate(1.0f - std::fabs(scratchNoise - 0.50f) *
+                                              26.0f),
+                         1.7f);
+            const float tarnishMask =
+                Saturate((broadWear - 0.36f) * 1.35f + fineWear * 0.20f +
+                         panelLine * 0.30f);
+            const float darkOxide =
+                Saturate((grime - 0.44f) * 1.05f + pitting * 0.22f);
+            const float exposedMetal =
+                Saturate((1.0f - tarnishMask) * 0.70f + scratchBand * 0.70f -
+                         darkOxide * 0.26f);
+
+            float r = 0.20f;
+            float g = 0.22f;
+            float b = 0.22f;
+
+            const float steel = exposedMetal;
+            r = Lerp(r, 0.58f, steel);
+            g = Lerp(g, 0.63f, steel);
+            b = Lerp(b, 0.62f, steel);
+
+            const float tarnish = tarnishMask;
+            r = Lerp(r, 0.62f, tarnish);
+            g = Lerp(g, 0.56f + fineWear * 0.08f, tarnish);
+            b = Lerp(b, 0.32f, tarnish);
+
+            const float coolOxide = darkOxide;
+            r = Lerp(r, 0.11f, coolOxide * 0.64f);
+            g = Lerp(g, 0.18f, coolOxide * 0.64f);
+            b = Lerp(b, 0.20f, coolOxide * 0.64f);
+
+            const float rivetGridX =
+                std::fabs(std::fmod(u * 5.0f, 1.0f) - 0.08f);
+            const float rivetGridY =
+                std::fabs(std::fmod(v * 4.0f, 1.0f) - 0.08f);
+            const float rivetGrid =
+                rivetGridX < rivetGridY ? rivetGridX : rivetGridY;
+            const float rivet =
+                1.0f - Smoothstep(0.018f, 0.036f, rivetGrid);
+            r = Lerp(r, 0.72f, rivet * 0.36f);
+            g = Lerp(g, 0.68f, rivet * 0.36f);
+            b = Lerp(b, 0.54f, rivet * 0.36f);
+
+            const float lineDarken = panelLine * 0.32f;
+            r *= 1.0f - lineDarken;
+            g *= 1.0f - lineDarken;
+            b *= 1.0f - lineDarken;
+
+            pixels[static_cast<size_t>(y) * width + x] = PackRgba(
+                static_cast<uint8_t>(Saturate(r) * 255.0f),
+                static_cast<uint8_t>(Saturate(g) * 255.0f),
+                static_cast<uint8_t>(Saturate(b) * 255.0f), 255u);
+        }
+    }
+
+    Image image{};
+    image.width = width;
+    image.height = height;
+    image.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    image.rowPitch = static_cast<size_t>(width) * sizeof(uint32_t);
+    image.slicePitch = image.rowPitch * height;
+    image.pixels = reinterpret_cast<uint8_t *>(pixels.data());
+
+    TexMetadata metadata{};
+    metadata.width = width;
+    metadata.height = height;
+    metadata.depth = 1;
+    metadata.arraySize = 1;
+    metadata.mipLevels = 1;
+    metadata.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    metadata.dimension = TEX_DIMENSION_TEXTURE2D;
+
+    const uint32_t id = CreateTexture(&image, 1, metadata);
+    generatedTextureToId_[cacheKey] = id;
+    return id;
+}
+
+uint32_t TextureManager::CreateHeroMetalTexture(uint32_t width,
+                                                uint32_t height) {
+    width = (std::max)(width, 1u);
+    height = (std::max)(height, 1u);
+    const std::wstring cacheKey =
+        MakeGeneratedTextureKey(L"hero_metal", width, height);
+    auto cached = generatedTextureToId_.find(cacheKey);
+    if (cached != generatedTextureToId_.end()) {
+        return cached->second;
+    }
+
+    std::vector<uint32_t> pixels(static_cast<size_t>(width) * height);
+    constexpr uint32_t seed = 0x35B1C0A7u;
+
+    for (uint32_t y = 0; y < height; ++y) {
+        for (uint32_t x = 0; x < width; ++x) {
+            const float u = static_cast<float>(x) / static_cast<float>(width);
+            const float v = static_cast<float>(y) / static_cast<float>(height);
+
+            const float broadPolish =
+                ValueNoise(u * 4.0f, v * 4.0f, seed + 17u);
+            const float finePolish =
+                ValueNoise(u * 34.0f, v * 34.0f, seed + 43u);
+            const float scratchNoise =
+                ValueNoise(u * 210.0f, v * 24.0f, seed + 89u);
+            const float edgeShade =
+                ValueNoise(u * 9.0f + 5.0f, v * 11.0f, seed + 131u);
+
+            const float panelLineX =
+                1.0f - Smoothstep(0.011f, 0.025f,
+                                   std::fabs(std::fmod(u * 4.0f, 1.0f) -
+                                             0.5f));
+            const float panelLineY =
+                1.0f - Smoothstep(0.011f, 0.025f,
+                                   std::fabs(std::fmod(v * 4.0f, 1.0f) -
+                                             0.5f));
+            const float panelLine = Saturate((panelLineX + panelLineY) * 0.22f);
+
+            const float scratch =
+                std::pow(Saturate(1.0f - std::fabs(scratchNoise - 0.50f) *
+                                              30.0f),
+                         1.5f);
+            const float highlight =
+                Saturate((broadPolish - 0.36f) * 0.55f + scratch * 0.22f);
+            const float coolShade =
+                Saturate((edgeShade - 0.50f) * 0.55f + finePolish * 0.10f);
+
+            float r = 0.30f;
+            float g = 0.28f;
+            float b = 0.58f;
+
+            r = Lerp(r, 0.42f, highlight);
+            g = Lerp(g, 0.46f, highlight);
+            b = Lerp(b, 0.88f, highlight);
+
+            r = Lerp(r, 0.18f, coolShade * 0.42f);
+            g = Lerp(g, 0.18f, coolShade * 0.42f);
+            b = Lerp(b, 0.46f, coolShade * 0.42f);
+
+            const float lineDarken = panelLine * 0.24f;
+            r *= 1.0f - lineDarken;
+            g *= 1.0f - lineDarken;
+            b *= 1.0f - lineDarken;
+
+            pixels[static_cast<size_t>(y) * width + x] = PackRgba(
+                static_cast<uint8_t>(Saturate(r) * 255.0f),
+                static_cast<uint8_t>(Saturate(g) * 255.0f),
+                static_cast<uint8_t>(Saturate(b) * 255.0f), 255u);
+        }
+    }
+
+    Image image{};
+    image.width = width;
+    image.height = height;
+    image.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    image.rowPitch = static_cast<size_t>(width) * sizeof(uint32_t);
+    image.slicePitch = image.rowPitch * height;
+    image.pixels = reinterpret_cast<uint8_t *>(pixels.data());
+
+    TexMetadata metadata{};
+    metadata.width = width;
+    metadata.height = height;
+    metadata.depth = 1;
+    metadata.arraySize = 1;
+    metadata.mipLevels = 1;
+    metadata.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    metadata.dimension = TEX_DIMENSION_TEXTURE2D;
+
+    const uint32_t id = CreateTexture(&image, 1, metadata);
+    generatedTextureToId_[cacheKey] = id;
+    return id;
+}
+
 uint32_t TextureManager::CreateArenaStoneTexture(uint32_t width,
                                                  uint32_t height) {
     width = (std::max)(width, 1u);

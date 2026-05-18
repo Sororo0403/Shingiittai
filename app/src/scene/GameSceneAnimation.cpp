@@ -131,6 +131,45 @@ static bool HasAnimation(const Model *model, const std::string &animationName) {
     return model->animations.find(animationName) != model->animations.end();
 }
 
+static std::string PickFirstAnimation(const Model *model,
+                                      const std::vector<std::string> &names) {
+    for (const std::string &name : names) {
+        if (HasAnimation(model, name)) {
+            return name;
+        }
+    }
+    return {};
+}
+
+static bool ScrubAnimationClip(ModelManager *modelManager, uint32_t modelId,
+                               Model *model, const std::string &animationName,
+                               float clipRatio, bool loop,
+                               std::string &currentName,
+                               bool &currentLoop) {
+    if (!modelManager || !model || animationName.empty()) {
+        return false;
+    }
+
+    const auto clipIt = model->animations.find(animationName);
+    if (clipIt == model->animations.end() || clipIt->second.duration <= 0.0f) {
+        return false;
+    }
+
+    if (currentName != animationName || currentLoop != loop) {
+        modelManager->PlayAnimation(modelId, animationName, loop);
+        currentName = animationName;
+        currentLoop = loop;
+    }
+
+    model->animationTime =
+        clipIt->second.duration * std::clamp(clipRatio, 0.0f, 1.0f);
+    model->isLoop = loop;
+    model->isPlaying = false;
+    model->animationFinished = !loop && clipRatio >= 1.0f;
+    modelManager->UpdateAnimation(modelId, 0.0f);
+    return true;
+}
+
 static std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
                                       bool &outLoop) {
     outLoop = true;
@@ -330,6 +369,48 @@ void GameScene::SyncEnemyAnimation() {
     modelManager->UpdateAnimation(enemyModelId_, 0.0f);
     enemyAnimationName_ = nextAnimation;
     enemyAnimationLoop_ = shouldLoop;
+}
+
+void GameScene::UpdateBattleIntroEnemyAnimation(float) {
+    if (ctx_ == nullptr || ctx_->model == nullptr) {
+        return;
+    }
+
+    ModelManager *modelManager = ctx_->model;
+    Model *enemyModel = modelManager->GetModel(enemyModelId_);
+    if (enemyModel == nullptr || enemyModel->animations.empty()) {
+        return;
+    }
+
+    const float t = battleIntroTimer_;
+    std::string clip{};
+    float clipRatio = 0.0f;
+
+    if (t < 2.25f) {
+        const float phase = Smooth01(t / 2.25f);
+        clip = PickFirstAnimation(enemyModel, {kBossAnimTeleport,
+                                               kBossAnimPhaseChange});
+        clipRatio = 0.02f + 0.58f * phase;
+    } else {
+        const float phase = Smooth01((t - 2.25f) /
+                                     (battleIntroDuration_ - 2.25f));
+        clip = PickFirstAnimation(enemyModel, {kBossAnimPhaseChange,
+                                               kBossAnimWave});
+        clipRatio = 0.08f + 0.64f * phase;
+    }
+
+    if (!ScrubAnimationClip(modelManager, enemyModelId_, enemyModel, clip,
+                            clipRatio, false, enemyAnimationName_,
+                            enemyAnimationLoop_)) {
+        enemyModel->currentAnimation.clear();
+        enemyModel->animationTime = 0.0f;
+        enemyModel->isLoop = false;
+        enemyModel->isPlaying = false;
+        enemyModel->animationFinished = false;
+        enemyAnimationName_.clear();
+        enemyAnimationLoop_ = false;
+        modelManager->UpdateAnimation(enemyModelId_, 0.0f);
+    }
 }
 
 void GameScene::UpdatePhaseTransitionEnemyAnimation(float deltaTime) {

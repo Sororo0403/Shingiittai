@@ -564,10 +564,11 @@ def create_control_socket(port):
 
 def poll_registration_commands(control_sock):
     if control_sock is None:
-        return False, None
+        return False, None, False
 
     should_reset = False
     register_slot = None
+    should_start_camera = False
     while True:
         try:
             data, _ = control_sock.recvfrom(CONTROL_COMMAND_BYTES)
@@ -576,7 +577,9 @@ def poll_registration_commands(control_sock):
         except OSError:
             break
         command = data.strip().decode("ascii", errors="ignore")
-        if command == "SGREGISTER_RESET":
+        if command == "SGCAMERA_START":
+            should_start_camera = True
+        elif command == "SGREGISTER_RESET":
             should_reset = True
             register_slot = None
         elif command.startswith("SGREGISTER_SLOT"):
@@ -586,7 +589,7 @@ def poll_registration_commands(control_sock):
                     register_slot = int(parts[1])
                 except ValueError:
                     register_slot = None
-    return should_reset, register_slot
+    return should_reset, register_slot, should_start_camera
 
 
 def try_register_single_hand(detected_hands, register_slot, identity_anchors, identity_labels):
@@ -717,7 +720,10 @@ def parse_args():
     parser.add_argument("--preview-fps", type=float, default=20.0)
     parser.add_argument("--preview-quality", type=int, default=62)
     parser.add_argument("--control-port", type=int, default=5007)
+    parser.add_argument("--status-host", default="127.0.0.1")
+    parser.add_argument("--status-port", type=int, default=5008)
     parser.add_argument("--show-window", action="store_true")
+    parser.add_argument("--start-paused", action="store_true")
     parser.add_argument("--camera", type=int, default=0)
     parser.add_argument("--max-hands", type=int, default=2)
     parser.add_argument("--model", default=default_model_path())
@@ -760,6 +766,17 @@ def send_preview_frame(sock, target, frame, args, state, now):
     state["last_time"] = now
 
 
+def send_status(args, message):
+    try:
+        status_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        status_sock.sendto(
+            message.encode("ascii"), (args.status_host, args.status_port)
+        )
+        status_sock.close()
+    except OSError:
+        pass
+
+
 def main():
     args = parse_args()
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -767,15 +784,6 @@ def main():
     preview_target = (args.preview_host, args.preview_port)
     control_sock = create_control_socket(args.control_port)
     preview_state = {"frame_id": 0, "last_time": 0.0}
-
-    capture = cv2.VideoCapture(args.camera)
-    if not capture.isOpened():
-        raise RuntimeError(f"Could not open camera {args.camera}")
-
-    capture.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-    capture.set(cv2.CAP_PROP_FPS, 60)
-    capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
     base_options = python.BaseOptions(model_asset_path=args.model)
     options = vision.HandLandmarkerOptions(
@@ -787,33 +795,51 @@ def main():
         min_tracking_confidence=0.35,
     )
     landmarker = vision.HandLandmarker.create_from_options(options)
+    send_status(args, "SGCAMERA_READY")
 
-    max_hands = max(1, min(args.max_hands, 2))
-    prev_positions = [(0.5, 0.5) for _ in range(max_hands)]
-    prev_landmarks = [None for _ in range(max_hands)]
-    missing_timers = [DETECTION_GRACE_SECONDS for _ in range(max_hands)]
-    center_filters = [
-        PointFilter(CENTER_FILTER_MIN_CUTOFF, CENTER_FILTER_BETA, FILTER_D_CUTOFF)
-        for _ in range(max_hands)
-    ]
-    center_kalman_filters = [CenterKalmanFilter() for _ in range(max_hands)]
-    point_filters = [
-        PointListFilter(POINT_FILTER_MIN_CUTOFF, POINT_FILTER_BETA, FILTER_D_CUTOFF)
-        for _ in range(max_hands)
-    ]
-    motion_histories = [
-        MotionHistory(MOTION_HISTORY_SECONDS) for _ in range(max_hands)
-    ]
-    distance_scales = [1.0 for _ in range(max_hands)]
-    center_trails = [[] for _ in range(max_hands)]
-    identity_anchors = [None for _ in range(max_hands)]
-    identity_labels = [None for _ in range(max_hands)]
-    pending_register_slot = None
-    start_time = time.perf_counter()
-    prev_time = time.perf_counter()
-    last_timestamp_ms = -1
-
+    capture = None
     try:
+        if args.start_paused:
+            while True:
+                _, _, should_start_camera = poll_registration_commands(control_sock)
+                if should_start_camera:
+                    break
+                time.sleep(1.0 / 60.0)
+
+        capture = cv2.VideoCapture(args.camera)
+        if not capture.isOpened():
+            raise RuntimeError(f"Could not open camera {args.camera}")
+
+        capture.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        capture.set(cv2.CAP_PROP_FPS, 60)
+        capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+        max_hands = max(1, min(args.max_hands, 2))
+        prev_positions = [(0.5, 0.5) for _ in range(max_hands)]
+        prev_landmarks = [None for _ in range(max_hands)]
+        missing_timers = [DETECTION_GRACE_SECONDS for _ in range(max_hands)]
+        center_filters = [
+            PointFilter(CENTER_FILTER_MIN_CUTOFF, CENTER_FILTER_BETA, FILTER_D_CUTOFF)
+            for _ in range(max_hands)
+        ]
+        center_kalman_filters = [CenterKalmanFilter() for _ in range(max_hands)]
+        point_filters = [
+            PointListFilter(POINT_FILTER_MIN_CUTOFF, POINT_FILTER_BETA, FILTER_D_CUTOFF)
+            for _ in range(max_hands)
+        ]
+        motion_histories = [
+            MotionHistory(MOTION_HISTORY_SECONDS) for _ in range(max_hands)
+        ]
+        distance_scales = [1.0 for _ in range(max_hands)]
+        center_trails = [[] for _ in range(max_hands)]
+        identity_anchors = [None for _ in range(max_hands)]
+        identity_labels = [None for _ in range(max_hands)]
+        pending_register_slot = None
+        start_time = time.perf_counter()
+        prev_time = time.perf_counter()
+        last_timestamp_ms = -1
+
         while True:
             ok, frame = capture.read()
             if not ok:
@@ -831,7 +857,7 @@ def main():
             dt = max(now - prev_time, 1.0 / 120.0)
             prev_time = now
 
-            should_reset, register_slot = poll_registration_commands(control_sock)
+            should_reset, register_slot, _ = poll_registration_commands(control_sock)
             if should_reset:
                 prev_positions = [(0.5, 0.5) for _ in range(max_hands)]
                 prev_landmarks = [None for _ in range(max_hands)]
@@ -1049,7 +1075,8 @@ def main():
                     break
     finally:
         landmarker.close()
-        capture.release()
+        if capture is not None:
+            capture.release()
         if control_sock is not None:
             control_sock.close()
         if args.show_window:

@@ -15,8 +15,15 @@
 #include "WinApp.h"
 #include <Windows.h>
 #include <filesystem>
+#include <mfapi.h>
+#include <mfidl.h>
 #include <memory>
+#include <objbase.h>
 #include <string>
+
+#pragma comment(lib, "mf.lib")
+#pragma comment(lib, "mfplat.lib")
+#pragma comment(lib, "mfuuid.lib")
 
 namespace {
 std::filesystem::path ResolveExecutableDirectory() {
@@ -32,16 +39,92 @@ std::filesystem::path ResolveExecutableDirectory() {
     return std::filesystem::path(path).parent_path();
 }
 
+bool DetectVideoCaptureDevice() {
+    const HRESULT coResult = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    const bool shouldUninitializeCom = SUCCEEDED(coResult);
+
+    bool found = false;
+    if (SUCCEEDED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) {
+        IMFAttributes *attributes = nullptr;
+        if (SUCCEEDED(MFCreateAttributes(&attributes, 1))) {
+            HRESULT hr = attributes->SetGUID(
+                MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE,
+                MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID);
+            IMFActivate **devices = nullptr;
+            UINT32 count = 0;
+            if (SUCCEEDED(hr)) {
+                hr = MFEnumDeviceSources(attributes, &devices, &count);
+            }
+            if (SUCCEEDED(hr)) {
+                found = count > 0;
+            }
+
+            for (UINT32 i = 0; i < count; ++i) {
+                if (devices[i] != nullptr) {
+                    devices[i]->Release();
+                }
+            }
+            CoTaskMemFree(devices);
+            attributes->Release();
+        }
+        MFShutdown();
+    }
+
+    if (shouldUninitializeCom) {
+        CoUninitialize();
+    }
+
+    return found;
+}
+
 class HandUdpSenderProcess {
   public:
     ~HandUdpSenderProcess() { Stop(); }
 
-    void Start() {
-        if (isRunning_) {
+    bool Prepare() { return Start(true); }
+
+    bool IsPreparationReady() {
+        PollStatus();
+        return preparationReady_;
+    }
+
+    void ActivateCamera() {
+        if (!isRunning_) {
+            Start(false);
+            cameraActivationRequested_ = false;
             return;
         }
-        if (IsDisabled()) {
+        cameraActivationRequested_ = true;
+        cameraActivationStartTick_ = GetTickCount();
+        lastCameraStartCommandTick_ = 0;
+        SendCameraStartCommand();
+    }
+
+    void Update() {
+        PollStatus();
+        if (!cameraActivationRequested_) {
             return;
+        }
+
+        const DWORD now = GetTickCount();
+        if (now - cameraActivationStartTick_ > 5000) {
+            cameraActivationRequested_ = false;
+            return;
+        }
+        if (now - lastCameraStartCommandTick_ < 150) {
+            return;
+        }
+
+        SendCameraStartCommand();
+        lastCameraStartCommandTick_ = now;
+    }
+
+    bool Start(bool startPaused) {
+        if (isRunning_) {
+            return true;
+        }
+        if (IsDisabled()) {
+            return false;
         }
 
         const std::filesystem::path runtimeRoot = ResolveRuntimeRoot();
@@ -50,7 +133,7 @@ class HandUdpSenderProcess {
             L"hand_landmarker.task";
 
         if (!std::filesystem::exists(modelPath)) {
-            return;
+            return false;
         }
 
         const std::filesystem::path packagedExe =
@@ -72,30 +155,44 @@ class HandUdpSenderProcess {
             scriptCommand = L"py -3.11 \"" + scriptPath.wstring() +
                             L"\" --model \"" + modelPath.wstring() + L"\"";
         }
+        if (!scriptCommand.empty() && startPaused) {
+            scriptCommand += L" --start-paused --status-port 5008";
+        }
 
         std::wstring packagedCommand;
         if (std::filesystem::exists(packagedExe)) {
             packagedCommand = L"\"" + packagedExe.wstring() + L"\" --model \"" +
                               modelPath.wstring() + L"\"";
         }
+        if (!packagedCommand.empty() && startPaused) {
+            packagedCommand += L" --start-paused --status-port 5008";
+        }
 
         std::wstring command;
+        if (startPaused && !scriptCommand.empty()) {
+            command = scriptCommand;
+        } else {
 #ifdef _DEBUG
-        if (!scriptCommand.empty()) {
-            command = scriptCommand;
-        } else {
-            command = packagedCommand;
-        }
+            if (!scriptCommand.empty()) {
+                command = scriptCommand;
+            } else {
+                command = packagedCommand;
+            }
 #else
-        if (!packagedCommand.empty()) {
-            command = packagedCommand;
-        } else {
-            command = scriptCommand;
-        }
+            if (!packagedCommand.empty()) {
+                command = packagedCommand;
+            } else {
+                command = scriptCommand;
+            }
 #endif
+        }
 
         if (command.empty()) {
-            return;
+            return false;
+        }
+
+        if (startPaused && !OpenStatusSocket()) {
+            return false;
         }
 
         HANDLE jobHandle = CreateJobObjectW(nullptr, nullptr);
@@ -125,7 +222,8 @@ class HandUdpSenderProcess {
             if (jobHandle != nullptr) {
                 CloseHandle(jobHandle);
             }
-            return;
+            CloseStatusSocket();
+            return false;
         }
 
         if (jobHandle != nullptr &&
@@ -139,9 +237,104 @@ class HandUdpSenderProcess {
         processInfo_ = processInfo;
         jobHandle_ = jobHandle;
         isRunning_ = true;
+        preparationReady_ = !startPaused;
+        return true;
     }
 
   private:
+    bool OpenStatusSocket() {
+        CloseStatusSocket();
+
+        WSADATA wsaData{};
+        if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+            return false;
+        }
+
+        statusSocket_ = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        if (statusSocket_ == INVALID_SOCKET) {
+            statusSocket_ = INVALID_SOCKET;
+            WSACleanup();
+            return false;
+        }
+
+        sockaddr_in address{};
+        address.sin_family = AF_INET;
+        address.sin_port = htons(5008);
+        address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+
+        if (bind(statusSocket_, reinterpret_cast<sockaddr *>(&address),
+                 sizeof(address)) == SOCKET_ERROR) {
+            CloseStatusSocket();
+            return false;
+        }
+
+        u_long nonBlocking = 1;
+        if (ioctlsocket(statusSocket_, FIONBIO, &nonBlocking) == SOCKET_ERROR) {
+            CloseStatusSocket();
+            return false;
+        }
+
+        return true;
+    }
+
+    void CloseStatusSocket() {
+        if (statusSocket_ != INVALID_SOCKET) {
+            closesocket(statusSocket_);
+            statusSocket_ = INVALID_SOCKET;
+            WSACleanup();
+        }
+    }
+
+    void PollStatus() {
+        if (statusSocket_ == INVALID_SOCKET || preparationReady_) {
+            return;
+        }
+
+        char buffer[128]{};
+        for (;;) {
+            sockaddr_in from{};
+            int fromLength = sizeof(from);
+            const int bytes =
+                recvfrom(statusSocket_, buffer,
+                         static_cast<int>(sizeof(buffer) - 1), 0,
+                         reinterpret_cast<sockaddr *>(&from), &fromLength);
+            if (bytes == SOCKET_ERROR) {
+                return;
+            }
+
+            buffer[bytes] = '\0';
+            if (std::string(buffer) == "SGCAMERA_READY") {
+                preparationReady_ = true;
+                CloseStatusSocket();
+                return;
+            }
+        }
+    }
+
+    static void SendCameraStartCommand() {
+        WSADATA wsaData{};
+        if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+            return;
+        }
+
+        SOCKET udpSocket = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        if (udpSocket == INVALID_SOCKET) {
+            WSACleanup();
+            return;
+        }
+
+        sockaddr_in address{};
+        address.sin_family = AF_INET;
+        address.sin_port = htons(5007);
+        address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+
+        constexpr char kCommand[] = "SGCAMERA_START";
+        sendto(udpSocket, kCommand, static_cast<int>(sizeof(kCommand) - 1), 0,
+               reinterpret_cast<sockaddr *>(&address), sizeof(address));
+        closesocket(udpSocket);
+        WSACleanup();
+    }
+
     static bool IsDisabled() {
         wchar_t value[8]{};
         const DWORD length = GetEnvironmentVariableW(
@@ -170,6 +363,7 @@ class HandUdpSenderProcess {
     }
 
     void Stop() {
+        CloseStatusSocket();
         if (!isRunning_) {
             return;
         }
@@ -195,7 +389,12 @@ class HandUdpSenderProcess {
 
     PROCESS_INFORMATION processInfo_{};
     HANDLE jobHandle_ = nullptr;
+    SOCKET statusSocket_ = INVALID_SOCKET;
     bool isRunning_ = false;
+    bool preparationReady_ = false;
+    bool cameraActivationRequested_ = false;
+    DWORD cameraActivationStartTick_ = 0;
+    DWORD lastCameraStartCommandTick_ = 0;
 };
 }
 
@@ -203,11 +402,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     SetCurrentDirectoryW(ResolveExecutableDirectory().wstring().c_str());
 
     HandUdpSenderProcess handUdpSenderProcess;
+    const bool cameraDeviceAvailable = DetectVideoCaptureDevice();
+    bool cameraPreparationStarted = false;
+    if (cameraDeviceAvailable) {
+        cameraPreparationStarted = handUdpSenderProcess.Prepare();
+    }
 
     // WinApp初期化
     WinApp winApp;
-    winApp.Initialize(hInstance, nCmdShow, 1280, 720, L"3145_身技一体");
-    winApp.BringToFront();
+    winApp.Initialize(hInstance, nCmdShow, 1280, 720, L"3145_身技一体", true);
 
     // クライアント領域の幅と高さ
     int width = winApp.GetWidth();
@@ -262,9 +465,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     sceneCtx.dxCommon = &dxCommon;
     sceneCtx.postEffectRenderer = &postEffectRenderer;
     sceneCtx.requestHandTrackingStart = [&handUdpSenderProcess, &winApp]() {
-        handUdpSenderProcess.Start();
+        handUdpSenderProcess.ActivateCamera();
         winApp.BringToFront();
     };
+    sceneCtx.isCameraDeviceAvailable = [cameraDeviceAvailable]() {
+        return cameraDeviceAvailable;
+    };
+    sceneCtx.isHandTrackingReady =
+        [&handUdpSenderProcess, cameraPreparationStarted]() {
+            return !cameraPreparationStarted ||
+                   handUdpSenderProcess.IsPreparationReady();
+        };
     sceneCtx.deltaTime = 0.0f;
 
     // SceneManager
@@ -292,6 +503,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
         prevTime = currentTime;
 
         sceneCtx.deltaTime = deltaTime;
+        handUdpSenderProcess.Update();
 
         // 入力更新
         input.Update(deltaTime);

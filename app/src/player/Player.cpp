@@ -359,8 +359,8 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
             rimEffect.enabled = true;
             rimEffect.additiveBlend = true;
             rimEffect.disableCulling = true;
-            rimEffect.color = {1.0f, 0.82f, 0.42f, 0.34f};
-            rimEffect.intensity = 0.46f;
+            rimEffect.color = {1.0f, 0.78f, 0.38f, 0.24f};
+            rimEffect.intensity = 0.28f;
             rimEffect.fresnelPower = 0.82f;
             rimEffect.time = recoveryVulnerableFlashTimer_;
             modelManager->SetDrawEffect(rimEffect);
@@ -413,7 +413,7 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
             recoveryEffect.additiveBlend = false;
             recoveryEffect.color = {1.0f, 0.08f, 0.02f, 0.82f};
             recoveryEffect.intensity =
-                0.42f + 0.48f * vulnerablePulse * attackRecoveryRatio;
+                0.26f + 0.28f * vulnerablePulse * attackRecoveryRatio;
             recoveryEffect.fresnelPower = 1.35f;
             recoveryEffect.noiseAmount = 0.34f + 0.18f * vulnerablePulse;
             recoveryEffect.time = recoveryVulnerableFlashTimer_;
@@ -452,7 +452,7 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
             recoveryEffect.additiveBlend = true;
             recoveryEffect.color = {0.18f, 0.78f, 1.0f, 0.72f};
             recoveryEffect.intensity =
-                0.42f + 0.26f * vulnerablePulse * recoveryRatio;
+                0.28f + 0.18f * vulnerablePulse * recoveryRatio;
             recoveryEffect.fresnelPower = 1.0f;
             recoveryEffect.noiseAmount = 0.10f;
             recoveryEffect.time = recoveryVulnerableFlashTimer_;

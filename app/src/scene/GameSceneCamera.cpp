@@ -155,29 +155,57 @@ void GameScene::UpdateBattleCamera() {
         const XMFLOAT2 line = NormalizeXZ(toEnemyX, toEnemyZ);
         const float sideX = line.y;
         const float sideZ = -line.x;
-        const float ratio =
-            Clamp01(battleIntroTimer_ / battleIntroDuration_);
-        const float push = ratio * ratio * (3.0f - 2.0f * ratio);
-        const DirectX::XMFLOAT3 startCameraPos = {
-            enemyPos.x - line.x * 10.2f + sideX * 0.35f,
-            enemyPos.y + 2.75f,
-            enemyPos.z - line.y * 10.2f + sideZ * 0.35f};
-        const DirectX::XMFLOAT3 endCameraPos = {
+        const float settle =
+            Clamp01((battleIntroTimer_ - 2.86f) /
+                    (battleIntroDuration_ - 2.86f));
+        const float settleEase = settle * settle * (3.0f - 2.0f * settle);
+        const float revealCharge = Clamp01(battleIntroTimer_ / 2.36f);
+        const float revealEase =
+            revealCharge * revealCharge * (3.0f - 2.0f * revealCharge);
+        const float flashKick =
+            Clamp01(1.0f - std::fabs(battleIntroTimer_ - 2.36f) / 0.24f);
+
+        const DirectX::XMFLOAT3 summonCameraPos = {
+            enemyPos.x - line.x * 10.8f + sideX * 1.65f,
+            enemyPos.y + 3.05f,
+            enemyPos.z - line.y * 10.8f + sideZ * 1.65f};
+        const DirectX::XMFLOAT3 revealCameraPos = {
+            enemyPos.x - line.x * 8.7f + sideX * 0.70f,
+            enemyPos.y + 2.86f + flashKick * 0.10f,
+            enemyPos.z - line.y * 8.7f + sideZ * 0.70f};
+        const DirectX::XMFLOAT3 playCameraPos = {
             playerPos.x - line.x * 6.0f + sideX * 1.15f,
             playerPos.y + 2.35f,
             playerPos.z - line.y * 6.0f + sideZ * 1.15f};
-        const DirectX::XMFLOAT3 startLookAt = {
-            enemyPos.x, enemyPos.y + 1.70f, enemyPos.z};
-        const DirectX::XMFLOAT3 endLookAt = {
-            playerPos.x * 0.36f + enemyPos.x * 0.64f,
-            playerPos.y * 0.28f + enemyPos.y * 0.72f + 1.38f,
-            playerPos.z * 0.36f + enemyPos.z * 0.64f};
-        const DirectX::XMFLOAT3 desiredCameraPos =
-            Lerp(startCameraPos, endCameraPos, push);
-        const DirectX::XMFLOAT3 desiredLookAt = Lerp(startLookAt, endLookAt, push);
+
+        const DirectX::XMFLOAT3 summonLookAt = {
+            enemyPos.x,
+            enemyPos.y + 1.45f + 0.22f * revealEase,
+            enemyPos.z};
+        const DirectX::XMFLOAT3 revealLookAt = {
+            enemyPos.x + line.x * 0.12f,
+            enemyPos.y + 1.62f + flashKick * 0.08f,
+            enemyPos.z + line.y * 0.12f};
+        const DirectX::XMFLOAT3 playLookAt = {
+            playerPos.x * 0.34f + enemyPos.x * 0.66f,
+            playerPos.y * 0.26f + enemyPos.y * 0.74f + 1.36f,
+            playerPos.z * 0.34f + enemyPos.z * 0.66f};
+
+        const DirectX::XMFLOAT3 heroCameraPos =
+            Lerp(summonCameraPos, revealCameraPos, revealEase);
+        const DirectX::XMFLOAT3 heroLookAt =
+            Lerp(summonLookAt, revealLookAt, revealEase);
+        DirectX::XMFLOAT3 desiredCameraPos =
+            Lerp(heroCameraPos, playCameraPos, settleEase);
+        DirectX::XMFLOAT3 desiredLookAt =
+            Lerp(heroLookAt, playLookAt, settleEase);
+        desiredCameraPos.x += sideX * flashKick * 0.14f;
+        desiredCameraPos.y += flashKick * 0.05f;
+        desiredCameraPos.z += sideZ * flashKick * 0.14f;
         lockOnOrbitCameraPos_ = desiredCameraPos;
         lockOnLookAt_ = desiredLookAt;
-        currentFovDeg_ = 48.0f + 24.0f * push;
+        const float heroFov = 58.0f - 4.0f * revealEase + 2.0f * flashKick;
+        currentFovDeg_ = heroFov + (66.0f - heroFov) * settleEase;
         camera_.SetPerspectiveFovDeg(currentFovDeg_);
         camera_.SetPosition(lockOnOrbitCameraPos_);
         camera_.LookAt(lockOnLookAt_);

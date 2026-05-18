@@ -29,7 +29,8 @@ LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wParam,
 }
 
 void WinApp::Initialize(HINSTANCE hInstance, int nCmdShow, int width,
-                        int height, const std::wstring &title) {
+                        int height, const std::wstring &title,
+                        bool startFullscreen) {
     WNDCLASS wc{};
     wc.lpfnWndProc = WindowProc;
     wc.hInstance = hInstance;
@@ -58,6 +59,22 @@ void WinApp::Initialize(HINSTANCE hInstance, int nCmdShow, int width,
 
     windowedStyle_ = static_cast<DWORD>(GetWindowLongPtr(hwnd_, GWL_STYLE));
     GetWindowPlacement(hwnd_, &windowedPlacement_);
+
+    if (startFullscreen) {
+        HMONITOR monitor = MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST);
+        MONITORINFO monitorInfo{sizeof(MONITORINFO)};
+        if (GetMonitorInfoW(monitor, &monitorInfo)) {
+            SetWindowLongPtr(hwnd_, GWL_STYLE,
+                             static_cast<LONG_PTR>(windowedStyle_ &
+                                                   ~WS_OVERLAPPEDWINDOW));
+            SetWindowPos(hwnd_, HWND_TOP, monitorInfo.rcMonitor.left,
+                         monitorInfo.rcMonitor.top,
+                         monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
+                         monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
+                         SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+            fullscreen_ = true;
+        }
+    }
 
     ShowWindow(hwnd_, nCmdShow);
     BringToFront();

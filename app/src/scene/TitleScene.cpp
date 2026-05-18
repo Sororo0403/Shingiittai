@@ -36,10 +36,6 @@ void TitleScene::Initialize(const SceneContext &ctx) {
     cameraStartRequested_ = false;
     waitingForCameraReady_ = false;
 
-    if (ctx_->requestHandTrackingStart) {
-        ctx_->requestHandTrackingStart();
-    }
-
     ctx_->dxCommon->BeginUpload();
     logoImage_ = LoadTitleImage(L"app/resources/title/title_simple.png");
     ctx_->dxCommon->EndUpload();
@@ -81,6 +77,9 @@ void TitleScene::Update() {
 
     if (IsCameraShortcutTriggered(*ctx_->input)) {
         cameraStartRequested_ = true;
+        if (ctx_->requestHandTrackingStart) {
+            ctx_->requestHandTrackingStart();
+        }
         return;
     }
 

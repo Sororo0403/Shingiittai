@@ -43,7 +43,7 @@ void DirectXCommon::BeginScenePass() {
     auto dsvHandle = dsvHeap_->GetCPUDescriptorHandleForHeapStart();
 
     commandList_->OMSetRenderTargets(1, &sceneRtv, FALSE, &dsvHandle);
-    commandList_->ClearRenderTargetView(sceneRtv, kClearColor, 0, nullptr);
+    commandList_->ClearRenderTargetView(sceneRtv, clearColor_, 0, nullptr);
     commandList_->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f,
                                         0, 0, nullptr);
 }
@@ -171,7 +171,7 @@ void DirectXCommon::SetBackBufferRenderTarget(bool clear, bool bindDepth) {
     commandList_->OMSetRenderTargets(1, &rtvHandle, FALSE, dsvHandlePtr);
 
     if (clear) {
-        commandList_->ClearRenderTargetView(rtvHandle, kClearColor, 0, nullptr);
+        commandList_->ClearRenderTargetView(rtvHandle, clearColor_, 0, nullptr);
         if (bindDepth) {
             commandList_->ClearDepthStencilView(
                 dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
@@ -194,6 +194,20 @@ void DirectXCommon::RegisterSceneColorSRV(SrvManager *srvManager) {
     srvManager_ = srvManager;
     sceneSrvIndex_ = srvManager->Allocate();
     UpdateSceneColorSrv();
+}
+
+void DirectXCommon::SetClearColor(const DirectX::XMFLOAT4 &color) {
+    clearColor_[0] = color.x;
+    clearColor_[1] = color.y;
+    clearColor_[2] = color.z;
+    clearColor_[3] = color.w;
+}
+
+void DirectXCommon::ResetClearColor() {
+    clearColor_[0] = kClearColor[0];
+    clearColor_[1] = kClearColor[1];
+    clearColor_[2] = kClearColor[2];
+    clearColor_[3] = kClearColor[3];
 }
 
 void DirectXCommon::UpdateSceneColorSrv() {

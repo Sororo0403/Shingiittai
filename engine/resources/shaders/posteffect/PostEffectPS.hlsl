@@ -10,6 +10,15 @@ Texture2D renderTexture : register(t0);
 Texture2D depthTexture : register(t1);
 SamplerState textureSampler : register(s0);
 
+float3 ApplyScreenGrade(float3 color)
+{
+    float luminance = dot(color, float3(0.2125f, 0.7154f, 0.0721f));
+    color = lerp(float3(luminance, luminance, luminance), color, 1.07f);
+    color = (color - 0.5f) * 1.055f + 0.5f;
+    color *= float3(1.015f, 1.005f, 0.985f);
+    return saturate(color);
+}
+
 float4 main(PostEffectVSOutput input) : SV_TARGET
 {
     float4 outputColor =
@@ -28,6 +37,7 @@ float4 main(PostEffectVSOutput input) : SV_TARGET
                                   vignettingPower);
     }
     outputColor.rgb *= 1.0f - saturate(sceneDimStrength) * 0.62f;
+    outputColor.rgb = ApplyScreenGrade(outputColor.rgb);
 
     outputColor = ApplyEdgeEffect(outputColor, renderTexture, depthTexture,
                                   textureSampler, input.uv, edgeMode);

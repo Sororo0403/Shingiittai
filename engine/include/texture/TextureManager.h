@@ -78,6 +78,24 @@ class TextureManager {
                                       uint32_t height = 512);
 
     /// <summary>
+    /// 赤味を抑えた敵金属用の手続きテクスチャを生成する
+    /// </summary>
+    /// <param name="width">テクスチャ幅</param>
+    /// <param name="height">テクスチャ高さ</param>
+    /// <returns>生成されたテクスチャのID</returns>
+    uint32_t CreatePatinatedMetalTexture(uint32_t width = 512,
+                                         uint32_t height = 512);
+
+    /// <summary>
+    /// 主人公金属用の青白い手続きテクスチャを生成する
+    /// </summary>
+    /// <param name="width">テクスチャ幅</param>
+    /// <param name="height">テクスチャ高さ</param>
+    /// <returns>生成されたテクスチャのID</returns>
+    uint32_t CreateHeroMetalTexture(uint32_t width = 512,
+                                    uint32_t height = 512);
+
+    /// <summary>
     /// 明るいアリーナ床用の手続き石材テクスチャを生成する
     /// </summary>
     /// <param name="width">テクスチャ幅</param>

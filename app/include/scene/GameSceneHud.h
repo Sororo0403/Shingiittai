@@ -13,11 +13,14 @@ class GameSceneHud {
     void Draw(const SceneContext &ctx);
 
   private:
-    // UI
-    Sprite playerHpSprite_{};
-    Sprite playerHpBackSprite_{};
-    Sprite bossHpSprite_{};
-    Sprite bossHpBackSprite_{};
+    void DrawRect(const SceneContext &ctx, float x, float y, float w, float h,
+                  const DirectX::XMFLOAT4 &color);
+    void DrawBar(const SceneContext &ctx, float x, float y, float w, float h,
+                 float rate, const DirectX::XMFLOAT4 &fill,
+                 const DirectX::XMFLOAT4 &accent);
+
+    float playerHpRate_ = 1.0f;
+    float bossHpRate_ = 1.0f;
 
     static constexpr float kPlayerHpMax = 100.0f;
     static constexpr float kPlayerHpBarMaxWidth = 400.0f;

@@ -22,6 +22,44 @@ XMFLOAT4X4 ToMatrix(const aiMatrix4x4 &m) {
             m.a3, m.b3, m.c3, m.d3, m.a4, m.b4, m.c4, m.d4};
 }
 
+void GeneratePlanarUvs(std::vector<Vertex> &vertices,
+                        const XMFLOAT3 &boundsMin,
+                        const XMFLOAT3 &boundsMax) {
+    const float extentX = boundsMax.x - boundsMin.x;
+    const float extentY = boundsMax.y - boundsMin.y;
+    const float extentZ = boundsMax.z - boundsMin.z;
+
+    const bool dropX = extentX <= extentY && extentX <= extentZ;
+    const bool dropY = extentY < extentX && extentY <= extentZ;
+
+    for (Vertex &vertex : vertices) {
+        if (dropX) {
+            vertex.uv = {
+                extentZ > 0.0001f ? (vertex.position.z - boundsMin.z) / extentZ
+                                   : 0.0f,
+                extentY > 0.0001f ? 1.0f - (vertex.position.y - boundsMin.y) /
+                                                extentY
+                                   : 0.0f,
+            };
+        } else if (dropY) {
+            vertex.uv = {
+                extentX > 0.0001f ? (vertex.position.x - boundsMin.x) / extentX
+                                   : 0.0f,
+                extentZ > 0.0001f ? (vertex.position.z - boundsMin.z) / extentZ
+                                   : 0.0f,
+            };
+        } else {
+            vertex.uv = {
+                extentX > 0.0001f ? (vertex.position.x - boundsMin.x) / extentX
+                                   : 0.0f,
+                extentY > 0.0001f ? 1.0f - (vertex.position.y - boundsMin.y) /
+                                                extentY
+                                   : 0.0f,
+            };
+        }
+    }
+}
+
 } // namespace
 
 void AssimpMeshLoader::Initialize(TextureManager *textureManager,
@@ -95,6 +133,8 @@ void AssimpMeshLoader::LoadMeshes(const aiScene *scene, const std::string &path,
         subMesh.sourcePositions.reserve(vertices.size());
         subMesh.sourceBoundsMin = vertices.front().position;
         subMesh.sourceBoundsMax = vertices.front().position;
+        XMFLOAT2 uvMin = vertices.front().uv;
+        XMFLOAT2 uvMax = vertices.front().uv;
         for (const Vertex &vertex : vertices) {
             subMesh.sourcePositions.push_back(vertex.position);
             subMesh.sourceBoundsMin.x =
@@ -109,6 +149,17 @@ void AssimpMeshLoader::LoadMeshes(const aiScene *scene, const std::string &path,
                 (std::max)(subMesh.sourceBoundsMax.y, vertex.position.y);
             subMesh.sourceBoundsMax.z =
                 (std::max)(subMesh.sourceBoundsMax.z, vertex.position.z);
+            uvMin.x = (std::min)(uvMin.x, vertex.uv.x);
+            uvMin.y = (std::min)(uvMin.y, vertex.uv.y);
+            uvMax.x = (std::max)(uvMax.x, vertex.uv.x);
+            uvMax.y = (std::max)(uvMax.y, vertex.uv.y);
+        }
+
+        const float uvRangeX = uvMax.x - uvMin.x;
+        const float uvRangeY = uvMax.y - uvMin.y;
+        if (uvRangeX < 0.001f || uvRangeY < 0.001f) {
+            GeneratePlanarUvs(vertices, subMesh.sourceBoundsMin,
+                              subMesh.sourceBoundsMax);
         }
 
         if (mesh->HasBones()) {

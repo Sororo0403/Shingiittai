@@ -21,7 +21,7 @@ class WinApp {
     /// <param name="height">クライアント領域の高さ</param>
     /// <param name="title">ウィンドウタイトル</param>
     void Initialize(HINSTANCE hInstance, int nCmdShow, int width, int height,
-                    const std::wstring &title);
+                    const std::wstring &title, bool startFullscreen = false);
 
     /// <summary>
     /// Windowsメッセージを処理する

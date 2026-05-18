@@ -446,6 +446,7 @@ class Enemy {
     void ApplyVictoryDefeatPose(float ratio,
                                 const DirectX::XMFLOAT3 &startPosition,
                                 const DirectX::XMFLOAT3 &playerPosition);
+    void FaceTargetImmediately(const DirectX::XMFLOAT3 &targetPosition);
 
     const Transform &GetTransform() const { return tf_; }
     bool IsAlive() const { return !runtime_.deathFinished; }

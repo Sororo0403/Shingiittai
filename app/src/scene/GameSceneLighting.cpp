@@ -79,57 +79,57 @@ void GameScene::UpdateSceneLighting() {
     }
 
     SceneLighting lighting{};
-    lighting.keyLightDirection = {-0.46f, -1.0f, 0.26f};
+    lighting.keyLightDirection = {-0.62f, -0.58f, 0.36f};
     lighting.keyLightColor = {
-        1.24f + actionColor.x * 0.07f,
-        1.12f + actionColor.y * 0.05f,
-        0.98f + actionColor.z * 0.03f,
+        1.30f + actionColor.x * 0.05f,
+        1.22f + actionColor.y * 0.04f,
+        1.10f + actionColor.z * 0.03f,
         1.0f,
     };
     lighting.fillLightDirection = {0.72f, -0.24f, -0.56f};
     lighting.fillLightColor = {
-        0.34f + actionColor.x * 0.04f,
-        0.34f + actionColor.y * 0.03f,
-        0.40f + actionColor.z * 0.03f,
-        0.52f,
+        0.58f + actionColor.x * 0.03f,
+        0.60f + actionColor.y * 0.02f,
+        0.66f + actionColor.z * 0.02f,
+        0.58f,
     };
     lighting.ambientColor = {
-        0.21f + actionColor.x * 0.010f,
-        0.23f + actionColor.y * 0.010f,
-        0.27f + actionColor.z * 0.010f,
+        0.39f + actionColor.x * 0.008f,
+        0.40f + actionColor.y * 0.008f,
+        0.44f + actionColor.z * 0.008f,
         1.0f,
     };
     lighting.lightingParams = {
-        58.0f,
-        0.34f,
-        1.7f,
-        0.18f,
+        52.0f,
+        0.30f,
+        1.34f,
+        0.17f,
     };
 
     lighting.pointLights[0].positionRange = {
-        playerPos.x,
-        playerPos.y + 3.35f,
-        playerPos.z - 0.10f,
-        7.20f,
+        playerPos.x - 2.00f,
+        playerPos.y + 1.55f,
+        playerPos.z - 1.80f,
+        5.40f,
     };
     lighting.pointLights[0].colorIntensity = {
         1.0f,
         0.74f,
         0.42f,
-        1.12f * pulse,
+        0.86f * pulse,
     };
 
     lighting.pointLights[1].positionRange = {
-        accentAnchor.x,
-        enemyPos.y + 3.55f,
-        accentAnchor.z + 0.05f,
-        6.30f,
+        accentAnchor.x + 2.20f,
+        enemyPos.y + 1.75f,
+        accentAnchor.z + 1.20f,
+        5.00f,
     };
     lighting.pointLights[1].colorIntensity = {
         1.0f + actionColor.x * 0.04f,
         0.82f + actionColor.y * 0.03f,
         0.52f + actionColor.z * 0.02f,
-        1.18f * actionBoost * enemyFocusBoost,
+        0.94f * actionBoost * enemyFocusBoost,
     };
 
     if (bladeClashFinishActive_ && bladeClashFinishPlayerWon_) {
@@ -140,35 +140,35 @@ void GameScene::UpdateSceneLighting() {
                 : 1.0f;
         const float impact =
             1.0f - std::clamp((ratio - 0.58f) / 0.42f, 0.0f, 1.0f);
-        lighting.keyLightDirection = {-0.16f, -0.86f, 0.48f};
-        lighting.keyLightColor = {1.94f, 1.84f, 1.62f, 1.0f};
+        lighting.keyLightDirection = {-0.40f, -0.54f, 0.62f};
+        lighting.keyLightColor = {1.48f, 1.42f, 1.26f, 1.0f};
         lighting.fillLightDirection = {0.66f, -0.16f, -0.72f};
-        lighting.fillLightColor = {0.80f, 0.82f, 0.88f, 0.72f};
+        lighting.fillLightColor = {0.66f, 0.68f, 0.74f, 0.60f};
         lighting.ambientColor = {0.36f, 0.37f, 0.40f, 1.0f};
-        lighting.lightingParams = {112.0f, 0.74f, 1.48f, 0.22f};
+        lighting.lightingParams = {86.0f, 0.52f, 1.16f, 0.18f};
         lighting.pointLights[0].positionRange = {
-            playerPos.x - bladeClashDirection_.x * 0.70f,
-            playerPos.y + 1.72f,
-            playerPos.z - bladeClashDirection_.z * 0.70f,
-            10.80f,
+            playerPos.x - bladeClashDirection_.x * 1.05f,
+            playerPos.y + 1.45f,
+            playerPos.z - bladeClashDirection_.z * 1.05f,
+            8.20f,
         };
         lighting.pointLights[0].colorIntensity = {
             1.0f,
             0.92f,
             0.72f,
-            4.05f + 1.20f * impact,
+            1.75f + 0.55f * impact,
         };
         lighting.pointLights[1].positionRange = {
-            enemyPos.x,
-            enemyPos.y + 2.05f,
-            enemyPos.z,
-            8.20f,
+            enemyPos.x + bladeClashDirection_.z * 1.15f,
+            enemyPos.y + 1.75f,
+            enemyPos.z - bladeClashDirection_.x * 1.15f,
+            6.80f,
         };
         lighting.pointLights[1].colorIntensity = {
             1.0f,
             0.90f,
             0.70f,
-            2.70f,
+            1.25f,
         };
     }
 

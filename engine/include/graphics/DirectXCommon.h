@@ -1,5 +1,6 @@
 #pragma once
 #include <Windows.h>
+#include <DirectXMath.h>
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <wrl.h>
@@ -59,6 +60,9 @@ class DirectXCommon {
     /// シーンカラーをシェーダーから読めるSRVとして登録する
     /// </summary>
     void RegisterSceneColorSRV(SrvManager *srvManager);
+
+    void SetClearColor(const DirectX::XMFLOAT4 &color);
+    void ResetClearColor();
 
     /// <summary>
     /// 深度バッファをシェーダー読み取り状態へ遷移する
@@ -192,6 +196,8 @@ class DirectXCommon {
     static constexpr UINT kSwapChainBufferCount = 2;
     static constexpr UINT kSceneRtvIndex = kSwapChainBufferCount;
     static constexpr float kClearColor[4] = {0.040f, 0.050f, 0.088f, 1.0f};
+    float clearColor_[4] = {kClearColor[0], kClearColor[1], kClearColor[2],
+                            kClearColor[3]};
 
     Microsoft::WRL::ComPtr<IDXGIFactory7> factory_;
     Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain_;

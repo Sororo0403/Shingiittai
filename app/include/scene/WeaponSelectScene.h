@@ -2,6 +2,7 @@
 #include "BaseScene.h"
 #include "Camera.h"
 #include "InputControlType.h"
+#include "JoyCon.h"
 #include "Sprite.h"
 #include "Transform.h"
 #include <DirectXMath.h>
@@ -36,9 +37,14 @@ class WeaponSelectScene : public BaseScene {
 
     Image LoadTextureImage(const std::wstring &path);
     void UpdateSelection(Input *input);
+    void UpdateDeviceAvailability();
     void BeginStart();
     void Layout(float screenWidth, float screenHeight);
     InputControlType SelectedControlType() const;
+    bool IsHandTrackingReady() const;
+    void RequestHandTrackingStartOnce();
+    bool IsModeAvailable(int index) const;
+    void ShowUnavailableMessage(int index);
     void UpdateCamera();
     void UpdateLighting();
 
@@ -52,15 +58,20 @@ class WeaponSelectScene : public BaseScene {
     void DrawImage(const Image &image, float x, float y, float scale = 1.0f,
                    float alpha = 1.0f);
     Transform MakeSwordTransform(int weaponIndex, int swordIndex) const;
-    DirectX::XMFLOAT4 WeaponColor(int index, float alpha = 1.0f) const;
+    DirectX::XMFLOAT4 WeaponColor(int index, float alpha = 1.0f,
+                                  bool available = true) const;
 
     int selectedIndex_ = 0;
     float sceneTime_ = 0.0f;
     float transitionTimer_ = 0.0f;
     bool startRequested_ = false;
+    bool waitingForHandTrackingReady_ = false;
+    bool handTrackingStartRequested_ = false;
 
     uint32_t swordModelId_ = 0;
     Camera camera_;
+    JoyCon leftJoyCon_;
+    JoyCon rightJoyCon_;
     Image backgroundImage_{};
     Image titleImage_{};
     Image controlsImage_{};
@@ -70,4 +81,6 @@ class WeaponSelectScene : public BaseScene {
     std::array<Image, kWeaponCount> weaponBottomImages_{};
     std::array<ButtonRect, kWeaponCount> cardRects_{};
     std::array<float, kWeaponCount> pulseTimers_{};
+    bool joyConAvailable_ = false;
+    bool cameraAvailable_ = false;
 };

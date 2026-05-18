@@ -5,6 +5,14 @@ TextureCube<float4> gEnvironmentTexture : register(t2);
 Texture2D<float4> gDissolveNoiseTexture : register(t3);
 SamplerState samp0 : register(s0);
 
+float3 ApplyFilmicTone(float3 source)
+{
+    float3 color = max(source, 0.0f);
+    color = (color * (2.51f * color + 0.03f)) /
+            (color * (2.43f * color + 0.59f) + 0.14f);
+    return saturate(color);
+}
+
 cbuffer ObjectTransform : register(b0)
 {
     float4x4 matWVP;
@@ -40,6 +48,16 @@ cbuffer Material : register(b2)
     float4 dissolveEdgeColor;
 };
 
+float3 ApplyAtmosphericDepth(float3 color, float3 worldPos)
+{
+    float distanceToCamera = length(cameraPos.xyz - worldPos);
+    float distanceFog = smoothstep(16.0f, 42.0f, distanceToCamera) * 0.34f;
+    float heightFog = saturate((worldPos.y - 2.7f) / 6.5f) * 0.16f;
+    float effectBypass = saturate(effectParams.x * 0.45f);
+    float fogAmount = saturate((distanceFog + heightFog) * (1.0f - effectBypass));
+    return lerp(color, float3(0.050f, 0.066f, 0.095f), fogAmount);
+}
+
 float4 main(ModelVSOutput input) : SV_TARGET
 {
     float2 uv = mul(float4(input.uv, 0.0f, 1.0f), uvTransform).xy;
@@ -60,6 +78,11 @@ float4 main(ModelVSOutput input) : SV_TARGET
     if (enableDissolve != 0)
     {
         float dissolveNoise = gDissolveNoiseTexture.Sample(samp0, uv).r;
+        float dripNoise =
+            gDissolveNoiseTexture.Sample(samp0, uv * float2(0.65f, 3.2f)).r;
+        float verticalMelt =
+            saturate(1.0f - uv.y + (dripNoise - 0.5f) * 0.42f);
+        dissolveNoise = saturate(dissolveNoise * 0.72f + verticalMelt * 0.28f);
         float dissolveAmount = dissolveNoise - saturate(dissolveThreshold);
         clip(dissolveAmount);
 
@@ -169,5 +192,7 @@ float4 main(ModelVSOutput input) : SV_TARGET
         finalColor.a = saturate(finalColor.a + effectColor.a * glow * 0.55f);
     }
 
+    finalColor.rgb = ApplyFilmicTone(finalColor.rgb);
+    finalColor.rgb = ApplyAtmosphericDepth(finalColor.rgb, input.worldPos);
     return finalColor;
 }

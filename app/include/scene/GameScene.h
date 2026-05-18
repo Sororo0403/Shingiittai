@@ -40,6 +40,7 @@ class GameScene : public BaseScene {
     void UpdateBattleCamera();
     void UpdateSceneLighting();
     void DrawArena();
+    void DrawDistantHazardBackdrop();
     void DrawBladeClashFinishBackdrop();
     void DrawEnemyFocusMarker();
     void DrawEnemyWeaponTrail();
@@ -49,7 +50,9 @@ class GameScene : public BaseScene {
     void DrawBladeClashFinishFrame();
     void DrawVictoryFlash();
     void DrawDefeatFlash();
+    void DrawBattleIntroFlash();
     void UpdateBattleIntro(float deltaTime);
+    void ApplyEnemyIntroDissolve(float revealRatio);
     void UpdatePhaseTransitionCinematic(float deltaTime);
     void EmitPhaseTransitionStartEffects();
     void EmitPhaseTransitionLoopEffects(float deltaTime);
@@ -60,6 +63,7 @@ class GameScene : public BaseScene {
     void BeginDefeatSequence();
     void UpdateDefeatSequence(float deltaTime);
     void SyncEnemyAnimation();
+    void UpdateBattleIntroEnemyAnimation(float deltaTime);
     void UpdatePhaseTransitionEnemyAnimation(float deltaTime);
     void ApplyEnemyProceduralAnimation();
     void SetEnemyAnimationFrozen(bool frozen);
@@ -114,6 +118,13 @@ class GameScene : public BaseScene {
     uint32_t enemyModelId_ = 0;
     uint32_t arenaFloorModelId_ = 0;
     uint32_t arenaLowPolyTerrainModelId_ = 0;
+    uint32_t arenaDistantTerrainModelId_ = 0;
+    uint32_t arenaHazardSpireModelId_ = 0;
+    uint32_t arenaHazardGlowRingModelId_ = 0;
+    uint32_t arenaCityTowerModelId_ = 0;
+    uint32_t arenaCityWindowModelId_ = 0;
+    uint32_t arenaGiantBodyModelId_ = 0;
+    uint32_t arenaGiantHeadModelId_ = 0;
     uint32_t arenaCenterDiskModelId_ = 0;
     uint32_t arenaSpokeModelId_ = 0;
     uint32_t arenaInnerRingModelId_ = 0;
@@ -221,8 +232,9 @@ class GameScene : public BaseScene {
     float battleElapsedTime_ = 0.0f;
     bool battleIntroActive_ = true;
     float battleIntroTimer_ = 0.0f;
-    float battleIntroDuration_ = 2.45f;
+    float battleIntroDuration_ = 4.35f;
     bool battleIntroSparkEmitted_ = false;
+    bool battleIntroRevealEmitted_ = false;
     bool phaseTransitionWasActive_ = false;
     bool phaseTransitionReleaseEmitted_ = false;
     float phaseTransitionLoopTimer_ = 0.0f;
