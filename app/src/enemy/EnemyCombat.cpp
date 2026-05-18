@@ -290,7 +290,10 @@ void Enemy::ResolveDeferredDamageTransitions() {
         return;
     }
 
+    const bool wasPhaseTransitionActive = phaseTransitionActive_;
     UpdateBossPhase();
+    const bool beganPhaseTransition =
+        !wasPhaseTransitionActive && phaseTransitionActive_;
     if (hp_ <= 0.0f) {
         isDying_ = true;
         deathTimer_ = 0.0f;
@@ -298,6 +301,13 @@ void Enemy::ResolveDeferredDamageTransitions() {
         hitReactionTimer_ = 0.0f;
         tf_.scale = {1.0f, 1.0f, 1.0f};
         EndAttack();
+        UpdateParts();
+        return;
+    }
+
+    if (beganPhaseTransition) {
+        hitReactionTimer_ = 0.0f;
+        counterRecoilTimer_ = 0.0f;
         UpdateParts();
         return;
     }
