@@ -37,7 +37,7 @@ void TitleScene::Initialize(const SceneContext &ctx) {
     waitingForCameraReady_ = false;
 
     ctx_->dxCommon->BeginUpload();
-    logoImage_ = LoadTitleImage(L"app/resources/title/title_simple.png");
+    logoImage_ = LoadTitleImage(L"app/resources/title/gamelogo.png");
     ctx_->dxCommon->EndUpload();
     ctx_->texture->ReleaseUploadBuffers();
 
