@@ -22,15 +22,18 @@ void DirectXCommon::Initialize(HWND hwnd, int width, int height) {
 }
 
 void DirectXCommon::BeginFrame() {
-    ThrowIfFailed(commandAllocator_->Reset(),
+    WaitForFenceValue(frameFenceValues_[backBufferIndex_]);
+
+    ID3D12CommandAllocator *allocator =
+        commandAllocators_[backBufferIndex_].Get();
+    ThrowIfFailed(allocator->Reset(),
                   "commandAllocator_->Reset failed");
-    ThrowIfFailed(commandList_->Reset(commandAllocator_.Get(), nullptr),
+    ThrowIfFailed(commandList_->Reset(allocator, nullptr),
                   "commandList_->Reset failed");
     isCommandListRecording_ = true;
 
     commandList_->RSSetViewports(1, &viewport_);
     commandList_->RSSetScissorRects(1, &scissorRect_);
-
 }
 
 void DirectXCommon::BeginScenePass() {
@@ -76,6 +79,13 @@ void DirectXCommon::EndFrame() {
     ID3D12CommandList *lists[] = {commandList_.Get()};
     commandQueue_->ExecuteCommandLists(1, lists);
 
+    const UINT frameIndex = backBufferIndex_;
+    fenceValue_++;
+    const UINT64 currentFenceValue = fenceValue_;
+    ThrowIfFailed(commandQueue_->Signal(fence_.Get(), currentFenceValue),
+                  "commandQueue_->Signal failed");
+    frameFenceValues_[frameIndex] = currentFenceValue;
+
     HRESULT presentResult = swapChain_->Present(1, 0);
     if (FAILED(presentResult)) {
         HRESULT removedReason = device_->GetDeviceRemovedReason();
@@ -83,16 +93,6 @@ void DirectXCommon::EndFrame() {
             ThrowIfFailed(removedReason, "D3D12 device removed");
         }
         ThrowIfFailed(presentResult, "swapChain_->Present failed");
-    }
-
-    fenceValue_++;
-    ThrowIfFailed(commandQueue_->Signal(fence_.Get(), fenceValue_),
-                  "commandQueue_->Signal failed");
-
-    if (fence_->GetCompletedValue() < fenceValue_) {
-        ThrowIfFailed(fence_->SetEventOnCompletion(fenceValue_, fenceEvent_),
-                      "fence_->SetEventOnCompletion failed");
-        WaitForSingleObject(fenceEvent_, INFINITE);
     }
 
     backBufferIndex_ = swapChain_->GetCurrentBackBufferIndex();
@@ -129,10 +129,14 @@ void DirectXCommon::Resize(int width, int height) {
 }
 
 void DirectXCommon::BeginUpload() {
-    ThrowIfFailed(commandAllocator_->Reset(),
+    WaitForGpu();
+
+    ID3D12CommandAllocator *allocator =
+        commandAllocators_[backBufferIndex_].Get();
+    ThrowIfFailed(allocator->Reset(),
                   "commandAllocator_->Reset failed");
 
-    ThrowIfFailed(commandList_->Reset(commandAllocator_.Get(), nullptr),
+    ThrowIfFailed(commandList_->Reset(allocator, nullptr),
                   "commandList_->Reset failed");
     isCommandListRecording_ = true;
 }
@@ -152,11 +156,20 @@ void DirectXCommon::WaitForGpu() {
     ThrowIfFailed(commandQueue_->Signal(fence_.Get(), fenceValue_),
                   "commandQueue_->Signal failed");
 
-    if (fence_->GetCompletedValue() < fenceValue_) {
-        ThrowIfFailed(fence_->SetEventOnCompletion(fenceValue_, fenceEvent_),
-                      "fence_->SetEventOnCompletion failed");
-        WaitForSingleObject(fenceEvent_, INFINITE);
+    WaitForFenceValue(fenceValue_);
+    for (UINT i = 0; i < kSwapChainBufferCount; ++i) {
+        frameFenceValues_[i] = fenceValue_;
     }
+}
+
+void DirectXCommon::WaitForFenceValue(UINT64 fenceValue) {
+    if (fenceValue == 0 || fence_->GetCompletedValue() >= fenceValue) {
+        return;
+    }
+
+    ThrowIfFailed(fence_->SetEventOnCompletion(fenceValue, fenceEvent_),
+                  "fence_->SetEventOnCompletion failed");
+    WaitForSingleObject(fenceEvent_, INFINITE);
 }
 
 void DirectXCommon::SetBackBufferRenderTarget(bool clear, bool bindDepth) {
@@ -268,15 +281,17 @@ void DirectXCommon::CreateCommandQueue() {
 }
 
 void DirectXCommon::CreateCommandAllocator() {
-    ThrowIfFailed(
-        device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
-                                        IID_PPV_ARGS(&commandAllocator_)),
-        "CreateCommandAllocator failed");
+    for (auto &allocator : commandAllocators_) {
+        ThrowIfFailed(
+            device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
+                                            IID_PPV_ARGS(&allocator)),
+            "CreateCommandAllocator failed");
+    }
 }
 
 void DirectXCommon::CreateCommandList() {
     ThrowIfFailed(device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
-                                             commandAllocator_.Get(), nullptr,
+                                             commandAllocators_[0].Get(), nullptr,
                                              IID_PPV_ARGS(&commandList_)),
                   "CreateCommandList failed");
 

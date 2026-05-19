@@ -1,5 +1,6 @@
 #include "SceneManager.h"
 #include "BaseScene.h"
+#include "DirectXCommon.h"
 
 void SceneManager::Initialize(const SceneContext &ctx) { ctx_ = &ctx; }
 
@@ -13,6 +14,10 @@ void SceneManager::ChangeScene(std::unique_ptr<BaseScene> nextScene) {
 }
 
 void SceneManager::ApplySceneChange(std::unique_ptr<BaseScene> nextScene) {
+    if (ctx_ != nullptr && ctx_->dxCommon != nullptr && currentScene_) {
+        ctx_->dxCommon->WaitForGpu();
+    }
+
     currentScene_.reset();
 
     currentScene_ = std::move(nextScene);

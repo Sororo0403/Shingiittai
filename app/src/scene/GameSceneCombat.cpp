@@ -241,6 +241,7 @@ PlayerCombatObservation GameScene::BuildPlayerCombatObservation() const {
     PlayerCombatObservation observation{};
     observation.position = player_.GetTransform().position;
     observation.velocity = player_.GetVelocity();
+    observation.facingYaw = player_.GetYaw();
     observation.isGuarding = false;
     observation.isCounterStance = false;
     observation.justCountered = player_.JustCountered();

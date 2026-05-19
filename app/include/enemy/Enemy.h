@@ -22,7 +22,7 @@ enum class ActionStep {
 };
 
 enum class WarpType { None, Approach, Escape };
-enum class WarpApproachSlot { None, BackLeft, BackRight, DirectBack };
+enum class WarpApproachSlot { None, Front, Back };
 
 // Enemy combat is driven by a two-part FSM:
 // - ActionKind decides which behavior is currently running.
@@ -38,6 +38,7 @@ struct WarpContext {
     WarpApproachSlot approachSlot = WarpApproachSlot::None;
     DirectX::XMFLOAT3 targetPos = {0.0f, 0.0f, 0.0f};
     DirectX::XMFLOAT3 departurePos = {0.0f, 0.0f, 0.0f};
+    float targetYaw = 0.0f;
 
     ActionKind followupKind = ActionKind::None;
     ActionStep followupStep = ActionStep::None;
@@ -45,6 +46,7 @@ struct WarpContext {
     bool collisionDisabled = false;
     bool hasValidTarget = false;
     bool hasDeparturePos = false;
+    bool hasTargetYaw = false;
 };
 
 enum class ChainStarter {
@@ -132,6 +134,7 @@ enum class BossPhase { Phase1, Phase2 };
 struct PlayerCombatObservation {
     DirectX::XMFLOAT3 position = {0.0f, 0.0f, 0.0f};
     DirectX::XMFLOAT3 velocity = {0.0f, 0.0f, 0.0f};
+    float facingYaw = 0.0f;
 
     bool isGuarding = false;
     bool isCounterStance = false;
@@ -746,9 +749,8 @@ class Enemy {
 
     float warpNearRadiusMin_ = 1.8f;
     float warpNearRadiusMax_ = 3.0f;
-    float warpApproachForwardDistance_ = 2.3f;
-    float warpApproachSideDistance_ = 2.1f;
-    float warpApproachLongFrontDistance_ = 4.0f;
+    float warpApproachFrontDistance_ = 2.55f;
+    float warpApproachBackDistance_ = 2.35f;
     int warpApproachWeight_ = 8;
     float farDistanceTimer_ = 0.0f;
     float farDistanceWarpTimeThreshold_ = 2.0f;
@@ -885,7 +887,9 @@ class Enemy {
     bool PrepareWarpContext();
     bool IsWarpSuspendedForPresentation() const;
     bool DecideWarpTargetNearPlayer(DirectX::XMFLOAT3 &outTarget);
-    bool DecideWarpTargetFarFromPlayer(DirectX::XMFLOAT3 &outTarget) const;
+    bool DecideWarpTargetFarFromPlayer(DirectX::XMFLOAT3 &outTarget);
+    void ClampWarpTargetToArena(DirectX::XMFLOAT3 &target) const;
+    void FinalizeWarpTargetFacing(DirectX::XMFLOAT3 &target);
     void BeginBackWarpPostAction();
     void ResetWarpContext();
 

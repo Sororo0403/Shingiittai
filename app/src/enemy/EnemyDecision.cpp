@@ -315,12 +315,38 @@ bool Enemy::TryBranchFromRecovery(ActionKind finishedKind) {
 
         ResetWarpContext();
         warp_.type = WarpType::Approach;
-        if (!DecideWarpTargetNearPlayer(warp_.targetPos)) {
-            ResetWarpContext();
-            return false;
+        warp_.approachSlot = WarpApproachSlot::Back;
+
+        float forwardX = std::sin(playerObs_.facingYaw);
+        float forwardZ = std::cos(playerObs_.facingYaw);
+        float forwardLength = std::sqrt(forwardX * forwardX + forwardZ * forwardZ);
+
+        if (forwardLength <= 0.0001f) {
+            forwardX = playerObs_.velocity.x;
+            forwardZ = playerObs_.velocity.z;
+            forwardLength = std::sqrt(forwardX * forwardX + forwardZ * forwardZ);
         }
 
+        if (forwardLength <= 0.0001f) {
+            forwardX = std::sin(facingYaw_);
+            forwardZ = std::cos(facingYaw_);
+            forwardLength = 1.0f;
+        }
+
+        forwardX /= forwardLength;
+        forwardZ /= forwardLength;
+
+        constexpr float shotRecommitBackDistance = 1.72f;
+        DirectX::XMFLOAT3 target = playerPos_;
+        target.x -= forwardX * shotRecommitBackDistance;
+        target.z -= forwardZ * shotRecommitBackDistance;
+        target.y = tf_.position.y;
+        FinalizeWarpTargetFacing(target);
+        warp_.targetPos = target;
+
         warp_.hasValidTarget = true;
+        warp_.followupKind = ActionKind::Smash;
+        warp_.followupStep = ActionStep::Charge;
         recoveryBranchType_ = RecoveryBranchType::Recommit;
         recoveryFollowupKind_ = ActionKind::Warp;
         recoveryFollowupStep_ = ActionStep::Start;
@@ -878,13 +904,13 @@ bool Enemy::TryBeginWarpBehindMeleeSkill(bool force) {
         }
     }
 
-    float forwardX = playerObs_.velocity.x;
-    float forwardZ = playerObs_.velocity.z;
+    float forwardX = std::sin(playerObs_.facingYaw);
+    float forwardZ = std::cos(playerObs_.facingYaw);
     float forwardLength = std::sqrt(forwardX * forwardX + forwardZ * forwardZ);
 
     if (forwardLength <= 0.0001f) {
-        forwardX = playerPos_.x - tf_.position.x;
-        forwardZ = playerPos_.z - tf_.position.z;
+        forwardX = playerObs_.velocity.x;
+        forwardZ = playerObs_.velocity.z;
         forwardLength = std::sqrt(forwardX * forwardX + forwardZ * forwardZ);
     }
 
@@ -905,7 +931,8 @@ bool Enemy::TryBeginWarpBehindMeleeSkill(bool force) {
 
     ResetWarpContext();
     warp_.type = WarpType::Approach;
-    warp_.approachSlot = WarpApproachSlot::DirectBack;
+    warp_.approachSlot = WarpApproachSlot::Back;
+    FinalizeWarpTargetFacing(target);
     warp_.targetPos = target;
     warp_.hasValidTarget = true;
     warp_.followupKind = SelectNearPressureAction();

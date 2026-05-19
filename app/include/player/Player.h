@@ -86,6 +86,7 @@ class Player {
         return postSlashRecoveryTimer_ > 0.0f || leftSlashRecoveryTimer_ > 0.0f ||
                rightSlashRecoveryTimer_ > 0.0f;
     }
+    float GetYaw() const { return yaw_; }
 
     float GetHP() const { return hp_; }
     void TakeDamage(float damage);

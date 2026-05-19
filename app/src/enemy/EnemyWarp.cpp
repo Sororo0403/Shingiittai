@@ -26,14 +26,14 @@ bool Enemy::IsWarpSuspendedForPresentation() const {
 }
 
 bool Enemy::DecideWarpTargetNearPlayer(DirectX::XMFLOAT3 &outTarget) {
-    float playerForwardX = playerObs_.velocity.x;
-    float playerForwardZ = playerObs_.velocity.z;
+    float playerForwardX = std::sin(playerObs_.facingYaw);
+    float playerForwardZ = std::cos(playerObs_.facingYaw);
     float playerForwardLength =
         std::sqrt(playerForwardX * playerForwardX + playerForwardZ * playerForwardZ);
 
     if (playerForwardLength <= 0.0001f) {
-        playerForwardX = playerPos_.x - tf_.position.x;
-        playerForwardZ = playerPos_.z - tf_.position.z;
+        playerForwardX = playerObs_.velocity.x;
+        playerForwardZ = playerObs_.velocity.z;
         playerForwardLength =
             std::sqrt(playerForwardX * playerForwardX + playerForwardZ * playerForwardZ);
     }
@@ -47,42 +47,26 @@ bool Enemy::DecideWarpTargetNearPlayer(DirectX::XMFLOAT3 &outTarget) {
     playerForwardX /= playerForwardLength;
     playerForwardZ /= playerForwardLength;
 
-    const float backX = -playerForwardX;
-    const float backZ = -playerForwardZ;
-    const float rightX = playerForwardZ;
-    const float rightZ = -playerForwardX;
-
     if (warp_.approachSlot == WarpApproachSlot::None) {
-        int slotRoll = std::rand() % 100;
-        if (slotRoll < 42) {
-            warp_.approachSlot = WarpApproachSlot::BackLeft;
-        } else if (slotRoll < 84) {
-            warp_.approachSlot = WarpApproachSlot::BackRight;
-        } else {
-            warp_.approachSlot = WarpApproachSlot::DirectBack;
-        }
+        warp_.approachSlot =
+            (std::rand() % 100 < 48) ? WarpApproachSlot::Front
+                                     : WarpApproachSlot::Back;
     }
 
     outTarget = playerPos_;
-    if (warp_.approachSlot == WarpApproachSlot::BackLeft) {
-        outTarget.x += backX * warpApproachForwardDistance_ -
-                       rightX * warpApproachSideDistance_;
-        outTarget.z += backZ * warpApproachForwardDistance_ -
-                       rightZ * warpApproachSideDistance_;
-    } else if (warp_.approachSlot == WarpApproachSlot::BackRight) {
-        outTarget.x += backX * warpApproachForwardDistance_ +
-                       rightX * warpApproachSideDistance_;
-        outTarget.z += backZ * warpApproachForwardDistance_ +
-                       rightZ * warpApproachSideDistance_;
+    if (warp_.approachSlot == WarpApproachSlot::Front) {
+        outTarget.x += playerForwardX * warpApproachFrontDistance_;
+        outTarget.z += playerForwardZ * warpApproachFrontDistance_;
     } else {
-        outTarget.x += backX * warpApproachLongFrontDistance_;
-        outTarget.z += backZ * warpApproachLongFrontDistance_;
+        outTarget.x -= playerForwardX * warpApproachBackDistance_;
+        outTarget.z -= playerForwardZ * warpApproachBackDistance_;
     }
     outTarget.y = tf_.position.y;
+    FinalizeWarpTargetFacing(outTarget);
     return true;
 }
 
-bool Enemy::DecideWarpTargetFarFromPlayer(DirectX::XMFLOAT3 &outTarget) const {
+bool Enemy::DecideWarpTargetFarFromPlayer(DirectX::XMFLOAT3 &outTarget) {
     const float angle =
         static_cast<float>(std::rand() % 360) * 3.14159265f / 180.0f;
     const float t =
@@ -94,7 +78,33 @@ bool Enemy::DecideWarpTargetFarFromPlayer(DirectX::XMFLOAT3 &outTarget) const {
     outTarget.x += std::cos(angle) * radius;
     outTarget.z += std::sin(angle) * radius;
     outTarget.y = tf_.position.y;
+    FinalizeWarpTargetFacing(outTarget);
     return true;
+}
+
+void Enemy::ClampWarpTargetToArena(DirectX::XMFLOAT3 &target) const {
+    const float radiusSq = arenaClampRadius_ * arenaClampRadius_;
+    const float distanceSq = target.x * target.x + target.z * target.z;
+    if (distanceSq <= radiusSq || distanceSq <= 0.0001f) {
+        return;
+    }
+
+    const float scale = arenaClampRadius_ / std::sqrt(distanceSq);
+    target.x *= scale;
+    target.z *= scale;
+}
+
+void Enemy::FinalizeWarpTargetFacing(DirectX::XMFLOAT3 &target) {
+    ClampWarpTargetToArena(target);
+
+    const float dx = playerPos_.x - target.x;
+    const float dz = playerPos_.z - target.z;
+    if (dx * dx + dz * dz > 0.0001f) {
+        warp_.targetYaw = NormalizeAngle(std::atan2(dx, dz));
+    } else {
+        warp_.targetYaw = NormalizeAngle(facingYaw_);
+    }
+    warp_.hasTargetYaw = true;
 }
 
 bool Enemy::PrepareWarpContext() {
@@ -335,6 +345,8 @@ void Enemy::UpdateWarpStart(float deltaTime) {
 }
 
 void Enemy::UpdateWarpMove(float deltaTime) {
+    (void)deltaTime;
+
     if (!warp_.hasValidTarget) {
         EndAttack();
         return;
@@ -354,19 +366,23 @@ void Enemy::UpdateWarpMove(float deltaTime) {
     tf_.position.z =
         warp_.departurePos.z + (warp_.targetPos.z - warp_.departurePos.z) * eased;
 
-    warpTrailEmitTimer_ += deltaTime;
-    while (warpTrailEmitTimer_ >= warpTrailInterval_) {
-        warpTrailEmitTimer_ -= warpTrailInterval_;
-        const float scale =
-            warpTrailScaleMax_ - (warpTrailScaleMax_ - warpTrailScaleMin_) * t;
-        EmitWarpTrailGhost(tf_.position, scale);
-    }
+    warpTrailEmitTimer_ = 0.0f;
 
-    UpdateFacingToPlayer();
+    if (warp_.hasTargetYaw) {
+        facingYaw_ = NormalizeAngle(warp_.targetYaw);
+    } else {
+        UpdateFacingToPlayer();
+    }
     LockCurrentFacing();
 
     if (stateTimer_ >= config_.warp.moveTime) {
         tf_.position = warp_.targetPos;
+        if (warp_.hasTargetYaw) {
+            facingYaw_ = NormalizeAngle(warp_.targetYaw);
+            LockCurrentFacing();
+        }
+        ResetWarpTrails();
+        EmitWarpTrailGhost(warp_.targetPos, warpTrailScaleMax_ * 1.14f);
         ChangeActionStep(ActionStep::End);
     }
 }
@@ -374,7 +390,12 @@ void Enemy::UpdateWarpMove(float deltaTime) {
 void Enemy::UpdateWarpEnd(float deltaTime) {
     isVisible_ = true;
     warp_.collisionDisabled = false;
-    UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_ * 0.55f);
+    if (warp_.hasTargetYaw) {
+        facingYaw_ = NormalizeAngle(warp_.targetYaw);
+        LockCurrentFacing();
+    } else {
+        UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_ * 0.55f);
+    }
 
     if (stateTimer_ < config_.warp.endTime) {
         return;

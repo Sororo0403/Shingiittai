@@ -30,6 +30,7 @@ void Enemy::UpdateParts() {
     float visualPitch = 0.0f;
     float visualRoll = 0.0f;
     const float pulse = 0.5f + 0.5f * std::sin(runtime_.stateTimer * 18.0f);
+    const float slowPulse = std::sin(runtime_.stateTimer * 7.0f);
     const bool isDelaySmashWhiffPunish =
         action_.kind == ActionKind::Smash &&
         action_.step == ActionStep::Recovery &&
@@ -542,22 +543,29 @@ void Enemy::UpdateParts() {
         }
     } else if (!suppressActionPresentation && action_.kind == ActionKind::Warp) {
         if (action_.step == ActionStep::Start) {
+            const float startT =
+                Saturate(stateTimer_ / (std::max)(config_.warp.startTime, 0.0001f));
+            const float vanish = startT * startT;
+            const float shimmer =
+                std::sin(startT * 12.56637061f) * (1.0f - startT);
             if (warp_.type == WarpType::Approach) {
-                if (warp_.approachSlot == WarpApproachSlot::BackLeft) {
-                    bodyTf_.position.x += (-rightX) * 0.16f;
-                    bodyTf_.position.z += (-rightZ) * 0.16f;
-                    rightHandTf_.position.x += (-rightX) * 0.32f;
-                    rightHandTf_.position.z += (-rightZ) * 0.32f;
-                } else if (warp_.approachSlot == WarpApproachSlot::BackRight) {
-                    bodyTf_.position.x += rightX * 0.16f;
-                    bodyTf_.position.z += rightZ * 0.16f;
-                    rightHandTf_.position.x += rightX * 0.32f;
-                    rightHandTf_.position.z += rightZ * 0.32f;
-                } else if (warp_.approachSlot == WarpApproachSlot::DirectBack) {
+                if (warp_.approachSlot == WarpApproachSlot::Front) {
+                    bodyTf_.position.y += 0.07f;
+                    bodyTf_.position.x += (-forwardX) * 0.16f;
+                    bodyTf_.position.z += (-forwardZ) * 0.16f;
+                    rightHandTf_.position.x += (-forwardX) * 0.24f;
+                    rightHandTf_.position.z += (-forwardZ) * 0.24f;
+                    visualTf_.position.x += (-forwardX) * (0.10f + 0.16f * vanish);
+                    visualTf_.position.z += (-forwardZ) * (0.10f + 0.16f * vanish);
+                    visualPitch += 0.10f * vanish;
+                } else if (warp_.approachSlot == WarpApproachSlot::Back) {
                     bodyTf_.position.y -= 0.10f;
                     bodyTf_.scale.z += 0.10f;
                     rightHandTf_.position.x += forwardX * 0.28f;
                     rightHandTf_.position.z += forwardZ * 0.28f;
+                    visualTf_.position.x += forwardX * (0.12f + 0.20f * vanish);
+                    visualTf_.position.z += forwardZ * (0.12f + 0.20f * vanish);
+                    visualPitch -= 0.12f * vanish;
                 }
             }
 
@@ -565,9 +573,20 @@ void Enemy::UpdateParts() {
             bodyTf_.scale.x *= 0.96f;
             bodyTf_.scale.y *= 0.92f;
             bodyTf_.scale.z *= 0.96f;
+            visualTf_.scale.x *= 1.0f - 0.22f * vanish;
+            visualTf_.scale.y *= 1.0f + 0.16f * vanish;
+            visualTf_.scale.z *= 1.0f - 0.42f * vanish;
+            visualTf_.position.y += warpArrivalPreviewHeight_ * (0.5f + vanish);
+            visualTf_.position.x += rightX * shimmer * 0.08f;
+            visualTf_.position.z += rightZ * shimmer * 0.08f;
+            visualYaw += 0.35f * slowPulse * vanish + shimmer * 0.38f;
+            visualRoll += shimmer * 0.18f;
 
         } else if (action_.step == ActionStep::Move) {
-            // メルゼナ風：Move中は本体感を落として影が滑る感じ
+            const float moveT =
+                Saturate(stateTimer_ / (std::max)(config_.warp.moveTime, 0.0001f));
+            const float streak = 1.0f - std::abs(moveT * 2.0f - 1.0f);
+            // Move中は本体を見せず、出発/到着の残光だけにする
             bodyTf_.scale.x *= 0.88f;
             bodyTf_.scale.y *= 0.80f;
             bodyTf_.scale.z *= 0.88f;
@@ -581,29 +600,44 @@ void Enemy::UpdateParts() {
             rightHandTf_.scale.z *= 0.82f;
 
             bodyTf_.position.y -= 0.01f;
+            visualTf_.scale.x *= warpMoveGhostScaleX_;
+            visualTf_.scale.y *= warpMoveGhostScaleY_;
+            visualTf_.scale.z *= warpMoveGhostScaleZ_;
+            visualTf_.position.y += warpArrivalPreviewHeight_ + 0.18f * streak;
+            visualPitch -= 0.22f * streak;
+            visualYaw += 0.85f * slowPulse;
 
         } else if (action_.step == ActionStep::End) {
+            const float endT =
+                Saturate(stateTimer_ / (std::max)(config_.warp.endTime, 0.0001f));
+            const float arrival = 1.0f - (1.0f - endT) * (1.0f - endT);
             rightHandTf_.position.y += 0.2f;
             rightHandTf_.position.x += forwardX * 0.3f;
             rightHandTf_.position.z += forwardZ * 0.3f;
 
             if (warp_.type == WarpType::Approach) {
-                if (warp_.approachSlot == WarpApproachSlot::BackLeft) {
-                    bodyTf_.position.x += (-rightX) * 0.18f;
-                    bodyTf_.position.z += (-rightZ) * 0.18f;
-                    rightHandTf_.position.x += (-rightX) * 0.28f;
-                    rightHandTf_.position.z += (-rightZ) * 0.28f;
-                } else if (warp_.approachSlot == WarpApproachSlot::BackRight) {
-                    bodyTf_.position.x += rightX * 0.18f;
-                    bodyTf_.position.z += rightZ * 0.18f;
-                    rightHandTf_.position.x += rightX * 0.28f;
-                    rightHandTf_.position.z += rightZ * 0.28f;
-                } else if (warp_.approachSlot == WarpApproachSlot::DirectBack) {
+                if (warp_.approachSlot == WarpApproachSlot::Front) {
+                    bodyTf_.position.y += 0.08f;
+                    bodyTf_.position.x += (-forwardX) * 0.10f;
+                    bodyTf_.position.z += (-forwardZ) * 0.10f;
+                    rightHandTf_.position.x += (-forwardX) * 0.25f;
+                    rightHandTf_.position.z += (-forwardZ) * 0.25f;
+                    visualTf_.position.x += (-forwardX) * warpArrivalEchoOffset_ *
+                                            (1.0f - arrival);
+                    visualTf_.position.z += (-forwardZ) * warpArrivalEchoOffset_ *
+                                            (1.0f - arrival);
+                    visualPitch += 0.14f * (1.0f - arrival);
+                } else if (warp_.approachSlot == WarpApproachSlot::Back) {
                     bodyTf_.position.y -= 0.08f;
                     bodyTf_.position.x += forwardX * 0.12f;
                     bodyTf_.position.z += forwardZ * 0.12f;
                     rightHandTf_.position.x += forwardX * 0.35f;
                     rightHandTf_.position.z += forwardZ * 0.35f;
+                    visualTf_.position.x += forwardX * warpArrivalEchoOffset_ *
+                                            (1.0f - arrival);
+                    visualTf_.position.z += forwardZ * warpArrivalEchoOffset_ *
+                                            (1.0f - arrival);
+                    visualPitch -= 0.14f * (1.0f - arrival);
                 }
             }
 
@@ -619,6 +653,11 @@ void Enemy::UpdateParts() {
             rightHandTf_.scale.x *= 1.02f;
             rightHandTf_.scale.y *= 1.01f;
             rightHandTf_.scale.z *= 1.02f;
+            const float arrivalScale =
+                1.0f + (warpArrivalPreviewScale_ - 1.0f) * (1.0f - arrival);
+            visualTf_.scale.x *= arrivalScale;
+            visualTf_.scale.z *= arrivalScale;
+            visualTf_.position.y += warpArrivalPreviewHeight_ * (1.0f - arrival);
         }
     } else if (!suppressActionPresentation && action_.kind == ActionKind::Stalk) {
         rightHandTf_.position.y += 0.35f;
@@ -784,12 +823,12 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
     ModelDrawEffect warpEffect{};
 
     if (action_.kind == ActionKind::Warp) {
-        warpEffect.enabled = false;
+        warpEffect.enabled = true;
         warpEffect.additiveBlend = true;
         warpEffect.color = actionTint;
-        warpEffect.intensity = (action_.step == ActionStep::Move) ? 0.92f : 0.62f;
+        warpEffect.intensity = (action_.step == ActionStep::End) ? 0.86f : 0.58f;
         warpEffect.fresnelPower = 1.9f;
-        warpEffect.noiseAmount = 0.42f;
+        warpEffect.noiseAmount = (action_.step == ActionStep::Start) ? 0.56f : 0.38f;
         warpEffect.time = stateTimer_;
 
         if (isHitFlashing) {
@@ -861,9 +900,10 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
 
             Transform trailVisual = visualTf_;
             trailVisual.position = trail.position;
-            trailVisual.scale.x *= 0.90f;
-            trailVisual.scale.y *= 0.95f;
-            trailVisual.scale.z *= 0.60f;
+            trailVisual.scale.x *= trail.scale * 1.02f;
+            trailVisual.scale.y *= trail.scale * 1.10f;
+            trailVisual.scale.z *= trail.scale * 0.62f;
+            trailVisual.position.y += warpArrivalPreviewHeight_;
             drawEnemyVisual(trailVisual);
         }
     }
