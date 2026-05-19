@@ -166,6 +166,24 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
     UpdateParts();
 }
 
+void Enemy::SetCinematicTransform(const DirectX::XMFLOAT3 &position,
+                                  float yaw) {
+    SetCinematicTransform(position, yaw, 0.0f, 0.0f);
+}
+
+void Enemy::SetCinematicTransform(const DirectX::XMFLOAT3 &position, float yaw,
+                                  float pitch, float roll) {
+    tf_.position = position;
+    facingYaw_ = yaw;
+    lockedAttackYaw_ = yaw;
+    cinematicPitch_ = pitch;
+    cinematicRoll_ = roll;
+    DirectX::XMVECTOR rot =
+        DirectX::XMQuaternionRotationRollPitchYaw(0.0f, yaw, 0.0f);
+    DirectX::XMStoreFloat4(&tf_.rotation, rot);
+    UpdateParts();
+}
+
 void Enemy::UpdateByAction(float deltaTime) {
     if (action_.kind == ActionKind::None) {
         UpdateIdle(deltaTime);
@@ -260,6 +278,8 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     runtime_.novaRingsSpawned = 0;
     runtime_.novaRingTimer = 0.0f;
     runtime_.cageTrapSpawned = false;
+    shotsRemaining_ = 0;
+    shotIntervalTimer_ = 0.0f;
     shotWarpedToArenaEdge_ = false;
     ResetPreAttackPresentationState();
     ResetRecoveryBranchState();

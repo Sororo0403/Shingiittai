@@ -111,6 +111,50 @@ void Respawn(uint index, inout Particle particle)
                                     (r2 - 0.5f) * emitterRadius * 0.08f);
         particle.velocity = radial * (0.16f + r0 * 0.42f) *
                             emitterDirectionSpeed.w;
+    } else if (emitterStyle == 5u)
+    {
+        float height = (r2 - 0.35f) * emitterRadius * 1.10f;
+        particle.translate = emitterTranslate +
+                             float3(cos(angle) * radius,
+                                    height,
+                                    sin(angle) * radius);
+        float3 orbit = normalize(float3(-sin(angle), 0.0f, cos(angle)));
+        float3 inward = normalize(float3(-cos(angle), 0.22f + r3 * 0.36f,
+                                         -sin(angle)));
+        particle.velocity = orbit * tangent * (0.58f + r3 * 1.08f) *
+                                emitterDirectionSpeed.w +
+                            inward * (0.16f + r4 * 0.38f) *
+                                emitterDirectionSpeed.w +
+                            emitDir * (0.08f + r6 * 0.22f) +
+                            float3(0.0f, 0.18f + r1 * 0.44f, 0.0f);
+    } else if (emitterStyle == 6u)
+    {
+        float height = (r2 - 0.46f) * emitterRadius * 1.05f;
+        particle.translate = emitterTranslate +
+                             float3(cos(angle) * radius * (0.92f + r3 * 0.26f),
+                                    height,
+                                    sin(angle) * radius * (0.92f + r4 * 0.26f));
+        float3 orbit = normalize(float3(-sin(angle), 0.0f, cos(angle)));
+        float3 lift = normalize(float3(cos(angle) * (r3 - 0.5f) * 0.22f,
+                                       0.78f + r6 * 0.48f,
+                                       sin(angle) * (r4 - 0.5f) * 0.22f));
+        particle.velocity = orbit * tangent * (0.62f + r1 * 0.76f) *
+                                emitterDirectionSpeed.w +
+                            lift * (0.34f + r5 * 0.48f) *
+                                emitterDirectionSpeed.w +
+                            emitDir * (0.02f + r6 * 0.06f);
+    } else if (emitterStyle == 7u)
+    {
+        particle.translate = emitterTranslate +
+                             float3(cos(angle) * radius * 0.24f,
+                                    (r2 - 0.42f) * emitterRadius * 0.30f,
+                                    sin(angle) * radius * 0.24f);
+        float3 burstDir = normalize(float3(cos(angle) * (0.78f + r3 * 0.44f),
+                                           0.18f + r6 * 0.62f,
+                                           sin(angle) * (0.78f + r4 * 0.44f)));
+        particle.velocity = burstDir * (0.62f + r1 * 1.12f) *
+                                emitterDirectionSpeed.w +
+                            emitDir * (0.04f + r5 * 0.10f);
     } else
     {
         float3 smokeDir = normalize(radial * float3(1.0f, 0.45f, 1.0f) +
@@ -123,6 +167,9 @@ void Respawn(uint index, inout Particle particle)
                         : emitterStyle == 1u ? (0.50f + r2 * 0.58f)
                         : emitterStyle == 3u ? (0.18f + r2 * 0.12f)
                         : emitterStyle == 4u ? (0.13f + r2 * 0.08f)
+                        : emitterStyle == 5u ? (1.18f + r2 * 1.28f)
+                        : emitterStyle == 6u ? (2.45f + r2 * 1.20f)
+                        : emitterStyle == 7u ? (0.42f + r2 * 0.42f)
                                              : (1.05f + r2 * 1.10f);
 
     float4 palette[6] =
@@ -151,6 +198,18 @@ void Respawn(uint index, inout Particle particle)
     {
         baseColor = lerp(float4(1.0f, 0.72f, 0.18f, 1.0f),
                          float4(1.0f, 1.0f, 0.86f, 1.0f), r4);
+    } else if (emitterStyle == 5u)
+    {
+        baseColor = lerp(float4(1.0f, 0.48f, 0.14f, 1.0f),
+                         float4(1.0f, 0.94f, 0.54f, 1.0f), r4);
+    } else if (emitterStyle == 6u)
+    {
+        baseColor = lerp(float4(0.74f, 0.88f, 1.0f, 1.0f),
+                         float4(1.0f, 1.0f, 0.92f, 1.0f), r4);
+    } else if (emitterStyle == 7u)
+    {
+        baseColor = lerp(float4(0.82f, 0.94f, 1.0f, 1.0f),
+                         float4(1.0f, 1.0f, 0.96f, 1.0f), r4);
     } else
     {
         float smoke = 0.20f + r4 * 0.24f;
@@ -160,18 +219,33 @@ void Respawn(uint index, inout Particle particle)
                             emitterStyle == 0u ? 1.0f :
                             emitterStyle == 1u ? 0.92f :
                             emitterStyle == 3u ? 0.86f :
-                            emitterStyle == 4u ? 0.82f : 0.55f);
+                            emitterStyle == 4u ? 0.82f :
+                            emitterStyle == 5u ? 0.72f :
+                            emitterStyle == 6u ? 0.70f :
+                            emitterStyle == 7u ? 0.74f : 0.55f);
 
     float scale = emitterStyle == 0u ? (0.022f + r0 * 0.036f)
                   : emitterStyle == 1u ? (0.20f + r0 * 0.30f)
                   : emitterStyle == 3u ? (0.066f + r0 * 0.052f)
                   : emitterStyle == 4u ? (0.30f + r0 * 0.30f)
+                  : emitterStyle == 5u ? (0.046f + r0 * 0.076f)
+                  : emitterStyle == 6u ? (0.245f + r0 * 0.115f)
+                  : emitterStyle == 7u ? (0.030f + r0 * 0.046f)
                                        : (0.32f + r0 * 0.48f);
     particle.scale = emitterStyle == 0u
                          ? float2(scale * (3.4f + r3 * 2.9f), scale * 0.26f)
                          : emitterStyle == 3u
                                ? float2(scale * (8.8f + r3 * 3.8f),
                                         scale * (0.18f + r4 * 0.10f))
+                         : emitterStyle == 5u
+                               ? float2(scale * (1.35f + r3 * 0.70f),
+                                        scale * (0.72f + r4 * 0.42f))
+                         : emitterStyle == 6u
+                               ? float2(scale * (0.92f + r3 * 0.44f),
+                                        scale * (0.92f + r4 * 0.44f))
+                         : emitterStyle == 7u
+                               ? float2(scale * (0.88f + r3 * 0.42f),
+                                        scale * (0.88f + r4 * 0.42f))
                          : float2(scale * (0.90f + r3 * 0.36f), scale);
     particle.seed += 19.19f + time.x;
     particle.padding.x = (float) emitterStyle;
@@ -213,6 +287,29 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         {
             gravity = float3(0.0f, 0.0f, 0.0f);
             wind *= 0.02f;
+        } else if (particle.padding.x > 4.5f && particle.padding.x < 5.5f)
+        {
+            float swirl = sin(time.x * 5.4f + particle.seed * 1.7f);
+            float drift = cos(time.x * 4.2f + particle.seed);
+            gravity = float3(0.0f, 0.03f, 0.0f);
+            wind = float3(swirl * 0.30f + drift * 0.08f,
+                          0.14f + sin(time.x * 2.8f + particle.seed) * 0.14f,
+                          drift * 0.30f - swirl * 0.08f);
+        } else if (particle.padding.x > 5.5f && particle.padding.x < 6.5f)
+        {
+            float swirl = sin(time.x * 2.9f + particle.seed * 1.3f);
+            float drift = cos(time.x * 2.2f + particle.seed);
+            gravity = float3(0.0f, 0.045f, 0.0f);
+            wind = float3(swirl * 0.22f + drift * 0.08f,
+                          0.085f + sin(time.x * 1.6f + particle.seed) * 0.055f,
+                          drift * 0.22f - swirl * 0.08f);
+        } else if (particle.padding.x > 6.5f && particle.padding.x < 7.5f)
+        {
+            float drift = sin(time.x * 5.8f + particle.seed);
+            gravity = float3(0.0f, -0.035f, 0.0f);
+            wind = float3(drift * 0.07f,
+                          0.018f + sin(time.x * 3.4f + particle.seed) * 0.025f,
+                          cos(time.x * 4.9f + particle.seed) * 0.07f);
         } else if (particle.padding.x > 1.5f)
         {
             gravity = float3(0.0f, 0.10f, 0.0f);
@@ -232,6 +329,18 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
                                          particle.padding.x < 4.5f
                                      ? smoothstep(0.0f, 0.08f, ageRate) *
                                            saturate(1.0f - ageRate) * 0.86f
+                               : particle.padding.x > 4.5f &&
+                                         particle.padding.x < 5.5f
+                                     ? smoothstep(0.0f, 0.20f, ageRate) *
+                                           saturate(1.0f - ageRate) * 0.74f
+                               : particle.padding.x > 5.5f &&
+                                         particle.padding.x < 6.5f
+                                     ? smoothstep(0.0f, 0.24f, ageRate) *
+                                           saturate(1.0f - ageRate) * 0.68f
+                               : particle.padding.x > 6.5f &&
+                                         particle.padding.x < 7.5f
+                                     ? smoothstep(0.0f, 0.10f, ageRate) *
+                                           saturate(1.0f - ageRate) * 0.78f
                                : particle.padding.x > 1.5f
                                      ? smoothstep(0.0f, 0.18f, ageRate) *
                                            saturate(1.0f - ageRate) * 0.48f

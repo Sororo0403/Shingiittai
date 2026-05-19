@@ -63,6 +63,7 @@ class GameScene : public BaseScene {
     void BeginDefeatSequence();
     void UpdateDefeatSequence(float deltaTime);
     void SyncEnemyAnimation();
+    void UpdateBladeClashEnemyAnimation(float deltaTime);
     void UpdateBattleIntroEnemyAnimation(float deltaTime);
     void UpdatePhaseTransitionEnemyAnimation(float deltaTime);
     void ApplyEnemyProceduralAnimation();
@@ -78,9 +79,13 @@ class GameScene : public BaseScene {
     float ComputeGameplayTimeScale() const;
     void UpdateSwordVfx(float deltaTime);
     void ApplyEnemyCageConstraint();
-    void BeginBladeClash(size_t swordIndex);
+    void BeginBladeClash(size_t swordIndex, bool finalClash = false);
     void UpdateBladeClash(float deltaTime);
     void ResolveBladeClash(bool playerWon);
+    float ApplyEnemyDamage(float damage, bool deferTransitions = false,
+                           bool allowLastStand = false);
+    bool TryBeginFinalBladeClash(size_t swordIndex,
+                                 const DirectX::XMFLOAT3 &hitPosition);
 
   private:
     struct EnemyWeaponTrailSample {
@@ -233,7 +238,6 @@ class GameScene : public BaseScene {
     bool battleIntroActive_ = true;
     float battleIntroTimer_ = 0.0f;
     float battleIntroDuration_ = 4.35f;
-    bool battleIntroSparkEmitted_ = false;
     bool battleIntroRevealEmitted_ = false;
     bool phaseTransitionWasActive_ = false;
     bool phaseTransitionReleaseEmitted_ = false;
@@ -276,16 +280,23 @@ class GameScene : public BaseScene {
     float bladeClashEnemySurgeTimer_ = 0.0f;
     float bladeClashChainTimer_ = 0.0f;
     int bladeClashSlashChain_ = 0;
+    bool enemyLastStandPrimed_ = false;
+    bool bladeClashFinal_ = false;
+    int bladeClashFinalBarrageStep_ = 0;
     bool bladeClashFinishActive_ = false;
     bool bladeClashFinishPlayerWon_ = false;
     bool bladeClashFinishImpactEmitted_ = false;
+    bool bladeClashFinishGuardBreakEmitted_ = false;
     bool bladeClashFinishSkidEmitted_ = false;
+    bool bladeClashFinishWallImpactEmitted_ = false;
     bool bladeClashFinishPendingEnemyTransition_ = false;
     float bladeClashFinishTimer_ = 0.0f;
     float bladeClashFinishDuration_ = 2.05f;
     DirectX::XMFLOAT3 bladeClashFinishCenter_ = {0.0f, 0.0f, 0.0f};
     DirectX::XMFLOAT3 bladeClashFinishPlayerStart_ = {0.0f, 0.0f, 0.0f};
     DirectX::XMFLOAT3 bladeClashFinishPlayerEnd_ = {0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT3 bladeClashFinishEnemyStart_ = {0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT3 bladeClashFinishEnemyEnd_ = {0.0f, 0.0f, 0.0f};
 
     float damageMultiplier_ = 2.0f;
     bool showCollisionDebug_ = false;

@@ -77,6 +77,9 @@ class Player {
     void SetYaw(float yaw);
     void SetCinematicBladeClashPose(const DirectX::XMFLOAT3 &position,
                                     float yaw, float pushRatio);
+    void SetCinematicDualBladeBarragePose(const DirectX::XMFLOAT3 &position,
+                                          float yaw, float phase,
+                                          float intensity);
     bool IsDodging() const { return dodgeTimer_ > 0.0f; }
     bool IsDamageInvulnerable() const { return dodgeInvulnerableTimer_ > 0.0f; }
     bool IsAttackRecovery() const {
@@ -122,6 +125,7 @@ class Player {
     void SetBladeClashPose(bool active, float pushRatio = 0.5f) {
         bladeClashPoseActive_ = active;
         bladeClashPosePushRatio_ = pushRatio;
+        bladeClashCinematicSlashRatio_ = 0.0f;
     }
     bool UsesGamepadCameraLook() const {
         return gamepadControlMode_ == PlayerGamepadControlMode::Hunter;
@@ -258,6 +262,7 @@ class Player {
     float defeatPoseRatio_ = 0.0f;
     bool bladeClashPoseActive_ = false;
     float bladeClashPosePushRatio_ = 0.5f;
+    float bladeClashCinematicSlashRatio_ = 0.0f;
 
     bool dualNextManualLeft_ = true;
 

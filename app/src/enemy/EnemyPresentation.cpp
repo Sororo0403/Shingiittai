@@ -346,8 +346,72 @@ void Enemy::UpdateParts() {
             rightHandTf_.position.z += rightZ * 0.3f;
             visualRoll += 0.10f;
         }
+    } else if (!suppressActionPresentation && action_.kind == ActionKind::Shot) {
+        const float beat =
+            0.5f + 0.5f * std::sin(runtime_.stateTimer * 18.0f);
+        const float beatSnap =
+            std::pow((std::max)(0.0f, std::sin(runtime_.stateTimer * 18.0f)),
+                     3.0f);
+        if (action_.step == ActionStep::Charge) {
+            bodyTf_.position.y -= 0.10f + 0.03f * beat;
+            bodyTf_.scale.x += 0.08f + 0.04f * beat;
+            bodyTf_.scale.z += 0.12f + 0.05f * beat;
+            leftHandTf_.position.y += 0.48f + 0.10f * beat;
+            leftHandTf_.position.x += forwardX * 0.76f + (-rightX) * 0.58f;
+            leftHandTf_.position.z += forwardZ * 0.76f + (-rightZ) * 0.58f;
+            leftHandTf_.scale.x += 0.18f + 0.12f * beat;
+            leftHandTf_.scale.y += 0.18f + 0.12f * beat;
+            leftHandTf_.scale.z += 0.18f + 0.12f * beat;
+            rightHandTf_.position.y += 0.38f + 0.08f * beat;
+            rightHandTf_.position.x += forwardX * 0.58f + rightX * 0.48f;
+            rightHandTf_.position.z += forwardZ * 0.58f + rightZ * 0.48f;
+            visualTf_.position.x += (-forwardX) * 0.16f;
+            visualTf_.position.z += (-forwardZ) * 0.16f;
+            visualPitch -= 0.16f + 0.05f * beat;
+        } else if (action_.step == ActionStep::Active) {
+            const bool rightHandBeat = IsDualCounterHandStage();
+            Transform &leadHand = rightHandBeat ? rightHandTf_ : leftHandTf_;
+            Transform &backHand = rightHandBeat ? leftHandTf_ : rightHandTf_;
+            const float side = rightHandBeat ? 1.0f : -1.0f;
+
+            bodyTf_.position.y -= 0.08f;
+            bodyTf_.position.x += (-forwardX) * 0.06f + rightX * side * 0.04f;
+            bodyTf_.position.z += (-forwardZ) * 0.06f + rightZ * side * 0.04f;
+            bodyTf_.scale.x += 0.10f + 0.08f * beatSnap;
+            bodyTf_.scale.z += 0.14f + 0.10f * beatSnap;
+
+            leadHand.position.y += 0.44f + 0.12f * beatSnap;
+            leadHand.position.x += forwardX * (1.28f + 0.36f * beatSnap) +
+                                   rightX * side * 0.34f;
+            leadHand.position.z += forwardZ * (1.28f + 0.36f * beatSnap) +
+                                   rightZ * side * 0.34f;
+            leadHand.scale.x += 0.22f + 0.16f * beatSnap;
+            leadHand.scale.y += 0.22f + 0.16f * beatSnap;
+            leadHand.scale.z += 0.22f + 0.16f * beatSnap;
+
+            backHand.position.y += 0.20f;
+            backHand.position.x += (-forwardX) * 0.18f + rightX * -side * 0.32f;
+            backHand.position.z += (-forwardZ) * 0.18f + rightZ * -side * 0.32f;
+
+            visualTf_.position.x += forwardX * 0.08f + rightX * side * 0.04f;
+            visualTf_.position.z += forwardZ * 0.08f + rightZ * side * 0.04f;
+            visualYaw += side * (0.10f + 0.10f * beatSnap);
+            visualPitch += 0.04f * beatSnap;
+            visualRoll += side * (0.08f + 0.14f * beatSnap);
+        } else if (action_.step == ActionStep::Recovery) {
+            leftHandTf_.position.y += 0.20f;
+            rightHandTf_.position.y += 0.24f;
+            leftHandTf_.position.x += (-forwardX) * 0.12f;
+            leftHandTf_.position.z += (-forwardZ) * 0.12f;
+            rightHandTf_.position.x += (-forwardX) * 0.08f;
+            rightHandTf_.position.z += (-forwardZ) * 0.08f;
+            visualPitch += 0.08f;
+        }
     } else if (!suppressActionPresentation &&
                action_.kind == ActionKind::BladeClash) {
+        const float bladeClashPulse =
+            0.5f + 0.5f * std::sin(bladeClashPresentationTime_ * 48.0f);
+        const float bladeClashTremble = (bladeClashPulse - 0.5f) * 2.0f;
         if (action_.step == ActionStep::Charge) {
             bodyTf_.scale.x -= 0.04f;
             bodyTf_.scale.z -= 0.04f;
@@ -368,26 +432,25 @@ void Enemy::UpdateParts() {
             visualTf_.position.z += (-forwardZ) * 0.10f;
             visualPitch -= 0.12f;
         } else if (action_.step == ActionStep::Active) {
-            bodyTf_.position.x += (-forwardX) * 0.18f;
-            bodyTf_.position.z += (-forwardZ) * 0.18f;
-            bodyTf_.position.y -= 0.08f;
-            bodyTf_.scale.x += 0.10f;
-            bodyTf_.scale.z += 0.12f;
-            leftHandTf_.position.y += 0.46f;
-            leftHandTf_.position.x += forwardX * 1.74f + (-rightX) * 0.12f;
-            leftHandTf_.position.z += forwardZ * 1.74f + (-rightZ) * 0.12f;
-            leftHandTf_.scale.x += 0.24f;
-            leftHandTf_.scale.y += 0.18f;
-            leftHandTf_.scale.z += 0.24f;
-            rightHandTf_.position.y += 0.42f;
-            rightHandTf_.position.x += forwardX * 1.92f + rightX * 0.08f;
-            rightHandTf_.position.z += forwardZ * 1.92f + rightZ * 0.08f;
-            rightHandTf_.scale.x += 0.30f;
-            rightHandTf_.scale.y += 0.22f;
-            rightHandTf_.scale.z += 0.30f;
-            visualPitch -= 0.24f;
-            visualTf_.position.x += (-forwardX) * 0.12f;
-            visualTf_.position.z += (-forwardZ) * 0.12f;
+            const float tremble = bladeClashTremble;
+            bodyTf_.position.y -= 0.10f;
+            bodyTf_.scale.x *= 0.96f;
+            bodyTf_.scale.y *= 0.92f;
+            bodyTf_.scale.z *= 1.06f;
+            rightHandTf_.position.y += 0.20f + 0.012f * bladeClashPulse;
+            rightHandTf_.position.x += forwardX * 0.30f + rightX * 0.06f;
+            rightHandTf_.position.z += forwardZ * 0.30f + rightZ * 0.06f;
+            leftHandTf_.position.y += 0.12f + 0.010f * bladeClashPulse;
+            leftHandTf_.position.x += (-rightX) * 0.10f + (-forwardX) * 0.04f;
+            leftHandTf_.position.z += (-rightZ) * 0.10f + (-forwardZ) * 0.04f;
+            visualTf_.position.x += rightX * 0.018f * tremble;
+            visualTf_.position.z += rightZ * 0.018f * tremble;
+            visualTf_.position.y -= 0.04f;
+            visualYaw += 0.014f * tremble;
+            visualRoll += 0.030f * tremble;
+            visualTf_.scale.x *= 0.985f;
+            visualTf_.scale.y *= 0.970f;
+            visualTf_.scale.z *= 1.020f;
         } else if (action_.step == ActionStep::Recovery) {
             leftHandTf_.position.y += 0.16f;
             leftHandTf_.position.x += forwardX * 0.54f;
@@ -568,14 +631,24 @@ void Enemy::UpdateParts() {
     }
 
     if (suppressAttackBodyMotion) {
+        const bool keepBladeClashPressure =
+            action_.kind == ActionKind::BladeClash &&
+            action_.step == ActionStep::Active;
         bodyTf_.position.x = tf_.position.x;
         bodyTf_.position.z = tf_.position.z;
-        visualTf_.position.x = tf_.position.x;
-        visualTf_.position.z = tf_.position.z;
         visualYaw = usedYaw;
-        visualPitch = 0.0f;
-        visualRoll = 0.0f;
+        if (!keepBladeClashPressure) {
+            visualTf_.position.x = tf_.position.x;
+            visualTf_.position.z = tf_.position.z;
+            visualPitch = 0.0f;
+            visualRoll = 0.0f;
+        } else {
+            visualRoll *= 0.18f;
+        }
     }
+
+    visualPitch += cinematicPitch_;
+    visualRoll += cinematicRoll_;
 
     DirectX::XMVECTOR hitboxRot =
         DirectX::XMQuaternionRotationRollPitchYaw(0.0f, usedYaw, 0.0f);
@@ -622,9 +695,9 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
         actionNoise = 0.10f;
         break;
     case ActionKind::Shot:
-        actionTint = {0.66f, 0.76f, 0.76f, 0.14f};
-        actionIntensity = 0.045f + 0.015f * actionPulse;
-        actionNoise = 0.08f;
+        actionTint = {0.32f, 0.92f, 1.0f, 0.20f};
+        actionIntensity = 0.064f + 0.028f * actionPulse;
+        actionNoise = 0.12f;
         break;
     case ActionKind::BladeClash:
         actionTint = {0.28f, 1.0f, 0.58f, 0.18f};
@@ -802,28 +875,90 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
             continue;
         }
 
-        Transform bulletTf = tf_;
-        bulletTf.position = bullet.position;
-        const float bulletYaw =
-            std::atan2(bullet.velocity.x, bullet.velocity.z);
-        DirectX::XMStoreFloat4(
-            &bulletTf.rotation,
-            DirectX::XMQuaternionRotationRollPitchYaw(0.0f, bulletYaw, 0.0f));
-        bulletTf.scale = bullet.isReflected
-                             ? DirectX::XMFLOAT3{0.52f, 0.52f, 0.86f}
-                             : DirectX::XMFLOAT3{0.72f, 0.72f, 1.15f};
-        ModelDrawEffect bulletEffect{};
-        bulletEffect.enabled = true;
-        bulletEffect.additiveBlend = true;
-        bulletEffect.color =
-            bullet.isReflected ? DirectX::XMFLOAT4{1.0f, 0.78f, 0.18f, 0.94f}
-                               : DirectX::XMFLOAT4{0.45f, 0.94f, 1.0f, 0.96f};
-        bulletEffect.intensity = bullet.isReflected ? 1.75f : 1.92f;
-        bulletEffect.fresnelPower = 1.05f;
-        bulletEffect.noiseAmount = 0.08f;
-        bulletEffect.time = stateTimer_ + bullet.lifeTime;
-        modelManager->SetDrawEffect(bulletEffect);
-        modelManager->Draw(effectModelId, bulletTf, camera);
+        float dirX = bullet.velocity.x;
+        float dirY = bullet.velocity.y;
+        float dirZ = bullet.velocity.z;
+        float dirLength = std::sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
+        if (dirLength <= 0.0001f) {
+            dirX = std::sinf(facingYaw_);
+            dirY = 0.0f;
+            dirZ = std::cosf(facingYaw_);
+            dirLength = 1.0f;
+        }
+        dirX /= dirLength;
+        dirY /= dirLength;
+        dirZ /= dirLength;
+
+        const float bulletYaw = std::atan2(dirX, dirZ);
+        const float flatLength = std::sqrt(dirX * dirX + dirZ * dirZ);
+        const float bulletPitch = -std::atan2(dirY, flatLength);
+        const float rightX = std::cosf(bulletYaw);
+        const float rightZ = -std::sinf(bulletYaw);
+        const float pulse =
+            0.5f + 0.5f * std::sinf(stateTimer_ * 36.0f + bullet.lifeTime * 9.0f);
+        const float beamLead = bullet.isReflected ? 0.72f : 2.35f;
+        const DirectX::XMFLOAT3 beamCenter = {
+            bullet.position.x + dirX * beamLead,
+            bullet.position.y + dirY * beamLead,
+            bullet.position.z + dirZ * beamLead};
+
+        auto drawBeamPass = [&](const DirectX::XMFLOAT3 &center,
+                                const DirectX::XMFLOAT3 &scale,
+                                const DirectX::XMFLOAT4 &color,
+                                float intensity, float fresnel,
+                                float noise, float roll = 0.0f) {
+            Transform beamTf = tf_;
+            beamTf.position = center;
+            beamTf.scale = scale;
+            DirectX::XMStoreFloat4(
+                &beamTf.rotation,
+                DirectX::XMQuaternionRotationRollPitchYaw(bulletPitch, bulletYaw,
+                                                          roll));
+            ModelDrawEffect beamEffect{};
+            beamEffect.enabled = true;
+            beamEffect.additiveBlend = true;
+            beamEffect.color = color;
+            beamEffect.intensity = intensity;
+            beamEffect.fresnelPower = fresnel;
+            beamEffect.noiseAmount = noise;
+            beamEffect.time = stateTimer_ + bullet.lifeTime;
+            modelManager->SetDrawEffect(beamEffect);
+            modelManager->Draw(effectModelId, beamTf, camera);
+        };
+
+        if (bullet.isReflected) {
+            drawBeamPass(beamCenter, {0.48f + 0.08f * pulse,
+                                      0.48f + 0.08f * pulse, 2.55f},
+                         {1.0f, 0.54f, 0.10f, 0.52f}, 1.80f, 0.96f, 0.08f);
+            drawBeamPass(beamCenter, {0.18f, 0.18f, 3.10f},
+                         {1.0f, 0.86f, 0.26f, 0.94f}, 2.60f, 0.66f, 0.03f);
+            continue;
+        }
+
+        drawBeamPass(beamCenter, {0.70f + 0.08f * pulse,
+                                  0.70f + 0.08f * pulse, 6.20f},
+                     {0.06f, 0.58f, 1.0f, 0.34f}, 1.36f, 0.58f, 0.10f);
+        drawBeamPass(beamCenter, {0.30f + 0.04f * pulse,
+                                  0.30f + 0.04f * pulse, 6.85f},
+                     {0.18f, 0.98f, 1.0f, 0.86f}, 2.85f, 0.46f, 0.025f);
+        drawBeamPass(beamCenter, {0.075f, 0.075f, 7.28f},
+                     {0.92f, 1.0f, 1.0f, 0.98f}, 3.65f, 0.30f, 0.0f);
+
+        const float railOffset = 0.34f + 0.05f * pulse;
+        const DirectX::XMFLOAT3 railA = {
+            beamCenter.x + rightX * railOffset,
+            beamCenter.y + 0.035f * pulse,
+            beamCenter.z + rightZ * railOffset};
+        const DirectX::XMFLOAT3 railB = {
+            beamCenter.x - rightX * railOffset,
+            beamCenter.y - 0.035f * pulse,
+            beamCenter.z - rightZ * railOffset};
+        drawBeamPass(railA, {0.055f, 0.055f, 5.45f},
+                     {0.36f, 0.90f, 1.0f, 0.48f}, 1.65f, 0.42f, 0.03f,
+                     0.08f);
+        drawBeamPass(railB, {0.055f, 0.055f, 5.45f},
+                     {0.36f, 0.90f, 1.0f, 0.48f}, 1.65f, 0.42f, 0.03f,
+                     -0.08f);
     }
 
     const EnemyCage &cage = runtime_.cage;

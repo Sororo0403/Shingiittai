@@ -452,7 +452,15 @@ void Enemy::NotifyBladeClashLanded() {
 
 void Enemy::ResolveBladeClash(bool playerWon) {
     if (playerWon) {
-        ApplyCounterBreakReaction(1.15f);
+        NotifyAttackConnected();
+        EndAttack();
+        hitReactionTimer_ = 0.0f;
+        counterRecoilTimer_ = 0.0f;
+        ResetChainContext();
+        ResetPostActionState();
+        stateTimer_ = 0.0f;
+        UpdateFacingToPlayer();
+        UpdateParts();
         return;
     }
 

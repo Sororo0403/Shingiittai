@@ -113,23 +113,47 @@ void Enemy::UpdateShotCharge(float deltaTime) {
 
     if (stateTimer_ >= config_.attacks.shot.chargeTime) {
         LockCurrentFacing();
-        dualCounterStage_ = 0;
+        const int minCount = (std::max)(1, config_.attacks.shot.minCount);
+        const int maxCount =
+            (std::max)(minCount, config_.attacks.shot.maxCount);
+        shotsRemaining_ = minCount + (std::rand() % (maxCount - minCount + 1));
+        if (phase_ == BossPhase::Phase2) {
+            ++shotsRemaining_;
+        }
+        shotIntervalTimer_ = 0.0f;
+        dualCounterStage_ = dualCounterFirstHand_ ? 0 : 1;
         dualCounterStageResolved_ = false;
         ChangeActionStep(ActionStep::Active);
     }
 }
 
 void Enemy::UpdateShotFire(float deltaTime) {
-    (void)deltaTime;
+    UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_ * 0.12f);
     isAttackActive_ = IsDualCounterWindow();
-    if (stateTimer_ >= 0.88f) {
-        if (dualCounterStage_ <= 0) {
-            dualCounterStage_ = 1;
-            dualCounterStageResolved_ = false;
-            stateTimer_ = 0.0f;
-            LockCurrentFacing();
-            return;
+
+    if (shotsRemaining_ <= 0 && stateTimer_ <= 0.05f) {
+        const int minCount = (std::max)(1, config_.attacks.shot.minCount);
+        const int maxCount =
+            (std::max)(minCount, config_.attacks.shot.maxCount);
+        shotsRemaining_ = minCount + (std::rand() % (maxCount - minCount + 1));
+        if (phase_ == BossPhase::Phase2) {
+            ++shotsRemaining_;
         }
+        shotIntervalTimer_ = 0.0f;
+    }
+
+    shotIntervalTimer_ -= deltaTime;
+    if (shotsRemaining_ > 0 && shotIntervalTimer_ <= 0.0f) {
+        dualCounterStage_ = shotsRemaining_ % 2;
+        dualCounterStageResolved_ = false;
+        LockCurrentFacing();
+        UpdateParts();
+        SpawnBullet();
+        --shotsRemaining_;
+        shotIntervalTimer_ += (std::max)(0.12f, config_.attacks.shot.interval);
+    }
+
+    if (shotsRemaining_ <= 0 && shotIntervalTimer_ <= -0.12f) {
         ChangeActionStep(ActionStep::Recovery);
     }
 }
@@ -213,11 +237,27 @@ void Enemy::SpawnBullet() {
     EnemyBullet bullet{};
 
     DirectX::XMFLOAT3 target = playerPos_;
-    const DirectX::XMFLOAT3 &shotHandPos = leftHandTf_.position;
+    target.y += 0.92f;
 
-    float dirX = target.x - shotHandPos.x;
-    float dirY = target.y - shotHandPos.y;
-    float dirZ = target.z - shotHandPos.z;
+    const float muzzleYaw = lockedAttackYaw_;
+    const float forwardX = std::sinf(muzzleYaw);
+    const float forwardZ = std::cosf(muzzleYaw);
+    const float rightX = std::cosf(muzzleYaw);
+    const float rightZ = -std::sinf(muzzleYaw);
+    const float handSide = IsDualCounterHandStage() ? 1.0f : -1.0f;
+    const float rhythm =
+        0.5f + 0.5f * std::sinf(stateTimer_ * 18.0f + handSide * 0.45f);
+    DirectX::XMFLOAT3 muzzlePos = {
+        tf_.position.x + forwardX * 1.42f +
+            rightX * handSide * (0.42f + 0.18f * rhythm),
+        tf_.position.y + config_.attacks.shot.spawnHeightOffset + 1.08f +
+            0.14f * rhythm,
+        tf_.position.z + forwardZ * 1.42f +
+            rightZ * handSide * (0.42f + 0.18f * rhythm)};
+
+    float dirX = target.x - muzzlePos.x;
+    float dirY = target.y - muzzlePos.y;
+    float dirZ = target.z - muzzlePos.z;
     float length = std::sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
     if (length <= 0.0001f) {
         length = 1.0f;
@@ -227,10 +267,10 @@ void Enemy::SpawnBullet() {
     dirY /= length;
     dirZ /= length;
 
-    bullet.position = shotHandPos;
-    bullet.position.y += config_.attacks.shot.spawnHeightOffset;
-    bullet.position.x += dirX * 0.65f;
-    bullet.position.z += dirZ * 0.65f;
+    bullet.position = muzzlePos;
+    bullet.position.x += dirX * 0.48f;
+    bullet.position.y += dirY * 0.48f;
+    bullet.position.z += dirZ * 0.48f;
     bullet.velocity = {dirX * config_.attacks.shot.bulletSpeed,
                        dirY * config_.attacks.shot.bulletSpeed,
                        dirZ * config_.attacks.shot.bulletSpeed};

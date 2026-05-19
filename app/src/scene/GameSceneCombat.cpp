@@ -17,6 +17,10 @@ constexpr CollisionManager::LayerMask kLayerPlayerCounter = 1u << 4;
 constexpr CollisionManager::LayerMask kLayerEnemyProjectile = 1u << 5;
 constexpr CollisionManager::LayerMask kLayerReflectedProjectile = 1u << 6;
 constexpr float kReleaseCounterWindowDuration = 0.62f;
+constexpr float kBladeClashWinGuardBreakLead = 0.52f;
+constexpr float kBladeClashWinActionSlow = 0.95f;
+constexpr float kBladeClashWinNormalDuration = 1.58f;
+constexpr float kBladeClashWinFinalDuration = 2.35f;
 
 CollisionManager::BodyId AddCollisionBody(
     CollisionManager &collisionManager, const OBB &box,
@@ -252,7 +256,88 @@ PlayerCombatObservation GameScene::BuildPlayerCombatObservation() const {
     return observation;
 }
 
-void GameScene::BeginBladeClash(size_t swordIndex) {
+float GameScene::ApplyEnemyDamage(float damage, bool deferTransitions,
+                                  bool allowLastStand) {
+    if (damage <= 0.0f || enemy_.GetHP() <= 0.0f) {
+        return 0.0f;
+    }
+
+    float appliedDamage = damage;
+    const float currentHp = enemy_.GetHP();
+    if (allowLastStand && enemyLastStandPrimed_ && currentHp <= 1.0f) {
+        return 0.0f;
+    }
+
+    if (allowLastStand && !enemyLastStandPrimed_ && currentHp > 1.0f &&
+        currentHp - damage <= 0.0f) {
+        enemyLastStandPrimed_ = true;
+        appliedDamage = currentHp - 1.0f;
+
+        XMFLOAT3 standCenter = enemy_.GetTransform().position;
+        standCenter.y += 1.34f;
+        swordFlashParticles_.EmitBurst(
+            standCenter, 12, 0.72f, GPUParticleSystem::BurstStyle::Flash,
+            {1.0f, 0.98f, 0.86f, 0.82f}, {0.0f, 1.0f, 0.0f}, 0.42f);
+        explosionParticles_.EmitBurst(
+            standCenter, 116, 1.38f,
+            GPUParticleSystem::BurstStyle::SpiritSparkle,
+            {1.0f, 1.0f, 0.96f, 0.72f}, {0.0f, 1.0f, 0.0f}, 1.52f);
+        smokeParticles_.EmitBurst(
+            standCenter, 34, 0.86f, GPUParticleSystem::BurstStyle::Smoke,
+            {0.42f, 0.34f, 0.28f, 0.40f}, {0.0f, 1.0f, 0.0f}, 0.62f);
+
+        CombatFeedbackEvent feedback{};
+        feedback.type = CombatFeedbackEventType::CounterSuccess;
+        feedback.position = standCenter;
+        feedback.direction = DirectionFromTo(player_.GetTransform().position,
+                                             enemy_.GetTransform().position);
+        feedback.power = 9.5f;
+        DispatchCombatFeedback(feedback);
+    }
+
+    if (appliedDamage <= 0.0f) {
+        return 0.0f;
+    }
+
+    if (deferTransitions) {
+        enemy_.TakeDamageDeferTransitions(appliedDamage);
+    } else {
+        enemy_.TakeDamage(appliedDamage);
+    }
+    return appliedDamage;
+}
+
+bool GameScene::TryBeginFinalBladeClash(size_t swordIndex,
+                                        const XMFLOAT3 &hitPosition) {
+    if (!enemyLastStandPrimed_ || enemy_.GetHP() > 1.0f ||
+        bladeClashActive_ || bladeClashFinishActive_ ||
+        victorySequenceActive_ || defeatSequenceActive_) {
+        return false;
+    }
+
+    XMFLOAT3 cue = hitPosition;
+    cue.y += 0.22f;
+    swordFlashParticles_.EmitBurst(
+        cue, 16, 0.58f, GPUParticleSystem::BurstStyle::Flash,
+        {1.0f, 0.94f, 0.74f, 0.86f},
+        DirectionFromTo(player_.GetTransform().position,
+                        enemy_.GetTransform().position),
+        0.36f);
+    sparkParticles_.EmitBurst(
+        cue, 120, 0.72f, GPUParticleSystem::BurstStyle::Sparks,
+        {1.0f, 0.62f, 0.18f, 0.86f},
+        DirectionFromTo(player_.GetTransform().position,
+                        enemy_.GetTransform().position),
+        2.20f);
+    explosionParticles_.EmitBurst(
+        cue, 92, 1.18f, GPUParticleSystem::BurstStyle::SpiritSparkle,
+        {1.0f, 1.0f, 0.96f, 0.70f}, {0.0f, 1.0f, 0.0f}, 1.20f);
+
+    BeginBladeClash(swordIndex, true);
+    return true;
+}
+
+void GameScene::BeginBladeClash(size_t swordIndex, bool finalClash) {
     if (bladeClashActive_) {
         return;
     }
@@ -271,27 +356,44 @@ void GameScene::BeginBladeClash(size_t swordIndex) {
     bladeClashCenter_ = {enemyPos.x - toEnemy.x * 1.42f,
                          playerPos.y + 1.10f,
                          enemyPos.z - toEnemy.y * 1.42f};
-    bladeClashGauge_ = 0.0f;
-    bladeClashTimer_ = bladeClashDuration_;
+    bladeClashFinal_ = finalClash;
+    bladeClashGauge_ = finalClash ? -0.38f : 0.0f;
+    bladeClashTimer_ = finalClash ? 6.15f : bladeClashDuration_;
     bladeClashCameraPush_ = 0.0f;
-    bladeClashImpactPulse_ = 0.18f;
+    bladeClashImpactPulse_ = finalClash ? 0.72f : 0.18f;
     bladeClashEnemySurgeTimer_ = 0.0f;
     bladeClashChainTimer_ = 0.0f;
     bladeClashSlashChain_ = 0;
+    bladeClashFinalBarrageStep_ = 0;
     bladeClashPreviousSlashStates_ = player_.GetSwordSlashStates();
     bladeClashActive_ = true;
+    enemy_.SetBladeClashPresentationTime(sceneLightTime_);
     player_.LockPosition(bladeClashPlayerFixedPos_);
     player_.SetBladeClashPose(true, 0.5f);
     counterCinematicActive_ = false;
     counterCinematicTimer_ = 0.0f;
     SetEnemyAnimationFrozen(false);
+    if (finalClash) {
+        enemy_.ForceDebugBladeClash();
+    }
     SyncEnemyAnimation();
     player_.NotifyCounterSuccess(swordIndex);
 
-    sparkParticles_.EmitBurst(bladeClashCenter_, 22, 0.16f,
-                              GPUParticleSystem::BurstStyle::Sparks,
-                              {0.90f, 0.98f, 1.0f, 0.60f},
-                              bladeClashDirection_, 1.05f);
+    sparkParticles_.EmitBurst(
+        bladeClashCenter_, finalClash ? 90 : 22, finalClash ? 0.64f : 0.16f,
+        GPUParticleSystem::BurstStyle::Sparks,
+        finalClash ? XMFLOAT4{1.0f, 0.54f, 0.16f, 0.86f}
+                   : XMFLOAT4{0.90f, 0.98f, 1.0f, 0.60f},
+        bladeClashDirection_, finalClash ? 2.35f : 1.05f);
+    if (finalClash) {
+        explosionParticles_.EmitBurst(
+            bladeClashCenter_, 130, 1.40f,
+            GPUParticleSystem::BurstStyle::SpiritSparkle,
+            {1.0f, 1.0f, 0.92f, 0.76f}, {0.0f, 1.0f, 0.0f}, 1.75f);
+        smokeParticles_.EmitBurst(
+            bladeClashCenter_, 44, 1.05f, GPUParticleSystem::BurstStyle::Smoke,
+            {0.48f, 0.36f, 0.28f, 0.42f}, {0.0f, 1.0f, 0.0f}, 0.82f);
+    }
 }
 
 void GameScene::UpdateBladeClash(float deltaTime) {
@@ -317,8 +419,10 @@ void GameScene::UpdateBladeClash(float deltaTime) {
         }
         bladeClashChainTimer_ = 0.42f;
         const float chainBonus =
-            static_cast<float>((std::max)(bladeClashSlashChain_ - 1, 0)) * 0.020f;
-        bladeClashGauge_ += bladeClashSlashPush_ + chainBonus;
+            static_cast<float>((std::max)(bladeClashSlashChain_ - 1, 0)) *
+            (bladeClashFinal_ ? 0.030f : 0.020f);
+        bladeClashGauge_ +=
+            (bladeClashFinal_ ? 0.245f : bladeClashSlashPush_) + chainBonus;
         bladeClashCameraPush_ =
             (std::min)(bladeClashCameraPush_ + 0.64f, 1.0f);
         bladeClashImpactPulse_ = 1.0f;
@@ -330,8 +434,11 @@ void GameScene::UpdateBladeClash(float deltaTime) {
         sparkPos.z += bladeClashDirection_.z * 0.10f;
         sparkParticles_.EmitBurst(sparkPos, 16, 0.11f,
                                   GPUParticleSystem::BurstStyle::Sparks,
-                                  {0.90f, 0.98f, 1.0f, 0.62f},
-                                  bladeClashDirection_, 1.08f);
+                                  bladeClashFinal_
+                                      ? XMFLOAT4{1.0f, 0.92f, 0.62f, 0.82f}
+                                      : XMFLOAT4{0.90f, 0.98f, 1.0f, 0.62f},
+                                  bladeClashDirection_,
+                                  bladeClashFinal_ ? 1.72f : 1.08f);
     }
 
     if (bladeClashChainTimer_ > 0.0f) {
@@ -341,6 +448,7 @@ void GameScene::UpdateBladeClash(float deltaTime) {
     }
 
     bladeClashEnemySurgeTimer_ += deltaTime;
+    enemy_.SetBladeClashPresentationTime(sceneLightTime_ + bladeClashEnemySurgeTimer_);
     if (bladeClashEnemySurgeTimer_ >= 0.62f) {
         bladeClashEnemySurgeTimer_ -= 0.62f;
         bladeClashImpactPulse_ = (std::max)(bladeClashImpactPulse_, 0.48f);
@@ -350,10 +458,12 @@ void GameScene::UpdateBladeClash(float deltaTime) {
         surgeSpark.z -= bladeClashDirection_.z * 0.12f;
         sparkParticles_.EmitBurst(surgeSpark, 8, 0.08f,
                                   GPUParticleSystem::BurstStyle::Sparks,
-                                  {1.0f, 0.48f, 0.18f, 0.42f},
+                                  bladeClashFinal_
+                                      ? XMFLOAT4{1.0f, 0.34f, 0.10f, 0.70f}
+                                      : XMFLOAT4{1.0f, 0.48f, 0.18f, 0.42f},
                                   {-bladeClashDirection_.x, 0.0f,
                                    -bladeClashDirection_.z},
-                                  0.64f);
+                                  bladeClashFinal_ ? 1.35f : 0.64f);
     }
 
     const float elapsedRatio =
@@ -361,11 +471,17 @@ void GameScene::UpdateBladeClash(float deltaTime) {
             ? std::clamp(1.0f - bladeClashTimer_ / bladeClashDuration_, 0.0f, 1.0f)
             : 1.0f;
     const float enemySurge =
-        0.78f + 0.22f * std::sinf(bladeClashEnemySurgeTimer_ * 10.1f);
+        (bladeClashFinal_ ? 0.92f : 0.78f) +
+        (bladeClashFinal_ ? 0.32f : 0.22f) *
+            std::sinf(bladeClashEnemySurgeTimer_ * 10.1f);
     const float lowTimePressure =
-        bladeClashTimer_ < 1.35f ? (1.35f - bladeClashTimer_) * 0.26f : 0.0f;
+        bladeClashTimer_ < 1.35f
+            ? (1.35f - bladeClashTimer_) * (bladeClashFinal_ ? 0.42f : 0.26f)
+            : 0.0f;
     bladeClashGauge_ -=
-        (bladeClashEnemyPushSpeed_ + elapsedRatio * 0.08f + lowTimePressure) *
+        ((bladeClashFinal_ ? 0.345f : bladeClashEnemyPushSpeed_) +
+         elapsedRatio * (bladeClashFinal_ ? 0.15f : 0.08f) +
+         lowTimePressure) *
         enemySurge * deltaTime;
     bladeClashGauge_ = std::clamp(bladeClashGauge_, -1.1f, 1.1f);
     bladeClashCameraPush_ =
@@ -405,12 +521,24 @@ void GameScene::ResolveBladeClash(bool playerWon) {
     bladeClashEnemySurgeTimer_ = 0.0f;
     bladeClashChainTimer_ = 0.0f;
     bladeClashSlashChain_ = 0;
+    const bool wasFinalClash = bladeClashFinal_;
     bladeClashFinishActive_ = true;
     bladeClashFinishPlayerWon_ = playerWon;
-    bladeClashFinishImpactEmitted_ = !playerWon;
-    bladeClashFinishSkidEmitted_ = !playerWon;
+    bladeClashFinishImpactEmitted_ = false;
+    bladeClashFinishGuardBreakEmitted_ = false;
+    bladeClashFinishSkidEmitted_ = false;
+    bladeClashFinishWallImpactEmitted_ = false;
     bladeClashFinishPendingEnemyTransition_ = false;
     bladeClashFinishTimer_ = 0.0f;
+    bladeClashFinalBarrageStep_ = 0;
+    const float winFinishBaseDuration =
+        wasFinalClash ? kBladeClashWinFinalDuration
+                      : kBladeClashWinNormalDuration;
+    bladeClashFinishDuration_ =
+        playerWon
+            ? winFinishBaseDuration * kBladeClashWinActionSlow +
+                  kBladeClashWinGuardBreakLead
+            : 2.38f;
     bladeClashFinishCenter_ =
         playerWon ? XMFLOAT3{enemy_.GetTransform().position.x,
                              enemy_.GetTransform().position.y + 1.22f,
@@ -423,14 +551,23 @@ void GameScene::ResolveBladeClash(bool playerWon) {
                               enemy_.GetTransform().position.z) *
                                  0.5f};
     bladeClashFinishPlayerStart_ = player_.GetTransform().position;
+    bladeClashFinishEnemyStart_ = enemy_.GetTransform().position;
+    bladeClashFinishEnemyEnd_ = {
+        bladeClashFinishEnemyStart_.x + bladeClashDirection_.x * 20.80f,
+        bladeClashFinishEnemyStart_.y,
+        bladeClashFinishEnemyStart_.z + bladeClashDirection_.z * 20.80f};
     bladeClashFinishPlayerEnd_ =
         playerWon ? XMFLOAT3{enemy_.GetTransform().position.x +
-                                 bladeClashDirection_.x * 8.45f,
+                                 bladeClashDirection_.x * 24.80f,
                              player_.GetTransform().position.y,
                              enemy_.GetTransform().position.z +
-                                 bladeClashDirection_.z * 8.45f}
-                  : player_.GetTransform().position;
-    player_.SetBladeClashPose(false);
+                                 bladeClashDirection_.z * 24.80f}
+                  : XMFLOAT3{player_.GetTransform().position.x -
+                                 bladeClashDirection_.x * 15.80f,
+                             player_.GetTransform().position.y,
+                             player_.GetTransform().position.z -
+                                 bladeClashDirection_.z * 15.80f};
+    player_.SetBladeClashPose(!playerWon, 0.0f);
     SetEnemyAnimationFrozen(playerWon);
     enemy_.ResolveBladeClash(playerWon);
 
@@ -443,38 +580,27 @@ void GameScene::ResolveBladeClash(bool playerWon) {
                   : DirectionFromTo(enemyPos, playerPos);
 
     if (playerWon) {
-        const float damage = 185.0f * damageMultiplier_;
-        enemy_.TakeDamageDeferTransitions(damage);
-        player_.NotifyAttackHit(damage);
+        const float damage = wasFinalClash ? enemy_.GetHP() + 10000.0f
+                                           : 185.0f * damageMultiplier_;
+        const float appliedDamage =
+            wasFinalClash
+                ? (enemy_.TakeDamageDeferTransitions(damage), damage)
+                : ApplyEnemyDamage(damage, true);
+        player_.NotifyAttackHit(appliedDamage);
         bladeClashFinishPendingEnemyTransition_ = true;
         feedback.type = CombatFeedbackEventType::CounterSuccess;
-        feedback.power = damage / 18.0f;
+        feedback.power = wasFinalClash ? 18.0f : appliedDamage / 18.0f;
         DispatchCombatFeedback(feedback);
+        bladeClashFinal_ = false;
         return;
     }
 
-    constexpr float clashLossDamage = 25.0f;
-    XMFLOAT3 sweepCenter = playerPos;
-    sweepCenter.y += 1.05f;
-    explosionParticles_.EmitBurst(
-        sweepCenter, 96, 1.18f, GPUParticleSystem::BurstStyle::SlashLine,
-        {1.0f, 0.32f, 0.06f, 0.88f},
-        {bladeClashDirection_.z, -0.04f, -bladeClashDirection_.x}, 1.46f);
-    swordFlashParticles_.EmitBurst(
-        sweepCenter, 8, 0.62f, GPUParticleSystem::BurstStyle::Flash,
-        {1.0f, 0.48f, 0.12f, 0.68f},
-        {-bladeClashDirection_.x, 0.0f, -bladeClashDirection_.z}, 0.32f);
+    XMFLOAT3 warningCenter = playerPos;
+    warningCenter.y += 1.16f;
     sparkParticles_.EmitBurst(
-        sweepCenter, 38, 0.34f, GPUParticleSystem::BurstStyle::Sparks,
-        {1.0f, 0.46f, 0.12f, 0.72f},
-        {-bladeClashDirection_.x, 0.06f, -bladeClashDirection_.z}, 1.18f);
-    player_.TakeDamage(clashLossDamage);
-    player_.AddKnockback({-bladeClashDirection_.x * 24.0f, 0.0f,
-                          -bladeClashDirection_.z * 24.0f});
-    feedback.type = CombatFeedbackEventType::PlayerDamaged;
-    feedback.power = 8.0f;
-    DispatchCombatFeedback(feedback);
-    playerHitCooldown_ = 0.55f;
+        warningCenter, 18, 0.24f, GPUParticleSystem::BurstStyle::Sparks,
+        {1.0f, 0.50f, 0.18f, 0.42f},
+        {bladeClashDirection_.z, 0.04f, -bladeClashDirection_.x}, 0.66f);
 }
 
 void GameScene::UpdateCombat(float gameplayDeltaTime) {
@@ -526,8 +652,8 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         if (enemy_.NotifyCountered(vulnerabilityDuration)) {
             forceSyncEnemyAnimationThisFrame = true;
         }
-        enemy_.TakeDamage(counterDamage);
-        player_.NotifyAttackHit(swordIndex, counterDamage);
+        const float appliedDamage = ApplyEnemyDamage(counterDamage);
+        player_.NotifyAttackHit(swordIndex, appliedDamage);
         CombatFeedbackEvent feedback{};
         feedback.type = CombatFeedbackEventType::CounterSuccess;
         feedback.position = enemy_.GetTransform().position;
@@ -535,7 +661,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         feedback.direction =
             DirectionFromTo(player_.GetTransform().position,
                             enemy_.GetTransform().position);
-        feedback.power = counterDamage / 10.0f;
+        feedback.power = appliedDamage / 10.0f;
         feedback.swordIndex = swordIndex;
         DispatchCombatFeedback(feedback);
         playerHitCooldown_ = hitCooldown;
@@ -666,7 +792,8 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     const bool isBadSlashPunishWindow =
         isEnemyMeleePreparationOrRelease && !isEnemyChargeWeakPointWindow &&
         enemyActionKind != ActionKind::BladeClash && !isReleaseCounterWindow &&
-        !enemyRedPunishUncounterable_;
+        !enemyRedPunishUncounterable_ &&
+        !(enemyLastStandPrimed_ && enemy_.GetHP() <= 1.0f);
     if (isBadSlashPunishWindow && playerHitCooldown_ <= 0.0f) {
         for (size_t i = 0; i < swordSlashStates.size(); ++i) {
             if (!swordSlashStates[i] || previousChargeWeakPointSlashStates_[i]) {
@@ -798,8 +925,8 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             if (enemy_.NotifyCountered(0.95f)) {
                 forceSyncEnemyAnimationThisFrame = true;
             }
-            enemy_.TakeDamage(breakDamage);
-            player_.NotifyAttackHit(i, breakDamage);
+            const float appliedDamage = ApplyEnemyDamage(breakDamage);
+            player_.NotifyAttackHit(i, appliedDamage);
 
             CombatFeedbackEvent feedback{};
             feedback.type = CombatFeedbackEventType::CounterSuccess;
@@ -808,7 +935,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             feedback.direction =
                 DirectionFromTo(player_.GetTransform().position,
                                 enemy_.GetTransform().position);
-            feedback.power = breakDamage / 12.0f;
+            feedback.power = appliedDamage / 12.0f;
             feedback.swordIndex = i;
             DispatchCombatFeedback(feedback);
             enemyHitCooldown_ = 0.18f;
@@ -819,15 +946,18 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             !suppressNormalSlashHitDuringEnemyMelee) {
             if (hitBody) {
                 const float swordDamage = swordAttackDamages[i];
-                enemy_.TakeDamage(swordDamage);
-                player_.NotifyAttackHit(i, swordDamage);
+                const float appliedDamage = ApplyEnemyDamage(swordDamage);
+                if (appliedDamage <= 0.0f) {
+                    break;
+                }
+                player_.NotifyAttackHit(i, appliedDamage);
                 CombatFeedbackEvent feedback{};
                 feedback.type = CombatFeedbackEventType::PlayerSlashHit;
                 feedback.position = swordHitBox.center;
                 feedback.direction =
                     DirectionFromTo(player_.GetTransform().position,
                                     enemy_.GetTransform().position);
-                feedback.power = swordDamage / 10.0f;
+                feedback.power = appliedDamage / 10.0f;
                 feedback.swordIndex = i;
                 DispatchCombatFeedback(feedback);
                 enemyHitCooldown_ = 0.2f;
@@ -977,15 +1107,19 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             if (isEnemyHurtBodyHit(bulletBody) &&
                 enemyHitCooldown_ <= 0.0f) {
                 const float damage = enemy_.GetBulletDamage() * damageMultiplier_;
-                enemy_.TakeDamage(damage);
-                player_.NotifyAttackHit(damage);
+                const float appliedDamage = ApplyEnemyDamage(damage);
+                if (appliedDamage <= 0.0f) {
+                    enemy_.DestroyBullet(i);
+                    continue;
+                }
+                player_.NotifyAttackHit(appliedDamage);
                 enemy_.DestroyBullet(i);
                 CombatFeedbackEvent feedback{};
                 feedback.type = CombatFeedbackEventType::ProjectileReflect;
                 feedback.position = bullet.position;
                 feedback.direction = DirectionFromTo(player_.GetTransform().position,
                                                     enemy_.GetTransform().position);
-                feedback.power = damage / 10.0f;
+                feedback.power = appliedDamage / 10.0f;
                 DispatchCombatFeedback(feedback);
                 enemyHitCooldown_ = 0.2f;
             }
@@ -1082,15 +1216,19 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             if (isEnemyHurtBodyHit(waveBody) &&
                 enemyHitCooldown_ <= 0.0f) {
                 const float damage = wave.damage * damageMultiplier_;
-                enemy_.TakeDamage(damage);
-                player_.NotifyAttackHit(damage);
+                const float appliedDamage = ApplyEnemyDamage(damage);
+                if (appliedDamage <= 0.0f) {
+                    enemy_.DestroyWave(i);
+                    continue;
+                }
+                player_.NotifyAttackHit(appliedDamage);
                 enemy_.DestroyWave(i);
                 CombatFeedbackEvent feedback{};
                 feedback.type = CombatFeedbackEventType::ProjectileReflect;
                 feedback.position = wave.position;
                 feedback.direction = DirectionFromTo(player_.GetTransform().position,
                                                     enemy_.GetTransform().position);
-                feedback.power = damage / 10.0f;
+                feedback.power = appliedDamage / 10.0f;
                 DispatchCombatFeedback(feedback);
                 enemyHitCooldown_ = 0.2f;
             }

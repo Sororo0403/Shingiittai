@@ -21,6 +21,9 @@ class GPUParticleSystem {
         Smoke = 2,
         SlashLine = 3,
         Flash = 4,
+        Ember = 5,
+        Spirit = 6,
+        SpiritSparkle = 7,
     };
 
     ~GPUParticleSystem();

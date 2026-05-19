@@ -446,7 +446,13 @@ class Enemy {
     void ApplyVictoryDefeatPose(float ratio,
                                 const DirectX::XMFLOAT3 &startPosition,
                                 const DirectX::XMFLOAT3 &playerPosition);
+    void SetCinematicTransform(const DirectX::XMFLOAT3 &position, float yaw);
+    void SetCinematicTransform(const DirectX::XMFLOAT3 &position, float yaw,
+                               float pitch, float roll);
     void FaceTargetImmediately(const DirectX::XMFLOAT3 &targetPosition);
+    void SetBladeClashPresentationTime(float time) {
+        bladeClashPresentationTime_ = time;
+    }
 
     const Transform &GetTransform() const { return tf_; }
     bool IsAlive() const { return !runtime_.deathFinished; }
@@ -716,6 +722,7 @@ class Enemy {
     float phase2RecoveryBranchChanceBonus_ = 0.08f;
 
     bool suspendWarpForPresentation_ = false;
+    float bladeClashPresentationTime_ = 0.0f;
     float warpDepartureEchoOffset_ = 0.28f;
     float warpArrivalEchoOffset_ = 0.22f;
     float warpArrivalPreviewHeight_ = 0.10f;
@@ -804,6 +811,8 @@ class Enemy {
     float novaPhase2CooldownDuration_ = 7.0f;
     float novaPhase2NearChance_ = 0.18f;
     float novaPhase2FarChance_ = 0.16f;
+    float cinematicPitch_ = 0.0f;
+    float cinematicRoll_ = 0.0f;
 
     int &stalkRepeatCount_ = runtime_.stalkRepeatCount;
     float &stalkMoveDir_ = runtime_.stalkMoveDir;         // -1:left / +1:right

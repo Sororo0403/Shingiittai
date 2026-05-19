@@ -23,6 +23,11 @@ static const std::string kBossAnimPhaseChange =
     "\xE7\xAC\xAC\xE4\xBA\x8C\xE5\xBD\xA2\xE6\x85\x8B\xE7\xA7\xBB\xE8\xA1\x8C";
 static const std::string kBossBoneBase =
     "\xE3\x83\x9C\xE3\x83\xBC\xE3\x83\xB3";
+static constexpr float kBladeClashWinGuardBreakLead = 0.52f;
+static constexpr float kBladeClashWinActionSlow = 0.95f;
+static constexpr float kBladeClashActivePoseClipRatio = 0.18f;
+static constexpr float kBladeClashGuardPoseClipRatio = 0.18f;
+static constexpr float kBladeClashGuardOpenClipRatio = 0.025f;
 
 static std::string BossBoneName(const char *suffix) {
     return suffix ? (kBossBoneBase + suffix) : kBossBoneBase;
@@ -321,8 +326,10 @@ void GameScene::SyncEnemyAnimation() {
     bool shouldLoop = true;
     std::string nextAnimation{};
     if (bladeClashActive_) {
-        shouldLoop = true;
-        if (HasAnimation(enemyModel, kBossAnimSweep)) {
+        shouldLoop = false;
+        if (HasAnimation(enemyModel, kBossAnimTeleport)) {
+            nextAnimation = kBossAnimTeleport;
+        } else if (HasAnimation(enemyModel, kBossAnimSweep)) {
             nextAnimation = kBossAnimSweep;
         } else if (HasAnimation(enemyModel, kBossAnimShot)) {
             nextAnimation = kBossAnimShot;
@@ -369,6 +376,121 @@ void GameScene::SyncEnemyAnimation() {
     modelManager->UpdateAnimation(enemyModelId_, 0.0f);
     enemyAnimationName_ = nextAnimation;
     enemyAnimationLoop_ = shouldLoop;
+}
+
+void GameScene::UpdateBladeClashEnemyAnimation(float deltaTime) {
+    (void)deltaTime;
+    if (ctx_ == nullptr || ctx_->model == nullptr) {
+        return;
+    }
+
+    ModelManager *modelManager = ctx_->model;
+    Model *enemyModel = modelManager->GetModel(enemyModelId_);
+    if (enemyModel == nullptr || enemyModel->animations.empty()) {
+        return;
+    }
+
+    const bool hasTeleport = HasAnimation(enemyModel, kBossAnimTeleport);
+    const bool hasSweep = HasAnimation(enemyModel, kBossAnimSweep);
+    const bool hasShot = HasAnimation(enemyModel, kBossAnimShot);
+    const bool hasSmash = HasAnimation(enemyModel, kBossAnimSmash);
+    const bool hasWave = HasAnimation(enemyModel, kBossAnimWave);
+    if (!hasTeleport && !hasSweep && !hasShot && !hasSmash && !hasWave) {
+        return;
+    }
+
+    std::string clip =
+        hasTeleport ? kBossAnimTeleport : hasSweep ? kBossAnimSweep : kBossAnimShot;
+    float clipRatio =
+        hasTeleport ? kBladeClashActivePoseClipRatio : hasSweep ? 0.62f : 0.38f;
+    if (bladeClashFinishActive_ && bladeClashFinishPlayerWon_ &&
+        bladeClashFinishTimer_ < kBladeClashWinGuardBreakLead) {
+        const float guardT =
+            Clamp01(bladeClashFinishTimer_ / kBladeClashWinGuardBreakLead);
+        const float guardBreakT = Clamp01(guardT);
+        const float guardBreakPlayback =
+            1.0f - std::pow(1.0f - guardBreakT, 4.0f);
+        if (hasTeleport) {
+            clip = kBossAnimTeleport;
+            clipRatio =
+                kBladeClashGuardPoseClipRatio +
+                (kBladeClashGuardOpenClipRatio -
+                 kBladeClashGuardPoseClipRatio) *
+                    guardBreakPlayback;
+        } else if (hasShot) {
+            clip = kBossAnimShot;
+            const float breakClipRatio =
+                0.10f + 0.12f * guardBreakPlayback;
+            clipRatio = 0.38f + (breakClipRatio - 0.38f) *
+                                    guardBreakPlayback;
+        } else if (hasWave) {
+            clip = kBossAnimWave;
+            const float breakClipRatio =
+                0.08f + 0.14f * guardBreakPlayback;
+            clipRatio = 0.38f + (breakClipRatio - 0.38f) *
+                                    guardBreakPlayback;
+        }
+    } else if (bladeClashFinishActive_ && bladeClashFinishPlayerWon_ &&
+        bladeClashFinal_) {
+        if (hasSmash) {
+            clip = kBossAnimSmash;
+        } else if (hasSweep) {
+            clip = kBossAnimSweep;
+        } else if (hasWave) {
+            clip = kBossAnimWave;
+        } else if (hasShot) {
+            clip = kBossAnimShot;
+        } else {
+            clip = kBossAnimTeleport;
+        }
+        const float finishActionTimer =
+            (std::max)(0.0f, bladeClashFinishTimer_ -
+                                  kBladeClashWinGuardBreakLead) /
+            kBladeClashWinActionSlow;
+        const float finishActionDuration =
+            (std::max)(0.001f, bladeClashFinishDuration_ -
+                                  kBladeClashWinGuardBreakLead) /
+            kBladeClashWinActionSlow;
+        const float t = Clamp01(finishActionTimer / finishActionDuration);
+        const float launch = Smooth01(Clamp01((finishActionTimer - 0.30f) /
+                                              0.62f));
+        const float bounce = Smooth01(Clamp01((finishActionTimer - 1.12f) /
+                                              0.44f));
+        const float slide = Smooth01(Clamp01((finishActionTimer - 1.84f) /
+                                             0.72f));
+        clipRatio = 0.18f + 0.30f * launch + 0.16f * bounce + 0.10f * slide;
+        if (t > 0.82f) {
+            clipRatio = 0.72f;
+        }
+        clipRatio = Clamp01(clipRatio);
+    } else if (bladeClashFinal_) {
+        const float t = bladeClashTimer_ > 0.0f
+                            ? 1.0f - Clamp01(bladeClashTimer_ / 6.15f)
+                            : 1.0f;
+        if (t < 0.42f && hasShot) {
+            clip = kBossAnimShot;
+            clipRatio = 0.22f + 0.22f * Smooth01(t / 0.42f);
+        } else if (hasSmash) {
+            clip = kBossAnimSmash;
+            clipRatio = 0.18f + 0.34f * Smooth01((t - 0.28f) / 0.58f);
+        } else if (hasSweep) {
+            clip = kBossAnimSweep;
+            clipRatio = 0.24f + 0.30f * Smooth01((t - 0.30f) / 0.54f);
+        } else if (hasWave) {
+            clip = kBossAnimWave;
+            clipRatio = 0.18f + 0.30f * Smooth01((t - 0.30f) / 0.54f);
+        } else {
+            clip = kBossAnimTeleport;
+            clipRatio = 0.08f + 0.24f * Smooth01(t);
+        }
+        clipRatio = Clamp01(clipRatio);
+    }
+    if (!ScrubAnimationClip(modelManager, enemyModelId_, enemyModel, clip,
+                            clipRatio, false, enemyAnimationName_,
+                            enemyAnimationLoop_)) {
+        modelManager->UpdateAnimation(enemyModelId_, 0.0f);
+    }
+    enemyAnimationFrozen_ = false;
 }
 
 void GameScene::UpdateBattleIntroEnemyAnimation(float) {
@@ -488,6 +610,10 @@ void GameScene::ApplyEnemyProceduralAnimation() {
         return;
     }
 
+    if (bladeClashActive_ || enemy_.GetActionKind() == ActionKind::BladeClash) {
+        return;
+    }
+
     const int root = FindBoneIndex(*enemyModel, BossBoneName(nullptr));
     const int spine = FindBoneIndex(*enemyModel, BossBoneName(".003"));
     const int chest = FindBoneIndex(*enemyModel, BossBoneName(".013"));
@@ -517,6 +643,11 @@ void GameScene::ApplyEnemyProceduralAnimation() {
                    : 0.0f);
     const float idleMotion = chargeSettled ? 0.10f : 1.0f;
 
+    if (bladeClashFinishActive_ && bladeClashFinishPlayerWon_) {
+        ctx_->model->GetRenderer()->UpdateSkinClusters(*enemyModel);
+        return;
+    }
+
     auto poseArms = [&](float pitch, float yaw, float roll) {
         PoseBoneTree(*enemyModel, upperA, pitch, yaw, roll);
         PoseBoneTree(*enemyModel, upperB, pitch * 0.76f, yaw * 0.62f,
@@ -537,62 +668,80 @@ void GameScene::ApplyEnemyProceduralAnimation() {
     PoseBoneTree(*enemyModel, headTip, 0.020f * slowPulse * idleMotion, 0.0f,
                  0.0f);
 
-    if (bladeClashActive_) {
-        const float gaugeProgress = Clamp01((bladeClashGauge_ + 1.0f) * 0.5f);
-        const float enemyPressure = Clamp01(1.0f - gaugeProgress);
-        const float timePressure =
-            bladeClashDuration_ > 0.0001f
-                ? Clamp01(1.0f - bladeClashTimer_ / bladeClashDuration_)
-                : 0.0f;
-        const float impact = Clamp01(bladeClashImpactPulse_);
-        const float surge =
-            0.5f + 0.5f * std::sinf(bladeClashEnemySurgeTimer_ * 13.0f);
-        const float menace =
-            0.58f + enemyPressure * 0.34f + timePressure * 0.18f;
-        const float tremble =
-            std::sinf(sceneLightTime_ * (32.0f + 18.0f * impact)) *
-            (0.04f + 0.08f * impact + 0.04f * enemyPressure);
-
-        PoseBoneTree(*enemyModel, root, -0.06f * menace + tremble * 0.24f,
-                     0.03f * surge, -0.04f * surge);
-        PoseBoneTree(*enemyModel, spine, -0.32f * menace + tremble,
-                     -0.12f + 0.05f * surge, -0.18f * surge);
-        PoseBoneTree(*enemyModel, chest, -0.42f * menace + tremble * 1.2f,
-                     -0.18f + 0.08f * surge, -0.26f * surge);
-        PoseBoneTree(*enemyModel, head, -0.18f * menace + tremble * 0.45f,
-                     -0.08f + 0.04f * surge, 0.06f * surge);
-        poseArms(-0.72f * menace + tremble * 1.35f,
-                 0.18f - 0.30f * surge,
-                 -0.82f * menace - 0.18f * surge);
-        return;
-    }
-
     if (bladeClashFinishActive_) {
+        if (bladeClashFinishPlayerWon_ &&
+            bladeClashFinishTimer_ < kBladeClashWinGuardBreakLead) {
+            const float guardT =
+                Clamp01(bladeClashFinishTimer_ / kBladeClashWinGuardBreakLead);
+            const float guardLocked =
+                1.0f - Smooth01((guardT - 0.36f) / 0.18f);
+            const float open =
+                1.0f - std::pow(1.0f - Clamp01((guardT - 0.50f) / 0.42f),
+                                 3.0f);
+            const float snap =
+                std::sin(Clamp01((guardT - 0.50f) / 0.24f) * 3.14159265f);
+            const float collapse =
+                1.0f - std::pow(1.0f - Clamp01((guardT - 0.54f) / 0.38f),
+                                 3.0f);
+            PoseBoneTree(*enemyModel, root,
+                         -0.052f * collapse, 0.0f,
+                         0.032f * collapse);
+            PoseBoneTree(*enemyModel, spine,
+                         -0.135f * collapse, -0.022f * open,
+                         -0.070f * collapse);
+            PoseBoneTree(*enemyModel, chest,
+                         -0.175f * collapse, -0.068f * open,
+                         -0.094f * collapse);
+            PoseBoneTree(*enemyModel, head,
+                         -0.050f * collapse, 0.0f,
+                         -0.024f * collapse);
+            const float armBreak = 1.0f - guardLocked;
+            poseArms((0.42f * open + 0.035f * snap) * armBreak,
+                     0.92f * open * armBreak,
+                     (-0.66f * open - 0.034f * snap -
+                      0.028f * collapse) *
+                         armBreak);
+            ctx_->model->GetRenderer()->UpdateSkinClusters(*enemyModel);
+            return;
+        }
+
+        const float finishActionTimer =
+            bladeClashFinishPlayerWon_
+                ? (std::max)(0.0f, bladeClashFinishTimer_ -
+                                        kBladeClashWinGuardBreakLead) /
+                      kBladeClashWinActionSlow
+                : bladeClashFinishTimer_;
+        const float finishActionDuration =
+            bladeClashFinishPlayerWon_
+                ? (std::max)(0.001f, bladeClashFinishDuration_ -
+                                        kBladeClashWinGuardBreakLead) /
+                      kBladeClashWinActionSlow
+                : bladeClashFinishDuration_;
         const float ratio =
-            bladeClashFinishDuration_ > 0.0001f
-                ? Clamp01(bladeClashFinishTimer_ / bladeClashFinishDuration_)
+            finishActionDuration > 0.0001f
+                ? Clamp01(finishActionTimer / finishActionDuration)
                 : 1.0f;
         const float hit = std::sin(Clamp01(ratio / 0.16f) * 3.14159265f);
         if (bladeClashFinishPlayerWon_) {
-            const float fall = Smooth01((ratio - 0.18f) / 0.72f);
+            const float fall = Smooth01((ratio - 0.16f) / 0.62f);
             PoseBoneTree(*enemyModel, root,
-                         0.12f * hit - 0.62f * fall,
+                         0.12f * hit - 0.92f * fall,
                          0.10f * hit,
-                         0.26f * hit + 0.48f * fall);
+                         0.26f * hit + 0.68f * fall);
             PoseBoneTree(*enemyModel, spine,
-                         0.24f * hit + 0.74f * fall,
-                         -0.10f * fall,
-                         -0.56f * hit - 0.36f * fall);
+                         0.24f * hit + 1.02f * fall,
+                         -0.16f * fall,
+                         -0.56f * hit - 0.54f * fall);
             PoseBoneTree(*enemyModel, chest,
-                         0.38f * hit + 0.86f * fall,
-                         -0.18f * fall,
-                         -0.88f * hit - 0.42f * fall);
+                         0.38f * hit + 1.18f * fall,
+                         -0.24f * fall,
+                         -0.88f * hit - 0.62f * fall);
             PoseBoneTree(*enemyModel, head,
-                         0.24f * hit + 0.42f * fall,
+                         0.24f * hit + 0.60f * fall,
                          0.10f * hit,
-                         -0.30f * hit - 0.18f * fall);
-            poseArms(0.62f * hit + 0.34f * fall, -0.24f * hit,
-                     0.72f * hit + 0.24f * fall);
+                         -0.30f * hit - 0.28f * fall);
+            poseArms(0.62f * hit + 0.48f * fall, -0.24f * hit,
+                     0.72f * hit + 0.42f * fall);
         } else {
             const float followThrough = Smooth01((ratio - 0.24f) / 0.58f);
             PoseBoneTree(*enemyModel, root, 0.0f,

@@ -661,6 +661,9 @@ ActionKind Enemy::SelectNeutralAction(float distance) const {
     int bladeClashWeight = distance >= config_.core.farAttackDistance ? 10 : 18;
     int waveWeight = distance >= config_.core.farAttackDistance ? 24 : 14;
     int cageWeight = distance >= config_.core.farAttackDistance ? 46 : 26;
+    int shotWeight = distance >= config_.core.farAttackDistance
+                         ? farShotWeight_
+                         : neutralMidShotBonus_;
     int novaWeight =
         (phase_ == BossPhase::Phase2 && novaPhase2Cooldown_ <= 0.0f) ? 10 : 0;
 
@@ -672,6 +675,8 @@ ActionKind Enemy::SelectNeutralAction(float distance) const {
         bladeClashWeight /= 3;
     } else if (lastActionKind_ == ActionKind::Cage) {
         cageWeight /= 2;
+    } else if (lastActionKind_ == ActionKind::Shot) {
+        shotWeight /= 3;
     } else if (lastActionKind_ == ActionKind::Nova) {
         novaWeight = 0;
     }
@@ -679,10 +684,16 @@ ActionKind Enemy::SelectNeutralAction(float distance) const {
     if (playerObs_.isAttacking || playerObs_.isCounterStance) {
         bladeClashWeight += 12;
         cageWeight += 8;
+        shotWeight += 8;
+    }
+
+    if (phase_ == BossPhase::Phase2) {
+        shotWeight += phase2MidShotBonus_;
     }
 
     switch (PickWeightedIndex(
-        {stalkWeight, bladeClashWeight, waveWeight, cageWeight, novaWeight})) {
+        {stalkWeight, bladeClashWeight, waveWeight, cageWeight, shotWeight,
+         novaWeight})) {
     case 1:
         return ActionKind::BladeClash;
     case 2:
@@ -690,6 +701,8 @@ ActionKind Enemy::SelectNeutralAction(float distance) const {
     case 3:
         return ActionKind::Cage;
     case 4:
+        return ActionKind::Shot;
+    case 5:
         return ActionKind::Nova;
     default:
         return ActionKind::Stalk;

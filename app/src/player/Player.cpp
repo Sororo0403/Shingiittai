@@ -43,6 +43,7 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
     defeatPoseRatio_ = 0.0f;
     bladeClashPoseActive_ = false;
     bladeClashPosePushRatio_ = 0.5f;
+    bladeClashCinematicSlashRatio_ = 0.0f;
     dualNextManualLeft_ = true;
     gamepadControlMode_ = PlayerGamepadControlMode::Hunter;
     gamepadSwordState_ = {};
@@ -334,6 +335,21 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
         playerVisual.position.y -= 0.10f * std::sinf((1.0f - dodgeRatio) *
                                                      3.14159265f);
     }
+    if (bladeClashPoseActive_) {
+        const float push = std::clamp(bladeClashPosePushRatio_, 0.0f, 1.0f);
+        const float cinematicSlash =
+            std::clamp(bladeClashCinematicSlashRatio_, 0.0f, 1.0f);
+        const float lean =
+            0.24f - 0.42f * push + 0.66f * cinematicSlash * push;
+        XMVECTOR baseRot = XMLoadFloat4(&playerVisual.rotation);
+        XMVECTOR qLean =
+            XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), lean);
+        XMStoreFloat4(&playerVisual.rotation,
+                      XMQuaternionNormalize(XMQuaternionMultiply(qLean, baseRot)));
+        playerVisual.position.y -=
+            0.035f * (1.0f - push) + 0.026f * cinematicSlash * push;
+        playerVisual.scale.z *= 1.0f + 0.035f * cinematicSlash * push;
+    }
     if (defeatPoseRatio_ > 0.0f) {
         const float fall = std::clamp(defeatPoseRatio_, 0.0f, 1.0f);
         const float eased = fall * fall * (3.0f - 2.0f * fall);
@@ -511,17 +527,20 @@ void Player::SetCinematicBladeClashPose(const XMFLOAT3 &position, float yaw,
 
     bladeClashPoseActive_ = true;
     bladeClashPosePushRatio_ = std::clamp(pushRatio, 0.0f, 1.0f);
+    bladeClashCinematicSlashRatio_ = 1.0f;
 
     const float push = bladeClashPosePushRatio_;
     auto makeFinishPose = [&](bool isLeft) {
         SwordPose pose = MakeIdleSwordPose(isLeft);
         const float side = isLeft ? -1.0f : 1.0f;
-        const float swingOut = 0.72f + 0.28f * push;
-        const float yawOut = side * (1.92f + 0.38f * swingOut);
-        const float pitchDown = 0.22f + 0.20f * swingOut;
-        const float rollThrough = side * (0.78f + 0.38f * swingOut);
+        const float sweep =
+            std::clamp((push - 0.70f) / 0.30f, 0.0f, 1.0f);
+        const float leading = isLeft ? 0.82f : 1.0f;
+        const float yawOut = side * (2.18f + 0.18f * sweep * leading);
+        const float pitchFlat = 0.0f;
+        const float rollThrough = side * (0.18f + 0.08f * sweep * leading);
         XMVECTOR qPitch =
-            XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), pitchDown);
+            XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), pitchFlat);
         XMVECTOR qYaw =
             XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), yawOut);
         XMVECTOR qRoll =
@@ -532,11 +551,42 @@ void Player::SetCinematicBladeClashPose(const XMFLOAT3 &position, float yaw,
         pose.isGuard = false;
         pose.isCounter = false;
         pose.isSlashMode = false;
+        pose.slashDir = {side, -0.08f};
         return pose;
     };
 
     SwordPose leftPose = makeFinishPose(true);
     SwordPose rightPose = makeFinishPose(false);
+    leftSword_.Update(BuildSwordTransform(leftPose, true), leftPose, 0.0f);
+    rightSword_.Update(BuildSwordTransform(rightPose, false), rightPose, 0.0f);
+    leftSwordVisible_ = true;
+    rightSwordVisible_ = true;
+    leftSwordSlashMode_ = false;
+    rightSwordSlashMode_ = false;
+}
+
+void Player::SetCinematicDualBladeBarragePose(const XMFLOAT3 &position,
+                                              float yaw, float phase,
+                                              float intensity) {
+    const float t = std::clamp(phase, 0.0f, 1.0f);
+    const float power = std::clamp(intensity, 0.0f, 1.0f);
+    XMFLOAT3 transformedPosition = position;
+    transformedPosition.y += 0.025f * power * std::sinf(t * 6.28318530f);
+    LockPosition(transformedPosition);
+    SetYaw(yaw);
+
+    bladeClashPoseActive_ = true;
+    bladeClashPosePushRatio_ = std::clamp(0.68f + 0.26f * power, 0.0f, 1.0f);
+    bladeClashCinematicSlashRatio_ = 0.0f;
+
+    SwordPose leftPose = MakeIdleSwordPose(true);
+    SwordPose rightPose = MakeIdleSwordPose(false);
+    leftPose.isGuard = false;
+    rightPose.isGuard = false;
+    leftPose.isCounter = false;
+    rightPose.isCounter = false;
+    leftPose.isSlashMode = false;
+    rightPose.isSlashMode = false;
     leftSword_.Update(BuildSwordTransform(leftPose, true), leftPose, 0.0f);
     rightSword_.Update(BuildSwordTransform(rightPose, false), rightPose, 0.0f);
     leftSwordVisible_ = true;
