@@ -9,7 +9,8 @@
 class GameSceneHud {
   public:
     void Initialize(const SceneContext &ctx);
-    void Update(const SceneContext &ctx, float playerHp, float enemyHp);
+    void Update(const SceneContext &ctx, float playerHp, float enemyHp,
+                float enemyMaxHp);
     void Draw(const SceneContext &ctx);
 
   private:
@@ -24,6 +25,5 @@ class GameSceneHud {
 
     static constexpr float kPlayerHpMax = 100.0f;
     static constexpr float kPlayerHpBarMaxWidth = 400.0f;
-    static constexpr float kBossHpMax = 1000.0f;
     static constexpr float kBossHpBarMaxWidth = 800.0f;
 };

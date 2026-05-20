@@ -653,7 +653,8 @@ void GameScene::Update() {
     if (victorySequenceActive_) {
         sceneLightTime_ += baseDeltaTime;
         combatFeedback_.Update(baseDeltaTime, sceneLightTime_);
-        hud_.Update(*ctx_, player_.GetHP(), enemy_.GetHP());
+        hud_.Update(*ctx_, player_.GetHP(), enemy_.GetHP(),
+                    enemy_.GetMaxHP());
         UpdateVictorySequence(baseDeltaTime);
         const float victoryPoseRatio = std::clamp(
             (victorySequenceTimer_ - 0.78f) / 2.35f, 0.0f, 1.0f);
@@ -693,6 +694,7 @@ void GameScene::Update() {
 
     combatFeedback_.Update(baseDeltaTime, sceneLightTime_);
     UpdateChargeWeakPointFocus(baseDeltaTime);
+    UpdateFeintTestInput(input);
     if (bladeClashFinishActive_) {
         bladeClashFinishTimer_ += baseDeltaTime;
         const float bladeClashWinActionTimer =
@@ -1310,7 +1312,7 @@ void GameScene::Update() {
         }
         previousSwordSoundStates_ = slashStates;
     }
-    hud_.Update(*ctx_, player_.GetHP(), enemy_.GetHP());
+    hud_.Update(*ctx_, player_.GetHP(), enemy_.GetHP(), enemy_.GetMaxHP());
     sceneLightTime_ += baseDeltaTime;
     battleElapsedTime_ += baseDeltaTime;
 
@@ -1414,6 +1416,48 @@ void GameScene::Update() {
     explosionParticles_.Update(baseDeltaTime);
     smokeParticles_.Update(baseDeltaTime);
     swordFlashParticles_.Update(baseDeltaTime);
+}
+
+void GameScene::UpdateFeintTestInput(Input *input) {
+    const bool testWarpFeint =
+        input != nullptr && input->IsKeyTrigger(DIK_F9);
+    const bool testDirectionFeint =
+        input != nullptr && input->IsKeyTrigger(DIK_F10);
+    if (input == nullptr || runMode_ != RunMode::Play ||
+        (!testWarpFeint && !testDirectionFeint)) {
+        return;
+    }
+    if (bladeClashActive_ || bladeClashFinishActive_ ||
+        victorySequenceActive_ || defeatSequenceActive_ ||
+        enemy_.IsPhaseTransitionActive()) {
+        return;
+    }
+
+    ActionKind feintKind = enemy_.GetActionKind();
+    if (!(feintKind == ActionKind::Smash || feintKind == ActionKind::Sweep)) {
+        feintKind = testDirectionFeint ? ActionKind::Sweep : ActionKind::Smash;
+    }
+
+    const bool beganFeint =
+        testDirectionFeint ? enemy_.ForcePhase2DirectionFeint(feintKind)
+                           : enemy_.ForcePhase2Feint(feintKind);
+    if (!beganFeint) {
+        return;
+    }
+
+    chargeWeakPointActionKind_ = ActionKind::None;
+    failedChargeWeakPointActionKind_ = ActionKind::None;
+    chargeWeakPointBroken_ = false;
+    chargeWeakPointFailedThisAction_ = false;
+    enemyRedPunishUncounterable_ = false;
+    chargeWeakPointSlashCount_ = 0;
+    previousChargeWeakPointSlashStates_.fill(false);
+    enemyCueParticleTimer_ = 0.0f;
+    enemyWeakPointParticleTimer_ = 0.0f;
+    counterCinematicActive_ = false;
+    counterCinematicTimer_ = 0.0f;
+    SetEnemyAnimationFrozen(false);
+    SyncEnemyAnimation();
 }
 
 void GameScene::Draw() {
@@ -1922,7 +1966,7 @@ void GameScene::UpdatePhaseTransitionCinematic(float deltaTime) {
     UpdatePhaseTransitionEnemyAnimation(deltaTime);
     ApplyEnemyProceduralAnimation();
     UpdateSceneLighting();
-    hud_.Update(*ctx_, player_.GetHP(), enemy_.GetHP());
+    hud_.Update(*ctx_, player_.GetHP(), enemy_.GetHP(), enemy_.GetMaxHP());
     UpdateBattleCamera();
     camera_.UpdateMatrices();
 
@@ -2158,7 +2202,8 @@ void GameScene::BeginVictorySequence() {
     counterCinematicActive_ = false;
     SetEnemyAnimationFrozen(false);
     if (ctx_ != nullptr) {
-        hud_.Update(*ctx_, player_.GetHP(), enemy_.GetHP());
+        hud_.Update(*ctx_, player_.GetHP(), enemy_.GetHP(),
+                    enemy_.GetMaxHP());
     }
 
     if (ctx_ != nullptr && ctx_->postEffectRenderer != nullptr) {

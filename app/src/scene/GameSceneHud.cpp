@@ -10,11 +10,13 @@ void GameSceneHud::Initialize(const SceneContext &ctx) {
 }
 
 void GameSceneHud::Update(const SceneContext &ctx, float playerHp,
-                          float enemyHp) {
+                          float enemyHp, float enemyMaxHp) {
     (void)ctx;
 
     playerHpRate_ = std::clamp(playerHp / kPlayerHpMax, 0.0f, 1.0f);
-    bossHpRate_ = std::clamp(enemyHp / kBossHpMax, 0.0f, 1.0f);
+    bossHpRate_ =
+        enemyMaxHp > 0.0f ? std::clamp(enemyHp / enemyMaxHp, 0.0f, 1.0f)
+                          : 0.0f;
 }
 
 void GameSceneHud::Draw(const SceneContext &ctx) {

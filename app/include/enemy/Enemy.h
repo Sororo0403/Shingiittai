@@ -42,6 +42,7 @@ struct WarpContext {
 
     ActionKind followupKind = ActionKind::None;
     ActionStep followupStep = ActionStep::None;
+    bool phase2FeintFollowup = false;
 
     bool collisionDisabled = false;
     bool hasValidTarget = false;
@@ -145,7 +146,7 @@ struct RangeF {
 };
 
 struct EnemyCoreConfig {
-    float maxHp = 1000.0f;
+    float maxHp = 660.0f;
     float phase2HealthRatioThreshold = 0.60f;
     float nearAttackDistance = 4.0f;
     float farAttackDistance = 6.5f;
@@ -213,21 +214,21 @@ struct EnemyCageConfig {
 };
 
 struct EnemyAttackSet {
-    EnemySmashConfig smash = {{{{10.0f, 4.0f, {2.8f, 2.1f, 3.2f}},
+    EnemySmashConfig smash = {{{{15.0f, 4.0f, {2.8f, 2.1f, 3.2f}},
                                 {1.20f, 0.86f, 0.05f, 0.22f, 0.38f}, 1.64f},
                                {0.42f, 0.86f}, 0.62f},
                               1.4f, 0.8f, 0.32f, 0.46f};
-    EnemySweepConfig sweep = {{{{10.0f, 4.0f, {5.0f, 1.65f, 2.6f}},
+    EnemySweepConfig sweep = {{{{15.0f, 4.0f, {5.0f, 1.65f, 2.6f}},
                                 {1.12f, 0.78f, 0.05f, 0.20f, 0.36f}, 1.52f},
                                {0.38f, 0.78f}, 0.48f},
                               0.2f, 0.8f};
     EnemyBladeClashConfig bladeClash = {
-        {8.0f, 4.0f, {1.75f, 1.60f, 1.95f}}, 0.72f, 0.88f, 0.78f};
-    EnemyWaveConfig wave = {{8.0f, 3.0f, {2.25f, 0.95f, 2.6f}},
+        {12.0f, 4.0f, {1.75f, 1.60f, 1.95f}}, 0.72f, 0.88f, 0.78f};
+    EnemyWaveConfig wave = {{10.0f, 3.0f, {2.25f, 0.95f, 2.6f}},
                             1.76f, 0.92f, 5.2f, 8.0f, 1.5f, 0.0f};
-    EnemyCageConfig cage = {{4.0f, 2.2f, {2.2f, 1.75f, 2.2f}},
+    EnemyCageConfig cage = {{8.0f, 2.2f, {2.2f, 1.75f, 2.2f}},
                             1.18f, 0.18f, 0.76f, 2.05f, 1.12f, 0.30f,
-                            4.45f, 1.85f, 3.2f, 1.45f, 0.72f, 2.5f,
+                            4.45f, 1.85f, 12.0f, 1.8f, 0.72f, 4.5f,
                             2.8f, 10};
 };
 
@@ -304,6 +305,11 @@ struct EnemyRuntimeState {
     HoldBranchType holdBranchType = HoldBranchType::None;
     float holdBranchDecisionTime = 0.0f;
     bool holdBranchDecided = false;
+    bool phase2FeintFollowupLocked = false;
+    bool phase2FeintDecisionMade = false;
+    bool phase2FeintForced = false;
+    bool phase2DirectionFeintDecisionMade = false;
+    bool phase2DirectionFeintForced = false;
 
     bool tellActive = false;
     bool fakeCommitActive = false;
@@ -355,6 +361,8 @@ class Enemy {
     float TakeDamageDeferTransitions(float damage);
     void ResolveDeferredDamageTransitions();
     void ForceBladeClash();
+    bool ForcePhase2Feint(ActionKind kind);
+    bool ForcePhase2DirectionFeint(ActionKind kind);
     void ConsumeWave(size_t index);
     void NotifyAttackConnected();
     void NotifyAttackGuarded();
@@ -380,6 +388,7 @@ class Enemy {
     const Transform &GetTransform() const { return tf_; }
     bool IsAlive() const { return !runtime_.deathFinished; }
     float GetHP() const { return runtime_.hp; }
+    float GetMaxHP() const { return config_.core.maxHp; }
 
     const Transform &GetVisualTransform() const { return visualTf_; }
     const Transform &GetBodyTransform() const { return bodyTf_; }
@@ -541,14 +550,21 @@ class Enemy {
 
     bool &holdConfigured_ = runtime_.holdConfigured;
     float &currentHoldDuration_ = runtime_.currentHoldDuration;
+    bool &phase2FeintFollowupLocked_ = runtime_.phase2FeintFollowupLocked;
+    bool &phase2FeintDecisionMade_ = runtime_.phase2FeintDecisionMade;
+    bool &phase2FeintForced_ = runtime_.phase2FeintForced;
+    bool &phase2DirectionFeintDecisionMade_ =
+        runtime_.phase2DirectionFeintDecisionMade;
+    bool &phase2DirectionFeintForced_ =
+        runtime_.phase2DirectionFeintForced;
 
     HoldBranchType &holdBranchType_ = runtime_.holdBranchType;
 
     float &holdBranchDecisionTime_ = runtime_.holdBranchDecisionTime;
     bool &holdBranchDecided_ = runtime_.holdBranchDecided;
 
-    float smashHoldBranchWarpChance_ = 0.0f;
-    float sweepHoldBranchWarpChance_ = 0.0f;
+    float smashHoldBranchWarpChance_ = 0.16f;
+    float sweepHoldBranchWarpChance_ = 0.14f;
 
     bool isPhaseChanging_ = false;
 
@@ -582,11 +598,11 @@ class Enemy {
     // ============================================================
     RecoveryBranchType &recoveryBranchType_ = runtime_.recoveryBranchType;
 
-    float recommitChance_ = 0.18f;
-    float delayedSecondChance_ = 0.20f;
-    float escapeFakeoutChance_ = 0.16f;
-    float phase2RecommitBonus_ = 0.12f;
-    float phase2DelayedSecondBonus_ = 0.08f;
+    float recommitChance_ = 0.34f;
+    float delayedSecondChance_ = 0.30f;
+    float escapeFakeoutChance_ = 0.24f;
+    float phase2RecommitBonus_ = 0.18f;
+    float phase2DelayedSecondBonus_ = 0.12f;
 
     float recommitDelayMin_ = 0.10f;
     float recommitDelayMax_ = 0.20f;
@@ -615,7 +631,7 @@ class Enemy {
     float smashActiveLungeSpeed_ = 1.18f;
     float sweepActiveLungeSpeed_ = 0.92f;
     float phase2ActiveLungeScale_ = 1.12f;
-    float phase2RecoveryBranchChanceBonus_ = 0.08f;
+    float phase2RecoveryBranchChanceBonus_ = 0.12f;
 
     bool suspendWarpForPresentation_ = false;
     float bladeClashPresentationTime_ = 0.0f;
@@ -820,6 +836,8 @@ class Enemy {
 
     void DecideHoldBranch(ActionKind kind);
     bool TryExecuteHoldBranch(ActionKind kind);
+    bool TryBeginPhase2FeintWarp(ActionKind kind);
+    bool TryApplyPhase2DirectionFeint(ActionKind kind);
 
     void EnterTell(ActionKind kind);
     bool IsTellFinished() const;

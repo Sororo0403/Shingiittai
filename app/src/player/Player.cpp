@@ -9,6 +9,8 @@ using namespace DirectX;
 
 namespace {
 constexpr float kPlayerVisualScaleMultiplier = 1.45f;
+constexpr float kBaseSwordAttackDamage = 8.0f;
+constexpr float kPlayerDamageTakenScale = 1.45f;
 }
 
 void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
@@ -28,8 +30,8 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
     postSlashRecoveryTimer_ = 0.0f;
     leftSlashRecoveryTimer_ = 0.0f;
     rightSlashRecoveryTimer_ = 0.0f;
-    leftSwordAttackDamage_ = 4.0f;
-    rightSwordAttackDamage_ = 4.0f;
+    leftSwordAttackDamage_ = kBaseSwordAttackDamage;
+    rightSwordAttackDamage_ = kBaseSwordAttackDamage;
     prevLeftSwordSlashMode_ = false;
     prevRightSwordSlashMode_ = false;
     leftSlashHitConfirmed_ = false;
@@ -37,7 +39,7 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
     recoveryVulnerableFlashTimer_ = 0.0f;
     overSwingCount_ = 0;
     overSwingResetTimer_ = 0.0f;
-    damageTakenScale_ = 3.34f;
+    damageTakenScale_ = kPlayerDamageTakenScale;
     swingComboCount_ = 0;
     swingComboTimer_ = 0.0f;
     defeatPoseRatio_ = 0.0f;
@@ -979,7 +981,7 @@ float Player::GetGuardDamageMultiplier() const {
 }
 
 float Player::GetCounterDamageMultiplier() const {
-    return 9.0f;
+    return 7.0f;
 }
 
 float Player::GetCounterVulnerabilityDuration() const {
@@ -1104,8 +1106,8 @@ void Player::UpdateWeaponRules(Input *input, SwordPose &leftPose,
                                bool useHunterGamepadControls,
                                bool useDualUdpControls, float deltaTime) {
     (void)input;
-    leftSwordAttackDamage_ = 4.0f;
-    rightSwordAttackDamage_ = 4.0f;
+    leftSwordAttackDamage_ = kBaseSwordAttackDamage;
+    rightSwordAttackDamage_ = kBaseSwordAttackDamage;
     auto applyJoyConSwingDamage = [&]() {
         if (hasLeftJoyCon && leftPose.isSlashMode) {
             leftSwordAttackDamage_ *= ComputeJoyConSwingDamageMultiplier(
@@ -1117,8 +1119,6 @@ void Player::UpdateWeaponRules(Input *input, SwordPose &leftPose,
         }
     };
 
-    leftSwordAttackDamage_ = 3.0f;
-    rightSwordAttackDamage_ = 3.0f;
     leftPose.isGuard = false;
     rightPose.isGuard = false;
 

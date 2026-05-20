@@ -212,6 +212,8 @@ void Enemy::UpdateByAction(float deltaTime) {
 
 void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     lastActionKind_ = kind;
+    const bool keepFeintFollowupLock =
+        kind == ActionKind::Warp || phase2FeintFollowupLocked_;
 
     if (kind == ActionKind::Warp) {
         stagnantTimer_ = 0.0f;
@@ -248,11 +250,16 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     hasTrackingLocked_ = false;
     holdConfigured_ = false;
     currentHoldDuration_ = 0.0f;
+    phase2FeintDecisionMade_ = false;
+    phase2FeintForced_ = false;
+    phase2DirectionFeintDecisionMade_ = false;
+    phase2DirectionFeintForced_ = false;
     isAttackActive_ = false;
     stateTimer_ = 0.0f;
     currentActionConnected_ = false;
     currentActionGuarded_ = false;
     cageTrapSpawned_ = false;
+    phase2FeintFollowupLocked_ = keepFeintFollowupLock;
     dualCounterStage_ = 0;
     dualCounterFirstHand_ = (std::rand() % 2) == 0;
     dualCounterStageResolved_ = false;
@@ -348,6 +355,11 @@ void Enemy::EndAttack() {
     stateTimer_ = 0.0f;
     currentActionConnected_ = false;
     currentActionGuarded_ = false;
+    phase2FeintFollowupLocked_ = false;
+    phase2FeintDecisionMade_ = false;
+    phase2FeintForced_ = false;
+    phase2DirectionFeintDecisionMade_ = false;
+    phase2DirectionFeintForced_ = false;
     dualCounterStage_ = 0;
     dualCounterFirstHand_ = true;
     dualCounterStageResolved_ = false;

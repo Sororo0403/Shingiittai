@@ -248,8 +248,8 @@ class Player {
     static constexpr float kJoyConAutoMoveDistanceSpeed = 4.20f;
     float leftSlashRecoveryTimer_ = 0.0f;
     float rightSlashRecoveryTimer_ = 0.0f;
-    float leftSwordAttackDamage_ = 4.0f;
-    float rightSwordAttackDamage_ = 4.0f;
+    float leftSwordAttackDamage_ = 8.0f;
+    float rightSwordAttackDamage_ = 8.0f;
     bool prevLeftSwordSlashMode_ = false;
     bool prevRightSwordSlashMode_ = false;
     bool leftSlashHitConfirmed_ = false;

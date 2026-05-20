@@ -120,6 +120,9 @@ void Enemy::UpdateWaveFire(float deltaTime) {
 void Enemy::UpdateWaveRecovery(float deltaTime) {
     (void)deltaTime;
     if (stateTimer_ >= config_.attacks.wave.recoveryTime + 0.18f) {
+        if (TryBranchFromRecovery(ActionKind::Wave)) {
+            return;
+        }
         EndAttack();
     }
 }
@@ -150,6 +153,9 @@ void Enemy::UpdateCageActive(float deltaTime) {
 void Enemy::UpdateCageRecovery(float deltaTime) {
     UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_ * 0.20f);
     if (stateTimer_ >= config_.attacks.cage.recoveryTime + 0.14f) {
+        if (TryBranchFromRecovery(ActionKind::Cage)) {
+            return;
+        }
         EndAttack();
     }
 }

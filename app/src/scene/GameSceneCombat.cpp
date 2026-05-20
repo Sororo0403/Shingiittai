@@ -701,7 +701,7 @@ void GameScene::ResolveBladeClash(bool playerWon) {
 
     if (playerWon) {
         const float damage = wasFinalClash ? enemy_.GetHP() + 10000.0f
-                                           : 185.0f * damageMultiplier_;
+                                           : 170.0f;
         const float appliedDamage = ApplyEnemyDamage(damage, true);
         player_.NotifyAttackHit(appliedDamage);
         bladeClashFinishPendingEnemyTransition_ = appliedDamage > 0.0f;
@@ -764,7 +764,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                                         float hitCooldown) {
         const float counterDamage =
             (std::max)(enemyDamage * player_.GetCounterDamageMultiplier(),
-                       140.0f);
+                       130.0f);
         const float vulnerabilityDuration =
             player_.GetCounterVulnerabilityDuration();
         player_.NotifyCounterSuccess(swordIndex);

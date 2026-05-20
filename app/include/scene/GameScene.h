@@ -67,6 +67,7 @@ class GameScene : public BaseScene {
     void ApplyEnemyProceduralAnimation();
     void SetEnemyAnimationFrozen(bool frozen);
     void UpdateCombat(float gameplayDeltaTime);
+    void UpdateFeintTestInput(Input *input);
     void ApplyEnemyCageConstraint(float deltaTime);
     void DispatchCombatFeedback(const CombatFeedbackEvent &event);
     void EmitCombatParticles(const CombatFeedbackEvent &event);

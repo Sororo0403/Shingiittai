@@ -84,10 +84,23 @@ void Enemy::UpdateSmashCharge(float deltaTime) {
         hasTrackingLocked_ = true;
     }
 
+    if (TryBeginPhase2FeintWarp(ActionKind::Smash)) {
+        return;
+    }
+    if (TryApplyPhase2DirectionFeint(ActionKind::Smash)) {
+        return;
+    }
+
     if (stateTimer_ >= currentChargeTime) {
         if (!hasTrackingLocked_) {
             LockCurrentFacing();
             hasTrackingLocked_ = true;
+        }
+        if (ShouldEnterSmashHold()) {
+            ChangeActionStep(ActionStep::Hold);
+            EnterHold(RandomRange(config_.attacks.smash.melee.holdTime.min,
+                                  config_.attacks.smash.melee.holdTime.max));
+            return;
         }
         ChangeActionStep(ActionStep::Active);
     }
@@ -120,6 +133,10 @@ void Enemy::UpdateSmashHold(float deltaTime) {
 
     if (!holdBranchDecided_ && stateTimer_ >= holdBranchDecisionTime_) {
         DecideHoldBranch(ActionKind::Smash);
+    }
+
+    if (TryBeginPhase2FeintWarp(ActionKind::Smash)) {
+        return;
     }
 
     if (ShouldSnapReleaseFromRead() || stateTimer_ >= currentHoldDuration_) {
@@ -161,6 +178,9 @@ void Enemy::UpdateSmashRecovery(float deltaTime) {
     recoveryDuration += 0.18f;
 
     if (stateTimer_ >= recoveryDuration) {
+        if (TryBranchFromRecovery(ActionKind::Smash)) {
+            return;
+        }
         EndAttack();
     }
 }
@@ -200,10 +220,23 @@ void Enemy::UpdateSweepCharge(float deltaTime) {
         hasTrackingLocked_ = true;
     }
 
+    if (TryBeginPhase2FeintWarp(ActionKind::Sweep)) {
+        return;
+    }
+    if (TryApplyPhase2DirectionFeint(ActionKind::Sweep)) {
+        return;
+    }
+
     if (stateTimer_ >= currentChargeTime) {
         if (!hasTrackingLocked_) {
             LockCurrentFacing();
             hasTrackingLocked_ = true;
+        }
+        if (ShouldEnterSweepHold()) {
+            ChangeActionStep(ActionStep::Hold);
+            EnterHold(RandomRange(config_.attacks.sweep.melee.holdTime.min,
+                                  config_.attacks.sweep.melee.holdTime.max));
+            return;
         }
         ChangeActionStep(ActionStep::Active);
     }
@@ -236,6 +269,10 @@ void Enemy::UpdateSweepHold(float deltaTime) {
 
     if (!holdBranchDecided_ && stateTimer_ >= holdBranchDecisionTime_) {
         DecideHoldBranch(ActionKind::Sweep);
+    }
+
+    if (TryBeginPhase2FeintWarp(ActionKind::Sweep)) {
+        return;
     }
 
     if (ShouldSnapReleaseFromRead() || stateTimer_ >= currentHoldDuration_) {
@@ -277,6 +314,9 @@ void Enemy::UpdateSweepRecovery(float deltaTime) {
     recoveryDuration += 0.16f;
 
     if (stateTimer_ >= recoveryDuration) {
+        if (TryBranchFromRecovery(ActionKind::Sweep)) {
+            return;
+        }
         EndAttack();
     }
 }
