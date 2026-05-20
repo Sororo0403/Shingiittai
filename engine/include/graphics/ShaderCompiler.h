@@ -64,9 +64,6 @@ inline Microsoft::WRL::ComPtr<ID3DBlob>
 Compile(const std::wstring &path, const std::string &entry,
         const std::string &target) {
     UINT flags = D3DCOMPILE_ENABLE_STRICTNESS;
-#ifdef _DEBUG
-    flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-#endif // _DEBUG
 
     Microsoft::WRL::ComPtr<ID3DBlob> shader;
     Microsoft::WRL::ComPtr<ID3DBlob> error;
@@ -79,10 +76,6 @@ Compile(const std::wstring &path, const std::string &entry,
                                     &shader, &error);
 
     if (FAILED(hr)) {
-        if (error) {
-            OutputDebugStringA(
-                static_cast<const char *>(error->GetBufferPointer()));
-        }
         DxUtils::ThrowIfFailed(hr, "D3DCompileFromFile failed");
     }
 

@@ -182,19 +182,11 @@ class HandUdpSenderProcess {
         if (startPaused && !scriptCommand.empty()) {
             command = scriptCommand;
         } else {
-#ifdef _DEBUG
-            if (!scriptCommand.empty()) {
-                command = scriptCommand;
-            } else {
-                command = packagedCommand;
-            }
-#else
             if (!packagedCommand.empty()) {
                 command = packagedCommand;
             } else {
                 command = scriptCommand;
             }
-#endif
         }
 
         if (command.empty()) {

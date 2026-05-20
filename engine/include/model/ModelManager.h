@@ -5,7 +5,6 @@
 #include "MeshManager.h"
 #include "Model.h"
 #include "ModelRenderer.h"
-#include "SkeletonDebugRenderer.h"
 #include <cstdint>
 #include <string>
 #include <unordered_map>
@@ -131,12 +130,6 @@ class ModelManager {
     void SetMaterial(uint32_t materialId, const Material &material);
 
     /// <summary>
-    /// モデルのSkeletonをデバッグラインで描画する
-    /// </summary>
-    void DrawSkeleton(uint32_t modelId, const Transform &transform,
-                      const Camera &camera);
-
-    /// <summary>
     /// モデルIDから描画する互換ヘルパー
     /// </summary>
     void Draw(uint32_t modelId, const Transform &transform,
@@ -187,7 +180,6 @@ class ModelManager {
     MaterialManager materialManager_;
     AssimpLoader assimpLoader_;
     ModelRenderer modelRenderer_;
-    SkeletonDebugRenderer skeletonDebugRenderer_;
     Animator animator_;
 
     std::vector<Model> models_;

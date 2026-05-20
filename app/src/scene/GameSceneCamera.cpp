@@ -72,21 +72,6 @@ void GameScene::UpdateCamera(Input *input) {
     float yawInput = 0.0f;
     float pitchInput = 0.0f;
 
-#ifdef _DEBUG
-    if (input->IsKeyPress(DIK_LEFT)) {
-        yawInput -= 1.0f;
-    }
-    if (input->IsKeyPress(DIK_RIGHT)) {
-        yawInput += 1.0f;
-    }
-    if (input->IsKeyPress(DIK_UP)) {
-        pitchInput += 1.0f;
-    }
-    if (input->IsKeyPress(DIK_DOWN)) {
-        pitchInput -= 1.0f;
-    }
-#endif
-
     if (input->IsGamepadConnected() && player_.UsesGamepadCameraLook()) {
         yawInput += input->GetGamepadRightStickX();
         pitchInput += input->GetGamepadRightStickY();
@@ -666,12 +651,6 @@ void GameScene::UpdateBattleCamera() {
             float diff = WrapRadians(targetYaw - cameraYaw_);
 
             float inputMagnitude = 0.0f;
-#ifdef _DEBUG
-            Input *input = ctx_->input;
-            if (input->IsKeyPress(DIK_LEFT) || input->IsKeyPress(DIK_RIGHT)) {
-                inputMagnitude = 1.0f;
-            }
-#endif
             if (ctx_->input != nullptr && ctx_->input->IsGamepadConnected() &&
                 player_.UsesGamepadCameraLook()) {
                 inputMagnitude =
@@ -769,12 +748,6 @@ void GameScene::UpdateBattleCamera() {
         float diff = WrapRadians(targetYaw - cameraYaw_);
 
         float inputMagnitude = 0.0f;
-#ifdef _DEBUG
-        Input *input = ctx_->input;
-        if (input->IsKeyPress(DIK_LEFT) || input->IsKeyPress(DIK_RIGHT)) {
-            inputMagnitude = 1.0f;
-        }
-#endif
         if (ctx_->input != nullptr && ctx_->input->IsGamepadConnected() &&
             player_.UsesGamepadCameraLook()) {
             const float stick = std::abs(ctx_->input->GetGamepadRightStickX());

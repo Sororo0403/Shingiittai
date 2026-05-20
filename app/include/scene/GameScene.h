@@ -2,7 +2,6 @@
 #include "BaseScene.h"
 #include "Camera.h"
 #include "CombatFeedbackDirector.h"
-#include "CollisionDebugRenderer.h"
 #include "CollisionManager.h"
 #include "Enemy.h"
 #include "GPUParticleSystem.h"
@@ -106,7 +105,6 @@ class GameScene : public BaseScene {
     Enemy enemy_;
     GameSceneHud hud_;
     CollisionManager collisionManager_;
-    CollisionDebugRenderer collisionDebugRenderer_;
     CombatFeedbackDirector combatFeedback_;
     GPUParticleSystem sparkParticles_;
     GPUParticleSystem explosionParticles_;
@@ -295,7 +293,6 @@ class GameScene : public BaseScene {
     DirectX::XMFLOAT3 bladeClashFinishEnemyEnd_ = {0.0f, 0.0f, 0.0f};
 
     float damageMultiplier_ = 2.0f;
-    bool showCollisionDebug_ = false;
     ActionKind chargeWeakPointActionKind_ = ActionKind::None;
     ActionKind failedChargeWeakPointActionKind_ = ActionKind::None;
     bool chargeWeakPointBroken_ = false;

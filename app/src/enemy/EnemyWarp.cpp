@@ -220,7 +220,11 @@ void Enemy::UpdateWarpMove(float deltaTime) {
 
     if (stateTimer_ >= config_.warp.moveTime) {
         tf_.position = warp_.targetPos;
-        if (warp_.faceLivePlayerOnEnd) {
+        const bool hasMeleeFollowup =
+            warp_.followupKind == ActionKind::Smash ||
+            warp_.followupKind == ActionKind::Sweep ||
+            warp_.followupKind == ActionKind::BladeClash;
+        if (warp_.faceLivePlayerOnEnd || hasMeleeFollowup) {
             UpdateFacingToPlayer();
             LockCurrentFacing();
         } else if (warp_.hasTargetYaw) {
@@ -236,7 +240,11 @@ void Enemy::UpdateWarpMove(float deltaTime) {
 void Enemy::UpdateWarpEnd(float deltaTime) {
     isVisible_ = true;
     warp_.collisionDisabled = false;
-    if (warp_.faceLivePlayerOnEnd) {
+    const bool hasMeleeFollowup =
+        warp_.followupKind == ActionKind::Smash ||
+        warp_.followupKind == ActionKind::Sweep ||
+        warp_.followupKind == ActionKind::BladeClash;
+    if (warp_.faceLivePlayerOnEnd || hasMeleeFollowup) {
         UpdateFacingToPlayer();
         LockCurrentFacing();
     } else if (warp_.hasTargetYaw) {
@@ -257,6 +265,12 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
     EndAttack();
     if (warpType == WarpType::Approach && followupKind != ActionKind::None &&
         followupStep != ActionStep::None) {
+        if (followupKind == ActionKind::Smash ||
+            followupKind == ActionKind::Sweep ||
+            followupKind == ActionKind::BladeClash) {
+            UpdateFacingToPlayer();
+            LockCurrentFacing();
+        }
         tactic_ = TacticState::Melee;
         BeginAction(followupKind, followupStep);
         return;

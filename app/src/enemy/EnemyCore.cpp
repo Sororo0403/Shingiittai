@@ -273,7 +273,7 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     }
 }
 
-void Enemy::ForceDebugBladeClash() {
+void Enemy::ForceBladeClash() {
     if (deathFinished_ || isDying_) {
         return;
     }

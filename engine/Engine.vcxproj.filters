@@ -16,9 +16,6 @@
     <Filter Include="include\model">
       <UniqueIdentifier>{b8067c30-35e6-468f-9e3d-ef8654614d0c}</UniqueIdentifier>
     </Filter>
-    <Filter Include="include\imgui">
-      <UniqueIdentifier>{a0f19709-9f78-4c29-b043-257079ce3264}</UniqueIdentifier>
-    </Filter>
     <Filter Include="include\graphics">
       <UniqueIdentifier>{cf901ebd-4ec3-4245-abfb-a4f8a060fe78}</UniqueIdentifier>
     </Filter>
@@ -42,9 +39,6 @@
     </Filter>
     <Filter Include="src\graphics">
       <UniqueIdentifier>{97862079-a97b-4220-a22d-7186c388520a}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="src\imgui">
-      <UniqueIdentifier>{9fdd27b8-e9de-4df3-816a-806d9fd09028}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\input">
       <UniqueIdentifier>{1e0faabc-891a-4635-898a-1eae741bf5fe}</UniqueIdentifier>
@@ -103,12 +97,6 @@
     <Filter Include="resources\shaders\particle">
       <UniqueIdentifier>{1bdc6374-9793-4a4e-9bca-5bb78cb274b8}</UniqueIdentifier>
     </Filter>
-    <Filter Include="resources\shaders\debug">
-      <UniqueIdentifier>{5555559b-2eca-4b5d-bf84-335509c634f7}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="resources\shaders\line">
-      <UniqueIdentifier>{2e3cf9f8-4b35-4a9c-b10c-bc8a13f2cba4}</UniqueIdentifier>
-    </Filter>
     <Filter Include="resources\shaders\posteffect">
       <UniqueIdentifier>{2be6bc38-3dda-4303-a10f-338456c66f26}</UniqueIdentifier>
     </Filter>
@@ -144,9 +132,6 @@
     <ClCompile Include="$(SolutionDir)engine\src\model\ModelRenderer.cpp">
       <Filter>src\model</Filter>
     </ClCompile>
-    <ClCompile Include="$(SolutionDir)engine\src\model\SkeletonDebugRenderer.cpp">
-      <Filter>src\model</Filter>
-    </ClCompile>
     <ClCompile Include="$(SolutionDir)engine\src\camera\Camera.cpp">
       <Filter>src\camera</Filter>
     </ClCompile>
@@ -155,9 +140,6 @@
     </ClCompile>
     <ClCompile Include="$(SolutionDir)engine\src\model\ModelManager.cpp">
       <Filter>src\model</Filter>
-    </ClCompile>
-    <ClCompile Include="$(SolutionDir)engine\src\imgui\ImguiManager.cpp">
-      <Filter>src\imgui</Filter>
     </ClCompile>
     <ClCompile Include="$(SolutionDir)engine\src\sound\SoundManager.cpp">
       <Filter>src\sound</Filter>
@@ -176,9 +158,6 @@
     </ClCompile>
     <ClCompile Include="$(SolutionDir)engine\src\particle\GPUParticleSystem.cpp">
       <Filter>src\particle</Filter>
-    </ClCompile>
-    <ClCompile Include="$(SolutionDir)engine\src\collision\CollisionDebugRenderer.cpp">
-      <Filter>src\collision</Filter>
     </ClCompile>
     <ClCompile Include="$(SolutionDir)engine\src\collision\CollisionManager.cpp">
       <Filter>src\collision</Filter>
@@ -203,9 +182,6 @@
     </ClCompile>
     <ClCompile Include="$(SolutionDir)engine\src\model\MaterialManager.cpp">
       <Filter>src\model</Filter>
-    </ClCompile>
-    <ClCompile Include="$(SolutionDir)engine\src\camera\DebugCamera.cpp">
-      <Filter>src\camera</Filter>
     </ClCompile>
     <ClCompile Include="$(SolutionDir)engine\src\graphics\DxUtils.cpp">
       <Filter>src\core</Filter>
@@ -263,9 +239,6 @@
     <ClInclude Include="$(SolutionDir)engine\include\model\ModelRenderer.h">
       <Filter>include\model</Filter>
     </ClInclude>
-    <ClInclude Include="$(SolutionDir)engine\include\model\SkeletonDebugRenderer.h">
-      <Filter>include\model</Filter>
-    </ClInclude>
     <ClInclude Include="$(SolutionDir)engine\include\model\Model.h">
       <Filter>include\model</Filter>
     </ClInclude>
@@ -280,9 +253,6 @@
     </ClInclude>
     <ClInclude Include="$(SolutionDir)engine\include\model\ModelManager.h">
       <Filter>include\model</Filter>
-    </ClInclude>
-    <ClInclude Include="$(SolutionDir)engine\include\imgui\ImguiManager.h">
-      <Filter>include\imgui</Filter>
     </ClInclude>
     <ClInclude Include="$(SolutionDir)engine\include\sound\SoundManager.h">
       <Filter>include\sound</Filter>
@@ -320,9 +290,6 @@
     <ClInclude Include="$(SolutionDir)engine\include\collision\AABB.h">
       <Filter>include\collision</Filter>
     </ClInclude>
-    <ClInclude Include="$(SolutionDir)engine\include\collision\CollisionDebugRenderer.h">
-      <Filter>include\collision</Filter>
-    </ClInclude>
     <ClInclude Include="$(SolutionDir)engine\include\collision\CollisionManager.h">
       <Filter>include\collision</Filter>
     </ClInclude>
@@ -353,9 +320,6 @@
     <ClInclude Include="$(SolutionDir)engine\include\collision\OBB.h">
       <Filter>include\collision</Filter>
     </ClInclude>
-    <ClInclude Include="$(SolutionDir)engine\include\camera\DebugCamera.h">
-      <Filter>include\camera</Filter>
-    </ClInclude>
     <ClInclude Include="$(SolutionDir)engine\include\model\SkyboxRenderer.h">
       <Filter>include\model</Filter>
     </ClInclude>
@@ -370,17 +334,11 @@
     <FxCompile Include="$(SolutionDir)engine\resources\shaders\model\ModelPS.hlsl">
       <Filter>resources\shaders\model</Filter>
     </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\line\DebugLinePS.hlsl">
-      <Filter>resources\shaders\line</Filter>
-    </FxCompile>
     <FxCompile Include="$(SolutionDir)engine\resources\shaders\model\ModelVS.hlsl">
       <Filter>resources\shaders\model</Filter>
     </FxCompile>
     <FxCompile Include="$(SolutionDir)engine\resources\shaders\model\SkinningCS.hlsl">
       <Filter>resources\shaders\model</Filter>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\line\DebugLineVS.hlsl">
-      <Filter>resources\shaders\line</Filter>
     </FxCompile>
     <FxCompile Include="$(SolutionDir)engine\resources\shaders\sprite\SpritePS.hlsl">
       <Filter>resources\shaders\sprite</Filter>

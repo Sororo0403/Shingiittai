@@ -64,7 +64,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>$(ProjectDir)include\enemy;$(ProjectDir)include\player;$(ProjectDir)include\scene;$(ProjectDir)..\engine\include\particle;$(ProjectDir)..\engine\include\collision;$(ProjectDir)..\engine\include\scene;$(ProjectDir)..\engine\include\input;$(ProjectDir)..\engine\include\camera;$(ProjectDir)..\engine\include\core;$(ProjectDir)..\engine\include\graphics;$(ProjectDir)..\engine\include\imgui;$(ProjectDir)..\engine\include\model;$(ProjectDir)..\engine\include\animation;$(ProjectDir)..\engine\include\sound;$(ProjectDir)..\engine\include\sprite;$(ProjectDir)..\engine\include\texture;$(ProjectDir)..\engine\externals;$(ProjectDir)..\engine\externals\assimp\include;$(ProjectDir)..\engine\externals\assimp\include\assimp;$(ProjectDir)..\engine\externals\DirectX-Headers;$(ProjectDir)..\engine\externals\DirectXTex;$(ProjectDir)..\engine\externals\JoyShockLibrary\include;$(ProjectDir)..\engine\externals\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)include\enemy;$(ProjectDir)include\player;$(ProjectDir)include\scene;$(ProjectDir)..\engine\include\particle;$(ProjectDir)..\engine\include\collision;$(ProjectDir)..\engine\include\scene;$(ProjectDir)..\engine\include\input;$(ProjectDir)..\engine\include\camera;$(ProjectDir)..\engine\include\core;$(ProjectDir)..\engine\include\graphics;$(ProjectDir)..\engine\include\model;$(ProjectDir)..\engine\include\animation;$(ProjectDir)..\engine\include\sound;$(ProjectDir)..\engine\include\sprite;$(ProjectDir)..\engine\include\texture;$(ProjectDir)..\engine\externals;$(ProjectDir)..\engine\externals\assimp\include;$(ProjectDir)..\engine\externals\assimp\include\assimp;$(ProjectDir)..\engine\externals\DirectX-Headers;$(ProjectDir)..\engine\externals\DirectXTex;$(ProjectDir)..\engine\externals\JoyShockLibrary\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -73,8 +73,8 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
-      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;imgui.lib;dinput8.lib;dxguid.lib;xinput.lib;ws2_32.lib;JoyShockLibrary.lib;assimp-vc145-mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(ProjectDir)..\engine\externals\assimp\lib\;$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\;$(SolutionDir)..\generated\outputs\$(Configuration)\imgui\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;dinput8.lib;dxguid.lib;xinput.lib;ws2_32.lib;JoyShockLibrary.lib;assimp-vc145-mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ProjectDir)..\engine\externals\assimp\lib\;$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -83,11 +83,11 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;IMGUI_DISABLED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>$(ProjectDir)include\enemy;$(ProjectDir)include\player;$(ProjectDir)include\scene;$(ProjectDir)..\engine\include\particle;$(ProjectDir)..\engine\include\collision;$(ProjectDir)..\engine\include\scene;$(ProjectDir)..\engine\include\input;$(ProjectDir)..\engine\include\camera;$(ProjectDir)..\engine\include\core;$(ProjectDir)..\engine\include\graphics;$(ProjectDir)..\engine\include\imgui;$(ProjectDir)..\engine\include\model;$(ProjectDir)..\engine\include\animation;$(ProjectDir)..\engine\include\sound;$(ProjectDir)..\engine\include\sprite;$(ProjectDir)..\engine\include\texture;$(ProjectDir)..\engine\externals;$(ProjectDir)..\engine\externals\assimp\include;$(ProjectDir)..\engine\externals\assimp\include\assimp;$(ProjectDir)..\engine\externals\DirectX-Headers;$(ProjectDir)..\engine\externals\DirectXTex;$(ProjectDir)..\engine\externals\JoyShockLibrary\include;$(ProjectDir)..\engine\externals\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)include\enemy;$(ProjectDir)include\player;$(ProjectDir)include\scene;$(ProjectDir)..\engine\include\particle;$(ProjectDir)..\engine\include\collision;$(ProjectDir)..\engine\include\scene;$(ProjectDir)..\engine\include\input;$(ProjectDir)..\engine\include\camera;$(ProjectDir)..\engine\include\core;$(ProjectDir)..\engine\include\graphics;$(ProjectDir)..\engine\include\model;$(ProjectDir)..\engine\include\animation;$(ProjectDir)..\engine\include\sound;$(ProjectDir)..\engine\include\sprite;$(ProjectDir)..\engine\include\texture;$(ProjectDir)..\engine\externals;$(ProjectDir)..\engine\externals\assimp\include;$(ProjectDir)..\engine\externals\assimp\include\assimp;$(ProjectDir)..\engine\externals\DirectX-Headers;$(ProjectDir)..\engine\externals\DirectXTex;$(ProjectDir)..\engine\externals\JoyShockLibrary\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -96,17 +96,15 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
-      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;imgui.lib;dinput8.lib;dxguid.lib;xinput.lib;ws2_32.lib;JoyShockLibrary.lib;assimp-vc145-mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(ProjectDir)..\engine\externals\assimp\lib\;$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\;$(SolutionDir)..\generated\outputs\$(Configuration)\imgui\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;dinput8.lib;dxguid.lib;xinput.lib;ws2_32.lib;JoyShockLibrary.lib;assimp-vc145-mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ProjectDir)..\engine\externals\assimp\lib\;$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\player\SwordSlashArcRenderer.cpp" />
     <ClCompile Include="src\player\SwordTrailRenderer.cpp" />
-    <ClCompile Include="src\player\HandCameraPreviewReceiver.cpp" />
     <ClCompile Include="src\scene\BattleResultScene.cpp" />
     <ClCompile Include="src\scene\CalibrationScene.cpp" />
-    <ClCompile Include="src\scene\CameraTestScene.cpp" />
     <ClCompile Include="src\scene\GameSceneHud.cpp" />
     <ClCompile Include="src\enemy\EnemyMelee.cpp" />
     <ClCompile Include="src\enemy\EnemyRanged.cpp" />
@@ -119,7 +117,6 @@
     <ClCompile Include="src\enemy\EnemyTuning.cpp" />
     <ClCompile Include="src\player\Player.cpp" />
     <ClCompile Include="src\scene\CombatFeedbackDirector.cpp" />
-    <ClCompile Include="src\scene\EnemyAnimationDebugScene.cpp" />
     <ClCompile Include="src\scene\GameScene.cpp" />
     <ClCompile Include="src\scene\GameSceneAnimation.cpp" />
     <ClCompile Include="src\scene\GameSceneCamera.cpp" />
@@ -139,11 +136,9 @@
   <ItemGroup>
     <ClInclude Include="include\player\SwordSlashArcRenderer.h" />
     <ClInclude Include="include\player\SwordTrailRenderer.h" />
-    <ClInclude Include="include\player\HandCameraPreviewReceiver.h" />
     <ClInclude Include="include\player\InputControlType.h" />
     <ClInclude Include="include\scene\BattleResultScene.h" />
     <ClInclude Include="include\scene\CalibrationScene.h" />
-    <ClInclude Include="include\scene\CameraTestScene.h" />
     <ClInclude Include="include\scene\GameSceneHud.h" />
     <ClInclude Include="include\enemy\EnemyActionData.h" />
     <ClInclude Include="include\player\SwordControllerState.h" />
@@ -151,7 +146,6 @@
     <ClInclude Include="include\player\SwordPose.h" />
     <ClInclude Include="include\enemy\Enemy.h" />
     <ClInclude Include="include\scene\CombatFeedbackDirector.h" />
-    <ClInclude Include="include\scene\EnemyAnimationDebugScene.h" />
     <ClInclude Include="include\scene\GameScene.h" />
     <ClInclude Include="include\scene\ModeSelectScene.h" />
     <ClInclude Include="include\scene\SettingsScene.h" />
@@ -170,9 +164,6 @@
     </ProjectReference>
     <ProjectReference Include="..\engine\externals\DirectXTex\DirectXTex_Desktop_2022.vcxproj">
       <Project>{371b9fa9-4c90-4ac6-a123-aced756d6c77}</Project>
-    </ProjectReference>
-    <ProjectReference Include="..\engine\externals\imgui\imgui.vcxproj">
-      <Project>{f6ba9c36-46d4-4c55-9c90-d016c833a837}</Project>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>

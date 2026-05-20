@@ -1,5 +1,4 @@
 #include "TitleScene.h"
-#include "CameraTestScene.h"
 #include "DirectXCommon.h"
 #include "GameScene.h"
 #include "Input.h"
@@ -82,14 +81,6 @@ void TitleScene::Update() {
         if (ctx_->requestHandTrackingStart) {
             ctx_->requestHandTrackingStart();
         }
-        return;
-    }
-
-    if (ctx_->input->IsKeyTrigger(DIK_F2)) {
-        if (ctx_->requestHandTrackingStart) {
-            ctx_->requestHandTrackingStart();
-        }
-        sceneManager_->ChangeScene(std::make_unique<CameraTestScene>());
         return;
     }
 
@@ -209,7 +200,7 @@ void TitleScene::DrawCameraModeBadge(float, float) {
 
 bool TitleScene::IsAnyButtonTriggered(const Input &input) const {
     for (int dik = 0; dik < 256; ++dik) {
-        if (dik == DIK_F1 || dik == DIK_F2 || dik == DIK_C || dik == DIK_R) {
+        if (dik == DIK_F1 || dik == DIK_C || dik == DIK_R) {
             continue;
         }
         if (input.IsKeyTrigger(dik)) {

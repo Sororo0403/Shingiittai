@@ -9,6 +9,5 @@
   <Project Path="app/App.vcxproj" Id="7f7e8d20-0e95-4e5a-b1a9-5df7d0d1f4e2" />
   <Project Path="engine/Engine.vcxproj" Id="8d69c2b4-4f39-47f0-9a40-4cb78ec442a1" />
   <Project Path="engine/externals/DirectXTex/DirectXTex_Desktop_2022.vcxproj" Id="371b9fa9-4c90-4ac6-a123-aced756d6c77" />
-  <Project Path="engine/externals/imgui/imgui.vcxproj" Id="f6ba9c36-46d4-4c55-9c90-d016c833a837" />
   <Project Path="tools/hand_tracking/HandUdpSender.vcxproj" Id="4c4f36ff-80bb-4eaf-a1a0-86fd79a93b61" />
 </Solution>

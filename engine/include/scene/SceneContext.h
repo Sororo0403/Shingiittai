@@ -15,10 +15,6 @@ class PostEffectRenderer;
 class RenderTexture;
 class SkyboxRenderer;
 
-#ifdef _DEBUG
-class ImguiManager;
-#endif // _DEBUG
-
 /// <summary>
 /// シーンが参照する各種システムへのアクセスポイントをまとめる
 /// </summary>
@@ -40,8 +36,4 @@ struct SceneContext {
     std::function<bool()> isCameraDeviceAvailable{};
     std::function<bool()> isHandTrackingReady{};
     float deltaTime = 0.0f;
-
-#ifdef _DEBUG
-    ImguiManager *imgui = nullptr;
-#endif // _DEBUG
 };

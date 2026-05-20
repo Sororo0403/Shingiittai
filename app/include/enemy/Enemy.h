@@ -354,8 +354,7 @@ class Enemy {
     float TakeDamage(float damage);
     float TakeDamageDeferTransitions(float damage);
     void ResolveDeferredDamageTransitions();
-    void SetPhase2DebugHealth();
-    void ForceDebugBladeClash();
+    void ForceBladeClash();
     void ConsumeWave(size_t index);
     void NotifyAttackConnected();
     void NotifyAttackGuarded();

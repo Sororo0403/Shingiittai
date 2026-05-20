@@ -494,7 +494,7 @@ void GameScene::BeginBladeClash(size_t swordIndex, bool finalClash) {
     counterCinematicTimer_ = 0.0f;
     SetEnemyAnimationFrozen(false);
     if (finalClash) {
-        enemy_.ForceDebugBladeClash();
+        enemy_.ForceBladeClash();
     }
     SyncEnemyAnimation();
     player_.NotifyCounterSuccess(swordIndex);

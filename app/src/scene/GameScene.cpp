@@ -1,7 +1,6 @@
 #include "GameScene.h"
 #include "BattleResultScene.h"
 #include "DirectXCommon.h"
-#include "EnemyAnimationDebugScene.h"
 #include "Input.h"
 #include "Material.h"
 #include "Model.h"
@@ -343,7 +342,6 @@ void GameScene::Initialize(const SceneContext &ctx) {
     camera_.SetMode(CameraMode::LookAt);
     camera_.UpdateMatrices();
     camera_.SetPerspectiveFovDeg(currentFovDeg_);
-    collisionDebugRenderer_.Initialize(ctx_->dxCommon);
 
     DirectXCommon *dx = ctx_->dxCommon;
     ModelManager *model = ctx_->model;
@@ -644,32 +642,6 @@ void GameScene::Initialize(const SceneContext &ctx) {
 
 void GameScene::Update() {
     Input *input = ctx_->input;
-#ifdef _DEBUG
-    if (runMode_ == RunMode::Play && input->IsKeyTrigger(DIK_F7)) {
-        sceneManager_->ChangeScene(std::make_unique<EnemyAnimationDebugScene>());
-        return;
-    }
-    if (runMode_ == RunMode::Play && input->IsKeyTrigger(DIK_F8) &&
-        !battleResultRequested_) {
-        enemy_.TakeDamage(99999.0f);
-    }
-    if (runMode_ == RunMode::Play && input->IsKeyTrigger(DIK_F6) &&
-        !battleResultRequested_) {
-        enemy_.SetPhase2DebugHealth();
-    }
-    if (runMode_ == RunMode::Play && input->IsKeyTrigger(DIK_F5) &&
-        !battleResultRequested_) {
-        enemy_.ForceDebugBladeClash();
-        EmitEnemyActionParticles(ActionKind::BladeClash, ActionStep::Active);
-        if (soundsLoaded_ && ctx_->sound != nullptr) {
-            ctx_->sound->Play(enemyReleaseSoundId_);
-        }
-    }
-#endif
-    if (runMode_ == RunMode::Play && input->IsKeyTrigger(DIK_F3)) {
-        showCollisionDebug_ = !showCollisionDebug_;
-    }
-
     const float baseDeltaTime = ctx_->deltaTime;
     if (battleIntroActive_) {
         if (runMode_ == RunMode::TitleDemo) {
@@ -1461,9 +1433,6 @@ void GameScene::Draw() {
                  bladeClashFinishActive_, playerVisualScale);
     if (!(victorySequenceActive_ && victoryFinalExplosionEmitted_)) {
         enemy_.Draw(ctx_->model, camera_, enemyVisualScale);
-    }
-    if (showCollisionDebug_) {
-        collisionDebugRenderer_.Draw(collisionManager_, camera_);
     }
     ctx_->model->PostDraw();
     swordTrailRenderer_.Draw(camera_);
