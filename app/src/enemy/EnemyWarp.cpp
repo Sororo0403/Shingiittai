@@ -47,10 +47,21 @@ bool Enemy::DecideWarpTargetNearPlayer(DirectX::XMFLOAT3 &outTarget) {
     playerForwardX /= playerForwardLength;
     playerForwardZ /= playerForwardLength;
 
+    const float toPlayerX = playerPos_.x - tf_.position.x;
+    const float toPlayerZ = playerPos_.z - tf_.position.z;
+    const float nearDistance = config_.core.nearAttackDistance;
+    const bool isAlreadyNear =
+        (toPlayerX * toPlayerX + toPlayerZ * toPlayerZ) <=
+        nearDistance * nearDistance;
+
     if (warp_.approachSlot == WarpApproachSlot::None) {
-        warp_.approachSlot =
-            (std::rand() % 100 < 48) ? WarpApproachSlot::Front
-                                     : WarpApproachSlot::Back;
+        warp_.approachSlot = isAlreadyNear
+                                 ? WarpApproachSlot::Back
+                                 : ((std::rand() % 100 < 48)
+                                        ? WarpApproachSlot::Front
+                                        : WarpApproachSlot::Back);
+    } else if (isAlreadyNear && warp_.approachSlot == WarpApproachSlot::Front) {
+        warp_.approachSlot = WarpApproachSlot::Back;
     }
 
     outTarget = playerPos_;
@@ -83,20 +94,10 @@ bool Enemy::DecideWarpTargetFarFromPlayer(DirectX::XMFLOAT3 &outTarget) {
 }
 
 void Enemy::ClampWarpTargetToArena(DirectX::XMFLOAT3 &target) const {
-    const float radiusSq = arenaClampRadius_ * arenaClampRadius_;
-    const float distanceSq = target.x * target.x + target.z * target.z;
-    if (distanceSq <= radiusSq || distanceSq <= 0.0001f) {
-        return;
-    }
-
-    const float scale = arenaClampRadius_ / std::sqrt(distanceSq);
-    target.x *= scale;
-    target.z *= scale;
+    (void)target;
 }
 
 void Enemy::FinalizeWarpTargetFacing(DirectX::XMFLOAT3 &target) {
-    ClampWarpTargetToArena(target);
-
     const float dx = playerPos_.x - target.x;
     const float dz = playerPos_.z - target.z;
     if (dx * dx + dz * dz > 0.0001f) {
@@ -126,193 +127,35 @@ bool Enemy::PrepareWarpContext() {
     return true;
 }
 
-void Enemy::ResetPostActionState() { postActionOption_ = PostActionOption::None; }
-
-void Enemy::BeginBackWarpPostAction() {
-    if (IsWarpSuspendedForPresentation()) {
-        ResetPostActionState();
-        return;
+bool Enemy::BeginBladeClashReturnWarp(
+    const PlayerCombatObservation &observation) {
+    if (deathFinished_ || isDying_ || hp_ <= 0.0f ||
+        IsWarpSuspendedForPresentation()) {
+        return false;
     }
 
+    playerObs_ = observation;
+    playerPos_ = observation.position;
+
     ResetWarpContext();
-    warp_.type = WarpType::Escape;
-    if (!DecideWarpTargetFarFromPlayer(warp_.targetPos)) {
-        ResetPostActionState();
-        return;
+    cinematicPitch_ = 0.0f;
+    cinematicRoll_ = 0.0f;
+    warp_.type = WarpType::Approach;
+    warp_.approachSlot = WarpApproachSlot::Front;
+    if (!DecideWarpTargetNearPlayer(warp_.targetPos)) {
+        ResetWarpContext();
+        return false;
     }
 
     warp_.hasValidTarget = true;
+    warp_.followupKind = ActionKind::None;
+    warp_.followupStep = ActionStep::None;
+    warp_.faceLivePlayerOnEnd = true;
     BeginAction(ActionKind::Warp, ActionStep::Start);
-}
-
-void Enemy::ResetWarpContext() { warp_ = WarpContext{}; }
-
-void Enemy::ResetChainContext() { chain_ = ChainContext{}; }
-
-bool Enemy::DecideNextChainAction(ActionKind finishedKind, ActionKind &outKind,
-                                  ActionStep &outStep) const {
-    outKind = ActionKind::None;
-    outStep = ActionStep::None;
-    if (!chain_.active) {
-        return false;
-    }
-
-    if (finishedKind == ActionKind::Smash) {
-        return false;
-    }
-
-    if (chain_.stepCount >= chain_.maxSteps) {
-        return false;
-    }
-
-    const float distance = GetDistanceToPlayer();
-    if (chain_.starter == ChainStarter::SweepWarpSmash &&
-        distance <= config_.chain.approachContinueDistance) {
-        outKind = ActionKind::Warp;
-        outStep = ActionStep::Start;
-        return true;
-    }
-
-    if (chain_.starter == ChainStarter::WaveWarpSmash &&
-        distance >= config_.chain.waveWarpSmashMinDistance) {
-        outKind = ActionKind::Warp;
-        outStep = ActionStep::Start;
-        return true;
-    }
-
-    return false;
-}
-
-void Enemy::SetupSweepWarpSmashChain() {
-    chain_.active = true;
-    chain_.starter = ChainStarter::SweepWarpSmash;
-    chain_.stepCount = 0;
-    chain_.maxSteps = (std::max)(1, config_.chain.warpApproachMaxSteps);
-}
-
-void Enemy::SetupWaveWarpSmashChain() {
-    chain_.active = true;
-    chain_.starter = ChainStarter::WaveWarpSmash;
-    chain_.stepCount = 0;
-    chain_.maxSteps = (std::max)(1, config_.chain.warpApproachMaxSteps);
-}
-
-void Enemy::OverrideWarpFollowupByChain() {
-    if (!chain_.active) {
-        return;
-    }
-
-    if (chain_.starter == ChainStarter::SweepWarpSmash ||
-        chain_.starter == ChainStarter::WaveWarpSmash) {
-        warp_.followupKind = ActionKind::Smash;
-        warp_.followupStep = ActionStep::Charge;
-        ++chain_.stepCount;
-    }
-}
-
-bool Enemy::TryStartPostActionWarpChain(ActionKind finishedKind) {
-    if (IsWarpSuspendedForPresentation()) {
-        return false;
-    }
-
-    const float distance = GetDistanceToPlayer();
-
-    if (finishedKind == ActionKind::Sweep &&
-        distance <= config_.chain.sweepWarpSmashMaxDistance) {
-        float r = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-        if (r < config_.chain.sweepWarpSmashChance) {
-            SetupSweepWarpSmashChain();
-            ResetWarpContext();
-            warp_.type = WarpType::Approach;
-            if (!DecideWarpTargetNearPlayer(warp_.targetPos)) {
-                ResetWarpContext();
-                ResetChainContext();
-                return false;
-            }
-            warp_.hasValidTarget = true;
-            OverrideWarpFollowupByChain();
-            BeginAction(ActionKind::Warp, ActionStep::Start);
-            return true;
-        }
-    }
-
-    if (finishedKind == ActionKind::Wave &&
-        distance >= config_.chain.waveWarpSmashMinDistance) {
-        float r = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-        if (r < config_.chain.waveWarpSmashChance) {
-            SetupWaveWarpSmashChain();
-            ResetWarpContext();
-            warp_.type = WarpType::Approach;
-            if (!DecideWarpTargetNearPlayer(warp_.targetPos)) {
-                ResetWarpContext();
-                ResetChainContext();
-                return false;
-            }
-            warp_.hasValidTarget = true;
-            OverrideWarpFollowupByChain();
-            BeginAction(ActionKind::Warp, ActionStep::Start);
-            return true;
-        }
-    }
-
-    return false;
-}
-
-bool Enemy::TryStartBackWarpPostAction(ActionKind finishedKind) {
-    if (IsWarpSuspendedForPresentation()) {
-        return false;
-    }
-
-    float chance = 0.0f;
-    switch (finishedKind) {
-    case ActionKind::Smash:
-        chance = backWarpAfterSmashChance_;
-        break;
-    case ActionKind::Sweep:
-        chance = backWarpAfterSweepChance_;
-        break;
-    case ActionKind::Wave:
-        chance = backWarpAfterWaveChance_;
-        break;
-    default:
-        return false;
-    }
-
-    float r = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-    if (r >= chance) {
-        return false;
-    }
-
-    postActionOption_ = PostActionOption::BackWarp;
-    BeginBackWarpPostAction();
     return true;
 }
 
-bool Enemy::TryContinueChain() {
-    ActionKind nextKind = ActionKind::None;
-    ActionStep nextStep = ActionStep::None;
-    const ActionKind finishedKind = action_.kind;
-
-    if (DecideNextChainAction(finishedKind, nextKind, nextStep)) {
-        ResetWarpContext();
-        warp_.type = WarpType::Approach;
-        if (!DecideWarpTargetNearPlayer(warp_.targetPos)) {
-            ResetWarpContext();
-            ResetChainContext();
-            return false;
-        }
-        warp_.hasValidTarget = true;
-        OverrideWarpFollowupByChain();
-        BeginAction(nextKind, nextStep);
-        return true;
-    }
-
-    if (chain_.active && finishedKind == ActionKind::Smash) {
-        ResetChainContext();
-    }
-
-    return TryStartPostActionWarpChain(finishedKind);
-}
+void Enemy::ResetWarpContext() { warp_ = WarpContext{}; }
 
 void Enemy::UpdateWarpStart(float deltaTime) {
     if (!warp_.hasDeparturePos) {
@@ -377,7 +220,10 @@ void Enemy::UpdateWarpMove(float deltaTime) {
 
     if (stateTimer_ >= config_.warp.moveTime) {
         tf_.position = warp_.targetPos;
-        if (warp_.hasTargetYaw) {
+        if (warp_.faceLivePlayerOnEnd) {
+            UpdateFacingToPlayer();
+            LockCurrentFacing();
+        } else if (warp_.hasTargetYaw) {
             facingYaw_ = NormalizeAngle(warp_.targetYaw);
             LockCurrentFacing();
         }
@@ -390,7 +236,10 @@ void Enemy::UpdateWarpMove(float deltaTime) {
 void Enemy::UpdateWarpEnd(float deltaTime) {
     isVisible_ = true;
     warp_.collisionDisabled = false;
-    if (warp_.hasTargetYaw) {
+    if (warp_.faceLivePlayerOnEnd) {
+        UpdateFacingToPlayer();
+        LockCurrentFacing();
+    } else if (warp_.hasTargetYaw) {
         facingYaw_ = NormalizeAngle(warp_.targetYaw);
         LockCurrentFacing();
     } else {

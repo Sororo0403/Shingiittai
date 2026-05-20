@@ -281,20 +281,3 @@ void Enemy::UpdateSweepRecovery(float deltaTime) {
     }
 }
 
-bool Enemy::TryBeginDoubleSweepSecondStage() {
-    if (action_.id != ActionId::DoubleSweep || isDoubleSweepSecondStage_) {
-        return false;
-    }
-    if (stateTimer_ < config_.attacks.sweep.secondDelay) {
-        return false;
-    }
-
-    isDoubleSweepSecondStage_ = true;
-    hasTrackingLocked_ = false;
-    holdConfigured_ = false;
-    currentHoldDuration_ = 0.0f;
-    isAttackActive_ = false;
-    stateTimer_ = 0.0f;
-    action_.step = ActionStep::Charge;
-    return true;
-}

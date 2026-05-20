@@ -1,6 +1,5 @@
 #pragma once
 #include "BaseScene.h"
-#include "Bullet.h"
 #include "Camera.h"
 #include "CombatFeedbackDirector.h"
 #include "CollisionDebugRenderer.h"
@@ -69,6 +68,7 @@ class GameScene : public BaseScene {
     void ApplyEnemyProceduralAnimation();
     void SetEnemyAnimationFrozen(bool frozen);
     void UpdateCombat(float gameplayDeltaTime);
+    void ApplyEnemyCageConstraint(float deltaTime);
     void DispatchCombatFeedback(const CombatFeedbackEvent &event);
     void EmitCombatParticles(const CombatFeedbackEvent &event);
     void EmitEnemyActionParticles(ActionKind kind, ActionStep step);
@@ -78,7 +78,6 @@ class GameScene : public BaseScene {
     PlayerCombatObservation BuildPlayerCombatObservation() const;
     float ComputeGameplayTimeScale() const;
     void UpdateSwordVfx(float deltaTime);
-    void ApplyEnemyCageConstraint();
     void BeginBladeClash(size_t swordIndex, bool finalClash = false);
     void UpdateBladeClash(float deltaTime);
     void ResolveBladeClash(bool playerWon);
@@ -116,7 +115,6 @@ class GameScene : public BaseScene {
     SwordTrailRenderer swordTrailRenderer_;
     SwordSlashArcRenderer swordSlashArcRenderer_;
     std::array<bool, Player::kSwordCount> prevSwordSlashStates_{};
-    std::array<bool, Player::kSwordCount> cageSlashPreviousStates_{};
     std::array<bool, Player::kSwordCount> bladeClashPreviousSlashStates_{};
     uint32_t particleTextureId_ = 0;
     uint32_t playerModelId_ = 0;
@@ -164,8 +162,6 @@ class GameScene : public BaseScene {
 
     float playerHitCooldown_ = 0.0f;
     float enemyHitCooldown_ = 0.0f;
-    Bullet bullet_;
-
     float cameraYaw_ = 0.0f;
     float cameraPitch_ = 0.12f;
     float cameraPitchMin_ = -0.20f;
@@ -313,5 +309,6 @@ class GameScene : public BaseScene {
     std::array<DirectX::XMFLOAT2, 2> chargeWeakPointRequiredDirections_ = {
         DirectX::XMFLOAT2{0.0f, -1.0f}, DirectX::XMFLOAT2{1.0f, 0.0f}};
     std::array<bool, Player::kSwordCount> previousChargeWeakPointSlashStates_{};
+    std::array<bool, Player::kSwordCount> cageSlashPreviousStates_{};
 
 };

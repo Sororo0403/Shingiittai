@@ -1,7 +1,6 @@
 #include "WeaponSelectScene.h"
 #include "CalibrationScene.h"
 #include "DirectXCommon.h"
-#include "HandRegistrationScene.h"
 #include "Input.h"
 #include "ModelManager.h"
 #include "PostEffectRenderer.h"
@@ -118,15 +117,14 @@ void WeaponSelectScene::Update() {
         }
 
         if (transitionTimer_ >= kTransitionDuration) {
+            SwordInputCalibration calibration{};
+            calibration.controlType = selectedType;
             if (selectedType == InputControlType::Hand) {
-                sceneManager_->ChangeScene(
-                    std::make_unique<HandRegistrationScene>());
+                sceneManager_->ChangeScene(std::make_unique<TipScene>(calibration));
             } else if (selectedType == InputControlType::JoyCon) {
                 sceneManager_->ChangeScene(
                     std::make_unique<CalibrationScene>(selectedType));
             } else {
-                SwordInputCalibration calibration{};
-                calibration.controlType = selectedType;
                 sceneManager_->ChangeScene(
                     std::make_unique<TipScene>(calibration));
             }

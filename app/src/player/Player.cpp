@@ -866,15 +866,18 @@ void Player::UpdateMovement(Input *input, float deltaTime, float cameraYaw,
         knockbackVelocity_.z = 0.0f;
 }
 
-void Player::TakeDamage(float damage) {
-    if (IsDamageInvulnerable()) {
-        return;
+float Player::TakeDamage(float damage, bool ignoreInvulnerability) {
+    if (damage <= 0.0f || (!ignoreInvulnerability && IsDamageInvulnerable()) ||
+        hp_ <= 0.0f) {
+        return 0.0f;
     }
 
+    const float previousHp = hp_;
     hp_ -= damage * damageTakenScale_;
     if (hp_ < 0.0f) {
         hp_ = 0.0f;
     }
+    return previousHp - hp_;
 }
 
 void Player::NotifyAttackHit(float damage) {

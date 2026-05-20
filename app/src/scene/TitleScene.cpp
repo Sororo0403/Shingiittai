@@ -1,11 +1,12 @@
 #include "TitleScene.h"
+#include "CameraTestScene.h"
 #include "DirectXCommon.h"
 #include "GameScene.h"
-#include "HandRegistrationScene.h"
 #include "Input.h"
 #include "PostEffectRenderer.h"
 #include "SceneManager.h"
 #include "SpriteManager.h"
+#include "TipScene.h"
 #include "TextureManager.h"
 #include "WinApp.h"
 #include "WeaponSelectScene.h"
@@ -65,8 +66,9 @@ void TitleScene::Update() {
         fadeTimer_ += ctx_->deltaTime;
         if (fadeTimer_ >= kFadeDuration) {
             if (cameraStartRequested_) {
-                sceneManager_->ChangeScene(
-                    std::make_unique<HandRegistrationScene>());
+                SwordInputCalibration calibration{};
+                calibration.controlType = InputControlType::Hand;
+                sceneManager_->ChangeScene(std::make_unique<TipScene>(calibration));
             } else {
                 sceneManager_->ChangeScene(
                     std::make_unique<WeaponSelectScene>());
@@ -80,6 +82,14 @@ void TitleScene::Update() {
         if (ctx_->requestHandTrackingStart) {
             ctx_->requestHandTrackingStart();
         }
+        return;
+    }
+
+    if (ctx_->input->IsKeyTrigger(DIK_F2)) {
+        if (ctx_->requestHandTrackingStart) {
+            ctx_->requestHandTrackingStart();
+        }
+        sceneManager_->ChangeScene(std::make_unique<CameraTestScene>());
         return;
     }
 
@@ -199,7 +209,7 @@ void TitleScene::DrawCameraModeBadge(float, float) {
 
 bool TitleScene::IsAnyButtonTriggered(const Input &input) const {
     for (int dik = 0; dik < 256; ++dik) {
-        if (dik == DIK_F1 || dik == DIK_C || dik == DIK_R) {
+        if (dik == DIK_F1 || dik == DIK_F2 || dik == DIK_C || dik == DIK_R) {
             continue;
         }
         if (input.IsKeyTrigger(dik)) {

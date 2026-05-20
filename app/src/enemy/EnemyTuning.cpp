@@ -19,9 +19,6 @@ float Enemy::GetCurrentSmashChargeTime() const {
 
 float Enemy::GetCurrentSweepChargeTime() const {
     float result = config_.attacks.sweep.melee.base.chargeTime;
-    if (action_.id == ActionId::DoubleSweep && isDoubleSweepSecondStage_) {
-        result *= config_.attacks.sweep.secondChargeScale;
-    }
 
     result += GetAdaptiveChargeOffset(ActionKind::Sweep);
     if (result < 0.05f) {
@@ -62,9 +59,6 @@ float Enemy::GetReleaseAnticipationRatio() const {
         case ActionKind::Sweep:
             releaseTime = GetCurrentSweepChargeTime();
             break;
-        case ActionKind::Shot:
-            releaseTime = config_.attacks.shot.chargeTime;
-            break;
         case ActionKind::BladeClash:
             releaseTime = config_.attacks.bladeClash.chargeTime;
             break;
@@ -73,10 +67,6 @@ float Enemy::GetReleaseAnticipationRatio() const {
             break;
         case ActionKind::Cage:
             releaseTime = config_.attacks.cage.chargeTime;
-            break;
-        case ActionKind::Nova:
-            releaseTime = config_.attacks.nova.chargeTime;
-            cueWindow = 0.34f;
             break;
         default:
             return 0.0f;
@@ -136,16 +126,12 @@ ActionId Enemy::MakeDefaultActionId(ActionKind kind) const {
         return ActionId::Smash;
     case ActionKind::Sweep:
         return ActionId::Sweep;
-    case ActionKind::Shot:
-        return ActionId::Shot;
     case ActionKind::BladeClash:
         return ActionId::BladeClash;
     case ActionKind::Wave:
         return ActionId::Wave;
     case ActionKind::Cage:
         return ActionId::Cage;
-    case ActionKind::Nova:
-        return ActionId::Nova;
     case ActionKind::Warp:
         return (warp_.type == WarpType::Escape) ? ActionId::WarpEscape
                                                 : ActionId::WarpApproach;

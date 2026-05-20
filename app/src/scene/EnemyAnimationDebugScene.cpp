@@ -27,8 +27,6 @@ const std::string kBossAnimSweep =
     "\xE6\xA8\xAA\xE8\x96\x99\xE3\x81\x8E\xE6\x89\x95\xE3\x81\x84";
 const std::string kBossAnimWave =
     "\xE6\xB3\xA2\xE7\x8A\xB6\xE6\x94\xBB\xE6\x92\x83";
-const std::string kBossAnimShot =
-    "\xE5\xBC\xBE\xE7\x99\xBA\xE5\xB0\x84";
 const std::string kBossAnimTeleport =
     "\xE3\x83\x86\xE3\x83\xAC\xE3\x83\x9D\xE3\x83\xBC\xE3\x83\x88";
 const std::string kBossBoneBase =
@@ -41,9 +39,9 @@ struct SkillPreview {
 
 const SkillPreview kSkillPreviews[] = {
     {"Smash", ActionKind::Smash}, {"Sweep", ActionKind::Sweep},
-    {"Shot", ActionKind::Shot},   {"BladeClash", ActionKind::BladeClash},
-    {"Wave", ActionKind::Wave},   {"Cage", ActionKind::Cage},
-    {"Nova", ActionKind::Nova},
+    {"BladeClash", ActionKind::BladeClash},
+    {"Wave", ActionKind::Wave},
+    {"Cage", ActionKind::Cage},
     {"Warp", ActionKind::Warp},
     {"Stalk", ActionKind::Stalk},
 };
@@ -142,15 +140,10 @@ std::string PickSkillAnimation(const Model *model, ActionKind kind) {
         return HasAnimation(model, kBossAnimSmash) ? kBossAnimSmash : std::string{};
     case ActionKind::Sweep:
         return HasAnimation(model, kBossAnimSweep) ? kBossAnimSweep : std::string{};
-    case ActionKind::Shot:
     case ActionKind::BladeClash:
-        if (HasAnimation(model, kBossAnimShot)) {
-            return kBossAnimShot;
-        }
         return HasAnimation(model, kBossAnimWave) ? kBossAnimWave : std::string{};
     case ActionKind::Wave:
     case ActionKind::Cage:
-    case ActionKind::Nova:
         return HasAnimation(model, kBossAnimWave) ? kBossAnimWave : std::string{};
     case ActionKind::Warp:
         return HasAnimation(model, kBossAnimTeleport) ? kBossAnimTeleport
@@ -436,13 +429,10 @@ void EnemyAnimationDebugScene::UpdateSkillPreview(float animationDelta) {
 float EnemyAnimationDebugScene::GetSelectedSkillDuration() const {
     const ActionKind kind = kSkillPreviews[selectedSkillIndex_].kind;
     switch (kind) {
-    case ActionKind::Nova:
-        return 2.1f;
     case ActionKind::Warp:
         return 1.35f;
     case ActionKind::Stalk:
         return 1.20f;
-    case ActionKind::Shot:
     case ActionKind::BladeClash:
     case ActionKind::Wave:
     case ActionKind::Cage:
@@ -562,7 +552,6 @@ void EnemyAnimationDebugScene::ApplySelectedSkillPose() {
         }
         break;
 
-    case ActionKind::Shot:
     case ActionKind::BladeClash:
     case ActionKind::Wave:
     case ActionKind::Cage:
@@ -573,31 +562,6 @@ void EnemyAnimationDebugScene::ApplySelectedSkillPose() {
         } else {
             PoseBoneTree(*enemyModel, chest, 0.08f, 0.0f, 0.0f);
             poseArms(0.28f * phaseScale, 0.03f, -0.05f);
-        }
-        break;
-
-    case ActionKind::Nova:
-        if (step == ActionStep::Charge) {
-            const float chargePulse = 0.65f + 0.35f * std::sin(time * 18.0f);
-            PoseBoneTree(*enemyModel, root, -0.12f * phaseScale, 0.0f,
-                         0.04f * chargePulse);
-            PoseBoneTree(*enemyModel, chest, -0.34f * phaseScale, 0.0f,
-                         0.18f * chargePulse);
-            PoseBoneTree(*enemyModel, head, -0.10f, 0.0f, 0.0f);
-            poseArms(-0.70f * phaseScale, 0.16f * chargePulse,
-                     0.34f * chargePulse);
-        } else if (step == ActionStep::Active) {
-            const float burst = 0.7f + 0.3f * std::sin(time * 34.0f);
-            PoseBoneTree(*enemyModel, root, 0.16f * phaseScale, 0.0f,
-                         0.08f * burst);
-            PoseBoneTree(*enemyModel, chest, 0.44f * phaseScale, 0.0f,
-                         -0.20f * burst);
-            PoseBoneTree(*enemyModel, head, 0.16f, 0.0f, 0.0f);
-            poseArms(0.64f * phaseScale, 0.44f * burst,
-                     -0.52f * phaseScale);
-        } else {
-            PoseBoneTree(*enemyModel, chest, 0.08f, 0.0f, -0.06f);
-            poseArms(0.16f, 0.10f, -0.08f);
         }
         break;
 

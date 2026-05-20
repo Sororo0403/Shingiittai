@@ -81,7 +81,7 @@ class HandUdpSenderProcess {
   public:
     ~HandUdpSenderProcess() { Stop(); }
 
-    bool Prepare() { return Start(true); }
+    bool Prepare() { return Start(false); }
 
     bool IsPreparationReady() {
         PollStatus();
@@ -131,6 +131,9 @@ class HandUdpSenderProcess {
         const std::filesystem::path modelPath =
             runtimeRoot / L"tools" / L"hand_tracking" / L"models" /
             L"hand_landmarker.task";
+        const std::filesystem::path poseModelPath =
+            runtimeRoot / L"tools" / L"hand_tracking" / L"models" /
+            L"pose_landmarker_lite.task";
 
         if (!std::filesystem::exists(modelPath)) {
             return false;
@@ -144,6 +147,11 @@ class HandUdpSenderProcess {
         const std::filesystem::path venvPython =
             runtimeRoot / L"tools" / L"hand_tracking" / L".venv" / L"Scripts" /
             L"python.exe";
+        const auto appendPoseModel = [&](std::wstring& command) {
+            if (!command.empty() && std::filesystem::exists(poseModelPath)) {
+                command += L" --pose-model \"" + poseModelPath.wstring() + L"\"";
+            }
+        };
 
         std::wstring scriptCommand;
         if (std::filesystem::exists(scriptPath) &&
@@ -155,6 +163,7 @@ class HandUdpSenderProcess {
             scriptCommand = L"py -3.11 \"" + scriptPath.wstring() +
                             L"\" --model \"" + modelPath.wstring() + L"\"";
         }
+        appendPoseModel(scriptCommand);
         if (!scriptCommand.empty() && startPaused) {
             scriptCommand += L" --start-paused --status-port 5008";
         }
@@ -164,6 +173,7 @@ class HandUdpSenderProcess {
             packagedCommand = L"\"" + packagedExe.wstring() + L"\" --model \"" +
                               modelPath.wstring() + L"\"";
         }
+        appendPoseModel(packagedCommand);
         if (!packagedCommand.empty() && startPaused) {
             packagedCommand += L" --start-paused --status-port 5008";
         }

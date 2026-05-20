@@ -106,6 +106,7 @@
     <ClCompile Include="src\player\HandCameraPreviewReceiver.cpp" />
     <ClCompile Include="src\scene\BattleResultScene.cpp" />
     <ClCompile Include="src\scene\CalibrationScene.cpp" />
+    <ClCompile Include="src\scene\CameraTestScene.cpp" />
     <ClCompile Include="src\scene\GameSceneHud.cpp" />
     <ClCompile Include="src\enemy\EnemyMelee.cpp" />
     <ClCompile Include="src\enemy\EnemyRanged.cpp" />
@@ -116,7 +117,6 @@
     <ClCompile Include="src\enemy\EnemyMovement.cpp" />
     <ClCompile Include="src\enemy\EnemyPresentation.cpp" />
     <ClCompile Include="src\enemy\EnemyTuning.cpp" />
-    <ClCompile Include="src\enemy\Bullet.cpp" />
     <ClCompile Include="src\player\Player.cpp" />
     <ClCompile Include="src\scene\CombatFeedbackDirector.cpp" />
     <ClCompile Include="src\scene\EnemyAnimationDebugScene.cpp" />
@@ -125,7 +125,6 @@
     <ClCompile Include="src\scene\GameSceneCamera.cpp" />
     <ClCompile Include="src\scene\GameSceneCombat.cpp" />
     <ClCompile Include="src\scene\GameSceneLighting.cpp" />
-    <ClCompile Include="src\scene\HandRegistrationScene.cpp" />
     <ClCompile Include="src\scene\ModeSelectScene.cpp" />
     <ClCompile Include="src\scene\SettingsScene.cpp" />
     <ClCompile Include="src\scene\TitleScene.cpp" />
@@ -144,18 +143,17 @@
     <ClInclude Include="include\player\InputControlType.h" />
     <ClInclude Include="include\scene\BattleResultScene.h" />
     <ClInclude Include="include\scene\CalibrationScene.h" />
+    <ClInclude Include="include\scene\CameraTestScene.h" />
     <ClInclude Include="include\scene\GameSceneHud.h" />
     <ClInclude Include="include\enemy\EnemyActionData.h" />
     <ClInclude Include="include\player\SwordControllerState.h" />
     <ClInclude Include="include\player\SwordInputCalibration.h" />
     <ClInclude Include="include\player\SwordPose.h" />
-    <ClInclude Include="include\enemy\Bullet.h" />
     <ClInclude Include="include\enemy\Enemy.h" />
     <ClInclude Include="include\scene\CombatFeedbackDirector.h" />
     <ClInclude Include="include\scene\EnemyAnimationDebugScene.h" />
     <ClInclude Include="include\scene\GameScene.h" />
     <ClInclude Include="include\scene\ModeSelectScene.h" />
-    <ClInclude Include="include\scene\HandRegistrationScene.h" />
     <ClInclude Include="include\scene\SettingsScene.h" />
     <ClInclude Include="include\scene\TitleScene.h" />
     <ClInclude Include="include\scene\TipScene.h" />
@@ -220,7 +218,7 @@
   <Target Name="BuildHandTrackingHelper"
           BeforeTargets="CopyRuntimeDlls"
           Condition="'$(Configuration)' == 'Release'"
-          Inputs="$(SolutionDir)tools\hand_tracking\build-hand-udp-exe.ps1;$(SolutionDir)tools\hand_tracking\hand_udp_sender.py;$(SolutionDir)tools\hand_tracking\requirements-hand-udp.txt;$(SolutionDir)tools\hand_tracking\models\hand_landmarker.task"
+          Inputs="$(SolutionDir)tools\hand_tracking\build-hand-udp-exe.ps1;$(SolutionDir)tools\hand_tracking\hand_udp_sender.py;$(SolutionDir)tools\hand_tracking\requirements-hand-udp.txt;$(SolutionDir)tools\hand_tracking\models\hand_landmarker.task;$(SolutionDir)tools\hand_tracking\models\pose_landmarker_lite.task"
           Outputs="$(SolutionDir)tools\hand_tracking\dist\hand_udp_sender\hand_udp_sender.exe">
     <Message Text="Building hand tracking helper for Release output." Importance="High" />
     <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(SolutionDir)tools\hand_tracking\build-hand-udp-exe.ps1&quot;" />
@@ -232,6 +230,7 @@
       <AppResource Include="$(ProjectDir)resources\**\*" />
       <EngineResource Include="$(ProjectDir)..\engine\resources\**\*" />
       <HandTrackingScript Include="$(SolutionDir)tools\hand_tracking\hand_udp_sender.py" />
+      <HandTrackingScript Include="$(SolutionDir)tools\hand_tracking\start-hand-sim.ps1" />
       <HandTrackingScript Include="$(SolutionDir)tools\hand_tracking\build-hand-udp-exe.ps1" />
       <HandTrackingScript Include="$(SolutionDir)tools\hand_tracking\requirements-hand-udp.txt" />
       <HandTrackingScript Include="$(SolutionDir)tools\hand_tracking\setup-hand-udp.ps1" />

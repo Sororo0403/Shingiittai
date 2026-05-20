@@ -43,10 +43,8 @@ void Enemy::UpdateParts() {
     const float rightZ = -std::sin(usedYaw);
     const bool suppressAttackBodyMotion =
         action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
-        action_.kind == ActionKind::Shot ||
         action_.kind == ActionKind::BladeClash ||
-        action_.kind == ActionKind::Wave ||
-        action_.kind == ActionKind::Cage || action_.kind == ActionKind::Nova;
+        action_.kind == ActionKind::Wave || action_.kind == ActionKind::Cage;
 
     bodyTf_ = tf_;
     bodyTf_.position = tf_.position;
@@ -96,10 +94,8 @@ void Enemy::UpdateParts() {
     const bool isTelegraphCharge =
         action_.step == ActionStep::Charge &&
         (action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
-         action_.kind == ActionKind::Shot ||
          action_.kind == ActionKind::BladeClash ||
-         action_.kind == ActionKind::Wave ||
-         action_.kind == ActionKind::Cage || action_.kind == ActionKind::Nova);
+         action_.kind == ActionKind::Wave || action_.kind == ActionKind::Cage);
 
     if (tellActive_ || isTelegraphCharge) {
         const float chargePulse = tellActive_ ? (1.0f + 0.55f * pulse)
@@ -347,67 +343,6 @@ void Enemy::UpdateParts() {
             rightHandTf_.position.z += rightZ * 0.3f;
             visualRoll += 0.10f;
         }
-    } else if (!suppressActionPresentation && action_.kind == ActionKind::Shot) {
-        const float beat =
-            0.5f + 0.5f * std::sin(runtime_.stateTimer * 18.0f);
-        const float beatSnap =
-            std::pow((std::max)(0.0f, std::sin(runtime_.stateTimer * 18.0f)),
-                     3.0f);
-        if (action_.step == ActionStep::Charge) {
-            bodyTf_.position.y -= 0.10f + 0.03f * beat;
-            bodyTf_.scale.x += 0.08f + 0.04f * beat;
-            bodyTf_.scale.z += 0.12f + 0.05f * beat;
-            leftHandTf_.position.y += 0.48f + 0.10f * beat;
-            leftHandTf_.position.x += forwardX * 0.76f + (-rightX) * 0.58f;
-            leftHandTf_.position.z += forwardZ * 0.76f + (-rightZ) * 0.58f;
-            leftHandTf_.scale.x += 0.18f + 0.12f * beat;
-            leftHandTf_.scale.y += 0.18f + 0.12f * beat;
-            leftHandTf_.scale.z += 0.18f + 0.12f * beat;
-            rightHandTf_.position.y += 0.38f + 0.08f * beat;
-            rightHandTf_.position.x += forwardX * 0.58f + rightX * 0.48f;
-            rightHandTf_.position.z += forwardZ * 0.58f + rightZ * 0.48f;
-            visualTf_.position.x += (-forwardX) * 0.16f;
-            visualTf_.position.z += (-forwardZ) * 0.16f;
-            visualPitch -= 0.16f + 0.05f * beat;
-        } else if (action_.step == ActionStep::Active) {
-            const bool rightHandBeat = IsDualCounterHandStage();
-            Transform &leadHand = rightHandBeat ? rightHandTf_ : leftHandTf_;
-            Transform &backHand = rightHandBeat ? leftHandTf_ : rightHandTf_;
-            const float side = rightHandBeat ? 1.0f : -1.0f;
-
-            bodyTf_.position.y -= 0.08f;
-            bodyTf_.position.x += (-forwardX) * 0.06f + rightX * side * 0.04f;
-            bodyTf_.position.z += (-forwardZ) * 0.06f + rightZ * side * 0.04f;
-            bodyTf_.scale.x += 0.10f + 0.08f * beatSnap;
-            bodyTf_.scale.z += 0.14f + 0.10f * beatSnap;
-
-            leadHand.position.y += 0.44f + 0.12f * beatSnap;
-            leadHand.position.x += forwardX * (1.28f + 0.36f * beatSnap) +
-                                   rightX * side * 0.34f;
-            leadHand.position.z += forwardZ * (1.28f + 0.36f * beatSnap) +
-                                   rightZ * side * 0.34f;
-            leadHand.scale.x += 0.22f + 0.16f * beatSnap;
-            leadHand.scale.y += 0.22f + 0.16f * beatSnap;
-            leadHand.scale.z += 0.22f + 0.16f * beatSnap;
-
-            backHand.position.y += 0.20f;
-            backHand.position.x += (-forwardX) * 0.18f + rightX * -side * 0.32f;
-            backHand.position.z += (-forwardZ) * 0.18f + rightZ * -side * 0.32f;
-
-            visualTf_.position.x += forwardX * 0.08f + rightX * side * 0.04f;
-            visualTf_.position.z += forwardZ * 0.08f + rightZ * side * 0.04f;
-            visualYaw += side * (0.10f + 0.10f * beatSnap);
-            visualPitch += 0.04f * beatSnap;
-            visualRoll += side * (0.08f + 0.14f * beatSnap);
-        } else if (action_.step == ActionStep::Recovery) {
-            leftHandTf_.position.y += 0.20f;
-            rightHandTf_.position.y += 0.24f;
-            leftHandTf_.position.x += (-forwardX) * 0.12f;
-            leftHandTf_.position.z += (-forwardZ) * 0.12f;
-            rightHandTf_.position.x += (-forwardX) * 0.08f;
-            rightHandTf_.position.z += (-forwardZ) * 0.08f;
-            visualPitch += 0.08f;
-        }
     } else if (!suppressActionPresentation &&
                action_.kind == ActionKind::BladeClash) {
         const float bladeClashPulse =
@@ -458,13 +393,10 @@ void Enemy::UpdateParts() {
             leftHandTf_.position.z += forwardZ * 0.54f;
             visualPitch += 0.06f;
         }
-    } else if (!suppressActionPresentation &&
-               (action_.kind == ActionKind::Wave ||
-                action_.kind == ActionKind::Cage)) {
-        const float cageLift = action_.kind == ActionKind::Cage ? 0.22f : 0.0f;
+    } else if (!suppressActionPresentation && action_.kind == ActionKind::Wave) {
         if (action_.step == ActionStep::Charge) {
             bodyTf_.position.y -= 0.12f + 0.04f * pulse;
-            rightHandTf_.position.y += 0.44f + cageLift;
+            rightHandTf_.position.y += 0.44f;
             rightHandTf_.position.x += forwardX * 0.6f;
             rightHandTf_.position.z += forwardZ * 0.6f;
             bodyTf_.scale.x += 0.06f + 0.06f * pulse;
@@ -476,14 +408,13 @@ void Enemy::UpdateParts() {
             visualTf_.scale.x += 0.02f * pulse;
             visualTf_.scale.z += 0.02f * pulse;
             visualPitch += 0.26f;
-            leftHandTf_.position.y += 0.34f + cageLift;
+            leftHandTf_.position.y += 0.34f;
             leftHandTf_.position.x += (-rightX) * 0.36f;
             leftHandTf_.position.z += (-rightZ) * 0.36f;
         } else if (action_.step == ActionStep::Active) {
-            rightHandTf_.position.y += 0.4f + cageLift;
+            rightHandTf_.position.y += 0.4f;
             rightHandTf_.position.x += forwardX * 1.0f;
             rightHandTf_.position.z += forwardZ * 1.0f;
-            leftHandTf_.position.y += cageLift;
             visualTf_.position.x += forwardX * 0.14f;
             visualTf_.position.z += forwardZ * 0.14f;
         } else if (action_.step == ActionStep::Recovery) {
@@ -492,54 +423,39 @@ void Enemy::UpdateParts() {
             rightHandTf_.position.z += forwardZ * 0.4f;
             visualPitch += 0.06f;
         }
-    } else if (!suppressActionPresentation && action_.kind == ActionKind::Nova) {
-        const float novaPulse = 0.5f + 0.5f * std::sin(runtime_.stateTimer * 28.0f);
+    } else if (!suppressActionPresentation && action_.kind == ActionKind::Cage) {
         if (action_.step == ActionStep::Charge) {
-            bodyTf_.position.y -= 0.14f;
-            bodyTf_.scale.x += 0.18f + 0.12f * novaPulse;
-            bodyTf_.scale.z += 0.18f + 0.12f * novaPulse;
-            bodyTf_.scale.y -= 0.08f;
-            rightHandTf_.position.y += 1.25f + 0.16f * novaPulse;
-            leftHandTf_.position.y += 1.00f + 0.12f * novaPulse;
-            rightHandTf_.position.x += rightX * 0.50f + (-forwardX) * 0.26f;
-            rightHandTf_.position.z += rightZ * 0.50f + (-forwardZ) * 0.26f;
-            leftHandTf_.position.x += (-rightX) * 0.50f + (-forwardX) * 0.18f;
-            leftHandTf_.position.z += (-rightZ) * 0.50f + (-forwardZ) * 0.18f;
-            visualTf_.position.y += 0.08f * novaPulse;
-            visualPitch -= 0.18f;
-            visualRoll += 0.14f * novaPulse;
+            bodyTf_.position.y -= 0.10f + 0.05f * pulse;
+            bodyTf_.scale.x += 0.08f + 0.08f * pulse;
+            bodyTf_.scale.z += 0.08f + 0.08f * pulse;
+            leftHandTf_.position.y += 0.86f + 0.18f * pulse;
+            leftHandTf_.position.x += (-rightX) * 0.32f + forwardX * 0.28f;
+            leftHandTf_.position.z += (-rightZ) * 0.32f + forwardZ * 0.28f;
+            rightHandTf_.position.y += 0.94f + 0.20f * pulse;
+            rightHandTf_.position.x += rightX * 0.32f + forwardX * 0.28f;
+            rightHandTf_.position.z += rightZ * 0.32f + forwardZ * 0.28f;
+            leftHandTf_.scale.x += 0.16f + 0.10f * pulse;
+            leftHandTf_.scale.y += 0.16f + 0.10f * pulse;
+            leftHandTf_.scale.z += 0.16f + 0.10f * pulse;
+            rightHandTf_.scale.x += 0.16f + 0.10f * pulse;
+            rightHandTf_.scale.y += 0.16f + 0.10f * pulse;
+            rightHandTf_.scale.z += 0.16f + 0.10f * pulse;
+            visualTf_.position.y += 0.05f * pulse;
+            visualPitch += 0.18f;
         } else if (action_.step == ActionStep::Active) {
-            const float impactTime = config_.attacks.nova.impactTime;
-            const float riseT =
-                impactTime > 0.0001f
-                    ? std::clamp(runtime_.stateTimer / impactTime, 0.0f, 1.0f)
-                    : 1.0f;
-            const float afterImpactT =
-                std::clamp((runtime_.stateTimer - impactTime) / 0.22f, 0.0f, 1.0f);
-            const float jumpHeight =
-                runtime_.stateTimer < impactTime
-                    ? std::sin(riseT * 1.57079633f) * 1.95f
-                    : (1.0f - afterImpactT) * 1.95f;
-            const float impactSquash = 1.0f - afterImpactT;
-            visualTf_.position.y += jumpHeight;
-            bodyTf_.position.y += jumpHeight * 0.35f - 0.14f * impactSquash;
-            bodyTf_.scale.x += 0.34f + 0.28f * impactSquash;
-            bodyTf_.scale.z += 0.34f + 0.28f * impactSquash;
-            bodyTf_.scale.y -= 0.08f * impactSquash;
-            rightHandTf_.position.y += 1.70f + jumpHeight * 0.35f;
-            leftHandTf_.position.y += 1.52f + jumpHeight * 0.35f;
-            rightHandTf_.position.x += rightX * 0.95f + forwardX * 0.24f;
-            rightHandTf_.position.z += rightZ * 0.95f + forwardZ * 0.24f;
-            leftHandTf_.position.x += (-rightX) * 0.95f + forwardX * 0.24f;
-            leftHandTf_.position.z += (-rightZ) * 0.95f + forwardZ * 0.24f;
-            visualTf_.scale.x += 0.08f * novaPulse + 0.10f * impactSquash;
-            visualTf_.scale.z += 0.08f * novaPulse + 0.10f * impactSquash;
-            visualPitch += 0.20f - 0.28f * riseT;
+            leftHandTf_.position.y += 0.70f;
+            rightHandTf_.position.y += 0.70f;
+            leftHandTf_.position.x += (-rightX) * 0.52f;
+            leftHandTf_.position.z += (-rightZ) * 0.52f;
+            rightHandTf_.position.x += rightX * 0.52f;
+            rightHandTf_.position.z += rightZ * 0.52f;
+            bodyTf_.scale.x += 0.10f;
+            bodyTf_.scale.z += 0.10f;
+            visualTf_.position.y += 0.08f;
         } else if (action_.step == ActionStep::Recovery) {
-            bodyTf_.position.y -= 0.06f;
-            rightHandTf_.position.y += 0.36f;
-            leftHandTf_.position.y += 0.30f;
-            visualPitch += 0.08f;
+            leftHandTf_.position.y += 0.22f;
+            rightHandTf_.position.y += 0.22f;
+            visualPitch += 0.05f;
         }
     } else if (!suppressActionPresentation && action_.kind == ActionKind::Warp) {
         if (action_.step == ActionStep::Start) {
@@ -733,11 +649,6 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
         actionIntensity = 0.050f + 0.018f * actionPulse;
         actionNoise = 0.10f;
         break;
-    case ActionKind::Shot:
-        actionTint = {0.32f, 0.92f, 1.0f, 0.20f};
-        actionIntensity = 0.064f + 0.028f * actionPulse;
-        actionNoise = 0.12f;
-        break;
     case ActionKind::BladeClash:
         actionTint = {0.28f, 1.0f, 0.58f, 0.18f};
         actionIntensity = 0.052f + 0.018f * actionPulse;
@@ -749,14 +660,9 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
         actionNoise = 0.08f;
         break;
     case ActionKind::Cage:
-        actionTint = {0.48f, 0.76f, 0.78f, 0.18f};
-        actionIntensity = 0.056f + 0.018f * actionPulse;
+        actionTint = {0.42f, 0.96f, 0.88f, 0.18f};
+        actionIntensity = 0.052f + 0.020f * actionPulse;
         actionNoise = 0.10f;
-        break;
-    case ActionKind::Nova:
-        actionTint = {0.88f, 0.46f, 0.28f, 0.22f};
-        actionIntensity = 0.070f + 0.022f * actionPulse;
-        actionNoise = 0.12f;
         break;
     case ActionKind::Warp:
         actionTint = {0.72f, 0.58f, 0.42f, 0.18f};
@@ -775,10 +681,8 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
     const bool isTelegraphCharge =
         action_.step == ActionStep::Charge &&
         (action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
-         action_.kind == ActionKind::Shot ||
          action_.kind == ActionKind::BladeClash ||
-         action_.kind == ActionKind::Wave ||
-         action_.kind == ActionKind::Cage || action_.kind == ActionKind::Nova);
+         action_.kind == ActionKind::Wave || action_.kind == ActionKind::Cage);
     if (isTelegraphCharge) {
         actionTint = LerpColor(actionTint, {0.82f, 0.72f, 0.42f, 0.22f},
                                0.08f + 0.08f * actionPulse);
@@ -910,158 +814,101 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
 
     modelManager->ClearDrawEffect();
 
-    for (const auto &bullet : bullets_) {
-        if (!bullet.isAlive) {
-            continue;
-        }
+    if (cage_.isActive) {
+        const int barCount = (std::max)(6, cage_.barCount);
+        const float lifeRatio =
+            cage_.maxLifeTime > 0.0001f
+                ? Saturate(cage_.lifeTime / cage_.maxLifeTime)
+                : 0.0f;
+        const float breakRatio =
+            cage_.maxBreakValue > 0.0001f
+                ? Saturate(cage_.breakValue / cage_.maxBreakValue)
+                : 0.0f;
+        const float pulseWave =
+            0.5f + 0.5f * std::sin(runtime_.stateTimer * 13.5f);
+        const float seamPulse =
+            0.5f + 0.5f * std::sin(runtime_.stateTimer * 28.0f);
+        const float ringY[2] = {0.18f, cage_.height};
+        const float segmentLength =
+            (2.0f * 3.14159265f * cage_.radius) /
+            static_cast<float>(barCount);
 
-        float dirX = bullet.velocity.x;
-        float dirY = bullet.velocity.y;
-        float dirZ = bullet.velocity.z;
-        float dirLength = std::sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
-        if (dirLength <= 0.0001f) {
-            dirX = std::sinf(facingYaw_);
-            dirY = 0.0f;
-            dirZ = std::cosf(facingYaw_);
-            dirLength = 1.0f;
-        }
-        dirX /= dirLength;
-        dirY /= dirLength;
-        dirZ /= dirLength;
-
-        const float bulletYaw = std::atan2(dirX, dirZ);
-        const float flatLength = std::sqrt(dirX * dirX + dirZ * dirZ);
-        const float bulletPitch = -std::atan2(dirY, flatLength);
-        const float rightX = std::cosf(bulletYaw);
-        const float rightZ = -std::sinf(bulletYaw);
-        const float pulse =
-            0.5f + 0.5f * std::sinf(stateTimer_ * 36.0f + bullet.lifeTime * 9.0f);
-        const float beamLead = bullet.isReflected ? 0.72f : 2.35f;
-        const DirectX::XMFLOAT3 beamCenter = {
-            bullet.position.x + dirX * beamLead,
-            bullet.position.y + dirY * beamLead,
-            bullet.position.z + dirZ * beamLead};
-
-        auto drawBeamPass = [&](const DirectX::XMFLOAT3 &center,
-                                const DirectX::XMFLOAT3 &scale,
-                                const DirectX::XMFLOAT4 &color,
-                                float intensity, float fresnel,
-                                float noise, float roll = 0.0f) {
-            Transform beamTf = tf_;
-            beamTf.position = center;
-            beamTf.scale = scale;
-            DirectX::XMStoreFloat4(
-                &beamTf.rotation,
-                DirectX::XMQuaternionRotationRollPitchYaw(bulletPitch, bulletYaw,
-                                                          roll));
-            ModelDrawEffect beamEffect{};
-            beamEffect.enabled = true;
-            beamEffect.additiveBlend = true;
-            beamEffect.color = color;
-            beamEffect.intensity = intensity;
-            beamEffect.fresnelPower = fresnel;
-            beamEffect.noiseAmount = noise;
-            beamEffect.time = stateTimer_ + bullet.lifeTime;
-            modelManager->SetDrawEffect(beamEffect);
-            modelManager->Draw(effectModelId, beamTf, camera);
+        auto drawCagePiece = [&](Transform tf, const DirectX::XMFLOAT4 &color,
+                                 float intensity, float noise) {
+            ModelDrawEffect cageEffect{};
+            cageEffect.enabled = true;
+            cageEffect.additiveBlend = true;
+            cageEffect.disableCulling = true;
+            cageEffect.color = color;
+            cageEffect.intensity = intensity;
+            cageEffect.fresnelPower = 1.18f;
+            cageEffect.noiseAmount = noise;
+            cageEffect.time = runtime_.stateTimer;
+            modelManager->SetDrawEffect(cageEffect);
+            modelManager->Draw(effectModelId, tf, camera);
         };
 
-        if (bullet.isReflected) {
-            drawBeamPass(beamCenter, {0.48f + 0.08f * pulse,
-                                      0.48f + 0.08f * pulse, 2.55f},
-                         {1.0f, 0.54f, 0.10f, 0.52f}, 1.80f, 0.96f, 0.08f);
-            drawBeamPass(beamCenter, {0.18f, 0.18f, 3.10f},
-                         {1.0f, 0.86f, 0.26f, 0.94f}, 2.60f, 0.66f, 0.03f);
-            continue;
-        }
-
-        drawBeamPass(beamCenter, {0.70f + 0.08f * pulse,
-                                  0.70f + 0.08f * pulse, 6.20f},
-                     {0.06f, 0.58f, 1.0f, 0.34f}, 1.36f, 0.58f, 0.10f);
-        drawBeamPass(beamCenter, {0.30f + 0.04f * pulse,
-                                  0.30f + 0.04f * pulse, 6.85f},
-                     {0.18f, 0.98f, 1.0f, 0.86f}, 2.85f, 0.46f, 0.025f);
-        drawBeamPass(beamCenter, {0.075f, 0.075f, 7.28f},
-                     {0.92f, 1.0f, 1.0f, 0.98f}, 3.65f, 0.30f, 0.0f);
-
-        const float railOffset = 0.34f + 0.05f * pulse;
-        const DirectX::XMFLOAT3 railA = {
-            beamCenter.x + rightX * railOffset,
-            beamCenter.y + 0.035f * pulse,
-            beamCenter.z + rightZ * railOffset};
-        const DirectX::XMFLOAT3 railB = {
-            beamCenter.x - rightX * railOffset,
-            beamCenter.y - 0.035f * pulse,
-            beamCenter.z - rightZ * railOffset};
-        drawBeamPass(railA, {0.055f, 0.055f, 5.45f},
-                     {0.36f, 0.90f, 1.0f, 0.48f}, 1.65f, 0.42f, 0.03f,
-                     0.08f);
-        drawBeamPass(railB, {0.055f, 0.055f, 5.45f},
-                     {0.36f, 0.90f, 1.0f, 0.48f}, 1.65f, 0.42f, 0.03f,
-                     -0.08f);
-    }
-
-    const EnemyCage &cage = runtime_.cage;
-    if (cage.isActive && cage.radius > 0.0f && cage.barCount > 0) {
-        const float lifeRatio =
-            cage.maxLifeTime > 0.0001f
-                ? std::clamp(cage.lifeTime / cage.maxLifeTime, 0.0f, 1.0f)
-                : 1.0f;
-        const float breakRatio =
-            cage.maxBreakValue > 0.0001f
-                ? std::clamp(cage.breakValue / cage.maxBreakValue, 0.0f, 1.0f)
-                : 1.0f;
-        const float fade = std::clamp(lifeRatio * 1.35f, 0.0f, 1.0f);
-        ModelDrawEffect cageEffect{};
-        cageEffect.enabled = true;
-        cageEffect.additiveBlend = true;
-        cageEffect.color = {0.30f + 0.35f * (1.0f - breakRatio), 0.88f,
-                            1.0f, 0.84f * fade};
-        cageEffect.intensity =
-            (1.38f + 0.58f * breakRatio) +
-            0.18f * std::sin(stateTimer_ * 16.0f);
-        cageEffect.fresnelPower = 0.92f;
-        cageEffect.noiseAmount = 0.18f;
-        cageEffect.time = stateTimer_ + cage.lifeTime;
-        modelManager->SetDrawEffect(cageEffect);
-
-        const float twoPi = 6.28318530f;
-        const float segmentLength =
-            (twoPi * cage.radius / static_cast<float>(cage.barCount)) * 0.78f;
-        for (int i = 0; i < cage.barCount; ++i) {
+        for (int i = 0; i < barCount; ++i) {
             const float angle =
-                twoPi * static_cast<float>(i) / static_cast<float>(cage.barCount);
-            const float dirX = std::sin(angle);
-            const float dirZ = std::cos(angle);
+                (static_cast<float>(i) / static_cast<float>(barCount)) *
+                6.28318530f;
+            float angleDiff = NormalizeAngle(angle - cage_.seamAngle);
+            const bool isSeamBar = std::fabs(angleDiff) <= cage_.seamWindow;
+            const float x = cage_.center.x + std::sin(angle) * cage_.radius;
+            const float z = cage_.center.z + std::cos(angle) * cage_.radius;
 
             Transform barTf = tf_;
-            barTf.position = cage.center;
-            barTf.position.x += dirX * cage.radius;
-            barTf.position.y = cage.center.y + cage.height * 0.5f;
-            barTf.position.z += dirZ * cage.radius;
-            barTf.scale = {0.24f, cage.height, 0.24f};
+            barTf.position = {x, cage_.center.y + cage_.height * 0.50f, z};
+            barTf.scale =
+                isSeamBar
+                    ? DirectX::XMFLOAT3{0.12f, cage_.height * 0.70f, 0.12f}
+                    : DirectX::XMFLOAT3{0.075f, cage_.height * 0.58f, 0.075f};
             DirectX::XMStoreFloat4(
                 &barTf.rotation,
                 DirectX::XMQuaternionRotationRollPitchYaw(0.0f, angle, 0.0f));
-            modelManager->Draw(effectModelId, barTf, camera);
+            const DirectX::XMFLOAT4 barColor =
+                isSeamBar
+                    ? DirectX::XMFLOAT4{1.0f, 0.94f, 0.52f,
+                                        0.62f + 0.24f * seamPulse}
+                    : DirectX::XMFLOAT4{0.42f, 0.96f, 0.88f,
+                                        0.30f + 0.18f * pulseWave};
+            const float barIntensity =
+                (isSeamBar ? 1.12f + 0.38f * seamPulse : 0.54f) +
+                (1.0f - breakRatio) * 0.24f;
+            drawCagePiece(barTf, barColor, barIntensity, 0.18f);
 
-            const float tangentYaw = angle + 1.57079633f;
-            for (int level = 0; level < 2; ++level) {
+            for (float y : ringY) {
                 Transform ringTf = tf_;
-                ringTf.position = cage.center;
-                ringTf.position.x += dirX * cage.radius;
-                ringTf.position.y =
-                    cage.center.y + (level == 0 ? 0.22f : cage.height);
-                ringTf.position.z += dirZ * cage.radius;
-                ringTf.scale = {0.16f, 0.16f, segmentLength};
+                ringTf.position = {x, cage_.center.y + y, z};
+                ringTf.scale =
+                    {0.065f, 0.052f, segmentLength * (isSeamBar ? 0.62f : 0.48f)};
                 DirectX::XMStoreFloat4(
                     &ringTf.rotation,
-                    DirectX::XMQuaternionRotationRollPitchYaw(0.0f, tangentYaw,
+                    DirectX::XMQuaternionRotationRollPitchYaw(0.0f,
+                                                              angle + 1.57079633f,
                                                               0.0f));
-                modelManager->Draw(effectModelId, ringTf, camera);
+                drawCagePiece(ringTf, barColor,
+                              isSeamBar ? 0.84f + 0.22f * seamPulse : 0.42f,
+                              0.16f);
             }
         }
+
+        Transform pulseRing = tf_;
+        pulseRing.position = cage_.center;
+        pulseRing.position.y += 0.08f;
+        const float pulseScale =
+            cage_.radius * (1.72f + 0.08f * pulseWave) *
+            (0.82f + 0.18f * lifeRatio);
+        pulseRing.scale = {pulseScale, 0.045f, pulseScale};
+        DirectX::XMStoreFloat4(
+            &pulseRing.rotation,
+            DirectX::XMQuaternionRotationRollPitchYaw(0.0f, runtime_.stateTimer,
+                                                      0.0f));
+        drawCagePiece(pulseRing, {0.36f, 0.95f, 0.92f, 0.26f},
+                      0.34f + 0.24f * pulseWave, 0.20f);
     }
+
+    modelManager->ClearDrawEffect();
 
     for (const auto &wave : waves_) {
         if (!wave.isAlive) {
@@ -1156,14 +1003,6 @@ void Enemy::ApplyVictoryDefeatPose(
     tf_.position.x += awayX * backDistance + rightX * lateral;
     tf_.position.z += awayZ * backDistance + rightZ * lateral;
     tf_.position.y += lift;
-    const float maxRadius = arenaClampRadius_ - 0.75f;
-    const float distanceSq =
-        tf_.position.x * tf_.position.x + tf_.position.z * tf_.position.z;
-    if (distanceSq > maxRadius * maxRadius && distanceSq > 0.0001f) {
-        const float clampScale = maxRadius / std::sqrt(distanceSq);
-        tf_.position.x *= clampScale;
-        tf_.position.z *= clampScale;
-    }
     tf_.scale = {1.0f + 0.05f * fallPose, 1.0f - 0.18f * fallPose,
                  1.0f + 0.10f * fallPose};
 

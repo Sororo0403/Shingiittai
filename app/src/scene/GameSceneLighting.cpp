@@ -16,14 +16,12 @@ void GameScene::UpdateSceneLighting() {
     const ActionStep actionStep = enemy_.GetActionStep();
     const bool isAttackKind =
         actionKind == ActionKind::Smash || actionKind == ActionKind::Sweep ||
-        actionKind == ActionKind::Shot ||
         actionKind == ActionKind::BladeClash ||
-        actionKind == ActionKind::Wave ||
-        actionKind == ActionKind::Cage || actionKind == ActionKind::Nova;
+        actionKind == ActionKind::Wave || actionKind == ActionKind::Cage;
     const bool effectFocus =
         (isAttackKind &&
          (actionStep == ActionStep::Charge || actionStep == ActionStep::Active)) ||
-        enemy_.IsNovaImpactWindow() || enemy_.IsPhaseTransitionActive();
+        enemy_.IsPhaseTransitionActive();
     XMFLOAT3 accentAnchor = enemy_.GetTransform().position;
     if (actionKind == ActionKind::Warp) {
         accentAnchor = enemy_.GetWarpTargetPos();
@@ -31,12 +29,10 @@ void GameScene::UpdateSceneLighting() {
 
     const float pulse = 0.96f + 0.04f * std::sinf(sceneLightTime_ * 2.4f);
     const float actionBoost =
-        actionKind == ActionKind::Nova   ? 1.22f
-        : actionKind == ActionKind::Warp ? 1.12f
-        : actionKind == ActionKind::Cage ? 1.11f
+        actionKind == ActionKind::Warp ? 1.12f
         : actionKind == ActionKind::Wave ? 1.08f
+        : actionKind == ActionKind::Cage ? 1.10f
         : actionKind == ActionKind::BladeClash ? 1.14f
-        : actionKind == ActionKind::Shot ? 1.18f
                                          : 1.0f;
     const float enemyFocusBoost = effectFocus ? 1.18f : 1.0f;
     XMFLOAT4 actionColor = {0.86f, 0.44f, 0.18f, 1.0f};
@@ -47,9 +43,6 @@ void GameScene::UpdateSceneLighting() {
     case ActionKind::Sweep:
         actionColor = {1.0f, 0.58f, 0.14f, 1.0f};
         break;
-    case ActionKind::Shot:
-        actionColor = {0.42f, 0.92f, 1.0f, 1.0f};
-        break;
     case ActionKind::BladeClash:
         actionColor = {0.42f, 1.0f, 0.66f, 1.0f};
         break;
@@ -57,10 +50,7 @@ void GameScene::UpdateSceneLighting() {
         actionColor = {0.56f, 0.82f, 0.48f, 1.0f};
         break;
     case ActionKind::Cage:
-        actionColor = {0.40f, 0.86f, 0.88f, 1.0f};
-        break;
-    case ActionKind::Nova:
-        actionColor = {1.0f, 0.22f, 0.04f, 1.0f};
+        actionColor = {0.42f, 0.96f, 0.88f, 1.0f};
         break;
     case ActionKind::Warp:
         actionColor = {0.46f, 0.78f, 0.66f, 1.0f};

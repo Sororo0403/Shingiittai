@@ -38,12 +38,9 @@ CounterReadAxis Enemy::GetCounterReadAxis(ActionKind kind) const {
     case ActionKind::Sweep:
         return CounterReadAxis::Horizontal;
     case ActionKind::Wave:
+        return CounterReadAxis::Radial;
     case ActionKind::Cage:
         return CounterReadAxis::Radial;
-    case ActionKind::Nova:
-        return CounterReadAxis::Radial;
-    case ActionKind::Shot:
-        return CounterReadAxis::Projectile;
     case ActionKind::BladeClash:
         return CounterReadAxis::None;
     default:
@@ -276,83 +273,12 @@ bool Enemy::TryBranchFromRecovery(ActionKind finishedKind) {
 
     if (!(finishedKind == ActionKind::Smash ||
           finishedKind == ActionKind::Sweep ||
-          finishedKind == ActionKind::Shot ||
           finishedKind == ActionKind::BladeClash)) {
         return false;
     }
 
     if (finishedKind == ActionKind::BladeClash) {
         return false;
-    }
-
-    if (finishedKind == ActionKind::Shot) {
-        float distance = GetDistanceToPlayer();
-        const bool canShotWarp = !IsWarpSuspendedForPresentation() &&
-                                 distance >= shotWarpMinDistance_ &&
-                                 distance <= shotWarpMaxDistance_;
-
-        if (!canShotWarp) {
-            return false;
-        }
-
-        float shotWarpChance = shotWarpFollowupChance_;
-        if (phase_ == BossPhase::Phase2) {
-            shotWarpChance += phase2ShotWarpFollowupBonus_;
-        }
-        if (playerObs_.isGuarding) {
-            shotWarpChance += 0.06f;
-        }
-        if (playerObs_.isCounterStance) {
-            shotWarpChance += 0.08f;
-        }
-
-        shotWarpChance = (std::clamp)(shotWarpChance, 0.0f, 0.80f);
-        float roll =
-            static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-        if (roll >= shotWarpChance) {
-            return false;
-        }
-
-        ResetWarpContext();
-        warp_.type = WarpType::Approach;
-        warp_.approachSlot = WarpApproachSlot::Back;
-
-        float forwardX = std::sin(playerObs_.facingYaw);
-        float forwardZ = std::cos(playerObs_.facingYaw);
-        float forwardLength = std::sqrt(forwardX * forwardX + forwardZ * forwardZ);
-
-        if (forwardLength <= 0.0001f) {
-            forwardX = playerObs_.velocity.x;
-            forwardZ = playerObs_.velocity.z;
-            forwardLength = std::sqrt(forwardX * forwardX + forwardZ * forwardZ);
-        }
-
-        if (forwardLength <= 0.0001f) {
-            forwardX = std::sin(facingYaw_);
-            forwardZ = std::cos(facingYaw_);
-            forwardLength = 1.0f;
-        }
-
-        forwardX /= forwardLength;
-        forwardZ /= forwardLength;
-
-        constexpr float shotRecommitBackDistance = 1.72f;
-        DirectX::XMFLOAT3 target = playerPos_;
-        target.x -= forwardX * shotRecommitBackDistance;
-        target.z -= forwardZ * shotRecommitBackDistance;
-        target.y = tf_.position.y;
-        FinalizeWarpTargetFacing(target);
-        warp_.targetPos = target;
-
-        warp_.hasValidTarget = true;
-        warp_.followupKind = ActionKind::Smash;
-        warp_.followupStep = ActionStep::Charge;
-        recoveryBranchType_ = RecoveryBranchType::Recommit;
-        recoveryFollowupKind_ = ActionKind::Warp;
-        recoveryFollowupStep_ = ActionStep::Start;
-        recoveryFollowupDelayTimer_ =
-            RandomRange(shotWarpFollowupDelayMin_, shotWarpFollowupDelayMax_);
-        return true;
     }
 
     const bool forceCombo =
@@ -611,20 +537,10 @@ void Enemy::UpdateIdle(float deltaTime) {
 
 TacticState Enemy::DecideTactic() const {
     const float distance = GetDistanceToPlayer();
-    if (runtime_.cage.isActive) {
-        return TacticState::Ranged;
-    }
-
     const bool canWarp = !IsWarpSuspendedForPresentation();
     const bool isNear = distance <= config_.core.nearAttackDistance;
     const bool isFar = distance >= config_.core.farAttackDistance;
-    const bool isMidRange = !isNear && !isFar;
-    const bool shouldWarp =
-        canWarp &&
-        (forceEscapeWarpNext_ || isDistanceStagnant_ ||
-         farDistanceTimer_ >= farDistanceWarpTimeThreshold_ ||
-         (isMidRange && lastActionKind_ != ActionKind::Warp &&
-          (playerObs_.isAttacking || playerObs_.isGuarding)));
+    const bool shouldWarp = canWarp && forceEscapeWarpNext_;
 
     if (shouldWarp) {
         return TacticState::Warp;
@@ -673,12 +589,6 @@ bool Enemy::TryBeginStalkAction(float chance, float repeatScale) {
 }
 
 ActionKind Enemy::SelectNeutralAction(float distance) const {
-    if (runtime_.cage.isActive) {
-        return lastActionKind_ == ActionKind::BladeClash
-                   ? ActionKind::Wave
-                   : ActionKind::BladeClash;
-    }
-
     if (distance <= config_.core.nearAttackDistance) {
         return SelectNearPressureAction();
     }
@@ -686,12 +596,7 @@ ActionKind Enemy::SelectNeutralAction(float distance) const {
     int stalkWeight = 36;
     int bladeClashWeight = distance >= config_.core.farAttackDistance ? 10 : 18;
     int waveWeight = distance >= config_.core.farAttackDistance ? 24 : 14;
-    int cageWeight = distance >= config_.core.farAttackDistance ? 46 : 26;
-    int shotWeight = distance >= config_.core.farAttackDistance
-                         ? farShotWeight_
-                         : neutralMidShotBonus_;
-    int novaWeight =
-        (phase_ == BossPhase::Phase2 && novaPhase2Cooldown_ <= 0.0f) ? 10 : 0;
+    int cageWeight = distance >= config_.core.farAttackDistance ? 18 : 12;
 
     if (lastActionKind_ == ActionKind::Stalk) {
         stalkWeight /= 2;
@@ -700,36 +605,25 @@ ActionKind Enemy::SelectNeutralAction(float distance) const {
     } else if (lastActionKind_ == ActionKind::BladeClash) {
         bladeClashWeight /= 3;
     } else if (lastActionKind_ == ActionKind::Cage) {
-        cageWeight /= 2;
-    } else if (lastActionKind_ == ActionKind::Shot) {
-        shotWeight /= 3;
-    } else if (lastActionKind_ == ActionKind::Nova) {
-        novaWeight = 0;
+        cageWeight /= 3;
     }
 
     if (playerObs_.isAttacking || playerObs_.isCounterStance) {
         bladeClashWeight += 12;
-        cageWeight += 8;
-        shotWeight += 8;
+        cageWeight += 6;
     }
-
-    if (phase_ == BossPhase::Phase2) {
-        shotWeight += phase2MidShotBonus_;
+    if (playerObs_.isGuarding) {
+        cageWeight += 5;
     }
 
     switch (PickWeightedIndex(
-        {stalkWeight, bladeClashWeight, waveWeight, cageWeight, shotWeight,
-         novaWeight})) {
+        {stalkWeight, bladeClashWeight, waveWeight, cageWeight})) {
     case 1:
         return ActionKind::BladeClash;
     case 2:
         return ActionKind::Wave;
     case 3:
         return ActionKind::Cage;
-    case 4:
-        return ActionKind::Shot;
-    case 5:
-        return ActionKind::Nova;
     default:
         return ActionKind::Stalk;
     }
@@ -739,7 +633,6 @@ ActionKind Enemy::SelectNearPressureAction() const {
     int smashWeight = nearSmashWeight_;
     int sweepWeight = nearSweepWeight_;
     int bladeClashWeight = 18;
-    int cageWeight = 28;
 
     if (forceCounterBaitNext_ || postCounterRhythmTimer_ > 0.0f ||
         playerObs_.justCounterEarly) {
@@ -754,30 +647,25 @@ ActionKind Enemy::SelectNearPressureAction() const {
         smashWeight += phase2NearSmashBonus_;
         sweepWeight += phase2NearSweepBonus_;
         bladeClashWeight += 6;
-        cageWeight += 8;
     }
 
     if (postCounterRhythmTimer_ > 0.0f) {
         smashWeight = static_cast<int>(smashWeight * 0.7f);
         sweepWeight = static_cast<int>(sweepWeight * 0.7f);
         bladeClashWeight += 10;
-        cageWeight = static_cast<int>(cageWeight * 0.8f);
     }
 
     if (playerObs_.isAttacking) {
         sweepWeight += 10;
         bladeClashWeight += 12;
-        cageWeight += 10;
     }
     if (playerObs_.isGuarding) {
         sweepWeight += 4;
-        cageWeight += 4;
     }
     if (playerObs_.isCounterStance) {
         smashWeight -= 6;
         sweepWeight += 4;
         bladeClashWeight += 12;
-        cageWeight += 8;
     }
 
     if (lastActionKind_ == ActionKind::Smash) {
@@ -786,18 +674,14 @@ ActionKind Enemy::SelectNearPressureAction() const {
         sweepWeight /= 2;
     } else if (lastActionKind_ == ActionKind::BladeClash) {
         bladeClashWeight /= 3;
-    } else if (lastActionKind_ == ActionKind::Cage) {
-        cageWeight = 0;
     }
 
     switch (PickWeightedIndex(
-        {smashWeight, sweepWeight, bladeClashWeight, cageWeight})) {
+        {smashWeight, sweepWeight, bladeClashWeight})) {
     case 0:
         return ActionKind::Smash;
     case 2:
         return ActionKind::BladeClash;
-    case 3:
-        return ActionKind::Cage;
     default:
         return ActionKind::Sweep;
     }
@@ -807,12 +691,6 @@ ActionKind Enemy::SelectChaseAction() const { return ActionKind::Stalk; }
 
 void Enemy::BeginNeutralAction() {
     const float distance = GetDistanceToPlayer();
-
-    if (runtime_.cage.isActive) {
-        stalkRepeatCount_ = 0;
-        TryBeginTacticAction(SelectNeutralAction(distance));
-        return;
-    }
 
     if (distance <= config_.core.nearAttackDistance) {
         BeginPressureAction();
@@ -832,11 +710,6 @@ void Enemy::BeginPressureAction() {
         return;
     }
 
-    if (!IsWarpSuspendedForPresentation()) {
-        BeginResetAction();
-        return;
-    }
-
     BeginChaseAction();
 }
 
@@ -845,12 +718,6 @@ void Enemy::BeginChaseAction() {
 
     if (distance <= config_.core.nearAttackDistance) {
         BeginPressureAction();
-        return;
-    }
-
-    if (distance >= config_.core.farAttackDistance + 1.5f &&
-        !IsWarpSuspendedForPresentation()) {
-        BeginResetAction();
         return;
     }
 
@@ -882,15 +749,15 @@ bool Enemy::TryBeginWarpBehindMeleeSkill(bool force) {
         return false;
     }
 
-    float chance = 0.22f;
+    float chance = 0.08f;
     if (playerObs_.isGuarding) {
-        chance += 0.18f;
+        chance += 0.08f;
     }
     if (playerObs_.isCounterStance) {
-        chance += 0.15f;
+        chance += 0.08f;
     }
     if (playerObs_.isAttacking) {
-        chance += 0.08f;
+        chance += 0.04f;
     }
     if (lastActionKind_ == ActionKind::Warp) {
         chance *= 0.5f;

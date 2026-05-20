@@ -300,12 +300,10 @@ float GameScene::ApplyEnemyDamage(float damage, bool deferTransitions,
         return 0.0f;
     }
 
-    if (deferTransitions) {
-        enemy_.TakeDamageDeferTransitions(appliedDamage);
-    } else {
-        enemy_.TakeDamage(appliedDamage);
-    }
-    return appliedDamage;
+    const float actualDamage =
+        deferTransitions ? enemy_.TakeDamageDeferTransitions(appliedDamage)
+                         : enemy_.TakeDamage(appliedDamage);
+    return actualDamage;
 }
 
 bool GameScene::TryBeginFinalBladeClash(size_t swordIndex,
@@ -336,6 +334,127 @@ bool GameScene::TryBeginFinalBladeClash(size_t swordIndex,
 
     BeginBladeClash(swordIndex, true);
     return true;
+}
+
+void GameScene::ApplyEnemyCageConstraint(float deltaTime) {
+    (void)deltaTime;
+
+    const EnemyCage &cage = enemy_.GetCage();
+    const auto slashStates = player_.GetSwordSlashStates();
+
+    auto emitCageBreak = [&](const XMFLOAT3 &position) {
+        XMFLOAT3 burstPos = position;
+        burstPos.y += 0.95f;
+        sparkParticles_.EmitBurst(
+            burstPos, 112, 0.26f, GPUParticleSystem::BurstStyle::Sparks,
+            {1.0f, 0.88f, 0.38f, 0.92f}, {0.0f, 1.0f, 0.0f}, 1.90f);
+        explosionParticles_.EmitBurst(
+            burstPos, 80, 0.42f, GPUParticleSystem::BurstStyle::Explosion,
+            {0.60f, 1.0f, 0.92f, 0.72f}, {0.0f, 1.0f, 0.0f}, 1.20f);
+        smokeParticles_.EmitBurst(
+            burstPos, 24, 0.45f, GPUParticleSystem::BurstStyle::Smoke,
+            {0.34f, 0.42f, 0.40f, 0.42f}, {0.0f, 1.0f, 0.0f}, 0.58f);
+    };
+
+    if (!cage.isActive) {
+        if (enemy_.ConsumeCageBreakFlash()) {
+            emitCageBreak(cage.center);
+        }
+        cageSlashPreviousStates_.fill(false);
+        return;
+    }
+
+    const auto swords = player_.GetSwords();
+    const auto swordDamages = player_.GetSwordAttackDamages();
+    const float seamX = cage.center.x + std::sin(cage.seamAngle) * cage.radius;
+    const float seamZ = cage.center.z + std::cos(cage.seamAngle) * cage.radius;
+    XMFLOAT3 seamPoint = {seamX, cage.center.y + cage.height * 0.62f, seamZ};
+    bool brokeCage = false;
+
+    for (size_t i = 0; i < slashStates.size(); ++i) {
+        const bool slashStarted = slashStates[i] && !cageSlashPreviousStates_[i];
+        cageSlashPreviousStates_[i] = slashStates[i];
+        if (!slashStarted || swords[i] == nullptr) {
+            continue;
+        }
+
+        const Sword &sword = *swords[i];
+        const XMFLOAT3 &swordPos = sword.GetTransform().position;
+        const float swordRadial =
+            std::sqrt(DistanceSqXZ(swordPos, cage.center));
+        const bool nearBars =
+            std::fabs(swordRadial - cage.radius) <= 1.15f ||
+            swordRadial >= cage.radius * 0.55f;
+        const bool hitSeam =
+            IsSlashTowardPoint(sword, seamPoint, -0.04f) &&
+            DistanceSqXZ(swordPos, seamPoint) <= 4.2f * 4.2f;
+
+        if (!hitSeam && !nearBars) {
+            continue;
+        }
+
+        const float cageDamage = hitSeam ? 1.10f : 0.42f;
+        brokeCage = enemy_.DamageCage(cageDamage, hitSeam);
+        player_.NotifyAttackHit(i, 0.0f);
+
+        CombatFeedbackEvent feedback{};
+        feedback.type = hitSeam ? CombatFeedbackEventType::CounterSuccess
+                                : CombatFeedbackEventType::PlayerSlashHit;
+        feedback.position = hitSeam ? seamPoint : sword.GetOBB().center;
+        feedback.direction =
+            DirectionFromTo(player_.GetTransform().position, seamPoint);
+        feedback.power = hitSeam ? 3.6f : 1.1f;
+        feedback.swordIndex = i;
+        DispatchCombatFeedback(feedback);
+
+        if (brokeCage) {
+            emitCageBreak(cage.center);
+            enemy_.ConsumeCageBreakFlash();
+            cageSlashPreviousStates_.fill(false);
+            break;
+        }
+    }
+
+    const XMFLOAT3 playerPos = player_.GetTransform().position;
+    XMFLOAT2 fromCenter =
+        NormalizeXZ(playerPos.x - cage.center.x, playerPos.z - cage.center.z);
+    const float distanceFromCenter =
+        std::sqrt(DistanceSqXZ(playerPos, cage.center));
+    const float maxRadius = (std::max)(0.44f, cage.radius - 0.30f);
+
+    if (distanceFromCenter > maxRadius) {
+        XMFLOAT3 clamped = playerPos;
+        clamped.x = cage.center.x + fromCenter.x * maxRadius;
+        clamped.z = cage.center.z + fromCenter.y * maxRadius;
+        player_.SetPosition(clamped);
+    }
+
+    if (enemy_.ConsumeCagePulse()) {
+        XMFLOAT3 pulsePos = cage.center;
+        pulsePos.y += 0.28f;
+        explosionParticles_.EmitBurst(
+            pulsePos, 44, 0.28f, GPUParticleSystem::BurstStyle::SpiritSparkle,
+            {0.40f, 1.0f, 0.92f, 0.48f}, {0.0f, 1.0f, 0.0f}, 0.95f);
+
+        if (distanceFromCenter >= cage.radius * 0.70f &&
+            playerHitCooldown_ <= 0.0f && !player_.IsDamageInvulnerable()) {
+            XMFLOAT2 inward =
+                NormalizeXZ(cage.center.x - playerPos.x,
+                            cage.center.z - playerPos.z);
+            player_.TakeDamage(enemy_.GetCageDamage());
+            player_.AddKnockback({inward.x * enemy_.GetCageKnockback(), 0.0f,
+                                  inward.y * enemy_.GetCageKnockback()});
+
+            CombatFeedbackEvent feedback{};
+            feedback.type = CombatFeedbackEventType::PlayerDamaged;
+            feedback.position = playerPos;
+            feedback.position.y += 0.85f;
+            feedback.direction = {inward.x, 0.0f, inward.y};
+            feedback.power = enemy_.GetCageDamage() / 3.0f;
+            DispatchCombatFeedback(feedback);
+            playerHitCooldown_ = 0.34f;
+        }
+    }
 }
 
 void GameScene::BeginBladeClash(size_t swordIndex, bool finalClash) {
@@ -583,15 +702,14 @@ void GameScene::ResolveBladeClash(bool playerWon) {
     if (playerWon) {
         const float damage = wasFinalClash ? enemy_.GetHP() + 10000.0f
                                            : 185.0f * damageMultiplier_;
-        const float appliedDamage =
-            wasFinalClash
-                ? (enemy_.TakeDamageDeferTransitions(damage), damage)
-                : ApplyEnemyDamage(damage, true);
+        const float appliedDamage = ApplyEnemyDamage(damage, true);
         player_.NotifyAttackHit(appliedDamage);
-        bladeClashFinishPendingEnemyTransition_ = true;
-        feedback.type = CombatFeedbackEventType::CounterSuccess;
-        feedback.power = wasFinalClash ? 18.0f : appliedDamage / 18.0f;
-        DispatchCombatFeedback(feedback);
+        bladeClashFinishPendingEnemyTransition_ = appliedDamage > 0.0f;
+        if (appliedDamage > 0.0f) {
+            feedback.type = CombatFeedbackEventType::CounterSuccess;
+            feedback.power = wasFinalClash ? 18.0f : appliedDamage / 18.0f;
+            DispatchCombatFeedback(feedback);
+        }
         bladeClashFinal_ = false;
         return;
     }
@@ -1010,168 +1128,6 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                 DispatchCombatFeedback(feedback);
                 playerHitCooldown_ = 0.4f;
             }
-        }
-    }
-
-    if (enemyActionKind == ActionKind::Nova && enemy_.IsNovaImpactWindow() &&
-        playerHitCooldown_ <= 0.0f) {
-        const XMFLOAT3 &enemyPos = enemy_.GetTransform().position;
-        const XMFLOAT3 &playerPos = player_.GetTransform().position;
-        const float dx = playerPos.x - enemyPos.x;
-        const float dz = playerPos.z - enemyPos.z;
-        const float distanceSq = dx * dx + dz * dz;
-        const float radius = enemy_.GetNovaImpactRadius();
-
-        if (distanceSq <= radius * radius) {
-            const XMFLOAT2 knockbackDir = NormalizeXZ(dx, dz);
-            const float novaDamage = enemy_.GetNovaImpactDamage();
-            const float novaKnockback = enemy_.GetNovaImpactKnockback();
-
-            if (isPlayerDodging) {
-                playerHitCooldown_ = 0.08f;
-            } else {
-                size_t counterSwordIndex = swords.size();
-                if (FindSlashTowardPoint(swords, swordSlashStates,
-                                         enemy_.GetTransform().position,
-                                         counterSwordIndex, 0.00f)) {
-                    triggerSuccessfulCounter(counterSwordIndex, novaDamage * 2.0f,
-                                             0.18f);
-                } else {
-                    enemy_.NotifyAttackConnected();
-                    player_.TakeDamage(novaDamage * playerRecoveryDamageScale);
-                    player_.AddKnockback(
-                        {knockbackDir.x * novaKnockback, 0.0f,
-                         knockbackDir.y * novaKnockback});
-                    CombatFeedbackEvent feedback{};
-                    feedback.type = CombatFeedbackEventType::PlayerDamaged;
-                    feedback.position = playerPos;
-                    feedback.position.y += 1.0f;
-                    feedback.direction = {knockbackDir.x, 0.0f, knockbackDir.y};
-                    feedback.power = novaDamage / 8.0f;
-                    DispatchCombatFeedback(feedback);
-                    playerHitCooldown_ = 0.55f;
-                }
-            }
-        }
-    }
-
-    if (enemyActionKind == ActionKind::Nova && enemy_.IsNovaImpactWindow()) {
-        OBB novaDebugBox{};
-        novaDebugBox.center = enemy_.GetTransform().position;
-        novaDebugBox.center.y += 0.06f;
-        const float diameter = enemy_.GetNovaImpactRadius() * 2.0f;
-        novaDebugBox.size = {diameter, 0.12f, diameter};
-        novaDebugBox.rotation = MakeYawRotation(0.0f);
-        AddCollisionBody(collisionManager_, novaDebugBox, kLayerEnemyAttack, 0u);
-    }
-
-    const auto &bullets = enemy_.GetBullets();
-    for (size_t i = 0; i < bullets.size(); ++i) {
-        const auto &bullet = bullets[i];
-        if (!bullet.isAlive) {
-            continue;
-        }
-
-        OBB bulletBox{};
-        bulletBox.center = bullet.position;
-        bulletBox.size = enemy_.GetBulletHitBoxSize();
-        bulletBox.rotation =
-            MakeYawRotation(std::atan2(bullet.velocity.x, bullet.velocity.z));
-        const float bulletThreatRadius =
-            GetReadableProjectileRadius(bulletBox.size);
-        const CollisionManager::BodyId bulletBody = AddCollisionBody(
-            collisionManager_, bulletBox,
-            bullet.isReflected ? kLayerReflectedProjectile
-                               : kLayerEnemyProjectile,
-            bullet.isReflected ? kLayerEnemy
-                               : (kLayerPlayer | kLayerPlayerCounter));
-
-        size_t projectileCounterSwordIndex = swords.size();
-        if (!bullet.isReflected &&
-            IsNearXZ(bullet.position, player_.GetTransform().position,
-                     bulletThreatRadius + 0.85f) &&
-            FindSlashTowardPoint(swords, swordSlashStates, bullet.position,
-                                 projectileCounterSwordIndex, 0.00f)) {
-            enemy_.ReflectBullet(i, enemy_.GetTransform().position);
-            player_.NotifyAttackHit(projectileCounterSwordIndex, 0.0f);
-            CombatFeedbackEvent feedback{};
-            feedback.type = CombatFeedbackEventType::ProjectileReflect;
-            feedback.position = bullet.position;
-            feedback.direction = DirectionFromTo(bullet.position,
-                                                enemy_.GetTransform().position);
-            feedback.power = enemy_.GetBulletDamage() / 5.0f;
-            DispatchCombatFeedback(feedback);
-            continue;
-        }
-
-        if (bullet.isReflected) {
-            if (isEnemyHurtBodyHit(bulletBody) &&
-                enemyHitCooldown_ <= 0.0f) {
-                const float damage = enemy_.GetBulletDamage() * damageMultiplier_;
-                const float appliedDamage = ApplyEnemyDamage(damage);
-                if (appliedDamage <= 0.0f) {
-                    enemy_.DestroyBullet(i);
-                    continue;
-                }
-                player_.NotifyAttackHit(appliedDamage);
-                enemy_.DestroyBullet(i);
-                CombatFeedbackEvent feedback{};
-                feedback.type = CombatFeedbackEventType::ProjectileReflect;
-                feedback.position = bullet.position;
-                feedback.direction = DirectionFromTo(player_.GetTransform().position,
-                                                    enemy_.GetTransform().position);
-                feedback.power = appliedDamage / 10.0f;
-                DispatchCombatFeedback(feedback);
-                enemyHitCooldown_ = 0.2f;
-            }
-            continue;
-        }
-
-        if (IsNearXZ(bullet.position, player_.GetTransform().position,
-                     bulletThreatRadius)) {
-            if (isPlayerDodging) {
-                playerHitCooldown_ = 0.08f;
-                continue;
-            }
-
-            if (playerHitCooldown_ <= 0.0f) {
-                const XMFLOAT2 hitDir =
-                    NormalizeXZ(bullet.velocity.x, bullet.velocity.z);
-
-                size_t counterSwordIndex = swords.size();
-                if (FindSlashTowardPoint(swords, swordSlashStates,
-                                         bullet.position, counterSwordIndex,
-                                         0.00f)) {
-                    enemy_.ReflectBullet(i, enemy_.GetTransform().position);
-                    player_.NotifyAttackHit(counterSwordIndex, 0.0f);
-                    CombatFeedbackEvent feedback{};
-                    feedback.type = CombatFeedbackEventType::ProjectileReflect;
-                    feedback.position = bullet.position;
-                    feedback.direction =
-                        DirectionFromTo(bullet.position,
-                                        enemy_.GetTransform().position);
-                    feedback.power = enemy_.GetBulletDamage() / 5.0f;
-                    DispatchCombatFeedback(feedback);
-                    continue;
-                } else {
-                    player_.TakeDamage(enemy_.GetBulletDamage() *
-                                       playerRecoveryDamageScale);
-                    player_.AddKnockback(
-                        {hitDir.x * enemy_.GetBulletKnockback(), 0.0f,
-                         hitDir.y * enemy_.GetBulletKnockback()});
-                    CombatFeedbackEvent feedback{};
-                    feedback.type = CombatFeedbackEventType::PlayerDamaged;
-                    feedback.position = bullet.position;
-                    feedback.direction = {hitDir.x, 0.0f, hitDir.y};
-                    feedback.power = enemy_.GetBulletDamage() / 5.0f;
-                    DispatchCombatFeedback(feedback);
-                    enemy_.DestroyBullet(i);
-                    playerHitCooldown_ = 0.3f;
-                }
-            }
-
-            enemy_.ConsumeBullet(i);
-            break;
         }
     }
 

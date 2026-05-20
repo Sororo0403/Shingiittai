@@ -61,8 +61,8 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
         tf_.scale.y = 1.0f - 0.55f * t;
         tf_.scale.z = 1.0f - 0.25f * t;
 
-        UpdateBullets(deltaTime);
         UpdateWaves(deltaTime);
+        UpdateCageTrap(deltaTime);
         UpdateParts();
 
         if (deathTimer_ >= deathDuration_) {
@@ -76,8 +76,8 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
         isAttackActive_ = false;
 
         UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_ * 0.35f);
-        UpdateBullets(deltaTime);
         UpdateWaves(deltaTime);
+        UpdateCageTrap(deltaTime);
         UpdateParts();
 
         if (phaseTransitionTimer_ >= phaseTransitionDuration_) {
@@ -118,13 +118,6 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
     } else {
         farDistanceTimer_ = 0.0f;
     }
-    if (novaPhase2Cooldown_ > 0.0f) {
-        novaPhase2Cooldown_ -= deltaTime;
-        if (novaPhase2Cooldown_ < 0.0f) {
-            novaPhase2Cooldown_ = 0.0f;
-        }
-    }
-
     runtime_.lastDistanceToPlayer = currentDistance;
 
     if (action_.kind == ActionKind::None) {
@@ -147,8 +140,8 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
             hitReactionTimer_ = 0.0f;
         }
 
-        UpdateBullets(deltaTime);
         UpdateWaves(deltaTime);
+        UpdateCageTrap(deltaTime);
         ClampToArena();
         UpdateParts();
         return;
@@ -159,7 +152,6 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
     }
 
     UpdateByAction(deltaTime);
-    UpdateBullets(deltaTime);
     UpdateWaves(deltaTime);
     UpdateCageTrap(deltaTime);
     ClampToArena();
@@ -197,9 +189,6 @@ void Enemy::UpdateByAction(float deltaTime) {
     case ActionKind::Sweep:
         UpdateSweepByStep(deltaTime);
         break;
-    case ActionKind::Shot:
-        UpdateShotByStep(deltaTime);
-        break;
     case ActionKind::BladeClash:
         UpdateBladeClashByStep(deltaTime);
         break;
@@ -208,9 +197,6 @@ void Enemy::UpdateByAction(float deltaTime) {
         break;
     case ActionKind::Cage:
         UpdateCageByStep(deltaTime);
-        break;
-    case ActionKind::Nova:
-        UpdateNovaByStep(deltaTime);
         break;
     case ActionKind::Warp:
         UpdateWarpByStep(deltaTime);
@@ -258,29 +244,18 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
         }
     }
 
-    if (kind == ActionKind::Nova) {
-        novaPhase2Cooldown_ = novaPhase2CooldownDuration_;
-    }
-
     action_.step = step;
     hasTrackingLocked_ = false;
     holdConfigured_ = false;
     currentHoldDuration_ = 0.0f;
     isAttackActive_ = false;
     stateTimer_ = 0.0f;
-    isDoubleSweepSecondStage_ = false;
     currentActionConnected_ = false;
     currentActionGuarded_ = false;
+    cageTrapSpawned_ = false;
     dualCounterStage_ = 0;
     dualCounterFirstHand_ = (std::rand() % 2) == 0;
     dualCounterStageResolved_ = false;
-    runtime_.novaSkyBulletsSpawned = false;
-    runtime_.novaRingsSpawned = 0;
-    runtime_.novaRingTimer = 0.0f;
-    runtime_.cageTrapSpawned = false;
-    shotsRemaining_ = 0;
-    shotIntervalTimer_ = 0.0f;
-    shotWarpedToArenaEdge_ = false;
     ResetPreAttackPresentationState();
     ResetRecoveryBranchState();
 
@@ -315,11 +290,9 @@ bool Enemy::TryBeginTacticAction(ActionKind kind) {
     switch (kind) {
     case ActionKind::Smash:
     case ActionKind::Sweep:
-    case ActionKind::Shot:
     case ActionKind::BladeClash:
     case ActionKind::Wave:
     case ActionKind::Cage:
-    case ActionKind::Nova:
         BeginAction(kind, ActionStep::Charge);
         return true;
     case ActionKind::Warp:
@@ -366,8 +339,6 @@ void Enemy::EndAttack() {
     action_.step = ActionStep::None;
 
     ResetWarpContext();
-    ResetChainContext();
-    ResetPostActionState();
     isVisible_ = true;
 
     hasTrackingLocked_ = false;
@@ -375,16 +346,11 @@ void Enemy::EndAttack() {
     currentHoldDuration_ = 0.0f;
     isAttackActive_ = false;
     stateTimer_ = 0.0f;
-    isDoubleSweepSecondStage_ = false;
     currentActionConnected_ = false;
     currentActionGuarded_ = false;
     dualCounterStage_ = 0;
     dualCounterFirstHand_ = true;
     dualCounterStageResolved_ = false;
-    runtime_.novaSkyBulletsSpawned = false;
-    runtime_.novaRingsSpawned = 0;
-    runtime_.novaRingTimer = 0.0f;
-
     if (postCounterRhythmTimer_ <= 0.0f) {
         counterMemory_.consecutiveSuccess = 0;
     }

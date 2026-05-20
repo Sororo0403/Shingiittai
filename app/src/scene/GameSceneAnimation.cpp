@@ -15,8 +15,6 @@ static const std::string kBossAnimWave =
     "\xE6\xB3\xA2\xE7\x8A\xB6\xE6\x94\xBB\xE6\x92\x83";
 static const std::string kBossAnimSmash =
     "\xE7\xB8\xA6\xE6\x8C\xAF\xE3\x82\x8A\xE4\xB8\x8B\xE3\x82\x8D\xE3\x81\x97";
-static const std::string kBossAnimShot =
-    "\xE5\xBC\xBE\xE7\x99\xBA\xE5\xB0\x84";
 static const std::string kBossAnimTeleport =
     "\xE3\x83\x86\xE3\x83\xAC\xE3\x83\x9D\xE3\x83\xBC\xE3\x83\x88";
 static const std::string kBossAnimPhaseChange =
@@ -46,13 +44,10 @@ static float GetChargeStanceSettleTime(ActionKind kind) {
         return 0.46f;
     case ActionKind::Sweep:
         return 0.42f;
-    case ActionKind::Shot:
     case ActionKind::BladeClash:
     case ActionKind::Wave:
     case ActionKind::Cage:
         return 0.48f;
-    case ActionKind::Nova:
-        return 0.64f;
     default:
         return 0.42f;
     }
@@ -203,24 +198,10 @@ static std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
         if (HasAnimation(model, kBossAnimSweep)) {
             return kBossAnimSweep;
         }
-        if (HasAnimation(model, kBossAnimShot)) {
-            return kBossAnimShot;
-        }
-        break;
-
-    case ActionKind::Shot:
-        outLoop = false;
-        if (HasAnimation(model, kBossAnimShot)) {
-            return kBossAnimShot;
-        }
-        if (HasAnimation(model, kBossAnimWave)) {
-            return kBossAnimWave;
-        }
         break;
 
     case ActionKind::Wave:
     case ActionKind::Cage:
-    case ActionKind::Nova:
         outLoop = false;
         if (HasAnimation(model, kBossAnimWave)) {
             return kBossAnimWave;
@@ -331,8 +312,6 @@ void GameScene::SyncEnemyAnimation() {
             nextAnimation = kBossAnimTeleport;
         } else if (HasAnimation(enemyModel, kBossAnimSweep)) {
             nextAnimation = kBossAnimSweep;
-        } else if (HasAnimation(enemyModel, kBossAnimShot)) {
-            nextAnimation = kBossAnimShot;
         } else if (HasAnimation(enemyModel, kBossAnimIdle)) {
             nextAnimation = kBossAnimIdle;
         }
@@ -392,15 +371,14 @@ void GameScene::UpdateBladeClashEnemyAnimation(float deltaTime) {
 
     const bool hasTeleport = HasAnimation(enemyModel, kBossAnimTeleport);
     const bool hasSweep = HasAnimation(enemyModel, kBossAnimSweep);
-    const bool hasShot = HasAnimation(enemyModel, kBossAnimShot);
     const bool hasSmash = HasAnimation(enemyModel, kBossAnimSmash);
     const bool hasWave = HasAnimation(enemyModel, kBossAnimWave);
-    if (!hasTeleport && !hasSweep && !hasShot && !hasSmash && !hasWave) {
+    if (!hasTeleport && !hasSweep && !hasSmash && !hasWave) {
         return;
     }
 
     std::string clip =
-        hasTeleport ? kBossAnimTeleport : hasSweep ? kBossAnimSweep : kBossAnimShot;
+        hasTeleport ? kBossAnimTeleport : hasSweep ? kBossAnimSweep : kBossAnimWave;
     float clipRatio =
         hasTeleport ? kBladeClashActivePoseClipRatio : hasSweep ? 0.62f : 0.38f;
     if (bladeClashFinishActive_ && bladeClashFinishPlayerWon_ &&
@@ -417,12 +395,6 @@ void GameScene::UpdateBladeClashEnemyAnimation(float deltaTime) {
                 (kBladeClashGuardOpenClipRatio -
                  kBladeClashGuardPoseClipRatio) *
                     guardBreakPlayback;
-        } else if (hasShot) {
-            clip = kBossAnimShot;
-            const float breakClipRatio =
-                0.10f + 0.12f * guardBreakPlayback;
-            clipRatio = 0.38f + (breakClipRatio - 0.38f) *
-                                    guardBreakPlayback;
         } else if (hasWave) {
             clip = kBossAnimWave;
             const float breakClipRatio =
@@ -438,8 +410,6 @@ void GameScene::UpdateBladeClashEnemyAnimation(float deltaTime) {
             clip = kBossAnimSweep;
         } else if (hasWave) {
             clip = kBossAnimWave;
-        } else if (hasShot) {
-            clip = kBossAnimShot;
         } else {
             clip = kBossAnimTeleport;
         }
@@ -467,10 +437,7 @@ void GameScene::UpdateBladeClashEnemyAnimation(float deltaTime) {
         const float t = bladeClashTimer_ > 0.0f
                             ? 1.0f - Clamp01(bladeClashTimer_ / 6.15f)
                             : 1.0f;
-        if (t < 0.42f && hasShot) {
-            clip = kBossAnimShot;
-            clipRatio = 0.22f + 0.22f * Smooth01(t / 0.42f);
-        } else if (hasSmash) {
+        if (hasSmash) {
             clip = kBossAnimSmash;
             clipRatio = 0.18f + 0.34f * Smooth01((t - 0.28f) / 0.58f);
         } else if (hasSweep) {
@@ -804,7 +771,6 @@ void GameScene::ApplyEnemyProceduralAnimation() {
         }
         break;
 
-    case ActionKind::Shot:
     case ActionKind::BladeClash:
     case ActionKind::Wave:
     case ActionKind::Cage:
@@ -817,34 +783,6 @@ void GameScene::ApplyEnemyProceduralAnimation() {
         } else {
             PoseBoneTree(*enemyModel, chest, 0.08f, 0.0f, 0.0f);
             poseArms(0.28f * phaseScale, 0.03f, -0.05f);
-        }
-        break;
-
-    case ActionKind::Nova:
-        if (step == ActionStep::Charge) {
-            const float chargePulse = 0.98f + 0.02f * std::sin(time * 18.0f);
-            PoseBoneTree(*enemyModel, root,
-                         -0.12f * phaseScale * chargePose, 0.0f,
-                         0.008f * chargePulse * chargePose);
-            PoseBoneTree(*enemyModel, chest,
-                         -0.34f * phaseScale * chargePose, 0.0f,
-                         0.030f * chargePulse * chargePose);
-            PoseBoneTree(*enemyModel, head, -0.10f * chargePose, 0.0f, 0.0f);
-            poseArms(-0.70f * phaseScale * chargePose,
-                     0.16f * chargePulse * chargePose,
-                     0.34f * chargePulse * chargePose);
-        } else if (step == ActionStep::Active) {
-            const float burst = 0.7f + 0.3f * std::sin(time * 34.0f);
-            PoseBoneTree(*enemyModel, root, 0.16f * phaseScale, 0.0f,
-                         0.08f * burst);
-            PoseBoneTree(*enemyModel, chest, 0.44f * phaseScale, 0.0f,
-                         -0.20f * burst);
-            PoseBoneTree(*enemyModel, head, 0.16f, 0.0f, 0.0f);
-            poseArms(0.64f * phaseScale, 0.44f * burst,
-                     -0.52f * phaseScale);
-        } else {
-            PoseBoneTree(*enemyModel, chest, 0.08f, 0.0f, -0.06f);
-            poseArms(0.16f, 0.10f, -0.08f);
         }
         break;
 

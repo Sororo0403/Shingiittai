@@ -89,7 +89,7 @@ class Player {
     float GetYaw() const { return yaw_; }
 
     float GetHP() const { return hp_; }
-    void TakeDamage(float damage);
+    float TakeDamage(float damage, bool ignoreInvulnerability = false);
     void NotifyAttackHit(float damage);
     void NotifyAttackHit(size_t swordIndex, float damage);
 

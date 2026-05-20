@@ -48,14 +48,68 @@ DEBUG_PREDICTED_COLOR = (240, 180, 80)
 PREVIEW_CHUNK_BYTES = 1150
 CONTROL_COMMAND_BYTES = 128
 HAND_IDENTITY_MIN_SEPARATION = 0.16
+HAND_IDENTITY_REGISTER_FRAMES = 3
 HAND_IDENTITY_ACTIVE_ANCHOR_WEIGHT = 0.10
+HAND_IDENTITY_RECENT_ANCHOR_WEIGHT = 0.02
 HAND_IDENTITY_RECOVER_ANCHOR_WEIGHT = 1.15
-HAND_IDENTITY_LABEL_MISMATCH_PENALTY = 0.18
+HAND_IDENTITY_ACTIVE_LABEL_MISMATCH_PENALTY = 0.012
+HAND_IDENTITY_RECOVER_LABEL_MISMATCH_PENALTY = 0.18
+HAND_ASSIGNMENT_ACTIVE_SWAP_MARGIN = 0.002
+HAND_ASSIGNMENT_CONTINUITY_OVERRIDE_MARGIN = 0.018
+HAND_ASSIGNMENT_AMBIGUOUS_SEPARATION = 0.14
+HAND_ASSIGNMENT_DIRECTION_MIN_DELTA = 0.004
+HAND_ASSIGNMENT_DIRECTION_OVERRIDE_MARGIN = 99.0
+HAND_ASSIGNMENT_DIRECTION_MAX_CONTINUITY_PENALTY = 0.001
+HAND_ASSIGNMENT_PREDICTION_FRAMES = 3.0
+HAND_SINGLE_ACTIVE_CONTINUITY_MAX_DIST = 0.20 * 0.20
+HAND_RECOVERY_LAST_POSITION_SECONDS = 1.20
+HAND_RECOVERY_POSITION_WEIGHT = 0.85
+HAND_ASSIGNMENT_DELTA_FOLLOW = 0.62
+HAND_ASSIGNMENT_DELTA_DECAY = 0.82
+POSE_LEFT_SHOULDER = 11
+POSE_RIGHT_SHOULDER = 12
+POSE_LEFT_ELBOW = 13
+POSE_RIGHT_ELBOW = 14
+POSE_LEFT_WRIST = 15
+POSE_RIGHT_WRIST = 16
+POSE_MIN_CONFIDENCE = 0.32
+HAND_POSE_WRIST_MAX_DIST = 0.32
+HAND_POSE_ASSIGNMENT_MARGIN = 0.002
+HAND_ASSIGNMENT_CLEAR_MARGIN = 0.024
+HAND_ASSIGNMENT_UNCERTAIN_MARGIN = 0.030
+HAND_ASSIGNMENT_CLOSE_HOLD_MARGIN = 0.16
+HAND_ASSIGNMENT_POSE_CONFLICT_MARGIN = 2.0
+HAND_ASSIGNMENT_POSE_CONFLICT_CONFIRM_FRAMES = 3
+HAND_ASSIGNMENT_SINGLE_STRONG_POSE_COST = 0.22
+HAND_ASSIGNMENT_SINGLE_POSE_MARGIN = 0.06
+HAND_ASSIGNMENT_SINGLE_POSE_CONFLICT_MAX_COST = 0.85
+HAND_ASSIGNMENT_POSE_WEIGHT = 0.72
+HAND_ASSIGNMENT_CONTINUITY_WEIGHT = 0.30
+HAND_ASSIGNMENT_RECENT_WEIGHT = 0.48
+HAND_ASSIGNMENT_PREDICTION_WEIGHT = 0.18
+HAND_ASSIGNMENT_NO_POSE_PENALTY = 0.10
+HAND_ASSIGNMENT_NO_TRACK_PENALTY = 0.08
+HAND_ASSIGNMENT_LABEL_WEIGHT = 0.028
+HAND_ASSIGNMENT_BODY_SCALE_MIN = 0.16
+HAND_ASSIGNMENT_BODY_SCALE_MAX = 0.72
+HAND_ASSIGNMENT_DEFAULT_BODY_SCALE = 0.34
+IDENTITY_CONFIDENCE_POSE = 0.94
+IDENTITY_CONFIDENCE_CONTINUITY = 0.72
+IDENTITY_CONFIDENCE_HOLD = 0.46
+IDENTITY_CONFIDENCE_PREDICTED = 0.34
+IDENTITY_CONFIDENCE_INIT = 0.62
+IDENTITY_CONFIDENCE_FALLBACK = 0.52
 
 
 def default_model_path():
     return os.path.join(
         os.path.dirname(__file__), "models", "hand_landmarker.task"
+    )
+
+
+def default_pose_model_path():
+    return os.path.join(
+        os.path.dirname(__file__), "models", "pose_landmarker_lite.task"
     )
 
 
@@ -344,6 +398,14 @@ def distance_sq(a, b):
     return dx * dx + dy * dy
 
 
+def vector_length_sq(v):
+    return v[0] * v[0] + v[1] * v[1]
+
+
+def vector_length(v):
+    return math.sqrt(vector_length_sq(v))
+
+
 def limit_step(prev_x, prev_y, x, y, max_step):
     dx = x - prev_x
     dy = y - prev_y
@@ -411,15 +473,170 @@ def build_motion_points(hand_landmarks):
     return points
 
 
-def register_initial_hand_identity(detected_hands, identity_anchors, identity_labels):
-    if len(detected_hands) < 2 or identity_anchors[0] is not None:
+def pose_landmark_confidence(landmark):
+    visibility = getattr(landmark, "visibility", 1.0)
+    presence = getattr(landmark, "presence", 1.0)
+    return clamp01(min(visibility, presence))
+
+
+def pose_point(landmarks, index, min_confidence=POSE_MIN_CONFIDENCE):
+    if index >= len(landmarks):
+        return None
+
+    landmark = landmarks[index]
+    confidence = pose_landmark_confidence(landmark)
+    if confidence < min_confidence:
+        return None
+    return {
+        "point": (clamp01(landmark.x), clamp01(landmark.y)),
+        "confidence": confidence,
+    }
+
+
+def build_pose_arm(landmarks, shoulder_index, elbow_index, wrist_index):
+    wrist = pose_point(landmarks, wrist_index)
+    elbow = pose_point(landmarks, elbow_index)
+    shoulder = pose_point(landmarks, shoulder_index)
+    if wrist is None:
+        return None
+
+    anchors = [point for point in (shoulder, elbow) if point is not None]
+    if not anchors:
+        return None
+
+    side_anchor = shoulder or elbow or wrist
+    confidence = min(
+        wrist["confidence"],
+        max(anchor["confidence"] for anchor in anchors),
+    )
+    return {
+        "wrist": wrist["point"],
+        "elbow": elbow["point"] if elbow is not None else None,
+        "shoulder": shoulder["point"] if shoulder is not None else None,
+        "side_x": side_anchor["point"][0],
+        "confidence": confidence,
+    }
+
+
+def build_pose_slots(pose_result, max_hands):
+    slots = [None for _ in range(max_hands)]
+    if pose_result is None or not getattr(pose_result, "pose_landmarks", None):
+        return slots
+
+    landmarks = pose_result.pose_landmarks[0]
+    arms = [
+        build_pose_arm(
+            landmarks, POSE_LEFT_SHOULDER, POSE_LEFT_ELBOW, POSE_LEFT_WRIST
+        ),
+        build_pose_arm(
+            landmarks, POSE_RIGHT_SHOULDER, POSE_RIGHT_ELBOW, POSE_RIGHT_WRIST
+        ),
+    ]
+    arms = [arm for arm in arms if arm is not None]
+    if not arms:
+        return slots
+
+    # After the camera mirror flip, slot 0 is the right side of the screen/body
+    # and slot 1 is the left side. Shoulder position is stabler than wrist order.
+    arms.sort(key=lambda arm: arm["side_x"], reverse=True)
+    for slot, arm in enumerate(arms[:max_hands]):
+        slots[slot] = arm
+    return slots
+
+
+def pose_body_scale(pose_slots):
+    if not pose_slots:
+        return HAND_ASSIGNMENT_DEFAULT_BODY_SCALE
+
+    shoulders = [
+        arm.get("shoulder")
+        for arm in pose_slots[:2]
+        if arm is not None and arm.get("shoulder") is not None
+    ]
+    if len(shoulders) >= 2:
+        return max(
+            HAND_ASSIGNMENT_BODY_SCALE_MIN,
+            min(
+                HAND_ASSIGNMENT_BODY_SCALE_MAX,
+                math.sqrt(distance_sq(shoulders[0], shoulders[1])),
+            ),
+        )
+
+    arm_lengths = []
+    for arm in pose_slots[:2]:
+        if arm is None:
+            continue
+        wrist = arm.get("wrist")
+        elbow = arm.get("elbow")
+        shoulder = arm.get("shoulder")
+        if wrist is not None and elbow is not None:
+            arm_lengths.append(math.sqrt(distance_sq(wrist, elbow)))
+        if elbow is not None and shoulder is not None:
+            arm_lengths.append(math.sqrt(distance_sq(elbow, shoulder)))
+
+    if arm_lengths:
+        return max(
+            HAND_ASSIGNMENT_BODY_SCALE_MIN,
+            min(HAND_ASSIGNMENT_BODY_SCALE_MAX, sum(arm_lengths) / len(arm_lengths)),
+        )
+    return HAND_ASSIGNMENT_DEFAULT_BODY_SCALE
+
+
+def normalized_distance_sq(a, b, scale):
+    safe_scale = max(HAND_ASSIGNMENT_BODY_SCALE_MIN, scale)
+    return distance_sq(a, b) / (safe_scale * safe_scale)
+
+
+def register_assigned_hand_identity(assigned_hands, identity_anchors, identity_labels):
+    if len(assigned_hands) < 2 or identity_anchors[0] is not None:
         return
 
-    ordered = sorted(detected_hands, key=lambda hand: hand["x"], reverse=True)
-    if abs(ordered[0]["x"] - ordered[1]["x"]) < HAND_IDENTITY_MIN_SEPARATION:
+    first = assigned_hands[0]
+    second = assigned_hands[1]
+    if first is None or second is None:
+        return
+    if abs(first["x"] - second["x"]) < HAND_IDENTITY_MIN_SEPARATION:
         return
 
-    for slot, hand in enumerate(ordered[:2]):
+    for slot, hand in enumerate((first, second)):
+        identity_anchors[slot] = (hand["x"], hand["y"])
+        identity_labels[slot] = hand.get("label")
+
+
+def register_assigned_hand_identity_stable(
+    assigned_hands,
+    identity_anchors,
+    identity_labels,
+    candidate_state,
+):
+    if len(assigned_hands) < 2 or identity_anchors[0] is not None:
+        return
+
+    first = assigned_hands[0]
+    second = assigned_hands[1]
+    if first is None or second is None:
+        candidate_state["count"] = 0
+        candidate_state["signature"] = None
+        return
+    if abs(first["x"] - second["x"]) < HAND_IDENTITY_MIN_SEPARATION:
+        candidate_state["count"] = 0
+        candidate_state["signature"] = None
+        return
+
+    signature = (
+        first.get("raw_id") or first.get("label") or "slot0",
+        second.get("raw_id") or second.get("label") or "slot1",
+    )
+    if candidate_state.get("signature") == signature:
+        candidate_state["count"] = candidate_state.get("count", 0) + 1
+    else:
+        candidate_state["signature"] = signature
+        candidate_state["count"] = 1
+
+    if candidate_state["count"] < HAND_IDENTITY_REGISTER_FRAMES:
+        return
+
+    for slot, hand in enumerate((first, second)):
         identity_anchors[slot] = (hand["x"], hand["y"])
         identity_labels[slot] = hand.get("label")
 
@@ -432,32 +649,372 @@ def hand_assignment_cost(
     missing_timers,
     identity_anchors,
     identity_labels,
+    prev_deltas=None,
 ):
     active = (
         prev_landmarks[slot] is not None
         and missing_timers[slot] <= DETECTION_GRACE_SECONDS * 2.0
     )
+    recent = hand_track_is_recent(slot, prev_landmarks, missing_timers)
     has_anchor = identity_anchors[slot] is not None
 
     cost = 0.0
     if active:
         cost += distance_sq(prev_positions[slot], (hand["x"], hand["y"]))
-    if has_anchor:
-        anchor_weight = (
-            HAND_IDENTITY_ACTIVE_ANCHOR_WEIGHT
-            if active
-            else HAND_IDENTITY_RECOVER_ANCHOR_WEIGHT
+    elif recent:
+        cost += HAND_RECOVERY_POSITION_WEIGHT * distance_sq(
+            prev_positions[slot], (hand["x"], hand["y"])
         )
+    if (active or recent) and prev_deltas is not None and slot < len(prev_deltas):
+        delta = prev_deltas[slot]
+        if vector_length_sq(delta) >= HAND_ASSIGNMENT_DIRECTION_MIN_DELTA ** 2:
+            predicted = (
+                prev_positions[slot][0] + delta[0] * HAND_ASSIGNMENT_PREDICTION_FRAMES,
+                prev_positions[slot][1] + delta[1] * HAND_ASSIGNMENT_PREDICTION_FRAMES,
+            )
+            cost += distance_sq(predicted, (hand["x"], hand["y"]))
+    if has_anchor:
+        if active:
+            anchor_weight = HAND_IDENTITY_ACTIVE_ANCHOR_WEIGHT
+        elif recent:
+            anchor_weight = HAND_IDENTITY_RECENT_ANCHOR_WEIGHT
+        else:
+            anchor_weight = HAND_IDENTITY_RECOVER_ANCHOR_WEIGHT
         cost += anchor_weight * distance_sq(identity_anchors[slot], (hand["x"], hand["y"]))
 
     label = hand.get("label")
-    if identity_labels[slot] and label and identity_labels[slot] != label:
-        cost += HAND_IDENTITY_LABEL_MISMATCH_PENALTY
+    if (
+        identity_labels[slot]
+        and label
+        and identity_labels[slot] != label
+    ):
+        label_score = hand.get("label_score", 1.0)
+        label_penalty = (
+            HAND_IDENTITY_ACTIVE_LABEL_MISMATCH_PENALTY
+            if active
+            else HAND_IDENTITY_RECOVER_LABEL_MISMATCH_PENALTY
+        )
+        cost += label_penalty * label_score
 
     return cost
 
 
-def assign_detected_hands(
+def hand_track_is_active(slot, prev_landmarks, missing_timers):
+    return (
+        prev_landmarks[slot] is not None
+        and missing_timers[slot] <= DETECTION_GRACE_SECONDS * 2.0
+    )
+
+
+def hand_track_is_recent(slot, prev_landmarks, missing_timers):
+    return (
+        prev_landmarks[slot] is not None
+        and missing_timers[slot] <= HAND_RECOVERY_LAST_POSITION_SECONDS
+    )
+
+
+def two_hand_assignment_order(
+    detected_hands,
+    prev_positions,
+    prev_landmarks,
+    missing_timers,
+    identity_anchors,
+    identity_labels,
+    prev_deltas=None,
+):
+    if len(detected_hands) != 2:
+        return None
+
+    slot_count = min(2, len(prev_positions))
+    if slot_count < 2:
+        return None
+
+    trackable_slots = [
+        slot
+        for slot in range(slot_count)
+        if hand_track_is_active(slot, prev_landmarks, missing_timers)
+        or hand_track_is_recent(slot, prev_landmarks, missing_timers)
+        or identity_anchors[slot] is not None
+    ]
+    if not trackable_slots:
+        return None
+
+    orders = ((0, 1), (1, 0))
+
+    def total_cost(order):
+        return sum(
+            hand_assignment_cost(
+                slot,
+                detected_hands[order[slot]],
+                prev_positions,
+                prev_landmarks,
+                missing_timers,
+                identity_anchors,
+                identity_labels,
+                prev_deltas,
+            )
+            for slot in range(slot_count)
+        )
+
+    def continuity_cost(order):
+        cost = 0.0
+        for slot in range(slot_count):
+            if hand_track_is_active(slot, prev_landmarks, missing_timers):
+                hand = detected_hands[order[slot]]
+                cost += distance_sq(prev_positions[slot], (hand["x"], hand["y"]))
+            elif hand_track_is_recent(slot, prev_landmarks, missing_timers):
+                hand = detected_hands[order[slot]]
+                cost += HAND_RECOVERY_POSITION_WEIGHT * distance_sq(
+                    prev_positions[slot], (hand["x"], hand["y"])
+                )
+        return cost
+
+    def direction_cost(order):
+        cost = 0.0
+        usable = 0
+        if prev_deltas is None:
+            return None
+        for slot in range(slot_count):
+            if not hand_track_is_recent(slot, prev_landmarks, missing_timers):
+                continue
+            delta = prev_deltas[slot]
+            delta_len = vector_length(delta)
+            if delta_len < HAND_ASSIGNMENT_DIRECTION_MIN_DELTA:
+                continue
+            hand = detected_hands[order[slot]]
+            candidate = (
+                hand["x"] - prev_positions[slot][0],
+                hand["y"] - prev_positions[slot][1],
+            )
+            candidate_len = vector_length(candidate)
+            if candidate_len < HAND_ASSIGNMENT_DIRECTION_MIN_DELTA:
+                continue
+            dot = (
+                delta[0] * candidate[0] + delta[1] * candidate[1]
+            ) / (delta_len * candidate_len)
+            cost += 1.0 - max(-1.0, min(1.0, dot))
+            usable += 1
+        if usable < 2:
+            return None
+        return cost
+
+    hand_separation = math.sqrt(
+        distance_sq(
+            (detected_hands[0]["x"], detected_hands[0]["y"]),
+            (detected_hands[1]["x"], detected_hands[1]["y"]),
+        )
+    )
+
+    total_costs = {order: total_cost(order) for order in orders}
+    continuity_costs = {order: continuity_cost(order) for order in orders}
+    direction_costs = {order: direction_cost(order) for order in orders}
+    best_order = min(orders, key=lambda order: total_costs[order])
+    continuity_order = min(orders, key=lambda order: continuity_costs[order])
+    valid_direction_orders = [
+        order for order in orders if direction_costs[order] is not None
+    ]
+
+    both_tracks_active = all(
+        hand_track_is_recent(slot, prev_landmarks, missing_timers)
+        for slot in range(slot_count)
+    )
+    if valid_direction_orders and hand_separation < HAND_ASSIGNMENT_AMBIGUOUS_SEPARATION:
+        direction_order = min(valid_direction_orders, key=lambda order: direction_costs[order])
+        other_order = orders[1] if direction_order == orders[0] else orders[0]
+        if (
+            direction_costs[other_order] is not None
+            and direction_costs[other_order] - direction_costs[direction_order]
+            > HAND_ASSIGNMENT_DIRECTION_OVERRIDE_MARGIN
+            and continuity_costs[direction_order] - continuity_costs[continuity_order]
+            <= HAND_ASSIGNMENT_DIRECTION_MAX_CONTINUITY_PENALTY
+        ):
+            return direction_order
+
+    if both_tracks_active and best_order != continuity_order:
+        continuity_advantage = (
+            continuity_costs[best_order] - continuity_costs[continuity_order]
+        )
+        if continuity_advantage > HAND_ASSIGNMENT_CONTINUITY_OVERRIDE_MARGIN:
+            return continuity_order
+        improvement = total_costs[continuity_order] - total_costs[best_order]
+        if improvement < HAND_ASSIGNMENT_ACTIVE_SWAP_MARGIN:
+            return continuity_order
+
+    return best_order
+
+
+def single_hand_assignment_slot(
+    hand,
+    prev_positions,
+    prev_landmarks,
+    missing_timers,
+    identity_anchors,
+    identity_labels,
+    max_hands,
+    prev_deltas=None,
+):
+    hand_position = (hand["x"], hand["y"])
+    active_slots = [
+        slot
+        for slot in range(min(max_hands, len(prev_positions)))
+        if hand_track_is_active(slot, prev_landmarks, missing_timers)
+        or hand_track_is_recent(slot, prev_landmarks, missing_timers)
+    ]
+    if active_slots:
+        continuity = sorted(
+            (distance_sq(prev_positions[slot], hand_position), slot)
+            for slot in active_slots
+        )
+        best_dist, best_slot = continuity[0]
+        if len(active_slots) > 1:
+            return best_slot
+        if best_dist <= HAND_SINGLE_ACTIVE_CONTINUITY_MAX_DIST:
+            return best_slot
+
+    recovery_slots = [
+        slot
+        for slot in range(min(max_hands, len(identity_anchors)))
+        if identity_anchors[slot] is not None
+    ]
+    if not recovery_slots:
+        return 0 if max_hands > 0 else None
+
+    return min(
+        recovery_slots,
+        key=lambda slot: hand_assignment_cost(
+            slot,
+            hand,
+            prev_positions,
+            prev_landmarks,
+            missing_timers,
+            identity_anchors,
+            identity_labels,
+            prev_deltas,
+        ),
+    )
+
+
+def pose_slot_assignment(
+    detected_hands,
+    pose_slots,
+    max_hands,
+    prev_positions=None,
+    prev_landmarks=None,
+    missing_timers=None,
+):
+    if not pose_slots:
+        return None
+
+    valid_slots = [
+        slot for slot, arm in enumerate(pose_slots[:max_hands]) if arm is not None
+    ]
+    if not valid_slots or not detected_hands:
+        return None
+
+    max_dist_sq = HAND_POSE_WRIST_MAX_DIST * HAND_POSE_WRIST_MAX_DIST
+
+    def cost(slot, detection_index):
+        return distance_sq(
+            pose_slots[slot]["wrist"],
+            (detected_hands[detection_index]["x"], detected_hands[detection_index]["y"]),
+        )
+
+    def continuity_slot_for_hand(hand):
+        if (
+            prev_positions is None
+            or prev_landmarks is None
+            or missing_timers is None
+        ):
+            return None
+        active_slots = [
+            slot
+            for slot in valid_slots
+            if hand_track_is_active(slot, prev_landmarks, missing_timers)
+            or hand_track_is_recent(slot, prev_landmarks, missing_timers)
+        ]
+        if not active_slots:
+            return None
+        return min(
+            active_slots,
+            key=lambda slot: distance_sq(prev_positions[slot], (hand["x"], hand["y"])),
+        )
+
+    def continuity_order(slots):
+        if (
+            prev_positions is None
+            or prev_landmarks is None
+            or missing_timers is None
+            or len(slots) < 2
+        ):
+            return None
+        if not all(
+            hand_track_is_active(slot, prev_landmarks, missing_timers)
+            or hand_track_is_recent(slot, prev_landmarks, missing_timers)
+            for slot in slots
+        ):
+            return None
+        orders = ((0, 1), (1, 0))
+        return min(
+            orders,
+            key=lambda order: sum(
+                distance_sq(
+                    prev_positions[slot],
+                    (
+                        detected_hands[order[index]]["x"],
+                        detected_hands[order[index]]["y"],
+                    ),
+                )
+                for index, slot in enumerate(slots)
+            ),
+        )
+
+    if len(detected_hands) == 1:
+        costs = sorted((cost(slot, 0), slot) for slot in valid_slots)
+        best_cost, best_slot = costs[0]
+        if best_cost > max_dist_sq:
+            return None
+        if len(costs) > 1 and costs[1][0] - best_cost < HAND_POSE_ASSIGNMENT_MARGIN:
+            continuity_slot = continuity_slot_for_hand(detected_hands[0])
+            if continuity_slot is None:
+                return None
+            best_slot = continuity_slot
+
+        assigned = [None for _ in range(max_hands)]
+        assigned[best_slot] = detected_hands[0]
+        return assigned
+
+    if max_hands < 2 or len(valid_slots) < 2 or len(detected_hands) < 2:
+        return None
+
+    slots = valid_slots[:2]
+    orders = ((0, 1), (1, 0))
+    scored_orders = []
+    for order in orders:
+        slot_costs = [cost(slot, order[index]) for index, slot in enumerate(slots)]
+        if any(slot_cost > max_dist_sq for slot_cost in slot_costs):
+            continue
+        scored_orders.append((sum(slot_costs), order))
+
+    if not scored_orders:
+        return None
+
+    scored_orders.sort(key=lambda item: item[0])
+    best_cost, best_order = scored_orders[0]
+    if (
+        len(scored_orders) > 1
+        and scored_orders[1][0] - best_cost < HAND_POSE_ASSIGNMENT_MARGIN
+    ):
+        best_order = continuity_order(slots)
+        if best_order is None:
+            return None
+
+    assigned = [None for _ in range(max_hands)]
+    for index, slot in enumerate(slots):
+        assigned[slot] = detected_hands[best_order[index]]
+    return assigned
+
+
+def legacy_assign_detected_hands_unused(
     detected_hands,
     prev_positions,
     prev_landmarks,
@@ -465,9 +1022,58 @@ def assign_detected_hands(
     max_hands,
     identity_anchors,
     identity_labels,
+    prev_deltas=None,
+    pose_slots=None,
 ):
     assigned = [None for _ in range(max_hands)]
     if not detected_hands:
+        return assigned
+
+    pose_assigned = pose_slot_assignment(
+        detected_hands,
+        pose_slots,
+        max_hands,
+        prev_positions,
+        prev_landmarks,
+        missing_timers,
+    )
+    if pose_assigned is not None:
+        return pose_assigned
+
+    if identity_anchors and identity_anchors[0] is None and len(detected_hands) >= 2:
+        ordered = sorted(detected_hands[:max_hands], key=lambda hand: hand["x"], reverse=True)
+        if abs(ordered[0]["x"] - ordered[1]["x"]) >= HAND_IDENTITY_MIN_SEPARATION:
+            for slot, hand in enumerate(ordered[:max_hands]):
+                assigned[slot] = hand
+            return assigned
+
+    if len(detected_hands) == 1:
+        slot = single_hand_assignment_slot(
+            detected_hands[0],
+            prev_positions,
+            prev_landmarks,
+            missing_timers,
+            identity_anchors,
+            identity_labels,
+            max_hands,
+            prev_deltas,
+        )
+        if slot is not None and 0 <= slot < max_hands:
+            assigned[slot] = detected_hands[0]
+        return assigned
+
+    two_hand_order = two_hand_assignment_order(
+        detected_hands,
+        prev_positions,
+        prev_landmarks,
+        missing_timers,
+        identity_anchors,
+        identity_labels,
+        prev_deltas,
+    )
+    if two_hand_order is not None:
+        for slot, detection_index in enumerate(two_hand_order):
+            assigned[slot] = detected_hands[detection_index]
         return assigned
 
     unused_detections = set(range(len(detected_hands)))
@@ -478,6 +1084,7 @@ def assign_detected_hands(
             prev_landmarks[index] is not None
             and missing_timers[index] <= DETECTION_GRACE_SECONDS * 2.0
         )
+        or hand_track_is_recent(index, prev_landmarks, missing_timers)
         or identity_anchors[index] is not None
     ]
     pairs = []
@@ -494,6 +1101,7 @@ def assign_detected_hands(
                         missing_timers,
                         identity_anchors,
                         identity_labels,
+                        prev_deltas,
                     ),
                     slot,
                     detection_index,
@@ -526,6 +1134,7 @@ def assign_detected_hands(
                                 missing_timers,
                                 identity_anchors,
                                 identity_labels,
+                                prev_deltas,
                             ),
                             slot,
                             detection_index,
@@ -551,6 +1160,624 @@ def assign_detected_hands(
     return assigned
 
 
+def assignment_metadata(reason="LOST", confidence=0.0, margin=0.0, cost=0.0):
+    return {
+        "reason": reason,
+        "identity_confidence": clamp01(confidence),
+        "margin": margin,
+        "cost": cost,
+    }
+
+
+def hand_position(hand):
+    return hand["x"], hand["y"]
+
+
+def slot_has_recent_identity(slot, prev_landmarks, missing_timers, identity_anchors):
+    return (
+        hand_track_is_active(slot, prev_landmarks, missing_timers)
+        or hand_track_is_recent(slot, prev_landmarks, missing_timers)
+        or (
+            slot < len(identity_anchors)
+            and identity_anchors[slot] is not None
+            and missing_timers[slot] <= HAND_RECOVERY_LAST_POSITION_SECONDS
+        )
+    )
+
+
+def predicted_slot_position(slot, prev_positions, prev_deltas):
+    if prev_deltas is None or slot >= len(prev_deltas):
+        return prev_positions[slot]
+    delta = prev_deltas[slot]
+    return (
+        prev_positions[slot][0] + delta[0] * HAND_ASSIGNMENT_PREDICTION_FRAMES,
+        prev_positions[slot][1] + delta[1] * HAND_ASSIGNMENT_PREDICTION_FRAMES,
+    )
+
+
+def fresh_assignment_cost(
+    slot,
+    hand,
+    prev_positions,
+    prev_landmarks,
+    missing_timers,
+    identity_anchors,
+    identity_labels,
+    prev_deltas,
+    pose_slots,
+    body_scale,
+):
+    position = hand_position(hand)
+    cost = 0.0
+    pose_used = False
+    continuity_used = False
+
+    pose_arm = (
+        pose_slots[slot]
+        if pose_slots is not None and slot < len(pose_slots)
+        else None
+    )
+    if pose_arm is not None:
+        pose_used = True
+        pose_confidence = pose_arm.get("confidence", 0.65)
+        pose_cost = normalized_distance_sq(position, pose_arm["wrist"], body_scale)
+        cost += HAND_ASSIGNMENT_POSE_WEIGHT * pose_cost / max(0.35, pose_confidence)
+    else:
+        cost += HAND_ASSIGNMENT_NO_POSE_PENALTY
+
+    if hand_track_is_active(slot, prev_landmarks, missing_timers):
+        continuity_used = True
+        cost += HAND_ASSIGNMENT_CONTINUITY_WEIGHT * normalized_distance_sq(
+            prev_positions[slot], position, body_scale
+        )
+        cost += HAND_ASSIGNMENT_PREDICTION_WEIGHT * normalized_distance_sq(
+            predicted_slot_position(slot, prev_positions, prev_deltas),
+            position,
+            body_scale,
+        )
+    elif hand_track_is_recent(slot, prev_landmarks, missing_timers):
+        continuity_used = True
+        age_scale = 1.0 + missing_timers[slot] / max(0.001, HAND_RECOVERY_LAST_POSITION_SECONDS)
+        cost += HAND_ASSIGNMENT_RECENT_WEIGHT * normalized_distance_sq(
+            prev_positions[slot], position, body_scale
+        ) * age_scale
+    else:
+        cost += HAND_ASSIGNMENT_NO_TRACK_PENALTY
+
+    if slot < len(identity_anchors) and identity_anchors[slot] is not None:
+        cost += 0.08 * normalized_distance_sq(
+            identity_anchors[slot], position, body_scale
+        )
+
+    label = hand.get("label")
+    if (
+        slot < len(identity_labels)
+        and identity_labels[slot]
+        and label
+        and identity_labels[slot] != label
+    ):
+        cost += HAND_ASSIGNMENT_LABEL_WEIGHT * hand.get("label_score", 1.0)
+
+    return cost, pose_used, continuity_used
+
+
+def assignment_label_mismatch_count(order, detected_hands, identity_labels):
+    mismatches = 0
+    for slot, hand_index in enumerate(order):
+        if slot >= len(identity_labels):
+            continue
+        expected_label = identity_labels[slot]
+        hand_label = detected_hands[hand_index].get("label")
+        if expected_label and hand_label and expected_label != hand_label:
+            mismatches += 1
+    return mismatches
+
+
+def classify_assignment_reason(slot_costs):
+    if any(item["pose_used"] for item in slot_costs):
+        return "POSE", IDENTITY_CONFIDENCE_POSE
+    if any(item["continuity_used"] for item in slot_costs):
+        return "CONTINUITY", IDENTITY_CONFIDENCE_CONTINUITY
+    return "INIT", IDENTITY_CONFIDENCE_INIT
+
+
+def decorate_assigned_hands(assigned, metadata):
+    decorated = []
+    for slot, hand in enumerate(assigned):
+        if hand is None:
+            decorated.append(None)
+            continue
+        copy = dict(hand)
+        copy["assignment_reason"] = metadata[slot]["reason"]
+        copy["identity_confidence"] = metadata[slot]["identity_confidence"]
+        copy["assignment_margin"] = metadata[slot]["margin"]
+        decorated.append(copy)
+    return decorated
+
+
+def hold_previous_assignment(max_hands, confidence=IDENTITY_CONFIDENCE_HOLD, margin=0.0):
+    return (
+        [None for _ in range(max_hands)],
+        [
+            assignment_metadata("HOLD", confidence, margin)
+            for _ in range(max_hands)
+        ],
+    )
+
+
+def reset_pose_conflict_state(pose_conflict_state):
+    if pose_conflict_state is None:
+        return
+    pose_conflict_state["order"] = None
+    pose_conflict_state["count"] = 0
+
+
+def pose_conflict_persisted(pose_conflict_state, order):
+    if pose_conflict_state is None:
+        return True
+
+    order = tuple(order)
+    if pose_conflict_state.get("order") == order:
+        pose_conflict_state["count"] = pose_conflict_state.get("count", 0) + 1
+    else:
+        pose_conflict_state["order"] = order
+        pose_conflict_state["count"] = 1
+
+    return (
+        pose_conflict_state["count"]
+        >= HAND_ASSIGNMENT_POSE_CONFLICT_CONFIRM_FRAMES
+    )
+
+
+def hold_pose_conflict_assignment(max_hands, margin, cost):
+    return (
+        [None for _ in range(max_hands)],
+        [
+            assignment_metadata(
+                "POSE_CONFLICT",
+                IDENTITY_CONFIDENCE_HOLD,
+                margin,
+                cost,
+            )
+            for _ in range(max_hands)
+        ],
+    )
+
+
+def initial_body_side_assignment(detected_hands, max_hands):
+    if max_hands < 2 or len(detected_hands) < 2:
+        return None
+
+    ordered = sorted(detected_hands[:max_hands], key=lambda hand: hand["x"], reverse=True)
+    if abs(ordered[0]["x"] - ordered[1]["x"]) < HAND_IDENTITY_MIN_SEPARATION:
+        return None
+
+    assigned = [None for _ in range(max_hands)]
+    metadata = [assignment_metadata() for _ in range(max_hands)]
+    for slot, hand in enumerate(ordered[:max_hands]):
+        assigned[slot] = hand
+        metadata[slot] = assignment_metadata(
+            "INIT", IDENTITY_CONFIDENCE_INIT, 1.0, 0.0
+        )
+    return decorate_assigned_hands(assigned, metadata), metadata
+
+
+def assign_two_hands_globally(
+    detected_hands,
+    prev_positions,
+    prev_landmarks,
+    missing_timers,
+    max_hands,
+    identity_anchors,
+    identity_labels,
+    prev_deltas,
+    pose_slots,
+    body_scale,
+    pose_conflict_state=None,
+):
+    slot_count = min(2, max_hands)
+    if slot_count < 2 or len(detected_hands) < 2:
+        return None
+
+    orders = ((0, 1), (1, 0))
+    scored = []
+    for order in orders:
+        slot_costs = []
+        total = 0.0
+        for slot in range(slot_count):
+            cost, pose_used, continuity_used = fresh_assignment_cost(
+                slot,
+                detected_hands[order[slot]],
+                prev_positions,
+                prev_landmarks,
+                missing_timers,
+                identity_anchors,
+                identity_labels,
+                prev_deltas,
+                pose_slots,
+                body_scale,
+            )
+            total += cost
+            slot_costs.append(
+                {
+                    "cost": cost,
+                    "pose_used": pose_used,
+                    "continuity_used": continuity_used,
+                }
+            )
+        scored.append((total, order, slot_costs))
+
+    scored.sort(key=lambda item: item[0])
+    best_cost, best_order, best_slot_costs = scored[0]
+    second_cost = scored[1][0]
+    margin = second_cost - best_cost
+
+    has_recent_identity = any(
+        slot_has_recent_identity(slot, prev_landmarks, missing_timers, identity_anchors)
+        for slot in range(slot_count)
+    )
+    has_identity_anchor = any(
+        slot < len(identity_anchors) and identity_anchors[slot] is not None
+        for slot in range(slot_count)
+    )
+    has_pose_evidence = any(
+        pose_slots is not None
+        and slot < len(pose_slots)
+        and pose_slots[slot] is not None
+        for slot in range(slot_count)
+    )
+    if has_pose_evidence and has_recent_identity and all(
+        hand_track_is_active(slot, prev_landmarks, missing_timers)
+        or hand_track_is_recent(slot, prev_landmarks, missing_timers)
+        for slot in range(slot_count)
+    ):
+        continuity_scores = []
+        for order in orders:
+            continuity_scores.append(
+                (
+                    sum(
+                        normalized_distance_sq(
+                            prev_positions[slot],
+                            hand_position(detected_hands[order[slot]]),
+                            body_scale,
+                        )
+                        for slot in range(slot_count)
+                    ),
+                    order,
+                )
+            )
+        continuity_scores.sort(key=lambda item: item[0])
+        continuity_order = continuity_scores[0][1]
+        if best_order != continuity_order:
+            if (
+                assignment_label_mismatch_count(
+                    best_order, detected_hands, identity_labels
+                )
+                >= slot_count
+                or
+                margin < HAND_ASSIGNMENT_POSE_CONFLICT_MARGIN
+                or not pose_conflict_persisted(pose_conflict_state, best_order)
+            ):
+                return hold_pose_conflict_assignment(max_hands, margin, best_cost)
+        else:
+            reset_pose_conflict_state(pose_conflict_state)
+    hand_separation = math.sqrt(
+        distance_sq(
+            hand_position(detected_hands[0]),
+            hand_position(detected_hands[1]),
+        )
+    )
+    if pose_slots is not None and not has_pose_evidence and has_identity_anchor:
+        reset_pose_conflict_state(pose_conflict_state)
+        return hold_previous_assignment(max_hands, margin=margin)
+
+    if (
+        has_pose_evidence
+        and has_recent_identity
+        and hand_separation < HAND_ASSIGNMENT_AMBIGUOUS_SEPARATION
+        and margin < HAND_ASSIGNMENT_CLOSE_HOLD_MARGIN
+    ):
+        reset_pose_conflict_state(pose_conflict_state)
+        return hold_previous_assignment(max_hands, margin=margin)
+
+    if has_pose_evidence and has_recent_identity and margin < HAND_ASSIGNMENT_CLEAR_MARGIN:
+        reset_pose_conflict_state(pose_conflict_state)
+        return hold_previous_assignment(max_hands, margin=margin)
+
+    clear = (
+        margin >= HAND_ASSIGNMENT_CLEAR_MARGIN
+        or best_cost <= HAND_ASSIGNMENT_UNCERTAIN_MARGIN
+    )
+
+    assigned = [None for _ in range(max_hands)]
+    metadata = [assignment_metadata() for _ in range(max_hands)]
+    reason, confidence = classify_assignment_reason(best_slot_costs)
+    if not clear:
+        confidence = min(confidence, IDENTITY_CONFIDENCE_FALLBACK)
+        reason = "FALLBACK"
+
+    for slot in range(slot_count):
+        assigned[slot] = detected_hands[best_order[slot]]
+        metadata[slot] = assignment_metadata(
+            reason,
+            confidence,
+            margin,
+            best_slot_costs[slot]["cost"],
+        )
+    reset_pose_conflict_state(pose_conflict_state)
+    return decorate_assigned_hands(assigned, metadata), metadata
+
+
+def assign_single_hand_globally(
+    hand,
+    prev_positions,
+    prev_landmarks,
+    missing_timers,
+    max_hands,
+    identity_anchors,
+    identity_labels,
+    prev_deltas,
+    pose_slots,
+    body_scale,
+    pose_conflict_state=None,
+):
+    has_recent_identity = any(
+        slot_has_recent_identity(slot, prev_landmarks, missing_timers, identity_anchors)
+        for slot in range(max_hands)
+    )
+    has_identity_anchor = any(
+        slot < len(identity_anchors) and identity_anchors[slot] is not None
+        for slot in range(max_hands)
+    )
+    has_pose_evidence = any(
+        pose_slots is not None
+        and slot < len(pose_slots)
+        and pose_slots[slot] is not None
+        for slot in range(max_hands)
+    )
+    if pose_slots is not None and not has_pose_evidence and has_identity_anchor:
+        return hold_previous_assignment(max_hands)
+
+    pose_candidates = []
+    for slot in range(max_hands):
+        pose_arm = (
+            pose_slots[slot]
+            if pose_slots is not None and slot < len(pose_slots)
+            else None
+        )
+        if pose_arm is None:
+            continue
+        pose_candidates.append(
+            (
+                normalized_distance_sq(hand_position(hand), pose_arm["wrist"], body_scale),
+                slot,
+            )
+        )
+    if pose_candidates:
+        pose_candidates.sort()
+        best_pose_cost, best_pose_slot = pose_candidates[0]
+        second_pose_cost = (
+            pose_candidates[1][0]
+            if len(pose_candidates) > 1
+            else best_pose_cost + 1.0
+        )
+        pose_margin = second_pose_cost - best_pose_cost
+        if (
+            best_pose_cost <= HAND_ASSIGNMENT_SINGLE_STRONG_POSE_COST
+            and pose_margin >= HAND_ASSIGNMENT_SINGLE_POSE_MARGIN
+            and not has_recent_identity
+        ):
+            assigned = [None for _ in range(max_hands)]
+            metadata = [assignment_metadata() for _ in range(max_hands)]
+            assigned[best_pose_slot] = hand
+            metadata[best_pose_slot] = assignment_metadata(
+                "POSE",
+                IDENTITY_CONFIDENCE_POSE,
+                pose_margin,
+                best_pose_cost,
+            )
+            return decorate_assigned_hands(assigned, metadata), metadata
+
+    scored = []
+    for slot in range(max_hands):
+        cost, pose_used, continuity_used = fresh_assignment_cost(
+            slot,
+            hand,
+            prev_positions,
+            prev_landmarks,
+            missing_timers,
+            identity_anchors,
+            identity_labels,
+            prev_deltas,
+            pose_slots,
+            body_scale,
+        )
+        scored.append(
+            {
+                "slot": slot,
+                "cost": cost,
+                "pose_used": pose_used,
+                "continuity_used": continuity_used,
+            }
+        )
+
+    scored.sort(key=lambda item: item["cost"])
+    best = scored[0]
+    second_cost = scored[1]["cost"] if len(scored) > 1 else best["cost"] + 1.0
+    margin = second_cost - best["cost"]
+    recent_slot_count = sum(
+        1
+        for slot in range(max_hands)
+        if slot_has_recent_identity(slot, prev_landmarks, missing_timers, identity_anchors)
+    )
+    if has_pose_evidence and has_recent_identity and best["pose_used"]:
+        continuity_candidates = []
+        for slot in range(max_hands):
+            if not slot_has_recent_identity(
+                slot, prev_landmarks, missing_timers, identity_anchors
+            ):
+                continue
+            continuity_candidates.append(
+                (
+                    normalized_distance_sq(
+                        prev_positions[slot],
+                        hand_position(hand),
+                        body_scale,
+                    ),
+                    slot,
+                )
+            )
+        if continuity_candidates:
+            continuity_candidates.sort(key=lambda item: item[0])
+            continuity_cost, continuity_slot = continuity_candidates[0]
+            if (
+                best["slot"] != continuity_slot
+                and continuity_cost <= HAND_ASSIGNMENT_SINGLE_POSE_CONFLICT_MAX_COST
+            ):
+                return hold_pose_conflict_assignment(
+                    max_hands,
+                    margin,
+                    best["cost"],
+                )
+
+    if has_pose_evidence and recent_slot_count >= 2:
+        return hold_previous_assignment(max_hands, margin=margin)
+
+    if has_pose_evidence and has_recent_identity and margin < HAND_ASSIGNMENT_CLEAR_MARGIN:
+        return hold_previous_assignment(max_hands, margin=margin)
+
+    clear = (
+        margin >= HAND_ASSIGNMENT_CLEAR_MARGIN
+        or (
+            best["continuity_used"]
+            and best["cost"] <= HAND_ASSIGNMENT_UNCERTAIN_MARGIN
+        )
+        or (
+            best["pose_used"]
+            and best["cost"] <= HAND_ASSIGNMENT_UNCERTAIN_MARGIN
+        )
+    )
+
+    assigned = [None for _ in range(max_hands)]
+    metadata = [assignment_metadata() for _ in range(max_hands)]
+    reason, confidence = classify_assignment_reason([best])
+    if not clear:
+        confidence = min(confidence, IDENTITY_CONFIDENCE_FALLBACK)
+        reason = "FALLBACK"
+
+    assigned[best["slot"]] = hand
+    metadata[best["slot"]] = assignment_metadata(
+        reason,
+        confidence,
+        margin,
+        best["cost"],
+    )
+    return decorate_assigned_hands(assigned, metadata), metadata
+
+
+def assign_detected_hands_with_debug(
+    detected_hands,
+    prev_positions,
+    prev_landmarks,
+    missing_timers,
+    max_hands,
+    identity_anchors,
+    identity_labels,
+    prev_deltas=None,
+    pose_slots=None,
+    pose_conflict_state=None,
+):
+    metadata = [assignment_metadata() for _ in range(max_hands)]
+    if not detected_hands:
+        reset_pose_conflict_state(pose_conflict_state)
+        for slot in range(max_hands):
+            if slot_has_recent_identity(
+                slot, prev_landmarks, missing_timers, identity_anchors
+            ):
+                metadata[slot] = assignment_metadata(
+                    "PREDICTED", IDENTITY_CONFIDENCE_PREDICTED
+                )
+        return [None for _ in range(max_hands)], metadata
+
+    body_scale = pose_body_scale(pose_slots)
+    limited_hands = detected_hands[:max_hands]
+
+    has_established_identity = any(
+        identity_anchors[slot] is not None
+        for slot in range(min(max_hands, len(identity_anchors)))
+    )
+    if not has_established_identity:
+        initial = initial_body_side_assignment(limited_hands, max_hands)
+        if initial is not None:
+            return initial
+        return (
+            [None for _ in range(max_hands)],
+            [
+                assignment_metadata("INIT_WAIT", 0.0)
+                for _ in range(max_hands)
+            ],
+        )
+
+    if len(limited_hands) >= 2 and max_hands >= 2:
+        assigned = assign_two_hands_globally(
+            limited_hands,
+            prev_positions,
+            prev_landmarks,
+            missing_timers,
+            max_hands,
+            identity_anchors,
+            identity_labels,
+            prev_deltas,
+            pose_slots,
+            body_scale,
+            pose_conflict_state,
+        )
+        if assigned is not None:
+            return assigned
+
+    reset_pose_conflict_state(pose_conflict_state)
+    return assign_single_hand_globally(
+        limited_hands[0],
+        prev_positions,
+        prev_landmarks,
+        missing_timers,
+        max_hands,
+        identity_anchors,
+        identity_labels,
+        prev_deltas,
+        pose_slots,
+        body_scale,
+        pose_conflict_state,
+    )
+
+
+def assign_detected_hands(
+    detected_hands,
+    prev_positions,
+    prev_landmarks,
+    missing_timers,
+    max_hands,
+    identity_anchors,
+    identity_labels,
+    prev_deltas=None,
+    pose_slots=None,
+    pose_conflict_state=None,
+):
+    assigned, _ = assign_detected_hands_with_debug(
+        detected_hands,
+        prev_positions,
+        prev_landmarks,
+        missing_timers,
+        max_hands,
+        identity_anchors,
+        identity_labels,
+        prev_deltas,
+        pose_slots,
+        pose_conflict_state,
+    )
+    return assigned
+
+
 def create_control_socket(port):
     control_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     control_sock.setblocking(False)
@@ -562,12 +1789,11 @@ def create_control_socket(port):
     return control_sock
 
 
-def poll_registration_commands(control_sock):
+def poll_control_commands(control_sock):
     if control_sock is None:
-        return False, None, False
+        return False, False
 
     should_reset = False
-    register_slot = None
     should_start_camera = False
     while True:
         try:
@@ -581,27 +1807,7 @@ def poll_registration_commands(control_sock):
             should_start_camera = True
         elif command == "SGREGISTER_RESET":
             should_reset = True
-            register_slot = None
-        elif command.startswith("SGREGISTER_SLOT"):
-            parts = command.split()
-            if len(parts) >= 2:
-                try:
-                    register_slot = int(parts[1])
-                except ValueError:
-                    register_slot = None
-    return should_reset, register_slot, should_start_camera
-
-
-def try_register_single_hand(detected_hands, register_slot, identity_anchors, identity_labels):
-    if register_slot is None or register_slot < 0 or register_slot >= len(identity_anchors):
-        return None
-    if len(detected_hands) != 1:
-        return register_slot
-
-    hand = detected_hands[0]
-    identity_anchors[register_slot] = (hand["x"], hand["y"])
-    identity_labels[register_slot] = hand.get("label")
-    return None
+    return should_reset, should_start_camera
 
 
 def get_average_motion(points, prev_points, dt):
@@ -679,6 +1885,44 @@ def draw_hand_bbox(frame, landmarks, color):
     )
 
 
+def draw_pose_slots(frame, pose_slots):
+    if not pose_slots:
+        return
+
+    height, width = frame.shape[:2]
+    colors = [(255, 120, 45), (55, 210, 255)]
+    for slot, arm in enumerate(pose_slots[:2]):
+        if arm is None:
+            continue
+
+        color = colors[slot % len(colors)]
+        points = [
+            arm.get("wrist"),
+            arm.get("elbow"),
+            arm.get("shoulder"),
+        ]
+        pixels = [
+            to_pixel(point, width, height)
+            for point in points
+            if point is not None
+        ]
+        for index, pixel in enumerate(pixels):
+            cv2.circle(frame, pixel, 8 if index == 0 else 5, color, 2, cv2.LINE_AA)
+            if index > 0:
+                cv2.line(frame, pixels[index - 1], pixel, color, 2, cv2.LINE_AA)
+        if pixels:
+            cv2.putText(
+                frame,
+                f"ARM{slot + 1}",
+                (pixels[0][0] + 10, pixels[0][1] - 10),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.46,
+                color,
+                1,
+                cv2.LINE_AA,
+            )
+
+
 def update_debug_trail(trail, point, dt):
     trail[:] = [
         (age + dt, sample)
@@ -724,9 +1968,17 @@ def parse_args():
     parser.add_argument("--status-port", type=int, default=5008)
     parser.add_argument("--show-window", action="store_true")
     parser.add_argument("--start-paused", action="store_true")
+    parser.add_argument("--simulate", action="store_true")
+    parser.add_argument(
+        "--simulate-scenario",
+        choices=("cross", "label-flip", "dropout", "noisy-cross"),
+        default="cross",
+    )
     parser.add_argument("--camera", type=int, default=0)
     parser.add_argument("--max-hands", type=int, default=2)
     parser.add_argument("--model", default=default_model_path())
+    parser.add_argument("--pose-model", default=default_pose_model_path())
+    parser.add_argument("--disable-pose", action="store_true")
     return parser.parse_args()
 
 
@@ -777,6 +2029,236 @@ def send_status(args, message):
         pass
 
 
+def simulated_motion_points(x, y):
+    return [
+        (clamp01(x), clamp01(y)),
+        (clamp01(x - 0.018), clamp01(y + 0.010)),
+        (clamp01(x + 0.018), clamp01(y + 0.010)),
+        (clamp01(x - 0.026), clamp01(y - 0.018)),
+        (clamp01(x + 0.026), clamp01(y - 0.018)),
+        (clamp01(x), clamp01(y - 0.040)),
+        (clamp01(x - 0.038), clamp01(y + 0.034)),
+        (clamp01(x), clamp01(y + 0.042)),
+        (clamp01(x + 0.038), clamp01(y + 0.034)),
+    ]
+
+
+def simulated_hand(raw_id, x, y, label, label_score=0.92):
+    return {
+        "raw_id": raw_id,
+        "x": clamp01(x),
+        "y": clamp01(y),
+        "points": simulated_motion_points(x, y),
+        "motion_scale": 1.0,
+        "confidence": 0.95,
+        "label": label,
+        "label_score": label_score,
+    }
+
+
+def simulated_detections(t, scenario):
+    phase = math.sin(t * 0.72)
+    wiggle = math.sin(t * 1.9) * 0.035
+    hand_a = simulated_hand("A", 0.50 + phase * 0.34, 0.46 + wiggle, "Right")
+    hand_b = simulated_hand("B", 0.50 - phase * 0.34, 0.56 - wiggle, "Left")
+
+    if scenario in ("label-flip", "noisy-cross") and abs(phase) < 0.26:
+        hand_a["label"], hand_b["label"] = hand_b["label"], hand_a["label"]
+        hand_a["label_score"] = 0.98
+        hand_b["label_score"] = 0.98
+
+    if scenario in ("dropout", "noisy-cross"):
+        dropout_phase = int(t * 1.15) % 8
+        if dropout_phase == 2:
+            return [hand_b]
+        if dropout_phase == 5:
+            return [hand_a]
+
+    if scenario == "noisy-cross":
+        noise = math.sin(t * 17.0) * 0.022
+        hand_a["x"] = clamp01(hand_a["x"] + noise)
+        hand_b["x"] = clamp01(hand_b["x"] - noise * 0.8)
+        hand_a["y"] = clamp01(hand_a["y"] + math.cos(t * 13.0) * 0.018)
+        hand_b["y"] = clamp01(hand_b["y"] - math.cos(t * 11.0) * 0.018)
+        hand_a["points"] = simulated_motion_points(hand_a["x"], hand_a["y"])
+        hand_b["points"] = simulated_motion_points(hand_b["x"], hand_b["y"])
+
+    detections = [hand_a, hand_b]
+    if int(t * 3.0) % 2 == 0 or abs(phase) < 0.18:
+        detections.reverse()
+    return detections
+
+
+def draw_simulated_frame(frame, detections, assigned_hands, t):
+    frame[:] = (15, 18, 22)
+    height, width = frame.shape[:2]
+    cv2.rectangle(frame, (10, 10), (width - 10, height - 10), (70, 80, 96), 1)
+    cv2.line(frame, (width // 2, 10), (width // 2, height - 10), (55, 58, 64), 1)
+
+    raw_colors = {"A": (60, 170, 255), "B": (70, 235, 130)}
+    for hand in detections:
+        color = raw_colors.get(hand.get("raw_id"), (220, 220, 220))
+        px, py = to_pixel((hand["x"], hand["y"]), width, height)
+        cv2.circle(frame, (px, py), 17, color, 2, cv2.LINE_AA)
+        cv2.circle(frame, (px, py), 5, color, -1, cv2.LINE_AA)
+        cv2.putText(
+            frame,
+            f"raw {hand.get('raw_id', '?')} {hand.get('label', '-')}",
+            (px + 12, py - 12),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.42,
+            color,
+            1,
+            cv2.LINE_AA,
+        )
+
+    slot_colors = [(255, 145, 40), (80, 240, 120)]
+    for slot, hand in enumerate(assigned_hands[:2]):
+        if hand is None:
+            continue
+        px, py = to_pixel((hand["x"], hand["y"]), width, height)
+        color = slot_colors[slot]
+        cv2.rectangle(frame, (px - 25, py - 25), (px + 25, py + 25), color, 2)
+        cv2.putText(
+            frame,
+            f"HAND{slot + 1}",
+            (px - 24, py + 39),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.48,
+            color,
+            1,
+            cv2.LINE_AA,
+        )
+
+    cv2.putText(
+        frame,
+        f"SIM {t:05.2f}",
+        (18, height - 18),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.50,
+        (230, 230, 230),
+        1,
+        cv2.LINE_AA,
+    )
+
+
+def run_simulation(args, sock, target, preview_target, control_sock, preview_state):
+    send_status(args, "SGCAMERA_READY")
+    max_hands = max(1, min(args.max_hands, 2))
+    prev_positions = [(0.5, 0.5) for _ in range(max_hands)]
+    prev_deltas = [(0.0, 0.0) for _ in range(max_hands)]
+    prev_landmarks = [None for _ in range(max_hands)]
+    missing_timers = [DETECTION_GRACE_SECONDS for _ in range(max_hands)]
+    identity_anchors = [None for _ in range(max_hands)]
+    identity_labels = [None for _ in range(max_hands)]
+    identity_candidate_state = {"signature": None, "count": 0}
+    pose_conflict_state = {"order": None, "count": 0}
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    start_time = time.perf_counter()
+    prev_time = time.perf_counter()
+
+    try:
+        while True:
+            now = time.perf_counter()
+            t = now - start_time
+            dt = max(now - prev_time, 1.0 / 120.0)
+            prev_time = now
+
+            should_reset, _ = poll_control_commands(control_sock)
+            if should_reset:
+                prev_positions = [(0.5, 0.5) for _ in range(max_hands)]
+                prev_deltas = [(0.0, 0.0) for _ in range(max_hands)]
+                prev_landmarks = [None for _ in range(max_hands)]
+                missing_timers = [DETECTION_GRACE_SECONDS for _ in range(max_hands)]
+                identity_anchors = [None for _ in range(max_hands)]
+                identity_labels = [None for _ in range(max_hands)]
+                identity_candidate_state = {"signature": None, "count": 0}
+                pose_conflict_state = {"order": None, "count": 0}
+
+            detected_hands = simulated_detections(t, args.simulate_scenario)
+            assigned_hands, assignment_metadata_list = assign_detected_hands_with_debug(
+                detected_hands,
+                prev_positions,
+                prev_landmarks,
+                missing_timers,
+                max_hands,
+                identity_anchors,
+                identity_labels,
+                prev_deltas,
+                pose_conflict_state=pose_conflict_state,
+            )
+            register_assigned_hand_identity_stable(
+                assigned_hands,
+                identity_anchors,
+                identity_labels,
+                identity_candidate_state,
+            )
+
+            for hand_index in range(max_hands):
+                hand = assigned_hands[hand_index]
+                assignment_meta = assignment_metadata_list[hand_index]
+                prev_x, prev_y = prev_positions[hand_index]
+                if hand is None:
+                    missing_timers[hand_index] += dt
+                    prev_deltas[hand_index] = (
+                        prev_deltas[hand_index][0] * HAND_ASSIGNMENT_DELTA_DECAY,
+                        prev_deltas[hand_index][1] * HAND_ASSIGNMENT_DELTA_DECAY,
+                    )
+                    valid = (
+                        prev_landmarks[hand_index] is not None
+                        and missing_timers[hand_index] <= DETECTION_GRACE_SECONDS
+                    )
+                    x, y = prev_x, prev_y
+                    dx = dy = speed = confidence = 0.0
+                else:
+                    x, y = hand["x"], hand["y"]
+                    dx = x - prev_x
+                    dy = y - prev_y
+                    prev_deltas[hand_index] = (
+                        prev_deltas[hand_index][0]
+                        * (1.0 - HAND_ASSIGNMENT_DELTA_FOLLOW)
+                        + dx * HAND_ASSIGNMENT_DELTA_FOLLOW,
+                        prev_deltas[hand_index][1]
+                        * (1.0 - HAND_ASSIGNMENT_DELTA_FOLLOW)
+                        + dy * HAND_ASSIGNMENT_DELTA_FOLLOW,
+                    )
+                    speed = math.sqrt(dx * dx + dy * dy) / dt
+                    confidence = min(
+                        hand["confidence"],
+                        hand.get(
+                            "identity_confidence",
+                            assignment_meta["identity_confidence"],
+                        ),
+                    )
+                    prev_positions[hand_index] = (x, y)
+                    prev_landmarks[hand_index] = hand["points"]
+                    missing_timers[hand_index] = 0.0
+                    valid = True
+
+                packet = (
+                    f"HAND{hand_index + 1} {1 if valid else 0} "
+                    f"{x:.6f} {y:.6f} {dx:.6f} {dy:.6f} "
+                    f"{speed:.6f} {confidence:.6f} "
+                    f"0.000000 1.000000 {speed:.6f} "
+                    f"{assignment_meta['reason']}"
+                )
+                sock.sendto(packet.encode("ascii"), target)
+
+            draw_simulated_frame(frame, detected_hands, assigned_hands, t)
+            send_preview_frame(sock, preview_target, frame, args, preview_state, now)
+
+            if args.show_window:
+                cv2.imshow("Hand UDP Sender Simulation", frame)
+                if cv2.waitKey(1) & 0xFF == 27:
+                    break
+            time.sleep(1.0 / 60.0)
+    finally:
+        if control_sock is not None:
+            control_sock.close()
+        if args.show_window:
+            cv2.destroyAllWindows()
+
+
 def main():
     args = parse_args()
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -784,6 +2266,10 @@ def main():
     preview_target = (args.preview_host, args.preview_port)
     control_sock = create_control_socket(args.control_port)
     preview_state = {"frame_id": 0, "last_time": 0.0}
+
+    if args.simulate:
+        run_simulation(args, sock, target, preview_target, control_sock, preview_state)
+        return
 
     base_options = python.BaseOptions(model_asset_path=args.model)
     options = vision.HandLandmarkerOptions(
@@ -795,13 +2281,27 @@ def main():
         min_tracking_confidence=0.35,
     )
     landmarker = vision.HandLandmarker.create_from_options(options)
+    pose_landmarker = None
+    if not args.disable_pose and args.pose_model and os.path.exists(args.pose_model):
+        try:
+            pose_options = vision.PoseLandmarkerOptions(
+                base_options=python.BaseOptions(model_asset_path=args.pose_model),
+                running_mode=vision.RunningMode.VIDEO,
+                num_poses=1,
+                min_pose_detection_confidence=0.35,
+                min_pose_presence_confidence=0.35,
+                min_tracking_confidence=0.35,
+            )
+            pose_landmarker = vision.PoseLandmarker.create_from_options(pose_options)
+        except Exception as error:
+            print(f"PoseLandmarker disabled: {error}", flush=True)
     send_status(args, "SGCAMERA_READY")
 
     capture = None
     try:
         if args.start_paused:
             while True:
-                _, _, should_start_camera = poll_registration_commands(control_sock)
+                _, should_start_camera = poll_control_commands(control_sock)
                 if should_start_camera:
                     break
                 time.sleep(1.0 / 60.0)
@@ -817,6 +2317,7 @@ def main():
 
         max_hands = max(1, min(args.max_hands, 2))
         prev_positions = [(0.5, 0.5) for _ in range(max_hands)]
+        prev_deltas = [(0.0, 0.0) for _ in range(max_hands)]
         prev_landmarks = [None for _ in range(max_hands)]
         missing_timers = [DETECTION_GRACE_SECONDS for _ in range(max_hands)]
         center_filters = [
@@ -835,7 +2336,8 @@ def main():
         center_trails = [[] for _ in range(max_hands)]
         identity_anchors = [None for _ in range(max_hands)]
         identity_labels = [None for _ in range(max_hands)]
-        pending_register_slot = None
+        identity_candidate_state = {"signature": None, "count": 0}
+        pose_conflict_state = {"order": None, "count": 0}
         start_time = time.perf_counter()
         prev_time = time.perf_counter()
         last_timestamp_ms = -1
@@ -853,20 +2355,28 @@ def main():
             timestamp_ms = max(last_timestamp_ms + 1, int((now - start_time) * 1000))
             last_timestamp_ms = timestamp_ms
             result = landmarker.detect_for_video(image, timestamp_ms)
+            pose_result = (
+                pose_landmarker.detect_for_video(image, timestamp_ms)
+                if pose_landmarker is not None
+                else None
+            )
+            pose_slots = build_pose_slots(pose_result, max_hands)
 
             dt = max(now - prev_time, 1.0 / 120.0)
             prev_time = now
 
-            should_reset, register_slot, _ = poll_registration_commands(control_sock)
+            should_reset, _ = poll_control_commands(control_sock)
             if should_reset:
                 prev_positions = [(0.5, 0.5) for _ in range(max_hands)]
+                prev_deltas = [(0.0, 0.0) for _ in range(max_hands)]
                 prev_landmarks = [None for _ in range(max_hands)]
                 missing_timers = [DETECTION_GRACE_SECONDS for _ in range(max_hands)]
                 distance_scales = [1.0 for _ in range(max_hands)]
                 center_trails = [[] for _ in range(max_hands)]
                 identity_anchors = [None for _ in range(max_hands)]
                 identity_labels = [None for _ in range(max_hands)]
-                pending_register_slot = None
+                identity_candidate_state = {"signature": None, "count": 0}
+                pose_conflict_state = {"order": None, "count": 0}
                 for filter_ in center_filters:
                     filter_.reset()
                 for filter_ in center_kalman_filters:
@@ -875,9 +2385,6 @@ def main():
                     filter_.reset()
                 for history in motion_histories:
                     history.reset()
-            if register_slot is not None:
-                pending_register_slot = register_slot
-
             detected_hands = []
             if result.hand_landmarks:
                 for hand_index, hand_landmarks in enumerate(
@@ -901,38 +2408,11 @@ def main():
                             "motion_scale": distance_motion_scale(hand_landmarks),
                             "confidence": max(0.65, handedness_score(handedness)),
                             "label": handedness_label(handedness),
+                            "label_score": handedness_score(handedness),
                         }
                     )
 
-            requested_register_slot = pending_register_slot
-            pending_register_slot = try_register_single_hand(
-                detected_hands,
-                pending_register_slot,
-                identity_anchors,
-                identity_labels,
-            )
-            if (
-                requested_register_slot is not None
-                and pending_register_slot is None
-                and len(detected_hands) == 1
-            ):
-                registered_hand = detected_hands[0]
-                for index in range(max_hands):
-                    prev_landmarks[index] = None
-                    missing_timers[index] = DETECTION_GRACE_SECONDS
-                    center_trails[index] = []
-                    center_filters[index].reset()
-                    center_kalman_filters[index].reset()
-                    point_filters[index].reset()
-                    motion_histories[index].reset()
-                prev_positions[requested_register_slot] = (
-                    registered_hand["x"],
-                    registered_hand["y"],
-                )
-                prev_landmarks[requested_register_slot] = registered_hand["points"]
-                missing_timers[requested_register_slot] = 0.0
-
-            assigned_hands = assign_detected_hands(
+            assigned_hands, assignment_metadata_list = assign_detected_hands_with_debug(
                 detected_hands,
                 prev_positions,
                 prev_landmarks,
@@ -940,15 +2420,26 @@ def main():
                 max_hands,
                 identity_anchors,
                 identity_labels,
+                prev_deltas,
+                pose_slots,
+                pose_conflict_state,
+            )
+            register_assigned_hand_identity_stable(
+                assigned_hands,
+                identity_anchors,
+                identity_labels,
+                identity_candidate_state,
             )
 
             speeds = []
             valid_count = 0
             height, width = frame.shape[:2]
             colors = [(30, 240, 90), (80, 180, 255)]
+            draw_pose_slots(frame, pose_slots)
 
             for hand_index in range(max_hands):
                 hand = assigned_hands[hand_index]
+                assignment_meta = assignment_metadata_list[hand_index]
                 detected = hand is not None
                 prev_x, prev_y = prev_positions[hand_index]
                 x = prev_x
@@ -965,7 +2456,13 @@ def main():
                     y = hand["y"]
                     raw_x = x
                     raw_y = y
-                    confidence = hand["confidence"]
+                    confidence = min(
+                        hand["confidence"],
+                        hand.get(
+                            "identity_confidence",
+                            assignment_meta["identity_confidence"],
+                        ),
+                    )
                     motion_scale = (
                         motion_scale
                         + (hand["motion_scale"] - motion_scale)
@@ -1001,6 +2498,10 @@ def main():
                         cv2.circle(frame, (px, py), 4, colors[hand_index], -1)
                 else:
                     missing_timers[hand_index] += dt
+                    prev_deltas[hand_index] = (
+                        prev_deltas[hand_index][0] * HAND_ASSIGNMENT_DELTA_DECAY,
+                        prev_deltas[hand_index][1] * HAND_ASSIGNMENT_DELTA_DECAY,
+                    )
 
                 valid = detected or (
                     prev_landmarks[hand_index] is not None
@@ -1011,10 +2512,22 @@ def main():
                     if predicted is not None:
                         x, y = predicted
                         predicted_only = True
-                        confidence = PREDICTED_HAND_CONFIDENCE
+                        confidence = min(
+                            PREDICTED_HAND_CONFIDENCE,
+                            max(
+                                assignment_meta["identity_confidence"],
+                                IDENTITY_CONFIDENCE_PREDICTED,
+                            ),
+                        )
 
                 dx = x - prev_x
                 dy = y - prev_y
+                prev_deltas[hand_index] = (
+                    prev_deltas[hand_index][0] * (1.0 - HAND_ASSIGNMENT_DELTA_FOLLOW)
+                    + dx * HAND_ASSIGNMENT_DELTA_FOLLOW,
+                    prev_deltas[hand_index][1] * (1.0 - HAND_ASSIGNMENT_DELTA_FOLLOW)
+                    + dy * HAND_ASSIGNMENT_DELTA_FOLLOW,
+                )
                 landmark_dx, landmark_dy, landmark_speed = get_average_motion(
                     points, prev_landmarks[hand_index], dt
                 ) if detected else (0.0, 0.0, 0.0)
@@ -1054,6 +2567,11 @@ def main():
                         frame,
                         (x, y),
                         DEBUG_PREDICTED_COLOR if predicted_only else colors[hand_index],
+                        label=(
+                            f"H{hand_index + 1} "
+                            f"{'PREDICTED' if predicted_only else assignment_meta['reason']} "
+                            f"{confidence:.2f}"
+                        ),
                         radius=7,
                         filled=detected,
                     )
@@ -1062,18 +2580,21 @@ def main():
                     f"HAND{hand_index + 1} {1 if valid else 0} "
                     f"{x:.6f} {y:.6f} {packet_dx:.6f} {packet_dy:.6f} "
                     f"{speed:.6f} {confidence:.6f} "
-                    f"0.000000 1.000000 {speed:.6f}"
+                    f"0.000000 1.000000 {speed:.6f} "
+                    f"{'PREDICTED' if predicted_only else assignment_meta['reason']}"
                 )
                 sock.sendto(packet.encode("ascii"), target)
 
             send_preview_frame(
-                sock, preview_target, camera_preview_frame, args, preview_state, now
+                sock, preview_target, frame, args, preview_state, now
             )
             if args.show_window:
                 cv2.imshow("Hand UDP Sender", frame)
                 if cv2.waitKey(1) & 0xFF == 27:
                     break
     finally:
+        if pose_landmarker is not None:
+            pose_landmarker.close()
         landmarker.close()
         if capture is not None:
             capture.release()

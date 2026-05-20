@@ -282,7 +282,6 @@ void GameScene::UpdateBattleCamera() {
          enemyActionStep == ActionStep::Active ||
          enemyActionStep == ActionStep::Recovery);
     const bool isEnemyWideAction =
-        enemyActionKind == ActionKind::Nova ||
         enemyActionKind == ActionKind::Wave ||
         enemyActionKind == ActionKind::Cage;
     const bool isEnemyPhaseTransition =
@@ -311,8 +310,7 @@ void GameScene::UpdateBattleCamera() {
         const float clashAdvantage = Clamp(bladeClashGauge_, -1.0f, 1.0f);
         targetFovDeg_ = 72.0f - Clamp01(clashAdvantage) * 4.0f +
                         Clamp01(-clashAdvantage) * 5.0f;
-    } else if (enemyActionKind == ActionKind::Shot ||
-               enemyActionKind == ActionKind::BladeClash) {
+    } else if (enemyActionKind == ActionKind::BladeClash) {
         targetFovDeg_ = 74.5f;
     }
 
@@ -333,8 +331,7 @@ void GameScene::UpdateBattleCamera() {
             const float clashAdvantage = Clamp(bladeClashGauge_, -1.0f, 1.0f);
             targetFovDeg_ = 74.0f - Clamp01(clashAdvantage) * 3.0f +
                             Clamp01(-clashAdvantage) * 4.0f;
-        } else if (enemyActionKind == ActionKind::Shot ||
-                   enemyActionKind == ActionKind::BladeClash) {
+        } else if (enemyActionKind == ActionKind::BladeClash) {
             targetFovDeg_ = 84.0f;
         }
         if (isEnemyWarpStart || isEnemyWarpMove || isEnemyWarpEnd) {
@@ -845,8 +842,7 @@ void GameScene::UpdateBattleCamera() {
             usedRadius -= 0.45f;
         } else if (isEnemyWideAction) {
             usedRadius += 0.85f;
-        } else if (enemyActionKind == ActionKind::Shot ||
-                   enemyActionKind == ActionKind::BladeClash) {
+        } else if (enemyActionKind == ActionKind::BladeClash) {
             usedRadius += 0.35f;
         }
         if (isEnemyPhaseTransition) {
