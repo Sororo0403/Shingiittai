@@ -15,6 +15,16 @@ def make_hand(raw_id, x, y, label, score=0.97):
     return tracker.simulated_hand(raw_id, x, y, label, score)
 
 
+def timed_burst_active(rng, step, state, name, seconds, rate):
+    if seconds <= 0.0:
+        return False
+
+    until_key = f"{name}_until"
+    if step >= state.get(until_key, -1) and rng.random() < rate:
+        state[until_key] = step + max(1, int(seconds * FPS))
+    return step < state.get(until_key, -1)
+
+
 def scenario_detections(rng, step, t, config, state):
     phase = math.sin(t * config.get("freq", 0.78))
     wiggle = math.sin(t * config.get("wiggle_freq", 1.9)) * config.get(
@@ -26,6 +36,10 @@ def scenario_detections(rng, step, t, config, state):
 
     ax = 0.5 + phase * amp + rng.gauss(0.0, jitter)
     bx = 0.5 - phase * amp + rng.gauss(0.0, jitter)
+    if config.get("edge_clamp", False):
+        edge_amp = config.get("edge_amp", 0.56)
+        ax = 0.5 + phase * edge_amp + rng.gauss(0.0, jitter)
+        bx = 0.5 - phase * edge_amp + rng.gauss(0.0, jitter)
     if config.get("vertical", False):
         ay = 0.5 + phase * config.get("vertical_amp", 0.22)
         by = 0.5 - phase * config.get("vertical_amp", 0.22)
@@ -89,13 +103,44 @@ def scenario_detections(rng, step, t, config, state):
         keep = rng.choice(("A", "B"))
         detections = [hand for hand in detections if hand["raw_id"] == keep]
 
-    if len(detections) == 2 and rng.random() < config.get("shuffle_rate", 1.0):
+    false_positive_seconds = config.get("false_positive_burst_seconds", 0.0)
+    false_positive_active = timed_burst_active(
+        rng,
+        step,
+        state,
+        "false_positive",
+        false_positive_seconds,
+        config.get("false_positive_burst_rate", 0.0),
+    )
+    false_positive_rate = config.get("false_positive_rate", 0.0)
+    if false_positive_active or (
+        false_positive_rate > 0.0 and rng.random() < false_positive_rate
+    ):
+        truth = state.get("truth", {})
+        if truth and rng.random() < config.get("false_positive_near_hand_rate", 0.75):
+            base_x, base_y = truth[rng.choice(("A", "B"))]
+            fx = base_x + rng.gauss(0.0, config.get("false_positive_jitter", 0.055))
+            fy = base_y + rng.gauss(0.0, config.get("false_positive_jitter", 0.055))
+        else:
+            fx = 0.5 + rng.gauss(0.0, config.get("false_positive_center_jitter", 0.18))
+            fy = 0.5 + rng.gauss(0.0, config.get("false_positive_center_jitter", 0.18))
+        false_hand = make_hand(
+            "N",
+            fx,
+            fy,
+            rng.choice(("Left", "Right")),
+            config.get("false_positive_label_score", 0.72),
+        )
+        insert_at = rng.randrange(0, len(detections) + 1)
+        detections.insert(insert_at, false_hand)
+
+    if len(detections) >= 2 and rng.random() < config.get("shuffle_rate", 1.0):
         detections.reverse()
 
     return detections
 
 
-def scenario_pose_slots(rng, config, state):
+def scenario_pose_slots(rng, step, config, state):
     if not config.get("pose", False):
         return None
 
@@ -108,8 +153,45 @@ def scenario_pose_slots(rng, config, state):
     pose_drop_rate = config.get("pose_drop_rate", 0.0)
     pose_swap_rate = config.get("pose_swap_rate", 0.0)
     pose_wrong_wrist_rate = config.get("pose_wrong_wrist_rate", 0.0)
+    pose_swap_active = timed_burst_active(
+        rng,
+        step,
+        state,
+        "pose_swap",
+        config.get("pose_swap_burst_seconds", 0.0),
+        config.get("pose_swap_burst_rate", 0.0),
+    )
+    pose_wrong_wrist_active = timed_burst_active(
+        rng,
+        step,
+        state,
+        "pose_wrong_wrist",
+        config.get("pose_wrong_wrist_burst_seconds", 0.0),
+        config.get("pose_wrong_wrist_burst_rate", 0.0),
+    )
+    pose_collapse_active = timed_burst_active(
+        rng,
+        step,
+        state,
+        "pose_collapse",
+        config.get("pose_collapse_burst_seconds", 0.0),
+        config.get("pose_collapse_burst_rate", 0.0),
+    )
+    pose_collapse_rate = config.get("pose_collapse_rate", 0.0)
+    if not pose_collapse_active and pose_collapse_rate > 0.0:
+        pose_collapse_active = rng.random() < pose_collapse_rate
+    collapse_point = None
+    if pose_collapse_active:
+        if rng.random() < config.get("pose_collapse_to_hand_rate", 0.85):
+            collapse_point = truth[rng.choice(("A", "B"))]
+        else:
+            collapse_point = (
+                (truth["A"][0] + truth["B"][0]) * 0.5,
+                (truth["A"][1] + truth["B"][1]) * 0.5,
+            )
+
     slot_specs = [(0, "A", 0.66), (1, "B", 0.34)]
-    if rng.random() < pose_swap_rate:
+    if pose_swap_active or rng.random() < pose_swap_rate:
         slot_specs = [(0, "B", 0.66), (1, "A", 0.34)]
 
     for slot, raw_id, shoulder_x in slot_specs:
@@ -117,9 +199,11 @@ def scenario_pose_slots(rng, config, state):
             continue
 
         wrist_x, wrist_y = truth[raw_id]
-        if rng.random() < pose_wrong_wrist_rate:
+        if pose_wrong_wrist_active or rng.random() < pose_wrong_wrist_rate:
             other_raw_id = "B" if raw_id == "A" else "A"
             wrist_x, wrist_y = truth[other_raw_id]
+        if collapse_point is not None:
+            wrist_x, wrist_y = collapse_point
         wrist = (
             tracker.clamp01(wrist_x + rng.gauss(0.0, pose_jitter)),
             tracker.clamp01(wrist_y + rng.gauss(0.0, pose_jitter)),
@@ -173,10 +257,16 @@ def run_once(seed, config):
         dt = DT
         if config.get("fps_jitter", False):
             dt *= rng.uniform(0.40, 2.20)
+        fps_stall_rate = config.get("fps_stall_rate", 0.0)
+        if fps_stall_rate > 0.0 and rng.random() < fps_stall_rate:
+            dt += rng.uniform(
+                config.get("fps_stall_min_seconds", 0.10),
+                config.get("fps_stall_max_seconds", 0.30),
+            )
         t += dt
 
         detections = scenario_detections(rng, step, t, config, state)
-        pose_slots = scenario_pose_slots(rng, config, state)
+        pose_slots = scenario_pose_slots(rng, step, config, state)
         if len(detections) == 0:
             none_frames += 1
         elif len(detections) == 1:
@@ -538,6 +628,138 @@ def scenario_matrix():
             "label_random_probability": 0.25,
             "pose": True,
             "pose_wrong_wrist_rate": 0.05,
+        },
+        "pose_wrong_wrist_burst": {
+            "freq": 1.35,
+            "amp": 0.36,
+            "jitter": 0.018,
+            "label": "random",
+            "label_random_probability": 0.35,
+            "fps_jitter": True,
+            "pose": True,
+            "pose_jitter": 0.026,
+            "pose_wrong_wrist_burst_seconds": 0.55,
+            "pose_wrong_wrist_burst_rate": 0.010,
+        },
+        "pose_swap_burst": {
+            "freq": 1.35,
+            "amp": 0.36,
+            "jitter": 0.018,
+            "label": "random",
+            "label_random_probability": 0.35,
+            "fps_jitter": True,
+            "pose": True,
+            "pose_jitter": 0.026,
+            "pose_swap_burst_seconds": 0.50,
+            "pose_swap_burst_rate": 0.010,
+        },
+        "pose_collapse_burst": {
+            "freq": 1.45,
+            "amp": 0.38,
+            "jitter": 0.018,
+            "label": "random",
+            "label_random_probability": 0.35,
+            "drop_one_rate": 0.04,
+            "fps_jitter": True,
+            "pose": True,
+            "pose_jitter": 0.020,
+            "pose_collapse_burst_seconds": 0.65,
+            "pose_collapse_burst_rate": 0.012,
+        },
+        "both_reacquire_long_pose": {
+            "freq": 1.15,
+            "amp": 0.39,
+            "jitter": 0.016,
+            "label": "flip_cross",
+            "both_burst_seconds": 2.20,
+            "both_burst_rate": 0.006,
+            "fps_jitter": True,
+            "pose": True,
+            "pose_jitter": 0.026,
+            "pose_drop_rate": 0.12,
+        },
+        "one_hand_long_occlusion_pose": {
+            "freq": 1.20,
+            "amp": 0.38,
+            "jitter": 0.016,
+            "label": "flip_cross",
+            "one_burst_seconds": 2.60,
+            "one_burst_rate": 0.006,
+            "drop_one_rate": 0.04,
+            "fps_jitter": True,
+            "pose": True,
+            "pose_jitter": 0.026,
+            "pose_drop_rate": 0.12,
+        },
+        "low_fps_stall_pose": {
+            "freq": 1.45,
+            "amp": 0.38,
+            "jitter": 0.018,
+            "label": "random",
+            "label_random_probability": 0.30,
+            "drop_one_rate": 0.04,
+            "fps_jitter": True,
+            "fps_stall_rate": 0.018,
+            "fps_stall_min_seconds": 0.10,
+            "fps_stall_max_seconds": 0.30,
+            "pose": True,
+            "pose_jitter": 0.026,
+        },
+        "false_positive_third_hand_pose": {
+            "freq": 1.25,
+            "amp": 0.36,
+            "jitter": 0.016,
+            "label": "random",
+            "label_random_probability": 0.30,
+            "fps_jitter": True,
+            "pose": True,
+            "pose_jitter": 0.024,
+            "false_positive_rate": 0.018,
+            "false_positive_burst_seconds": 0.35,
+            "false_positive_burst_rate": 0.006,
+            "false_positive_near_hand_rate": 0.85,
+        },
+        "false_positive_equal_conf_pose": {
+            "freq": 1.25,
+            "amp": 0.36,
+            "jitter": 0.016,
+            "label": "random",
+            "label_random_probability": 0.30,
+            "fps_jitter": True,
+            "pose": True,
+            "pose_jitter": 0.024,
+            "false_positive_rate": 0.018,
+            "false_positive_burst_seconds": 0.35,
+            "false_positive_burst_rate": 0.006,
+            "false_positive_label_score": 0.97,
+            "false_positive_near_hand_rate": 0.85,
+        },
+        "false_positive_high_conf_pose": {
+            "freq": 1.25,
+            "amp": 0.36,
+            "jitter": 0.016,
+            "label": "random",
+            "label_random_probability": 0.30,
+            "fps_jitter": True,
+            "pose": True,
+            "pose_jitter": 0.024,
+            "false_positive_rate": 0.018,
+            "false_positive_burst_seconds": 0.35,
+            "false_positive_burst_rate": 0.006,
+            "false_positive_label_score": 0.99,
+            "false_positive_near_hand_rate": 0.85,
+        },
+        "edge_clamp_pose": {
+            "freq": 1.10,
+            "edge_clamp": True,
+            "edge_amp": 0.62,
+            "jitter": 0.020,
+            "label": "random",
+            "label_random_probability": 0.28,
+            "drop_one_rate": 0.04,
+            "fps_jitter": True,
+            "pose": True,
+            "pose_jitter": 0.024,
         },
         "pose_mixed_abuse": {
             "freq": 1.35,

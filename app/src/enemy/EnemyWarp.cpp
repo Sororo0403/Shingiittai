@@ -262,6 +262,7 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
     const ActionStep followupStep = warp_.followupStep;
     const WarpType warpType = warp_.type;
     const bool phase2FeintFollowup = warp_.phase2FeintFollowup;
+    const bool phase2FeintImmediateGreen = warp_.phase2FeintImmediateGreen;
 
     EndAttack();
     if (warpType == WarpType::Approach && followupKind != ActionKind::None &&
@@ -275,6 +276,8 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
         tactic_ = TacticState::Melee;
         BeginAction(followupKind, followupStep);
         phase2FeintFollowupLocked_ = phase2FeintFollowup;
+        phase2FeintImmediateGreen_ =
+            phase2FeintFollowup && phase2FeintImmediateGreen;
         return;
     }
 

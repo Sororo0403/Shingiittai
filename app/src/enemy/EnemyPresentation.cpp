@@ -137,15 +137,16 @@ void Enemy::UpdateParts() {
         visualPitch -= 0.08f;
     }
 
-    if (phase_ == BossPhase::Phase2) {
+    if (phase_ != BossPhase::Phase1) {
+        const bool phase3 = phase_ == BossPhase::Phase3;
         bodyTf_.scale.x += 0.05f;
         bodyTf_.scale.z += 0.05f;
-        bodyTf_.position.y += 0.04f * pulse;
-        leftHandTf_.position.y += 0.04f;
-        rightHandTf_.position.y += 0.06f;
+        bodyTf_.position.y += (phase3 ? 0.06f : 0.04f) * pulse;
+        leftHandTf_.position.y += phase3 ? 0.07f : 0.04f;
+        rightHandTf_.position.y += phase3 ? 0.09f : 0.06f;
         visualTf_.position.y += 0.03f * pulse;
-        visualTf_.scale.x += 0.03f;
-        visualTf_.scale.z += 0.03f;
+        visualTf_.scale.x += phase3 ? 0.05f : 0.03f;
+        visualTf_.scale.z += phase3 ? 0.05f : 0.03f;
     }
 
     if (phaseTransitionActive_) {
@@ -631,9 +632,11 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
     const float actionPulse =
         0.5f + 0.5f * std::sin(runtime_.stateTimer * 12.0f);
     const DirectX::XMFLOAT4 phaseTint =
-        phase_ == BossPhase::Phase2
-            ? DirectX::XMFLOAT4{0.78f, 0.58f, 0.42f, 0.18f}
-            : DirectX::XMFLOAT4{0.72f, 0.76f, 0.72f, 0.12f};
+        phase_ == BossPhase::Phase3
+            ? DirectX::XMFLOAT4{0.42f, 0.86f, 0.62f, 0.22f}
+            : phase_ == BossPhase::Phase2
+                  ? DirectX::XMFLOAT4{0.78f, 0.58f, 0.42f, 0.18f}
+                  : DirectX::XMFLOAT4{0.72f, 0.76f, 0.72f, 0.12f};
     DirectX::XMFLOAT4 actionTint = phaseTint;
     float actionIntensity = 0.025f + 0.010f * actionPulse;
     float actionNoise = 0.08f;

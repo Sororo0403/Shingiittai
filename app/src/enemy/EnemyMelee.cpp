@@ -51,6 +51,7 @@ void Enemy::UpdateSweepByStep(float deltaTime) {
 
 void Enemy::UpdateSmashCharge(float deltaTime) {
     float currentChargeTime = GetCurrentSmashChargeTime();
+    const bool isQuickCounter = action_.id == ActionId::QuickSmash;
     float trackingEnd = config_.attacks.smash.melee.base.timing.trackingEndTime;
     if (trackingEnd < 0.0f) {
         trackingEnd = 0.0f;
@@ -59,11 +60,12 @@ void Enemy::UpdateSmashCharge(float deltaTime) {
         trackingEnd = currentChargeTime;
     }
 
-    if (!tellActive_ && stateTimer_ <= 0.0001f) {
+    if (!phase3GuardCounterActive_ && !isQuickCounter && !tellActive_ &&
+        stateTimer_ <= 0.0001f) {
         EnterTell(ActionKind::Smash);
     }
 
-    if (tellActive_) {
+    if (!phase3GuardCounterActive_ && !isQuickCounter && tellActive_) {
         UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_ * 0.55f);
         if (!IsTellFinished()) {
             return;
@@ -84,10 +86,12 @@ void Enemy::UpdateSmashCharge(float deltaTime) {
         hasTrackingLocked_ = true;
     }
 
-    if (TryBeginPhase2FeintWarp(ActionKind::Smash)) {
+    if (!phase3GuardCounterActive_ && !isQuickCounter &&
+        TryBeginPhase2FeintWarp(ActionKind::Smash)) {
         return;
     }
-    if (TryApplyPhase2DirectionFeint(ActionKind::Smash)) {
+    if (!phase3GuardCounterActive_ && !isQuickCounter &&
+        TryApplyPhase2DirectionFeint(ActionKind::Smash)) {
         return;
     }
 
@@ -96,7 +100,9 @@ void Enemy::UpdateSmashCharge(float deltaTime) {
             LockCurrentFacing();
             hasTrackingLocked_ = true;
         }
-        if (ShouldEnterSmashHold()) {
+        if (!phase3GuardCounterActive_ && !isQuickCounter &&
+            !phase2DirectionFeintDecisionMade_ &&
+            ShouldEnterSmashHold()) {
             ChangeActionStep(ActionStep::Hold);
             EnterHold(RandomRange(config_.attacks.smash.melee.holdTime.min,
                                   config_.attacks.smash.melee.holdTime.max));
@@ -187,6 +193,7 @@ void Enemy::UpdateSmashRecovery(float deltaTime) {
 
 void Enemy::UpdateSweepCharge(float deltaTime) {
     float currentChargeTime = GetCurrentSweepChargeTime();
+    const bool isQuickCounter = action_.id == ActionId::QuickSweep;
     float trackingEnd = config_.attacks.sweep.melee.base.timing.trackingEndTime;
     if (trackingEnd < 0.0f) {
         trackingEnd = 0.0f;
@@ -195,11 +202,12 @@ void Enemy::UpdateSweepCharge(float deltaTime) {
         trackingEnd = currentChargeTime;
     }
 
-    if (!tellActive_ && stateTimer_ <= 0.0001f) {
+    if (!phase3GuardCounterActive_ && !isQuickCounter && !tellActive_ &&
+        stateTimer_ <= 0.0001f) {
         EnterTell(ActionKind::Sweep);
     }
 
-    if (tellActive_) {
+    if (!phase3GuardCounterActive_ && !isQuickCounter && tellActive_) {
         UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_ * 0.50f);
         if (!IsTellFinished()) {
             return;
@@ -220,10 +228,12 @@ void Enemy::UpdateSweepCharge(float deltaTime) {
         hasTrackingLocked_ = true;
     }
 
-    if (TryBeginPhase2FeintWarp(ActionKind::Sweep)) {
+    if (!phase3GuardCounterActive_ && !isQuickCounter &&
+        TryBeginPhase2FeintWarp(ActionKind::Sweep)) {
         return;
     }
-    if (TryApplyPhase2DirectionFeint(ActionKind::Sweep)) {
+    if (!phase3GuardCounterActive_ && !isQuickCounter &&
+        TryApplyPhase2DirectionFeint(ActionKind::Sweep)) {
         return;
     }
 
@@ -232,7 +242,9 @@ void Enemy::UpdateSweepCharge(float deltaTime) {
             LockCurrentFacing();
             hasTrackingLocked_ = true;
         }
-        if (ShouldEnterSweepHold()) {
+        if (!phase3GuardCounterActive_ && !isQuickCounter &&
+            !phase2DirectionFeintDecisionMade_ &&
+            ShouldEnterSweepHold()) {
             ChangeActionStep(ActionStep::Hold);
             EnterHold(RandomRange(config_.attacks.sweep.melee.holdTime.min,
                                   config_.attacks.sweep.melee.holdTime.max));

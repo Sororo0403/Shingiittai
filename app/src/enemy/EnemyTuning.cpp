@@ -5,6 +5,13 @@
 float Enemy::GetCurrentActionTime() const { return stateTimer_; }
 
 float Enemy::GetCurrentSmashChargeTime() const {
+    if (phase3GuardCounterActive_) {
+        return phase3GuardCounterSmashChargeTime_;
+    }
+    if (action_.id == ActionId::QuickSmash) {
+        return quickSmashChargeTime_;
+    }
+
     float result = config_.attacks.smash.melee.base.chargeTime;
     if (action_.id == ActionId::DelaySmash) {
         result += config_.attacks.smash.delayExtraChargeTime;
@@ -18,6 +25,13 @@ float Enemy::GetCurrentSmashChargeTime() const {
 }
 
 float Enemy::GetCurrentSweepChargeTime() const {
+    if (phase3GuardCounterActive_) {
+        return phase3GuardCounterSweepChargeTime_;
+    }
+    if (action_.id == ActionId::QuickSweep) {
+        return quickSweepChargeTime_;
+    }
+
     float result = config_.attacks.sweep.melee.base.chargeTime;
 
     result += GetAdaptiveChargeOffset(ActionKind::Sweep);
@@ -48,6 +62,16 @@ bool Enemy::HasReachedRecoveryStart() const {
 }
 
 float Enemy::GetReleaseAnticipationRatio() const {
+    if (IsQuickCounterAction() && action_.step == ActionStep::Charge) {
+        return 1.0f;
+    }
+    if (phase2FeintFollowupLocked_ && phase2FeintImmediateGreen_ &&
+        action_.step == ActionStep::Charge &&
+        (action_.kind == ActionKind::Smash ||
+         action_.kind == ActionKind::Sweep)) {
+        return 1.0f;
+    }
+
     float releaseTime = 0.0f;
     float cueWindow = 0.52f;
 
@@ -93,8 +117,8 @@ float Enemy::GetReleaseAnticipationRatio() const {
 }
 
 float Enemy::GetChargeWeakPointTimeLimitForPresentation() const {
-    if (!(action_.kind == ActionKind::Smash ||
-          action_.kind == ActionKind::Sweep)) {
+    if (action_.kind != ActionKind::Smash ||
+        action_.id != ActionId::DelaySmash) {
         return 0.0f;
     }
 
@@ -102,9 +126,7 @@ float Enemy::GetChargeWeakPointTimeLimitForPresentation() const {
         return currentHoldDuration_;
     }
 
-    if (action_.kind != ActionKind::Smash ||
-        action_.id != ActionId::DelaySmash ||
-        action_.step != ActionStep::Charge) {
+    if (action_.step != ActionStep::Charge) {
         return 0.0f;
     }
 

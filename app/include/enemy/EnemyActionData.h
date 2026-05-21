@@ -5,6 +5,7 @@
 enum class ActionKind {
     None,
     Smash,
+    DelaySmash,
     Sweep,
     BladeClash,
     Wave,
@@ -18,8 +19,10 @@ enum class ActionId {
 
     Smash,
     DelaySmash,
+    QuickSmash,
 
     Sweep,
+    QuickSweep,
     BladeClash,
     Wave,
     Cage,

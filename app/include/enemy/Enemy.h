@@ -43,6 +43,7 @@ struct WarpContext {
     ActionKind followupKind = ActionKind::None;
     ActionStep followupStep = ActionStep::None;
     bool phase2FeintFollowup = false;
+    bool phase2FeintImmediateGreen = false;
 
     bool collisionDisabled = false;
     bool hasValidTarget = false;
@@ -113,7 +114,7 @@ enum class TacticState {
     DistanceAdjust
 };
 
-enum class BossPhase { Phase1, Phase2 };
+enum class BossPhase { Phase1, Phase2, Phase3 };
 
 // GameScene 側から渡す観測情報
 struct PlayerCombatObservation {
@@ -146,8 +147,9 @@ struct RangeF {
 };
 
 struct EnemyCoreConfig {
-    float maxHp = 660.0f;
-    float phase2HealthRatioThreshold = 0.60f;
+    float maxHp = 1080.0f;
+    float phase2HealthRatioThreshold = 0.74f;
+    float phase3HealthRatioThreshold = 0.37f;
     float nearAttackDistance = 4.0f;
     float farAttackDistance = 6.5f;
 };
@@ -217,7 +219,7 @@ struct EnemyAttackSet {
     EnemySmashConfig smash = {{{{15.0f, 4.0f, {2.8f, 2.1f, 3.2f}},
                                 {1.20f, 0.86f, 0.05f, 0.22f, 0.38f}, 1.64f},
                                {0.42f, 0.86f}, 0.62f},
-                              1.4f, 0.8f, 0.32f, 0.46f};
+                              1.4f, 0.8f, 0.06f, 0.46f};
     EnemySweepConfig sweep = {{{{15.0f, 4.0f, {5.0f, 1.65f, 2.6f}},
                                 {1.12f, 0.78f, 0.05f, 0.20f, 0.36f}, 1.52f},
                                {0.38f, 0.78f}, 0.48f},
@@ -228,8 +230,8 @@ struct EnemyAttackSet {
                             1.76f, 0.92f, 5.2f, 8.0f, 1.5f, 0.0f};
     EnemyCageConfig cage = {{8.0f, 2.2f, {2.2f, 1.75f, 2.2f}},
                             1.18f, 0.18f, 0.76f, 2.05f, 1.12f, 0.30f,
-                            4.45f, 1.85f, 12.0f, 1.8f, 0.72f, 4.5f,
-                            2.8f, 10};
+                            4.45f, 1.85f, 12.0f, 1.8f, 0.72f, 0.0f,
+                            0.0f, 10};
 };
 
 struct EnemyWarpConfig {
@@ -271,6 +273,7 @@ struct EnemyRuntimeState {
     float deathStartY = 0.0f;
 
     ActionState action{};
+    uint32_t actionSerial = 0;
     float stateTimer = 0.0f;
     ActionKind lastActionKind = ActionKind::None;
     bool isAttackActive = false;
@@ -299,6 +302,11 @@ struct EnemyRuntimeState {
     BossPhase phase = BossPhase::Phase1;
     bool phaseTransitionActive = false;
     float phaseTransitionTimer = 0.0f;
+    bool bladeClashUsedPhase2 = false;
+    bool bladeClashUsedPhase3 = false;
+    bool phase2BladeClashStandby = false;
+    bool phase3GuardCounterActive = false;
+    bool quickCounterOpeningUsed = false;
 
     bool holdConfigured = false;
     float currentHoldDuration = 0.0f;
@@ -306,10 +314,9 @@ struct EnemyRuntimeState {
     float holdBranchDecisionTime = 0.0f;
     bool holdBranchDecided = false;
     bool phase2FeintFollowupLocked = false;
+    bool phase2FeintImmediateGreen = false;
     bool phase2FeintDecisionMade = false;
-    bool phase2FeintForced = false;
     bool phase2DirectionFeintDecisionMade = false;
-    bool phase2DirectionFeintForced = false;
 
     bool tellActive = false;
     bool fakeCommitActive = false;
@@ -361,8 +368,6 @@ class Enemy {
     float TakeDamageDeferTransitions(float damage);
     void ResolveDeferredDamageTransitions();
     void ForceBladeClash();
-    bool ForcePhase2Feint(ActionKind kind);
-    bool ForcePhase2DirectionFeint(ActionKind kind);
     void ConsumeWave(size_t index);
     void NotifyAttackConnected();
     void NotifyAttackGuarded();
@@ -373,6 +378,7 @@ class Enemy {
     bool BeginBladeClashReturnWarp(const PlayerCombatObservation &observation);
     bool NotifyCountered();
     bool NotifyCountered(float vulnerabilityDuration);
+    bool TryBeginPhase3GuardCounter();
     void FinishCounterRecoil();
     void ApplyVictoryDefeatPose(float ratio,
                                 const DirectX::XMFLOAT3 &startPosition,
@@ -402,6 +408,7 @@ class Enemy {
     ActionKind GetActionKind() const { return runtime_.action.kind; }
     ActionId GetActionId() const { return runtime_.action.id; }
     ActionStep GetActionStep() const { return runtime_.action.step; }
+    uint32_t GetActionSerial() const { return runtime_.actionSerial; }
     float GetActionTimerForPresentation() const { return runtime_.stateTimer; }
     float GetReleaseAnticipationRatio() const;
     float GetChargeWeakPointTimeLimitForPresentation() const;
@@ -434,6 +441,13 @@ class Enemy {
     bool IsDualCounterHandStage() const;
     bool IsBladeClashAction() const;
     bool IsBladeClashWindow() const;
+    bool IsPhase2BladeClashStandby() const {
+        return runtime_.phase2BladeClashStandby;
+    }
+    bool IsPhase3GuardCounterActive() const {
+        return runtime_.phase3GuardCounterActive;
+    }
+    bool IsPhase3GuardCounterGuarding() const;
     void NotifyBladeClashLanded();
 
     float GetDistanceToPlayer() const;
@@ -547,16 +561,22 @@ class Enemy {
     bool &phaseTransitionActive_ = runtime_.phaseTransitionActive;
     float &phaseTransitionTimer_ = runtime_.phaseTransitionTimer;
     float phaseTransitionDuration_ = 3.40f;
+    bool &bladeClashUsedPhase2_ = runtime_.bladeClashUsedPhase2;
+    bool &bladeClashUsedPhase3_ = runtime_.bladeClashUsedPhase3;
+    bool &phase2BladeClashStandby_ = runtime_.phase2BladeClashStandby;
+    bool &phase3GuardCounterActive_ = runtime_.phase3GuardCounterActive;
+    bool &quickCounterOpeningUsed_ = runtime_.quickCounterOpeningUsed;
+    float phase3GuardCounterPoseTime_ = 0.34f;
+    float phase3GuardCounterSmashChargeTime_ = 0.86f;
+    float phase3GuardCounterSweepChargeTime_ = 0.78f;
 
     bool &holdConfigured_ = runtime_.holdConfigured;
     float &currentHoldDuration_ = runtime_.currentHoldDuration;
     bool &phase2FeintFollowupLocked_ = runtime_.phase2FeintFollowupLocked;
+    bool &phase2FeintImmediateGreen_ = runtime_.phase2FeintImmediateGreen;
     bool &phase2FeintDecisionMade_ = runtime_.phase2FeintDecisionMade;
-    bool &phase2FeintForced_ = runtime_.phase2FeintForced;
     bool &phase2DirectionFeintDecisionMade_ =
         runtime_.phase2DirectionFeintDecisionMade;
-    bool &phase2DirectionFeintForced_ =
-        runtime_.phase2DirectionFeintForced;
 
     HoldBranchType &holdBranchType_ = runtime_.holdBranchType;
 
@@ -673,6 +693,11 @@ class Enemy {
     int nearSweepWeight_ = 25;
     int phase2NearSmashBonus_ = 8;
     int phase2NearSweepBonus_ = 14;
+    int phase3NearSmashBonus_ = 4;
+    int phase3NearSweepBonus_ = 6;
+    float quickCounterAttackChance_ = 0.58f;
+    float quickSmashChargeTime_ = 0.86f;
+    float quickSweepChargeTime_ = 0.78f;
 
     int midWaveWeight_ = 30;
 
@@ -736,6 +761,9 @@ class Enemy {
     ActionKind SelectNeutralAction(float distance) const;
     ActionKind SelectNearPressureAction() const;
     ActionKind SelectChaseAction() const;
+    bool IsQuickCounterAction() const;
+    bool ShouldBeginQuickCounterAttack() const;
+    void BeginQuickCounterAttack();
     bool TryBeginTacticActionOrFallback(ActionKind preferred, ActionKind fallback);
     void BeginNeutralAction();
     void BeginPressureAction();
@@ -816,6 +844,8 @@ class Enemy {
     ActionId MakeDefaultActionId(ActionKind kind) const;
 
     bool TryBeginTacticAction(ActionKind kind);
+    bool CanBeginPhaseBladeClash() const;
+    void MarkPhaseBladeClashUsed();
     void BeginAction(ActionKind kind, ActionStep step);
     void ChangeActionStep(ActionStep step);
     void EndAttack();

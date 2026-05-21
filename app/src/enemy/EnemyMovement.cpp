@@ -40,7 +40,7 @@ void Enemy::UpdateStalkMove(float deltaTime) {
     if (stateTimer_ >= stalkPounceMinTime_ &&
         GetDistanceToPlayer() <= pounceDistance) {
         float chance = stalkPounceChance_;
-        if (phase_ == BossPhase::Phase2) {
+        if (phase_ != BossPhase::Phase1) {
             chance += 0.18f;
         }
         if (playerObs_.isAttacking || playerObs_.isGuarding) {

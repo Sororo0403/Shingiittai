@@ -81,14 +81,16 @@ class HandUdpSenderProcess {
   public:
     ~HandUdpSenderProcess() { Stop(); }
 
-    bool Prepare() { return Start(false); }
+    bool Prepare() { return Start(true); }
 
     bool IsPreparationReady() {
+        RefreshProcessState();
         PollStatus();
         return preparationReady_;
     }
 
     void ActivateCamera() {
+        RefreshProcessState();
         if (!isRunning_) {
             Start(false);
             cameraActivationRequested_ = false;
@@ -101,6 +103,7 @@ class HandUdpSenderProcess {
     }
 
     void Update() {
+        RefreshProcessState();
         PollStatus();
         if (!cameraActivationRequested_) {
             return;
@@ -244,6 +247,34 @@ class HandUdpSenderProcess {
     }
 
   private:
+    void RefreshProcessState() {
+        if (!isRunning_) {
+            return;
+        }
+
+        DWORD exitCode = 0;
+        if (GetExitCodeProcess(processInfo_.hProcess, &exitCode) &&
+            exitCode == STILL_ACTIVE) {
+            return;
+        }
+
+        CloseStatusSocket();
+        if (jobHandle_ != nullptr) {
+            CloseHandle(jobHandle_);
+            jobHandle_ = nullptr;
+        }
+        if (processInfo_.hThread != nullptr) {
+            CloseHandle(processInfo_.hThread);
+        }
+        if (processInfo_.hProcess != nullptr) {
+            CloseHandle(processInfo_.hProcess);
+        }
+        processInfo_ = {};
+        isRunning_ = false;
+        preparationReady_ = false;
+        cameraActivationRequested_ = false;
+    }
+
     bool OpenStatusSocket() {
         CloseStatusSocket();
 

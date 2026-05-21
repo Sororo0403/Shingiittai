@@ -56,7 +56,7 @@ HAND_IDENTITY_ACTIVE_LABEL_MISMATCH_PENALTY = 0.012
 HAND_IDENTITY_RECOVER_LABEL_MISMATCH_PENALTY = 0.18
 HAND_ASSIGNMENT_ACTIVE_SWAP_MARGIN = 0.002
 HAND_ASSIGNMENT_CONTINUITY_OVERRIDE_MARGIN = 0.018
-HAND_ASSIGNMENT_AMBIGUOUS_SEPARATION = 0.14
+HAND_ASSIGNMENT_AMBIGUOUS_SEPARATION = 0.18
 HAND_ASSIGNMENT_DIRECTION_MIN_DELTA = 0.004
 HAND_ASSIGNMENT_DIRECTION_OVERRIDE_MARGIN = 99.0
 HAND_ASSIGNMENT_DIRECTION_MAX_CONTINUITY_PENALTY = 0.001
@@ -80,6 +80,11 @@ HAND_ASSIGNMENT_UNCERTAIN_MARGIN = 0.030
 HAND_ASSIGNMENT_CLOSE_HOLD_MARGIN = 0.16
 HAND_ASSIGNMENT_POSE_CONFLICT_MARGIN = 2.0
 HAND_ASSIGNMENT_POSE_CONFLICT_CONFIRM_FRAMES = 3
+HAND_ASSIGNMENT_POSE_COLLAPSE_MIN_SEPARATION = 0.10
+HAND_ASSIGNMENT_POSE_COLLAPSE_RATIO = 0.45
+HAND_ASSIGNMENT_SINGLE_POSE_REACQUIRE_MIN_MISSING = 0.10
+HAND_ASSIGNMENT_POSE_REACQUIRE_CONTINUITY_MAX_MISSING = 0.50
+HAND_ASSIGNMENT_JUMP_DISAGREE_MARGIN = 0.70
 HAND_ASSIGNMENT_SINGLE_STRONG_POSE_COST = 0.22
 HAND_ASSIGNMENT_SINGLE_POSE_MARGIN = 0.06
 HAND_ASSIGNMENT_SINGLE_POSE_CONFLICT_MAX_COST = 0.85
@@ -1225,7 +1230,11 @@ def fresh_assignment_cost(
     else:
         cost += HAND_ASSIGNMENT_NO_POSE_PENALTY
 
-    if hand_track_is_active(slot, prev_landmarks, missing_timers):
+    use_continuity = not (
+        pose_arm is not None
+        and missing_timers[slot] > HAND_ASSIGNMENT_POSE_REACQUIRE_CONTINUITY_MAX_MISSING
+    )
+    if use_continuity and hand_track_is_active(slot, prev_landmarks, missing_timers):
         continuity_used = True
         cost += HAND_ASSIGNMENT_CONTINUITY_WEIGHT * normalized_distance_sq(
             prev_positions[slot], position, body_scale
@@ -1235,7 +1244,7 @@ def fresh_assignment_cost(
             position,
             body_scale,
         )
-    elif hand_track_is_recent(slot, prev_landmarks, missing_timers):
+    elif use_continuity and hand_track_is_recent(slot, prev_landmarks, missing_timers):
         continuity_used = True
         age_scale = 1.0 + missing_timers[slot] / max(0.001, HAND_RECOVERY_LAST_POSITION_SECONDS)
         cost += HAND_ASSIGNMENT_RECENT_WEIGHT * normalized_distance_sq(
@@ -1344,6 +1353,73 @@ def hold_pose_conflict_assignment(max_hands, margin, cost):
     )
 
 
+def pose_slots_are_collapsed(pose_slots, detected_hands, slot_count):
+    if pose_slots is None or slot_count < 2 or len(detected_hands) < 2:
+        return False
+    if len(pose_slots) < 2 or pose_slots[0] is None or pose_slots[1] is None:
+        return False
+
+    hand_separation = math.sqrt(
+        distance_sq(
+            hand_position(detected_hands[0]),
+            hand_position(detected_hands[1]),
+        )
+    )
+    if hand_separation < HAND_ASSIGNMENT_POSE_COLLAPSE_MIN_SEPARATION:
+        return False
+
+    pose_separation = math.sqrt(
+        distance_sq(pose_slots[0]["wrist"], pose_slots[1]["wrist"])
+    )
+    return pose_separation < hand_separation * HAND_ASSIGNMENT_POSE_COLLAPSE_RATIO
+
+
+def pose_slot_count(pose_slots, slot_count):
+    if pose_slots is None:
+        return 0
+    return sum(
+        1
+        for slot in range(slot_count)
+        if slot < len(pose_slots) and pose_slots[slot] is not None
+    )
+
+
+def pose_slots_are_crossed(pose_slots, slot_count):
+    if pose_slots is None or slot_count < 2:
+        return False
+    if len(pose_slots) < 2 or pose_slots[0] is None or pose_slots[1] is None:
+        return False
+
+    first_side = pose_slots[0].get("side_x", pose_slots[0]["shoulder"][0])
+    second_side = pose_slots[1].get("side_x", pose_slots[1]["shoulder"][0])
+    first_wrist_x = pose_slots[0]["wrist"][0]
+    second_wrist_x = pose_slots[1]["wrist"][0]
+    return (first_side - second_side) * (first_wrist_x - second_wrist_x) < 0.0
+
+
+def assignment_position_jump(order, detected_hands, prev_positions, slot_count):
+    return sum(
+        math.sqrt(
+            distance_sq(
+                prev_positions[slot],
+                hand_position(detected_hands[order[slot]]),
+            )
+        )
+        for slot in range(slot_count)
+    )
+
+
+def select_detection_candidates(detected_hands, max_hands):
+    if len(detected_hands) <= max_hands:
+        return detected_hands
+
+    return sorted(
+        detected_hands,
+        key=lambda hand: hand.get("label_score", 1.0),
+        reverse=True,
+    )[:max_hands]
+
+
 def initial_body_side_assignment(detected_hands, max_hands):
     if max_hands < 2 or len(detected_hands) < 2:
         return None
@@ -1426,6 +1502,55 @@ def assign_two_hands_globally(
         and pose_slots[slot] is not None
         for slot in range(slot_count)
     )
+    if has_pose_evidence and has_identity_anchor and all(
+        slot < len(prev_landmarks) and prev_landmarks[slot] is not None
+        for slot in range(slot_count)
+    ):
+        other_order = orders[1] if best_order == orders[0] else orders[0]
+        best_jump = assignment_position_jump(
+            best_order, detected_hands, prev_positions, slot_count
+        )
+        other_jump = assignment_position_jump(
+            other_order, detected_hands, prev_positions, slot_count
+        )
+        if best_jump > other_jump + HAND_ASSIGNMENT_JUMP_DISAGREE_MARGIN:
+            reset_pose_conflict_state(pose_conflict_state)
+            return hold_pose_conflict_assignment(max_hands, margin, best_cost)
+
+    if (
+        has_pose_evidence
+        and has_recent_identity
+        and pose_slots_are_collapsed(pose_slots, detected_hands, slot_count)
+    ):
+        reset_pose_conflict_state(pose_conflict_state)
+        return hold_pose_conflict_assignment(max_hands, margin, best_cost)
+
+    if (
+        has_pose_evidence
+        and has_recent_identity
+        and pose_slot_count(pose_slots, slot_count) == 1
+        and all(
+            missing_timers[slot]
+            >= HAND_ASSIGNMENT_SINGLE_POSE_REACQUIRE_MIN_MISSING
+            for slot in range(slot_count)
+        )
+    ):
+        reset_pose_conflict_state(pose_conflict_state)
+        return hold_pose_conflict_assignment(max_hands, margin, best_cost)
+
+    if (
+        has_pose_evidence
+        and has_recent_identity
+        and pose_slots_are_crossed(pose_slots, slot_count)
+        and all(
+            missing_timers[slot]
+            >= HAND_ASSIGNMENT_SINGLE_POSE_REACQUIRE_MIN_MISSING
+            for slot in range(slot_count)
+        )
+    ):
+        reset_pose_conflict_state(pose_conflict_state)
+        return hold_pose_conflict_assignment(max_hands, margin, best_cost)
+
     if has_pose_evidence and has_recent_identity and all(
         hand_track_is_active(slot, prev_landmarks, missing_timers)
         or hand_track_is_recent(slot, prev_landmarks, missing_timers)
@@ -1700,12 +1825,23 @@ def assign_detected_hands_with_debug(
         return [None for _ in range(max_hands)], metadata
 
     body_scale = pose_body_scale(pose_slots)
-    limited_hands = detected_hands[:max_hands]
+    limited_hands = select_detection_candidates(detected_hands, max_hands)
 
     has_established_identity = any(
         identity_anchors[slot] is not None
         for slot in range(min(max_hands, len(identity_anchors)))
     )
+    if len(detected_hands) > max_hands:
+        if has_established_identity:
+            return hold_previous_assignment(max_hands)
+        return (
+            [None for _ in range(max_hands)],
+            [
+                assignment_metadata("INIT_WAIT", 0.0)
+                for _ in range(max_hands)
+            ],
+        )
+
     if not has_established_identity:
         initial = initial_body_side_assignment(limited_hands, max_hands)
         if initial is not None:

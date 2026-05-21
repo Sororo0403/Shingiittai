@@ -77,12 +77,10 @@ static bool IsNearXZ(const XMFLOAT3 &a, const XMFLOAT3 &b, float radius) {
 
 static bool IsChargeWeakPointWindow(ActionKind kind, ActionId id,
                                     ActionStep step) {
-    if (!(kind == ActionKind::Smash || kind == ActionKind::Sweep)) {
+    if (kind != ActionKind::Smash || id != ActionId::DelaySmash) {
         return false;
     }
-    return step == ActionStep::Hold ||
-           (kind == ActionKind::Smash && id == ActionId::DelaySmash &&
-            step == ActionStep::Charge);
+    return step == ActionStep::Charge || step == ActionStep::Hold;
 }
 
 static bool IsReadableChargeWeakPointHit(const OBB &swordHitBox,
@@ -435,25 +433,6 @@ void GameScene::ApplyEnemyCageConstraint(float deltaTime) {
         explosionParticles_.EmitBurst(
             pulsePos, 44, 0.28f, GPUParticleSystem::BurstStyle::SpiritSparkle,
             {0.40f, 1.0f, 0.92f, 0.48f}, {0.0f, 1.0f, 0.0f}, 0.95f);
-
-        if (distanceFromCenter >= cage.radius * 0.70f &&
-            playerHitCooldown_ <= 0.0f && !player_.IsDamageInvulnerable()) {
-            XMFLOAT2 inward =
-                NormalizeXZ(cage.center.x - playerPos.x,
-                            cage.center.z - playerPos.z);
-            player_.TakeDamage(enemy_.GetCageDamage());
-            player_.AddKnockback({inward.x * enemy_.GetCageKnockback(), 0.0f,
-                                  inward.y * enemy_.GetCageKnockback()});
-
-            CombatFeedbackEvent feedback{};
-            feedback.type = CombatFeedbackEventType::PlayerDamaged;
-            feedback.position = playerPos;
-            feedback.position.y += 0.85f;
-            feedback.direction = {inward.x, 0.0f, inward.y};
-            feedback.power = enemy_.GetCageDamage() / 3.0f;
-            DispatchCombatFeedback(feedback);
-            playerHitCooldown_ = 0.34f;
-        }
     }
 }
 
@@ -754,6 +733,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     const ActionKind enemyActionKind = enemy_.GetActionKind();
     const ActionId enemyActionId = enemy_.GetActionId();
     const ActionStep enemyActionStep = enemy_.GetActionStep();
+    const uint32_t enemyActionSerial = enemy_.GetActionSerial();
     const auto swords = player_.GetSwords();
     const auto swordSlashStates = player_.GetSwordSlashStates();
     const auto swordAttackDamages = player_.GetSwordAttackDamages();
@@ -816,11 +796,13 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         isEnemySmashMeleeWindow || isEnemySweepMeleeWindow;
     const bool isEnemyMeleeCommitted =
         isEnemySmashCommitted || isEnemySweepCommitted;
+    const bool isEnemyBladeClashStandby = enemy_.IsPhase2BladeClashStandby();
     const bool isEnemyBladeClashCommitted =
         enemyActionKind == ActionKind::BladeClash &&
-        enemyActionStep == ActionStep::Active;
+        (enemyActionStep == ActionStep::Active || isEnemyBladeClashStandby);
     const bool isEnemyBladeClashCounterWindow =
-        isEnemyBladeClashCommitted && enemy_.IsBladeClashWindow();
+        isEnemyBladeClashCommitted &&
+        (isEnemyBladeClashStandby || enemy_.IsBladeClashWindow());
     const bool isEnemyBladeClashStrikeActive =
         isEnemyBladeClashCommitted && enemy_.IsAttackActive();
     if (enemyRedPunishUncounterable_ &&
@@ -833,41 +815,55 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     const bool isEnemyChargeWeakPointWindow =
         IsChargeWeakPointWindow(enemyActionKind, enemyActionId,
                                 enemyActionStep);
+    const int requiredChargeWeakPointSlashCount =
+        static_cast<int>(chargeWeakPointRequiredDirections_.size());
     if (chargeWeakPointFailedThisAction_ &&
-        (enemyActionKind != failedChargeWeakPointActionKind_ ||
+        (enemyActionSerial != failedChargeWeakPointActionSerial_ ||
          enemyActionStep == ActionStep::Recovery ||
          enemyActionStep == ActionStep::None)) {
         chargeWeakPointFailedThisAction_ = false;
         failedChargeWeakPointActionKind_ = ActionKind::None;
+        failedChargeWeakPointActionSerial_ = 0;
     }
     if (isEnemyChargeWeakPointWindow) {
-        if (chargeWeakPointActionKind_ != enemyActionKind) {
+        if (chargeWeakPointActionSerial_ != enemyActionSerial) {
             chargeWeakPointActionKind_ = enemyActionKind;
+            chargeWeakPointActionSerial_ = enemyActionSerial;
             chargeWeakPointBroken_ = false;
             chargeWeakPointFailedThisAction_ = false;
             failedChargeWeakPointActionKind_ = ActionKind::None;
+            failedChargeWeakPointActionSerial_ = 0;
             chargeWeakPointSlashCount_ = 0;
             chargeWeakPointRequiredDirections_[0] =
                 MakeRandomChargeWeakPointDirection();
-            chargeWeakPointRequiredDirections_[1] =
-                MakeRandomChargeWeakPointDirection(
-                    &chargeWeakPointRequiredDirections_[0]);
+            for (size_t directionIndex = 1;
+                 directionIndex < chargeWeakPointRequiredDirections_.size();
+                 ++directionIndex) {
+                const size_t previousDirectionIndex = directionIndex - 1;
+                const auto *previousDirection =
+                    &chargeWeakPointRequiredDirections_[previousDirectionIndex];
+                chargeWeakPointRequiredDirections_[directionIndex] =
+                    MakeRandomChargeWeakPointDirection(previousDirection);
+            }
             previousChargeWeakPointSlashStates_.fill(false);
         }
     } else {
         if (chargeWeakPointActionKind_ != ActionKind::None &&
-            !chargeWeakPointBroken_ && chargeWeakPointSlashCount_ < 2) {
+            !chargeWeakPointBroken_ &&
+            chargeWeakPointSlashCount_ < requiredChargeWeakPointSlashCount) {
             chargeWeakPointFailedThisAction_ = true;
             failedChargeWeakPointActionKind_ = chargeWeakPointActionKind_;
+            failedChargeWeakPointActionSerial_ = chargeWeakPointActionSerial_;
         }
         chargeWeakPointActionKind_ = ActionKind::None;
+        chargeWeakPointActionSerial_ = 0;
         chargeWeakPointBroken_ = false;
         chargeWeakPointSlashCount_ = 0;
         previousChargeWeakPointSlashStates_.fill(false);
     }
     const bool isFailedChargeWeakPointRelease =
         chargeWeakPointFailedThisAction_ &&
-        enemyActionKind == failedChargeWeakPointActionKind_ &&
+        enemyActionSerial == failedChargeWeakPointActionSerial_ &&
         enemyActionStep == ActionStep::Active;
     const bool isEnemyMeleePreparationOrRelease =
         (enemyActionKind == ActionKind::Smash ||
@@ -883,9 +879,15 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         !chargeWeakPointFailedThisAction_ &&
         enemyActionStep != ActionStep::Active &&
         enemy_.GetReleaseAnticipationRatio() > 0.0f;
+    const bool isPhase3GuardCounterWindow =
+        enemy_.IsPhase3GuardCounterActive() &&
+        (enemyActionKind == ActionKind::Smash ||
+         enemyActionKind == ActionKind::Sweep) &&
+        (enemyActionStep == ActionStep::Charge ||
+         enemyActionStep == ActionStep::Active);
     const bool isReleaseCounterWindow =
         !enemyRedPunishUncounterable_ &&
-        (isPreReleaseCounterWindow ||
+        (isPhase3GuardCounterWindow || isPreReleaseCounterWindow ||
          (isEnemyMeleeCommitted &&
           enemy_.GetActionTimerForPresentation() <=
               kReleaseCounterWindowDuration) ||
@@ -900,7 +902,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     CollisionManager::BodyId enemyAttackBody =
         CollisionManager::kInvalidBodyId;
     if (isEnemyMeleeCommitted || isPreReleaseCounterWindow ||
-        isEnemyBladeClashCommitted) {
+        isPhase3GuardCounterWindow || isEnemyBladeClashCommitted) {
         enemyAttackBox = enemy_.GetAttackOBB();
         enemyAttackBody =
             AddCollisionBody(collisionManager_, enemyAttackBox,
@@ -1017,12 +1019,15 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
 
         if (canMatchChargeWeakPoint) {
             ++chargeWeakPointSlashCount_;
-            if (chargeWeakPointSlashCount_ < 2) {
-                chargeWeakPointRequiredDirections_[static_cast<size_t>(
-                    chargeWeakPointSlashCount_)] =
-                    MakeRandomChargeWeakPointDirection(
-                        &chargeWeakPointRequiredDirections_[static_cast<size_t>(
-                            chargeWeakPointSlashCount_ - 1)]);
+            if (chargeWeakPointSlashCount_ <
+                requiredChargeWeakPointSlashCount) {
+                const size_t nextDirectionIndex =
+                    static_cast<size_t>(chargeWeakPointSlashCount_);
+                const size_t previousDirectionIndex = nextDirectionIndex - 1;
+                const auto *previousDirection =
+                    &chargeWeakPointRequiredDirections_[previousDirectionIndex];
+                chargeWeakPointRequiredDirections_[nextDirectionIndex] =
+                    MakeRandomChargeWeakPointDirection(previousDirection);
 
                 CombatFeedbackEvent feedback{};
                 feedback.type = CombatFeedbackEventType::PlayerSlashHit;
@@ -1040,6 +1045,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
 
             chargeWeakPointBroken_ = true;
             chargeWeakPointActionKind_ = ActionKind::None;
+            chargeWeakPointActionSerial_ = 0;
             const float breakDamage = 78.0f + swordAttackDamages[i] * 1.25f;
             if (enemy_.NotifyCountered(0.95f)) {
                 forceSyncEnemyAnimationThisFrame = true;
@@ -1068,6 +1074,11 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                 const float appliedDamage = ApplyEnemyDamage(swordDamage);
                 if (appliedDamage <= 0.0f) {
                     break;
+                }
+                const bool beganPhase3GuardCounter =
+                    enemy_.TryBeginPhase3GuardCounter();
+                if (beganPhase3GuardCounter) {
+                    forceSyncEnemyAnimationThisFrame = true;
                 }
                 player_.NotifyAttackHit(i, appliedDamage);
                 CombatFeedbackEvent feedback{};

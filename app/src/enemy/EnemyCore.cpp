@@ -12,6 +12,12 @@ void Enemy::Initialize(uint32_t modelId, uint32_t projectileModelId) {
     runtime_.stateTimer = -0.10f;
     runtime_.phaseTransitionActive = false;
     runtime_.phaseTransitionTimer = 0.0f;
+    runtime_.bladeClashUsedPhase2 = false;
+    runtime_.bladeClashUsedPhase3 = false;
+    runtime_.phase2BladeClashStandby = false;
+    runtime_.phase3GuardCounterActive = false;
+    runtime_.quickCounterOpeningUsed = false;
+    runtime_.phase2FeintImmediateGreen = false;
 
     tf_.position = {0.0f, 0.0f, 10.0f};
     tf_.scale = {1.0f, 1.0f, 1.0f};
@@ -85,6 +91,11 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
             phaseTransitionTimer_ = 0.0f;
             SetIsPhaseChanging(false);
             stateTimer_ = 0.0f;
+            if (phase_ == BossPhase::Phase2 && !bladeClashUsedPhase2_) {
+                BeginAction(ActionKind::BladeClash, ActionStep::Charge);
+                MarkPhaseBladeClashUsed();
+                phase2BladeClashStandby_ = true;
+            }
         }
         return;
     }
@@ -211,6 +222,7 @@ void Enemy::UpdateByAction(float deltaTime) {
 }
 
 void Enemy::BeginAction(ActionKind kind, ActionStep step) {
+    ++runtime_.actionSerial;
     lastActionKind_ = kind;
     const bool keepFeintFollowupLock =
         kind == ActionKind::Warp || phase2FeintFollowupLocked_;
@@ -225,41 +237,24 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
 
     action_.kind = kind;
     action_.id = MakeDefaultActionId(kind);
-    if (kind == ActionKind::Smash) {
-        float delayChance = config_.attacks.smash.delayChance;
-        if (playerObs_.isAttacking) {
-            delayChance += 0.28f;
-        }
-        if (playerObs_.justCounterEarly || counterMemory_.earlyCount > 0.6f) {
-            delayChance += 0.22f;
-        }
-        if (postCounterRhythmTimer_ > 0.0f || forceCounterBaitNext_) {
-            delayChance += 0.34f;
-        }
-        delayChance += counterMemory_.successCount * 0.07f;
-        delayChance = (std::clamp)(delayChance, 0.0f, 0.88f);
-
-        const float roll =
-            static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-        if (roll < delayChance) {
-            action_.id = ActionId::DelaySmash;
-        }
-    }
 
     action_.step = step;
     hasTrackingLocked_ = false;
     holdConfigured_ = false;
     currentHoldDuration_ = 0.0f;
     phase2FeintDecisionMade_ = false;
-    phase2FeintForced_ = false;
     phase2DirectionFeintDecisionMade_ = false;
-    phase2DirectionFeintForced_ = false;
+    phase3GuardCounterActive_ = false;
     isAttackActive_ = false;
     stateTimer_ = 0.0f;
     currentActionConnected_ = false;
     currentActionGuarded_ = false;
     cageTrapSpawned_ = false;
     phase2FeintFollowupLocked_ = keepFeintFollowupLock;
+    if (!phase2FeintFollowupLocked_) {
+        phase2FeintImmediateGreen_ = false;
+    }
+    phase2BladeClashStandby_ = false;
     dualCounterStage_ = 0;
     dualCounterFirstHand_ = (std::rand() % 2) == 0;
     dualCounterStageResolved_ = false;
@@ -287,20 +282,70 @@ void Enemy::ForceBladeClash() {
 
     UpdateFacingToPlayerWithSpeed(1.0f, 999.0f);
     BeginAction(ActionKind::BladeClash, ActionStep::Active);
+    phase2BladeClashStandby_ = false;
     LockCurrentFacing();
     dualCounterStage_ = 0;
     dualCounterStageResolved_ = false;
     UpdateParts();
 }
 
+bool Enemy::CanBeginPhaseBladeClash() const {
+    if (phase_ == BossPhase::Phase2) {
+        return !bladeClashUsedPhase2_;
+    }
+    if (phase_ == BossPhase::Phase3) {
+        return !bladeClashUsedPhase3_;
+    }
+    return false;
+}
+
+void Enemy::MarkPhaseBladeClashUsed() {
+    if (phase_ == BossPhase::Phase2) {
+        bladeClashUsedPhase2_ = true;
+    } else if (phase_ == BossPhase::Phase3) {
+        bladeClashUsedPhase3_ = true;
+    }
+}
+
+bool Enemy::TryBeginPhase3GuardCounter() {
+    if (phase_ != BossPhase::Phase3 || deathFinished_ || isDying_ ||
+        hp_ <= 0.0f || phaseTransitionActive_ || counterRecoilTimer_ > 0.0f ||
+        action_.kind == ActionKind::BladeClash) {
+        return false;
+    }
+
+    const ActionKind counterKind =
+        (std::rand() % 2 == 0) ? ActionKind::Smash : ActionKind::Sweep;
+    hitReactionTimer_ = 0.0f;
+    counterRecoilTimer_ = 0.0f;
+    UpdateFacingToPlayerWithSpeed(1.0f, 999.0f);
+    BeginAction(counterKind, ActionStep::Charge);
+    action_.id = MakeDefaultActionId(counterKind);
+    phase3GuardCounterActive_ = true;
+    LockCurrentFacing();
+    UpdateParts();
+    return true;
+}
+
 bool Enemy::TryBeginTacticAction(ActionKind kind) {
     switch (kind) {
     case ActionKind::Smash:
     case ActionKind::Sweep:
-    case ActionKind::BladeClash:
+        BeginAction(kind, ActionStep::Charge);
+        return true;
+    case ActionKind::DelaySmash:
+        BeginAction(ActionKind::Smash, ActionStep::Charge);
+        action_.id = ActionId::DelaySmash;
+        return true;
     case ActionKind::Wave:
     case ActionKind::Cage:
+        return false;
+    case ActionKind::BladeClash:
+        if (!CanBeginPhaseBladeClash()) {
+            return false;
+        }
         BeginAction(kind, ActionStep::Charge);
+        MarkPhaseBladeClashUsed();
         return true;
     case ActionKind::Warp:
         if (!PrepareWarpContext()) {
@@ -356,10 +401,11 @@ void Enemy::EndAttack() {
     currentActionConnected_ = false;
     currentActionGuarded_ = false;
     phase2FeintFollowupLocked_ = false;
+    phase2FeintImmediateGreen_ = false;
     phase2FeintDecisionMade_ = false;
-    phase2FeintForced_ = false;
     phase2DirectionFeintDecisionMade_ = false;
-    phase2DirectionFeintForced_ = false;
+    phase2BladeClashStandby_ = false;
+    phase3GuardCounterActive_ = false;
     dualCounterStage_ = 0;
     dualCounterFirstHand_ = true;
     dualCounterStageResolved_ = false;
@@ -378,17 +424,25 @@ void Enemy::FinishCurrentAction() {
 }
 
 void Enemy::UpdateBossPhase() {
-    if (phase_ == BossPhase::Phase2 || config_.core.maxHp <= 0.0f) {
+    if (phase_ == BossPhase::Phase3 || phaseTransitionActive_ ||
+        config_.core.maxHp <= 0.0f) {
         return;
     }
 
     const float hpRatio = hp_ / config_.core.maxHp;
-    if (hpRatio <= config_.core.phase2HealthRatioThreshold) {
+    BossPhase nextPhase = phase_;
+    if (hpRatio <= config_.core.phase3HealthRatioThreshold) {
+        nextPhase = BossPhase::Phase3;
+    } else if (hpRatio <= config_.core.phase2HealthRatioThreshold) {
+        nextPhase = BossPhase::Phase2;
+    }
+
+    if (nextPhase != phase_) {
         EndAttack();
         hitReactionTimer_ = 0.0f;
         counterRecoilTimer_ = 0.0f;
         SetIsPhaseChanging(true);
-        phase_ = BossPhase::Phase2;
+        phase_ = nextPhase;
         phaseTransitionActive_ = true;
         phaseTransitionTimer_ = 0.0f;
         stateTimer_ = 0.0f;

@@ -62,12 +62,12 @@ class GameScene : public BaseScene {
     void UpdateDefeatSequence(float deltaTime);
     void SyncEnemyAnimation();
     void UpdateBladeClashEnemyAnimation(float deltaTime);
+    void UpdateCageEnemyAnimation(float deltaTime);
     void UpdateBattleIntroEnemyAnimation(float deltaTime);
     void UpdatePhaseTransitionEnemyAnimation(float deltaTime);
     void ApplyEnemyProceduralAnimation();
     void SetEnemyAnimationFrozen(bool frozen);
     void UpdateCombat(float gameplayDeltaTime);
-    void UpdateFeintTestInput(Input *input);
     void ApplyEnemyCageConstraint(float deltaTime);
     void DispatchCombatFeedback(const CombatFeedbackEvent &event);
     void EmitCombatParticles(const CombatFeedbackEvent &event);
@@ -296,6 +296,8 @@ class GameScene : public BaseScene {
     float damageMultiplier_ = 2.0f;
     ActionKind chargeWeakPointActionKind_ = ActionKind::None;
     ActionKind failedChargeWeakPointActionKind_ = ActionKind::None;
+    uint32_t chargeWeakPointActionSerial_ = 0;
+    uint32_t failedChargeWeakPointActionSerial_ = 0;
     bool chargeWeakPointBroken_ = false;
     bool chargeWeakPointFailedThisAction_ = false;
     bool enemyRedPunishUncounterable_ = false;
@@ -304,8 +306,9 @@ class GameScene : public BaseScene {
     float chargeWeakPointFocusInSpeed_ = 7.5f;
     float chargeWeakPointFocusOutSpeed_ = 10.0f;
     float chargeWeakPointFocusTimeScale_ = 0.28f;
-    std::array<DirectX::XMFLOAT2, 2> chargeWeakPointRequiredDirections_ = {
-        DirectX::XMFLOAT2{0.0f, -1.0f}, DirectX::XMFLOAT2{1.0f, 0.0f}};
+    std::array<DirectX::XMFLOAT2, 3> chargeWeakPointRequiredDirections_ = {
+        DirectX::XMFLOAT2{0.0f, -1.0f}, DirectX::XMFLOAT2{1.0f, 0.0f},
+        DirectX::XMFLOAT2{-1.0f, 0.0f}};
     std::array<bool, Player::kSwordCount> previousChargeWeakPointSlashStates_{};
     std::array<bool, Player::kSwordCount> cageSlashPreviousStates_{};
 

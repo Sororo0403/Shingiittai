@@ -317,6 +317,14 @@ bool Enemy::IsBladeClashWindow() const {
            stateTimer_ <= config_.attacks.bladeClash.activeTime;
 }
 
+bool Enemy::IsPhase3GuardCounterGuarding() const {
+    return phase3GuardCounterActive_ &&
+           (action_.kind == ActionKind::Smash ||
+            action_.kind == ActionKind::Sweep) &&
+           action_.step == ActionStep::Charge &&
+           stateTimer_ <= phase3GuardCounterPoseTime_;
+}
+
 bool Enemy::IsDualCounterWindow() const {
     return false;
 }

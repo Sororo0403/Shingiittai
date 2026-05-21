@@ -71,10 +71,17 @@ void Enemy::UpdateBladeClashCharge(float deltaTime) {
     const float distanceSq = dx * dx + dz * dz;
     if (distanceSq > 2.65f * 2.65f) {
         const float distance = std::sqrt(distanceSq);
-        const float moveSpeed = phase_ == BossPhase::Phase2 ? 3.55f : 3.18f;
+        const float moveSpeed = phase_ == BossPhase::Phase3
+                                    ? 3.68f
+                                    : phase_ == BossPhase::Phase2 ? 3.55f
+                                                                  : 3.18f;
         tf_.position.x += (dx / distance) * moveSpeed * deltaTime;
         tf_.position.z += (dz / distance) * moveSpeed * deltaTime;
         ClampToArena();
+    }
+
+    if (phase2BladeClashStandby_) {
+        return;
     }
 
     if (stateTimer_ >= config_.attacks.bladeClash.chargeTime) {
@@ -175,7 +182,7 @@ void Enemy::SpawnWave() {
         wave.direction = {forwardX, 0.0f, forwardZ};
         wave.hitBoxSize = config_.attacks.wave.attack.hitBoxSize;
         wave.speed = config_.attacks.wave.speed;
-        if (phase_ == BossPhase::Phase2) {
+        if (phase_ != BossPhase::Phase1) {
             wave.speed *= 1.12f;
         }
         wave.traveledDistance = 0.0f;
@@ -187,7 +194,7 @@ void Enemy::SpawnWave() {
         waves_.push_back(wave);
     };
 
-    if (phase_ == BossPhase::Phase2) {
+    if (phase_ != BossPhase::Phase1) {
         spawnWaveWithYaw(usedYaw - phase2WaveFanAngleRad_);
         spawnWaveWithYaw(usedYaw);
         spawnWaveWithYaw(usedYaw + phase2WaveFanAngleRad_);
@@ -221,7 +228,7 @@ void Enemy::SpawnCageTrap() {
         cage_.seamAngle = facingYaw_;
     }
 
-    if (phase_ == BossPhase::Phase2) {
+    if (phase_ != BossPhase::Phase1) {
         cage_.radius *= 0.94f;
         cage_.targetRadius *= 0.94f;
         cage_.breakValue += 0.6f;

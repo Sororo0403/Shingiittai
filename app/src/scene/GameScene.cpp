@@ -24,6 +24,9 @@ constexpr float kPi = 3.14159265f;
 constexpr float kBladeClashWinGuardBreakLead = 0.52f;
 constexpr float kBladeClashWinGuardBreakImpactTime = 0.24f;
 constexpr float kBladeClashWinActionSlow = 0.95f;
+constexpr float kBladeClashGuardBreakSlowStart = 0.21f;
+constexpr float kBladeClashGuardBreakSlowEnd = 0.36f;
+constexpr float kBladeClashGuardBreakSlowScale = 0.18f;
 constexpr float kBladeClashGuardBreakRecoilDistance = 0.72f;
 constexpr float kBladeClashGuardBreakDrop = 0.16f;
 constexpr float kBladeClashGuardBreakLift = 0.32f;
@@ -247,6 +250,7 @@ SwordCounterAxis RequiredVisualCounterAxisForAction(ActionKind kind) {
     case ActionKind::Smash:
         return SwordCounterAxis::Vertical;
     case ActionKind::Sweep:
+    case ActionKind::BladeClash:
         return SwordCounterAxis::Horizontal;
     default:
         return SwordCounterAxis::None;
@@ -626,6 +630,8 @@ void GameScene::Initialize(const SceneContext &ctx) {
     enemyAnimationFrozen_ = false;
     chargeWeakPointActionKind_ = ActionKind::None;
     failedChargeWeakPointActionKind_ = ActionKind::None;
+    chargeWeakPointActionSerial_ = 0;
+    failedChargeWeakPointActionSerial_ = 0;
     chargeWeakPointBroken_ = false;
     chargeWeakPointFailedThisAction_ = false;
     enemyRedPunishUncounterable_ = false;
@@ -694,9 +700,23 @@ void GameScene::Update() {
 
     combatFeedback_.Update(baseDeltaTime, sceneLightTime_);
     UpdateChargeWeakPointFocus(baseDeltaTime);
-    UpdateFeintTestInput(input);
     if (bladeClashFinishActive_) {
-        bladeClashFinishTimer_ += baseDeltaTime;
+        float bladeClashFinishDeltaTime = baseDeltaTime;
+        if (bladeClashFinishPlayerWon_ &&
+            bladeClashFinishTimer_ >= kBladeClashGuardBreakSlowStart &&
+            bladeClashFinishTimer_ < kBladeClashGuardBreakSlowEnd) {
+            const float slowT =
+                std::clamp((bladeClashFinishTimer_ -
+                            kBladeClashGuardBreakSlowStart) /
+                               (kBladeClashGuardBreakSlowEnd -
+                                kBladeClashGuardBreakSlowStart),
+                           0.0f, 1.0f);
+            const float snapHold = std::sinf(slowT * kPi);
+            const float slowScale =
+                1.0f - (1.0f - kBladeClashGuardBreakSlowScale) * snapHold;
+            bladeClashFinishDeltaTime *= slowScale;
+        }
+        bladeClashFinishTimer_ += bladeClashFinishDeltaTime;
         const float bladeClashWinActionTimer =
             bladeClashFinishPlayerWon_
                 ? (std::max)(0.0f, bladeClashFinishTimer_ -
@@ -731,7 +751,8 @@ void GameScene::Update() {
                 {-bladeClashDirection_.x, 0.06f, -bladeClashDirection_.z},
                 0.76f);
             CombatFeedbackEvent guardBreakFeedback{};
-            guardBreakFeedback.type = CombatFeedbackEventType::CounterSuccess;
+            guardBreakFeedback.type =
+                CombatFeedbackEventType::BladeClashGuardBreak;
             guardBreakFeedback.position = breakCenter;
             guardBreakFeedback.direction =
                 {-bladeClashDirection_.x, 0.0f, -bladeClashDirection_.z};
@@ -892,27 +913,38 @@ void GameScene::Update() {
             XMFLOAT3 cutCenter = enemy_.GetTransform().position;
             cutCenter.y += 1.18f;
             explosionParticles_.EmitBurst(
-                cutCenter, 64, 0.74f,
+                cutCenter, 104, 0.86f,
                 GPUParticleSystem::BurstStyle::SlashLine,
-                {1.0f, 0.90f, 0.58f, 0.52f},
-                {bladeClashDirection_.z, 0.08f, -bladeClashDirection_.x},
-                1.25f);
+                {1.0f, 0.90f, 0.58f, 0.66f},
+                {bladeClashDirection_.z, 0.12f, -bladeClashDirection_.x},
+                1.72f);
+            explosionParticles_.EmitBurst(
+                cutCenter, 42, 0.68f,
+                GPUParticleSystem::BurstStyle::Explosion,
+                {1.0f, 0.78f, 0.34f, 0.50f},
+                {bladeClashDirection_.x, 0.16f, bladeClashDirection_.z},
+                1.18f);
             swordFlashParticles_.EmitBurst(
-                cutCenter, 5, 0.34f, GPUParticleSystem::BurstStyle::Flash,
-                {1.0f, 0.96f, 0.80f, 0.44f},
+                cutCenter, 8, 0.42f, GPUParticleSystem::BurstStyle::Flash,
+                {1.0f, 0.96f, 0.80f, 0.56f},
                 {bladeClashDirection_.z, 0.0f, -bladeClashDirection_.x},
-                0.18f);
+                0.26f);
             sparkParticles_.EmitBurst(
-                cutCenter, 18, 0.20f, GPUParticleSystem::BurstStyle::Sparks,
-                {1.0f, 0.82f, 0.28f, 0.42f},
-                {bladeClashDirection_.z, 0.08f, -bladeClashDirection_.x},
-                0.72f);
+                cutCenter, 46, 0.26f, GPUParticleSystem::BurstStyle::Sparks,
+                {1.0f, 0.82f, 0.28f, 0.58f},
+                {bladeClashDirection_.z, 0.16f, -bladeClashDirection_.x},
+                1.08f);
+            smokeParticles_.EmitBurst(
+                cutCenter, 18, 0.52f, GPUParticleSystem::BurstStyle::Smoke,
+                {0.38f, 0.32f, 0.25f, 0.34f},
+                {-bladeClashDirection_.x, 0.10f, -bladeClashDirection_.z},
+                0.62f);
             CombatFeedbackEvent slashFeedback{};
-            slashFeedback.type = CombatFeedbackEventType::PlayerSlashHit;
+            slashFeedback.type = CombatFeedbackEventType::BladeClashPierce;
             slashFeedback.position = cutCenter;
             slashFeedback.direction =
                 {bladeClashDirection_.z, 0.0f, -bladeClashDirection_.x};
-            slashFeedback.power = 7.5f;
+            slashFeedback.power = 9.5f;
             DispatchCombatFeedback(slashFeedback);
         }
         if (bladeClashFinishPlayerWon_ && bladeClashFinal_ &&
@@ -1049,7 +1081,7 @@ void GameScene::Update() {
     const bool chargeFocusHoldingEnemyAttack =
         chargeWeakPointFocusRatio_ > 0.001f && IsChargeWeakPointFocusActive();
     const float playerDeltaTime = gameplayDeltaTime;
-    const float enemyDeltaTime =
+    float enemyDeltaTime =
         bladeClashActive_
             ? 0.0f
             : counterCinematicActive_
@@ -1057,6 +1089,11 @@ void GameScene::Update() {
                (std::min)(counterTimeScale_, ComputeGameplayTimeScale()))
             : (chargeFocusHoldingEnemyAttack ? baseDeltaTime
                                              : gameplayDeltaTime);
+    if (enemy_.GetBossPhase() == BossPhase::Phase3 &&
+        !enemy_.IsPhaseTransitionActive() && !bladeClashActive_ &&
+        !counterCinematicActive_) {
+        enemyDeltaTime *= 1.08f;
+    }
     UpdateCamera(input);
 
     ctx_->model->UpdateAnimation(playerModelId_, playerDeltaTime);
@@ -1082,8 +1119,11 @@ void GameScene::Update() {
                 std::sinf(std::clamp(guardT / 0.42f, 0.0f,
                                      1.0f) *
                           kPi);
-            const float collapseT =
-                std::clamp(guardT, 0.0f, 1.0f);
+            const float collapseT = std::clamp(
+                (bladeClashFinishTimer_ - kBladeClashWinGuardBreakImpactTime) /
+                    (kBladeClashWinGuardBreakLead -
+                     kBladeClashWinGuardBreakImpactTime),
+                0.0f, 1.0f);
             const float collapseEase =
                 1.0f - std::pow(1.0f - collapseT, 4.0f);
             const float snap =
@@ -1152,13 +1192,13 @@ void GameScene::Update() {
             player_.SetDefeatPoseRatio(0.0f);
         } else {
             const float windupT =
-                std::clamp(bladeClashWinActionTimer / 0.18f, 0.0f, 1.0f);
+                std::clamp(bladeClashWinActionTimer / 0.12f, 0.0f, 1.0f);
             const float cutT = std::clamp(
-                (bladeClashWinActionTimer - 0.06f) / 0.34f, 0.0f, 1.0f);
+                (bladeClashWinActionTimer - 0.03f) / 0.18f, 0.0f, 1.0f);
             const float slideT = std::clamp(
-                (bladeClashWinActionTimer - 0.18f) / 0.86f, 0.0f, 1.0f);
+                (bladeClashWinActionTimer - 0.11f) / 0.44f, 0.0f, 1.0f);
             const float settleT = std::clamp(
-                (bladeClashWinActionTimer - 0.82f) / 0.42f, 0.0f, 1.0f);
+                (bladeClashWinActionTimer - 0.50f) / 0.34f, 0.0f, 1.0f);
             const float windupEase =
                 windupT * windupT * (3.0f - 2.0f * windupT);
             const float cutEase = 1.0f - std::pow(1.0f - cutT, 4.0f);
@@ -1166,20 +1206,20 @@ void GameScene::Update() {
             const float settleEase =
                 settleT * settleT * (3.0f - 2.0f * settleT);
             const float dashEase =
-                std::clamp(0.68f * cutEase + 0.32f * slideEase, 0.0f, 1.0f);
+                std::clamp(0.86f * cutEase + 0.24f * slideEase, 0.0f, 1.0f);
             XMFLOAT3 dashPos = Lerp(bladeClashFinishPlayerStart_,
                                     bladeClashFinishPlayerEnd_, dashEase);
             const float anticipation =
                 std::sinf(windupEase * kPi) * (1.0f - cutEase);
             const float lift =
                 std::sinf(cutT * kPi) * 0.10f * (1.0f - settleEase);
-            dashPos.x -= bladeClashDirection_.x * 0.32f * anticipation;
+            dashPos.x -= bladeClashDirection_.x * 0.42f * anticipation;
             dashPos.y += lift;
-            dashPos.z -= bladeClashDirection_.z * 0.32f * anticipation;
+            dashPos.z -= bladeClashDirection_.z * 0.42f * anticipation;
             player_.LockPosition(dashPos);
 
             const float slashPose =
-                std::sinf(std::clamp((bladeClashWinActionTimer - 0.10f) / 0.74f,
+                std::sinf(std::clamp((bladeClashWinActionTimer - 0.06f) / 0.38f,
                                      0.0f, 1.0f) *
                           kPi);
             const float finishYaw =
@@ -1190,13 +1230,13 @@ void GameScene::Update() {
                            0.0f, 1.0f));
 
             const float enemyHitT = std::clamp(
-                (bladeClashWinActionTimer - 0.10f) / 0.16f, 0.0f, 1.0f);
+                (bladeClashWinActionTimer - 0.08f) / 0.14f, 0.0f, 1.0f);
             const float enemyBreakT = std::clamp(
-                (bladeClashWinActionTimer - 0.20f) / 0.34f, 0.0f, 1.0f);
+                (bladeClashWinActionTimer - 0.18f) / 0.38f, 0.0f, 1.0f);
             const float enemySlamT = std::clamp(
-                (bladeClashWinActionTimer - 0.46f) / 0.34f, 0.0f, 1.0f);
+                (bladeClashWinActionTimer - 0.48f) / 0.38f, 0.0f, 1.0f);
             const float enemySlideT = std::clamp(
-                (bladeClashWinActionTimer - 0.72f) / 0.56f, 0.0f, 1.0f);
+                (bladeClashWinActionTimer - 0.78f) / 0.52f, 0.0f, 1.0f);
             const float enemyHitEase =
                 1.0f - std::pow(1.0f - enemyHitT, 5.0f);
             const float enemyBreakEase =
@@ -1207,40 +1247,55 @@ void GameScene::Update() {
                 1.0f - std::pow(1.0f - enemySlideT, 2.0f);
             const float hitPop = std::sinf(enemyHitT * kPi);
             const float breakArc = std::sinf(enemyBreakT * kPi);
+            const float slamArc = std::sinf(enemySlamT * kPi);
             const float recoil =
                 kBladeClashGuardBreakRecoilDistance +
-                0.92f * enemyHitEase + 3.10f * enemyBreakEase +
-                5.65f * enemySlamEase + 1.20f * enemySlideEase;
+                1.12f * enemyHitEase + 3.45f * enemyBreakEase +
+                5.90f * enemySlamEase + 1.95f * enemySlideEase;
             const float side =
                 bladeClashDirection_.x >= 0.0f ? 1.0f : -1.0f;
             const XMFLOAT3 right = {
                 bladeClashDirection_.z, 0.0f, -bladeClashDirection_.x};
             const float sideDrift =
-                side * (0.18f * hitPop + 0.48f * enemySlamEase -
-                        0.10f * enemySlideEase);
+                side * (0.42f * hitPop + 0.92f * enemySlamEase -
+                        0.18f * enemySlideEase);
             XMFLOAT3 enemyPos = {
                 bladeClashFinishEnemyStart_.x + bladeClashDirection_.x * recoil +
                     right.x * sideDrift,
                 bladeClashFinishEnemyStart_.y +
                     kBladeClashGuardBreakLift * (1.0f - 0.22f * enemySlamEase) -
-                    kBladeClashGuardBreakDrop + hitPop * 0.30f +
-                    breakArc * 0.92f + 0.34f * enemySlamEase -
-                    0.46f * enemySlideEase,
+                    kBladeClashGuardBreakDrop + hitPop * 0.50f +
+                    breakArc * 1.12f + slamArc * 0.58f -
+                    0.82f * enemySlideEase,
                 bladeClashFinishEnemyStart_.z + bladeClashDirection_.z * recoil +
                     right.z * sideDrift};
             const float enemyYaw =
                 std::atan2f(-bladeClashDirection_.x, -bladeClashDirection_.z);
             const float twistYaw =
                 enemyYaw +
-                side * (0.16f * hitPop + 0.62f * enemySlamEase -
-                        0.18f * enemySlideEase);
+                side * (0.46f * hitPop + 0.98f * enemySlamEase -
+                        0.22f * enemySlideEase);
             const float pitch =
-                -0.18f * kBladeClashGuardBreakPose - 0.18f * hitPop -
-                0.46f * enemySlamEase + 0.16f * enemySlideEase;
+                -0.18f * kBladeClashGuardBreakPose - 0.28f * hitPop -
+                0.90f * enemySlamEase + 0.18f * enemySlideEase;
             const float roll =
-                side * (0.12f * hitPop + 0.46f * enemySlamEase -
-                        0.12f * enemySlideEase);
+                side * (0.36f * hitPop + 0.92f * enemySlamEase -
+                        0.20f * enemySlideEase);
             enemy_.SetCinematicTransform(enemyPos, twistYaw, pitch, roll);
+
+            if (enemySlamT > 0.02f && enemySlideT < 0.82f) {
+                XMFLOAT3 burstCenter = enemyPos;
+                burstCenter.y += 0.26f;
+                smokeParticles_.EmitBurst(
+                    burstCenter, 5, 0.30f, GPUParticleSystem::BurstStyle::Smoke,
+                    {0.34f, 0.29f, 0.24f, 0.24f},
+                    {-bladeClashDirection_.x, 0.06f, -bladeClashDirection_.z},
+                    0.52f);
+                sparkParticles_.EmitBurst(
+                    burstCenter, 4, 0.14f, GPUParticleSystem::BurstStyle::Sparks,
+                    {1.0f, 0.66f, 0.18f, 0.32f},
+                    {right.x * side, 0.08f, right.z * side}, 0.64f);
+            }
         }
     } else if (bladeClashFinishActive_) {
         const float leanT =
@@ -1345,9 +1400,7 @@ void GameScene::Update() {
 
     SyncEnemyAnimation();
     const bool bladeClashFinishWinAnim =
-        bladeClashFinishActive_ && bladeClashFinishPlayerWon_ &&
-        (bladeClashFinal_ ||
-         bladeClashFinishTimer_ < kBladeClashWinGuardBreakLead);
+        bladeClashFinishActive_ && bladeClashFinishPlayerWon_;
     SetEnemyAnimationFrozen(
         counterCinematicActive_ ||
         (bladeClashFinishActive_ && bladeClashFinishPlayerWon_ &&
@@ -1356,8 +1409,24 @@ void GameScene::Update() {
         float enemyAnimationDeltaTime = enemyDeltaTime;
         const ActionKind enemyActionKind = enemy_.GetActionKind();
         const ActionStep enemyActionStep = enemy_.GetActionStep();
-        if (bladeClashActive_ || bladeClashFinishWinAnim) {
+        const bool bladeClashStartupAnim =
+            enemyActionKind == ActionKind::BladeClash &&
+            enemyActionStep == ActionStep::Charge;
+        const bool phase3GuardCounterAnim =
+            enemy_.IsPhase3GuardCounterGuarding();
+        const bool cageCastAnim =
+            enemyActionKind == ActionKind::Cage &&
+            (enemyActionStep == ActionStep::Charge ||
+             enemyActionStep == ActionStep::Active);
+        if (bladeClashActive_ || bladeClashFinishWinAnim ||
+            bladeClashStartupAnim || phase3GuardCounterAnim) {
             UpdateBladeClashEnemyAnimation(baseDeltaTime);
+            if (bladeClashStartupAnim || phase3GuardCounterAnim) {
+                enemyAnimationDeltaTime = 0.0f;
+            }
+        } else if (cageCastAnim) {
+            UpdateCageEnemyAnimation(baseDeltaTime);
+            enemyAnimationDeltaTime = 0.0f;
         } else if (enemyActionKind == ActionKind::Smash ||
             enemyActionKind == ActionKind::Sweep ||
             enemyActionKind == ActionKind::BladeClash ||
@@ -1418,48 +1487,6 @@ void GameScene::Update() {
     swordFlashParticles_.Update(baseDeltaTime);
 }
 
-void GameScene::UpdateFeintTestInput(Input *input) {
-    const bool testWarpFeint =
-        input != nullptr && input->IsKeyTrigger(DIK_F9);
-    const bool testDirectionFeint =
-        input != nullptr && input->IsKeyTrigger(DIK_F10);
-    if (input == nullptr || runMode_ != RunMode::Play ||
-        (!testWarpFeint && !testDirectionFeint)) {
-        return;
-    }
-    if (bladeClashActive_ || bladeClashFinishActive_ ||
-        victorySequenceActive_ || defeatSequenceActive_ ||
-        enemy_.IsPhaseTransitionActive()) {
-        return;
-    }
-
-    ActionKind feintKind = enemy_.GetActionKind();
-    if (!(feintKind == ActionKind::Smash || feintKind == ActionKind::Sweep)) {
-        feintKind = testDirectionFeint ? ActionKind::Sweep : ActionKind::Smash;
-    }
-
-    const bool beganFeint =
-        testDirectionFeint ? enemy_.ForcePhase2DirectionFeint(feintKind)
-                           : enemy_.ForcePhase2Feint(feintKind);
-    if (!beganFeint) {
-        return;
-    }
-
-    chargeWeakPointActionKind_ = ActionKind::None;
-    failedChargeWeakPointActionKind_ = ActionKind::None;
-    chargeWeakPointBroken_ = false;
-    chargeWeakPointFailedThisAction_ = false;
-    enemyRedPunishUncounterable_ = false;
-    chargeWeakPointSlashCount_ = 0;
-    previousChargeWeakPointSlashStates_.fill(false);
-    enemyCueParticleTimer_ = 0.0f;
-    enemyWeakPointParticleTimer_ = 0.0f;
-    counterCinematicActive_ = false;
-    counterCinematicTimer_ = 0.0f;
-    SetEnemyAnimationFrozen(false);
-    SyncEnemyAnimation();
-}
-
 void GameScene::Draw() {
     ctx_->model->PreDraw();
 
@@ -1502,9 +1529,11 @@ void GameScene::DispatchCombatFeedback(const CombatFeedbackEvent &event) {
 
     switch (event.type) {
     case CombatFeedbackEventType::CounterSuccess:
+    case CombatFeedbackEventType::BladeClashGuardBreak:
         ctx_->sound->Play(counterSoundId_);
         break;
     case CombatFeedbackEventType::PlayerSlashHit:
+    case CombatFeedbackEventType::BladeClashPierce:
         ctx_->sound->Play(hitSoundId_);
         break;
     case CombatFeedbackEventType::PlayerDamaged:
@@ -1540,6 +1569,7 @@ void GameScene::EmitCombatParticles(const CombatFeedbackEvent &event) {
 
     switch (event.type) {
     case CombatFeedbackEventType::PlayerSlashHit:
+    case CombatFeedbackEventType::BladeClashPierce:
         sparkParticles_.EmitBurst(position,
                                   static_cast<uint32_t>(64.0f + power * 28.0f),
                                   0.13f, GPUParticleSystem::BurstStyle::Sparks,
@@ -1571,6 +1601,7 @@ void GameScene::EmitCombatParticles(const CombatFeedbackEvent &event) {
                                   {0.48f, 0.36f, 0.28f, 1.0f}, direction, 0.78f);
         break;
     case CombatFeedbackEventType::CounterSuccess:
+    case CombatFeedbackEventType::BladeClashGuardBreak:
         sparkParticles_.EmitBurst(position, 170, 0.34f,
                                   GPUParticleSystem::BurstStyle::Sparks,
                                   {1.00f, 0.76f, 0.26f, 1.0f}, direction, 2.1f);
@@ -1708,6 +1739,8 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
     const float releaseAnticipation = enemy_.GetReleaseAnticipationRatio();
     const bool dualCounterCueVisible =
         kind == ActionKind::BladeClash && enemy_.IsBladeClashWindow();
+    const bool phase2BladeClashStandbyCueVisible =
+        kind == ActionKind::BladeClash && enemy_.IsPhase2BladeClashStandby();
     const bool preReleaseCounterCueVisible =
         !chargeDirectionVisible && actionStep != ActionStep::Active &&
         releaseAnticipation > 0.0f;
@@ -1715,11 +1748,17 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
         actionStep == ActionStep::Active &&
         enemy_.GetActionTimerForPresentation() <=
             kReleaseCounterWindowDuration;
+    const bool phase3GuardCounterCueVisible =
+        enemy_.IsPhase3GuardCounterActive() &&
+        (kind == ActionKind::Smash || kind == ActionKind::Sweep) &&
+        (actionStep == ActionStep::Charge ||
+         actionStep == ActionStep::Active);
     const bool releaseCounterCueVisible =
-        dualCounterCueVisible ||
+        dualCounterCueVisible || phase2BladeClashStandbyCueVisible ||
         (!chargeWeakPointFailedThisAction_ &&
          (kind == ActionKind::Smash || kind == ActionKind::Sweep) &&
-         (preReleaseCounterCueVisible || activeReleaseCounterCueVisible));
+         (phase3GuardCounterCueVisible || preReleaseCounterCueVisible ||
+          activeReleaseCounterCueVisible));
     const bool badSlashCueVisible =
         (kind == ActionKind::Smash || kind == ActionKind::Sweep ||
          kind == ActionKind::BladeClash) &&
@@ -1765,7 +1804,8 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
         const float cuePower =
             dualCounterCueVisible
                 ? 1.0f
-                : activeReleaseCounterCueVisible
+                : (activeReleaseCounterCueVisible ||
+                   phase3GuardCounterCueVisible)
                 ? 1.0f
                 : std::clamp(0.64f + releaseAnticipation * 0.28f, 0.64f,
                              0.92f);
@@ -1773,7 +1813,8 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
             kind == ActionKind::BladeClash
                 ? 30u
                 : releaseCounterCueVisible
-                ? ((activeReleaseCounterCueVisible || dualCounterCueVisible)
+                ? ((activeReleaseCounterCueVisible ||
+                    phase3GuardCounterCueVisible || dualCounterCueVisible)
                        ? 72u
                        : 52u)
                 : 60u;
@@ -1789,7 +1830,8 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
                                   GPUParticleSystem::BurstStyle::Sparks,
                                   cueColor, forward, sparkSpeed);
         const bool showCounterAxisLine =
-            kind == ActionKind::Smash || kind == ActionKind::Sweep;
+            kind == ActionKind::Smash || kind == ActionKind::Sweep ||
+            phase2BladeClashStandbyCueVisible;
         if ((releaseCounterCueVisible || badSlashCueVisible) &&
             showCounterAxisLine) {
             const SwordCounterAxis cueAxis =
@@ -1809,6 +1851,7 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
                                       :
                                   releaseCounterCueVisible
                                       ? ((activeReleaseCounterCueVisible ||
+                                          phase3GuardCounterCueVisible ||
                                           dualCounterCueVisible)
                                              ? 7
                                              : 4)
@@ -1818,6 +1861,7 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
                                       :
                                   releaseCounterCueVisible
                                       ? ((activeReleaseCounterCueVisible ||
+                                          phase3GuardCounterCueVisible ||
                                           dualCounterCueVisible)
                                              ? 0.82f
                                              : 0.62f)
@@ -1899,20 +1943,67 @@ void GameScene::UpdateChargeWeakPointFocus(float deltaTime) {
                 : 1.0f;
         const float hold = 1.0f - std::clamp((ratio - 0.76f) / 0.24f,
                                              0.0f, 1.0f);
+        float radialBlurStrength =
+            bladeClashFinishPlayerWon_ ? 0.018f * hold : 0.020f * hold;
+        float vignetteStrength = bladeClashFinishPlayerWon_ ? 0.22f : 0.46f;
+        float vignetteScale = 11.0f;
+        float vignettePower = 1.15f;
+        float sceneDimStrength =
+            bladeClashFinishPlayerWon_ ? 0.03f * hold : 0.16f * hold;
+        if (bladeClashFinishPlayerWon_) {
+            const float guardBreakInT = std::clamp(
+                (bladeClashFinishTimer_ -
+                 (kBladeClashWinGuardBreakImpactTime - 0.035f)) /
+                    0.16f,
+                0.0f, 1.0f);
+            const float guardBreakHold = 1.0f - std::clamp(
+                (bladeClashFinishTimer_ - kBladeClashWinGuardBreakImpactTime) /
+                    0.36f,
+                0.0f, 1.0f);
+            const float guardBreakPulse =
+                std::sinf(guardBreakInT * kPi) * 0.10f +
+                guardBreakHold * 0.28f;
+            radialBlurStrength =
+                (std::max)(radialBlurStrength, 0.024f * guardBreakHold);
+            vignetteStrength =
+                std::clamp((std::max)(vignetteStrength,
+                                      0.26f + guardBreakPulse),
+                           0.0f, 0.68f);
+            vignetteScale = 8.2f;
+            vignettePower = 1.25f;
+            sceneDimStrength =
+                (std::max)(sceneDimStrength, 0.06f * guardBreakHold);
+
+            const float pierceTimer =
+                (std::max)(0.0f, bladeClashFinishTimer_ -
+                                      kBladeClashWinGuardBreakLead) /
+                kBladeClashWinActionSlow;
+            const float pierceT =
+                std::clamp((pierceTimer - 0.24f) / 0.18f, 0.0f, 1.0f);
+            const float pierceHold =
+                pierceTimer >= 0.24f
+                    ? 1.0f - std::clamp((pierceTimer - 0.32f) / 0.30f, 0.0f,
+                                        1.0f)
+                    : 0.0f;
+            const float piercePulse =
+                std::sinf(pierceT * kPi) * 0.020f + pierceHold * 0.026f;
+            radialBlurStrength =
+                (std::max)(radialBlurStrength, piercePulse);
+        }
         ctx_->postEffectRenderer->SetRadialBlurCenter(0.5f, 0.48f);
         ctx_->postEffectRenderer->SetRadialBlurSampleCount(18);
-        ctx_->postEffectRenderer->SetRadialBlurStrength(
-            bladeClashFinishPlayerWon_ ? 0.018f * hold : 0.020f * hold);
+        ctx_->postEffectRenderer->SetRadialBlurStrength(radialBlurStrength);
         ctx_->postEffectRenderer->SetVignettingEnabled(true);
-        ctx_->postEffectRenderer->SetVignettingStrength(
-            bladeClashFinishPlayerWon_ ? 0.22f : 0.46f);
-        ctx_->postEffectRenderer->SetSceneDimStrength(
-            bladeClashFinishPlayerWon_ ? 0.03f * hold : 0.16f * hold);
+        ctx_->postEffectRenderer->SetVignettingShape(vignetteScale,
+                                                     vignettePower);
+        ctx_->postEffectRenderer->SetVignettingStrength(vignetteStrength);
+        ctx_->postEffectRenderer->SetSceneDimStrength(sceneDimStrength);
         return;
     }
 
     const float focus = chargeWeakPointFocusRatio_;
     if (focus <= 0.001f) {
+        ctx_->postEffectRenderer->SetVignettingShape(11.0f, 1.15f);
         ctx_->postEffectRenderer->SetSceneDimStrength(0.0f);
         return;
     }
@@ -1920,6 +2011,7 @@ void GameScene::UpdateChargeWeakPointFocus(float deltaTime) {
     ctx_->postEffectRenderer->SetRadialBlurCenter(0.5f, 0.48f);
     ctx_->postEffectRenderer->SetRadialBlurSampleCount(20);
     ctx_->postEffectRenderer->SetRadialBlurStrength(0.030f * focus);
+    ctx_->postEffectRenderer->SetVignettingShape(11.0f, 1.15f);
     ctx_->postEffectRenderer->SetVignettingStrength(0.20f + 0.72f * focus);
     ctx_->postEffectRenderer->SetSceneDimStrength(0.42f * focus);
 }
@@ -3018,10 +3110,8 @@ void GameScene::DrawChargeWeakPoint() {
     const ActionStep actionStep = enemy_.GetActionStep();
     const bool isChargeWeakPointVisible =
         !chargeWeakPointBroken_ &&
-        ((actionKind == ActionKind::Smash && actionId == ActionId::DelaySmash &&
-          actionStep == ActionStep::Charge) ||
-         ((actionKind == ActionKind::Smash || actionKind == ActionKind::Sweep) &&
-          actionStep == ActionStep::Hold));
+        actionKind == ActionKind::Smash && actionId == ActionId::DelaySmash &&
+        (actionStep == ActionStep::Charge || actionStep == ActionStep::Hold);
     if (!isChargeWeakPointVisible || chargeWeakPointModelId_ == 0) {
         return;
     }
