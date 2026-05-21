@@ -92,6 +92,7 @@ class TitleScene : public BaseScene {
     uintptr_t previewSocket_ = UINTPTR_MAX;
     uint32_t previewFrameId_ = 0;
     size_t previewReceivedChunks_ = 0;
+    Image pressAnyButtonImage_;
     float sceneTime_ = 0.0f;
     float fadeTimer_ = 0.0f;
     float cameraRequestTimer_ = 999.0f;

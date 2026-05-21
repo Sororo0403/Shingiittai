@@ -195,6 +195,45 @@ bool Enemy::DecidePhase3PhantomBehindTarget(DirectX::XMFLOAT3 &outTarget) {
     return true;
 }
 
+bool Enemy::RefreshLiveBehindWarpTarget() {
+    const bool isPhase2Behind =
+        warp_.phase2FeintFollowup &&
+        warp_.approachSlot == WarpApproachSlot::Back;
+    const bool isPhase3FinalBehind =
+        warp_.phase3PhantomChain && warp_.phase3PhantomFinal;
+    if (!isPhase2Behind && !isPhase3FinalBehind) {
+        return false;
+    }
+
+    float forwardX = std::sin(playerObs_.facingYaw);
+    float forwardZ = std::cos(playerObs_.facingYaw);
+    float forwardLength = std::sqrt(forwardX * forwardX + forwardZ * forwardZ);
+
+    if (forwardLength <= 0.0001f) {
+        forwardX = playerObs_.velocity.x;
+        forwardZ = playerObs_.velocity.z;
+        forwardLength = std::sqrt(forwardX * forwardX + forwardZ * forwardZ);
+    }
+    if (forwardLength <= 0.0001f) {
+        forwardX = std::sin(facingYaw_);
+        forwardZ = std::cos(facingYaw_);
+        forwardLength = 1.0f;
+    }
+
+    forwardX /= forwardLength;
+    forwardZ /= forwardLength;
+
+    const float backDistance =
+        isPhase3FinalBehind ? 1.55f : warpApproachBackDistance_;
+    warp_.targetPos = playerPos_;
+    warp_.targetPos.x -= forwardX * backDistance;
+    warp_.targetPos.z -= forwardZ * backDistance;
+    warp_.targetPos.y = tf_.position.y;
+    FinalizeWarpTargetFacing(warp_.targetPos);
+    warp_.hasValidTarget = true;
+    return true;
+}
+
 void Enemy::ClampWarpTargetToArena(DirectX::XMFLOAT3 &target) const {
     (void)target;
 }
@@ -332,6 +371,7 @@ void Enemy::UpdateWarpMove(float deltaTime) {
         EndAttack();
         return;
     }
+    RefreshLiveBehindWarpTarget();
 
     float t = 1.0f;
     const float moveTime =
@@ -385,6 +425,7 @@ void Enemy::UpdateWarpMove(float deltaTime) {
 void Enemy::UpdateWarpEnd(float deltaTime) {
     isVisible_ = true;
     warp_.collisionDisabled = false;
+    RefreshLiveBehindWarpTarget();
     const bool hasMeleeFollowup =
         warp_.followupKind == ActionKind::Smash ||
         warp_.followupKind == ActionKind::Sweep ||
@@ -415,6 +456,8 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
     const WarpType warpType = warp_.type;
     const bool phase2FeintFollowup = warp_.phase2FeintFollowup;
     const bool phase2FeintImmediateGreen = warp_.phase2FeintImmediateGreen;
+    const bool phase2FeintBehindFollowup =
+        phase2FeintFollowup && warp_.approachSlot == WarpApproachSlot::Back;
     const bool phase3PhantomChain = warp_.phase3PhantomChain;
     const bool phase3PhantomFinal = warp_.phase3PhantomFinal;
     const int phase3PhantomRemaining = warp_.phase3PhantomViewWarpsRemaining;
@@ -458,6 +501,7 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
         phase2FeintFollowupLocked_ = phase2FeintFollowup;
         phase2FeintImmediateGreen_ =
             phase2FeintFollowup && phase2FeintImmediateGreen;
+        phase2FeintBehindFollowup_ = phase2FeintBehindFollowup;
         return;
     }
 

@@ -160,8 +160,8 @@ bool Enemy::TryBeginPhase2FeintWarp(ActionKind kind) {
     ResetWarpContext();
     warp_.type = WarpType::Approach;
     warp_.approachSlot =
-        (std::rand() % 2 == 0) ? WarpApproachSlot::Back
-                               : WarpApproachSlot::Front;
+        (std::rand() % 100 < 55) ? WarpApproachSlot::Back
+                                 : WarpApproachSlot::Front;
     if (!DecideWarpTargetNearPlayer(warp_.targetPos)) {
         ResetWarpContext();
         return false;
@@ -173,6 +173,8 @@ bool Enemy::TryBeginPhase2FeintWarp(ActionKind kind) {
     warp_.phase2FeintFollowup = true;
     warp_.phase2FeintImmediateGreen = (std::rand() % 2) == 0;
     warp_.faceLivePlayerOnEnd = true;
+    phase2FeintBehindFollowup_ =
+        warp_.approachSlot == WarpApproachSlot::Back;
     BeginAction(ActionKind::Warp, ActionStep::Start);
     return true;
 }

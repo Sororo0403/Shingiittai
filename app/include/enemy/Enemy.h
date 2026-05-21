@@ -320,6 +320,7 @@ struct EnemyRuntimeState {
     bool holdBranchDecided = false;
     bool phase2FeintFollowupLocked = false;
     bool phase2FeintImmediateGreen = false;
+    bool phase2FeintBehindFollowup = false;
     bool phase2FeintDecisionMade = false;
     bool phase2DirectionFeintDecisionMade = false;
 
@@ -470,9 +471,12 @@ class Enemy {
     bool IsWarpCollisionDisabled() const { return runtime_.warp.collisionDisabled; }
     bool ShouldSuppressPhase3PhantomBehindLookAt() const {
         return runtime_.phase3PhantomFinalLockDelay > 0.0f ||
+               runtime_.phase2FeintBehindFollowup ||
                (runtime_.action.kind == ActionKind::Warp &&
-                runtime_.warp.phase3PhantomChain &&
-                runtime_.warp.phase3PhantomFinal);
+                ((runtime_.warp.phase3PhantomChain &&
+                  runtime_.warp.phase3PhantomFinal) ||
+                 (runtime_.warp.phase2FeintFollowup &&
+                  runtime_.warp.approachSlot == WarpApproachSlot::Back)));
     }
 
     const std::vector<EnemyWave> &GetWaves() const { return runtime_.waves; }
@@ -535,7 +539,7 @@ class Enemy {
     float hitReactionDuration_ = 0.16f;
     float hitReactionMoveSpeed_ = 0.0f;
     float &counterRecoilTimer_ = runtime_.counterRecoilTimer;
-    float counterRecoilDuration_ = 0.82f;
+    float counterRecoilDuration_ = 0.62f;
     float counterRecoilPitchRad_ = 0.14f;
     float &deathTimer_ = runtime_.deathTimer;
     float deathDuration_ = 0.75f;
@@ -589,6 +593,7 @@ class Enemy {
     float &currentHoldDuration_ = runtime_.currentHoldDuration;
     bool &phase2FeintFollowupLocked_ = runtime_.phase2FeintFollowupLocked;
     bool &phase2FeintImmediateGreen_ = runtime_.phase2FeintImmediateGreen;
+    bool &phase2FeintBehindFollowup_ = runtime_.phase2FeintBehindFollowup;
     bool &phase2FeintDecisionMade_ = runtime_.phase2FeintDecisionMade;
     bool &phase2DirectionFeintDecisionMade_ =
         runtime_.phase2DirectionFeintDecisionMade;
@@ -826,6 +831,7 @@ class Enemy {
     bool IsWarpSuspendedForPresentation() const;
     bool DecideWarpTargetNearPlayer(DirectX::XMFLOAT3 &outTarget);
     bool DecideWarpTargetFarFromPlayer(DirectX::XMFLOAT3 &outTarget);
+    bool RefreshLiveBehindWarpTarget();
     void ClampWarpTargetToArena(DirectX::XMFLOAT3 &target) const;
     void FinalizeWarpTargetFacing(DirectX::XMFLOAT3 &target);
     void ResetWarpContext();

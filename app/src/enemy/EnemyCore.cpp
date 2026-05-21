@@ -18,6 +18,7 @@ void Enemy::Initialize(uint32_t modelId, uint32_t projectileModelId) {
     runtime_.phase3GuardCounterActive = false;
     runtime_.quickCounterOpeningUsed = false;
     runtime_.phase2FeintImmediateGreen = false;
+    runtime_.phase2FeintBehindFollowup = false;
     runtime_.phase3PhantomWarpCooldown = 0.0f;
 
     tf_.position = {0.0f, 0.0f, 10.0f};
@@ -231,6 +232,9 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     lastActionKind_ = kind;
     const bool keepFeintFollowupLock =
         kind == ActionKind::Warp || phase2FeintFollowupLocked_;
+    const bool keepFeintBehindFollowup =
+        phase2FeintBehindFollowup_ &&
+        (kind == ActionKind::Warp || phase2FeintFollowupLocked_);
 
     if (kind == ActionKind::Warp) {
         stagnantTimer_ = 0.0f;
@@ -257,8 +261,11 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     currentActionGuarded_ = false;
     cageTrapSpawned_ = false;
     phase2FeintFollowupLocked_ = keepFeintFollowupLock;
+    phase2FeintBehindFollowup_ =
+        keepFeintFollowupLock && keepFeintBehindFollowup;
     if (!phase2FeintFollowupLocked_) {
         phase2FeintImmediateGreen_ = false;
+        phase2FeintBehindFollowup_ = false;
     }
     phase2BladeClashStandby_ = false;
     dualCounterStage_ = 0;
@@ -408,6 +415,7 @@ void Enemy::EndAttack() {
     currentActionGuarded_ = false;
     phase2FeintFollowupLocked_ = false;
     phase2FeintImmediateGreen_ = false;
+    phase2FeintBehindFollowup_ = false;
     phase2FeintDecisionMade_ = false;
     phase2DirectionFeintDecisionMade_ = false;
     phase2BladeClashStandby_ = false;

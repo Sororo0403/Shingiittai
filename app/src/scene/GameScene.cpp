@@ -55,6 +55,8 @@ struct SharedBattleModels {
     uint32_t enemyFocusRingModelId = 0;
     uint32_t enemyWeaponTrailModelId = 0;
     uint32_t chargeWeakPointModelId = 0;
+    uint32_t chargeWeakPointBackplateModelId = 0;
+    uint32_t chargeWeakPointSlashModelId = 0;
 };
 
 SharedBattleModels gSharedBattleModels;
@@ -316,12 +318,12 @@ void ApplyRustedRobotMaterials(ModelManager *modelManager, uint32_t modelId,
 
         Material material = modelManager->GetMaterial(subMesh.materialId);
         material.enableTexture = 1;
-        material.color = {0.35f, 0.33f, 0.28f, 1.0f};
+        material.color = {0.68f, 0.62f, 0.50f, 1.0f};
         XMStoreFloat4x4(&material.uvTransform,
                         XMMatrixTranspose(XMMatrixIdentity()));
-        material.reflectionStrength = 0.045f;
-        material.reflectionFresnelStrength = 0.012f;
-        material.reflectionRoughness = 0.94f;
+        material.reflectionStrength = 0.085f;
+        material.reflectionFresnelStrength = 0.030f;
+        material.reflectionRoughness = 0.82f;
         material.enableDissolve = 0;
         material.dissolveEdgeColor = {0.68f, 0.24f, 0.08f, 0.46f};
         modelManager->SetMaterial(subMesh.materialId, material);
@@ -386,8 +388,8 @@ void GameScene::Initialize(const SceneContext &ctx) {
         gSharedBattleModels.arenaNoiseTextureId = arenaStoneTextureId;
         gSharedBattleModels.arenaFloorModelId = model->CreatePlane(
             arenaStoneTextureId,
-            MakeArenaMaterial({0.16f, 0.21f, 0.25f, 1.0f}, true, 0.055f,
-                              0.64f));
+        MakeArenaMaterial({0.070f, 0.085f, 0.105f, 1.0f}, true, 0.025f,
+                          0.84f));
         gSharedBattleModels.arenaLowPolyTerrainModelId =
             model->CreateLowPolyTerrain(
                 arenaStoneTextureId,
@@ -409,11 +411,11 @@ void GameScene::Initialize(const SceneContext &ctx) {
             0, MakeArenaMaterial({0.55f, 0.88f, 0.96f, 0.42f}, false, 0.0f,
                                  0.46f),
             48, 2.45f, 0.34f);
-        gSharedBattleModels.arenaCityTowerModelId = model->CreateCylinder(
+        gSharedBattleModels.arenaCityTowerModelId = model->CreateBox(
             arenaStoneTextureId,
             MakeArenaMaterial({0.18f, 0.24f, 0.29f, 1.0f}, true, 0.025f,
                               0.76f),
-            4, 0.92f, 1.0f, 1.0f);
+            1.0f, 1.0f, 1.0f);
         gSharedBattleModels.arenaCityWindowModelId = model->CreatePlane(
             0, MakeArenaMaterial({0.72f, 0.90f, 0.96f, 0.58f}, false, 0.0f,
                                  0.40f));
@@ -434,8 +436,8 @@ void GameScene::Initialize(const SceneContext &ctx) {
             96, 1.95f, 0.0f);
         gSharedBattleModels.arenaSpokeModelId = model->CreatePlane(
             arenaStoneTextureId,
-            MakeArenaMaterial({0.64f, 0.50f, 0.30f, 1.0f}, false, 0.12f,
-                              0.30f));
+        MakeArenaMaterial({0.28f, 0.21f, 0.12f, 1.0f}, false, 0.06f,
+                          0.58f));
         gSharedBattleModels.arenaInnerRingModelId = model->CreateRing(
             arenaStoneTextureId,
             MakeArenaMaterial({0.64f, 0.60f, 0.44f, 1.0f}, false, 0.12f,
@@ -476,6 +478,13 @@ void GameScene::Initialize(const SceneContext &ctx) {
         gSharedBattleModels.chargeWeakPointModelId = model->CreatePlane(
             0, MakeArenaMaterial({1.0f, 0.96f, 0.78f, 0.92f}, false, 0.02f,
                                  0.20f));
+        gSharedBattleModels.chargeWeakPointBackplateModelId =
+            model->CreatePlane(
+                0, MakeArenaMaterial({0.006f, 0.012f, 0.010f, 0.80f}, false,
+                                     0.00f, 0.86f));
+        gSharedBattleModels.chargeWeakPointSlashModelId = model->CreatePlane(
+            0, MakeArenaMaterial({0.34f, 1.0f, 0.38f, 0.96f}, false, 0.04f,
+                                 0.18f));
         gSharedBattleModels.initialized = true;
     }
 
@@ -503,6 +512,10 @@ void GameScene::Initialize(const SceneContext &ctx) {
     enemyFocusRingModelId_ = gSharedBattleModels.enemyFocusRingModelId;
     enemyWeaponTrailModelId_ = gSharedBattleModels.enemyWeaponTrailModelId;
     chargeWeakPointModelId_ = gSharedBattleModels.chargeWeakPointModelId;
+    chargeWeakPointBackplateModelId_ =
+        gSharedBattleModels.chargeWeakPointBackplateModelId;
+    chargeWeakPointSlashModelId_ =
+        gSharedBattleModels.chargeWeakPointSlashModelId;
     sparkParticles_.Initialize(dx, ctx_->srv, texture, particleTextureId_, 4096);
     sparkParticles_.SetEmission(1, 1000.0f);
     sparkParticles_.SetEmitterRadius(0.08f);
@@ -806,7 +819,7 @@ void GameScene::Update() {
                 {-bladeClashDirection_.x, 0.04f, -bladeClashDirection_.z},
                 0.62f);
             const float appliedDamage =
-                player_.TakeDamage(clashLossDamage, true);
+                player_.TakeDamage(clashLossDamage);
             CombatFeedbackEvent lossFeedback{};
             if (appliedDamage > 0.0f) {
                 lossFeedback.type = CombatFeedbackEventType::PlayerDamaged;
@@ -1372,16 +1385,11 @@ void GameScene::Update() {
             player_.SetBladeClashPose(true, 0.0f);
         }
     } else {
-        DirectX::XMFLOAT3 playerLookTarget = enemy_.GetTransform().position;
-        if (enemy_.ShouldSuppressPhase3PhantomBehindLookAt()) {
-            const auto &playerPos = player_.GetTransform().position;
-            const float playerYaw = player_.GetYaw();
-            playerLookTarget = {playerPos.x + std::sinf(playerYaw) * 5.0f,
-                                playerLookTarget.y,
-                                playerPos.z + std::cosf(playerYaw) * 5.0f};
-        }
-        player_.Update(input, playerDeltaTime, playerLookTarget, cameraYaw_,
-                       forceRangedReflectMove, baseDeltaTime);
+        const bool suppressLookAt =
+            enemy_.ShouldSuppressPhase3PhantomBehindLookAt();
+        player_.Update(input, playerDeltaTime, enemy_.GetTransform().position,
+                       cameraYaw_, forceRangedReflectMove, baseDeltaTime,
+                       suppressLookAt);
     }
     UpdateSwordVfx(baseDeltaTime);
     if (soundsLoaded_ && ctx_->sound != nullptr) {
@@ -1753,12 +1761,12 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
         cuePos.y += 1.64f;
         cuePos.z += (toCameraZ / toCameraLen) * 0.84f;
 
-        const XMFLOAT4 cueColor{0.22f, 1.0f, 0.34f, 1.0f};
-        sparkParticles_.EmitBurst(cuePos, 72, 1.20f,
+        const XMFLOAT4 cueColor{0.34f, 1.0f, 0.38f, 1.0f};
+        sparkParticles_.EmitBurst(cuePos, 112, 1.46f,
                                   GPUParticleSystem::BurstStyle::SlashLine,
                                   cueColor, {slashDir.x, slashDir.y, 0.0f},
-                                  0.86f);
-        enemyWeakPointParticleTimer_ = 0.120f;
+                                  1.06f);
+        enemyWeakPointParticleTimer_ = 0.085f;
     }
 
     constexpr float kReleaseCounterWindowDuration = 0.62f;
@@ -1826,7 +1834,7 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
         }
         const XMFLOAT4 cueColor =
             releaseCounterCueVisible ? XMFLOAT4{0.22f, 1.0f, 0.34f, 0.92f}
-                                     : XMFLOAT4{1.0f, 0.08f, 0.04f, 0.92f};
+                                     : XMFLOAT4{1.0f, 0.02f, 0.12f, 0.98f};
         const float cuePower =
             dualCounterCueVisible
                 ? 1.0f
@@ -1843,15 +1851,15 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
                     phase3GuardCounterCueVisible || dualCounterCueVisible)
                        ? 72u
                        : 52u)
-                : 60u;
+                : 76u;
         const float sparkRadius =
             kind == ActionKind::BladeClash
                 ? 0.34f
-                : releaseCounterCueVisible ? 0.90f * cuePower : 0.98f;
+                : releaseCounterCueVisible ? 0.90f * cuePower : 1.18f;
         const float sparkSpeed =
             kind == ActionKind::BladeClash
                 ? 1.65f
-                : releaseCounterCueVisible ? 4.15f * cuePower : 4.35f;
+                : releaseCounterCueVisible ? 4.15f * cuePower : 4.70f;
         sparkParticles_.EmitBurst(cuePos, sparkCount, sparkRadius,
                                   GPUParticleSystem::BurstStyle::Sparks,
                                   cueColor, forward, sparkSpeed);
@@ -1863,14 +1871,21 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
             const SwordCounterAxis cueAxis =
                 RequiredVisualCounterAxisForAction(kind);
             sparkParticles_.EmitBurst(
-                cuePos, releaseCounterCueVisible ? 72u : 64u,
-                releaseCounterCueVisible ? 1.04f : 0.96f,
+                cuePos, releaseCounterCueVisible ? 104u : 116u,
+                releaseCounterCueVisible ? 1.26f : 1.34f,
                 GPUParticleSystem::BurstStyle::SlashLine, cueColor,
-                CounterAxisParticleDirection(cueAxis), 0.74f);
+                CounterAxisParticleDirection(cueAxis), 0.96f);
+            if (badSlashCueVisible) {
+                sparkParticles_.EmitBurst(
+                    cuePos, 46u, 0.74f,
+                    GPUParticleSystem::BurstStyle::SlashLine,
+                    {1.0f, 0.16f, 0.10f, 0.82f},
+                    CounterAxisParticleDirection(cueAxis), 0.58f);
+            }
         }
         const XMFLOAT4 flashColor =
             releaseCounterCueVisible ? XMFLOAT4{0.18f, 1.0f, 0.28f, 0.78f}
-                                     : XMFLOAT4{1.0f, 0.05f, 0.03f, 0.78f};
+                                     : XMFLOAT4{1.0f, 0.04f, 0.10f, 0.88f};
         smokeParticles_.EmitBurst(cuePos,
                                   kind == ActionKind::BladeClash
                                       ? 2
@@ -2198,7 +2213,7 @@ void GameScene::UpdateBattleIntro(float deltaTime) {
         const float whiteBg =
             SmoothStep01((battleIntroTimer_ - 2.34f) / 0.38f);
         const XMFLOAT4 darkBg = {0.040f, 0.050f, 0.088f, 1.0f};
-        const XMFLOAT4 paperWhite = {0.94f, 0.945f, 0.925f, 1.0f};
+        const XMFLOAT4 paperWhite = {0.34f, 0.365f, 0.390f, 1.0f};
         ctx_->dxCommon->SetClearColor(
             {darkBg.x + (paperWhite.x - darkBg.x) * whiteBg,
              darkBg.y + (paperWhite.y - darkBg.y) * whiteBg,
@@ -2238,7 +2253,7 @@ void GameScene::UpdateBattleIntro(float deltaTime) {
         battleIntroTimer_ = battleIntroDuration_;
         ApplyEnemyIntroDissolve(1.0f);
         if (ctx_ != nullptr && ctx_->dxCommon != nullptr) {
-            ctx_->dxCommon->SetClearColor({0.94f, 0.945f, 0.925f, 1.0f});
+            ctx_->dxCommon->SetClearColor({0.34f, 0.365f, 0.390f, 1.0f});
         }
         if (ctx_ != nullptr && ctx_->postEffectRenderer != nullptr) {
             ctx_->postEffectRenderer->SetRadialBlurStrength(0.0f);
@@ -3068,7 +3083,7 @@ void GameScene::DrawEnemyWeaponTrail() {
         const XMFLOAT4 sampleColor =
             kind == ActionKind::Smash
                 ? (enemy_.GetActionId() == ActionId::DelaySmash
-                       ? XMFLOAT4{1.0f, 0.24f, 0.04f, 0.74f}
+                       ? XMFLOAT4{1.0f, 0.03f, 0.12f, 0.84f}
                        : XMFLOAT4{1.0f, 0.70f, 0.18f, 0.70f})
             : kind == ActionKind::BladeClash
                 ? XMFLOAT4{0.48f, 1.0f, 0.74f, 0.86f}
@@ -3092,7 +3107,7 @@ void GameScene::DrawEnemyWeaponTrail() {
     if (kind == ActionKind::Smash) {
         const XMFLOAT4 trailColor =
             enemy_.GetActionId() == ActionId::DelaySmash
-                ? XMFLOAT4{1.0f, 0.24f, 0.04f, 0.74f}
+                ? XMFLOAT4{1.0f, 0.03f, 0.12f, 0.84f}
                 : XMFLOAT4{1.0f, 0.70f, 0.18f, 0.70f};
         drawTrailPlane({trailCenter.x + toCameraX * 0.035f,
                         trailCenter.y + 0.010f,
@@ -3101,6 +3116,17 @@ void GameScene::DrawEnemyWeaponTrail() {
                        {trailLength * 0.90f, trailThickness, 1.0f},
                        trailColor, 1.12f + 0.22f * pulse + activeBoost * 0.50f,
                        0.02f);
+        if (enemy_.GetActionId() == ActionId::DelaySmash) {
+            drawTrailPlane({trailCenter.x + toCameraX * 0.052f,
+                            trailCenter.y + 0.018f,
+                            trailCenter.z + toCameraZ * 0.052f},
+                           billboardYaw, trailRoll,
+                           {trailLength * 0.76f, trailThickness * 0.36f,
+                            1.0f},
+                           {1.0f, 0.18f, 0.10f, 0.68f},
+                           0.58f + 0.14f * pulse + activeBoost * 0.24f,
+                           0.00f);
+        }
     } else if (kind == ActionKind::Sweep) {
         drawTrailPlane({trailCenter.x + toCameraX * 0.035f,
                         trailCenter.y + 0.010f,
@@ -3154,252 +3180,268 @@ void GameScene::DrawChargeWeakPoint() {
     toCameraZ /= toCameraLen;
     const float pulse = 0.5f + 0.5f * std::sinf(sceneLightTime_ * 24.0f);
     const float yaw = BillboardYawToCamera(enemyPos, cameraPos);
+    const size_t directionIndex = static_cast<size_t>(std::clamp(
+        chargeWeakPointSlashCount_, 0,
+        static_cast<int>(chargeWeakPointRequiredDirections_.size() - 1)));
+    const XMFLOAT2 slashDir = chargeWeakPointRequiredDirections_[directionIndex];
+    const float slashRoll = std::atan2f(slashDir.y, slashDir.x);
 
     Transform outer{};
-    outer.position = {enemyPos.x + toCameraX * 0.72f, enemyPos.y + 1.62f,
-                      enemyPos.z + toCameraZ * 0.72f};
+    outer.position = {enemyPos.x + toCameraX * 0.82f, enemyPos.y + 1.66f,
+                      enemyPos.z + toCameraZ * 0.82f};
     outer.rotation = MakeQuat(0.0f, yaw, 0.0f);
-    outer.scale = {1.20f + 0.28f * pulse, 1.20f + 0.28f * pulse, 1.0f};
+    outer.scale = {1.34f + 0.22f * pulse, 1.34f + 0.22f * pulse, 1.0f};
+
+    if (chargeWeakPointBackplateModelId_ != 0) {
+        Transform backplate = outer;
+        backplate.position.x += toCameraX * 0.018f;
+        backplate.position.z += toCameraZ * 0.018f;
+        backplate.scale = {1.58f, 1.58f, 1.0f};
+        ctx_->model->Draw(chargeWeakPointBackplateModelId_, backplate,
+                          camera_);
+
+        Transform slashShadow = outer;
+        slashShadow.position.x += toCameraX * 0.030f;
+        slashShadow.position.z += toCameraZ * 0.030f;
+        slashShadow.rotation = MakeQuat(0.0f, yaw, slashRoll);
+        slashShadow.scale = {2.02f, 0.38f, 1.0f};
+        ctx_->model->Draw(chargeWeakPointBackplateModelId_, slashShadow,
+                          camera_);
+    }
 
     ModelDrawEffect outerEffect{};
     outerEffect.enabled = true;
     outerEffect.additiveBlend = true;
     outerEffect.disableCulling = true;
-    outerEffect.color = {1.0f, 0.34f, 0.04f, 0.58f};
-    outerEffect.intensity = 0.42f + 0.18f * pulse;
+    outerEffect.color = {0.42f, 1.0f, 0.38f, 0.76f};
+    outerEffect.intensity = 0.56f + 0.22f * pulse;
     outerEffect.fresnelPower = 1.2f;
     outerEffect.noiseAmount = 0.18f;
     outerEffect.time = sceneLightTime_;
     ctx_->model->SetDrawEffect(outerEffect);
     ctx_->model->Draw(chargeWeakPointModelId_, outer, camera_);
 
+    if (chargeWeakPointSlashModelId_ != 0) {
+        Transform slash = outer;
+        slash.position.x += toCameraX * 0.052f;
+        slash.position.z += toCameraZ * 0.052f;
+        slash.rotation = MakeQuat(0.0f, yaw, slashRoll);
+        slash.scale = {1.76f + 0.14f * pulse, 0.18f + 0.04f * pulse,
+                       1.0f};
+
+        ModelDrawEffect slashEffect{};
+        slashEffect.enabled = true;
+        slashEffect.additiveBlend = true;
+        slashEffect.disableCulling = true;
+        slashEffect.color = {0.36f, 1.0f, 0.30f, 0.94f};
+        slashEffect.intensity = 0.88f + 0.26f * pulse;
+        slashEffect.fresnelPower = 0.75f;
+        slashEffect.noiseAmount = 0.08f;
+        slashEffect.time = sceneLightTime_;
+        ctx_->model->SetDrawEffect(slashEffect);
+        ctx_->model->Draw(chargeWeakPointSlashModelId_, slash, camera_);
+    }
+
     ctx_->model->ClearDrawEffect();
 }
 
 void GameScene::DrawBladeClashFinishBackdrop() {
-    ModelManager *model = ctx_->model;
-
-    ModelDrawEffect backdropEffect{};
-    backdropEffect.enabled = true;
-    backdropEffect.additiveBlend = false;
-    backdropEffect.disableCulling = true;
-    backdropEffect.color = {0.74f, 0.78f, 0.86f, 0.22f};
-    backdropEffect.intensity = 0.10f;
-    backdropEffect.fresnelPower = 1.60f;
-    backdropEffect.noiseAmount = 0.0f;
-    backdropEffect.time = sceneLightTime_;
-    model->SetDrawEffect(backdropEffect);
-
-    Transform terrain{};
-    terrain.position = {0.0f, -0.42f, 0.0f};
-    terrain.rotation = MakeQuat(0.0f, 0.0f, 0.0f);
-    terrain.scale = {1.0f, 1.0f, 1.0f};
-    model->Draw(arenaLowPolyTerrainModelId_, terrain, camera_);
-
-    DrawDistantHazardBackdrop();
-
-    Transform floor{};
-    floor.position = {0.0f, -0.04f, 0.0f};
-    floor.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
-    floor.scale = {28.0f, 28.0f, 1.0f};
-    model->Draw(arenaFloorModelId_, floor, camera_);
-
-    Transform centerDisk{};
-    centerDisk.position = {0.0f, 0.006f, 0.0f};
-    centerDisk.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
-    model->Draw(arenaCenterDiskModelId_, centerDisk, camera_);
-
-    model->ClearDrawEffect();
+    DrawArena();
 }
 
 void GameScene::DrawDistantHazardBackdrop() {
     ModelManager *model = ctx_->model;
     const float pulse = 0.5f + 0.5f * std::sinf(sceneLightTime_ * 1.8f);
 
-    ModelDrawEffect baseEffect{};
-    baseEffect.enabled = true;
-    baseEffect.additiveBlend = false;
-    baseEffect.disableCulling = false;
-    baseEffect.color = {0.13f, 0.18f, 0.22f, 0.72f};
-    baseEffect.intensity = 0.10f;
-    baseEffect.fresnelPower = 1.2f;
-    baseEffect.noiseAmount = 0.02f;
-    baseEffect.time = sceneLightTime_;
-    model->SetDrawEffect(baseEffect);
-    for (int i = 0; i < 8; ++i) {
-        const float angle = static_cast<float>(i) * kPi * 0.25f;
-        Transform distant{};
-        distant.position = {std::sinf(angle) * 53.0f, -3.10f,
-                            std::cosf(angle) * 53.0f + 8.0f};
-        distant.rotation = MakeQuat(0.0f, -angle, 0.0f);
-        distant.scale = {0.34f, 0.22f, 0.20f};
-        model->Draw(arenaDistantTerrainModelId_, distant, camera_);
-    }
-    model->ClearDrawEffect();
-
     ModelDrawEffect cityEffect{};
     cityEffect.enabled = true;
     cityEffect.additiveBlend = false;
-    cityEffect.disableCulling = false;
-    cityEffect.color = {0.18f, 0.25f, 0.30f, 0.86f};
-    cityEffect.intensity = 0.23f;
+    cityEffect.disableCulling = true;
+    cityEffect.color = {0.16f, 0.20f, 0.24f, 0.90f};
+    cityEffect.intensity = 0.12f;
     cityEffect.fresnelPower = 0.95f;
-    cityEffect.noiseAmount = 0.025f;
+    cityEffect.noiseAmount = 0.0f;
     cityEffect.time = sceneLightTime_ * 0.45f;
     model->SetDrawEffect(cityEffect);
-    for (int i = 0; i < 52; ++i) {
-        const float angle = static_cast<float>(i) * kPi * 2.0f / 52.0f;
-        const float front = 0.5f + 0.5f * std::cosf(angle);
-        const float sideLift = 0.5f + 0.5f * std::sinf(angle * 2.0f + 0.7f);
-        const float jitter = std::sinf(static_cast<float>(i) * 2.41f);
-        const float radius = 46.0f + sideLift * 5.6f;
-        const float height = 2.5f + front * 3.2f + sideLift * 2.0f +
-                             jitter * 0.42f;
-        Transform tower{};
-        tower.position = {std::sinf(angle) * radius, -0.62f,
-                          std::cosf(angle) * radius + 8.0f};
-        tower.rotation = MakeQuat(0.0f, -angle, 0.0f);
-        tower.scale = {0.50f + 0.08f * std::fabs(jitter), height,
-                       0.50f + 0.08f * front};
-        model->Draw(arenaCityTowerModelId_, tower, camera_);
+    for (int side = 0; side < 4; ++side) {
+        const bool alongX = side < 2;
+        const float sign = (side == 0 || side == 2) ? 1.0f : -1.0f;
+        for (int row = 0; row < 3; ++row) {
+            for (int i = 0; i < 17; ++i) {
+                const float lane = (static_cast<float>(i) - 8.0f) * 4.15f;
+                const float depthLane = 48.0f + static_cast<float>(row) * 4.1f;
+                const float height =
+                    2.4f + static_cast<float>((i * 5 + row * 7 + side) % 10) *
+                               0.45f +
+                    static_cast<float>(row) * 0.55f;
+                Transform tower{};
+                tower.position = alongX
+                                     ? XMFLOAT3{lane, -0.68f,
+                                               sign * depthLane + 8.0f}
+                                     : XMFLOAT3{sign * depthLane, -0.68f,
+                                               lane + 8.0f};
+                tower.rotation =
+                    MakeQuat(0.0f, alongX ? 0.0f : kPi * 0.5f, 0.0f);
+                tower.scale = {0.62f + static_cast<float>((i + row) % 3) * 0.16f,
+                               height,
+                               0.78f + static_cast<float>((i * 3 + row) % 2) *
+                                           0.24f};
+                model->Draw(arenaCityTowerModelId_, tower, camera_);
+            }
+        }
     }
     model->ClearDrawEffect();
 
-    ModelDrawEffect upperTierEffect = cityEffect;
-    upperTierEffect.color = {0.24f, 0.34f, 0.40f, 0.72f};
-    upperTierEffect.intensity = 0.16f;
-    model->SetDrawEffect(upperTierEffect);
-    for (int i = 0; i < 26; ++i) {
-        const float angle = (static_cast<float>(i) + 0.5f) * kPi * 2.0f / 26.0f;
-        const float radius = 49.0f;
-        Transform tier{};
-        tier.position = {std::sinf(angle) * radius, 3.20f,
-                         std::cosf(angle) * radius + 8.0f};
-        tier.rotation = MakeQuat(0.0f, -angle, 0.0f);
-        tier.scale = {0.88f, 1.05f, 0.42f};
-        model->Draw(arenaCityTowerModelId_, tier, camera_);
+    ModelDrawEffect blockEffect = cityEffect;
+    blockEffect.color = {0.07f, 0.10f, 0.13f, 0.92f};
+    blockEffect.intensity = 0.18f;
+    model->SetDrawEffect(blockEffect);
+    for (int i = 0; i < 15; ++i) {
+        const float offset = static_cast<float>(i - 7);
+        Transform wall{};
+        wall.position = {offset * 1.72f, -0.76f,
+                         72.0f + std::fabs(offset) * 0.42f};
+        wall.rotation = MakeQuat(0.0f, 0.0f, 0.0f);
+        wall.scale = {1.28f + 0.12f * static_cast<float>(i % 3),
+                      5.3f + static_cast<float>((i * 5) % 5) * 0.72f,
+                      1.08f};
+        model->Draw(arenaCityTowerModelId_, wall, camera_);
+    }
+    for (int side = 0; side < 2; ++side) {
+        const float sign = side == 0 ? -1.0f : 1.0f;
+        for (int step = 0; step < 4; ++step) {
+            Transform brace{};
+            brace.position = {sign * (9.2f + static_cast<float>(step) * 2.25f),
+                              2.25f + static_cast<float>(step) * 0.62f,
+                              69.4f + static_cast<float>(step) * 1.55f};
+            brace.rotation = MakeQuat(0.0f, sign * 0.12f, 0.0f);
+            brace.scale = {2.8f - static_cast<float>(step) * 0.22f, 0.30f,
+                           0.78f};
+            model->Draw(arenaCityTowerModelId_, brace, camera_);
+        }
     }
     model->ClearDrawEffect();
 
-    ModelDrawEffect windowEffect{};
-    windowEffect.enabled = true;
-    windowEffect.additiveBlend = true;
-    windowEffect.disableCulling = true;
-    windowEffect.color = {0.96f, 0.58f, 0.28f, 0.22f};
-    windowEffect.intensity = 0.060f + 0.030f * pulse;
-    windowEffect.fresnelPower = 1.0f;
-    windowEffect.noiseAmount = 0.045f;
-    windowEffect.time = sceneLightTime_;
-    model->SetDrawEffect(windowEffect);
-    for (int i = 0; i < 52; i += 2) {
-        const float angle = (static_cast<float>(i) + 0.5f) * kPi * 2.0f / 52.0f;
-        const float front = 0.5f + 0.5f * std::cosf(angle);
-        const float radius = 45.2f;
-        Transform windows{};
-        windows.position = {std::sinf(angle) * radius, 1.20f + front * 1.75f,
-                            std::cosf(angle) * radius + 7.4f};
-        windows.rotation = MakeQuat(0.0f, -angle, 0.0f);
-        windows.scale = {0.24f + 0.08f * front, 0.86f + 0.62f * front, 1.0f};
-        model->Draw(arenaCityWindowModelId_, windows, camera_);
-    }
-    model->ClearDrawEffect();
-
-    ModelDrawEffect giantEffect{};
-    giantEffect.enabled = true;
-    giantEffect.additiveBlend = false;
-    giantEffect.disableCulling = false;
-    giantEffect.color = {0.032f, 0.060f, 0.070f, 0.68f};
-    giantEffect.intensity = 0.22f + 0.025f * pulse;
-    giantEffect.fresnelPower = 0.62f;
-    giantEffect.noiseAmount = 0.06f;
-    giantEffect.time = sceneLightTime_ * 0.35f;
-    model->SetDrawEffect(giantEffect);
-    Transform body{};
-    body.position = {0.0f, -1.90f, 82.0f};
-    body.rotation = MakeQuat(0.0f, 0.0f, 0.0f);
-    body.scale = {1.95f, 1.48f + 0.025f * pulse, 1.02f};
-    model->Draw(arenaGiantBodyModelId_, body, camera_);
-
-    Transform head{};
-    head.position = {0.0f, 6.40f + 0.055f * pulse, 81.80f};
-    head.rotation = MakeQuat(0.0f, 0.0f, 0.0f);
-    head.scale = {1.28f, 0.92f, 0.86f};
-    model->Draw(arenaGiantHeadModelId_, head, camera_);
-
-    for (int i = 0; i < 2; ++i) {
-        const float side = i == 0 ? -1.0f : 1.0f;
-        Transform horn{};
-        horn.position = {side * 0.88f, 7.10f, 81.55f};
-        horn.rotation = MakeQuat(0.24f, side * 0.22f, side * 0.20f);
-        horn.scale = {0.17f, 0.34f, 0.17f};
-        model->Draw(arenaHazardSpireModelId_, horn, camera_);
-    }
-    model->ClearDrawEffect();
-
-    ModelDrawEffect eyeEffect{};
-    eyeEffect.enabled = true;
-    eyeEffect.additiveBlend = true;
-    eyeEffect.disableCulling = true;
-    eyeEffect.color = {0.94f, 0.46f, 0.24f, 0.34f};
-    eyeEffect.intensity = 0.045f + 0.045f * pulse;
-    eyeEffect.fresnelPower = 0.5f;
-    eyeEffect.noiseAmount = 0.02f;
-    eyeEffect.time = sceneLightTime_;
-    model->SetDrawEffect(eyeEffect);
-    for (int i = 0; i < 2; ++i) {
-        const float side = i == 0 ? -1.0f : 1.0f;
-        Transform eye{};
-        eye.position = {side * 0.36f, 6.85f, 81.05f};
-        eye.rotation = MakeQuat(0.0f, 0.0f, 0.0f);
-        eye.scale = {0.065f, 0.018f, 1.0f};
-        model->Draw(arenaCityWindowModelId_, eye, camera_);
+    ModelDrawEffect lightEffect{};
+    lightEffect.enabled = true;
+    lightEffect.additiveBlend = true;
+    lightEffect.disableCulling = true;
+    lightEffect.color = {0.96f, 0.58f, 0.28f, 0.18f};
+    lightEffect.intensity = 0.035f + 0.025f * pulse;
+    lightEffect.fresnelPower = 0.8f;
+    lightEffect.noiseAmount = 0.0f;
+    lightEffect.time = sceneLightTime_;
+    model->SetDrawEffect(lightEffect);
+    for (int side = 0; side < 4; ++side) {
+        const bool alongX = side < 2;
+        const float sign = (side == 0 || side == 2) ? 1.0f : -1.0f;
+        for (int i = 0; i < 11; ++i) {
+            const float lane = (static_cast<float>(i) - 5.0f) * 4.0f;
+            Transform panel{};
+            panel.position = alongX
+                                 ? XMFLOAT3{lane, 1.15f + static_cast<float>(i % 4) * 0.58f,
+                                           sign * 47.35f + 8.0f}
+                                 : XMFLOAT3{sign * 47.35f,
+                                           1.15f + static_cast<float>(i % 4) * 0.58f,
+                                           lane + 8.0f};
+            panel.rotation =
+                MakeQuat(0.0f, alongX ? 0.0f : kPi * 0.5f, 0.0f);
+            panel.scale = {0.16f, 1.05f + static_cast<float>(i % 2) * 0.40f,
+                           1.0f};
+            model->Draw(arenaCityWindowModelId_, panel, camera_);
+        }
     }
     model->ClearDrawEffect();
 }
 
 void GameScene::DrawArena() {
     ModelManager *model = ctx_->model;
-
-    Transform terrain{};
-    terrain.position = {0.0f, -0.42f, 0.0f};
-    terrain.rotation = MakeQuat(0.0f, 0.0f, 0.0f);
-    terrain.scale = {1.0f, 1.0f, 1.0f};
-    model->Draw(arenaLowPolyTerrainModelId_, terrain, camera_);
+    const float pulse = 0.5f + 0.5f * std::sinf(sceneLightTime_ * 2.2f);
+    constexpr float kPatternSpacing = 3.55f;
+    constexpr float kLaneSpacing = 4.25f;
 
     DrawDistantHazardBackdrop();
 
     Transform floor{};
     floor.position = {0.0f, -0.04f, 0.0f};
     floor.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
-    floor.scale = {28.0f, 28.0f, 1.0f};
+    floor.scale = {180.0f, 180.0f, 1.0f};
     model->Draw(arenaFloorModelId_, floor, camera_);
 
-    Transform centerDisk{};
-    centerDisk.position = {0.0f, 0.006f, 0.0f};
-    centerDisk.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
-    model->Draw(arenaCenterDiskModelId_, centerDisk, camera_);
+    ModelDrawEffect fieldEffect{};
+    fieldEffect.enabled = true;
+    fieldEffect.additiveBlend = false;
+    fieldEffect.disableCulling = true;
+    fieldEffect.color = {0.085f, 0.075f, 0.060f, 0.115f};
+    fieldEffect.intensity = 0.004f;
+    fieldEffect.fresnelPower = 0.7f;
+    fieldEffect.noiseAmount = 0.0f;
+    fieldEffect.time = sceneLightTime_;
+    model->SetDrawEffect(fieldEffect);
 
-    for (int i = 0; i < 16; ++i) {
-        const float angle = static_cast<float>(i) * kPi * 0.125f;
-        const float x = std::sinf(angle) * 3.7f;
-        const float z = std::cosf(angle) * 3.7f;
-
-        Transform spoke{};
-        spoke.position = {x, 0.008f, z};
-        spoke.rotation = MakeQuat(-kPi * 0.5f, angle, 0.0f);
-        spoke.scale = {0.075f, 4.8f, 1.0f};
-        model->Draw(arenaSpokeModelId_, spoke, camera_);
+    for (int z = -14; z <= 14; ++z) {
+        for (int x = -14; x <= 14; ++x) {
+            if ((std::abs(x) + std::abs(z)) % 2 != 0) {
+                continue;
+            }
+            Transform tile{};
+            tile.position = {static_cast<float>(x) * kPatternSpacing, 0.004f,
+                             static_cast<float>(z) * kPatternSpacing};
+            tile.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
+            tile.scale = {2.26f, 2.26f, 1.0f};
+            model->Draw(arenaSpokeModelId_, tile, camera_);
+        }
     }
 
-    Transform innerRing{};
-    innerRing.position = {0.0f, 0.012f, 0.0f};
-    innerRing.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
-    model->Draw(arenaInnerRingModelId_, innerRing, camera_);
+    Transform center{};
+    center.position = {0.0f, 0.012f, 0.0f};
+    center.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
+    center.scale = {4.8f, 4.8f, 1.0f};
+    model->Draw(arenaSpokeModelId_, center, camera_);
 
-    Transform outerRing{};
-    outerRing.position = {0.0f, 0.018f, 0.0f};
-    outerRing.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
-    model->Draw(arenaOuterRingModelId_, outerRing, camera_);
+    for (int i = -13; i <= 13; ++i) {
+        Transform laneX{};
+        laneX.position = {0.0f, 0.016f,
+                          static_cast<float>(i) * kLaneSpacing};
+        laneX.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
+        laneX.scale = {168.0f, i == 0 ? 0.080f : 0.034f, 1.0f};
+        model->Draw(arenaSpokeModelId_, laneX, camera_);
+
+        Transform laneZ{};
+        laneZ.position = {static_cast<float>(i) * kLaneSpacing, 0.017f,
+                          0.0f};
+        laneZ.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
+        laneZ.scale = {i == 0 ? 0.080f : 0.034f, 168.0f, 1.0f};
+        model->Draw(arenaSpokeModelId_, laneZ, camera_);
+    }
+    model->ClearDrawEffect();
+
+    ModelDrawEffect lineEffect{};
+    lineEffect.enabled = true;
+    lineEffect.additiveBlend = true;
+    lineEffect.disableCulling = true;
+    lineEffect.color = {0.22f, 0.10f, 0.045f, 0.026f};
+    lineEffect.intensity = 0.0015f + 0.0015f * pulse;
+    lineEffect.fresnelPower = 0.75f;
+    lineEffect.noiseAmount = 0.0f;
+    lineEffect.time = sceneLightTime_;
+    model->SetDrawEffect(lineEffect);
+    for (int i = -15; i <= 15; ++i) {
+        Transform lightX{};
+        lightX.position = {0.0f, 0.034f,
+                           static_cast<float>(i) * kPatternSpacing};
+        lightX.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
+        lightX.scale = {160.0f, 0.016f, 1.0f};
+        model->Draw(arenaCityWindowModelId_, lightX, camera_);
+
+        Transform lightZ{};
+        lightZ.position = {static_cast<float>(i) * kPatternSpacing, 0.035f,
+                           0.0f};
+        lightZ.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
+        lightZ.scale = {0.016f, 160.0f, 1.0f};
+        model->Draw(arenaCityWindowModelId_, lightZ, camera_);
+    }
+    model->ClearDrawEffect();
 }
 
 void GameScene::DrawEnemyFocusMarker() {

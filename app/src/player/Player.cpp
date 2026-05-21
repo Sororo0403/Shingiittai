@@ -56,13 +56,8 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
     hunterGamepadAttackTimer_ = 0.0f;
     hunterGamepadAttackDuration_ = 0.0f;
     hunterNextSideSlashLeft_ = true;
-    dodgeTimer_ = 0.0f;
-    dodgeCooldownTimer_ = 0.0f;
-    dodgeInvulnerableTimer_ = 0.0f;
-    dodgeDirection_ = {0.0f, -1.0f};
     autoMoveOrbitDir_ = 1.0f;
     autoMoveOrbitTimer_ = 0.0f;
-    autoDodgeSide_ = 1.0f;
     leftSword_.Update(BuildSwordTransform(MakeIdleSwordPose(true), true),
                       MakeIdleSwordPose(true), 0.0f);
     rightSword_.Update(BuildSwordTransform(MakeIdleSwordPose(false), false),
@@ -77,7 +72,7 @@ void Player::SetInputCalibration(const SwordInputCalibration &calibration) {
 
 void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
                     float cameraYaw, bool forceRangedReflectMove,
-                    float controlDeltaTime) {
+                    float controlDeltaTime, bool suppressLookAt) {
     const float inputDeltaTime =
         controlDeltaTime > 0.0f ? controlDeltaTime : deltaTime;
 
@@ -88,13 +83,14 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
         ToggleGamepadControlMode();
     }
 
-    UpdateDodgeInput(input, deltaTime, cameraYaw, lookTarget);
     UpdateMovement(input, deltaTime, cameraYaw, lookTarget,
                    forceRangedReflectMove);
     UpdateSwingCombo(deltaTime);
     UpdateOverSwing(deltaTime);
     KeepDistanceFromTarget(lookTarget);
-    LookAt(lookTarget);
+    if (!suppressLookAt) {
+        LookAt(lookTarget);
+    }
 
     const InputControlType controlType = inputCalibration_.controlType;
     const bool useKeyboardMouse =
@@ -182,8 +178,7 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     }
 
     const bool isInPostSlashRecovery = postSlashRecoveryTimer_ > 0.0f;
-    const bool isDodging = dodgeTimer_ > 0.0f;
-    if (isInPostSlashRecovery || isDodging) {
+    if (isInPostSlashRecovery) {
         leftPose.isSlashMode = false;
         rightPose.isSlashMode = false;
         leftPose.isGuard = false;
@@ -324,18 +319,6 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
         playerVisual.scale.x *= 1.0f + 0.045f * attackRecoveryRatio;
         playerVisual.scale.y *= 1.0f - 0.075f * attackRecoveryRatio;
         playerVisual.scale.z *= 1.0f + 0.045f * attackRecoveryRatio;
-    }
-    if (dodgeTimer_ > 0.0f) {
-        const float dodgeRatio =
-            std::clamp(dodgeTimer_ / kDodgeDuration, 0.0f, 1.0f);
-        const float lean = 0.22f * std::sinf((1.0f - dodgeRatio) * 3.14159265f);
-        XMVECTOR baseRot = XMLoadFloat4(&playerVisual.rotation);
-        XMVECTOR qLean =
-            XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), lean);
-        XMStoreFloat4(&playerVisual.rotation,
-                      XMQuaternionNormalize(XMQuaternionMultiply(qLean, baseRot)));
-        playerVisual.position.y -= 0.10f * std::sinf((1.0f - dodgeRatio) *
-                                                     3.14159265f);
     }
     if (bladeClashPoseActive_) {
         const float push = std::clamp(bladeClashPosePushRatio_, 0.0f, 1.0f);
@@ -656,104 +639,8 @@ DirectX::XMFLOAT2 Player::ReadMovementInput(Input *input) const {
     return {inputX, inputZ};
 }
 
-bool Player::IsDodgeInputTriggered(Input *input) const {
-    const bool keyboardDodge = input->IsKeyTrigger(DIK_SPACE);
-    const bool gamepadDodge =
-        input->IsGamepadConnected() &&
-        input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_B);
-    const bool leftJoyConDodge =
-        leftJoyCon_.IsConnected() &&
-        (leftJoyCon_.IsButtonTrigger(JSMASK_S) ||
-         leftJoyCon_.IsButtonTrigger(JSMASK_LCLICK));
-    const bool rightJoyConDodge =
-        rightJoyCon_.IsConnected() &&
-        (rightJoyCon_.IsButtonTrigger(JSMASK_S) ||
-         rightJoyCon_.IsButtonTrigger(JSMASK_RCLICK));
-
-    return keyboardDodge || gamepadDodge || leftJoyConDodge || rightJoyConDodge;
-}
-
 bool Player::UsesJoyConAutoMovement() const {
     return leftJoyCon_.IsConnected() || rightJoyCon_.IsConnected();
-}
-
-void Player::UpdateDodgeInput(Input *input, float deltaTime, float cameraYaw,
-                              const XMFLOAT3 &lookTarget) {
-    if (dodgeCooldownTimer_ > 0.0f) {
-        dodgeCooldownTimer_ -= deltaTime;
-        if (dodgeCooldownTimer_ < 0.0f) {
-            dodgeCooldownTimer_ = 0.0f;
-        }
-    }
-    if (dodgeTimer_ > 0.0f) {
-        dodgeTimer_ -= deltaTime;
-        if (dodgeTimer_ < 0.0f) {
-            dodgeTimer_ = 0.0f;
-        }
-    }
-    if (dodgeInvulnerableTimer_ > 0.0f) {
-        dodgeInvulnerableTimer_ -= deltaTime;
-        if (dodgeInvulnerableTimer_ < 0.0f) {
-            dodgeInvulnerableTimer_ = 0.0f;
-        }
-    }
-
-    if (dodgeTimer_ > 0.0f || dodgeCooldownTimer_ > 0.0f ||
-        !IsDodgeInputTriggered(input)) {
-        return;
-    }
-
-    XMFLOAT2 inputDir = ReadMovementInput(input);
-    const float lenSq = inputDir.x * inputDir.x + inputDir.y * inputDir.y;
-    float worldX = 0.0f;
-    float worldZ = 0.0f;
-    if (lenSq > 0.01f && !UsesJoyConAutoMovement()) {
-        const float sinYaw = std::sinf(cameraYaw);
-        const float cosYaw = std::cosf(cameraYaw);
-        worldX = sinYaw * inputDir.y + cosYaw * inputDir.x;
-        worldZ = cosYaw * inputDir.y - sinYaw * inputDir.x;
-    } else if (UsesJoyConAutoMovement()) {
-        float toTargetX = lookTarget.x - tf_.position.x;
-        float toTargetZ = lookTarget.z - tf_.position.z;
-        float distSq = toTargetX * toTargetX + toTargetZ * toTargetZ;
-        if (distSq < 0.0001f) {
-            toTargetX = std::sinf(yaw_);
-            toTargetZ = std::cosf(yaw_);
-            distSq = 1.0f;
-        }
-
-        const float invDist = 1.0f / std::sqrt(distSq);
-        const float towardX = toTargetX * invDist;
-        const float towardZ = toTargetZ * invDist;
-        const float rightX = towardZ;
-        const float rightZ = -towardX;
-        const float distance = std::sqrt(distSq);
-        const bool tooClose = distance < kJoyConAutoMoveNearDistance;
-
-        worldX = rightX * autoDodgeSide_;
-        worldZ = rightZ * autoDodgeSide_;
-        if (tooClose) {
-            worldX -= towardX * 0.75f;
-            worldZ -= towardZ * 0.75f;
-        }
-        autoDodgeSide_ *= -1.0f;
-    } else {
-        worldX = -std::sinf(yaw_);
-        worldZ = -std::cosf(yaw_);
-    }
-
-    const float worldLenSq = worldX * worldX + worldZ * worldZ;
-    if (worldLenSq > 0.001f) {
-        const float invLen = 1.0f / std::sqrt(worldLenSq);
-        worldX *= invLen;
-        worldZ *= invLen;
-    }
-
-    dodgeDirection_ = {worldX, worldZ};
-    dodgeTimer_ = kDodgeDuration;
-    dodgeInvulnerableTimer_ = kDodgeInvulnerableDuration;
-    dodgeCooldownTimer_ = kDodgeCooldownDuration;
-    postSlashRecoveryTimer_ = 0.0f;
 }
 
 void Player::UpdateMovement(Input *input, float deltaTime, float cameraYaw,
@@ -831,11 +718,7 @@ void Player::UpdateMovement(Input *input, float deltaTime, float cameraYaw,
         speedScale *= 0.38f;
     }
 
-    if (dodgeTimer_ > 0.0f) {
-        velocity_.x = dodgeDirection_.x * kDodgeSpeed;
-        velocity_.y = 0.0f;
-        velocity_.z = dodgeDirection_.y * kDodgeSpeed;
-    } else if (useAutoMovement && !hasManualMove) {
+    if (useAutoMovement && !hasManualMove) {
         velocity_.x = worldMoveX * speedScale;
         velocity_.y = 0.0f;
         velocity_.z = worldMoveZ * speedScale;
@@ -868,9 +751,8 @@ void Player::UpdateMovement(Input *input, float deltaTime, float cameraYaw,
         knockbackVelocity_.z = 0.0f;
 }
 
-float Player::TakeDamage(float damage, bool ignoreInvulnerability) {
-    if (damage <= 0.0f || (!ignoreInvulnerability && IsDamageInvulnerable()) ||
-        hp_ <= 0.0f) {
+float Player::TakeDamage(float damage) {
+    if (damage <= 0.0f || hp_ <= 0.0f) {
         return 0.0f;
     }
 
@@ -963,10 +845,6 @@ float Player::ComputeJoyConSwingDamageMultiplier(float angularVelocity) const {
 }
 
 void Player::AddKnockback(const DirectX::XMFLOAT3 &velocity) {
-    if (IsDamageInvulnerable()) {
-        return;
-    }
-
     knockbackVelocity_.x += velocity.x;
     knockbackVelocity_.y += velocity.y;
     knockbackVelocity_.z += velocity.z;
@@ -1066,10 +944,10 @@ SwordPose Player::UpdateKeyboardLeftSword(Input *input, float deltaTime) {
         dirX += 1.0f;
     }
     if (input->IsKeyPress(DIK_W)) {
-        dirY -= 1.0f;
+        dirY += 1.0f;
     }
     if (input->IsKeyPress(DIK_S)) {
-        dirY += 1.0f;
+        dirY -= 1.0f;
     }
 
     const bool slashTriggered =

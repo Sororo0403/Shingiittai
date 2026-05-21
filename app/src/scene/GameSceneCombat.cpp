@@ -711,7 +711,6 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     }
 
     const auto playerBox = player_.GetOBB();
-    const bool isPlayerDodging = player_.IsDamageInvulnerable();
     const float playerRecoveryDamageScale =
         player_.IsAttackRecovery() ? 1.65f : 1.0f;
     const auto enemyBodyBox = enemy_.GetBodyOBB();
@@ -1116,29 +1115,25 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                 player_.GetTransform().position.z -
                     enemy_.GetTransform().position.z);
 
-            if (isPlayerDodging) {
-                playerHitCooldown_ = 0.08f;
+            if (isEnemyBladeClashStrikeActive) {
+                enemy_.NotifyBladeClashLanded();
             } else {
-                if (isEnemyBladeClashStrikeActive) {
-                    enemy_.NotifyBladeClashLanded();
-                } else {
-                    enemy_.NotifyAttackConnected();
-                }
-                player_.TakeDamage(enemyAttackDamage * playerRecoveryDamageScale);
-                player_.AddKnockback(
-                    {knockbackDir.x * enemyAttackKnockback, 0.0f,
-                     knockbackDir.y * enemyAttackKnockback});
-                CombatFeedbackEvent feedback{};
-                feedback.type = CombatFeedbackEventType::PlayerDamaged;
-                feedback.position = player_.GetTransform().position;
-                feedback.position.y += 1.0f;
-                feedback.direction =
-                    DirectionFromTo(enemy_.GetTransform().position,
-                                    player_.GetTransform().position);
-                feedback.power = enemyAttackDamage / 10.0f;
-                DispatchCombatFeedback(feedback);
-                playerHitCooldown_ = 0.4f;
+                enemy_.NotifyAttackConnected();
             }
+            player_.TakeDamage(enemyAttackDamage * playerRecoveryDamageScale);
+            player_.AddKnockback(
+                {knockbackDir.x * enemyAttackKnockback, 0.0f,
+                 knockbackDir.y * enemyAttackKnockback});
+            CombatFeedbackEvent feedback{};
+            feedback.type = CombatFeedbackEventType::PlayerDamaged;
+            feedback.position = player_.GetTransform().position;
+            feedback.position.y += 1.0f;
+            feedback.direction =
+                DirectionFromTo(enemy_.GetTransform().position,
+                                player_.GetTransform().position);
+            feedback.power = enemyAttackDamage / 10.0f;
+            DispatchCombatFeedback(feedback);
+            playerHitCooldown_ = 0.4f;
         }
     }
 
@@ -1205,11 +1200,6 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
 
         if (IsNearXZ(wave.position, player_.GetTransform().position,
                      waveThreatRadius)) {
-            if (isPlayerDodging) {
-                playerHitCooldown_ = 0.08f;
-                continue;
-            }
-
             if (playerHitCooldown_ <= 0.0f) {
                 const XMFLOAT2 hitDir =
                     NormalizeXZ(wave.direction.x, wave.direction.z);

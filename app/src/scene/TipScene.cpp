@@ -127,7 +127,7 @@ TipScene::Image TipScene::LoadTextureImage(const std::wstring &path) {
 bool TipScene::ShouldStart() {
     switch (inputCalibration_.controlType) {
     case InputControlType::KeyboardMouse:
-        return ctx_->input->IsMouseTrigger(0);
+        return ctx_->input->IsKeyTrigger(DIK_SPACE);
     case InputControlType::JoyCon: {
         constexpr int kFaceButtons = JSMASK_S | JSMASK_E | JSMASK_W | JSMASK_N;
         const bool left =

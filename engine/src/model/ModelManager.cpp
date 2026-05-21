@@ -167,6 +167,74 @@ uint32_t ModelManager::CreatePlane(uint32_t textureId, const Material &material)
     return static_cast<uint32_t>(models_.size() - 1);
 }
 
+uint32_t ModelManager::CreateBox(uint32_t textureId, const Material &material,
+                                 float width, float height, float depth) {
+    width = (std::max)(width, 0.001f);
+    height = (std::max)(height, 0.001f);
+    depth = (std::max)(depth, 0.001f);
+
+    Material boxMaterial = material;
+    XMStoreFloat4x4(&boxMaterial.uvTransform,
+                    XMMatrixTranspose(XMMatrixIdentity()));
+
+    const float hx = width * 0.5f;
+    const float hz = depth * 0.5f;
+    const float y0 = 0.0f;
+    const float y1 = height;
+
+    std::vector<Vertex> vertices;
+    std::vector<uint32_t> indices;
+    vertices.reserve(24u);
+    indices.reserve(36u);
+
+    auto addFace = [&](const XMFLOAT3 &normal, const XMFLOAT3 &bottomLeft,
+                       const XMFLOAT3 &topLeft, const XMFLOAT3 &bottomRight,
+                       const XMFLOAT3 &topRight) {
+        const uint32_t base = static_cast<uint32_t>(vertices.size());
+        vertices.push_back({bottomLeft, normal, {0.0f, 1.0f}});
+        vertices.push_back({topLeft, normal, {0.0f, 0.0f}});
+        vertices.push_back({bottomRight, normal, {1.0f, 1.0f}});
+        vertices.push_back({topRight, normal, {1.0f, 0.0f}});
+        indices.push_back(base + 0u);
+        indices.push_back(base + 1u);
+        indices.push_back(base + 2u);
+        indices.push_back(base + 2u);
+        indices.push_back(base + 1u);
+        indices.push_back(base + 3u);
+    };
+
+    addFace({0.0f, 0.0f, 1.0f}, {-hx, y0, hz}, {-hx, y1, hz},
+            {hx, y0, hz}, {hx, y1, hz});
+    addFace({0.0f, 0.0f, -1.0f}, {hx, y0, -hz}, {hx, y1, -hz},
+            {-hx, y0, -hz}, {-hx, y1, -hz});
+    addFace({1.0f, 0.0f, 0.0f}, {hx, y0, hz}, {hx, y1, hz},
+            {hx, y0, -hz}, {hx, y1, -hz});
+    addFace({-1.0f, 0.0f, 0.0f}, {-hx, y0, -hz}, {-hx, y1, -hz},
+            {-hx, y0, hz}, {-hx, y1, hz});
+    addFace({0.0f, 1.0f, 0.0f}, {-hx, y1, -hz}, {-hx, y1, hz},
+            {hx, y1, -hz}, {hx, y1, hz});
+    addFace({0.0f, -1.0f, 0.0f}, {-hx, y0, hz}, {-hx, y0, -hz},
+            {hx, y0, hz}, {hx, y0, -hz});
+
+    Model model{};
+    ModelSubMesh subMesh{};
+    subMesh.vertexCount = static_cast<uint32_t>(vertices.size());
+    subMesh.meshId = meshManager_.CreateMesh(
+        vertices.data(), sizeof(Vertex), static_cast<uint32_t>(vertices.size()),
+        indices.data(), static_cast<uint32_t>(indices.size()));
+    subMesh.textureId = textureId;
+    subMesh.materialId = materialManager_.CreateMaterial(boxMaterial);
+
+    model.subMeshes.push_back(subMesh);
+    model.meshId = subMesh.meshId;
+    model.textureId = textureId;
+    model.materialId = subMesh.materialId;
+
+    modelRenderer_.CreateSkinClusters(model);
+    models_.push_back(model);
+    return static_cast<uint32_t>(models_.size() - 1);
+}
+
 uint32_t ModelManager::CreateRing(uint32_t textureId, const Material &material,
                                   uint32_t divide, float outerRadius,
                                   float innerRadius) {

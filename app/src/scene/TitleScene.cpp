@@ -74,6 +74,8 @@ void TitleScene::Initialize(const SceneContext &ctx) {
 
     ctx_->dxCommon->BeginUpload();
     logoImage_ = LoadTitleImage(L"app/resources/title/title_simple.png");
+    pressAnyButtonImage_ =
+        LoadTitleImage(L"app/resources/title/press_any_button.png");
     ctx_->dxCommon->EndUpload();
     ctx_->texture->ReleaseUploadBuffers();
 
@@ -159,6 +161,17 @@ void TitleScene::DrawOverlay() {
         const float logoX = (w - logoImage_.width * logoScale) * 0.5f;
         const float logoY = (h - logoImage_.height * logoScale) * 0.5f;
         DrawImage(logoImage_, logoX, logoY, 1.0f, logoScale);
+
+        const float pressScale =
+            std::clamp(w * 0.28f / pressAnyButtonImage_.width, 0.48f, 0.82f);
+        const float pressX =
+            (w - pressAnyButtonImage_.width * pressScale) * 0.5f;
+        const float pressY =
+            logoY + logoImage_.height * logoScale + 18.0f;
+        const float pressAlpha =
+            0.58f + 0.32f * (0.5f + 0.5f * std::sinf(sceneTime_ * 4.2f));
+        DrawImage(pressAnyButtonImage_, pressX, pressY, pressAlpha,
+                  pressScale);
     }
 
     DrawCameraModeBadge(w, h);

@@ -44,6 +44,13 @@ class ModelManager {
     uint32_t CreatePlane(uint32_t textureId, const Material &material);
 
     /// <summary>
+    /// Y軸方向に伸びる直方体Primitiveを生成する
+    /// </summary>
+    uint32_t CreateBox(uint32_t textureId, const Material &material,
+                       float width = 1.0f, float height = 1.0f,
+                       float depth = 1.0f);
+
+    /// <summary>
     /// XY平面のRing Primitiveを生成する
     /// </summary>
     /// <param name="textureId">貼り付けるテクスチャID</param>

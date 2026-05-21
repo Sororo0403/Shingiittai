@@ -138,6 +138,8 @@ class GameScene : public BaseScene {
     uint32_t enemyFocusRingModelId_ = 0;
     uint32_t enemyWeaponTrailModelId_ = 0;
     uint32_t chargeWeakPointModelId_ = 0;
+    uint32_t chargeWeakPointBackplateModelId_ = 0;
+    uint32_t chargeWeakPointSlashModelId_ = 0;
     uint32_t slashSoundId_ = 0;
     uint32_t enemyReleaseSoundId_ = 0;
     uint32_t hitSoundId_ = 0;
@@ -254,7 +256,7 @@ class GameScene : public BaseScene {
     bool counterCinematicActive_ = false;
     bool enemyAnimationFrozen_ = false;
     float counterCinematicTimer_ = 0.0f;
-    float counterCinematicDuration_ = 0.85f;
+    float counterCinematicDuration_ = 0.66f;
     float counterTimeScale_ = 0.05f;
     float counterCameraShakeX_ = 0.035f;
     float counterCameraShakeY_ = 0.020f;

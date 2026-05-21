@@ -15,15 +15,8 @@
 #include "WinApp.h"
 #include <Windows.h>
 #include <filesystem>
-#include <mfapi.h>
-#include <mfidl.h>
 #include <memory>
-#include <objbase.h>
 #include <string>
-
-#pragma comment(lib, "mf.lib")
-#pragma comment(lib, "mfplat.lib")
-#pragma comment(lib, "mfuuid.lib")
 
 namespace {
 std::filesystem::path ResolveExecutableDirectory() {
@@ -39,44 +32,6 @@ std::filesystem::path ResolveExecutableDirectory() {
     return std::filesystem::path(path).parent_path();
 }
 
-bool DetectVideoCaptureDevice() {
-    const HRESULT coResult = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-    const bool shouldUninitializeCom = SUCCEEDED(coResult);
-
-    bool found = false;
-    if (SUCCEEDED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) {
-        IMFAttributes *attributes = nullptr;
-        if (SUCCEEDED(MFCreateAttributes(&attributes, 1))) {
-            HRESULT hr = attributes->SetGUID(
-                MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE,
-                MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID);
-            IMFActivate **devices = nullptr;
-            UINT32 count = 0;
-            if (SUCCEEDED(hr)) {
-                hr = MFEnumDeviceSources(attributes, &devices, &count);
-            }
-            if (SUCCEEDED(hr)) {
-                found = count > 0;
-            }
-
-            for (UINT32 i = 0; i < count; ++i) {
-                if (devices[i] != nullptr) {
-                    devices[i]->Release();
-                }
-            }
-            CoTaskMemFree(devices);
-            attributes->Release();
-        }
-        MFShutdown();
-    }
-
-    if (shouldUninitializeCom) {
-        CoUninitialize();
-    }
-
-    return found;
-}
-
 class HandUdpSenderProcess {
   public:
     ~HandUdpSenderProcess() { Stop(); }
@@ -85,8 +40,30 @@ class HandUdpSenderProcess {
 
     bool IsPreparationReady() {
         RefreshProcessState();
+        if (!isRunning_) {
+            return true;
+        }
         PollStatus();
         return preparationReady_;
+    }
+
+    static bool IsRuntimeAvailable() {
+        if (IsDisabled()) {
+            return false;
+        }
+
+        const std::filesystem::path runtimeRoot = ResolveRuntimeRoot();
+        const std::filesystem::path modelPath =
+            runtimeRoot / L"tools" / L"hand_tracking" / L"models" /
+            L"hand_landmarker.task";
+        const std::filesystem::path packagedExe =
+            runtimeRoot / L"tools" / L"hand_tracking" / L"hand_udp_sender" /
+            L"hand_udp_sender.exe";
+        const std::filesystem::path scriptPath =
+            runtimeRoot / L"tools" / L"hand_tracking" / L"hand_udp_sender.py";
+        return std::filesystem::exists(modelPath) &&
+               (std::filesystem::exists(packagedExe) ||
+                std::filesystem::exists(scriptPath));
     }
 
     void ActivateCamera() {
@@ -435,11 +412,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     SetCurrentDirectoryW(ResolveExecutableDirectory().wstring().c_str());
 
     HandUdpSenderProcess handUdpSenderProcess;
-    const bool cameraDeviceAvailable = DetectVideoCaptureDevice();
-    bool cameraPreparationStarted = false;
-    if (cameraDeviceAvailable) {
-        cameraPreparationStarted = handUdpSenderProcess.Prepare();
-    }
+    const bool handTrackingRuntimeAvailable =
+        HandUdpSenderProcess::IsRuntimeAvailable();
 
     // WinApp初期化
     WinApp winApp;
@@ -501,14 +475,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
         handUdpSenderProcess.ActivateCamera();
         winApp.BringToFront();
     };
-    sceneCtx.isCameraDeviceAvailable = [cameraDeviceAvailable]() {
-        return cameraDeviceAvailable;
+    sceneCtx.isCameraDeviceAvailable = [handTrackingRuntimeAvailable]() {
+        return handTrackingRuntimeAvailable;
     };
-    sceneCtx.isHandTrackingReady =
-        [&handUdpSenderProcess, cameraPreparationStarted]() {
-            return !cameraPreparationStarted ||
-                   handUdpSenderProcess.IsPreparationReady();
-        };
+    sceneCtx.isHandTrackingReady = [&handUdpSenderProcess]() {
+        return handUdpSenderProcess.IsPreparationReady();
+    };
     sceneCtx.deltaTime = 0.0f;
 
     // SceneManager
@@ -522,6 +494,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
 
     LARGE_INTEGER prevTime;
     QueryPerformanceCounter(&prevTime);
+
+    bool handTrackingPrewarmPending = handTrackingRuntimeAvailable;
 
     // メインループ
     while (winApp.ProcessMessage()) {
@@ -578,6 +552,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
         sceneManager.DrawOverlay();
 
         dxCommon.EndFrame();
+
+        if (handTrackingPrewarmPending) {
+            handTrackingPrewarmPending = false;
+            handUdpSenderProcess.Prepare();
+        }
     }
 
     return 0;

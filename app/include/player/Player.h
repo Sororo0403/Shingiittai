@@ -37,7 +37,8 @@ class Player {
     void Update(Input *input, float deltaTime,
                 const DirectX::XMFLOAT3 &lookTarget, float cameraYaw,
                 bool forceRangedReflectMove = false,
-                float controlDeltaTime = -1.0f);
+                float controlDeltaTime = -1.0f,
+                bool suppressLookAt = false);
     void UpdateJoyConCalibrationInput(Input *input, float deltaTime);
 
     void Draw(ModelManager *modelManager, const Camera &camera,
@@ -72,7 +73,6 @@ class Player {
         tf_.position = position;
         velocity_ = {0.0f, 0.0f, 0.0f};
         knockbackVelocity_ = {0.0f, 0.0f, 0.0f};
-        dodgeTimer_ = 0.0f;
     }
     void SetYaw(float yaw);
     void SetCinematicBladeClashPose(const DirectX::XMFLOAT3 &position,
@@ -80,8 +80,6 @@ class Player {
     void SetCinematicDualBladeBarragePose(const DirectX::XMFLOAT3 &position,
                                           float yaw, float phase,
                                           float intensity);
-    bool IsDodging() const { return dodgeTimer_ > 0.0f; }
-    bool IsDamageInvulnerable() const { return dodgeInvulnerableTimer_ > 0.0f; }
     bool IsAttackRecovery() const {
         return postSlashRecoveryTimer_ > 0.0f || leftSlashRecoveryTimer_ > 0.0f ||
                rightSlashRecoveryTimer_ > 0.0f;
@@ -89,7 +87,7 @@ class Player {
     float GetYaw() const { return yaw_; }
 
     float GetHP() const { return hp_; }
-    float TakeDamage(float damage, bool ignoreInvulnerability = false);
+    float TakeDamage(float damage);
     void NotifyAttackHit(float damage);
     void NotifyAttackHit(size_t swordIndex, float damage);
 
@@ -161,9 +159,6 @@ class Player {
     DirectX::XMFLOAT2 GetHunterGamepadSlashDir(
         HunterGamepadAttackKind attackKind) const;
     void ToggleGamepadControlMode();
-    void UpdateDodgeInput(Input *input, float deltaTime, float cameraYaw,
-                          const DirectX::XMFLOAT3 &lookTarget);
-    bool IsDodgeInputTriggered(Input *input) const;
     DirectX::XMFLOAT2 ReadMovementInput(Input *input) const;
     bool UsesJoyConAutoMovement() const;
     void UpdateMovement(Input *input, float deltaTime, float cameraYaw,
@@ -230,17 +225,8 @@ class Player {
     bool isGuarding_ = false;
     float postSlashRecoveryTimer_ = 0.0f;
     static constexpr float kPostSlashRecoveryDuration = 0.30f;
-    float dodgeTimer_ = 0.0f;
-    float dodgeCooldownTimer_ = 0.0f;
-    float dodgeInvulnerableTimer_ = 0.0f;
-    DirectX::XMFLOAT2 dodgeDirection_ = {0.0f, -1.0f};
-    static constexpr float kDodgeDuration = 0.34f;
-    static constexpr float kDodgeInvulnerableDuration = 0.24f;
-    static constexpr float kDodgeCooldownDuration = 0.46f;
-    static constexpr float kDodgeSpeed = 8.8f;
     float autoMoveOrbitDir_ = 1.0f;
     float autoMoveOrbitTimer_ = 0.0f;
-    float autoDodgeSide_ = 1.0f;
     static constexpr float kJoyConAutoMoveIdealDistance = 2.45f;
     static constexpr float kJoyConAutoMoveNearDistance = 1.75f;
     static constexpr float kJoyConAutoMoveFarDistance = 3.05f;
