@@ -52,6 +52,7 @@ static float GetChargeStanceSettleTime(ActionKind kind) {
         return 0.42f;
     case ActionKind::BladeClash:
     case ActionKind::Wave:
+    case ActionKind::Laser:
     case ActionKind::Cage:
         return 0.48f;
     default:
@@ -213,6 +214,20 @@ static std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
         outLoop = false;
         if (HasAnimation(model, kBossAnimWave)) {
             return kBossAnimWave;
+        }
+        break;
+
+    case ActionKind::Laser:
+        outLoop = false;
+        if (enemy.GetFarLaserFollowupKind() == ActionKind::Sweep &&
+            HasAnimation(model, kBossAnimSweep)) {
+            return kBossAnimSweep;
+        }
+        if (HasAnimation(model, kBossAnimSmash)) {
+            return kBossAnimSmash;
+        }
+        if (HasAnimation(model, kBossAnimSweep)) {
+            return kBossAnimSweep;
         }
         break;
 

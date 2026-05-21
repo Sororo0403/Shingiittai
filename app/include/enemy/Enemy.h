@@ -218,6 +218,18 @@ struct EnemyCageConfig {
     int barCount = 0;
 };
 
+struct EnemyLaserConfig {
+    AttackParam attack{};
+    float chargeTime = 0.0f;
+    float activeTime = 0.0f;
+    float recoveryTime = 0.0f;
+    float length = 0.0f;
+    float width = 0.0f;
+    float height = 0.0f;
+    float spawnForwardOffset = 0.0f;
+    float spawnHeightOffset = 0.0f;
+};
+
 struct EnemyAttackSet {
     EnemySmashConfig smash = {{{{15.0f, 4.0f, {2.8f, 2.1f, 3.2f}},
                                 {1.20f, 0.86f, 0.05f, 0.22f, 0.38f}, 1.64f},
@@ -231,6 +243,9 @@ struct EnemyAttackSet {
         {12.0f, 4.0f, {1.75f, 1.60f, 1.95f}}, 0.72f, 0.88f, 0.78f};
     EnemyWaveConfig wave = {{10.0f, 3.0f, {2.25f, 0.95f, 2.6f}},
                             1.76f, 0.92f, 5.2f, 8.0f, 1.5f, 0.0f};
+    EnemyLaserConfig laser = {{16.0f, 5.2f, {1.0f, 1.0f, 1.0f}},
+                              0.92f, 0.30f, 0.62f, 14.5f, 0.62f, 1.05f,
+                              0.92f, 1.18f};
     EnemyCageConfig cage = {{8.0f, 2.2f, {2.2f, 1.75f, 2.2f}},
                             1.18f, 0.18f, 0.76f, 2.05f, 1.12f, 0.30f,
                             4.45f, 1.85f, 12.0f, 1.8f, 0.72f, 0.0f,
@@ -292,6 +307,11 @@ struct EnemyRuntimeState {
     bool isVisible = true;
 
     std::vector<EnemyWave> waves{};
+    bool laserDashInitialized = false;
+    DirectX::XMFLOAT3 laserDashStart = {0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT3 laserDashTarget = {0.0f, 0.0f, 0.0f};
+    ActionKind laserDashFollowupKind = ActionKind::Smash;
+    bool farLaserFollowupActive = false;
     EnemyCage cage{};
     bool cageTrapSpawned = false;
 
@@ -374,6 +394,7 @@ class Enemy {
     float TakeDamageDeferTransitions(float damage);
     void ResolveDeferredDamageTransitions();
     void ForceBladeClash();
+    bool ForceFarLaserSkill();
     void ConsumeWave(size_t index);
     void NotifyAttackConnected();
     void NotifyAttackGuarded();
@@ -455,6 +476,17 @@ class Enemy {
         return runtime_.phase3GuardCounterActive;
     }
     bool IsPhase3GuardCounterGuarding() const;
+    bool IsFarLaserSkillActive() const {
+        return runtime_.action.kind == ActionKind::Laser ||
+               (runtime_.action.kind == ActionKind::Warp &&
+                runtime_.warp.followupKind == ActionKind::Laser);
+    }
+    bool ShouldLockPlayerForFarLaserSkill() const {
+        return IsFarLaserSkillActive() || runtime_.farLaserFollowupActive;
+    }
+    ActionKind GetFarLaserFollowupKind() const {
+        return runtime_.laserDashFollowupKind;
+    }
     void NotifyBladeClashLanded();
 
     float GetDistanceToPlayer() const;
@@ -562,6 +594,11 @@ class Enemy {
     bool &isVisible_ = runtime_.isVisible;
 
     std::vector<EnemyWave> &waves_ = runtime_.waves;
+    bool &laserDashInitialized_ = runtime_.laserDashInitialized;
+    DirectX::XMFLOAT3 &laserDashStart_ = runtime_.laserDashStart;
+    DirectX::XMFLOAT3 &laserDashTarget_ = runtime_.laserDashTarget;
+    ActionKind &laserDashFollowupKind_ = runtime_.laserDashFollowupKind;
+    bool &farLaserFollowupActive_ = runtime_.farLaserFollowupActive;
     EnemyCage &cage_ = runtime_.cage;
     bool &cageTrapSpawned_ = runtime_.cageTrapSpawned;
 
@@ -659,14 +696,12 @@ class Enemy {
 
     float phase2PressureMaxDistanceBonus_ = 1.2f;
     float phase2MidPressureTacticChance_ = 0.68f;
-    float phase2DelaySmashBonus_ = 0.22f;
     float sweepRecoveryTime_ = 1.0f;
     bool &currentActionConnected_ = runtime_.currentActionConnected;
     bool &currentActionGuarded_ = runtime_.currentActionGuarded;
     int &dualCounterStage_ = runtime_.dualCounterStage;
     bool &dualCounterFirstHand_ = runtime_.dualCounterFirstHand;
     bool &dualCounterStageResolved_ = runtime_.dualCounterStageResolved;
-    float delaySmashWhiffRecoveryBonus_ = 0.34f;
     float punishWindowTurnSpeedScale_ = 0.55f;
     float smashActiveLungeSpeed_ = 1.18f;
     float sweepActiveLungeSpeed_ = 0.92f;
@@ -774,6 +809,7 @@ class Enemy {
     void UpdateSweepByStep(float deltaTime);
     void UpdateBladeClashByStep(float deltaTime);
     void UpdateWaveByStep(float deltaTime);
+    void UpdateLaserByStep(float deltaTime);
     void UpdateCageByStep(float deltaTime);
     void UpdateWarpByStep(float deltaTime);
     void UpdateIdle(float deltaTime);
@@ -794,6 +830,7 @@ class Enemy {
     void BeginResetAction();
     bool TryBeginWarpBehindMeleeSkill(bool force);
     bool TryBeginPhase3PhantomWarpSkill(float chance);
+    bool TryBeginFarLaserSkill(float chance, bool force = false);
     bool DecideWarpTargetInPlayerView(DirectX::XMFLOAT3 &outTarget);
     bool DecidePhase3PhantomBehindTarget(DirectX::XMFLOAT3 &outTarget);
     void BeginPhase3PhantomWarpStep(int viewWarpsRemaining,
@@ -831,6 +868,7 @@ class Enemy {
     bool IsWarpSuspendedForPresentation() const;
     bool DecideWarpTargetNearPlayer(DirectX::XMFLOAT3 &outTarget);
     bool DecideWarpTargetFarFromPlayer(DirectX::XMFLOAT3 &outTarget);
+    bool DecideFarLaserWarpTarget(DirectX::XMFLOAT3 &outTarget);
     bool RefreshLiveBehindWarpTarget();
     void ClampWarpTargetToArena(DirectX::XMFLOAT3 &target) const;
     void FinalizeWarpTargetFacing(DirectX::XMFLOAT3 &target);
@@ -844,6 +882,10 @@ class Enemy {
 
     void SpawnWave();
     void UpdateWaves(float deltaTime);
+    void UpdateLaserCharge(float deltaTime);
+    void UpdateLaserActive(float deltaTime);
+    void UpdateLaserRecovery(float deltaTime);
+    void ResetLaserActionState(bool clearVariant);
 
     void UpdateCageCharge(float deltaTime);
     void UpdateCageActive(float deltaTime);

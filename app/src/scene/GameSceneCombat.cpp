@@ -77,10 +77,10 @@ static bool IsNearXZ(const XMFLOAT3 &a, const XMFLOAT3 &b, float radius) {
 
 static bool IsChargeWeakPointWindow(ActionKind kind, ActionId id,
                                     ActionStep step) {
-    if (kind != ActionKind::Smash || id != ActionId::DelaySmash) {
-        return false;
-    }
-    return step == ActionStep::Charge || step == ActionStep::Hold;
+    (void)kind;
+    (void)id;
+    (void)step;
+    return false;
 }
 
 static bool IsReadableChargeWeakPointHit(const OBB &swordHitBox,
@@ -170,12 +170,16 @@ static bool IsSlashAlongDirection(const Sword &sword,
     return std::fabs(dot) >= minAbsDot;
 }
 
-static SwordCounterAxis RequiredCounterAxisForAction(ActionKind kind) {
+static SwordCounterAxis RequiredCounterAxisForAction(ActionKind kind,
+                                                     ActionKind farFollowupKind) {
     switch (kind) {
     case ActionKind::Smash:
         return SwordCounterAxis::Vertical;
     case ActionKind::Sweep:
         return SwordCounterAxis::Horizontal;
+    case ActionKind::Laser:
+        return farFollowupKind == ActionKind::Sweep ? SwordCounterAxis::Horizontal
+                                                    : SwordCounterAxis::Vertical;
     default:
         return SwordCounterAxis::None;
     }
@@ -787,6 +791,9 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     const bool isEnemySweepCommitted =
         (enemyActionKind == ActionKind::Sweep &&
          enemyActionStep == ActionStep::Active);
+    const bool isEnemyFarLaserCounterApproach =
+        enemyActionKind == ActionKind::Laser &&
+        enemyActionStep == ActionStep::Active;
     const bool isEnemySmashMeleeWindow =
         isEnemySmashCommitted && enemy_.IsAttackActive();
     const bool isEnemySweepMeleeWindow =
@@ -794,7 +801,8 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     const bool isEnemyMeleeActive =
         isEnemySmashMeleeWindow || isEnemySweepMeleeWindow;
     const bool isEnemyMeleeCommitted =
-        isEnemySmashCommitted || isEnemySweepCommitted;
+        isEnemySmashCommitted || isEnemySweepCommitted ||
+        isEnemyFarLaserCounterApproach;
     const bool isEnemyBladeClashStandby = enemy_.IsPhase2BladeClashStandby();
     const bool isEnemyBladeClashCommitted =
         enemyActionKind == ActionKind::BladeClash &&
@@ -867,13 +875,15 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     const bool isEnemyMeleePreparationOrRelease =
         (enemyActionKind == ActionKind::Smash ||
          enemyActionKind == ActionKind::Sweep ||
+         enemyActionKind == ActionKind::Laser ||
          enemyActionKind == ActionKind::BladeClash) &&
         (enemyActionStep == ActionStep::Charge ||
          enemyActionStep == ActionStep::Hold ||
          enemyActionStep == ActionStep::Active);
     const bool isPreReleaseCounterWindow =
         (enemyActionKind == ActionKind::Smash ||
-         enemyActionKind == ActionKind::Sweep) &&
+         enemyActionKind == ActionKind::Sweep ||
+         enemyActionKind == ActionKind::Laser) &&
         isEnemyMeleePreparationOrRelease && !isEnemyChargeWeakPointWindow &&
         !chargeWeakPointFailedThisAction_ &&
         enemyActionStep != ActionStep::Active &&
@@ -887,6 +897,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     const bool isReleaseCounterWindow =
         !enemyRedPunishUncounterable_ &&
         (isPhase3GuardCounterWindow || isPreReleaseCounterWindow ||
+         isEnemyFarLaserCounterApproach ||
          (isEnemyMeleeCommitted &&
           enemy_.GetActionTimerForPresentation() <=
               kReleaseCounterWindowDuration) ||
@@ -994,7 +1005,9 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             IsNearXZ(player_.GetTransform().position, enemyAttackBox.center,
                      GetReadableMeleeRadius(enemyAttackBox) + 0.85f) &&
             IsSlashAxisMatched(*sword,
-                               RequiredCounterAxisForAction(enemyActionKind));
+                               RequiredCounterAxisForAction(
+                                   enemyActionKind,
+                                   enemy_.GetFarLaserFollowupKind()));
         const bool canBladeClashCounter =
             enemyActionKind == ActionKind::BladeClash &&
             isEnemyBladeClashCounterWindow &&

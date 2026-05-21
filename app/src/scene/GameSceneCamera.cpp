@@ -270,6 +270,7 @@ void GameScene::UpdateBattleCamera() {
          enemyActionStep == ActionStep::Recovery);
     const bool isEnemyWideAction =
         enemyActionKind == ActionKind::Wave ||
+        enemyActionKind == ActionKind::Laser ||
         enemyActionKind == ActionKind::Cage;
     const bool isEnemyPhaseTransition =
         enemy_.IsPhaseTransitionActive() && !bladeClashFinishActive_;

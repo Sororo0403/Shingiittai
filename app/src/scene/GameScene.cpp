@@ -230,6 +230,7 @@ float GetChargeStanceSettleTime(ActionKind kind) {
         return 0.42f;
     case ActionKind::BladeClash:
     case ActionKind::Wave:
+    case ActionKind::Laser:
     case ActionKind::Cage:
         return 0.48f;
     default:
@@ -247,13 +248,17 @@ bool IsChargeStanceSettled(ActionKind kind, ActionStep step, float timer) {
     return timer >= GetChargeStanceSettleTime(kind);
 }
 
-SwordCounterAxis RequiredVisualCounterAxisForAction(ActionKind kind) {
+SwordCounterAxis RequiredVisualCounterAxisForAction(ActionKind kind,
+                                                    ActionKind farFollowupKind) {
     switch (kind) {
     case ActionKind::Smash:
         return SwordCounterAxis::Vertical;
     case ActionKind::Sweep:
     case ActionKind::BladeClash:
         return SwordCounterAxis::Horizontal;
+    case ActionKind::Laser:
+        return farFollowupKind == ActionKind::Sweep ? SwordCounterAxis::Horizontal
+                                                    : SwordCounterAxis::Vertical;
     default:
         return SwordCounterAxis::None;
     }
@@ -715,6 +720,23 @@ void GameScene::Update() {
         input->IsKeyTrigger(DIK_F8) && !bladeClashActive_ &&
         !bladeClashFinishActive_ && !counterCinematicActive_) {
         if (enemy_.ForcePhase3PhantomWarpSkill()) {
+            chargeWeakPointActionKind_ = ActionKind::None;
+            chargeWeakPointActionSerial_ = 0;
+            failedChargeWeakPointActionKind_ = ActionKind::None;
+            failedChargeWeakPointActionSerial_ = 0;
+            chargeWeakPointBroken_ = false;
+            chargeWeakPointFailedThisAction_ = false;
+            chargeWeakPointSlashCount_ = 0;
+            previousChargeWeakPointSlashStates_.fill(false);
+            enemyRedPunishUncounterable_ = false;
+            SetEnemyAnimationFrozen(false);
+            SyncEnemyAnimation();
+        }
+    }
+    if (runMode_ == RunMode::Play && input != nullptr &&
+        input->IsKeyTrigger(DIK_F9) && !bladeClashActive_ &&
+        !bladeClashFinishActive_ && !counterCinematicActive_) {
+        if (enemy_.ForceFarLaserSkill()) {
             chargeWeakPointActionKind_ = ActionKind::None;
             chargeWeakPointActionSerial_ = 0;
             failedChargeWeakPointActionKind_ = ActionKind::None;
@@ -1387,9 +1409,15 @@ void GameScene::Update() {
     } else {
         const bool suppressLookAt =
             enemy_.ShouldSuppressPhase3PhantomBehindLookAt();
+        const bool lockPlayerPositionForFarLaser =
+            enemy_.ShouldLockPlayerForFarLaserSkill();
+        const XMFLOAT3 farLaserLockedPlayerPos = player_.GetTransform().position;
         player_.Update(input, playerDeltaTime, enemy_.GetTransform().position,
                        cameraYaw_, forceRangedReflectMove, baseDeltaTime,
                        suppressLookAt);
+        if (lockPlayerPositionForFarLaser) {
+            player_.LockPosition(farLaserLockedPlayerPos);
+        }
     }
     UpdateSwordVfx(baseDeltaTime);
     if (soundsLoaded_ && ctx_->sound != nullptr) {
@@ -1705,6 +1733,15 @@ void GameScene::EmitEnemyActionParticles(ActionKind kind, ActionStep step) {
                 GPUParticleSystem::BurstStyle::SpiritSparkle,
                 {0.96f, 1.0f, 0.96f, 0.68f}, forward, 1.48f);
             break;
+        case ActionKind::Laser:
+            explosionParticles_.EmitBurst(
+                origin, 150, 2.24f,
+                GPUParticleSystem::BurstStyle::SpiritSparkle,
+                {0.58f, 0.96f, 1.0f, 0.72f}, forward, 1.72f);
+            sparkParticles_.EmitBurst(
+                origin, 96, 0.52f, GPUParticleSystem::BurstStyle::SlashLine,
+                {0.70f, 1.0f, 1.0f, 0.86f}, forward, 1.05f);
+            break;
         case ActionKind::Cage: {
             XMFLOAT3 cageOrigin = player_.GetTransform().position;
             cageOrigin.y += 0.72f;
@@ -1782,6 +1819,9 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
         actionStep == ActionStep::Active &&
         enemy_.GetActionTimerForPresentation() <=
             kReleaseCounterWindowDuration;
+    const bool farLaserCueVisible =
+        kind == ActionKind::Laser &&
+        (actionStep == ActionStep::Charge || actionStep == ActionStep::Active);
     const bool phase3GuardCounterCueVisible =
         enemy_.IsPhase3GuardCounterActive() &&
         (kind == ActionKind::Smash || kind == ActionKind::Sweep) &&
@@ -1789,13 +1829,14 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
          actionStep == ActionStep::Active);
     const bool releaseCounterCueVisible =
         dualCounterCueVisible || phase2BladeClashStandbyCueVisible ||
+        farLaserCueVisible ||
         (!chargeWeakPointFailedThisAction_ &&
          (kind == ActionKind::Smash || kind == ActionKind::Sweep) &&
          (phase3GuardCounterCueVisible || preReleaseCounterCueVisible ||
           activeReleaseCounterCueVisible));
     const bool badSlashCueVisible =
         (kind == ActionKind::Smash || kind == ActionKind::Sweep ||
-         kind == ActionKind::BladeClash) &&
+         kind == ActionKind::BladeClash || kind == ActionKind::Laser) &&
         !chargeDirectionVisible && !releaseCounterCueVisible &&
         (actionStep == ActionStep::Charge || actionStep == ActionStep::Hold ||
          actionStep == ActionStep::Active);
@@ -1865,11 +1906,12 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
                                   cueColor, forward, sparkSpeed);
         const bool showCounterAxisLine =
             kind == ActionKind::Smash || kind == ActionKind::Sweep ||
-            phase2BladeClashStandbyCueVisible;
+            kind == ActionKind::Laser || phase2BladeClashStandbyCueVisible;
         if ((releaseCounterCueVisible || badSlashCueVisible) &&
             showCounterAxisLine) {
             const SwordCounterAxis cueAxis =
-                RequiredVisualCounterAxisForAction(kind);
+                RequiredVisualCounterAxisForAction(
+                    kind, enemy_.GetFarLaserFollowupKind());
             sparkParticles_.EmitBurst(
                 cuePos, releaseCounterCueVisible ? 104u : 116u,
                 releaseCounterCueVisible ? 1.26f : 1.34f,
@@ -3082,9 +3124,7 @@ void GameScene::DrawEnemyWeaponTrail() {
     if (enemyWeaponTrailSampleTimer_ >= sampleInterval) {
         const XMFLOAT4 sampleColor =
             kind == ActionKind::Smash
-                ? (enemy_.GetActionId() == ActionId::DelaySmash
-                       ? XMFLOAT4{1.0f, 0.03f, 0.12f, 0.84f}
-                       : XMFLOAT4{1.0f, 0.70f, 0.18f, 0.70f})
+                ? XMFLOAT4{1.0f, 0.70f, 0.18f, 0.70f}
             : kind == ActionKind::BladeClash
                 ? XMFLOAT4{0.48f, 1.0f, 0.74f, 0.86f}
                 : XMFLOAT4{0.10f, 0.86f, 1.0f, 0.72f};
@@ -3105,28 +3145,13 @@ void GameScene::DrawEnemyWeaponTrail() {
     enemyWeaponTrailLastStep_ = step;
 
     if (kind == ActionKind::Smash) {
-        const XMFLOAT4 trailColor =
-            enemy_.GetActionId() == ActionId::DelaySmash
-                ? XMFLOAT4{1.0f, 0.03f, 0.12f, 0.84f}
-                : XMFLOAT4{1.0f, 0.70f, 0.18f, 0.70f};
         drawTrailPlane({trailCenter.x + toCameraX * 0.035f,
                         trailCenter.y + 0.010f,
                         trailCenter.z + toCameraZ * 0.035f},
                        billboardYaw, trailRoll,
                        {trailLength * 0.90f, trailThickness, 1.0f},
-                       trailColor, 1.12f + 0.22f * pulse + activeBoost * 0.50f,
-                       0.02f);
-        if (enemy_.GetActionId() == ActionId::DelaySmash) {
-            drawTrailPlane({trailCenter.x + toCameraX * 0.052f,
-                            trailCenter.y + 0.018f,
-                            trailCenter.z + toCameraZ * 0.052f},
-                           billboardYaw, trailRoll,
-                           {trailLength * 0.76f, trailThickness * 0.36f,
-                            1.0f},
-                           {1.0f, 0.18f, 0.10f, 0.68f},
-                           0.58f + 0.14f * pulse + activeBoost * 0.24f,
-                           0.00f);
-        }
+                       {1.0f, 0.70f, 0.18f, 0.70f},
+                       1.12f + 0.22f * pulse + activeBoost * 0.50f, 0.02f);
     } else if (kind == ActionKind::Sweep) {
         drawTrailPlane({trailCenter.x + toCameraX * 0.035f,
                         trailCenter.y + 0.010f,
@@ -3157,92 +3182,6 @@ void GameScene::DrawEnemyWeaponTrail() {
 }
 
 void GameScene::DrawChargeWeakPoint() {
-    const ActionKind actionKind = enemy_.GetActionKind();
-    const ActionId actionId = enemy_.GetActionId();
-    const ActionStep actionStep = enemy_.GetActionStep();
-    const bool isChargeWeakPointVisible =
-        !chargeWeakPointBroken_ &&
-        actionKind == ActionKind::Smash && actionId == ActionId::DelaySmash &&
-        (actionStep == ActionStep::Charge || actionStep == ActionStep::Hold);
-    if (!isChargeWeakPointVisible || chargeWeakPointModelId_ == 0) {
-        return;
-    }
-
-    const XMFLOAT3 &enemyPos = enemy_.GetTransform().position;
-    const XMFLOAT3 &cameraPos = camera_.GetPosition();
-    float toCameraX = cameraPos.x - enemyPos.x;
-    float toCameraZ = cameraPos.z - enemyPos.z;
-    float toCameraLen = std::sqrt(toCameraX * toCameraX + toCameraZ * toCameraZ);
-    if (toCameraLen < 0.0001f) {
-        toCameraLen = 1.0f;
-    }
-    toCameraX /= toCameraLen;
-    toCameraZ /= toCameraLen;
-    const float pulse = 0.5f + 0.5f * std::sinf(sceneLightTime_ * 24.0f);
-    const float yaw = BillboardYawToCamera(enemyPos, cameraPos);
-    const size_t directionIndex = static_cast<size_t>(std::clamp(
-        chargeWeakPointSlashCount_, 0,
-        static_cast<int>(chargeWeakPointRequiredDirections_.size() - 1)));
-    const XMFLOAT2 slashDir = chargeWeakPointRequiredDirections_[directionIndex];
-    const float slashRoll = std::atan2f(slashDir.y, slashDir.x);
-
-    Transform outer{};
-    outer.position = {enemyPos.x + toCameraX * 0.82f, enemyPos.y + 1.66f,
-                      enemyPos.z + toCameraZ * 0.82f};
-    outer.rotation = MakeQuat(0.0f, yaw, 0.0f);
-    outer.scale = {1.34f + 0.22f * pulse, 1.34f + 0.22f * pulse, 1.0f};
-
-    if (chargeWeakPointBackplateModelId_ != 0) {
-        Transform backplate = outer;
-        backplate.position.x += toCameraX * 0.018f;
-        backplate.position.z += toCameraZ * 0.018f;
-        backplate.scale = {1.58f, 1.58f, 1.0f};
-        ctx_->model->Draw(chargeWeakPointBackplateModelId_, backplate,
-                          camera_);
-
-        Transform slashShadow = outer;
-        slashShadow.position.x += toCameraX * 0.030f;
-        slashShadow.position.z += toCameraZ * 0.030f;
-        slashShadow.rotation = MakeQuat(0.0f, yaw, slashRoll);
-        slashShadow.scale = {2.02f, 0.38f, 1.0f};
-        ctx_->model->Draw(chargeWeakPointBackplateModelId_, slashShadow,
-                          camera_);
-    }
-
-    ModelDrawEffect outerEffect{};
-    outerEffect.enabled = true;
-    outerEffect.additiveBlend = true;
-    outerEffect.disableCulling = true;
-    outerEffect.color = {0.42f, 1.0f, 0.38f, 0.76f};
-    outerEffect.intensity = 0.56f + 0.22f * pulse;
-    outerEffect.fresnelPower = 1.2f;
-    outerEffect.noiseAmount = 0.18f;
-    outerEffect.time = sceneLightTime_;
-    ctx_->model->SetDrawEffect(outerEffect);
-    ctx_->model->Draw(chargeWeakPointModelId_, outer, camera_);
-
-    if (chargeWeakPointSlashModelId_ != 0) {
-        Transform slash = outer;
-        slash.position.x += toCameraX * 0.052f;
-        slash.position.z += toCameraZ * 0.052f;
-        slash.rotation = MakeQuat(0.0f, yaw, slashRoll);
-        slash.scale = {1.76f + 0.14f * pulse, 0.18f + 0.04f * pulse,
-                       1.0f};
-
-        ModelDrawEffect slashEffect{};
-        slashEffect.enabled = true;
-        slashEffect.additiveBlend = true;
-        slashEffect.disableCulling = true;
-        slashEffect.color = {0.36f, 1.0f, 0.30f, 0.94f};
-        slashEffect.intensity = 0.88f + 0.26f * pulse;
-        slashEffect.fresnelPower = 0.75f;
-        slashEffect.noiseAmount = 0.08f;
-        slashEffect.time = sceneLightTime_;
-        ctx_->model->SetDrawEffect(slashEffect);
-        ctx_->model->Draw(chargeWeakPointSlashModelId_, slash, camera_);
-    }
-
-    ctx_->model->ClearDrawEffect();
 }
 
 void GameScene::DrawBladeClashFinishBackdrop() {

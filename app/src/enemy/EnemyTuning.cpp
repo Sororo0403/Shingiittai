@@ -13,10 +13,6 @@ float Enemy::GetCurrentSmashChargeTime() const {
     }
 
     float result = config_.attacks.smash.melee.base.chargeTime;
-    if (action_.id == ActionId::DelaySmash) {
-        result += config_.attacks.smash.delayExtraChargeTime;
-    }
-
     result += GetAdaptiveChargeOffset(ActionKind::Smash);
     if (result < 0.05f) {
         result = 0.05f;
@@ -89,6 +85,10 @@ float Enemy::GetReleaseAnticipationRatio() const {
         case ActionKind::Wave:
             releaseTime = config_.attacks.wave.chargeTime;
             break;
+        case ActionKind::Laser:
+            releaseTime = config_.attacks.laser.chargeTime;
+            cueWindow = config_.attacks.laser.chargeTime;
+            break;
         case ActionKind::Cage:
             releaseTime = config_.attacks.cage.chargeTime;
             break;
@@ -117,20 +117,7 @@ float Enemy::GetReleaseAnticipationRatio() const {
 }
 
 float Enemy::GetChargeWeakPointTimeLimitForPresentation() const {
-    if (action_.kind != ActionKind::Smash ||
-        action_.id != ActionId::DelaySmash) {
-        return 0.0f;
-    }
-
-    if (action_.step == ActionStep::Hold) {
-        return currentHoldDuration_;
-    }
-
-    if (action_.step != ActionStep::Charge) {
-        return 0.0f;
-    }
-
-    return GetCurrentSmashChargeTime();
+    return 0.0f;
 }
 
 float Enemy::GetChargeWeakPointTimeRemainingForPresentation() const {
@@ -152,6 +139,8 @@ ActionId Enemy::MakeDefaultActionId(ActionKind kind) const {
         return ActionId::BladeClash;
     case ActionKind::Wave:
         return ActionId::Wave;
+    case ActionKind::Laser:
+        return ActionId::Laser;
     case ActionKind::Cage:
         return ActionId::Cage;
     case ActionKind::Warp:

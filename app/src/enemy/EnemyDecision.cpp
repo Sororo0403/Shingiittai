@@ -39,6 +39,10 @@ CounterReadAxis Enemy::GetCounterReadAxis(ActionKind kind) const {
         return CounterReadAxis::Horizontal;
     case ActionKind::Wave:
         return CounterReadAxis::Radial;
+    case ActionKind::Laser:
+        return laserDashFollowupKind_ == ActionKind::Sweep
+                   ? CounterReadAxis::Horizontal
+                   : CounterReadAxis::Vertical;
     case ActionKind::Cage:
         return CounterReadAxis::Radial;
     case ActionKind::BladeClash:
@@ -188,10 +192,6 @@ bool Enemy::TryApplyPhase2DirectionFeint(ActionKind kind) {
         action_.kind != kind || action_.step != ActionStep::Charge) {
         return false;
     }
-    if (kind == ActionKind::Smash && action_.id == ActionId::DelaySmash) {
-        return false;
-    }
-
     const float chargeTime = kind == ActionKind::Smash
                                  ? GetCurrentSmashChargeTime()
                                  : GetCurrentSweepChargeTime();
@@ -269,9 +269,6 @@ bool Enemy::ShouldDoFakeCommit(ActionKind kind) const {
         }
         if (counterMemory_.earlyCount > 0.6f) {
             chance += 0.12f;
-        }
-        if (action_.id == ActionId::DelaySmash) {
-            chance += 0.15f;
         }
     } else if (kind == ActionKind::Sweep) {
         chance = sweepFakeCommitChance_;
@@ -401,16 +398,6 @@ bool Enemy::TryBranchFromRecovery(ActionKind finishedKind) {
 
     if (finishedKind == ActionKind::Smash ||
         finishedKind == ActionKind::Sweep) {
-        const bool forceCombo =
-            phase_ != BossPhase::Phase1 && finishedKind == ActionKind::Smash &&
-            action_.id == ActionId::DelaySmash &&
-            (currentActionConnected_ || currentActionGuarded_);
-        if (forceCombo) {
-            BeginAction(ActionKind::Sweep, ActionStep::Charge);
-            isMargitComboATransition_ = true;
-            return true;
-        }
-
         float recommitChance = recommitChance_;
         float delayedSecondChance = delayedSecondChance_;
         float fakeoutChance =
@@ -547,9 +534,6 @@ float Enemy::GetAdaptiveHoldChance(ActionKind kind) const {
 
     if (kind == ActionKind::Smash) {
         chance = config_.attacks.smash.melee.feintChance;
-        if (action_.id == ActionId::DelaySmash) {
-            chance += 0.20f;
-        }
     } else if (kind == ActionKind::Sweep) {
         chance = config_.attacks.sweep.melee.feintChance;
     }
@@ -736,7 +720,6 @@ ActionKind Enemy::SelectNeutralAction(float distance) const {
 
 ActionKind Enemy::SelectNearPressureAction() const {
     int smashWeight = nearSmashWeight_;
-    int delaySmashWeight = 12;
     int sweepWeight = nearSweepWeight_;
     int bladeClashWeight = 18;
     if (!CanBeginPhaseBladeClash()) {
@@ -754,26 +737,22 @@ ActionKind Enemy::SelectNearPressureAction() const {
 
     if (phase_ != BossPhase::Phase1) {
         smashWeight += phase2NearSmashBonus_;
-        delaySmashWeight += 4;
         sweepWeight += phase2NearSweepBonus_;
         bladeClashWeight += 6;
     }
     if (phase_ == BossPhase::Phase3) {
         smashWeight += phase3NearSmashBonus_;
-        delaySmashWeight += 2;
         sweepWeight += phase3NearSweepBonus_;
         bladeClashWeight += 4;
     }
 
     if (postCounterRhythmTimer_ > 0.0f) {
         smashWeight = static_cast<int>(smashWeight * 0.7f);
-        delaySmashWeight = static_cast<int>(delaySmashWeight * 0.8f);
         sweepWeight = static_cast<int>(sweepWeight * 0.7f);
         bladeClashWeight += 10;
     }
 
     if (playerObs_.isAttacking) {
-        delaySmashWeight += 2;
         sweepWeight += 10;
         bladeClashWeight += 12;
     }
@@ -782,27 +761,22 @@ ActionKind Enemy::SelectNearPressureAction() const {
     }
     if (playerObs_.isCounterStance) {
         smashWeight -= 6;
-        delaySmashWeight += 3;
         sweepWeight += 4;
         bladeClashWeight += 12;
     }
 
     if (lastActionKind_ == ActionKind::Smash) {
         smashWeight /= 2;
-        delaySmashWeight /= 2;
     } else if (lastActionKind_ == ActionKind::Sweep) {
         sweepWeight /= 2;
     } else if (lastActionKind_ == ActionKind::BladeClash) {
         bladeClashWeight /= 3;
     }
 
-    switch (PickWeightedIndex(
-        {smashWeight, delaySmashWeight, sweepWeight, bladeClashWeight})) {
+    switch (PickWeightedIndex({smashWeight, sweepWeight, bladeClashWeight})) {
     case 0:
         return ActionKind::Smash;
-    case 1:
-        return ActionKind::DelaySmash;
-    case 3:
+    case 2:
         return ActionKind::BladeClash;
     default:
         return ActionKind::Sweep;
@@ -873,6 +847,10 @@ void Enemy::BeginNeutralAction() {
     }
 
     stalkRepeatCount_ = 0;
+    if (phase_ != BossPhase::Phase1 &&
+        TryBeginFarLaserSkill(phase_ == BossPhase::Phase3 ? 0.30f : 0.24f)) {
+        return;
+    }
     if (phase_ != BossPhase::Phase1 &&
         TryBeginPhase3PhantomWarpSkill(phase3PhantomWarpChance_ * 0.72f)) {
         return;

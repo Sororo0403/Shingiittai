@@ -103,6 +103,39 @@ bool Enemy::DecideWarpTargetFarFromPlayer(DirectX::XMFLOAT3 &outTarget) {
     return true;
 }
 
+bool Enemy::DecideFarLaserWarpTarget(DirectX::XMFLOAT3 &outTarget) {
+    float forwardX = std::sin(playerObs_.facingYaw);
+    float forwardZ = std::cos(playerObs_.facingYaw);
+    float forwardLen = std::sqrt(forwardX * forwardX + forwardZ * forwardZ);
+    if (forwardLen <= 0.0001f) {
+        forwardX = playerPos_.x - tf_.position.x;
+        forwardZ = playerPos_.z - tf_.position.z;
+        forwardLen = std::sqrt(forwardX * forwardX + forwardZ * forwardZ);
+    }
+    if (forwardLen <= 0.0001f) {
+        forwardX = std::sin(facingYaw_);
+        forwardZ = std::cos(facingYaw_);
+        forwardLen = 1.0f;
+    }
+    forwardX /= forwardLen;
+    forwardZ /= forwardLen;
+
+    const float sideSign = (std::rand() % 2 == 0) ? -1.0f : 1.0f;
+    const float sideT =
+        static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+    const float distance = phase_ == BossPhase::Phase3 ? 14.2f : 13.0f;
+    const float sideOffset = sideSign * (2.2f + 2.8f * sideT);
+    const float rightX = forwardZ;
+    const float rightZ = -forwardX;
+
+    outTarget = playerPos_;
+    outTarget.x += forwardX * distance + rightX * sideOffset;
+    outTarget.z += forwardZ * distance + rightZ * sideOffset;
+    outTarget.y = tf_.position.y;
+    FinalizeWarpTargetFacing(outTarget);
+    return true;
+}
+
 bool Enemy::DecideWarpTargetInPlayerView(DirectX::XMFLOAT3 &outTarget) {
     float forwardX = std::sin(playerObs_.facingYaw);
     float forwardZ = std::cos(playerObs_.facingYaw);
@@ -329,6 +362,47 @@ bool Enemy::BeginBladeClashReturnWarp(
     BeginAction(ActionKind::Warp, ActionStep::Start);
     return true;
 }
+
+bool Enemy::TryBeginFarLaserSkill(float chance, bool force) {
+    if ((!force && phase_ == BossPhase::Phase1) || deathFinished_ || isDying_ ||
+        hp_ <= 0.0f || phaseTransitionActive_ ||
+        IsWarpSuspendedForPresentation()) {
+        return false;
+    }
+    if (!force && lastActionKind_ == ActionKind::Warp) {
+        chance *= 0.58f;
+    }
+    if (!force) {
+        const float roll =
+            static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+        if (roll >= std::clamp(chance, 0.0f, 0.78f)) {
+            return false;
+        }
+    }
+
+    ResetWarpContext();
+    ResetLaserActionState(true);
+    laserDashFollowupKind_ =
+        (std::rand() % 2 == 0) ? ActionKind::Smash : ActionKind::Sweep;
+
+    warp_.type = WarpType::Approach;
+    warp_.approachSlot = WarpApproachSlot::Front;
+    if (!DecideFarLaserWarpTarget(warp_.targetPos)) {
+        ResetWarpContext();
+        ResetLaserActionState(true);
+        return false;
+    }
+    warp_.hasValidTarget = true;
+    warp_.followupKind = ActionKind::Laser;
+    warp_.followupStep = ActionStep::Charge;
+    warp_.faceLivePlayerOnEnd = true;
+    hitReactionTimer_ = 0.0f;
+    counterRecoilTimer_ = 0.0f;
+    BeginAction(ActionKind::Warp, ActionStep::Start);
+    return true;
+}
+
+bool Enemy::ForceFarLaserSkill() { return TryBeginFarLaserSkill(1.0f, true); }
 
 void Enemy::ResetWarpContext() { warp_ = WarpContext{}; }
 

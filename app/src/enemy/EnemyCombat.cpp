@@ -42,6 +42,9 @@ OBB Enemy::GetAttackOBB() const {
         return GetSmashAttackOBB();
     case ActionKind::Sweep:
         return GetSweepAttackOBB();
+    case ActionKind::Laser:
+        return laserDashFollowupKind_ == ActionKind::Sweep ? GetSweepAttackOBB()
+                                                           : GetSmashAttackOBB();
     case ActionKind::BladeClash:
         return MakeOBB(bodyTf_, GetCurrentAttackHitBoxSize());
     default:
@@ -102,6 +105,7 @@ bool Enemy::IsPunishableRecovery() const {
     case ActionKind::Sweep:
     case ActionKind::BladeClash:
     case ActionKind::Wave:
+    case ActionKind::Laser:
     case ActionKind::Cage:
         return action_.step == ActionStep::Recovery && hitReactionTimer_ <= 0.0f;
     default:
@@ -128,6 +132,9 @@ float Enemy::GetRecoveryProgressForPresentation() const {
         break;
     case ActionKind::Wave:
         duration = config_.attacks.wave.recoveryTime + 0.18f;
+        break;
+    case ActionKind::Laser:
+        duration = config_.attacks.laser.recoveryTime + 0.16f;
         break;
     case ActionKind::Cage:
         duration = config_.attacks.cage.recoveryTime + 0.14f;
@@ -171,6 +178,10 @@ AttackParam *Enemy::GetCurrentAttackParam() {
         return &config_.attacks.bladeClash.attack;
     case ActionKind::Wave:
         return &config_.attacks.wave.attack;
+    case ActionKind::Laser:
+        return laserDashFollowupKind_ == ActionKind::Sweep
+                   ? &config_.attacks.sweep.melee.base.attack
+                   : &config_.attacks.smash.melee.base.attack;
     case ActionKind::Cage:
         return &config_.attacks.cage.attack;
     default:
@@ -188,6 +199,10 @@ const AttackParam *Enemy::GetCurrentAttackParam() const {
         return &config_.attacks.bladeClash.attack;
     case ActionKind::Wave:
         return &config_.attacks.wave.attack;
+    case ActionKind::Laser:
+        return laserDashFollowupKind_ == ActionKind::Sweep
+                   ? &config_.attacks.sweep.melee.base.attack
+                   : &config_.attacks.smash.melee.base.attack;
     case ActionKind::Cage:
         return &config_.attacks.cage.attack;
     default:
@@ -394,7 +409,8 @@ bool Enemy::ApplyCounterBreakReaction(float vulnerabilityDuration) {
 
     const bool isCounterBreakableAction =
         action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
-        action_.kind == ActionKind::BladeClash;
+        action_.kind == ActionKind::BladeClash ||
+        action_.kind == ActionKind::Laser;
     if (!isCounterBreakableAction) {
         return false;
     }

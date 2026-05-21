@@ -20,6 +20,7 @@ void Enemy::Initialize(uint32_t modelId, uint32_t projectileModelId) {
     runtime_.phase2FeintImmediateGreen = false;
     runtime_.phase2FeintBehindFollowup = false;
     runtime_.phase3PhantomWarpCooldown = 0.0f;
+    ResetLaserActionState(true);
 
     tf_.position = {0.0f, 0.0f, 10.0f};
     tf_.scale = {1.0f, 1.0f, 1.0f};
@@ -212,6 +213,9 @@ void Enemy::UpdateByAction(float deltaTime) {
     case ActionKind::Wave:
         UpdateWaveByStep(deltaTime);
         break;
+    case ActionKind::Laser:
+        UpdateLaserByStep(deltaTime);
+        break;
     case ActionKind::Cage:
         UpdateCageByStep(deltaTime);
         break;
@@ -242,6 +246,11 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
         ResetWarpTrails();
     } else {
         ResetWarpContext();
+    }
+    if (kind == ActionKind::Laser) {
+        ResetLaserActionState(false);
+    } else if (kind != ActionKind::Warp) {
+        ResetLaserActionState(true);
     }
 
     action_.kind = kind;
@@ -346,11 +355,8 @@ bool Enemy::TryBeginTacticAction(ActionKind kind) {
     case ActionKind::Sweep:
         BeginAction(kind, ActionStep::Charge);
         return true;
-    case ActionKind::DelaySmash:
-        BeginAction(ActionKind::Smash, ActionStep::Charge);
-        action_.id = ActionId::DelaySmash;
-        return true;
     case ActionKind::Wave:
+    case ActionKind::Laser:
     case ActionKind::Cage:
         return false;
     case ActionKind::BladeClash:
@@ -416,6 +422,7 @@ void Enemy::EndAttack() {
     phase2FeintFollowupLocked_ = false;
     phase2FeintImmediateGreen_ = false;
     phase2FeintBehindFollowup_ = false;
+    farLaserFollowupActive_ = false;
     phase2FeintDecisionMade_ = false;
     phase2DirectionFeintDecisionMade_ = false;
     phase2BladeClashStandby_ = false;

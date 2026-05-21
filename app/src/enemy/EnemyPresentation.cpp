@@ -39,12 +39,6 @@ void Enemy::UpdateParts() {
     float visualRoll = 0.0f;
     const float pulse = 0.5f + 0.5f * std::sin(runtime_.stateTimer * 18.0f);
     const float slowPulse = std::sin(runtime_.stateTimer * 7.0f);
-    const bool isDelaySmashWhiffPunish =
-        action_.kind == ActionKind::Smash &&
-        action_.step == ActionStep::Recovery &&
-        action_.id == ActionId::DelaySmash && !currentActionConnected_ &&
-        !currentActionGuarded_;
-
     const float forwardX = std::sin(usedYaw);
     const float forwardZ = std::cos(usedYaw);
     const float rightX = std::cos(usedYaw);
@@ -234,8 +228,8 @@ void Enemy::UpdateParts() {
     if (!suppressActionPresentation && action_.kind == ActionKind::Smash) {
         if (action_.step == ActionStep::Charge || action_.step == ActionStep::Hold) {
             const bool isDelayBait =
-                action_.id == ActionId::DelaySmash || action_.step == ActionStep::Hold ||
-                fakeCommitActive_ || freezeHoldActive_;
+                action_.step == ActionStep::Hold || fakeCommitActive_ ||
+                freezeHoldActive_;
             bodyTf_.position.y -= 0.28f + 0.08f * pulse;
             bodyTf_.scale.y += 0.24f;
             bodyTf_.scale.x += 0.16f + 0.06f * pulse;
@@ -283,19 +277,6 @@ void Enemy::UpdateParts() {
             rightHandTf_.position.x += forwardX * 0.8f;
             rightHandTf_.position.z += forwardZ * 0.8f;
 
-            if (isDelaySmashWhiffPunish) {
-                bodyTf_.position.y -= 0.14f;
-                bodyTf_.position.x += forwardX * 0.10f;
-                bodyTf_.position.z += forwardZ * 0.10f;
-                bodyTf_.scale.y -= 0.10f;
-                bodyTf_.scale.x += 0.08f;
-                rightHandTf_.position.y -= 0.30f;
-                rightHandTf_.position.x += forwardX * 0.40f;
-                rightHandTf_.position.z += forwardZ * 0.40f;
-                leftHandTf_.position.y -= 0.18f;
-                leftHandTf_.position.x += (-rightX) * 0.22f;
-                leftHandTf_.position.z += (-rightZ) * 0.22f;
-            }
 
             visualTf_.position.x += forwardX * 0.10f;
             visualTf_.position.z += forwardZ * 0.10f;

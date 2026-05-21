@@ -44,6 +44,23 @@ void Enemy::UpdateWaveByStep(float deltaTime) {
     }
 }
 
+void Enemy::UpdateLaserByStep(float deltaTime) {
+    switch (action_.step) {
+    case ActionStep::Charge:
+        UpdateLaserCharge(deltaTime);
+        break;
+    case ActionStep::Active:
+        UpdateLaserActive(deltaTime);
+        break;
+    case ActionStep::Recovery:
+        UpdateLaserRecovery(deltaTime);
+        break;
+    default:
+        EndAttack();
+        break;
+    }
+}
+
 void Enemy::UpdateCageByStep(float deltaTime) {
     switch (action_.step) {
     case ActionStep::Charge:
@@ -132,6 +149,83 @@ void Enemy::UpdateWaveRecovery(float deltaTime) {
         }
         EndAttack();
     }
+}
+
+void Enemy::UpdateLaserCharge(float deltaTime) {
+    UpdateFacingToPlayerWithSpeed(
+        deltaTime,
+        chargeTurnSpeed_ * ChargeTurnScaleAfterStance(stateTimer_, 0.34f));
+
+    const float chargeTime = config_.attacks.laser.chargeTime * 0.72f;
+    if (stateTimer_ >= chargeTime) {
+        LockCurrentFacing();
+        ChangeActionStep(ActionStep::Active);
+    }
+}
+
+void Enemy::UpdateLaserActive(float deltaTime) {
+    (void)deltaTime;
+    if (!laserDashInitialized_) {
+        laserDashInitialized_ = true;
+        laserDashStart_ = tf_.position;
+        float dirX = playerPos_.x - tf_.position.x;
+        float dirZ = playerPos_.z - tf_.position.z;
+        float len = std::sqrt(dirX * dirX + dirZ * dirZ);
+        if (len <= 0.0001f) {
+            dirX = std::sin(facingYaw_);
+            dirZ = std::cos(facingYaw_);
+            len = 1.0f;
+        }
+        dirX /= len;
+        dirZ /= len;
+        laserDashTarget_ = playerPos_;
+        laserDashTarget_.x -= dirX * 1.55f;
+        laserDashTarget_.z -= dirZ * 1.55f;
+        laserDashTarget_.y = tf_.position.y;
+        facingYaw_ = NormalizeAngle(std::atan2(dirX, dirZ));
+        LockCurrentFacing();
+    }
+
+    constexpr float kTuckTime = 0.10f;
+    constexpr float kDashTime = 0.58f;
+    const float moveTimer = (std::max)(0.0f, stateTimer_ - kTuckTime);
+    float t = moveTimer / kDashTime;
+    t = std::clamp(t, 0.0f, 1.0f);
+    const float eased = 1.0f - std::pow(1.0f - t, 4.8f);
+    const float tuck =
+        stateTimer_ < kTuckTime
+            ? std::sinf((stateTimer_ / kTuckTime) * 3.14159265f) * 0.18f
+            : 0.0f;
+    const float dashX = laserDashTarget_.x - laserDashStart_.x;
+    const float dashZ = laserDashTarget_.z - laserDashStart_.z;
+    float dashLen = std::sqrt(dashX * dashX + dashZ * dashZ);
+    if (dashLen < 0.0001f) {
+        dashLen = 1.0f;
+    }
+    tf_.position.x =
+        laserDashStart_.x + dashX * eased - (dashX / dashLen) * tuck;
+    tf_.position.y =
+        laserDashStart_.y + (laserDashTarget_.y - laserDashStart_.y) * eased;
+    tf_.position.z =
+        laserDashStart_.z + dashZ * eased - (dashZ / dashLen) * tuck;
+    EmitWarpTrailGhost(tf_.position, warpTrailScaleMax_ * 1.05f);
+
+    if (stateTimer_ >= kTuckTime + kDashTime) {
+        const ActionKind followupKind = laserDashFollowupKind_;
+        EndAttack();
+        BeginAction(followupKind, ActionStep::Active);
+        action_.id =
+            followupKind == ActionKind::Smash ? ActionId::QuickSmash
+                                              : ActionId::QuickSweep;
+        stateTimer_ = 0.0f;
+        LockCurrentFacing();
+        farLaserFollowupActive_ = true;
+    }
+}
+
+void Enemy::UpdateLaserRecovery(float deltaTime) {
+    (void)deltaTime;
+    EndAttack();
 }
 
 void Enemy::UpdateCageCharge(float deltaTime) {
@@ -332,6 +426,16 @@ bool Enemy::ConsumeCagePulse() {
 }
 
 void Enemy::DestroyWave(size_t index) { ConsumeWave(index); }
+
+void Enemy::ResetLaserActionState(bool clearVariant) {
+    laserDashInitialized_ = false;
+    if (clearVariant) {
+        laserDashFollowupKind_ = ActionKind::Smash;
+        laserDashStart_ = {};
+        laserDashTarget_ = {};
+        farLaserFollowupActive_ = false;
+    }
+}
 
 void Enemy::ReflectWave(size_t index, const DirectX::XMFLOAT3 &targetPos) {
     if (index >= waves_.size()) {
