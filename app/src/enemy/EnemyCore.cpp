@@ -18,6 +18,7 @@ void Enemy::Initialize(uint32_t modelId, uint32_t projectileModelId) {
     runtime_.phase3GuardCounterActive = false;
     runtime_.quickCounterOpeningUsed = false;
     runtime_.phase2FeintImmediateGreen = false;
+    runtime_.phase3PhantomWarpCooldown = 0.0f;
 
     tf_.position = {0.0f, 0.0f, 10.0f};
     tf_.scale = {1.0f, 1.0f, 1.0f};
@@ -47,6 +48,10 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
     runtime_.playerGuarding = playerObs.isGuarding;
     UpdateBossPhase();
     UpdateWarpTrails(deltaTime);
+    if (phase3PhantomWarpCooldown_ > 0.0f) {
+        phase3PhantomWarpCooldown_ =
+            (std::max)(0.0f, phase3PhantomWarpCooldown_ - deltaTime);
+    }
 
     if (counterRecoilTimer_ > 0.0f) {
         counterRecoilTimer_ -= deltaTime;
@@ -245,6 +250,7 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     phase2FeintDecisionMade_ = false;
     phase2DirectionFeintDecisionMade_ = false;
     phase3GuardCounterActive_ = false;
+    phase3PhantomFinalLockDelay_ = 0.0f;
     isAttackActive_ = false;
     stateTimer_ = 0.0f;
     currentActionConnected_ = false;

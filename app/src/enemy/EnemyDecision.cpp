@@ -871,6 +871,10 @@ void Enemy::BeginNeutralAction() {
     }
 
     stalkRepeatCount_ = 0;
+    if (phase_ != BossPhase::Phase1 &&
+        TryBeginPhase3PhantomWarpSkill(phase3PhantomWarpChance_ * 0.72f)) {
+        return;
+    }
     TryBeginTacticAction(SelectNeutralAction(distance));
 }
 
@@ -879,6 +883,10 @@ void Enemy::BeginPressureAction() {
 
     if (distance <= config_.core.nearAttackDistance) {
         stalkRepeatCount_ = 0;
+        if (phase_ != BossPhase::Phase1 &&
+            TryBeginPhase3PhantomWarpSkill(phase3PhantomWarpChance_)) {
+            return;
+        }
         if (ShouldBeginQuickCounterAttack()) {
             BeginQuickCounterAttack();
             return;
@@ -988,5 +996,53 @@ bool Enemy::TryBeginWarpBehindMeleeSkill(bool force) {
 
     BeginAction(ActionKind::Warp, ActionStep::Start);
     action_.id = ActionId::WarpBackstab;
+    return true;
+}
+
+bool Enemy::TryBeginPhase3PhantomWarpSkill(float chance) {
+    if (phase_ == BossPhase::Phase1 || deathFinished_ || isDying_ ||
+        hp_ <= 0.0f || phaseTransitionActive_ ||
+        IsWarpSuspendedForPresentation() ||
+        phase3PhantomWarpCooldown_ > 0.0f) {
+        return false;
+    }
+
+    const float distance = GetDistanceToPlayer();
+    if (distance < 1.65f || distance > 9.8f) {
+        return false;
+    }
+
+    if (lastActionKind_ == ActionKind::Warp) {
+        chance *= 0.42f;
+    }
+    if (playerObs_.isCounterStance || playerObs_.isGuarding) {
+        chance += 0.08f;
+    }
+    if (playerObs_.isAttacking) {
+        chance += 0.06f;
+    }
+    chance = (std::clamp)(chance, 0.0f, 0.72f);
+
+    const float roll =
+        static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+    if (roll >= chance) {
+        return false;
+    }
+
+    BeginPhase3PhantomWarpStep(3, false, ActionKind::None);
+    phase3PhantomWarpCooldown_ = phase3PhantomWarpCooldownDuration_;
+    return true;
+}
+
+bool Enemy::ForcePhase3PhantomWarpSkill() {
+    if (deathFinished_ || isDying_ || hp_ <= 0.0f || phaseTransitionActive_ ||
+        IsWarpSuspendedForPresentation()) {
+        return false;
+    }
+
+    hitReactionTimer_ = 0.0f;
+    counterRecoilTimer_ = 0.0f;
+    BeginPhase3PhantomWarpStep(3, false, ActionKind::None);
+    phase3PhantomWarpCooldown_ = phase3PhantomWarpCooldownDuration_;
     return true;
 }

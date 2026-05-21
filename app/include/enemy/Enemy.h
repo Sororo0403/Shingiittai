@@ -44,6 +44,9 @@ struct WarpContext {
     ActionStep followupStep = ActionStep::None;
     bool phase2FeintFollowup = false;
     bool phase2FeintImmediateGreen = false;
+    bool phase3PhantomChain = false;
+    bool phase3PhantomFinal = false;
+    int phase3PhantomViewWarpsRemaining = 0;
 
     bool collisionDisabled = false;
     bool hasValidTarget = false;
@@ -307,6 +310,8 @@ struct EnemyRuntimeState {
     bool phase2BladeClashStandby = false;
     bool phase3GuardCounterActive = false;
     bool quickCounterOpeningUsed = false;
+    float phase3PhantomWarpCooldown = 0.0f;
+    float phase3PhantomFinalLockDelay = 0.0f;
 
     bool holdConfigured = false;
     float currentHoldDuration = 0.0f;
@@ -379,6 +384,7 @@ class Enemy {
     bool NotifyCountered();
     bool NotifyCountered(float vulnerabilityDuration);
     bool TryBeginPhase3GuardCounter();
+    bool ForcePhase3PhantomWarpSkill();
     void FinishCounterRecoil();
     void ApplyVictoryDefeatPose(float ratio,
                                 const DirectX::XMFLOAT3 &startPosition,
@@ -462,6 +468,12 @@ class Enemy {
     bool HasWarpDeparturePos() const { return runtime_.warp.hasDeparturePos; }
     WarpType GetWarpType() const { return runtime_.warp.type; }
     bool IsWarpCollisionDisabled() const { return runtime_.warp.collisionDisabled; }
+    bool ShouldSuppressPhase3PhantomBehindLookAt() const {
+        return runtime_.phase3PhantomFinalLockDelay > 0.0f ||
+               (runtime_.action.kind == ActionKind::Warp &&
+                runtime_.warp.phase3PhantomChain &&
+                runtime_.warp.phase3PhantomFinal);
+    }
 
     const std::vector<EnemyWave> &GetWaves() const { return runtime_.waves; }
     void DestroyWave(size_t index);
@@ -566,9 +578,12 @@ class Enemy {
     bool &phase2BladeClashStandby_ = runtime_.phase2BladeClashStandby;
     bool &phase3GuardCounterActive_ = runtime_.phase3GuardCounterActive;
     bool &quickCounterOpeningUsed_ = runtime_.quickCounterOpeningUsed;
+    float &phase3PhantomWarpCooldown_ = runtime_.phase3PhantomWarpCooldown;
     float phase3GuardCounterPoseTime_ = 0.34f;
     float phase3GuardCounterSmashChargeTime_ = 0.86f;
     float phase3GuardCounterSweepChargeTime_ = 0.78f;
+    float phase3PhantomWarpCooldownDuration_ = 5.8f;
+    float phase3PhantomWarpChance_ = 0.34f;
 
     bool &holdConfigured_ = runtime_.holdConfigured;
     float &currentHoldDuration_ = runtime_.currentHoldDuration;
@@ -698,6 +713,9 @@ class Enemy {
     float quickCounterAttackChance_ = 0.58f;
     float quickSmashChargeTime_ = 0.86f;
     float quickSweepChargeTime_ = 0.78f;
+    float &phase3PhantomFinalLockDelay_ =
+        runtime_.phase3PhantomFinalLockDelay;
+    float phase3PhantomFinalLockDelayDuration_ = 0.26f;
 
     int midWaveWeight_ = 30;
 
@@ -770,6 +788,12 @@ class Enemy {
     void BeginChaseAction();
     void BeginResetAction();
     bool TryBeginWarpBehindMeleeSkill(bool force);
+    bool TryBeginPhase3PhantomWarpSkill(float chance);
+    bool DecideWarpTargetInPlayerView(DirectX::XMFLOAT3 &outTarget);
+    bool DecidePhase3PhantomBehindTarget(DirectX::XMFLOAT3 &outTarget);
+    void BeginPhase3PhantomWarpStep(int viewWarpsRemaining,
+                                    bool finalBehind,
+                                    ActionKind followupKind);
 
     void UpdateSmashCharge(float deltaTime);
     void UpdateSmashHold(float deltaTime);

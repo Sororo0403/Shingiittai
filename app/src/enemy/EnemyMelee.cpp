@@ -76,7 +76,11 @@ void Enemy::UpdateSmashCharge(float deltaTime) {
     }
 
     const float stanceTime = (std::min)(trackingEnd, 0.46f);
-    if (stateTimer_ < trackingEnd) {
+    if (isQuickCounter && phase3PhantomFinalLockDelay_ > 0.0f) {
+        phase3PhantomFinalLockDelay_ =
+            (std::max)(0.0f, phase3PhantomFinalLockDelay_ - deltaTime);
+        LockCurrentFacing();
+    } else if (stateTimer_ < trackingEnd) {
         UpdateFacingToPlayerWithSpeed(
             deltaTime,
             chargeTurnSpeed_ *
@@ -218,7 +222,11 @@ void Enemy::UpdateSweepCharge(float deltaTime) {
     }
 
     const float stanceTime = (std::min)(trackingEnd, 0.42f);
-    if (stateTimer_ < trackingEnd) {
+    if (isQuickCounter && phase3PhantomFinalLockDelay_ > 0.0f) {
+        phase3PhantomFinalLockDelay_ =
+            (std::max)(0.0f, phase3PhantomFinalLockDelay_ - deltaTime);
+        LockCurrentFacing();
+    } else if (stateTimer_ < trackingEnd) {
         UpdateFacingToPlayerWithSpeed(
             deltaTime,
             chargeTurnSpeed_ *

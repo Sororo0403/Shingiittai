@@ -698,6 +698,24 @@ void GameScene::Update() {
     phaseTransitionWasActive_ = false;
     phaseTransitionReleaseEmitted_ = false;
 
+    if (runMode_ == RunMode::Play && input != nullptr &&
+        input->IsKeyTrigger(DIK_F8) && !bladeClashActive_ &&
+        !bladeClashFinishActive_ && !counterCinematicActive_) {
+        if (enemy_.ForcePhase3PhantomWarpSkill()) {
+            chargeWeakPointActionKind_ = ActionKind::None;
+            chargeWeakPointActionSerial_ = 0;
+            failedChargeWeakPointActionKind_ = ActionKind::None;
+            failedChargeWeakPointActionSerial_ = 0;
+            chargeWeakPointBroken_ = false;
+            chargeWeakPointFailedThisAction_ = false;
+            chargeWeakPointSlashCount_ = 0;
+            previousChargeWeakPointSlashStates_.fill(false);
+            enemyRedPunishUncounterable_ = false;
+            SetEnemyAnimationFrozen(false);
+            SyncEnemyAnimation();
+        }
+    }
+
     combatFeedback_.Update(baseDeltaTime, sceneLightTime_);
     UpdateChargeWeakPointFocus(baseDeltaTime);
     if (bladeClashFinishActive_) {
@@ -1354,8 +1372,16 @@ void GameScene::Update() {
             player_.SetBladeClashPose(true, 0.0f);
         }
     } else {
-        player_.Update(input, playerDeltaTime, enemy_.GetTransform().position,
-                       cameraYaw_, forceRangedReflectMove, baseDeltaTime);
+        DirectX::XMFLOAT3 playerLookTarget = enemy_.GetTransform().position;
+        if (enemy_.ShouldSuppressPhase3PhantomBehindLookAt()) {
+            const auto &playerPos = player_.GetTransform().position;
+            const float playerYaw = player_.GetYaw();
+            playerLookTarget = {playerPos.x + std::sinf(playerYaw) * 5.0f,
+                                playerLookTarget.y,
+                                playerPos.z + std::cosf(playerYaw) * 5.0f};
+        }
+        player_.Update(input, playerDeltaTime, playerLookTarget, cameraYaw_,
+                       forceRangedReflectMove, baseDeltaTime);
     }
     UpdateSwordVfx(baseDeltaTime);
     if (soundsLoaded_ && ctx_->sound != nullptr) {

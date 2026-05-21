@@ -22,6 +22,14 @@ DirectX::XMFLOAT4 LerpColor(const DirectX::XMFLOAT4 &from,
             from.z + (to.z - from.z) * t, from.w + (to.w - from.w) * t};
 }
 
+float GetPhase3PhantomWarpMoveTime(bool finalWarp) {
+    return finalWarp ? 0.24f : 0.20f;
+}
+
+float GetPhase3PhantomWarpEndTime(bool finalWarp) {
+    return finalWarp ? 0.18f : 0.42f;
+}
+
 } // namespace
 
 void Enemy::UpdateParts() {
@@ -460,8 +468,12 @@ void Enemy::UpdateParts() {
         }
     } else if (!suppressActionPresentation && action_.kind == ActionKind::Warp) {
         if (action_.step == ActionStep::Start) {
+            const float warpStartTime =
+                warp_.phase3PhantomChain
+                    ? (warp_.phase3PhantomFinal ? 0.13f : 0.11f)
+                    : config_.warp.startTime;
             const float startT =
-                Saturate(stateTimer_ / (std::max)(config_.warp.startTime, 0.0001f));
+                Saturate(stateTimer_ / (std::max)(warpStartTime, 0.0001f));
             const float vanish = startT * startT;
             const float shimmer =
                 std::sin(startT * 12.56637061f) * (1.0f - startT);
@@ -500,8 +512,12 @@ void Enemy::UpdateParts() {
             visualRoll += shimmer * 0.18f;
 
         } else if (action_.step == ActionStep::Move) {
+            const float warpMoveTime =
+                warp_.phase3PhantomChain
+                    ? GetPhase3PhantomWarpMoveTime(warp_.phase3PhantomFinal)
+                    : config_.warp.moveTime;
             const float moveT =
-                Saturate(stateTimer_ / (std::max)(config_.warp.moveTime, 0.0001f));
+                Saturate(stateTimer_ / (std::max)(warpMoveTime, 0.0001f));
             const float streak = 1.0f - std::abs(moveT * 2.0f - 1.0f);
             // Move中は本体を見せず、出発/到着の残光だけにする
             bodyTf_.scale.x *= 0.88f;
@@ -525,8 +541,16 @@ void Enemy::UpdateParts() {
             visualYaw += 0.85f * slowPulse;
 
         } else if (action_.step == ActionStep::End) {
+            const float warpEndTime =
+                warp_.phase3PhantomChain
+                    ? GetPhase3PhantomWarpEndTime(warp_.phase3PhantomFinal)
+                    : config_.warp.endTime;
+            const float warpArrivalTime =
+                warp_.phase3PhantomChain && !warp_.phase3PhantomFinal
+                    ? 0.14f
+                    : warpEndTime;
             const float endT =
-                Saturate(stateTimer_ / (std::max)(config_.warp.endTime, 0.0001f));
+                Saturate(stateTimer_ / (std::max)(warpArrivalTime, 0.0001f));
             const float arrival = 1.0f - (1.0f - endT) * (1.0f - endT);
             rightHandTf_.position.y += 0.2f;
             rightHandTf_.position.x += forwardX * 0.3f;
@@ -729,7 +753,13 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
         action_.kind == ActionKind::Warp && action_.step == ActionStep::Move;
     ModelDrawEffect warpEffect{};
 
-    if (action_.kind == ActionKind::Warp) {
+    const float phase3NonFinalEndVisibleTime = 0.16f;
+    const bool showNormalDuringPhase3WarpSettle =
+        action_.kind == ActionKind::Warp && action_.step == ActionStep::End &&
+        warp_.phase3PhantomChain && !warp_.phase3PhantomFinal &&
+        stateTimer_ >= phase3NonFinalEndVisibleTime;
+
+    if (action_.kind == ActionKind::Warp && !showNormalDuringPhase3WarpSettle) {
         warpEffect.enabled = true;
         warpEffect.additiveBlend = true;
         warpEffect.color = actionTint;
@@ -737,6 +767,14 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
         warpEffect.fresnelPower = 1.9f;
         warpEffect.noiseAmount = (action_.step == ActionStep::Start) ? 0.56f : 0.38f;
         warpEffect.time = stateTimer_;
+        if (warp_.phase3PhantomChain) {
+            warpEffect.color =
+                warp_.phase3PhantomFinal
+                    ? DirectX::XMFLOAT4{0.42f, 1.0f, 0.58f, 0.92f}
+                    : DirectX::XMFLOAT4{0.64f, 0.74f, 1.0f, 0.82f};
+            warpEffect.intensity += warp_.phase3PhantomFinal ? 0.44f : 0.30f;
+            warpEffect.noiseAmount += 0.16f;
+        }
 
         if (isHitFlashing) {
             warpEffect.color = LerpColor(warpEffect.color,
