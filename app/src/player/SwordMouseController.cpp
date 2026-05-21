@@ -6,7 +6,8 @@
 using namespace DirectX;
 
 namespace {
-constexpr float kMouseSwordOrientationScale = 0.0065f;
+constexpr float kMouseSwordOrientationScale = 0.0055f;
+constexpr float kMouseSlashSpeedScale = 0.90f;
 constexpr float kMouseSwordMaxAngle = 1.18f;
 constexpr float kMouseSlashMinDeltaSq = 6.0f * 6.0f;
 }
@@ -73,5 +74,5 @@ void SwordMouseController::UpdateSlash(Input *input, float dt) {
         const float invLength = 1.0f / speed;
         state_.slashDir = {dx * invLength, -dy * invLength};
     }
-    state_.UpdateSlash(mouseSpeed_, dt);
+    state_.UpdateSlash(mouseSpeed_ * kMouseSlashSpeedScale, dt);
 }

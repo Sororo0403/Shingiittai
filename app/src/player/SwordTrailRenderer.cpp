@@ -345,7 +345,7 @@ void SwordTrailRenderer::CreatePipelineState() {
     pso.BlendState = blend;
 
     D3D12_DEPTH_STENCIL_DESC depth = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
-    depth.DepthEnable = TRUE;
+    depth.DepthEnable = FALSE;
     depth.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
     depth.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
     pso.DepthStencilState = depth;

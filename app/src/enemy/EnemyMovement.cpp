@@ -4,16 +4,6 @@
 #include <cstdlib>
 
 void Enemy::ClampToArena() {
-    const float radiusSq = arenaClampRadius_ * arenaClampRadius_;
-    const float distanceSq =
-        tf_.position.x * tf_.position.x + tf_.position.z * tf_.position.z;
-    if (distanceSq <= radiusSq || distanceSq <= 0.0001f) {
-        return;
-    }
-
-    const float scale = arenaClampRadius_ / std::sqrt(distanceSq);
-    tf_.position.x *= scale;
-    tf_.position.z *= scale;
 }
 
 void Enemy::UpdateStalkByStep(float deltaTime) {
@@ -31,20 +21,15 @@ void Enemy::UpdateStalkMove(float deltaTime) {
     UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_ * 1.15f);
 
     const float usedYaw = facingYaw_;
-    const float rightX = std::cos(usedYaw);
-    const float rightZ = -std::sin(usedYaw);
     const float forwardX = std::sin(usedYaw);
     const float forwardZ = std::cos(usedYaw);
 
-    float moveX = rightX * stalkMoveDir_ * stalkStrafeRadiusWeight_;
-    float moveZ = rightZ * stalkMoveDir_ * stalkStrafeRadiusWeight_;
-    moveX += forwardX * stalkForwardBias_ * stalkForwardAdjustWeight_;
-    moveZ += forwardZ * stalkForwardBias_ * stalkForwardAdjustWeight_;
-
-    const float length = std::sqrt(moveX * moveX + moveZ * moveZ);
-    if (length > 0.0001f) {
-        moveX /= length;
-        moveZ /= length;
+    const float distance = GetDistanceToPlayer();
+    float moveX = 0.0f;
+    float moveZ = 0.0f;
+    if (distance > config_.core.nearAttackDistance) {
+        moveX = forwardX;
+        moveZ = forwardZ;
     }
 
     tf_.position.x += moveX * stalkMoveSpeed_ * deltaTime;
@@ -55,7 +40,7 @@ void Enemy::UpdateStalkMove(float deltaTime) {
     if (stateTimer_ >= stalkPounceMinTime_ &&
         GetDistanceToPlayer() <= pounceDistance) {
         float chance = stalkPounceChance_;
-        if (phase_ == BossPhase::Phase2) {
+        if (phase_ != BossPhase::Phase1) {
             chance += 0.18f;
         }
         if (playerObs_.isAttacking || playerObs_.isGuarding) {
@@ -85,6 +70,7 @@ void Enemy::UpdateFacingToPlayer() {
     const float dx = playerPos_.x - tf_.position.x;
     const float dz = playerPos_.z - tf_.position.z;
     facingYaw_ = std::atan2(dx, dz);
+    SyncBaseRotationToFacing();
 }
 
 void Enemy::FaceTargetImmediately(const DirectX::XMFLOAT3 &targetPosition) {
@@ -93,10 +79,20 @@ void Enemy::FaceTargetImmediately(const DirectX::XMFLOAT3 &targetPosition) {
     const float dz = targetPosition.z - tf_.position.z;
     facingYaw_ = std::atan2(dx, dz);
     lockedAttackYaw_ = facingYaw_;
+    SyncBaseRotationToFacing();
     UpdateParts();
 }
 
-void Enemy::LockCurrentFacing() { lockedAttackYaw_ = facingYaw_; }
+void Enemy::LockCurrentFacing() {
+    lockedAttackYaw_ = facingYaw_;
+    SyncBaseRotationToFacing();
+}
+
+void Enemy::SyncBaseRotationToFacing() {
+    DirectX::XMVECTOR rot =
+        DirectX::XMQuaternionRotationRollPitchYaw(0.0f, facingYaw_, 0.0f);
+    DirectX::XMStoreFloat4(&tf_.rotation, rot);
+}
 
 float Enemy::NormalizeAngle(float angle) const {
     while (angle > 3.14159265f) {
@@ -123,6 +119,7 @@ void Enemy::UpdateFacingToPlayerWithSpeed(float deltaTime, float turnSpeed) {
     }
 
     facingYaw_ = NormalizeAngle(facingYaw_ + diff);
+    SyncBaseRotationToFacing();
 }
 
 float Enemy::GetVisualYaw() const {

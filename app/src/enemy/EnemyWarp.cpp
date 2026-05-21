@@ -4,6 +4,16 @@
 #include <cmath>
 #include <cstdlib>
 
+namespace {
+float GetPhase3PhantomWarpMoveTime(bool finalWarp) {
+    return finalWarp ? 0.24f : 0.20f;
+}
+
+float GetPhase3PhantomWarpEndTime(bool finalWarp) {
+    return finalWarp ? 0.18f : 0.42f;
+}
+} // namespace
+
 void Enemy::UpdateWarpByStep(float deltaTime) {
     switch (action_.step) {
     case ActionStep::Start:
@@ -26,14 +36,14 @@ bool Enemy::IsWarpSuspendedForPresentation() const {
 }
 
 bool Enemy::DecideWarpTargetNearPlayer(DirectX::XMFLOAT3 &outTarget) {
-    float playerForwardX = playerObs_.velocity.x;
-    float playerForwardZ = playerObs_.velocity.z;
+    float playerForwardX = std::sin(playerObs_.facingYaw);
+    float playerForwardZ = std::cos(playerObs_.facingYaw);
     float playerForwardLength =
         std::sqrt(playerForwardX * playerForwardX + playerForwardZ * playerForwardZ);
 
     if (playerForwardLength <= 0.0001f) {
-        playerForwardX = playerPos_.x - tf_.position.x;
-        playerForwardZ = playerPos_.z - tf_.position.z;
+        playerForwardX = playerObs_.velocity.x;
+        playerForwardZ = playerObs_.velocity.z;
         playerForwardLength =
             std::sqrt(playerForwardX * playerForwardX + playerForwardZ * playerForwardZ);
     }
@@ -47,42 +57,37 @@ bool Enemy::DecideWarpTargetNearPlayer(DirectX::XMFLOAT3 &outTarget) {
     playerForwardX /= playerForwardLength;
     playerForwardZ /= playerForwardLength;
 
-    const float backX = -playerForwardX;
-    const float backZ = -playerForwardZ;
-    const float rightX = playerForwardZ;
-    const float rightZ = -playerForwardX;
+    const float toPlayerX = playerPos_.x - tf_.position.x;
+    const float toPlayerZ = playerPos_.z - tf_.position.z;
+    const float nearDistance = config_.core.nearAttackDistance;
+    const bool isAlreadyNear =
+        (toPlayerX * toPlayerX + toPlayerZ * toPlayerZ) <=
+        nearDistance * nearDistance;
 
     if (warp_.approachSlot == WarpApproachSlot::None) {
-        int slotRoll = std::rand() % 100;
-        if (slotRoll < 42) {
-            warp_.approachSlot = WarpApproachSlot::BackLeft;
-        } else if (slotRoll < 84) {
-            warp_.approachSlot = WarpApproachSlot::BackRight;
-        } else {
-            warp_.approachSlot = WarpApproachSlot::DirectBack;
-        }
+        warp_.approachSlot = isAlreadyNear
+                                 ? WarpApproachSlot::Back
+                                 : ((std::rand() % 100 < 48)
+                                        ? WarpApproachSlot::Front
+                                        : WarpApproachSlot::Back);
+    } else if (isAlreadyNear && warp_.approachSlot == WarpApproachSlot::Front) {
+        warp_.approachSlot = WarpApproachSlot::Back;
     }
 
     outTarget = playerPos_;
-    if (warp_.approachSlot == WarpApproachSlot::BackLeft) {
-        outTarget.x += backX * warpApproachForwardDistance_ -
-                       rightX * warpApproachSideDistance_;
-        outTarget.z += backZ * warpApproachForwardDistance_ -
-                       rightZ * warpApproachSideDistance_;
-    } else if (warp_.approachSlot == WarpApproachSlot::BackRight) {
-        outTarget.x += backX * warpApproachForwardDistance_ +
-                       rightX * warpApproachSideDistance_;
-        outTarget.z += backZ * warpApproachForwardDistance_ +
-                       rightZ * warpApproachSideDistance_;
+    if (warp_.approachSlot == WarpApproachSlot::Front) {
+        outTarget.x += playerForwardX * warpApproachFrontDistance_;
+        outTarget.z += playerForwardZ * warpApproachFrontDistance_;
     } else {
-        outTarget.x += backX * warpApproachLongFrontDistance_;
-        outTarget.z += backZ * warpApproachLongFrontDistance_;
+        outTarget.x -= playerForwardX * warpApproachBackDistance_;
+        outTarget.z -= playerForwardZ * warpApproachBackDistance_;
     }
     outTarget.y = tf_.position.y;
+    FinalizeWarpTargetFacing(outTarget);
     return true;
 }
 
-bool Enemy::DecideWarpTargetFarFromPlayer(DirectX::XMFLOAT3 &outTarget) const {
+bool Enemy::DecideWarpTargetFarFromPlayer(DirectX::XMFLOAT3 &outTarget) {
     const float angle =
         static_cast<float>(std::rand() % 360) * 3.14159265f / 180.0f;
     const float t =
@@ -94,7 +99,187 @@ bool Enemy::DecideWarpTargetFarFromPlayer(DirectX::XMFLOAT3 &outTarget) const {
     outTarget.x += std::cos(angle) * radius;
     outTarget.z += std::sin(angle) * radius;
     outTarget.y = tf_.position.y;
+    FinalizeWarpTargetFacing(outTarget);
     return true;
+}
+
+bool Enemy::DecideFarLaserWarpTarget(DirectX::XMFLOAT3 &outTarget) {
+    float forwardX = std::sin(playerObs_.facingYaw);
+    float forwardZ = std::cos(playerObs_.facingYaw);
+    float forwardLen = std::sqrt(forwardX * forwardX + forwardZ * forwardZ);
+    if (forwardLen <= 0.0001f) {
+        forwardX = playerPos_.x - tf_.position.x;
+        forwardZ = playerPos_.z - tf_.position.z;
+        forwardLen = std::sqrt(forwardX * forwardX + forwardZ * forwardZ);
+    }
+    if (forwardLen <= 0.0001f) {
+        forwardX = std::sin(facingYaw_);
+        forwardZ = std::cos(facingYaw_);
+        forwardLen = 1.0f;
+    }
+    forwardX /= forwardLen;
+    forwardZ /= forwardLen;
+
+    const float sideSign = (std::rand() % 2 == 0) ? -1.0f : 1.0f;
+    const float sideT =
+        static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+    const float distance = phase_ == BossPhase::Phase3 ? 14.2f : 13.0f;
+    const float sideOffset = sideSign * (2.2f + 2.8f * sideT);
+    const float rightX = forwardZ;
+    const float rightZ = -forwardX;
+
+    outTarget = playerPos_;
+    outTarget.x += forwardX * distance + rightX * sideOffset;
+    outTarget.z += forwardZ * distance + rightZ * sideOffset;
+    outTarget.y = tf_.position.y;
+    FinalizeWarpTargetFacing(outTarget);
+    return true;
+}
+
+bool Enemy::DecideWarpTargetInPlayerView(DirectX::XMFLOAT3 &outTarget) {
+    float forwardX = std::sin(playerObs_.facingYaw);
+    float forwardZ = std::cos(playerObs_.facingYaw);
+    float forwardLength =
+        std::sqrt(forwardX * forwardX + forwardZ * forwardZ);
+
+    if (forwardLength <= 0.0001f) {
+        forwardX = playerObs_.velocity.x;
+        forwardZ = playerObs_.velocity.z;
+        forwardLength =
+            std::sqrt(forwardX * forwardX + forwardZ * forwardZ);
+    }
+    if (forwardLength <= 0.0001f) {
+        forwardX = std::sin(facingYaw_);
+        forwardZ = std::cos(facingYaw_);
+        forwardLength = 1.0f;
+    }
+
+    forwardX /= forwardLength;
+    forwardZ /= forwardLength;
+    const float rightX = forwardZ;
+    const float rightZ = -forwardX;
+
+    const float laneT =
+        static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+    const float jitterT =
+        static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+    const float spreadT =
+        static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+
+    float sideOffset = 0.0f;
+    float forwardOffset = 0.0f;
+    const float sideSign = (std::rand() % 2 == 0) ? -1.0f : 1.0f;
+    const float jitter = -0.45f + 0.90f * jitterT;
+    if (laneT < 0.28f) {
+        sideOffset = sideSign * (4.85f + 1.75f * spreadT);
+        forwardOffset = 2.65f + 1.65f * jitterT;
+    } else if (laneT < 0.56f) {
+        sideOffset = sideSign * (2.90f + 1.55f * spreadT);
+        forwardOffset = 6.35f + 1.75f * jitterT;
+    } else if (laneT < 0.78f) {
+        sideOffset = jitter * 1.45f;
+        forwardOffset = 7.35f + 1.65f * spreadT;
+    } else {
+        sideOffset = jitter * 1.85f;
+        forwardOffset = 1.85f + 0.95f * spreadT;
+    }
+
+    outTarget = playerPos_;
+    outTarget.x += forwardX * forwardOffset + rightX * sideOffset;
+    outTarget.z += forwardZ * forwardOffset + rightZ * sideOffset;
+    outTarget.y = tf_.position.y;
+    FinalizeWarpTargetFacing(outTarget);
+    return true;
+}
+
+bool Enemy::DecidePhase3PhantomBehindTarget(DirectX::XMFLOAT3 &outTarget) {
+    float forwardX = std::sin(playerObs_.facingYaw);
+    float forwardZ = std::cos(playerObs_.facingYaw);
+    float forwardLength = std::sqrt(forwardX * forwardX + forwardZ * forwardZ);
+
+    if (forwardLength <= 0.0001f) {
+        forwardX = tf_.position.x - playerPos_.x;
+        forwardZ = tf_.position.z - playerPos_.z;
+        forwardLength = std::sqrt(forwardX * forwardX + forwardZ * forwardZ);
+    }
+    if (forwardLength <= 0.0001f) {
+        forwardX = std::sin(facingYaw_);
+        forwardZ = std::cos(facingYaw_);
+        forwardLength = 1.0f;
+    }
+
+    forwardX /= forwardLength;
+    forwardZ /= forwardLength;
+    const float rightX = forwardZ;
+    const float rightZ = -forwardX;
+    const float sideT =
+        static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+    const float sideOffset = -0.06f + 0.12f * sideT;
+    const float backDistance = 1.55f;
+
+    outTarget = playerPos_;
+    outTarget.x -= forwardX * backDistance;
+    outTarget.z -= forwardZ * backDistance;
+    outTarget.x += rightX * sideOffset;
+    outTarget.z += rightZ * sideOffset;
+
+    outTarget.y = tf_.position.y;
+    FinalizeWarpTargetFacing(outTarget);
+    return true;
+}
+
+bool Enemy::RefreshLiveBehindWarpTarget() {
+    const bool isPhase2Behind =
+        warp_.phase2FeintFollowup &&
+        warp_.approachSlot == WarpApproachSlot::Back;
+    const bool isPhase3FinalBehind =
+        warp_.phase3PhantomChain && warp_.phase3PhantomFinal;
+    if (!isPhase2Behind && !isPhase3FinalBehind) {
+        return false;
+    }
+
+    float forwardX = std::sin(playerObs_.facingYaw);
+    float forwardZ = std::cos(playerObs_.facingYaw);
+    float forwardLength = std::sqrt(forwardX * forwardX + forwardZ * forwardZ);
+
+    if (forwardLength <= 0.0001f) {
+        forwardX = playerObs_.velocity.x;
+        forwardZ = playerObs_.velocity.z;
+        forwardLength = std::sqrt(forwardX * forwardX + forwardZ * forwardZ);
+    }
+    if (forwardLength <= 0.0001f) {
+        forwardX = std::sin(facingYaw_);
+        forwardZ = std::cos(facingYaw_);
+        forwardLength = 1.0f;
+    }
+
+    forwardX /= forwardLength;
+    forwardZ /= forwardLength;
+
+    const float backDistance =
+        isPhase3FinalBehind ? 1.55f : warpApproachBackDistance_;
+    warp_.targetPos = playerPos_;
+    warp_.targetPos.x -= forwardX * backDistance;
+    warp_.targetPos.z -= forwardZ * backDistance;
+    warp_.targetPos.y = tf_.position.y;
+    FinalizeWarpTargetFacing(warp_.targetPos);
+    warp_.hasValidTarget = true;
+    return true;
+}
+
+void Enemy::ClampWarpTargetToArena(DirectX::XMFLOAT3 &target) const {
+    (void)target;
+}
+
+void Enemy::FinalizeWarpTargetFacing(DirectX::XMFLOAT3 &target) {
+    const float dx = playerPos_.x - target.x;
+    const float dz = playerPos_.z - target.z;
+    if (dx * dx + dz * dz > 0.0001f) {
+        warp_.targetYaw = NormalizeAngle(std::atan2(dx, dz));
+    } else {
+        warp_.targetYaw = NormalizeAngle(facingYaw_);
+    }
+    warp_.hasTargetYaw = true;
 }
 
 bool Enemy::PrepareWarpContext() {
@@ -116,193 +301,110 @@ bool Enemy::PrepareWarpContext() {
     return true;
 }
 
-void Enemy::ResetPostActionState() { postActionOption_ = PostActionOption::None; }
-
-void Enemy::BeginBackWarpPostAction() {
-    if (IsWarpSuspendedForPresentation()) {
-        ResetPostActionState();
-        return;
-    }
-
+void Enemy::BeginPhase3PhantomWarpStep(int viewWarpsRemaining,
+                                       bool finalBehind,
+                                       ActionKind followupKind) {
     ResetWarpContext();
-    warp_.type = WarpType::Escape;
-    if (!DecideWarpTargetFarFromPlayer(warp_.targetPos)) {
-        ResetPostActionState();
-        return;
+    warp_.type = WarpType::Approach;
+    warp_.phase3PhantomChain = true;
+    warp_.phase3PhantomFinal = finalBehind;
+    warp_.phase3PhantomViewWarpsRemaining = viewWarpsRemaining;
+    warp_.faceLivePlayerOnEnd = !finalBehind;
+
+    if (finalBehind) {
+        warp_.approachSlot = WarpApproachSlot::Back;
+        if (!DecidePhase3PhantomBehindTarget(warp_.targetPos)) {
+            ResetWarpContext();
+            BeginChaseAction();
+            return;
+        }
+        warp_.followupKind = followupKind;
+        warp_.followupStep = ActionStep::Charge;
+    } else {
+        warp_.approachSlot = WarpApproachSlot::Front;
+        if (!DecideWarpTargetInPlayerView(warp_.targetPos)) {
+            ResetWarpContext();
+            BeginChaseAction();
+            return;
+        }
+        warp_.followupKind = ActionKind::None;
+        warp_.followupStep = ActionStep::None;
     }
 
     warp_.hasValidTarget = true;
     BeginAction(ActionKind::Warp, ActionStep::Start);
 }
 
-void Enemy::ResetWarpContext() { warp_ = WarpContext{}; }
-
-void Enemy::ResetChainContext() { chain_ = ChainContext{}; }
-
-bool Enemy::DecideNextChainAction(ActionKind finishedKind, ActionKind &outKind,
-                                  ActionStep &outStep) const {
-    outKind = ActionKind::None;
-    outStep = ActionStep::None;
-    if (!chain_.active) {
+bool Enemy::BeginBladeClashReturnWarp(
+    const PlayerCombatObservation &observation) {
+    if (deathFinished_ || isDying_ || hp_ <= 0.0f ||
+        IsWarpSuspendedForPresentation()) {
         return false;
     }
 
-    if (finishedKind == ActionKind::Smash) {
+    playerObs_ = observation;
+    playerPos_ = observation.position;
+
+    ResetWarpContext();
+    cinematicPitch_ = 0.0f;
+    cinematicRoll_ = 0.0f;
+    warp_.type = WarpType::Approach;
+    warp_.approachSlot = WarpApproachSlot::Front;
+    if (!DecideWarpTargetNearPlayer(warp_.targetPos)) {
+        ResetWarpContext();
         return false;
     }
 
-    if (chain_.stepCount >= chain_.maxSteps) {
-        return false;
-    }
-
-    const float distance = GetDistanceToPlayer();
-    if (chain_.starter == ChainStarter::SweepWarpSmash &&
-        distance <= config_.chain.approachContinueDistance) {
-        outKind = ActionKind::Warp;
-        outStep = ActionStep::Start;
-        return true;
-    }
-
-    if (chain_.starter == ChainStarter::WaveWarpSmash &&
-        distance >= config_.chain.waveWarpSmashMinDistance) {
-        outKind = ActionKind::Warp;
-        outStep = ActionStep::Start;
-        return true;
-    }
-
-    return false;
-}
-
-void Enemy::SetupSweepWarpSmashChain() {
-    chain_.active = true;
-    chain_.starter = ChainStarter::SweepWarpSmash;
-    chain_.stepCount = 0;
-    chain_.maxSteps = (std::max)(1, config_.chain.warpApproachMaxSteps);
-}
-
-void Enemy::SetupWaveWarpSmashChain() {
-    chain_.active = true;
-    chain_.starter = ChainStarter::WaveWarpSmash;
-    chain_.stepCount = 0;
-    chain_.maxSteps = (std::max)(1, config_.chain.warpApproachMaxSteps);
-}
-
-void Enemy::OverrideWarpFollowupByChain() {
-    if (!chain_.active) {
-        return;
-    }
-
-    if (chain_.starter == ChainStarter::SweepWarpSmash ||
-        chain_.starter == ChainStarter::WaveWarpSmash) {
-        warp_.followupKind = ActionKind::Smash;
-        warp_.followupStep = ActionStep::Charge;
-        ++chain_.stepCount;
-    }
-}
-
-bool Enemy::TryStartPostActionWarpChain(ActionKind finishedKind) {
-    if (IsWarpSuspendedForPresentation()) {
-        return false;
-    }
-
-    const float distance = GetDistanceToPlayer();
-
-    if (finishedKind == ActionKind::Sweep &&
-        distance <= config_.chain.sweepWarpSmashMaxDistance) {
-        float r = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-        if (r < config_.chain.sweepWarpSmashChance) {
-            SetupSweepWarpSmashChain();
-            ResetWarpContext();
-            warp_.type = WarpType::Approach;
-            if (!DecideWarpTargetNearPlayer(warp_.targetPos)) {
-                ResetWarpContext();
-                ResetChainContext();
-                return false;
-            }
-            warp_.hasValidTarget = true;
-            OverrideWarpFollowupByChain();
-            BeginAction(ActionKind::Warp, ActionStep::Start);
-            return true;
-        }
-    }
-
-    if (finishedKind == ActionKind::Wave &&
-        distance >= config_.chain.waveWarpSmashMinDistance) {
-        float r = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-        if (r < config_.chain.waveWarpSmashChance) {
-            SetupWaveWarpSmashChain();
-            ResetWarpContext();
-            warp_.type = WarpType::Approach;
-            if (!DecideWarpTargetNearPlayer(warp_.targetPos)) {
-                ResetWarpContext();
-                ResetChainContext();
-                return false;
-            }
-            warp_.hasValidTarget = true;
-            OverrideWarpFollowupByChain();
-            BeginAction(ActionKind::Warp, ActionStep::Start);
-            return true;
-        }
-    }
-
-    return false;
-}
-
-bool Enemy::TryStartBackWarpPostAction(ActionKind finishedKind) {
-    if (IsWarpSuspendedForPresentation()) {
-        return false;
-    }
-
-    float chance = 0.0f;
-    switch (finishedKind) {
-    case ActionKind::Smash:
-        chance = backWarpAfterSmashChance_;
-        break;
-    case ActionKind::Sweep:
-        chance = backWarpAfterSweepChance_;
-        break;
-    case ActionKind::Wave:
-        chance = backWarpAfterWaveChance_;
-        break;
-    default:
-        return false;
-    }
-
-    float r = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-    if (r >= chance) {
-        return false;
-    }
-
-    postActionOption_ = PostActionOption::BackWarp;
-    BeginBackWarpPostAction();
+    warp_.hasValidTarget = true;
+    warp_.followupKind = ActionKind::None;
+    warp_.followupStep = ActionStep::None;
+    warp_.faceLivePlayerOnEnd = true;
+    BeginAction(ActionKind::Warp, ActionStep::Start);
     return true;
 }
 
-bool Enemy::TryContinueChain() {
-    ActionKind nextKind = ActionKind::None;
-    ActionStep nextStep = ActionStep::None;
-    const ActionKind finishedKind = action_.kind;
-
-    if (DecideNextChainAction(finishedKind, nextKind, nextStep)) {
-        ResetWarpContext();
-        warp_.type = WarpType::Approach;
-        if (!DecideWarpTargetNearPlayer(warp_.targetPos)) {
-            ResetWarpContext();
-            ResetChainContext();
+bool Enemy::TryBeginFarLaserSkill(float chance, bool force) {
+    if ((!force && phase_ == BossPhase::Phase1) || deathFinished_ || isDying_ ||
+        hp_ <= 0.0f || phaseTransitionActive_ ||
+        IsWarpSuspendedForPresentation()) {
+        return false;
+    }
+    if (!force && lastActionKind_ == ActionKind::Warp) {
+        chance *= 0.58f;
+    }
+    if (!force) {
+        const float roll =
+            static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+        if (roll >= std::clamp(chance, 0.0f, 0.78f)) {
             return false;
         }
-        warp_.hasValidTarget = true;
-        OverrideWarpFollowupByChain();
-        BeginAction(nextKind, nextStep);
-        return true;
     }
 
-    if (chain_.active && finishedKind == ActionKind::Smash) {
-        ResetChainContext();
-    }
+    ResetWarpContext();
+    ResetLaserActionState(true);
+    laserDashFollowupKind_ =
+        (std::rand() % 2 == 0) ? ActionKind::Smash : ActionKind::Sweep;
 
-    return TryStartPostActionWarpChain(finishedKind);
+    warp_.type = WarpType::Approach;
+    warp_.approachSlot = WarpApproachSlot::Front;
+    if (!DecideFarLaserWarpTarget(warp_.targetPos)) {
+        ResetWarpContext();
+        ResetLaserActionState(true);
+        return false;
+    }
+    warp_.hasValidTarget = true;
+    warp_.followupKind = ActionKind::Laser;
+    warp_.followupStep = ActionStep::Charge;
+    warp_.faceLivePlayerOnEnd = true;
+    hitReactionTimer_ = 0.0f;
+    counterRecoilTimer_ = 0.0f;
+    BeginAction(ActionKind::Warp, ActionStep::Start);
+    return true;
 }
+
+bool Enemy::ForceFarLaserSkill() { return TryBeginFarLaserSkill(1.0f, true); }
+
+void Enemy::ResetWarpContext() { warp_ = WarpContext{}; }
 
 void Enemy::UpdateWarpStart(float deltaTime) {
     if (!warp_.hasDeparturePos) {
@@ -318,7 +420,9 @@ void Enemy::UpdateWarpStart(float deltaTime) {
     warp_.collisionDisabled = false;
 
     float startTime = config_.warp.startTime;
-    if (action_.id == ActionId::WarpBackstab) {
+    if (warp_.phase3PhantomChain) {
+        startTime = warp_.phase3PhantomFinal ? 0.13f : 0.11f;
+    } else if (action_.id == ActionId::WarpBackstab) {
         startTime *= 0.55f;
         if (startTime < 0.08f) {
             startTime = 0.08f;
@@ -335,14 +439,21 @@ void Enemy::UpdateWarpStart(float deltaTime) {
 }
 
 void Enemy::UpdateWarpMove(float deltaTime) {
+    (void)deltaTime;
+
     if (!warp_.hasValidTarget) {
         EndAttack();
         return;
     }
+    RefreshLiveBehindWarpTarget();
 
     float t = 1.0f;
-    if (config_.warp.moveTime > 0.0001f) {
-        t = stateTimer_ / config_.warp.moveTime;
+    const float moveTime =
+        warp_.phase3PhantomChain
+            ? GetPhase3PhantomWarpMoveTime(warp_.phase3PhantomFinal)
+            : config_.warp.moveTime;
+    if (moveTime > 0.0001f) {
+        t = stateTimer_ / moveTime;
     }
     t = (t < 0.0f) ? 0.0f : ((t > 1.0f) ? 1.0f : t);
 
@@ -354,19 +465,33 @@ void Enemy::UpdateWarpMove(float deltaTime) {
     tf_.position.z =
         warp_.departurePos.z + (warp_.targetPos.z - warp_.departurePos.z) * eased;
 
-    warpTrailEmitTimer_ += deltaTime;
-    while (warpTrailEmitTimer_ >= warpTrailInterval_) {
-        warpTrailEmitTimer_ -= warpTrailInterval_;
-        const float scale =
-            warpTrailScaleMax_ - (warpTrailScaleMax_ - warpTrailScaleMin_) * t;
-        EmitWarpTrailGhost(tf_.position, scale);
-    }
+    warpTrailEmitTimer_ = 0.0f;
 
-    UpdateFacingToPlayer();
+    if (warp_.hasTargetYaw) {
+        facingYaw_ = NormalizeAngle(warp_.targetYaw);
+    } else {
+        UpdateFacingToPlayer();
+    }
     LockCurrentFacing();
 
-    if (stateTimer_ >= config_.warp.moveTime) {
+    if (stateTimer_ >= moveTime) {
         tf_.position = warp_.targetPos;
+        const bool hasMeleeFollowup =
+            warp_.followupKind == ActionKind::Smash ||
+            warp_.followupKind == ActionKind::Sweep ||
+            warp_.followupKind == ActionKind::BladeClash;
+        const bool delayPhase3FinalLock =
+            warp_.phase3PhantomChain && warp_.phase3PhantomFinal;
+        if ((warp_.faceLivePlayerOnEnd || hasMeleeFollowup) &&
+            !delayPhase3FinalLock) {
+            UpdateFacingToPlayer();
+            LockCurrentFacing();
+        } else if (warp_.hasTargetYaw) {
+            facingYaw_ = NormalizeAngle(warp_.targetYaw);
+            LockCurrentFacing();
+        }
+        ResetWarpTrails();
+        EmitWarpTrailGhost(warp_.targetPos, warpTrailScaleMax_ * 1.14f);
         ChangeActionStep(ActionStep::End);
     }
 }
@@ -374,21 +499,83 @@ void Enemy::UpdateWarpMove(float deltaTime) {
 void Enemy::UpdateWarpEnd(float deltaTime) {
     isVisible_ = true;
     warp_.collisionDisabled = false;
-    UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_ * 0.55f);
+    RefreshLiveBehindWarpTarget();
+    const bool hasMeleeFollowup =
+        warp_.followupKind == ActionKind::Smash ||
+        warp_.followupKind == ActionKind::Sweep ||
+        warp_.followupKind == ActionKind::BladeClash;
+    const bool delayPhase3FinalLock =
+        warp_.phase3PhantomChain && warp_.phase3PhantomFinal;
+    if ((warp_.faceLivePlayerOnEnd || hasMeleeFollowup) &&
+        !delayPhase3FinalLock) {
+        UpdateFacingToPlayer();
+        LockCurrentFacing();
+    } else if (warp_.hasTargetYaw) {
+        facingYaw_ = NormalizeAngle(warp_.targetYaw);
+        LockCurrentFacing();
+    } else {
+        UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_ * 0.55f);
+    }
 
-    if (stateTimer_ < config_.warp.endTime) {
+    const float endTime =
+        warp_.phase3PhantomChain
+            ? GetPhase3PhantomWarpEndTime(warp_.phase3PhantomFinal)
+            : config_.warp.endTime;
+    if (stateTimer_ < endTime) {
         return;
     }
 
     const ActionKind followupKind = warp_.followupKind;
     const ActionStep followupStep = warp_.followupStep;
     const WarpType warpType = warp_.type;
+    const bool phase2FeintFollowup = warp_.phase2FeintFollowup;
+    const bool phase2FeintImmediateGreen = warp_.phase2FeintImmediateGreen;
+    const bool phase2FeintBehindFollowup =
+        phase2FeintFollowup && warp_.approachSlot == WarpApproachSlot::Back;
+    const bool phase3PhantomChain = warp_.phase3PhantomChain;
+    const bool phase3PhantomFinal = warp_.phase3PhantomFinal;
+    const int phase3PhantomRemaining = warp_.phase3PhantomViewWarpsRemaining;
 
     EndAttack();
+    if (phase3PhantomChain && !phase3PhantomFinal) {
+        if (phase3PhantomRemaining > 1) {
+            BeginPhase3PhantomWarpStep(phase3PhantomRemaining - 1, false,
+                                       ActionKind::None);
+        } else {
+            const ActionKind finisher =
+                (std::rand() % 2 == 0) ? ActionKind::Smash
+                                       : ActionKind::Sweep;
+            BeginPhase3PhantomWarpStep(0, true, finisher);
+        }
+        return;
+    }
     if (warpType == WarpType::Approach && followupKind != ActionKind::None &&
         followupStep != ActionStep::None) {
+        if ((followupKind == ActionKind::Smash ||
+             followupKind == ActionKind::Sweep ||
+             followupKind == ActionKind::BladeClash) &&
+            !(phase3PhantomChain && phase3PhantomFinal)) {
+            UpdateFacingToPlayer();
+            LockCurrentFacing();
+        }
         tactic_ = TacticState::Melee;
         BeginAction(followupKind, followupStep);
+        if (phase3PhantomChain && phase3PhantomFinal &&
+            (followupKind == ActionKind::Smash ||
+             followupKind == ActionKind::Sweep)) {
+            action_.id = followupKind == ActionKind::Smash
+                             ? ActionId::QuickSmash
+                             : ActionId::QuickSweep;
+            LockCurrentFacing();
+            phase3PhantomFinalLockDelay_ =
+                phase3PhantomFinalLockDelayDuration_;
+            phase2FeintDecisionMade_ = true;
+            phase2DirectionFeintDecisionMade_ = true;
+        }
+        phase2FeintFollowupLocked_ = phase2FeintFollowup;
+        phase2FeintImmediateGreen_ =
+            phase2FeintFollowup && phase2FeintImmediateGreen;
+        phase2FeintBehindFollowup_ = phase2FeintBehindFollowup;
         return;
     }
 

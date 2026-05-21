@@ -38,12 +38,13 @@ CounterReadAxis Enemy::GetCounterReadAxis(ActionKind kind) const {
     case ActionKind::Sweep:
         return CounterReadAxis::Horizontal;
     case ActionKind::Wave:
+        return CounterReadAxis::Radial;
+    case ActionKind::Laser:
+        return laserDashFollowupKind_ == ActionKind::Sweep
+                   ? CounterReadAxis::Horizontal
+                   : CounterReadAxis::Vertical;
     case ActionKind::Cage:
         return CounterReadAxis::Radial;
-    case ActionKind::Nova:
-        return CounterReadAxis::Radial;
-    case ActionKind::Shot:
-        return CounterReadAxis::Projectile;
     case ActionKind::BladeClash:
         return CounterReadAxis::None;
     default:
@@ -102,41 +103,9 @@ float Enemy::RandomRange(float minValue, float maxValue) const {
 }
 
 void Enemy::DecideHoldBranch(ActionKind kind) {
+    (void)kind;
     holdBranchType_ = HoldBranchType::Active;
     holdBranchDecided_ = true;
-
-    float warpChance = 0.0f;
-    if (kind == ActionKind::Smash) {
-        warpChance = smashHoldBranchWarpChance_;
-    } else if (kind == ActionKind::Sweep) {
-        warpChance = sweepHoldBranchWarpChance_;
-    } else {
-        return;
-    }
-
-    if (IsWarpSuspendedForPresentation()) {
-        warpChance = 0.0f;
-    }
-
-    if (playerObs_.isCounterStance) {
-        warpChance += 0.10f;
-    }
-    if (playerObs_.isAttacking) {
-        warpChance += 0.06f;
-    }
-
-    if (playerObs_.justCounterEarly || counterMemory_.earlyCount > 0.6f) {
-        warpChance += 0.08f;
-    }
-
-    if (postCounterRhythmTimer_ > 0.0f) {
-        warpChance += 0.10f;
-    }
-
-    float roll = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-    if (roll < warpChance) {
-        holdBranchType_ = HoldBranchType::Warp;
-    }
 }
 
 bool Enemy::TryExecuteHoldBranch(ActionKind kind) {
@@ -152,6 +121,123 @@ bool Enemy::TryExecuteHoldBranch(ActionKind kind) {
 
     holdBranchType_ = HoldBranchType::Active;
     return false;
+}
+
+bool Enemy::TryBeginPhase2FeintWarp(ActionKind kind) {
+    if (phase_ == BossPhase::Phase1 || phase2FeintFollowupLocked_ ||
+        phase2FeintDecisionMade_ || IsWarpSuspendedForPresentation()) {
+        return false;
+    }
+    if (!(kind == ActionKind::Smash || kind == ActionKind::Sweep) ||
+        action_.kind != kind ||
+        !(action_.step == ActionStep::Charge ||
+          action_.step == ActionStep::Hold)) {
+        return false;
+    }
+
+    constexpr float kFeintGreenCueRatio = 0.12f;
+    if (GetReleaseAnticipationRatio() < kFeintGreenCueRatio) {
+        return false;
+    }
+
+    phase2FeintDecisionMade_ = true;
+
+    float chance = kind == ActionKind::Smash ? 0.42f : 0.36f;
+    if (playerObs_.isCounterStance) {
+        chance += 0.16f;
+    }
+    if (playerObs_.isAttacking || playerObs_.justCounterEarly) {
+        chance += 0.12f;
+    }
+    if (postCounterRhythmTimer_ > 0.0f || forceCounterBaitNext_) {
+        chance += 0.14f;
+    }
+    chance += counterMemory_.successCount * 0.05f;
+    chance = (std::clamp)(chance, 0.0f, 0.78f);
+
+    const float roll =
+        static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+    if (roll >= chance) {
+        return false;
+    }
+
+    ResetWarpContext();
+    warp_.type = WarpType::Approach;
+    warp_.approachSlot =
+        (std::rand() % 100 < 55) ? WarpApproachSlot::Back
+                                 : WarpApproachSlot::Front;
+    if (!DecideWarpTargetNearPlayer(warp_.targetPos)) {
+        ResetWarpContext();
+        return false;
+    }
+
+    warp_.hasValidTarget = true;
+    warp_.followupKind = kind;
+    warp_.followupStep = ActionStep::Charge;
+    warp_.phase2FeintFollowup = true;
+    warp_.phase2FeintImmediateGreen = (std::rand() % 2) == 0;
+    warp_.faceLivePlayerOnEnd = true;
+    phase2FeintBehindFollowup_ =
+        warp_.approachSlot == WarpApproachSlot::Back;
+    BeginAction(ActionKind::Warp, ActionStep::Start);
+    return true;
+}
+
+bool Enemy::TryApplyPhase2DirectionFeint(ActionKind kind) {
+    if (phase_ == BossPhase::Phase1 || phase2FeintFollowupLocked_ ||
+        phase2DirectionFeintDecisionMade_) {
+        return false;
+    }
+    if (!(kind == ActionKind::Smash || kind == ActionKind::Sweep) ||
+        action_.kind != kind || action_.step != ActionStep::Charge) {
+        return false;
+    }
+    const float chargeTime = kind == ActionKind::Smash
+                                 ? GetCurrentSmashChargeTime()
+                                 : GetCurrentSweepChargeTime();
+    const float redSwitchTime = (std::max)(0.22f, chargeTime - 0.74f);
+    if (stateTimer_ < redSwitchTime || GetReleaseAnticipationRatio() > 0.0f) {
+        return false;
+    }
+
+    phase2DirectionFeintDecisionMade_ = true;
+    float chance = kind == ActionKind::Smash ? 0.28f : 0.32f;
+    if (playerObs_.isCounterStance || playerObs_.isAttacking) {
+        chance += 0.12f;
+    }
+    if (postCounterRhythmTimer_ > 0.0f || forceCounterBaitNext_) {
+        chance += 0.10f;
+    }
+    chance = (std::clamp)(chance, 0.0f, 0.62f);
+
+    const float roll =
+        static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+    if (roll >= chance) {
+        return false;
+    }
+
+    const ActionKind nextKind =
+        kind == ActionKind::Smash ? ActionKind::Sweep : ActionKind::Smash;
+    action_.kind = nextKind;
+    action_.id = MakeDefaultActionId(nextKind);
+    phase2FeintDecisionMade_ = true;
+    hasTrackingLocked_ = false;
+    holdConfigured_ = false;
+    currentHoldDuration_ = 0.0f;
+    holdBranchType_ = HoldBranchType::None;
+    holdBranchDecided_ = false;
+    holdBranchDecisionTime_ = 0.0f;
+    ResetPreAttackPresentationState();
+
+    constexpr float kDirectionFeintGreenCueWindow = 0.52f;
+    constexpr float kDirectionFeintRedAfterSwitchTime = 0.08f;
+    const float nextChargeTime =
+        nextKind == ActionKind::Smash ? GetCurrentSmashChargeTime()
+                                      : GetCurrentSweepChargeTime();
+    stateTimer_ =
+        (std::max)(0.18f, nextChargeTime - kDirectionFeintGreenCueWindow -
+                              kDirectionFeintRedAfterSwitchTime);
+    return true;
 }
 
 void Enemy::EnterTell(ActionKind kind) {
@@ -183,9 +269,6 @@ bool Enemy::ShouldDoFakeCommit(ActionKind kind) const {
         }
         if (counterMemory_.earlyCount > 0.6f) {
             chance += 0.12f;
-        }
-        if (action_.id == ActionId::DelaySmash) {
-            chance += 0.15f;
         }
     } else if (kind == ActionKind::Sweep) {
         chance = sweepFakeCommitChance_;
@@ -276,7 +359,7 @@ bool Enemy::TryBranchFromRecovery(ActionKind finishedKind) {
 
     if (!(finishedKind == ActionKind::Smash ||
           finishedKind == ActionKind::Sweep ||
-          finishedKind == ActionKind::Shot ||
+          finishedKind == ActionKind::Cage ||
           finishedKind == ActionKind::BladeClash)) {
         return false;
     }
@@ -285,135 +368,108 @@ bool Enemy::TryBranchFromRecovery(ActionKind finishedKind) {
         return false;
     }
 
-    if (finishedKind == ActionKind::Shot) {
-        float distance = GetDistanceToPlayer();
-        const bool canShotWarp = !IsWarpSuspendedForPresentation() &&
-                                 distance >= shotWarpMinDistance_ &&
-                                 distance <= shotWarpMaxDistance_;
+    if (finishedKind == ActionKind::Cage) {
+        float chainChance = 0.34f;
+        if (phase_ != BossPhase::Phase1) {
+            chainChance += 0.22f;
+        }
+        if (playerObs_.isCounterStance || playerObs_.isAttacking) {
+            chainChance += 0.12f;
+        }
+        if (postCounterRhythmTimer_ > 0.0f || forceCounterBaitNext_) {
+            chainChance += 0.14f;
+        }
+        chainChance = (std::clamp)(chainChance, 0.0f, 0.82f);
 
-        if (!canShotWarp) {
+        const float chainRoll =
+            static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+        if (chainRoll >= chainChance) {
             return false;
         }
 
-        float shotWarpChance = shotWarpFollowupChance_;
-        if (phase_ == BossPhase::Phase2) {
-            shotWarpChance += phase2ShotWarpFollowupBonus_;
-        }
-        if (playerObs_.isGuarding) {
-            shotWarpChance += 0.06f;
-        }
-        if (playerObs_.isCounterStance) {
-            shotWarpChance += 0.08f;
+        if (!IsWarpSuspendedForPresentation() &&
+            TryBeginWarpBehindMeleeSkill(true)) {
+            return true;
         }
 
-        shotWarpChance = (std::clamp)(shotWarpChance, 0.0f, 0.80f);
+        BeginPressureAction();
+        return true;
+    }
+
+    if (finishedKind == ActionKind::Smash ||
+        finishedKind == ActionKind::Sweep) {
+        float recommitChance = recommitChance_;
+        float delayedSecondChance = delayedSecondChance_;
+        float fakeoutChance =
+            IsWarpSuspendedForPresentation() ? 0.0f : escapeFakeoutChance_;
+
+        if (phase_ != BossPhase::Phase1) {
+            recommitChance += phase2RecommitBonus_;
+            delayedSecondChance += phase2DelayedSecondBonus_;
+            recommitChance += phase2RecoveryBranchChanceBonus_;
+            delayedSecondChance += phase2RecoveryBranchChanceBonus_;
+            fakeoutChance += phase2RecoveryBranchChanceBonus_;
+        }
+
+        if (playerObs_.isCounterStance) {
+            delayedSecondChance += 0.08f;
+            fakeoutChance += 0.08f;
+        }
+
+        if (postCounterRhythmTimer_ > 0.0f) {
+            recommitChance += 0.04f;
+            delayedSecondChance += 0.06f;
+            fakeoutChance += 0.12f;
+        }
+
+        if (counterMemory_.earlyCount > 0.6f) {
+            delayedSecondChance += 0.08f;
+        }
+
+        const float branchWeightTotal =
+            recommitChance + delayedSecondChance + fakeoutChance;
+        const float branchChance =
+            (std::clamp)(branchWeightTotal, 0.0f,
+                         phase_ != BossPhase::Phase1 ? 0.92f : 0.82f);
+        if (branchWeightTotal <= 0.0f || branchChance <= 0.0f) {
+            return false;
+        }
+
         float roll =
             static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-        if (roll >= shotWarpChance) {
+        if (roll >= branchChance) {
             return false;
         }
 
+        float pick = static_cast<float>(std::rand()) /
+                     static_cast<float>(RAND_MAX) * branchWeightTotal;
+        if (pick < recommitChance) {
+            const ActionKind followupKind =
+                (finishedKind == ActionKind::Smash) ? ActionKind::Sweep
+                                                    : ActionKind::Smash;
+            BeginAction(followupKind, ActionStep::Charge);
+            return true;
+        }
+
+        if (pick < recommitChance + delayedSecondChance) {
+            BeginAction(finishedKind, ActionStep::Charge);
+            return true;
+        }
+
+        recoveryBranchType_ = RecoveryBranchType::EscapeFakeout;
         ResetWarpContext();
-        warp_.type = WarpType::Approach;
-        if (!DecideWarpTargetNearPlayer(warp_.targetPos)) {
-            ResetWarpContext();
+        warp_.type = WarpType::Escape;
+        if (!DecideWarpTargetFarFromPlayer(warp_.targetPos)) {
+            ResetRecoveryBranchState();
             return false;
         }
 
         warp_.hasValidTarget = true;
-        recoveryBranchType_ = RecoveryBranchType::Recommit;
-        recoveryFollowupKind_ = ActionKind::Warp;
-        recoveryFollowupStep_ = ActionStep::Start;
-        recoveryFollowupDelayTimer_ =
-            RandomRange(shotWarpFollowupDelayMin_, shotWarpFollowupDelayMax_);
+        BeginAction(ActionKind::Warp, ActionStep::Start);
         return true;
     }
 
-    const bool forceCombo =
-        phase_ == BossPhase::Phase2 && finishedKind == ActionKind::Smash &&
-        action_.id == ActionId::DelaySmash &&
-        (currentActionConnected_ || currentActionGuarded_);
-    if (forceCombo) {
-        recoveryBranchType_ = RecoveryBranchType::Recommit;
-        recoveryFollowupKind_ = ActionKind::Sweep;
-        recoveryFollowupStep_ = ActionStep::Charge;
-        recoveryFollowupDelayTimer_ =
-            RandomRange(margitComboFollowupDelayMin_, margitComboFollowupDelayMax_);
-        isMargitComboATransition_ = true;
-        return true;
-    }
-
-    float recommitChance = recommitChance_;
-    float delayedSecondChance = delayedSecondChance_;
-    float fakeoutChance =
-        IsWarpSuspendedForPresentation() ? 0.0f : escapeFakeoutChance_;
-
-    if (phase_ == BossPhase::Phase2) {
-        recommitChance += phase2RecommitBonus_;
-        delayedSecondChance += phase2DelayedSecondBonus_;
-        recommitChance += phase2RecoveryBranchChanceBonus_;
-        delayedSecondChance += phase2RecoveryBranchChanceBonus_;
-        fakeoutChance += phase2RecoveryBranchChanceBonus_;
-    }
-
-    if (playerObs_.isCounterStance) {
-        delayedSecondChance += 0.08f;
-        fakeoutChance += 0.08f;
-    }
-
-    if (postCounterRhythmTimer_ > 0.0f) {
-        recommitChance += 0.04f;
-        delayedSecondChance += 0.06f;
-        fakeoutChance += 0.12f;
-    }
-
-    if (counterMemory_.earlyCount > 0.6f) {
-        delayedSecondChance += 0.08f;
-    }
-
-    float total = recommitChance + delayedSecondChance + fakeoutChance;
-    if (total <= 0.0f) {
-        return false;
-    }
-
-    float roll = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-    if (roll >= total) {
-        return false;
-    }
-
-    float pick =
-        static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX) * total;
-    if (pick < recommitChance) {
-        recoveryBranchType_ = RecoveryBranchType::Recommit;
-        recoveryFollowupKind_ =
-            (finishedKind == ActionKind::Smash) ? ActionKind::Sweep
-                                                : ActionKind::Smash;
-        recoveryFollowupStep_ = ActionStep::Charge;
-        recoveryFollowupDelayTimer_ =
-            RandomRange(recommitDelayMin_, recommitDelayMax_);
-        return true;
-    }
-
-    if (pick < recommitChance + delayedSecondChance) {
-        recoveryBranchType_ = RecoveryBranchType::DelayedSecond;
-        recoveryFollowupKind_ = finishedKind;
-        recoveryFollowupStep_ = ActionStep::Charge;
-        recoveryFollowupDelayTimer_ =
-            RandomRange(delayedSecondDelayMin_, delayedSecondDelayMax_);
-        return true;
-    }
-
-    recoveryBranchType_ = RecoveryBranchType::EscapeFakeout;
-    ResetWarpContext();
-    warp_.type = WarpType::Escape;
-    if (!DecideWarpTargetFarFromPlayer(warp_.targetPos)) {
-        ResetRecoveryBranchState();
-        return false;
-    }
-
-    warp_.hasValidTarget = true;
-    BeginAction(ActionKind::Warp, ActionStep::Start);
-    return true;
+    return false;
 }
 
 void Enemy::UpdateCounterAdaptation(float deltaTime) {
@@ -478,9 +534,6 @@ float Enemy::GetAdaptiveHoldChance(ActionKind kind) const {
 
     if (kind == ActionKind::Smash) {
         chance = config_.attacks.smash.melee.feintChance;
-        if (action_.id == ActionId::DelaySmash) {
-            chance += 0.20f;
-        }
     } else if (kind == ActionKind::Sweep) {
         chance = config_.attacks.sweep.melee.feintChance;
     }
@@ -585,20 +638,10 @@ void Enemy::UpdateIdle(float deltaTime) {
 
 TacticState Enemy::DecideTactic() const {
     const float distance = GetDistanceToPlayer();
-    if (runtime_.cage.isActive) {
-        return TacticState::Ranged;
-    }
-
     const bool canWarp = !IsWarpSuspendedForPresentation();
     const bool isNear = distance <= config_.core.nearAttackDistance;
     const bool isFar = distance >= config_.core.farAttackDistance;
-    const bool isMidRange = !isNear && !isFar;
-    const bool shouldWarp =
-        canWarp &&
-        (forceEscapeWarpNext_ || isDistanceStagnant_ ||
-         farDistanceTimer_ >= farDistanceWarpTimeThreshold_ ||
-         (isMidRange && lastActionKind_ != ActionKind::Warp &&
-          (playerObs_.isAttacking || playerObs_.isGuarding)));
+    const bool shouldWarp = canWarp && forceEscapeWarpNext_;
 
     if (shouldWarp) {
         return TacticState::Warp;
@@ -647,50 +690,29 @@ bool Enemy::TryBeginStalkAction(float chance, float repeatScale) {
 }
 
 ActionKind Enemy::SelectNeutralAction(float distance) const {
-    if (runtime_.cage.isActive) {
-        return lastActionKind_ == ActionKind::BladeClash
-                   ? ActionKind::Wave
-                   : ActionKind::BladeClash;
-    }
-
     if (distance <= config_.core.nearAttackDistance) {
         return SelectNearPressureAction();
     }
 
     int stalkWeight = 36;
     int bladeClashWeight = distance >= config_.core.farAttackDistance ? 10 : 18;
-    int waveWeight = distance >= config_.core.farAttackDistance ? 24 : 14;
-    int cageWeight = distance >= config_.core.farAttackDistance ? 46 : 26;
-    int novaWeight =
-        (phase_ == BossPhase::Phase2 && novaPhase2Cooldown_ <= 0.0f) ? 10 : 0;
+    if (!CanBeginPhaseBladeClash()) {
+        bladeClashWeight = 0;
+    }
 
     if (lastActionKind_ == ActionKind::Stalk) {
         stalkWeight /= 2;
-    } else if (lastActionKind_ == ActionKind::Wave) {
-        waveWeight /= 2;
     } else if (lastActionKind_ == ActionKind::BladeClash) {
         bladeClashWeight /= 3;
-    } else if (lastActionKind_ == ActionKind::Cage) {
-        cageWeight /= 2;
-    } else if (lastActionKind_ == ActionKind::Nova) {
-        novaWeight = 0;
     }
 
     if (playerObs_.isAttacking || playerObs_.isCounterStance) {
         bladeClashWeight += 12;
-        cageWeight += 8;
     }
 
-    switch (PickWeightedIndex(
-        {stalkWeight, bladeClashWeight, waveWeight, cageWeight, novaWeight})) {
+    switch (PickWeightedIndex({stalkWeight, bladeClashWeight})) {
     case 1:
         return ActionKind::BladeClash;
-    case 2:
-        return ActionKind::Wave;
-    case 3:
-        return ActionKind::Cage;
-    case 4:
-        return ActionKind::Nova;
     default:
         return ActionKind::Stalk;
     }
@@ -700,7 +722,9 @@ ActionKind Enemy::SelectNearPressureAction() const {
     int smashWeight = nearSmashWeight_;
     int sweepWeight = nearSweepWeight_;
     int bladeClashWeight = 18;
-    int cageWeight = 28;
+    if (!CanBeginPhaseBladeClash()) {
+        bladeClashWeight = 0;
+    }
 
     if (forceCounterBaitNext_ || postCounterRhythmTimer_ > 0.0f ||
         playerObs_.justCounterEarly) {
@@ -711,34 +735,34 @@ ActionKind Enemy::SelectNearPressureAction() const {
         }
     }
 
-    if (phase_ == BossPhase::Phase2) {
+    if (phase_ != BossPhase::Phase1) {
         smashWeight += phase2NearSmashBonus_;
         sweepWeight += phase2NearSweepBonus_;
         bladeClashWeight += 6;
-        cageWeight += 8;
+    }
+    if (phase_ == BossPhase::Phase3) {
+        smashWeight += phase3NearSmashBonus_;
+        sweepWeight += phase3NearSweepBonus_;
+        bladeClashWeight += 4;
     }
 
     if (postCounterRhythmTimer_ > 0.0f) {
         smashWeight = static_cast<int>(smashWeight * 0.7f);
         sweepWeight = static_cast<int>(sweepWeight * 0.7f);
         bladeClashWeight += 10;
-        cageWeight = static_cast<int>(cageWeight * 0.8f);
     }
 
     if (playerObs_.isAttacking) {
         sweepWeight += 10;
         bladeClashWeight += 12;
-        cageWeight += 10;
     }
     if (playerObs_.isGuarding) {
         sweepWeight += 4;
-        cageWeight += 4;
     }
     if (playerObs_.isCounterStance) {
         smashWeight -= 6;
         sweepWeight += 4;
         bladeClashWeight += 12;
-        cageWeight += 8;
     }
 
     if (lastActionKind_ == ActionKind::Smash) {
@@ -747,18 +771,13 @@ ActionKind Enemy::SelectNearPressureAction() const {
         sweepWeight /= 2;
     } else if (lastActionKind_ == ActionKind::BladeClash) {
         bladeClashWeight /= 3;
-    } else if (lastActionKind_ == ActionKind::Cage) {
-        cageWeight = 0;
     }
 
-    switch (PickWeightedIndex(
-        {smashWeight, sweepWeight, bladeClashWeight, cageWeight})) {
+    switch (PickWeightedIndex({smashWeight, sweepWeight, bladeClashWeight})) {
     case 0:
         return ActionKind::Smash;
     case 2:
         return ActionKind::BladeClash;
-    case 3:
-        return ActionKind::Cage;
     default:
         return ActionKind::Sweep;
     }
@@ -766,14 +785,61 @@ ActionKind Enemy::SelectNearPressureAction() const {
 
 ActionKind Enemy::SelectChaseAction() const { return ActionKind::Stalk; }
 
+bool Enemy::IsQuickCounterAction() const {
+    return action_.id == ActionId::QuickSmash ||
+           action_.id == ActionId::QuickSweep;
+}
+
+bool Enemy::ShouldBeginQuickCounterAttack() const {
+    if (phaseTransitionActive_ || deathFinished_ || isDying_) {
+        return false;
+    }
+    if (phase_ == BossPhase::Phase3) {
+        return false;
+    }
+
+    if (!quickCounterOpeningUsed_) {
+        return true;
+    }
+
+    float chance = quickCounterAttackChance_;
+    if (phase_ == BossPhase::Phase2) {
+        chance += 0.08f;
+    }
+    if (playerObs_.isGuarding || playerObs_.isCounterStance) {
+        chance += 0.14f;
+    }
+    if (playerObs_.isAttacking) {
+        chance += 0.08f;
+    }
+    if (postCounterRhythmTimer_ > 0.0f || forceCounterBaitNext_) {
+        chance += 0.10f;
+    }
+    if (lastActionKind_ == ActionKind::Smash ||
+        lastActionKind_ == ActionKind::Sweep) {
+        chance *= 0.58f;
+    }
+
+    chance = (std::clamp)(chance, 0.0f, 0.85f);
+    const float roll =
+        static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+    return roll < chance;
+}
+
+void Enemy::BeginQuickCounterAttack() {
+    const ActionKind kind = DecideAdaptiveCounterBaitAction();
+    BeginAction(kind, ActionStep::Charge);
+    action_.id =
+        kind == ActionKind::Smash ? ActionId::QuickSmash : ActionId::QuickSweep;
+    quickCounterOpeningUsed_ = true;
+    phase2FeintDecisionMade_ = true;
+    phase2DirectionFeintDecisionMade_ = true;
+    holdConfigured_ = false;
+    currentHoldDuration_ = 0.0f;
+}
+
 void Enemy::BeginNeutralAction() {
     const float distance = GetDistanceToPlayer();
-
-    if (runtime_.cage.isActive) {
-        stalkRepeatCount_ = 0;
-        TryBeginTacticAction(SelectNeutralAction(distance));
-        return;
-    }
 
     if (distance <= config_.core.nearAttackDistance) {
         BeginPressureAction();
@@ -781,6 +847,14 @@ void Enemy::BeginNeutralAction() {
     }
 
     stalkRepeatCount_ = 0;
+    if (phase_ != BossPhase::Phase1 &&
+        TryBeginFarLaserSkill(phase_ == BossPhase::Phase3 ? 0.30f : 0.24f)) {
+        return;
+    }
+    if (phase_ != BossPhase::Phase1 &&
+        TryBeginPhase3PhantomWarpSkill(phase3PhantomWarpChance_ * 0.72f)) {
+        return;
+    }
     TryBeginTacticAction(SelectNeutralAction(distance));
 }
 
@@ -789,12 +863,15 @@ void Enemy::BeginPressureAction() {
 
     if (distance <= config_.core.nearAttackDistance) {
         stalkRepeatCount_ = 0;
+        if (phase_ != BossPhase::Phase1 &&
+            TryBeginPhase3PhantomWarpSkill(phase3PhantomWarpChance_)) {
+            return;
+        }
+        if (ShouldBeginQuickCounterAttack()) {
+            BeginQuickCounterAttack();
+            return;
+        }
         TryBeginTacticAction(SelectNearPressureAction());
-        return;
-    }
-
-    if (!IsWarpSuspendedForPresentation()) {
-        BeginResetAction();
         return;
     }
 
@@ -806,12 +883,6 @@ void Enemy::BeginChaseAction() {
 
     if (distance <= config_.core.nearAttackDistance) {
         BeginPressureAction();
-        return;
-    }
-
-    if (distance >= config_.core.farAttackDistance + 1.5f &&
-        !IsWarpSuspendedForPresentation()) {
-        BeginResetAction();
         return;
     }
 
@@ -843,15 +914,15 @@ bool Enemy::TryBeginWarpBehindMeleeSkill(bool force) {
         return false;
     }
 
-    float chance = 0.22f;
+    float chance = 0.08f;
     if (playerObs_.isGuarding) {
-        chance += 0.18f;
+        chance += 0.08f;
     }
     if (playerObs_.isCounterStance) {
-        chance += 0.15f;
+        chance += 0.08f;
     }
     if (playerObs_.isAttacking) {
-        chance += 0.08f;
+        chance += 0.04f;
     }
     if (lastActionKind_ == ActionKind::Warp) {
         chance *= 0.5f;
@@ -865,13 +936,13 @@ bool Enemy::TryBeginWarpBehindMeleeSkill(bool force) {
         }
     }
 
-    float forwardX = playerObs_.velocity.x;
-    float forwardZ = playerObs_.velocity.z;
+    float forwardX = std::sin(playerObs_.facingYaw);
+    float forwardZ = std::cos(playerObs_.facingYaw);
     float forwardLength = std::sqrt(forwardX * forwardX + forwardZ * forwardZ);
 
     if (forwardLength <= 0.0001f) {
-        forwardX = playerPos_.x - tf_.position.x;
-        forwardZ = playerPos_.z - tf_.position.z;
+        forwardX = playerObs_.velocity.x;
+        forwardZ = playerObs_.velocity.z;
         forwardLength = std::sqrt(forwardX * forwardX + forwardZ * forwardZ);
     }
 
@@ -892,7 +963,8 @@ bool Enemy::TryBeginWarpBehindMeleeSkill(bool force) {
 
     ResetWarpContext();
     warp_.type = WarpType::Approach;
-    warp_.approachSlot = WarpApproachSlot::DirectBack;
+    warp_.approachSlot = WarpApproachSlot::Back;
+    FinalizeWarpTargetFacing(target);
     warp_.targetPos = target;
     warp_.hasValidTarget = true;
     warp_.followupKind = SelectNearPressureAction();
@@ -904,5 +976,53 @@ bool Enemy::TryBeginWarpBehindMeleeSkill(bool force) {
 
     BeginAction(ActionKind::Warp, ActionStep::Start);
     action_.id = ActionId::WarpBackstab;
+    return true;
+}
+
+bool Enemy::TryBeginPhase3PhantomWarpSkill(float chance) {
+    if (phase_ == BossPhase::Phase1 || deathFinished_ || isDying_ ||
+        hp_ <= 0.0f || phaseTransitionActive_ ||
+        IsWarpSuspendedForPresentation() ||
+        phase3PhantomWarpCooldown_ > 0.0f) {
+        return false;
+    }
+
+    const float distance = GetDistanceToPlayer();
+    if (distance < 1.65f || distance > 9.8f) {
+        return false;
+    }
+
+    if (lastActionKind_ == ActionKind::Warp) {
+        chance *= 0.42f;
+    }
+    if (playerObs_.isCounterStance || playerObs_.isGuarding) {
+        chance += 0.08f;
+    }
+    if (playerObs_.isAttacking) {
+        chance += 0.06f;
+    }
+    chance = (std::clamp)(chance, 0.0f, 0.72f);
+
+    const float roll =
+        static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+    if (roll >= chance) {
+        return false;
+    }
+
+    BeginPhase3PhantomWarpStep(3, false, ActionKind::None);
+    phase3PhantomWarpCooldown_ = phase3PhantomWarpCooldownDuration_;
+    return true;
+}
+
+bool Enemy::ForcePhase3PhantomWarpSkill() {
+    if (deathFinished_ || isDying_ || hp_ <= 0.0f || phaseTransitionActive_ ||
+        IsWarpSuspendedForPresentation()) {
+        return false;
+    }
+
+    hitReactionTimer_ = 0.0f;
+    counterRecoilTimer_ = 0.0f;
+    BeginPhase3PhantomWarpStep(3, false, ActionKind::None);
+    phase3PhantomWarpCooldown_ = phase3PhantomWarpCooldownDuration_;
     return true;
 }

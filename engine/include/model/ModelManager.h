@@ -5,7 +5,6 @@
 #include "MeshManager.h"
 #include "Model.h"
 #include "ModelRenderer.h"
-#include "SkeletonDebugRenderer.h"
 #include <cstdint>
 #include <string>
 #include <unordered_map>
@@ -43,6 +42,13 @@ class ModelManager {
     /// <param name="material">使用するマテリアル</param>
     /// <returns>生成されたモデルID</returns>
     uint32_t CreatePlane(uint32_t textureId, const Material &material);
+
+    /// <summary>
+    /// Y軸方向に伸びる直方体Primitiveを生成する
+    /// </summary>
+    uint32_t CreateBox(uint32_t textureId, const Material &material,
+                       float width = 1.0f, float height = 1.0f,
+                       float depth = 1.0f);
 
     /// <summary>
     /// XY平面のRing Primitiveを生成する
@@ -131,12 +137,6 @@ class ModelManager {
     void SetMaterial(uint32_t materialId, const Material &material);
 
     /// <summary>
-    /// モデルのSkeletonをデバッグラインで描画する
-    /// </summary>
-    void DrawSkeleton(uint32_t modelId, const Transform &transform,
-                      const Camera &camera);
-
-    /// <summary>
     /// モデルIDから描画する互換ヘルパー
     /// </summary>
     void Draw(uint32_t modelId, const Transform &transform,
@@ -187,7 +187,6 @@ class ModelManager {
     MaterialManager materialManager_;
     AssimpLoader assimpLoader_;
     ModelRenderer modelRenderer_;
-    SkeletonDebugRenderer skeletonDebugRenderer_;
     Animator animator_;
 
     std::vector<Model> models_;

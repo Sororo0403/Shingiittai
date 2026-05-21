@@ -179,7 +179,9 @@ class ModelRenderer {
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> skinningRootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> opaquePSO_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> opaqueNoCullPSO_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> transparentPSO_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> transparentNoCullPSO_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> additivePSO_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> additiveNoCullPSO_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> skinningPSO_;

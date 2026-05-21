@@ -191,6 +191,7 @@ class DirectXCommon {
     /// GPU同期用フェンスを生成する
     /// </summary>
     void CreateFence();
+    void WaitForFenceValue(UINT64 fenceValue);
 
   private:
     static constexpr UINT kSwapChainBufferCount = 2;
@@ -203,7 +204,8 @@ class DirectXCommon {
     Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain_;
     Microsoft::WRL::ComPtr<ID3D12Device> device_;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue_;
-    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator_;
+    Microsoft::WRL::ComPtr<ID3D12CommandAllocator>
+        commandAllocators_[kSwapChainBufferCount];
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList_;
     bool isCommandListRecording_ = false;
 
@@ -216,6 +218,7 @@ class DirectXCommon {
 
     Microsoft::WRL::ComPtr<ID3D12Fence> fence_;
     UINT64 fenceValue_ = 0;
+    UINT64 frameFenceValues_[kSwapChainBufferCount] = {};
     HANDLE fenceEvent_ = nullptr;
 
     D3D12_VIEWPORT viewport_{};

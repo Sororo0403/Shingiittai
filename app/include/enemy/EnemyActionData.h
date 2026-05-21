@@ -6,31 +6,26 @@ enum class ActionKind {
     None,
     Smash,
     Sweep,
-    Shot,
     BladeClash,
     Wave,
+    Laser,
     Cage,
-    Nova,
     Warp,
     Stalk,
-    PhaseTransition,
 };
 
 enum class ActionId {
     None,
 
     Smash,
-    DelaySmash,
+    QuickSmash,
 
     Sweep,
-    DoubleSweep,
-    AdvanceSweep,
-
-    Shot,
+    QuickSweep,
     BladeClash,
     Wave,
+    Laser,
     Cage,
-    Nova,
 
     WarpApproach,
     WarpEscape,

@@ -5,11 +5,14 @@
 float Enemy::GetCurrentActionTime() const { return stateTimer_; }
 
 float Enemy::GetCurrentSmashChargeTime() const {
-    float result = config_.attacks.smash.melee.base.chargeTime;
-    if (action_.id == ActionId::DelaySmash) {
-        result += config_.attacks.smash.delayExtraChargeTime;
+    if (phase3GuardCounterActive_) {
+        return phase3GuardCounterSmashChargeTime_;
+    }
+    if (action_.id == ActionId::QuickSmash) {
+        return quickSmashChargeTime_;
     }
 
+    float result = config_.attacks.smash.melee.base.chargeTime;
     result += GetAdaptiveChargeOffset(ActionKind::Smash);
     if (result < 0.05f) {
         result = 0.05f;
@@ -18,10 +21,14 @@ float Enemy::GetCurrentSmashChargeTime() const {
 }
 
 float Enemy::GetCurrentSweepChargeTime() const {
-    float result = config_.attacks.sweep.melee.base.chargeTime;
-    if (action_.id == ActionId::DoubleSweep && isDoubleSweepSecondStage_) {
-        result *= config_.attacks.sweep.secondChargeScale;
+    if (phase3GuardCounterActive_) {
+        return phase3GuardCounterSweepChargeTime_;
     }
+    if (action_.id == ActionId::QuickSweep) {
+        return quickSweepChargeTime_;
+    }
+
+    float result = config_.attacks.sweep.melee.base.chargeTime;
 
     result += GetAdaptiveChargeOffset(ActionKind::Sweep);
     if (result < 0.05f) {
@@ -51,6 +58,16 @@ bool Enemy::HasReachedRecoveryStart() const {
 }
 
 float Enemy::GetReleaseAnticipationRatio() const {
+    if (IsQuickCounterAction() && action_.step == ActionStep::Charge) {
+        return 1.0f;
+    }
+    if (phase2FeintFollowupLocked_ && phase2FeintImmediateGreen_ &&
+        action_.step == ActionStep::Charge &&
+        (action_.kind == ActionKind::Smash ||
+         action_.kind == ActionKind::Sweep)) {
+        return 1.0f;
+    }
+
     float releaseTime = 0.0f;
     float cueWindow = 0.52f;
 
@@ -62,21 +79,18 @@ float Enemy::GetReleaseAnticipationRatio() const {
         case ActionKind::Sweep:
             releaseTime = GetCurrentSweepChargeTime();
             break;
-        case ActionKind::Shot:
-            releaseTime = config_.attacks.shot.chargeTime;
-            break;
         case ActionKind::BladeClash:
             releaseTime = config_.attacks.bladeClash.chargeTime;
             break;
         case ActionKind::Wave:
             releaseTime = config_.attacks.wave.chargeTime;
             break;
+        case ActionKind::Laser:
+            releaseTime = config_.attacks.laser.chargeTime;
+            cueWindow = config_.attacks.laser.chargeTime;
+            break;
         case ActionKind::Cage:
             releaseTime = config_.attacks.cage.chargeTime;
-            break;
-        case ActionKind::Nova:
-            releaseTime = config_.attacks.nova.chargeTime;
-            cueWindow = 0.34f;
             break;
         default:
             return 0.0f;
@@ -103,22 +117,7 @@ float Enemy::GetReleaseAnticipationRatio() const {
 }
 
 float Enemy::GetChargeWeakPointTimeLimitForPresentation() const {
-    if (!(action_.kind == ActionKind::Smash ||
-          action_.kind == ActionKind::Sweep)) {
-        return 0.0f;
-    }
-
-    if (action_.step == ActionStep::Hold) {
-        return currentHoldDuration_;
-    }
-
-    if (action_.kind != ActionKind::Smash ||
-        action_.id != ActionId::DelaySmash ||
-        action_.step != ActionStep::Charge) {
-        return 0.0f;
-    }
-
-    return GetCurrentSmashChargeTime();
+    return 0.0f;
 }
 
 float Enemy::GetChargeWeakPointTimeRemainingForPresentation() const {
@@ -136,16 +135,14 @@ ActionId Enemy::MakeDefaultActionId(ActionKind kind) const {
         return ActionId::Smash;
     case ActionKind::Sweep:
         return ActionId::Sweep;
-    case ActionKind::Shot:
-        return ActionId::Shot;
     case ActionKind::BladeClash:
         return ActionId::BladeClash;
     case ActionKind::Wave:
         return ActionId::Wave;
+    case ActionKind::Laser:
+        return ActionId::Laser;
     case ActionKind::Cage:
         return ActionId::Cage;
-    case ActionKind::Nova:
-        return ActionId::Nova;
     case ActionKind::Warp:
         return (warp_.type == WarpType::Escape) ? ActionId::WarpEscape
                                                 : ActionId::WarpApproach;

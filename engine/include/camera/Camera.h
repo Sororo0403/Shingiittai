@@ -5,8 +5,7 @@
 /// カメラの挙動モード
 /// </summary>
 enum class CameraMode {
-    Free,  // Debug用
-    LookAt // 通常・三脚
+    LookAt
 };
 
 /// <summary>

@@ -20,7 +20,6 @@
 using namespace DirectX;
 
 namespace {
-constexpr const char *kRankingPath = "app/resources/result/clear_ranking.txt";
 constexpr float kHandSwingStartSpeed = 0.78f;
 constexpr float kHandSwingResetSpeed = 0.32f;
 constexpr int kRequiredHandSwings = 3;
@@ -31,6 +30,19 @@ XMFLOAT4 Color(float r, float g, float b, float a = 1.0f) {
 }
 
 float SmoothStep(float t) { return t * t * (3.0f - 2.0f * t); }
+
+std::filesystem::path RankingPathForControl(InputControlType controlType) {
+    const std::filesystem::path rankingDir = "app/resources/result";
+    switch (controlType) {
+    case InputControlType::JoyCon:
+        return rankingDir / "clear_ranking_joycon.txt";
+    case InputControlType::Hand:
+        return rankingDir / "clear_ranking_hand.txt";
+    case InputControlType::KeyboardMouse:
+    default:
+        return rankingDir / "clear_ranking_keyboard_mouse.txt";
+    }
+}
 } // namespace
 
 BattleResultScene::BattleResultScene(ResultKind resultKind, float clearTime,
@@ -177,7 +189,7 @@ BattleResultScene::LoadTextureImage(const std::wstring &path) {
 
 void BattleResultScene::LoadRanking() {
     ranking_.clear();
-    std::ifstream file(kRankingPath);
+    std::ifstream file(RankingPathForControl(inputCalibration_.controlType));
     float value = 0.0f;
     while (file >> value) {
         if (value > 0.0f) {
@@ -192,7 +204,8 @@ void BattleResultScene::LoadRanking() {
 
 void BattleResultScene::SaveRanking() const {
     std::filesystem::create_directories("app/resources/result");
-    std::ofstream file(kRankingPath, std::ios::trunc);
+    std::ofstream file(RankingPathForControl(inputCalibration_.controlType),
+                       std::ios::trunc);
     file << std::fixed << std::setprecision(3);
     for (float value : ranking_) {
         file << value << '\n';

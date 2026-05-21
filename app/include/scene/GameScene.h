@@ -1,9 +1,7 @@
 #pragma once
 #include "BaseScene.h"
-#include "Bullet.h"
 #include "Camera.h"
 #include "CombatFeedbackDirector.h"
-#include "CollisionDebugRenderer.h"
 #include "CollisionManager.h"
 #include "Enemy.h"
 #include "GPUParticleSystem.h"
@@ -63,11 +61,14 @@ class GameScene : public BaseScene {
     void BeginDefeatSequence();
     void UpdateDefeatSequence(float deltaTime);
     void SyncEnemyAnimation();
+    void UpdateBladeClashEnemyAnimation(float deltaTime);
+    void UpdateCageEnemyAnimation(float deltaTime);
     void UpdateBattleIntroEnemyAnimation(float deltaTime);
     void UpdatePhaseTransitionEnemyAnimation(float deltaTime);
     void ApplyEnemyProceduralAnimation();
     void SetEnemyAnimationFrozen(bool frozen);
     void UpdateCombat(float gameplayDeltaTime);
+    void ApplyEnemyCageConstraint(float deltaTime);
     void DispatchCombatFeedback(const CombatFeedbackEvent &event);
     void EmitCombatParticles(const CombatFeedbackEvent &event);
     void EmitEnemyActionParticles(ActionKind kind, ActionStep step);
@@ -77,10 +78,13 @@ class GameScene : public BaseScene {
     PlayerCombatObservation BuildPlayerCombatObservation() const;
     float ComputeGameplayTimeScale() const;
     void UpdateSwordVfx(float deltaTime);
-    void ApplyEnemyCageConstraint();
-    void BeginBladeClash(size_t swordIndex);
+    void BeginBladeClash(size_t swordIndex, bool finalClash = false);
     void UpdateBladeClash(float deltaTime);
     void ResolveBladeClash(bool playerWon);
+    float ApplyEnemyDamage(float damage, bool deferTransitions = false,
+                           bool allowLastStand = false);
+    bool TryBeginFinalBladeClash(size_t swordIndex,
+                                 const DirectX::XMFLOAT3 &hitPosition);
 
   private:
     struct EnemyWeaponTrailSample {
@@ -102,7 +106,6 @@ class GameScene : public BaseScene {
     Enemy enemy_;
     GameSceneHud hud_;
     CollisionManager collisionManager_;
-    CollisionDebugRenderer collisionDebugRenderer_;
     CombatFeedbackDirector combatFeedback_;
     GPUParticleSystem sparkParticles_;
     GPUParticleSystem explosionParticles_;
@@ -111,7 +114,6 @@ class GameScene : public BaseScene {
     SwordTrailRenderer swordTrailRenderer_;
     SwordSlashArcRenderer swordSlashArcRenderer_;
     std::array<bool, Player::kSwordCount> prevSwordSlashStates_{};
-    std::array<bool, Player::kSwordCount> cageSlashPreviousStates_{};
     std::array<bool, Player::kSwordCount> bladeClashPreviousSlashStates_{};
     uint32_t particleTextureId_ = 0;
     uint32_t playerModelId_ = 0;
@@ -136,6 +138,8 @@ class GameScene : public BaseScene {
     uint32_t enemyFocusRingModelId_ = 0;
     uint32_t enemyWeaponTrailModelId_ = 0;
     uint32_t chargeWeakPointModelId_ = 0;
+    uint32_t chargeWeakPointBackplateModelId_ = 0;
+    uint32_t chargeWeakPointSlashModelId_ = 0;
     uint32_t slashSoundId_ = 0;
     uint32_t enemyReleaseSoundId_ = 0;
     uint32_t hitSoundId_ = 0;
@@ -159,8 +163,6 @@ class GameScene : public BaseScene {
 
     float playerHitCooldown_ = 0.0f;
     float enemyHitCooldown_ = 0.0f;
-    Bullet bullet_;
-
     float cameraYaw_ = 0.0f;
     float cameraPitch_ = 0.12f;
     float cameraPitchMin_ = -0.20f;
@@ -233,7 +235,6 @@ class GameScene : public BaseScene {
     bool battleIntroActive_ = true;
     float battleIntroTimer_ = 0.0f;
     float battleIntroDuration_ = 4.35f;
-    bool battleIntroSparkEmitted_ = false;
     bool battleIntroRevealEmitted_ = false;
     bool phaseTransitionWasActive_ = false;
     bool phaseTransitionReleaseEmitted_ = false;
@@ -255,7 +256,7 @@ class GameScene : public BaseScene {
     bool counterCinematicActive_ = false;
     bool enemyAnimationFrozen_ = false;
     float counterCinematicTimer_ = 0.0f;
-    float counterCinematicDuration_ = 0.85f;
+    float counterCinematicDuration_ = 0.66f;
     float counterTimeScale_ = 0.05f;
     float counterCameraShakeX_ = 0.035f;
     float counterCameraShakeY_ = 0.020f;
@@ -276,21 +277,29 @@ class GameScene : public BaseScene {
     float bladeClashEnemySurgeTimer_ = 0.0f;
     float bladeClashChainTimer_ = 0.0f;
     int bladeClashSlashChain_ = 0;
+    bool enemyLastStandPrimed_ = false;
+    bool bladeClashFinal_ = false;
+    int bladeClashFinalBarrageStep_ = 0;
     bool bladeClashFinishActive_ = false;
     bool bladeClashFinishPlayerWon_ = false;
     bool bladeClashFinishImpactEmitted_ = false;
+    bool bladeClashFinishGuardBreakEmitted_ = false;
     bool bladeClashFinishSkidEmitted_ = false;
+    bool bladeClashFinishWallImpactEmitted_ = false;
     bool bladeClashFinishPendingEnemyTransition_ = false;
     float bladeClashFinishTimer_ = 0.0f;
     float bladeClashFinishDuration_ = 2.05f;
     DirectX::XMFLOAT3 bladeClashFinishCenter_ = {0.0f, 0.0f, 0.0f};
     DirectX::XMFLOAT3 bladeClashFinishPlayerStart_ = {0.0f, 0.0f, 0.0f};
     DirectX::XMFLOAT3 bladeClashFinishPlayerEnd_ = {0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT3 bladeClashFinishEnemyStart_ = {0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT3 bladeClashFinishEnemyEnd_ = {0.0f, 0.0f, 0.0f};
 
     float damageMultiplier_ = 2.0f;
-    bool showCollisionDebug_ = false;
     ActionKind chargeWeakPointActionKind_ = ActionKind::None;
     ActionKind failedChargeWeakPointActionKind_ = ActionKind::None;
+    uint32_t chargeWeakPointActionSerial_ = 0;
+    uint32_t failedChargeWeakPointActionSerial_ = 0;
     bool chargeWeakPointBroken_ = false;
     bool chargeWeakPointFailedThisAction_ = false;
     bool enemyRedPunishUncounterable_ = false;
@@ -299,8 +308,10 @@ class GameScene : public BaseScene {
     float chargeWeakPointFocusInSpeed_ = 7.5f;
     float chargeWeakPointFocusOutSpeed_ = 10.0f;
     float chargeWeakPointFocusTimeScale_ = 0.28f;
-    std::array<DirectX::XMFLOAT2, 2> chargeWeakPointRequiredDirections_ = {
-        DirectX::XMFLOAT2{0.0f, -1.0f}, DirectX::XMFLOAT2{1.0f, 0.0f}};
+    std::array<DirectX::XMFLOAT2, 3> chargeWeakPointRequiredDirections_ = {
+        DirectX::XMFLOAT2{0.0f, -1.0f}, DirectX::XMFLOAT2{1.0f, 0.0f},
+        DirectX::XMFLOAT2{-1.0f, 0.0f}};
     std::array<bool, Player::kSwordCount> previousChargeWeakPointSlashStates_{};
+    std::array<bool, Player::kSwordCount> cageSlashPreviousStates_{};
 
 };

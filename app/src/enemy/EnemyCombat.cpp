@@ -42,9 +42,9 @@ OBB Enemy::GetAttackOBB() const {
         return GetSmashAttackOBB();
     case ActionKind::Sweep:
         return GetSweepAttackOBB();
-    case ActionKind::Shot:
-        return MakeOBB(IsDualCounterHandStage() ? leftHandTf_ : rightHandTf_,
-                       GetCurrentAttackHitBoxSize());
+    case ActionKind::Laser:
+        return laserDashFollowupKind_ == ActionKind::Sweep ? GetSweepAttackOBB()
+                                                           : GetSmashAttackOBB();
     case ActionKind::BladeClash:
         return MakeOBB(bodyTf_, GetCurrentAttackHitBoxSize());
     default:
@@ -99,42 +99,14 @@ DirectX::XMFLOAT3 Enemy::GetCurrentAttackHitBoxSize() const {
     return param ? param->hitBoxSize : DirectX::XMFLOAT3{0.1f, 0.1f, 0.1f};
 }
 
-bool Enemy::IsNovaImpactPending() const {
-    return action_.kind == ActionKind::Nova && action_.step == ActionStep::Active &&
-           stateTimer_ < config_.attacks.nova.impactTime;
-}
-
-bool Enemy::IsNovaImpactWindow() const {
-    if (action_.kind != ActionKind::Nova || action_.step != ActionStep::Active) {
-        return false;
-    }
-
-    const float start = config_.attacks.nova.impactTime;
-    const float end = start + config_.attacks.nova.impactWindow;
-    return stateTimer_ >= start && stateTimer_ <= end;
-}
-
-float Enemy::GetNovaImpactRadius() const {
-    return config_.attacks.nova.impactRadius;
-}
-
-float Enemy::GetNovaImpactDamage() const {
-    return config_.attacks.nova.impactDamage;
-}
-
-float Enemy::GetNovaImpactKnockback() const {
-    return config_.attacks.nova.impactKnockback;
-}
-
 bool Enemy::IsPunishableRecovery() const {
     switch (action_.kind) {
     case ActionKind::Smash:
     case ActionKind::Sweep:
-    case ActionKind::Shot:
     case ActionKind::BladeClash:
     case ActionKind::Wave:
+    case ActionKind::Laser:
     case ActionKind::Cage:
-    case ActionKind::Nova:
         return action_.step == ActionStep::Recovery && hitReactionTimer_ <= 0.0f;
     default:
         return false;
@@ -155,20 +127,17 @@ float Enemy::GetRecoveryProgressForPresentation() const {
         }
         duration += (action_.kind == ActionKind::Smash) ? 0.18f : 0.16f;
         break;
-    case ActionKind::Shot:
-        duration = config_.attacks.shot.recoveryTime + 0.18f;
-        break;
     case ActionKind::BladeClash:
         duration = config_.attacks.bladeClash.recoveryTime + 0.18f;
         break;
     case ActionKind::Wave:
         duration = config_.attacks.wave.recoveryTime + 0.18f;
         break;
-    case ActionKind::Cage:
-        duration = config_.attacks.cage.recoveryTime + 0.18f;
+    case ActionKind::Laser:
+        duration = config_.attacks.laser.recoveryTime + 0.16f;
         break;
-    case ActionKind::Nova:
-        duration = config_.attacks.nova.recoveryTime + 0.25f;
+    case ActionKind::Cage:
+        duration = config_.attacks.cage.recoveryTime + 0.14f;
         break;
     default:
         duration = 1.0f;
@@ -205,16 +174,16 @@ AttackParam *Enemy::GetCurrentAttackParam() {
         return &config_.attacks.smash.melee.base.attack;
     case ActionKind::Sweep:
         return &config_.attacks.sweep.melee.base.attack;
-    case ActionKind::Shot:
-        return &config_.attacks.shot.attack;
     case ActionKind::BladeClash:
         return &config_.attacks.bladeClash.attack;
     case ActionKind::Wave:
         return &config_.attacks.wave.attack;
+    case ActionKind::Laser:
+        return laserDashFollowupKind_ == ActionKind::Sweep
+                   ? &config_.attacks.sweep.melee.base.attack
+                   : &config_.attacks.smash.melee.base.attack;
     case ActionKind::Cage:
         return &config_.attacks.cage.attack;
-    case ActionKind::Nova:
-        return &config_.attacks.wave.attack;
     default:
         return nullptr;
     }
@@ -226,16 +195,16 @@ const AttackParam *Enemy::GetCurrentAttackParam() const {
         return &config_.attacks.smash.melee.base.attack;
     case ActionKind::Sweep:
         return &config_.attacks.sweep.melee.base.attack;
-    case ActionKind::Shot:
-        return &config_.attacks.shot.attack;
     case ActionKind::BladeClash:
         return &config_.attacks.bladeClash.attack;
     case ActionKind::Wave:
         return &config_.attacks.wave.attack;
+    case ActionKind::Laser:
+        return laserDashFollowupKind_ == ActionKind::Sweep
+                   ? &config_.attacks.sweep.melee.base.attack
+                   : &config_.attacks.smash.melee.base.attack;
     case ActionKind::Cage:
         return &config_.attacks.cage.attack;
-    case ActionKind::Nova:
-        return &config_.attacks.wave.attack;
     default:
         return nullptr;
     }
@@ -265,24 +234,28 @@ bool Enemy::ShouldUseLockedAttackYaw() const {
     }
 }
 
-void Enemy::TakeDamage(float damage) {
-    TakeDamageDeferTransitions(damage);
+float Enemy::TakeDamage(float damage) {
+    const float appliedDamage = TakeDamageDeferTransitions(damage);
     ResolveDeferredDamageTransitions();
+    return appliedDamage;
 }
 
-void Enemy::TakeDamageDeferTransitions(float damage) {
-    if (deathFinished_ || isDying_) {
-        return;
+float Enemy::TakeDamageDeferTransitions(float damage) {
+    if (damage <= 0.0f || deathFinished_ || isDying_ || hp_ <= 0.0f) {
+        return 0.0f;
     }
 
+    const float previousHp = hp_;
     hp_ -= damage;
     if (hp_ < 0.0f) {
         hp_ = 0.0f;
     }
+    const float appliedDamage = previousHp - hp_;
 
     if (hp_ > 0.0f) {
         hitReactionTimer_ = (std::max)(hitReactionTimer_, hitReactionDuration_);
     }
+    return appliedDamage;
 }
 
 void Enemy::ResolveDeferredDamageTransitions() {
@@ -315,28 +288,13 @@ void Enemy::ResolveDeferredDamageTransitions() {
     hitReactionTimer_ = (std::max)(hitReactionTimer_, hitReactionDuration_);
 }
 
-void Enemy::SetPhase2DebugHealth() {
-    if (deathFinished_ || isDying_) {
-        return;
-    }
-
-    const float phase2Hp =
-        config_.core.maxHp * config_.core.phase2HealthRatioThreshold;
-    hp_ = (std::max)(1.0f, phase2Hp);
-    hitReactionTimer_ = 0.0f;
-    counterRecoilTimer_ = 0.0f;
-    UpdateBossPhase();
-    UpdateParts();
-}
-
 void Enemy::NotifyAttackConnected() { currentActionConnected_ = true; }
 
 void Enemy::NotifyAttackGuarded() { currentActionGuarded_ = true; }
 
 void Enemy::ForcePunishRelease() {
     if (!(action_.kind == ActionKind::Smash ||
-          action_.kind == ActionKind::Sweep ||
-          action_.kind == ActionKind::Shot)) {
+          action_.kind == ActionKind::Sweep)) {
         return;
     }
     if (!(action_.step == ActionStep::Charge ||
@@ -350,24 +308,15 @@ void Enemy::ForcePunishRelease() {
         hasTrackingLocked_ = true;
     }
     ChangeActionStep(ActionStep::Active);
-    if (action_.kind == ActionKind::Shot) {
-        dualCounterStage_ = 0;
-        dualCounterStageResolved_ = false;
-    }
     const AttackTimingParam *timing = GetCurrentAttackTiming();
     if (timing != nullptr) {
         stateTimer_ = timing->activeStartTime;
-        isAttackActive_ = true;
-    } else if (action_.kind == ActionKind::Shot) {
-        stateTimer_ = 0.20f;
         isAttackActive_ = true;
     }
 }
 
 bool Enemy::IsDualCounterAction() const {
-    return action_.kind == ActionKind::Shot &&
-           (action_.step == ActionStep::Charge ||
-            action_.step == ActionStep::Active);
+    return false;
 }
 
 bool Enemy::IsBladeClashAction() const {
@@ -383,10 +332,16 @@ bool Enemy::IsBladeClashWindow() const {
            stateTimer_ <= config_.attacks.bladeClash.activeTime;
 }
 
+bool Enemy::IsPhase3GuardCounterGuarding() const {
+    return phase3GuardCounterActive_ &&
+           (action_.kind == ActionKind::Smash ||
+            action_.kind == ActionKind::Sweep) &&
+           action_.step == ActionStep::Charge &&
+           stateTimer_ <= phase3GuardCounterPoseTime_;
+}
+
 bool Enemy::IsDualCounterWindow() const {
-    return action_.kind == ActionKind::Shot && action_.step == ActionStep::Active &&
-           !dualCounterStageResolved_ && stateTimer_ >= 0.14f &&
-           stateTimer_ <= 0.72f;
+    return false;
 }
 
 bool Enemy::IsDualCounterHandStage() const {
@@ -397,44 +352,11 @@ bool Enemy::IsDualCounterHandStage() const {
 }
 
 bool Enemy::NotifyDualCountered() {
-    if (action_.kind != ActionKind::Shot || action_.step != ActionStep::Active) {
-        return false;
-    }
-
-    currentActionGuarded_ = true;
-    dualCounterStageResolved_ = true;
-    isAttackActive_ = false;
-
-    if (dualCounterStage_ <= 0) {
-        dualCounterStage_ = 1;
-        stateTimer_ = 0.0f;
-        dualCounterStageResolved_ = false;
-        LockCurrentFacing();
-        return false;
-    }
-
-    return ApplyCounterBreakReaction(0.95f);
+    return false;
 }
 
 void Enemy::NotifyDualStrikeLanded() {
-    if (action_.kind != ActionKind::Shot || action_.step != ActionStep::Active) {
-        NotifyAttackConnected();
-        return;
-    }
-
     NotifyAttackConnected();
-    dualCounterStageResolved_ = true;
-    isAttackActive_ = false;
-
-    if (dualCounterStage_ <= 0) {
-        dualCounterStage_ = 1;
-        stateTimer_ = 0.0f;
-        dualCounterStageResolved_ = false;
-        LockCurrentFacing();
-        return;
-    }
-
-    ChangeActionStep(ActionStep::Recovery);
 }
 
 void Enemy::NotifyBladeClashLanded() {
@@ -452,7 +374,13 @@ void Enemy::NotifyBladeClashLanded() {
 
 void Enemy::ResolveBladeClash(bool playerWon) {
     if (playerWon) {
-        ApplyCounterBreakReaction(1.15f);
+        NotifyAttackConnected();
+        EndAttack();
+        hitReactionTimer_ = 0.0f;
+        counterRecoilTimer_ = 0.0f;
+        stateTimer_ = 0.0f;
+        UpdateFacingToPlayer();
+        UpdateParts();
         return;
     }
 
@@ -481,8 +409,8 @@ bool Enemy::ApplyCounterBreakReaction(float vulnerabilityDuration) {
 
     const bool isCounterBreakableAction =
         action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
-        action_.kind == ActionKind::Shot ||
-        action_.kind == ActionKind::BladeClash;
+        action_.kind == ActionKind::BladeClash ||
+        action_.kind == ActionKind::Laser;
     if (!isCounterBreakableAction) {
         return false;
     }
@@ -490,8 +418,6 @@ bool Enemy::ApplyCounterBreakReaction(float vulnerabilityDuration) {
     EndAttack();
     counterRecoilTimer_ = counterRecoilDuration_;
     hitReactionTimer_ = (std::max)(hitReactionTimer_, vulnerabilityDuration);
-    ResetChainContext();
-    ResetPostActionState();
     stateTimer_ = 0.0f;
 
     tactic_ = DecideTactic();

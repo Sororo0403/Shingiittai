@@ -9,6 +9,8 @@ using namespace DirectX;
 
 namespace {
 constexpr float kPlayerVisualScaleMultiplier = 1.45f;
+constexpr float kBaseSwordAttackDamage = 8.0f;
+constexpr float kPlayerDamageTakenScale = 1.45f;
 }
 
 void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
@@ -28,8 +30,8 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
     postSlashRecoveryTimer_ = 0.0f;
     leftSlashRecoveryTimer_ = 0.0f;
     rightSlashRecoveryTimer_ = 0.0f;
-    leftSwordAttackDamage_ = 4.0f;
-    rightSwordAttackDamage_ = 4.0f;
+    leftSwordAttackDamage_ = kBaseSwordAttackDamage;
+    rightSwordAttackDamage_ = kBaseSwordAttackDamage;
     prevLeftSwordSlashMode_ = false;
     prevRightSwordSlashMode_ = false;
     leftSlashHitConfirmed_ = false;
@@ -37,12 +39,13 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
     recoveryVulnerableFlashTimer_ = 0.0f;
     overSwingCount_ = 0;
     overSwingResetTimer_ = 0.0f;
-    damageTakenScale_ = 3.34f;
+    damageTakenScale_ = kPlayerDamageTakenScale;
     swingComboCount_ = 0;
     swingComboTimer_ = 0.0f;
     defeatPoseRatio_ = 0.0f;
     bladeClashPoseActive_ = false;
     bladeClashPosePushRatio_ = 0.5f;
+    bladeClashCinematicSlashRatio_ = 0.0f;
     dualNextManualLeft_ = true;
     gamepadControlMode_ = PlayerGamepadControlMode::Hunter;
     gamepadSwordState_ = {};
@@ -53,13 +56,8 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
     hunterGamepadAttackTimer_ = 0.0f;
     hunterGamepadAttackDuration_ = 0.0f;
     hunterNextSideSlashLeft_ = true;
-    dodgeTimer_ = 0.0f;
-    dodgeCooldownTimer_ = 0.0f;
-    dodgeInvulnerableTimer_ = 0.0f;
-    dodgeDirection_ = {0.0f, -1.0f};
     autoMoveOrbitDir_ = 1.0f;
     autoMoveOrbitTimer_ = 0.0f;
-    autoDodgeSide_ = 1.0f;
     leftSword_.Update(BuildSwordTransform(MakeIdleSwordPose(true), true),
                       MakeIdleSwordPose(true), 0.0f);
     rightSword_.Update(BuildSwordTransform(MakeIdleSwordPose(false), false),
@@ -74,7 +72,7 @@ void Player::SetInputCalibration(const SwordInputCalibration &calibration) {
 
 void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
                     float cameraYaw, bool forceRangedReflectMove,
-                    float controlDeltaTime) {
+                    float controlDeltaTime, bool suppressLookAt) {
     const float inputDeltaTime =
         controlDeltaTime > 0.0f ? controlDeltaTime : deltaTime;
 
@@ -85,13 +83,14 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
         ToggleGamepadControlMode();
     }
 
-    UpdateDodgeInput(input, deltaTime, cameraYaw, lookTarget);
     UpdateMovement(input, deltaTime, cameraYaw, lookTarget,
                    forceRangedReflectMove);
     UpdateSwingCombo(deltaTime);
     UpdateOverSwing(deltaTime);
     KeepDistanceFromTarget(lookTarget);
-    LookAt(lookTarget);
+    if (!suppressLookAt) {
+        LookAt(lookTarget);
+    }
 
     const InputControlType controlType = inputCalibration_.controlType;
     const bool useKeyboardMouse =
@@ -179,8 +178,7 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     }
 
     const bool isInPostSlashRecovery = postSlashRecoveryTimer_ > 0.0f;
-    const bool isDodging = dodgeTimer_ > 0.0f;
-    if (isInPostSlashRecovery || isDodging) {
+    if (isInPostSlashRecovery) {
         leftPose.isSlashMode = false;
         rightPose.isSlashMode = false;
         leftPose.isGuard = false;
@@ -322,17 +320,20 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
         playerVisual.scale.y *= 1.0f - 0.075f * attackRecoveryRatio;
         playerVisual.scale.z *= 1.0f + 0.045f * attackRecoveryRatio;
     }
-    if (dodgeTimer_ > 0.0f) {
-        const float dodgeRatio =
-            std::clamp(dodgeTimer_ / kDodgeDuration, 0.0f, 1.0f);
-        const float lean = 0.22f * std::sinf((1.0f - dodgeRatio) * 3.14159265f);
+    if (bladeClashPoseActive_) {
+        const float push = std::clamp(bladeClashPosePushRatio_, 0.0f, 1.0f);
+        const float cinematicSlash =
+            std::clamp(bladeClashCinematicSlashRatio_, 0.0f, 1.0f);
+        const float lean =
+            0.24f - 0.42f * push + 0.66f * cinematicSlash * push;
         XMVECTOR baseRot = XMLoadFloat4(&playerVisual.rotation);
         XMVECTOR qLean =
             XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), lean);
         XMStoreFloat4(&playerVisual.rotation,
                       XMQuaternionNormalize(XMQuaternionMultiply(qLean, baseRot)));
-        playerVisual.position.y -= 0.10f * std::sinf((1.0f - dodgeRatio) *
-                                                     3.14159265f);
+        playerVisual.position.y -=
+            0.035f * (1.0f - push) + 0.026f * cinematicSlash * push;
+        playerVisual.scale.z *= 1.0f + 0.035f * cinematicSlash * push;
     }
     if (defeatPoseRatio_ > 0.0f) {
         const float fall = std::clamp(defeatPoseRatio_, 0.0f, 1.0f);
@@ -511,17 +512,20 @@ void Player::SetCinematicBladeClashPose(const XMFLOAT3 &position, float yaw,
 
     bladeClashPoseActive_ = true;
     bladeClashPosePushRatio_ = std::clamp(pushRatio, 0.0f, 1.0f);
+    bladeClashCinematicSlashRatio_ = 1.0f;
 
     const float push = bladeClashPosePushRatio_;
     auto makeFinishPose = [&](bool isLeft) {
         SwordPose pose = MakeIdleSwordPose(isLeft);
         const float side = isLeft ? -1.0f : 1.0f;
-        const float swingOut = 0.72f + 0.28f * push;
-        const float yawOut = side * (1.92f + 0.38f * swingOut);
-        const float pitchDown = 0.22f + 0.20f * swingOut;
-        const float rollThrough = side * (0.78f + 0.38f * swingOut);
+        const float sweep =
+            std::clamp((push - 0.70f) / 0.30f, 0.0f, 1.0f);
+        const float leading = isLeft ? 0.82f : 1.0f;
+        const float yawOut = side * (2.18f + 0.18f * sweep * leading);
+        const float pitchFlat = 0.0f;
+        const float rollThrough = side * (0.18f + 0.08f * sweep * leading);
         XMVECTOR qPitch =
-            XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), pitchDown);
+            XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), pitchFlat);
         XMVECTOR qYaw =
             XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), yawOut);
         XMVECTOR qRoll =
@@ -532,11 +536,42 @@ void Player::SetCinematicBladeClashPose(const XMFLOAT3 &position, float yaw,
         pose.isGuard = false;
         pose.isCounter = false;
         pose.isSlashMode = false;
+        pose.slashDir = {side, -0.08f};
         return pose;
     };
 
     SwordPose leftPose = makeFinishPose(true);
     SwordPose rightPose = makeFinishPose(false);
+    leftSword_.Update(BuildSwordTransform(leftPose, true), leftPose, 0.0f);
+    rightSword_.Update(BuildSwordTransform(rightPose, false), rightPose, 0.0f);
+    leftSwordVisible_ = true;
+    rightSwordVisible_ = true;
+    leftSwordSlashMode_ = false;
+    rightSwordSlashMode_ = false;
+}
+
+void Player::SetCinematicDualBladeBarragePose(const XMFLOAT3 &position,
+                                              float yaw, float phase,
+                                              float intensity) {
+    const float t = std::clamp(phase, 0.0f, 1.0f);
+    const float power = std::clamp(intensity, 0.0f, 1.0f);
+    XMFLOAT3 transformedPosition = position;
+    transformedPosition.y += 0.025f * power * std::sinf(t * 6.28318530f);
+    LockPosition(transformedPosition);
+    SetYaw(yaw);
+
+    bladeClashPoseActive_ = true;
+    bladeClashPosePushRatio_ = std::clamp(0.68f + 0.26f * power, 0.0f, 1.0f);
+    bladeClashCinematicSlashRatio_ = 0.0f;
+
+    SwordPose leftPose = MakeIdleSwordPose(true);
+    SwordPose rightPose = MakeIdleSwordPose(false);
+    leftPose.isGuard = false;
+    rightPose.isGuard = false;
+    leftPose.isCounter = false;
+    rightPose.isCounter = false;
+    leftPose.isSlashMode = false;
+    rightPose.isSlashMode = false;
     leftSword_.Update(BuildSwordTransform(leftPose, true), leftPose, 0.0f);
     rightSword_.Update(BuildSwordTransform(rightPose, false), rightPose, 0.0f);
     leftSwordVisible_ = true;
@@ -604,104 +639,8 @@ DirectX::XMFLOAT2 Player::ReadMovementInput(Input *input) const {
     return {inputX, inputZ};
 }
 
-bool Player::IsDodgeInputTriggered(Input *input) const {
-    const bool keyboardDodge = input->IsKeyTrigger(DIK_SPACE);
-    const bool gamepadDodge =
-        input->IsGamepadConnected() &&
-        input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_B);
-    const bool leftJoyConDodge =
-        leftJoyCon_.IsConnected() &&
-        (leftJoyCon_.IsButtonTrigger(JSMASK_S) ||
-         leftJoyCon_.IsButtonTrigger(JSMASK_LCLICK));
-    const bool rightJoyConDodge =
-        rightJoyCon_.IsConnected() &&
-        (rightJoyCon_.IsButtonTrigger(JSMASK_S) ||
-         rightJoyCon_.IsButtonTrigger(JSMASK_RCLICK));
-
-    return keyboardDodge || gamepadDodge || leftJoyConDodge || rightJoyConDodge;
-}
-
 bool Player::UsesJoyConAutoMovement() const {
     return leftJoyCon_.IsConnected() || rightJoyCon_.IsConnected();
-}
-
-void Player::UpdateDodgeInput(Input *input, float deltaTime, float cameraYaw,
-                              const XMFLOAT3 &lookTarget) {
-    if (dodgeCooldownTimer_ > 0.0f) {
-        dodgeCooldownTimer_ -= deltaTime;
-        if (dodgeCooldownTimer_ < 0.0f) {
-            dodgeCooldownTimer_ = 0.0f;
-        }
-    }
-    if (dodgeTimer_ > 0.0f) {
-        dodgeTimer_ -= deltaTime;
-        if (dodgeTimer_ < 0.0f) {
-            dodgeTimer_ = 0.0f;
-        }
-    }
-    if (dodgeInvulnerableTimer_ > 0.0f) {
-        dodgeInvulnerableTimer_ -= deltaTime;
-        if (dodgeInvulnerableTimer_ < 0.0f) {
-            dodgeInvulnerableTimer_ = 0.0f;
-        }
-    }
-
-    if (dodgeTimer_ > 0.0f || dodgeCooldownTimer_ > 0.0f ||
-        !IsDodgeInputTriggered(input)) {
-        return;
-    }
-
-    XMFLOAT2 inputDir = ReadMovementInput(input);
-    const float lenSq = inputDir.x * inputDir.x + inputDir.y * inputDir.y;
-    float worldX = 0.0f;
-    float worldZ = 0.0f;
-    if (lenSq > 0.01f && !UsesJoyConAutoMovement()) {
-        const float sinYaw = std::sinf(cameraYaw);
-        const float cosYaw = std::cosf(cameraYaw);
-        worldX = sinYaw * inputDir.y + cosYaw * inputDir.x;
-        worldZ = cosYaw * inputDir.y - sinYaw * inputDir.x;
-    } else if (UsesJoyConAutoMovement()) {
-        float toTargetX = lookTarget.x - tf_.position.x;
-        float toTargetZ = lookTarget.z - tf_.position.z;
-        float distSq = toTargetX * toTargetX + toTargetZ * toTargetZ;
-        if (distSq < 0.0001f) {
-            toTargetX = std::sinf(yaw_);
-            toTargetZ = std::cosf(yaw_);
-            distSq = 1.0f;
-        }
-
-        const float invDist = 1.0f / std::sqrt(distSq);
-        const float towardX = toTargetX * invDist;
-        const float towardZ = toTargetZ * invDist;
-        const float rightX = towardZ;
-        const float rightZ = -towardX;
-        const float distance = std::sqrt(distSq);
-        const bool tooClose = distance < kJoyConAutoMoveNearDistance;
-
-        worldX = rightX * autoDodgeSide_;
-        worldZ = rightZ * autoDodgeSide_;
-        if (tooClose) {
-            worldX -= towardX * 0.75f;
-            worldZ -= towardZ * 0.75f;
-        }
-        autoDodgeSide_ *= -1.0f;
-    } else {
-        worldX = -std::sinf(yaw_);
-        worldZ = -std::cosf(yaw_);
-    }
-
-    const float worldLenSq = worldX * worldX + worldZ * worldZ;
-    if (worldLenSq > 0.001f) {
-        const float invLen = 1.0f / std::sqrt(worldLenSq);
-        worldX *= invLen;
-        worldZ *= invLen;
-    }
-
-    dodgeDirection_ = {worldX, worldZ};
-    dodgeTimer_ = kDodgeDuration;
-    dodgeInvulnerableTimer_ = kDodgeInvulnerableDuration;
-    dodgeCooldownTimer_ = kDodgeCooldownDuration;
-    postSlashRecoveryTimer_ = 0.0f;
 }
 
 void Player::UpdateMovement(Input *input, float deltaTime, float cameraYaw,
@@ -779,11 +718,7 @@ void Player::UpdateMovement(Input *input, float deltaTime, float cameraYaw,
         speedScale *= 0.38f;
     }
 
-    if (dodgeTimer_ > 0.0f) {
-        velocity_.x = dodgeDirection_.x * kDodgeSpeed;
-        velocity_.y = 0.0f;
-        velocity_.z = dodgeDirection_.y * kDodgeSpeed;
-    } else if (useAutoMovement && !hasManualMove) {
+    if (useAutoMovement && !hasManualMove) {
         velocity_.x = worldMoveX * speedScale;
         velocity_.y = 0.0f;
         velocity_.z = worldMoveZ * speedScale;
@@ -816,15 +751,17 @@ void Player::UpdateMovement(Input *input, float deltaTime, float cameraYaw,
         knockbackVelocity_.z = 0.0f;
 }
 
-void Player::TakeDamage(float damage) {
-    if (IsDamageInvulnerable()) {
-        return;
+float Player::TakeDamage(float damage) {
+    if (damage <= 0.0f || hp_ <= 0.0f) {
+        return 0.0f;
     }
 
+    const float previousHp = hp_;
     hp_ -= damage * damageTakenScale_;
     if (hp_ < 0.0f) {
         hp_ = 0.0f;
     }
+    return previousHp - hp_;
 }
 
 void Player::NotifyAttackHit(float damage) {
@@ -908,10 +845,6 @@ float Player::ComputeJoyConSwingDamageMultiplier(float angularVelocity) const {
 }
 
 void Player::AddKnockback(const DirectX::XMFLOAT3 &velocity) {
-    if (IsDamageInvulnerable()) {
-        return;
-    }
-
     knockbackVelocity_.x += velocity.x;
     knockbackVelocity_.y += velocity.y;
     knockbackVelocity_.z += velocity.z;
@@ -926,7 +859,7 @@ float Player::GetGuardDamageMultiplier() const {
 }
 
 float Player::GetCounterDamageMultiplier() const {
-    return 9.0f;
+    return 7.0f;
 }
 
 float Player::GetCounterVulnerabilityDuration() const {
@@ -1011,10 +944,10 @@ SwordPose Player::UpdateKeyboardLeftSword(Input *input, float deltaTime) {
         dirX += 1.0f;
     }
     if (input->IsKeyPress(DIK_W)) {
-        dirY -= 1.0f;
+        dirY += 1.0f;
     }
     if (input->IsKeyPress(DIK_S)) {
-        dirY += 1.0f;
+        dirY -= 1.0f;
     }
 
     const bool slashTriggered =
@@ -1051,8 +984,8 @@ void Player::UpdateWeaponRules(Input *input, SwordPose &leftPose,
                                bool useHunterGamepadControls,
                                bool useDualUdpControls, float deltaTime) {
     (void)input;
-    leftSwordAttackDamage_ = 4.0f;
-    rightSwordAttackDamage_ = 4.0f;
+    leftSwordAttackDamage_ = kBaseSwordAttackDamage;
+    rightSwordAttackDamage_ = kBaseSwordAttackDamage;
     auto applyJoyConSwingDamage = [&]() {
         if (hasLeftJoyCon && leftPose.isSlashMode) {
             leftSwordAttackDamage_ *= ComputeJoyConSwingDamageMultiplier(
@@ -1064,8 +997,6 @@ void Player::UpdateWeaponRules(Input *input, SwordPose &leftPose,
         }
     };
 
-    leftSwordAttackDamage_ = 3.0f;
-    rightSwordAttackDamage_ = 3.0f;
     leftPose.isGuard = false;
     rightPose.isGuard = false;
 

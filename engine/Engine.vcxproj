@@ -69,7 +69,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>$(SolutionDir)engine\include\scene;$(SolutionDir)engine\include\particle;$(SolutionDir)engine\include\collision;$(SolutionDir)engine\include\input;$(SolutionDir)engine\include\camera;$(SolutionDir)engine\include\core;$(SolutionDir)engine\include\graphics;$(SolutionDir)engine\include\imgui;$(SolutionDir)engine\include\model;$(SolutionDir)engine\include\animation;$(SolutionDir)engine\include\sound;$(SolutionDir)engine\include\sprite;$(SolutionDir)engine\include\texture;$(SolutionDir)engine\externals;$(SolutionDir)engine\externals\assimp\include;$(SolutionDir)engine\externals\assimp\include\assimp;$(SolutionDir)engine\externals\DirectX-Headers;$(SolutionDir)engine\externals\DirectXTex;$(SolutionDir)engine\externals\JoyShockLibrary\include;$(SolutionDir)engine\externals\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)engine\include\scene;$(SolutionDir)engine\include\particle;$(SolutionDir)engine\include\collision;$(SolutionDir)engine\include\input;$(SolutionDir)engine\include\camera;$(SolutionDir)engine\include\core;$(SolutionDir)engine\include\graphics;$(SolutionDir)engine\include\model;$(SolutionDir)engine\include\animation;$(SolutionDir)engine\include\sound;$(SolutionDir)engine\include\sprite;$(SolutionDir)engine\include\texture;$(SolutionDir)engine\externals;$(SolutionDir)engine\externals\assimp\include;$(SolutionDir)engine\externals\assimp\include\assimp;$(SolutionDir)engine\externals\DirectX-Headers;$(SolutionDir)engine\externals\DirectXTex;$(SolutionDir)engine\externals\JoyShockLibrary\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -83,7 +83,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <TreatWarningAsError>false</TreatWarningAsError>
-      <AdditionalIncludeDirectories>$(SolutionDir)engine\include\scene;$(SolutionDir)engine\include\particle;$(SolutionDir)engine\include\collision;$(SolutionDir)engine\include\input;$(SolutionDir)engine\include\camera;$(SolutionDir)engine\include\core;$(SolutionDir)engine\include\graphics;$(SolutionDir)engine\include\imgui;$(SolutionDir)engine\include\model;$(SolutionDir)engine\include\animation;$(SolutionDir)engine\include\sound;$(SolutionDir)engine\include\sprite;$(SolutionDir)engine\include\texture;$(SolutionDir)engine\externals;$(SolutionDir)engine\externals\assimp\include;$(SolutionDir)engine\externals\assimp\include\assimp;$(SolutionDir)engine\externals\DirectX-Headers;$(SolutionDir)engine\externals\DirectXTex;$(SolutionDir)engine\externals\JoyShockLibrary\include;$(SolutionDir)engine\externals\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)engine\include\scene;$(SolutionDir)engine\include\particle;$(SolutionDir)engine\include\collision;$(SolutionDir)engine\include\input;$(SolutionDir)engine\include\camera;$(SolutionDir)engine\include\core;$(SolutionDir)engine\include\graphics;$(SolutionDir)engine\include\model;$(SolutionDir)engine\include\animation;$(SolutionDir)engine\include\sound;$(SolutionDir)engine\include\sprite;$(SolutionDir)engine\include\texture;$(SolutionDir)engine\externals;$(SolutionDir)engine\externals\assimp\include;$(SolutionDir)engine\externals\assimp\include\assimp;$(SolutionDir)engine\externals\DirectX-Headers;$(SolutionDir)engine\externals\DirectXTex;$(SolutionDir)engine\externals\JoyShockLibrary\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -95,13 +95,11 @@
     <ClCompile Include="$(SolutionDir)engine\src\graphics\RenderTexture.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\model\SkyboxRenderer.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\model\MaterialManager.cpp" />
-    <ClCompile Include="$(SolutionDir)engine\src\camera\DebugCamera.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\animation\Animator.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\animation\AnimationSampler.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\animation\AssimpAnimationLoader.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\model\AssimpLoader.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\model\AssimpMeshLoader.cpp" />
-    <ClCompile Include="$(SolutionDir)engine\src\collision\CollisionDebugRenderer.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\collision\CollisionManager.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\collision\CollisionUtil.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\particle\GPUParticleSystem.cpp" />
@@ -111,12 +109,10 @@
     <ClCompile Include="$(SolutionDir)engine\src\input\JoyCon.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\input\MahonyFilter.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\sound\SoundManager.cpp" />
-    <ClCompile Include="$(SolutionDir)engine\src\imgui\ImguiManager.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\model\ModelManager.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\model\MeshManager.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\camera\Camera.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\model\ModelRenderer.cpp" />
-    <ClCompile Include="$(SolutionDir)engine\src\model\SkeletonDebugRenderer.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\sprite\SpriteManager.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\sprite\SpriteRenderer.cpp" />
     <ClCompile Include="$(SolutionDir)engine\src\graphics\DirectXCommon.cpp" />
@@ -126,7 +122,6 @@
     <ClCompile Include="$(SolutionDir)engine\src\animation\SkeletonPoseBuilder.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="$(SolutionDir)engine\include\camera\DebugCamera.h" />
     <ClInclude Include="$(SolutionDir)engine\include\animation\Animator.h" />
     <ClInclude Include="$(SolutionDir)engine\include\animation\AnimationSampler.h" />
     <ClInclude Include="$(SolutionDir)engine\include\animation\AssimpAnimationLoader.h" />
@@ -134,14 +129,12 @@
     <ClInclude Include="$(SolutionDir)engine\include\model\AssimpLoader.h" />
     <ClInclude Include="$(SolutionDir)engine\include\model\AssimpMeshLoader.h" />
     <ClInclude Include="$(SolutionDir)engine\include\collision\AABB.h" />
-    <ClInclude Include="$(SolutionDir)engine\include\collision\CollisionDebugRenderer.h" />
     <ClInclude Include="$(SolutionDir)engine\include\collision\CollisionManager.h" />
     <ClInclude Include="$(SolutionDir)engine\include\collision\CollisionUtil.h" />
     <ClInclude Include="$(SolutionDir)engine\include\collision\OBB.h" />
     <ClInclude Include="$(SolutionDir)engine\include\particle\GPUParticleSystem.h" />
     <ClInclude Include="$(SolutionDir)engine\include\model\Transform.h" />
     <ClInclude Include="$(SolutionDir)engine\include\scene\BaseScene.h" />
-    <ClInclude Include="$(SolutionDir)engine\include\imgui\ImguiManager.h" />
     <ClInclude Include="$(SolutionDir)engine\include\camera\Camera.h" />
     <ClInclude Include="$(SolutionDir)engine\include\graphics\DxHelpers.h" />
     <ClInclude Include="$(SolutionDir)engine\include\graphics\DxUtils.h" />
@@ -162,7 +155,6 @@
     <ClInclude Include="$(SolutionDir)engine\include\sprite\SpriteRenderer.h" />
     <ClInclude Include="$(SolutionDir)engine\include\sprite\SpriteManager.h" />
     <ClInclude Include="$(SolutionDir)engine\include\model\ModelRenderer.h" />
-    <ClInclude Include="$(SolutionDir)engine\include\model\SkeletonDebugRenderer.h" />
     <ClInclude Include="$(SolutionDir)engine\include\model\MeshManager.h" />
     <ClInclude Include="$(SolutionDir)engine\include\model\ModelManager.h" />
     <ClInclude Include="$(SolutionDir)engine\include\sound\SoundManager.h" />
@@ -212,12 +204,6 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\line\DebugLinePS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
     <FxCompile Include="$(SolutionDir)engine\resources\shaders\model\ModelVS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
@@ -227,12 +213,6 @@
     <FxCompile Include="$(SolutionDir)engine\resources\shaders\model\SkinningCS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="$(SolutionDir)engine\resources\shaders\line\DebugLineVS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>

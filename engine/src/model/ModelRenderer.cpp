@@ -176,17 +176,21 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
             materialManager_->GetMaterial(subMesh.materialId);
 
         const bool forceOpaqueMaterial = currentEffect_.forceOpaqueMaterial;
+        const bool useNoCull =
+            currentEffect_.enabled && currentEffect_.disableCulling;
         if (currentEffect_.enabled && currentEffect_.additiveBlend) {
-            if (currentEffect_.disableCulling) {
+            if (useNoCull) {
                 cmd->SetPipelineState(additiveNoCullPSO_.Get());
             } else {
                 cmd->SetPipelineState(additivePSO_.Get());
             }
         } else if (!forceOpaqueMaterial &&
                    (material.color.w < 1.0f || currentEffect_.enabled)) {
-            cmd->SetPipelineState(transparentPSO_.Get());
+            cmd->SetPipelineState(useNoCull ? transparentNoCullPSO_.Get()
+                                            : transparentPSO_.Get());
         } else {
-            cmd->SetPipelineState(opaquePSO_.Get());
+            cmd->SetPipelineState(useNoCull ? opaqueNoCullPSO_.Get()
+                                            : opaquePSO_.Get());
         }
 
         const Mesh &mesh = meshManager_->GetMesh(subMesh.meshId);
@@ -620,7 +624,11 @@ void ModelRenderer::CreatePipelineState() {
     pso.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
     pso.SampleDesc.Count = 1;
     pso.SampleMask = UINT_MAX;
-    pso.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+    const D3D12_RASTERIZER_DESC defaultRasterizer =
+        CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+    D3D12_RASTERIZER_DESC noCullRasterizer = defaultRasterizer;
+    noCullRasterizer.CullMode = D3D12_CULL_MODE_NONE;
+    pso.RasterizerState = defaultRasterizer;
 
     D3D12_BLEND_DESC blend = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
     blend.RenderTarget[0].BlendEnable = FALSE;
@@ -636,6 +644,12 @@ void ModelRenderer::CreatePipelineState() {
     ThrowIfFailed(
         device->CreateGraphicsPipelineState(&pso, IID_PPV_ARGS(&opaquePSO_)),
         "CreateGraphicsPipelineState(Opaque) failed");
+
+    pso.RasterizerState = noCullRasterizer;
+    ThrowIfFailed(device->CreateGraphicsPipelineState(
+                      &pso, IID_PPV_ARGS(&opaqueNoCullPSO_)),
+                  "CreateGraphicsPipelineState(OpaqueNoCull) failed");
+    pso.RasterizerState = defaultRasterizer;
 
     blend.RenderTarget[0].BlendEnable = TRUE;
     blend.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
@@ -658,6 +672,12 @@ void ModelRenderer::CreatePipelineState() {
                       &pso, IID_PPV_ARGS(&transparentPSO_)),
                   "CreateGraphicsPipelineState(Transparent) failed");
 
+    pso.RasterizerState = noCullRasterizer;
+    ThrowIfFailed(device->CreateGraphicsPipelineState(
+                      &pso, IID_PPV_ARGS(&transparentNoCullPSO_)),
+                  "CreateGraphicsPipelineState(TransparentNoCull) failed");
+    pso.RasterizerState = defaultRasterizer;
+
     // 加算エフェクトPSO
     blend.RenderTarget[0].BlendEnable = TRUE;
     blend.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
@@ -674,9 +694,6 @@ void ModelRenderer::CreatePipelineState() {
                       &pso, IID_PPV_ARGS(&additivePSO_)),
                   "CreateGraphicsPipelineState(Additive) failed");
 
-    D3D12_RASTERIZER_DESC noCullRasterizer =
-        CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-    noCullRasterizer.CullMode = D3D12_CULL_MODE_NONE;
     pso.RasterizerState = noCullRasterizer;
 
     ThrowIfFailed(device->CreateGraphicsPipelineState(

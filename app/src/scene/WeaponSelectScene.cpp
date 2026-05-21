@@ -1,7 +1,6 @@
 #include "WeaponSelectScene.h"
 #include "CalibrationScene.h"
 #include "DirectXCommon.h"
-#include "HandRegistrationScene.h"
 #include "Input.h"
 #include "ModelManager.h"
 #include "PostEffectRenderer.h"
@@ -13,7 +12,11 @@
 #include <Xinput.h>
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
 #include <memory>
+#include <sstream>
 
 using namespace DirectX;
 
@@ -31,6 +34,19 @@ XMFLOAT4 MakeQuat(float pitch, float yaw, float roll) {
     XMStoreFloat4(&q, XMQuaternionRotationRollPitchYaw(pitch, yaw, roll));
     return q;
 }
+
+std::filesystem::path RankingPathForControl(InputControlType controlType) {
+    const std::filesystem::path rankingDir = "app/resources/result";
+    switch (controlType) {
+    case InputControlType::JoyCon:
+        return rankingDir / "clear_ranking_joycon.txt";
+    case InputControlType::Hand:
+        return rankingDir / "clear_ranking_hand.txt";
+    case InputControlType::KeyboardMouse:
+    default:
+        return rankingDir / "clear_ranking_keyboard_mouse.txt";
+    }
+}
 } // namespace
 
 void WeaponSelectScene::Initialize(const SceneContext &ctx) {
@@ -41,6 +57,7 @@ void WeaponSelectScene::Initialize(const SceneContext &ctx) {
     startRequested_ = false;
     waitingForHandTrackingReady_ = false;
     handTrackingStartRequested_ = false;
+    rankingOpen_ = false;
     pulseTimers_.fill(0.0f);
     joyConAvailable_ = false;
     cameraAvailable_ = false;
@@ -62,6 +79,8 @@ void WeaponSelectScene::Initialize(const SceneContext &ctx) {
     controlsImage_ =
         LoadTextureImage(L"app/resources/text/weapon_controls.png");
     readyImage_ = LoadTextureImage(L"app/resources/text/weapon_ready.png");
+    rankingButtonImage_ =
+        LoadTextureImage(L"app/resources/text/ranking_button.png");
     weaponNameImages_[0] =
         LoadTextureImage(L"app/resources/text/input_kbm.png");
     weaponNameImages_[1] =
@@ -80,9 +99,24 @@ void WeaponSelectScene::Initialize(const SceneContext &ctx) {
         LoadTextureImage(L"app/resources/text/input_ready_joycon.png");
     weaponBottomImages_[2] =
         LoadTextureImage(L"app/resources/text/input_ready_hand.png");
+    for (int i = 0; i < 10; ++i) {
+        digitImages_[static_cast<size_t>(i)] =
+            LoadTextureImage(L"app/resources/result/char_" +
+                             std::to_wstring(i) + L".png");
+    }
+    for (int i = 0; i < kMaxRanking; ++i) {
+        rankImages_[static_cast<size_t>(i)] =
+            LoadTextureImage(L"app/resources/result/rank_" +
+                             std::to_wstring(i + 1) + L".png");
+    }
+    colonImage_ = LoadTextureImage(L"app/resources/result/char_colon.png");
+    dotImage_ = LoadTextureImage(L"app/resources/result/char_dot.png");
+    dashImage_ = LoadTextureImage(L"app/resources/result/char_dash.png");
+    secondImage_ = LoadTextureImage(L"app/resources/result/char_s.png");
     swordModelId_ = ctx_->model->Load(L"app/resources/models/player/sword.glb");
     ctx_->dxCommon->EndUpload();
     ctx_->texture->ReleaseUploadBuffers();
+    LoadRankings();
 
     ctx_->postEffectRenderer->ResetEffects();
     UpdateLighting();
@@ -118,15 +152,14 @@ void WeaponSelectScene::Update() {
         }
 
         if (transitionTimer_ >= kTransitionDuration) {
+            SwordInputCalibration calibration{};
+            calibration.controlType = selectedType;
             if (selectedType == InputControlType::Hand) {
-                sceneManager_->ChangeScene(
-                    std::make_unique<HandRegistrationScene>());
+                sceneManager_->ChangeScene(std::make_unique<TipScene>(calibration));
             } else if (selectedType == InputControlType::JoyCon) {
                 sceneManager_->ChangeScene(
                     std::make_unique<CalibrationScene>(selectedType));
             } else {
-                SwordInputCalibration calibration{};
-                calibration.controlType = selectedType;
                 sceneManager_->ChangeScene(
                     std::make_unique<TipScene>(calibration));
             }
@@ -152,6 +185,8 @@ void WeaponSelectScene::Draw() {
 
     ctx_->sprite->PreDraw();
     DrawLabels(w, h);
+    DrawRankingButton(w, h);
+    DrawRankingPanel(w, h);
     DrawStartTransition(w, h);
     ctx_->sprite->PostDraw();
 }
@@ -166,14 +201,48 @@ WeaponSelectScene::LoadTextureImage(const std::wstring &path) {
     return image;
 }
 
+void WeaponSelectScene::LoadRankings() {
+    for (int i = 0; i < kWeaponCount; ++i) {
+        rankings_[static_cast<size_t>(i)] =
+            LoadRankingForControl(ControlTypeForIndex(i));
+    }
+}
+
+std::vector<float>
+WeaponSelectScene::LoadRankingForControl(InputControlType controlType) const {
+    std::vector<float> ranking;
+    std::ifstream file(RankingPathForControl(controlType));
+    float value = 0.0f;
+    while (file >> value) {
+        if (value > 0.0f) {
+            ranking.push_back(value);
+        }
+    }
+    std::sort(ranking.begin(), ranking.end());
+    if (ranking.size() > static_cast<size_t>(kMaxRanking)) {
+        ranking.resize(kMaxRanking);
+    }
+    return ranking;
+}
+
 void WeaponSelectScene::UpdateSelection(Input *input) {
+    if (rankingOpen_) {
+        if (input->IsKeyTrigger(DIK_TAB) ||
+            input->IsKeyTrigger(DIK_BACK) ||
+            (input->IsGamepadConnected() &&
+             input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_B))) {
+            rankingOpen_ = false;
+        }
+        return;
+    }
+
     int nextIndex = selectedIndex_;
 
     if (input->IsKeyTrigger(DIK_LEFT) || input->IsKeyTrigger(DIK_A)) {
-        nextIndex = (selectedIndex_ + kWeaponCount - 1) % kWeaponCount;
+        nextIndex = (selectedIndex_ + kSelectableCount - 1) % kSelectableCount;
     }
     if (input->IsKeyTrigger(DIK_RIGHT) || input->IsKeyTrigger(DIK_D)) {
-        nextIndex = (selectedIndex_ + 1) % kWeaponCount;
+        nextIndex = (selectedIndex_ + 1) % kSelectableCount;
     }
     if (input->IsKeyTrigger(DIK_1)) {
         nextIndex = 0;
@@ -187,21 +256,31 @@ void WeaponSelectScene::UpdateSelection(Input *input) {
 
     if (input->IsGamepadConnected()) {
         if (input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_LEFT)) {
-            nextIndex = (selectedIndex_ + kWeaponCount - 1) % kWeaponCount;
+            nextIndex =
+                (selectedIndex_ + kSelectableCount - 1) % kSelectableCount;
         }
         if (input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_RIGHT)) {
-            nextIndex = (selectedIndex_ + 1) % kWeaponCount;
+            nextIndex = (selectedIndex_ + 1) % kSelectableCount;
         }
     }
 
     if (nextIndex != selectedIndex_) {
         selectedIndex_ = nextIndex;
-        pulseTimers_[selectedIndex_] = 1.0f;
+        if (selectedIndex_ < kWeaponCount) {
+            pulseTimers_[selectedIndex_] = 1.0f;
+        }
     }
 
-    if (input->IsKeyTrigger(DIK_RETURN) || input->IsKeyTrigger(DIK_SPACE) ||
+    const bool confirm =
+        input->IsKeyTrigger(DIK_RETURN) || input->IsKeyTrigger(DIK_SPACE) ||
         (input->IsGamepadConnected() &&
-         input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_A))) {
+         input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_A));
+    if (confirm) {
+        if (selectedIndex_ == kRankingButtonIndex) {
+            rankingOpen_ = true;
+            LoadRankings();
+            return;
+        }
         BeginStart();
     }
 }
@@ -217,6 +296,12 @@ void WeaponSelectScene::UpdateDeviceAvailability() {
 }
 
 void WeaponSelectScene::BeginStart() {
+    if (selectedIndex_ == kRankingButtonIndex) {
+        rankingOpen_ = true;
+        LoadRankings();
+        return;
+    }
+
     if (!IsModeAvailable(selectedIndex_)) {
         pulseTimers_[selectedIndex_] = 1.0f;
         ShowUnavailableMessage(selectedIndex_);
@@ -248,10 +333,23 @@ void WeaponSelectScene::Layout(float screenWidth, float screenHeight) {
     for (int i = 0; i < kWeaponCount; ++i) {
         cardRects_[i] = {startX + i * (cardW + gap), y, cardW, cardH};
     }
+
+    const float buttonW = (std::min)(122.0f, screenWidth * 0.10f);
+    const float buttonH = 34.0f;
+    const ButtonRect &cameraCard = cardRects_[2];
+    float buttonX = cameraCard.x + cameraCard.w + 16.0f;
+    if (buttonX + buttonW > screenWidth - 24.0f) {
+        buttonX = cameraCard.x + cameraCard.w - buttonW - 14.0f;
+    }
+    rankingButtonRect_ = {buttonX, cameraCard.y + 16.0f, buttonW, buttonH};
 }
 
 InputControlType WeaponSelectScene::SelectedControlType() const {
-    switch (selectedIndex_) {
+    return ControlTypeForIndex(selectedIndex_);
+}
+
+InputControlType WeaponSelectScene::ControlTypeForIndex(int index) const {
+    switch (index) {
     case 2:
         return InputControlType::Hand;
     case 1:
@@ -422,12 +520,17 @@ void WeaponSelectScene::DrawLabels(float screenWidth, float screenHeight) {
                   disabledAlpha * (selected ? 1.0f : 0.62f));
     }
 
-    const Image &bottom = weaponBottomImages_[selectedIndex_];
+    const int bottomIndex =
+        selectedIndex_ < kWeaponCount ? selectedIndex_ : kWeaponCount - 1;
+    const Image &bottom = weaponBottomImages_[bottomIndex];
     const float bottomScale =
         (std::min)(1.0f, (screenWidth * 0.56f) /
                              (std::max)(bottom.width, 1.0f));
     DrawImage(bottom, 58.0f, screenHeight - 88.0f, bottomScale,
-              IsModeAvailable(selectedIndex_) ? 1.0f : 0.42f);
+              selectedIndex_ == kRankingButtonIndex ||
+                      IsModeAvailable(selectedIndex_)
+                  ? 1.0f
+                  : 0.42f);
 
     const float controlsScale =
         (std::min)(1.0f, (screenWidth * 0.32f) /
@@ -435,6 +538,108 @@ void WeaponSelectScene::DrawLabels(float screenWidth, float screenHeight) {
     DrawImage(controlsImage_,
               screenWidth - controlsImage_.width * controlsScale - 52.0f,
               screenHeight - 78.0f, controlsScale, 0.82f);
+}
+
+void WeaponSelectScene::DrawRankingButton(float, float) {
+    const bool selected = selectedIndex_ == kRankingButtonIndex;
+    const XMFLOAT4 body =
+        rankingOpen_ || selected
+            ? MakeColor(1.0f, 0.78f, 0.08f, 0.96f)
+            : MakeColor(0.12f, 0.13f, 0.15f, 0.86f);
+    if (selected) {
+        const float frame = 4.0f;
+        DrawRect(rankingButtonRect_.x - frame, rankingButtonRect_.y - frame,
+                 rankingButtonRect_.w + frame * 2.0f, frame,
+                 MakeColor(1.0f, 0.82f, 0.02f, 1.0f));
+        DrawRect(rankingButtonRect_.x - frame,
+                 rankingButtonRect_.y + rankingButtonRect_.h,
+                 rankingButtonRect_.w + frame * 2.0f, frame,
+                 MakeColor(1.0f, 0.82f, 0.02f, 1.0f));
+        DrawRect(rankingButtonRect_.x - frame, rankingButtonRect_.y - frame,
+                 frame, rankingButtonRect_.h + frame * 2.0f,
+                 MakeColor(1.0f, 0.82f, 0.02f, 1.0f));
+        DrawRect(rankingButtonRect_.x + rankingButtonRect_.w,
+                 rankingButtonRect_.y - frame, frame,
+                 rankingButtonRect_.h + frame * 2.0f,
+                 MakeColor(1.0f, 0.82f, 0.02f, 1.0f));
+    }
+    DrawRect(rankingButtonRect_.x, rankingButtonRect_.y, rankingButtonRect_.w,
+             rankingButtonRect_.h, body);
+    DrawRect(rankingButtonRect_.x, rankingButtonRect_.y,
+             rankingButtonRect_.w, 4.0f,
+             MakeColor(1.0f, 0.82f, 0.02f, rankingOpen_ ? 1.0f : 0.78f));
+    DrawRect(rankingButtonRect_.x, rankingButtonRect_.y +
+                                       rankingButtonRect_.h - 4.0f,
+             rankingButtonRect_.w, 4.0f,
+             MakeColor(0.0f, 0.0f, 0.0f, 0.54f));
+
+    const float scale =
+        (std::min)(0.46f, (rankingButtonRect_.w * 0.82f) /
+                               (std::max)(rankingButtonImage_.width, 1.0f));
+    DrawImage(rankingButtonImage_,
+              rankingButtonRect_.x +
+                  (rankingButtonRect_.w - rankingButtonImage_.width * scale) *
+                      0.5f,
+              rankingButtonRect_.y +
+                  (rankingButtonRect_.h - rankingButtonImage_.height * scale) *
+                      0.5f,
+              scale, rankingOpen_ || selected ? 1.0f : 0.92f);
+}
+
+void WeaponSelectScene::DrawRankingPanel(float screenWidth,
+                                         float screenHeight) {
+    if (!rankingOpen_) {
+        return;
+    }
+
+    const float panelW = (std::min)(980.0f, screenWidth * 0.82f);
+    const float panelH = (std::min)(430.0f, screenHeight * 0.58f);
+    const float panelX = (screenWidth - panelW) * 0.5f;
+    const float panelY = screenHeight * 0.20f;
+    DrawRect(0.0f, 96.0f, screenWidth, screenHeight - 96.0f,
+             MakeColor(0.0f, 0.0f, 0.0f, 0.48f));
+    DrawRect(panelX, panelY, panelW, panelH,
+             MakeColor(0.018f, 0.020f, 0.024f, 0.96f));
+    DrawRect(panelX, panelY, panelW, 6.0f,
+             MakeColor(1.0f, 0.82f, 0.02f, 0.96f));
+
+    const float columnGap = 18.0f;
+    const float columnW =
+        (panelW - 56.0f - columnGap * static_cast<float>(kWeaponCount - 1)) /
+        static_cast<float>(kWeaponCount);
+    const float columnY = panelY + 42.0f;
+    const float rowY = columnY + 88.0f;
+    for (int i = 0; i < kWeaponCount; ++i) {
+        const float x = panelX + 28.0f +
+                        static_cast<float>(i) * (columnW + columnGap);
+        const bool available = IsModeAvailable(i);
+        DrawRect(x, columnY, columnW, panelH - 68.0f,
+                 MakeColor(0.065f, 0.070f, 0.080f, available ? 0.82f : 0.52f));
+        DrawRect(x, columnY, columnW, 5.0f,
+                 WeaponColor(i, available ? 0.92f : 0.48f, available));
+
+        const Image &header = weaponNameImages_[static_cast<size_t>(i)];
+        const float headerScale =
+            (std::min)(0.82f, (columnW * 0.72f) /
+                                   (std::max)(header.width, 1.0f));
+        DrawImage(header, x + (columnW - header.width * headerScale) * 0.5f,
+                  columnY + 28.0f, headerScale, available ? 0.96f : 0.45f);
+
+        const std::vector<float> &ranking = rankings_[static_cast<size_t>(i)];
+        for (int rank = 0; rank < kMaxRanking; ++rank) {
+            const float y = rowY + static_cast<float>(rank) * 43.0f;
+            DrawImage(rankImages_[static_cast<size_t>(rank)], x + 30.0f, y,
+                      0.55f, available ? 0.86f : 0.35f);
+            if (rank < static_cast<int>(ranking.size())) {
+                DrawTextLine(FormatTime(ranking[static_cast<size_t>(rank)]),
+                             x + columnW * 0.62f, y - 2.0f, 0.55f,
+                             available ? 0.94f : 0.38f);
+            } else {
+                DrawTextLine("--:--.--s", x + columnW * 0.62f, y - 2.0f,
+                             0.55f, 0.34f);
+            }
+        }
+    }
 }
 
 void WeaponSelectScene::DrawStartTransition(float screenWidth,
@@ -479,6 +684,71 @@ void WeaponSelectScene::DrawImage(const Image &image, float x, float y,
     sprite.color = {1.0f, 1.0f, 1.0f, alpha};
     sprite.textureId = image.textureId;
     ctx_->sprite->DrawSprite(sprite);
+}
+
+void WeaponSelectScene::DrawTextLine(const std::string &text, float centerX,
+                                     float y, float scale, float alpha) {
+    float x = centerX - MeasureTextLine(text, scale) * 0.5f;
+    for (char c : text) {
+        if (c == ' ') {
+            x += 18.0f * scale;
+            continue;
+        }
+        const Image *image = FindCharImage(c);
+        if (image == nullptr) {
+            continue;
+        }
+        DrawImage(*image, x, y, scale, alpha);
+        x += image->width * scale - 4.0f * scale;
+    }
+}
+
+float WeaponSelectScene::MeasureTextLine(const std::string &text,
+                                         float scale) const {
+    float width = 0.0f;
+    for (char c : text) {
+        if (c == ' ') {
+            width += 18.0f * scale;
+            continue;
+        }
+        const Image *image = FindCharImage(c);
+        if (image != nullptr) {
+            width += image->width * scale - 4.0f * scale;
+        }
+    }
+    return (std::max)(0.0f, width);
+}
+
+const WeaponSelectScene::Image *
+WeaponSelectScene::FindCharImage(char c) const {
+    if (c >= '0' && c <= '9') {
+        return &digitImages_[static_cast<size_t>(c - '0')];
+    }
+    if (c == ':') {
+        return &colonImage_;
+    }
+    if (c == '.') {
+        return &dotImage_;
+    }
+    if (c == '-') {
+        return &dashImage_;
+    }
+    if (c == 's' || c == 'S') {
+        return &secondImage_;
+    }
+    return nullptr;
+}
+
+std::string WeaponSelectScene::FormatTime(float seconds) const {
+    const int centiseconds =
+        static_cast<int>(std::round((std::max)(0.0f, seconds) * 100.0f));
+    const int minutes = centiseconds / 6000;
+    const int sec = (centiseconds / 100) % 60;
+    const int centi = centiseconds % 100;
+    std::ostringstream oss;
+    oss << std::setfill('0') << std::setw(2) << minutes << ':'
+        << std::setw(2) << sec << '.' << std::setw(2) << centi << 's';
+    return oss.str();
 }
 
 Transform WeaponSelectScene::MakeSwordTransform(int weaponIndex,
