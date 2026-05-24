@@ -13,9 +13,7 @@ constexpr float kMouseSlashMinDeltaSq = 6.0f * 6.0f;
 }
 
 SwordPose SwordMouseController::GetPose() const {
-    SwordPose pose = state_.ToPose();
-    pose.isMouse = true;
-    return pose;
+    return state_.ToPose();
 }
 
 void SwordMouseController::Update(Input *input, float dt,
@@ -23,7 +21,6 @@ void SwordMouseController::Update(Input *input, float dt,
     (void)swordPos;
     UpdateOrientation(input, dt);
     state_.isGuard = false;
-    state_.isCounter = false;
     UpdateSlash(input, dt);
 }
 
@@ -56,11 +53,6 @@ void SwordMouseController::UpdateOrientation(Input *input, float dt) {
     const float speed = std::sqrt(dx * dx + dy * dy);
     mouseSpeed_ = (dt > 0.0f) ? speed / dt : 0.0f;
     mouseDelta_ = {dx, dy};
-}
-
-void SwordMouseController::UpdateGuard(Input *input) {
-    (void)input;
-    state_.isGuard = false;
 }
 
 void SwordMouseController::UpdateSlash(Input *input, float dt) {

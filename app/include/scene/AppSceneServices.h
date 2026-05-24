@@ -6,15 +6,12 @@ using VoidCallback = std::function<void()>;
 using BoolCallback = std::function<bool()>;
 
 inline VoidCallback requestHandTrackingStart;
-inline VoidCallback requestHandTrackingRestart;
 inline BoolCallback isCameraDeviceAvailable;
 inline BoolCallback isHandTrackingReady;
 
-inline void ConfigureHandTracking(VoidCallback start, VoidCallback restart,
-                                  BoolCallback cameraAvailable,
+inline void ConfigureHandTracking(VoidCallback start, BoolCallback cameraAvailable,
                                   BoolCallback handReady) {
     requestHandTrackingStart = std::move(start);
-    requestHandTrackingRestart = std::move(restart);
     isCameraDeviceAvailable = std::move(cameraAvailable);
     isHandTrackingReady = std::move(handReady);
 }
@@ -26,12 +23,6 @@ inline bool HasHandTrackingStart() {
 inline void RequestHandTrackingStart() {
     if (requestHandTrackingStart) {
         requestHandTrackingStart();
-    }
-}
-
-inline void RequestHandTrackingRestart() {
-    if (requestHandTrackingRestart) {
-        requestHandTrackingRestart();
     }
 }
 

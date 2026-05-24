@@ -9,9 +9,7 @@ constexpr float kJoyConSlashSensitivity = 2.05f;
 }
 
 SwordPose SwordJoyConController::GetPose() const {
-    SwordPose pose = state_.ToPose();
-    pose.isJoyCon = true;
-    return pose;
+    return state_.ToPose();
 }
 
 void SwordJoyConController::ResetTracking(JoyCon *joyCon) {
@@ -37,8 +35,6 @@ void SwordJoyConController::Update(JoyCon *joyCon, float dt,
     (void)swordPos;
     UpdateOrientation(joyCon, dt);
     state_.isGuard = false;
-    state_.isCounter = false;
-    state_.counterTimer = SwordControllerState::kCounterFrames;
     UpdateSlash(dt);
     UpdateSlashDirFromOrientation();
 }
@@ -68,17 +64,6 @@ void SwordJoyConController::UpdateOrientation(JoyCon *joyCon, float dt) {
 
     XMStoreFloat4(&state_.orientation, q);
     XMStoreFloat4(&prevOrientation_, q);
-}
-
-void SwordJoyConController::UpdateGuard(JoyCon *joyCon) {
-    (void)joyCon;
-    state_.isGuard = false;
-}
-
-void SwordJoyConController::UpdateCounter(JoyCon *joyCon) {
-    (void)joyCon;
-    state_.isCounter = false;
-    state_.counterTimer = SwordControllerState::kCounterFrames;
 }
 
 void SwordJoyConController::UpdateSlash(float dt) {

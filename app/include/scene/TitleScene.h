@@ -3,10 +3,8 @@
 #include "Sprite.h"
 #include <DirectXMath.h>
 #include <cstdint>
-#include <memory>
 #include <string>
 
-class GameScene;
 class Input;
 
 class TitleScene : public BaseScene {
@@ -32,7 +30,6 @@ class TitleScene : public BaseScene {
     bool IsAnyButtonTriggered(const Input &input) const;
 
   private:
-    std::unique_ptr<GameScene> demoScene_;
     Image logoImage_;
     Image pressAnyButtonImage_;
     float sceneTime_ = 0.0f;

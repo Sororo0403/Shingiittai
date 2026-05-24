@@ -60,6 +60,9 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\scene\CameraPreviewReceiver.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
     <ClCompile Include="src\scene\BattleResultScene.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
@@ -120,12 +123,6 @@
     <ClCompile Include="src\scene\GameSceneLighting.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
-    <ClCompile Include="src\scene\ModeSelectScene.cpp">
-      <Filter>Source Files\scene</Filter>
-    </ClCompile>
-    <ClCompile Include="src\scene\SettingsScene.cpp">
-      <Filter>Source Files\scene</Filter>
-    </ClCompile>
     <ClCompile Include="src\scene\TitleScene.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
@@ -159,6 +156,9 @@
     <ClCompile Include="src\player\SwordTrailRenderer.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\scene\CameraPreviewReceiver.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
     <ClInclude Include="include\scene\BattleResultScene.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
@@ -184,12 +184,6 @@
       <Filter>Header Files\scene</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\GameScene.h">
-      <Filter>Header Files\scene</Filter>
-    </ClInclude>
-    <ClInclude Include="include\scene\ModeSelectScene.h">
-      <Filter>Header Files\scene</Filter>
-    </ClInclude>
-    <ClInclude Include="include\scene\SettingsScene.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\TitleScene.h">
@@ -272,39 +266,6 @@
     </None>
     <None Include="resources\title\press_any_button.png">
       <Filter>Resources\Title</Filter>
-    </None>
-    <None Include="resources\title\title_logo.png">
-      <Filter>Resources\Title</Filter>
-    </None>
-    <None Include="resources\menu\back.png">
-      <Filter>Resources\Menu</Filter>
-    </None>
-    <None Include="resources\menu\game_start.png">
-      <Filter>Resources\Menu</Filter>
-    </None>
-    <None Include="resources\menu\game_start_help.png">
-      <Filter>Resources\Menu</Filter>
-    </None>
-    <None Include="resources\menu\menu_controls.png">
-      <Filter>Resources\Menu</Filter>
-    </None>
-    <None Include="resources\menu\mode_select_title.png">
-      <Filter>Resources\Menu</Filter>
-    </None>
-    <None Include="resources\menu\settings.png">
-      <Filter>Resources\Menu</Filter>
-    </None>
-    <None Include="resources\menu\settings_controls.png">
-      <Filter>Resources\Menu</Filter>
-    </None>
-    <None Include="resources\menu\settings_help.png">
-      <Filter>Resources\Menu</Filter>
-    </None>
-    <None Include="resources\menu\settings_title.png">
-      <Filter>Resources\Menu</Filter>
-    </None>
-    <None Include="resources\menu\volume.png">
-      <Filter>Resources\Menu</Filter>
     </None>
     <None Include="resources\text\input_hand.png">
       <Filter>Resources\Text</Filter>

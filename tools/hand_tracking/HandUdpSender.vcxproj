@@ -38,10 +38,8 @@
   </PropertyGroup>
   <ItemGroup>
     <None Include="hand_udp_sender.py" />
-    <None Include="start-hand-sim.ps1" />
     <None Include="build-hand-udp-exe.ps1" />
     <None Include="models\hand_landmarker.task" />
-    <None Include="models\pose_landmarker_lite.task" />
     <None Include="requirements-hand-udp.txt" />
     <None Include="setup-hand-udp.ps1" />
   </ItemGroup>

@@ -79,12 +79,6 @@ class HandUdpSenderProcess {
         }
     }
 
-    void RestartCamera() {
-        shouldKeepRunning_ = true;
-        Stop();
-        Start();
-    }
-
     void Update() {
         RefreshProcessState();
         if (shouldKeepRunning_ && !isRunning_ && !IsDisabled()) {
@@ -288,15 +282,7 @@ class HandUdpSenderProcess {
     ResolvePoseModelPath(const std::filesystem::path &runtimeRoot) {
         const std::filesystem::path modelDir =
             runtimeRoot / L"tools" / L"hand_tracking" / L"models";
-        const std::filesystem::path full =
-            modelDir / L"pose_landmarker_full.task";
-        const std::filesystem::path lite =
-            modelDir / L"pose_landmarker_lite.task";
-
-        if (std::filesystem::exists(full)) {
-            return full;
-        }
-        return lite;
+        return modelDir / L"pose_landmarker_full.task";
     }
 
     static std::filesystem::path ResolveRepoRoot() {
@@ -471,10 +457,6 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
     AppSceneServices::ConfigureHandTracking(
         [&handUdpSenderProcess, &winApp]() {
             handUdpSenderProcess.ActivateCamera();
-            SetForegroundWindow(winApp.GetHwnd());
-        },
-        [&handUdpSenderProcess, &winApp]() {
-            handUdpSenderProcess.RestartCamera();
             SetForegroundWindow(winApp.GetHwnd());
         },
         [handTrackingRuntimeAvailable]() { return handTrackingRuntimeAvailable; },

@@ -19,7 +19,6 @@ class JoyCon {
     void StartCalibration();
     void SetBaseOrientation();
 
-    bool IsButtonPress(int buttonMask) const;
     bool IsButtonTrigger(int buttonMask) const;
     bool IsConnected() const;
     bool IsCalibrating() const { return isCalibrating_; }

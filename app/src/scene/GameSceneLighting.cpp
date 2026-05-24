@@ -17,8 +17,7 @@ void GameScene::UpdateSceneLighting() {
     const bool isAttackKind =
         actionKind == ActionKind::Smash || actionKind == ActionKind::Sweep ||
         actionKind == ActionKind::BladeClash ||
-        actionKind == ActionKind::Wave || actionKind == ActionKind::Laser ||
-        actionKind == ActionKind::Cage;
+        actionKind == ActionKind::Wave;
     const bool effectFocus =
         (isAttackKind &&
          (actionStep == ActionStep::Charge || actionStep == ActionStep::Active)) ||
@@ -32,8 +31,6 @@ void GameScene::UpdateSceneLighting() {
     const float actionBoost =
         actionKind == ActionKind::Warp ? 1.12f
         : actionKind == ActionKind::Wave ? 1.08f
-        : actionKind == ActionKind::Laser ? 1.18f
-        : actionKind == ActionKind::Cage ? 1.10f
         : actionKind == ActionKind::BladeClash ? 1.14f
                                          : 1.0f;
     const float enemyFocusBoost = effectFocus ? 1.18f : 1.0f;
@@ -50,12 +47,6 @@ void GameScene::UpdateSceneLighting() {
         break;
     case ActionKind::Wave:
         actionColor = {0.56f, 0.82f, 0.48f, 1.0f};
-        break;
-    case ActionKind::Laser:
-        actionColor = {0.36f, 0.92f, 1.0f, 1.0f};
-        break;
-    case ActionKind::Cage:
-        actionColor = {0.42f, 0.96f, 0.88f, 1.0f};
         break;
     case ActionKind::Warp:
         actionColor = {0.46f, 0.78f, 0.66f, 1.0f};

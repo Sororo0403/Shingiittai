@@ -42,24 +42,6 @@ float SwordUdpController::GetMotionSpeed(size_t handIndex) const {
                : 0.0f;
 }
 
-float SwordUdpController::GetRawMotionSpeed(size_t handIndex) const {
-    return GetMotionSpeed(handIndex);
-}
-
-bool SwordUdpController::GetHandCenter(size_t handIndex, float &x,
-                                       float &y) const {
-    if (handIndex >= actionSwordStates_.size() || !HasFreshActionInput()) {
-        return false;
-    }
-    x = 0.5f;
-    y = 0.5f;
-    return true;
-}
-
-bool SwordUdpController::HasRecentPacket() const {
-    return HasFreshActionInput();
-}
-
 void SwordUdpController::SetCalibration(
     const SwordInputCalibration &calibration) {
     calibration_ = calibration;
@@ -224,7 +206,6 @@ void SwordUdpController::ApplyActionInput(float dt) {
             confidenceGate;
         state.UpdateSlash(confidenceScaledSpeed, dt);
         state.isGuard = false;
-        state.isCounter = false;
     }
 }
 

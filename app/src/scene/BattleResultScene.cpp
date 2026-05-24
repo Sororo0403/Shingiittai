@@ -11,8 +11,6 @@
 #include <Xinput.h>
 #include <algorithm>
 #include <cmath>
-#include <filesystem>
-#include <fstream>
 #include <iomanip>
 #include <memory>
 #include <sstream>
@@ -29,23 +27,8 @@ XMFLOAT4 Color(float r, float g, float b, float a = 1.0f) {
     return {r, g, b, a};
 }
 
-float SmoothStep(float t) { return t * t * (3.0f - 2.0f * t); }
-
 bool IsHandControl(InputControlType controlType) {
     return controlType == InputControlType::Hand;
-}
-
-std::filesystem::path RankingPathForControl(InputControlType controlType) {
-    const std::filesystem::path rankingDir = "app/resources/result";
-    switch (controlType) {
-    case InputControlType::JoyCon:
-        return rankingDir / "clear_ranking_joycon.txt";
-    case InputControlType::Hand:
-        return rankingDir / "clear_ranking_hand.txt";
-    case InputControlType::KeyboardMouse:
-    default:
-        return rankingDir / "clear_ranking_keyboard_mouse.txt";
-    }
 }
 } // namespace
 
@@ -75,9 +58,6 @@ void BattleResultScene::Initialize(const SceneContext &ctx) {
         LoadTextureImage(L"app/resources/result/game_over_title.png");
     clearTimeLabel_ =
         LoadTextureImage(L"app/resources/result/clear_time.png");
-    rankingLabel_ = LoadTextureImage(L"app/resources/result/ranking.png");
-    newRecordLabel_ =
-        LoadTextureImage(L"app/resources/result/new_record.png");
     noClearTimeLabel_ =
         LoadTextureImage(L"app/resources/result/no_clear_time.png");
     retryLabel_ = LoadTextureImage(L"app/resources/result/retry.png");
@@ -87,20 +67,10 @@ void BattleResultScene::Initialize(const SceneContext &ctx) {
             LoadTextureImage(L"app/resources/result/char_" +
                              std::to_wstring(i) + L".png");
     }
-    for (int i = 0; i < kMaxRanking; ++i) {
-        rankImages_[static_cast<size_t>(i)] =
-            LoadTextureImage(L"app/resources/result/rank_" +
-                             std::to_wstring(i + 1) + L".png");
-    }
     colonImage_ = LoadTextureImage(L"app/resources/result/char_colon.png");
     dotImage_ = LoadTextureImage(L"app/resources/result/char_dot.png");
     dashImage_ = LoadTextureImage(L"app/resources/result/char_dash.png");
     secondImage_ = LoadTextureImage(L"app/resources/result/char_s.png");
-
-    LoadRanking();
-    if (resultKind_ == ResultKind::Clear) {
-        RegisterClearTime();
-    }
 }
 
 void BattleResultScene::Update() {
@@ -118,8 +88,7 @@ void BattleResultScene::Update() {
         (input->IsGamepadConnected() &&
          input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_A));
     if (retry) {
-        sceneManager_->ChangeScene(std::make_unique<GameScene>(
-            GameScene::RunMode::Play, inputCalibration_));
+        sceneManager_->ChangeScene(std::make_unique<GameScene>(inputCalibration_));
         return;
     }
 
@@ -136,8 +105,8 @@ void BattleResultScene::UpdateHandResultInput(float deltaTime) {
     handController_.Update(deltaTime);
 
     const float speed =
-        (std::max)(handController_.GetRawMotionSpeed(0),
-                   handController_.GetRawMotionSpeed(1));
+        (std::max)(handController_.GetMotionSpeed(0),
+                   handController_.GetMotionSpeed(1));
     if (handSwingArmed_ && speed >= kHandSwingStartSpeed) {
         ++handSwingCount_;
         handSwingArmed_ = false;
@@ -150,8 +119,7 @@ void BattleResultScene::UpdateHandResultInput(float deltaTime) {
     }
 
     if (handSwingCount_ >= kRequiredHandSwings) {
-        sceneManager_->ChangeScene(std::make_unique<GameScene>(
-            GameScene::RunMode::Play, inputCalibration_));
+        sceneManager_->ChangeScene(std::make_unique<GameScene>(inputCalibration_));
         return;
     }
 
@@ -187,49 +155,6 @@ BattleResultScene::LoadTextureImage(const std::wstring &path) {
     return image;
 }
 
-void BattleResultScene::LoadRanking() {
-    ranking_.clear();
-    std::ifstream file(RankingPathForControl(inputCalibration_.controlType));
-    float value = 0.0f;
-    while (file >> value) {
-        if (value > 0.0f) {
-            ranking_.push_back(value);
-        }
-    }
-    std::sort(ranking_.begin(), ranking_.end());
-    if (ranking_.size() > static_cast<size_t>(kMaxRanking)) {
-        ranking_.resize(kMaxRanking);
-    }
-}
-
-void BattleResultScene::SaveRanking() const {
-    std::filesystem::create_directories("app/resources/result");
-    std::ofstream file(RankingPathForControl(inputCalibration_.controlType),
-                       std::ios::trunc);
-    file << std::fixed << std::setprecision(3);
-    for (float value : ranking_) {
-        file << value << '\n';
-    }
-}
-
-void BattleResultScene::RegisterClearTime() {
-    if (registered_) {
-        return;
-    }
-    registered_ = true;
-    ranking_.push_back(clearTime_);
-    std::sort(ranking_.begin(), ranking_.end());
-    const auto it = std::find(ranking_.begin(), ranking_.end(), clearTime_);
-    if (it != ranking_.end()) {
-        newRecordIndex_ = static_cast<int>(std::distance(ranking_.begin(), it));
-    }
-    if (ranking_.size() > static_cast<size_t>(kMaxRanking)) {
-        ranking_.resize(kMaxRanking);
-    }
-    newRecord_ = newRecordIndex_ >= 0 && newRecordIndex_ < kMaxRanking;
-    SaveRanking();
-}
-
 void BattleResultScene::DrawBackground(float screenWidth, float screenHeight) {
     const float pulse = 0.5f + 0.5f * std::sin(sceneTime_ * 2.2f);
     const XMFLOAT4 base =
@@ -252,31 +177,6 @@ void BattleResultScene::DrawClear(float screenWidth, float screenHeight) {
     DrawImage(clearTimeLabel_, cx - clearTimeLabel_.width * 0.82f * 0.5f,
               screenHeight * 0.32f, 0.82f);
     DrawTextLine(FormatTime(clearTime_), cx, screenHeight * 0.40f, 1.15f);
-
-    if (newRecord_) {
-        DrawImage(newRecordLabel_, cx - newRecordLabel_.width * 0.80f * 0.5f,
-                  screenHeight * 0.505f, 0.80f,
-                  0.74f + 0.26f * SmoothStep(0.5f + 0.5f *
-                                             std::sin(sceneTime_ * 7.0f)));
-    }
-
-    DrawImage(rankingLabel_, screenWidth * 0.26f, screenHeight * 0.60f, 0.72f);
-    const float rowY = screenHeight * 0.66f;
-    for (int i = 0; i < kMaxRanking; ++i) {
-        const float y = rowY + static_cast<float>(i) * 42.0f;
-        const float alpha =
-            i == newRecordIndex_ ? 0.75f + 0.25f * std::sin(sceneTime_ * 8.0f)
-                                 : 1.0f;
-        DrawImage(rankImages_[static_cast<size_t>(i)], screenWidth * 0.38f, y,
-                  0.70f, alpha);
-        if (i < static_cast<int>(ranking_.size())) {
-            DrawTextLine(FormatTime(ranking_[static_cast<size_t>(i)]),
-                         screenWidth * 0.60f, y - 2.0f, 0.72f, alpha);
-        } else {
-            DrawTextLine("--:--.--s", screenWidth * 0.60f, y - 2.0f, 0.72f,
-                         0.45f);
-        }
-    }
 
     DrawImage(retryLabel_, screenWidth * 0.30f, screenHeight * 0.90f, 0.78f);
     DrawImage(menuLabel_, screenWidth * 0.58f, screenHeight * 0.90f, 0.78f);

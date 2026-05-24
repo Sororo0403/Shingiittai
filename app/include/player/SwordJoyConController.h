@@ -12,18 +12,11 @@ class SwordJoyConController {
     bool IsActive(const JoyCon *joyCon) const;
 
     float GetAngularVelocity() const { return angularVelocity_; }
-    bool GetIsGuard() const { return state_.isGuard; }
-    bool GetCounter() const { return state_.isCounter; }
-    const DirectX::XMFLOAT4 &GetOrientation() { return state_.orientation; }
     SwordPose GetPose() const;
     void ResetTracking(JoyCon *joyCon);
 
-    void SetCounter(bool isCounter) { state_.isCounter = isCounter; }
-
   private:
     void UpdateOrientation(JoyCon *joyCon, float dt);
-    void UpdateGuard(JoyCon *joyCon);
-    void UpdateCounter(JoyCon *joyCon);
     void UpdateSlash(float dt);
     void UpdateSlashDirFromOrientation();
 

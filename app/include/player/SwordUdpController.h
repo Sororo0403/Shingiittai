@@ -19,9 +19,6 @@ class SwordUdpController {
     bool IsActive(size_t handIndex = 0) const;
     SwordPose GetPose(size_t handIndex = 0) const;
     float GetMotionSpeed(size_t handIndex = 0) const;
-    float GetRawMotionSpeed(size_t handIndex = 0) const;
-    bool GetHandCenter(size_t handIndex, float &x, float &y) const;
-    bool HasRecentPacket() const;
     void SetCalibration(const SwordInputCalibration &calibration);
 
   private:

@@ -101,6 +101,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\scene\CameraPreviewReceiver.cpp" />
     <ClCompile Include="src\player\SwordSlashArcRenderer.cpp" />
     <ClCompile Include="src\player\SwordTrailRenderer.cpp" />
     <ClCompile Include="src\scene\BattleResultScene.cpp" />
@@ -124,8 +125,6 @@
     <ClCompile Include="src\scene\GameSceneCamera.cpp" />
     <ClCompile Include="src\scene\GameSceneCombat.cpp" />
     <ClCompile Include="src\scene\GameSceneLighting.cpp" />
-    <ClCompile Include="src\scene\ModeSelectScene.cpp" />
-    <ClCompile Include="src\scene\SettingsScene.cpp" />
     <ClCompile Include="src\scene\TitleScene.cpp" />
     <ClCompile Include="src\scene\TipScene.cpp" />
     <ClCompile Include="src\scene\WeaponSelectScene.cpp" />
@@ -136,6 +135,7 @@
     <ClCompile Include="src\player\SwordUdpController.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\scene\CameraPreviewReceiver.h" />
     <ClInclude Include="include\player\SwordSlashArcRenderer.h" />
     <ClInclude Include="include\player\SwordTrailRenderer.h" />
     <ClInclude Include="include\player\InputControlType.h" />
@@ -154,8 +154,6 @@
     <ClInclude Include="include\enemy\Enemy.h" />
     <ClInclude Include="include\scene\CombatFeedbackDirector.h" />
     <ClInclude Include="include\scene\GameScene.h" />
-    <ClInclude Include="include\scene\ModeSelectScene.h" />
-    <ClInclude Include="include\scene\SettingsScene.h" />
     <ClInclude Include="include\scene\TitleScene.h" />
     <ClInclude Include="include\scene\TipScene.h" />
     <ClInclude Include="include\scene\WeaponSelectScene.h" />
@@ -183,17 +181,6 @@
     <None Include="resources\models\player\sword.glb" />
     <None Include="resources\select\weapon_select_bg.png" />
     <None Include="resources\title\press_any_button.png" />
-    <None Include="resources\title\title_logo.png" />
-    <None Include="resources\menu\back.png" />
-    <None Include="resources\menu\game_start.png" />
-    <None Include="resources\menu\game_start_help.png" />
-    <None Include="resources\menu\menu_controls.png" />
-    <None Include="resources\menu\mode_select_title.png" />
-    <None Include="resources\menu\settings.png" />
-    <None Include="resources\menu\settings_controls.png" />
-    <None Include="resources\menu\settings_help.png" />
-    <None Include="resources\menu\settings_title.png" />
-    <None Include="resources\menu\volume.png" />
     <None Include="resources\text\input_hand.png" />
     <None Include="resources\text\input_joycon.png" />
     <None Include="resources\text\input_kbm.png" />
@@ -223,7 +210,6 @@
       <AppResource Include="$(ProjectDir)resources\**\*" />
       <EngineResource Include="$(ProjectDir)..\engine\resources\**\*" />
       <HandTrackingScript Include="$(SolutionDir)tools\hand_tracking\hand_udp_sender.py" />
-      <HandTrackingScript Include="$(SolutionDir)tools\hand_tracking\start-hand-sim.ps1" />
       <HandTrackingScript Include="$(SolutionDir)tools\hand_tracking\build-hand-udp-exe.ps1" />
       <HandTrackingScript Include="$(SolutionDir)tools\hand_tracking\requirements-hand-udp.txt" />
       <HandTrackingScript Include="$(SolutionDir)tools\hand_tracking\setup-hand-udp.ps1" />

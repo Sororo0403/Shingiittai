@@ -6,7 +6,6 @@
 #include <array>
 #include <cstdint>
 #include <string>
-#include <vector>
 
 class BattleResultScene : public BaseScene {
   public:
@@ -31,9 +30,6 @@ class BattleResultScene : public BaseScene {
     };
 
     Image LoadTextureImage(const std::wstring &path);
-    void LoadRanking();
-    void SaveRanking() const;
-    void RegisterClearTime();
     void UpdateHandResultInput(float deltaTime);
     void DrawBackground(float screenWidth, float screenHeight);
     void DrawClear(float screenWidth, float screenHeight);
@@ -50,8 +46,6 @@ class BattleResultScene : public BaseScene {
     std::string FormatTime(float seconds) const;
 
   private:
-    static constexpr int kMaxRanking = 5;
-
     ResultKind resultKind_ = ResultKind::GameOver;
     SwordInputCalibration inputCalibration_{};
     SwordUdpController handController_;
@@ -60,21 +54,14 @@ class BattleResultScene : public BaseScene {
     float handIdleTimer_ = 0.0f;
     int handSwingCount_ = 0;
     bool handSwingArmed_ = true;
-    bool registered_ = false;
-    bool newRecord_ = false;
-    int newRecordIndex_ = -1;
-    std::vector<float> ranking_;
 
     Image clearTitle_{};
     Image gameOverTitle_{};
     Image clearTimeLabel_{};
-    Image rankingLabel_{};
-    Image newRecordLabel_{};
     Image noClearTimeLabel_{};
     Image retryLabel_{};
     Image menuLabel_{};
     std::array<Image, 10> digitImages_{};
-    std::array<Image, kMaxRanking> rankImages_{};
     Image colonImage_{};
     Image dotImage_{};
     Image dashImage_{};

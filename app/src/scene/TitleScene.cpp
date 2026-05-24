@@ -1,7 +1,6 @@
 #include "TitleScene.h"
 #include "AppSceneServices.h"
 #include "DirectXCommon.h"
-#include "GameScene.h"
 #include "Input.h"
 #include "PostProcessSystem.h"
 #include "SceneManager.h"
@@ -12,7 +11,6 @@
 #include <Xinput.h>
 #include <algorithm>
 #include <cmath>
-#include <memory>
 #include <string>
 
 using namespace DirectX;
@@ -41,17 +39,10 @@ void TitleScene::Initialize(const SceneContext &ctx) {
     pressAnyButtonImage_ =
         LoadTitleImage(L"app/resources/title/press_any_button.png");
 
-    demoScene_ = std::make_unique<GameScene>(GameScene::RunMode::TitleDemo);
-    demoScene_->SetSceneManager(sceneManager_);
-    demoScene_->Initialize(ctx);
 }
 
 void TitleScene::Update() {
     sceneTime_ += ctx_->frame.deltaTime;
-
-    if (demoScene_) {
-        demoScene_->Update();
-    }
 
     if (startRequested_) {
         fadeTimer_ += ctx_->frame.deltaTime;
@@ -72,9 +63,16 @@ void TitleScene::Update() {
 }
 
 void TitleScene::Draw() {
-    if (demoScene_) {
-        demoScene_->Draw();
-    }
+    const float w = static_cast<float>(ctx_->systems.winApp->GetWidth());
+    const float h = static_cast<float>(ctx_->systems.winApp->GetHeight());
+
+    ctx_->rendering.sprite->PreDraw();
+    DrawRect(0.0f, 0.0f, w, h, MakeColor(0.015f, 0.018f, 0.024f, 1.0f));
+    DrawRect(0.0f, h * 0.62f, w, h * 0.38f,
+             MakeColor(0.040f, 0.038f, 0.030f, 1.0f));
+    DrawRect(0.0f, h * 0.62f, w, 5.0f,
+             MakeColor(1.0f, 0.80f, 0.10f, 0.88f));
+    ctx_->rendering.sprite->PostDraw();
 }
 
 void TitleScene::DrawTransparent() {

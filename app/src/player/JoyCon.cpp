@@ -127,10 +127,6 @@ void JoyCon::SetBaseOrientation() {
     hasBaseOrientation_ = true;
 }
 
-bool JoyCon::IsButtonPress(int buttonMask) const {
-    return (buttonsNow_ & buttonMask) != 0;
-}
-
 bool JoyCon::IsButtonTrigger(int buttonMask) const {
     return (buttonsNow_ & buttonMask) && !(buttonsPrev_ & buttonMask);
 }

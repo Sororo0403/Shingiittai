@@ -12,16 +12,6 @@ void Enemy::Initialize(uint32_t modelId, uint32_t projectileModelId) {
     runtime_.stateTimer = -0.10f;
     runtime_.phaseTransitionActive = false;
     runtime_.phaseTransitionTimer = 0.0f;
-    runtime_.bladeClashUsedPhase2 = false;
-    runtime_.bladeClashUsedPhase3 = false;
-    runtime_.phase2BladeClashStandby = false;
-    runtime_.phase3GuardCounterActive = false;
-    runtime_.quickCounterOpeningUsed = false;
-    runtime_.phase2FeintImmediateGreen = false;
-    runtime_.phase2FeintBehindFollowup = false;
-    runtime_.phase3PhantomWarpCooldown = 0.0f;
-    ResetLaserActionState(true);
-
     tf_.position = {0.0f, 0.0f, 10.0f};
     tf_.scale = {1.0f, 1.0f, 1.0f};
     tf_.rotation = {0.0f, 0.0f, 0.0f, 1.0f};
@@ -50,10 +40,6 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
     runtime_.playerGuarding = playerObs.isGuarding;
     UpdateBossPhase();
     UpdateWarpTrails(deltaTime);
-    if (phase3PhantomWarpCooldown_ > 0.0f) {
-        phase3PhantomWarpCooldown_ =
-            (std::max)(0.0f, phase3PhantomWarpCooldown_ - deltaTime);
-    }
 
     if (counterRecoilTimer_ > 0.0f) {
         counterRecoilTimer_ -= deltaTime;
@@ -75,7 +61,6 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
         tf_.scale.z = 1.0f - 0.25f * t;
 
         UpdateWaves(deltaTime);
-        UpdateCageTrap(deltaTime);
         UpdateParts();
 
         if (deathTimer_ >= deathDuration_) {
@@ -90,7 +75,6 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
 
         UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_ * 0.35f);
         UpdateWaves(deltaTime);
-        UpdateCageTrap(deltaTime);
         UpdateParts();
 
         if (phaseTransitionTimer_ >= phaseTransitionDuration_) {
@@ -98,11 +82,6 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
             phaseTransitionTimer_ = 0.0f;
             SetIsPhaseChanging(false);
             stateTimer_ = 0.0f;
-            if (phase_ == BossPhase::Phase2 && !bladeClashUsedPhase2_) {
-                BeginAction(ActionKind::BladeClash, ActionStep::Charge);
-                MarkPhaseBladeClashUsed();
-                phase2BladeClashStandby_ = true;
-            }
         }
         return;
     }
@@ -145,8 +124,6 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
     stateTimer_ += deltaTime;
     isAttackActive_ = false;
 
-    UpdateCounterAdaptation(deltaTime);
-
     if (hitReactionTimer_ > 0.0f) {
         stateTimer_ -= deltaTime;
         if (stateTimer_ < 0.0f) {
@@ -159,7 +136,6 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
         }
 
         UpdateWaves(deltaTime);
-        UpdateCageTrap(deltaTime);
         ClampToArena();
         UpdateParts();
         return;
@@ -171,7 +147,6 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
 
     UpdateByAction(deltaTime);
     UpdateWaves(deltaTime);
-    UpdateCageTrap(deltaTime);
     ClampToArena();
     UpdateParts();
 }
@@ -207,17 +182,8 @@ void Enemy::UpdateByAction(float deltaTime) {
     case ActionKind::Sweep:
         UpdateSweepByStep(deltaTime);
         break;
-    case ActionKind::BladeClash:
-        UpdateBladeClashByStep(deltaTime);
-        break;
     case ActionKind::Wave:
         UpdateWaveByStep(deltaTime);
-        break;
-    case ActionKind::Laser:
-        UpdateLaserByStep(deltaTime);
-        break;
-    case ActionKind::Cage:
-        UpdateCageByStep(deltaTime);
         break;
     case ActionKind::Warp:
         UpdateWarpByStep(deltaTime);
@@ -234,11 +200,6 @@ void Enemy::UpdateByAction(float deltaTime) {
 void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     ++runtime_.actionSerial;
     lastActionKind_ = kind;
-    const bool keepFeintFollowupLock =
-        kind == ActionKind::Warp || phase2FeintFollowupLocked_;
-    const bool keepFeintBehindFollowup =
-        phase2FeintBehindFollowup_ &&
-        (kind == ActionKind::Warp || phase2FeintFollowupLocked_);
 
     if (kind == ActionKind::Warp) {
         stagnantTimer_ = 0.0f;
@@ -247,12 +208,6 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     } else {
         ResetWarpContext();
     }
-    if (kind == ActionKind::Laser) {
-        ResetLaserActionState(false);
-    } else if (kind != ActionKind::Warp) {
-        ResetLaserActionState(true);
-    }
-
     action_.kind = kind;
     action_.id = MakeDefaultActionId(kind);
 
@@ -260,28 +215,10 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     hasTrackingLocked_ = false;
     holdConfigured_ = false;
     currentHoldDuration_ = 0.0f;
-    phase2FeintDecisionMade_ = false;
-    phase2DirectionFeintDecisionMade_ = false;
-    phase3GuardCounterActive_ = false;
-    phase3PhantomFinalLockDelay_ = 0.0f;
     isAttackActive_ = false;
     stateTimer_ = 0.0f;
     currentActionConnected_ = false;
-    currentActionGuarded_ = false;
-    cageTrapSpawned_ = false;
-    phase2FeintFollowupLocked_ = keepFeintFollowupLock;
-    phase2FeintBehindFollowup_ =
-        keepFeintFollowupLock && keepFeintBehindFollowup;
-    if (!phase2FeintFollowupLocked_) {
-        phase2FeintImmediateGreen_ = false;
-        phase2FeintBehindFollowup_ = false;
-    }
-    phase2BladeClashStandby_ = false;
-    dualCounterStage_ = 0;
-    dualCounterFirstHand_ = (std::rand() % 2) == 0;
-    dualCounterStageResolved_ = false;
     ResetPreAttackPresentationState();
-    ResetRecoveryBranchState();
 
     if (kind == ActionKind::Stalk) {
         stalkMoveDir_ = (std::rand() % 2 == 0) ? -1.0f : 1.0f;
@@ -297,56 +234,8 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     }
 }
 
-void Enemy::ForceBladeClash() {
-    if (deathFinished_ || isDying_) {
-        return;
-    }
-
-    UpdateFacingToPlayerWithSpeed(1.0f, 999.0f);
-    BeginAction(ActionKind::BladeClash, ActionStep::Active);
-    phase2BladeClashStandby_ = false;
-    LockCurrentFacing();
-    dualCounterStage_ = 0;
-    dualCounterStageResolved_ = false;
-    UpdateParts();
-}
-
-bool Enemy::CanBeginPhaseBladeClash() const {
-    if (phase_ == BossPhase::Phase2) {
-        return !bladeClashUsedPhase2_;
-    }
-    if (phase_ == BossPhase::Phase3) {
-        return !bladeClashUsedPhase3_;
-    }
-    return false;
-}
-
-void Enemy::MarkPhaseBladeClashUsed() {
-    if (phase_ == BossPhase::Phase2) {
-        bladeClashUsedPhase2_ = true;
-    } else if (phase_ == BossPhase::Phase3) {
-        bladeClashUsedPhase3_ = true;
-    }
-}
-
 bool Enemy::TryBeginPhase3GuardCounter() {
-    if (phase_ != BossPhase::Phase3 || deathFinished_ || isDying_ ||
-        hp_ <= 0.0f || phaseTransitionActive_ || counterRecoilTimer_ > 0.0f ||
-        action_.kind == ActionKind::BladeClash) {
-        return false;
-    }
-
-    const ActionKind counterKind =
-        (std::rand() % 2 == 0) ? ActionKind::Smash : ActionKind::Sweep;
-    hitReactionTimer_ = 0.0f;
-    counterRecoilTimer_ = 0.0f;
-    UpdateFacingToPlayerWithSpeed(1.0f, 999.0f);
-    BeginAction(counterKind, ActionStep::Charge);
-    action_.id = MakeDefaultActionId(counterKind);
-    phase3GuardCounterActive_ = true;
-    LockCurrentFacing();
-    UpdateParts();
-    return true;
+    return false;
 }
 
 bool Enemy::TryBeginTacticAction(ActionKind kind) {
@@ -356,16 +245,7 @@ bool Enemy::TryBeginTacticAction(ActionKind kind) {
         BeginAction(kind, ActionStep::Charge);
         return true;
     case ActionKind::Wave:
-    case ActionKind::Laser:
-    case ActionKind::Cage:
         return false;
-    case ActionKind::BladeClash:
-        if (!CanBeginPhaseBladeClash()) {
-            return false;
-        }
-        BeginAction(kind, ActionStep::Charge);
-        MarkPhaseBladeClashUsed();
-        return true;
     case ActionKind::Warp:
         if (!PrepareWarpContext()) {
             return false;
@@ -393,12 +273,6 @@ void Enemy::ChangeActionStep(ActionStep step) {
     isAttackActive_ = false;
     stateTimer_ = 0.0f;
 
-    if (step != ActionStep::Hold) {
-        holdBranchType_ = HoldBranchType::None;
-        holdBranchDecided_ = false;
-        holdBranchDecisionTime_ = 0.0f;
-    }
-
     if (step != ActionStep::Charge && step != ActionStep::Hold) {
         ResetPreAttackPresentationState();
     }
@@ -418,30 +292,10 @@ void Enemy::EndAttack() {
     isAttackActive_ = false;
     stateTimer_ = 0.0f;
     currentActionConnected_ = false;
-    currentActionGuarded_ = false;
-    phase2FeintFollowupLocked_ = false;
-    phase2FeintImmediateGreen_ = false;
-    phase2FeintBehindFollowup_ = false;
-    farLaserFollowupActive_ = false;
-    phase2FeintDecisionMade_ = false;
-    phase2DirectionFeintDecisionMade_ = false;
-    phase2BladeClashStandby_ = false;
-    phase3GuardCounterActive_ = false;
-    dualCounterStage_ = 0;
-    dualCounterFirstHand_ = true;
-    dualCounterStageResolved_ = false;
-    if (postCounterRhythmTimer_ <= 0.0f) {
-        counterMemory_.consecutiveSuccess = 0;
-    }
 
     ResetPreAttackPresentationState();
-    ResetRecoveryBranchState();
     stalkMoveDir_ = 1.0f;
     stalkForwardBias_ = 0.0f;
-}
-
-void Enemy::FinishCurrentAction() {
-    EndAttack();
 }
 
 void Enemy::UpdateBossPhase() {

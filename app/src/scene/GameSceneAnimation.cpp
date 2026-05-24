@@ -29,9 +29,6 @@ static constexpr float kBladeClashGuardPoseClipRatio = 0.18f;
 static constexpr float kBladeClashGuardOpenClipRatio = 0.025f;
 static constexpr float kBladeClashStartupClipStartRatio = 0.025f;
 static constexpr float kBladeClashStartupPoseTime = 0.32f;
-static constexpr float kCageCastClipStartRatio = 0.025f;
-static constexpr float kCageCastClipHoldRatio = 0.22f;
-static constexpr float kCageCastPoseTime = 0.62f;
 
 static std::string BossBoneName(const char *suffix) {
     return suffix ? (kBossBoneBase + suffix) : kBossBoneBase;
@@ -52,8 +49,6 @@ static float GetChargeStanceSettleTime(ActionKind kind) {
         return 0.42f;
     case ActionKind::BladeClash:
     case ActionKind::Wave:
-    case ActionKind::Laser:
-    case ActionKind::Cage:
         return 0.48f;
     default:
         return 0.42f;
@@ -217,29 +212,6 @@ static std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
         }
         break;
 
-    case ActionKind::Laser:
-        outLoop = false;
-        if (enemy.GetFarLaserFollowupKind() == ActionKind::Sweep &&
-            HasAnimation(model, kBossAnimSweep)) {
-            return kBossAnimSweep;
-        }
-        if (HasAnimation(model, kBossAnimSmash)) {
-            return kBossAnimSmash;
-        }
-        if (HasAnimation(model, kBossAnimSweep)) {
-            return kBossAnimSweep;
-        }
-        break;
-
-    case ActionKind::Cage:
-        outLoop = false;
-        if (HasAnimation(model, kBossAnimTeleport)) {
-            return kBossAnimTeleport;
-        }
-        if (HasAnimation(model, kBossAnimWave)) {
-            return kBossAnimWave;
-        }
-        break;
 
     case ActionKind::Stalk:
         if (HasAnimation(model, kBossAnimMove)) {
@@ -284,11 +256,7 @@ static std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
 }
 
 float GameScene::ComputeGameplayTimeScale() const {
-    const float feedbackScale = combatFeedback_.GetGameplayTimeScale();
-    const float focusScale =
-        1.0f - (1.0f - chargeWeakPointFocusTimeScale_) *
-                   chargeWeakPointFocusRatio_;
-    return (std::min)(feedbackScale, focusScale);
+    return combatFeedback_.GetGameplayTimeScale();
 }
 
 void GameScene::SetEnemyAnimationFrozen(bool frozen) {
@@ -418,8 +386,7 @@ void GameScene::UpdateBladeClashEnemyAnimation(float deltaTime) {
         !bladeClashActive_ && !bladeClashFinishActive_ &&
         enemy_.GetActionKind() == ActionKind::BladeClash &&
         enemy_.GetActionStep() == ActionStep::Charge;
-    const bool phase3GuardCounterAnim = enemy_.IsPhase3GuardCounterGuarding();
-    if (bladeClashStartupAnim || phase3GuardCounterAnim) {
+    if (bladeClashStartupAnim) {
         const float startupT = Smooth01(
             enemy_.GetActionTimerForPresentation() /
             kBladeClashStartupPoseTime);
@@ -536,70 +503,6 @@ void GameScene::UpdateBladeClashEnemyAnimation(float deltaTime) {
     }
     if (!ScrubAnimationClip(modelManager, enemyModelId_, enemyModel, clip,
                             clipRatio, false, enemyAnimationName_,
-                            enemyAnimationLoop_)) {
-        modelManager->UpdateAnimation(enemyModelId_, 0.0f);
-    }
-    enemyAnimationFrozen_ = false;
-}
-
-void GameScene::UpdateCageEnemyAnimation(float deltaTime) {
-    (void)deltaTime;
-    if (ctx_ == nullptr || ctx_->rendering.model == nullptr) {
-        return;
-    }
-
-    ModelManager *modelManager = ctx_->rendering.model;
-    Model *enemyModel = modelManager->GetModel(enemyModelId_);
-    if (enemyModel == nullptr || enemyModel->animations.empty() ||
-        enemy_.GetActionKind() != ActionKind::Cage) {
-        return;
-    }
-
-    const bool hasTeleport = HasAnimation(enemyModel, kBossAnimTeleport);
-    const bool hasWave = HasAnimation(enemyModel, kBossAnimWave);
-    const bool hasSweep = HasAnimation(enemyModel, kBossAnimSweep);
-    if (!hasTeleport && !hasWave && !hasSweep) {
-        return;
-    }
-
-    const ActionStep step = enemy_.GetActionStep();
-    const float timer = enemy_.GetActionTimerForPresentation();
-    const float castT = Smooth01(timer / kCageCastPoseTime);
-    std::string clip =
-        hasTeleport ? kBossAnimTeleport : hasWave ? kBossAnimWave : kBossAnimSweep;
-    float clipRatio = hasTeleport ? kCageCastClipStartRatio : 0.08f;
-
-    if (step == ActionStep::Charge) {
-        if (hasTeleport) {
-            clip = kBossAnimTeleport;
-            clipRatio = kCageCastClipStartRatio +
-                        (kCageCastClipHoldRatio - kCageCastClipStartRatio) *
-                            castT;
-        } else if (hasWave) {
-            clip = kBossAnimWave;
-            clipRatio = 0.10f + 0.26f * castT;
-        } else {
-            clip = kBossAnimSweep;
-            clipRatio = 0.12f + 0.20f * castT;
-        }
-    } else if (step == ActionStep::Active) {
-        const float snapT = Smooth01(timer / 0.18f);
-        if (hasTeleport) {
-            clip = kBossAnimTeleport;
-            clipRatio = kCageCastClipHoldRatio + 0.08f * snapT;
-        } else if (hasWave) {
-            clip = kBossAnimWave;
-            clipRatio = 0.36f + 0.12f * snapT;
-        } else {
-            clip = kBossAnimSweep;
-            clipRatio = 0.32f + 0.12f * snapT;
-        }
-    } else {
-        clipRatio = hasTeleport ? kCageCastClipHoldRatio : 0.42f;
-    }
-
-    if (!ScrubAnimationClip(modelManager, enemyModelId_, enemyModel, clip,
-                            Clamp01(clipRatio), false, enemyAnimationName_,
                             enemyAnimationLoop_)) {
         modelManager->UpdateAnimation(enemyModelId_, 0.0f);
     }
@@ -873,17 +776,6 @@ void GameScene::ApplyEnemyProceduralAnimation() {
         return;
     }
 
-    if (enemy_.IsPhase3GuardCounterGuarding()) {
-        const float guard =
-            Smooth01(actionTimer / (std::max)(0.001f, 0.22f));
-        PoseBoneTree(*enemyModel, chest, -0.05f * guard,
-                     0.006f * pulse * guard, 0.008f * pulse * guard);
-        poseArms(-0.22f * phaseScale * guard, 0.02f * pulse * guard,
-                 0.06f * guard);
-        ctx_->rendering.model->GetRenderer()->UpdateSkinClusters(*enemyModel);
-        return;
-    }
-
     switch (action) {
     case ActionKind::Smash:
         if (step == ActionStep::Charge || step == ActionStep::Hold) {
@@ -940,34 +832,6 @@ void GameScene::ApplyEnemyProceduralAnimation() {
         } else {
             PoseBoneTree(*enemyModel, chest, 0.08f, 0.0f, 0.0f);
             poseArms(0.28f * phaseScale, 0.03f, -0.05f);
-        }
-        break;
-
-    case ActionKind::Cage:
-        if (step == ActionStep::Charge) {
-            const float drawIn = Smooth01((actionTimer - 0.22f) / 0.48f);
-            const float sealPulse = (0.5f + 0.5f * pulse) * chargePose;
-            PoseBoneTree(*enemyModel, root, -0.03f * chargePose, 0.0f, 0.0f);
-            PoseBoneTree(*enemyModel, chest,
-                         -0.13f * phaseScale * chargePose,
-                         0.03f * slowPulse * chargePose,
-                         0.02f * pulse * chargePose);
-            PoseBoneTree(*enemyModel, head, -0.03f * chargePose,
-                         0.012f * pulse * chargePose, 0.0f);
-            poseArms((-0.28f - 0.10f * drawIn) * phaseScale * chargePose,
-                     (0.36f - 0.58f * drawIn) * phaseScale * chargePose,
-                     (0.30f + 0.22f * drawIn + 0.04f * sealPulse) *
-                         chargePose);
-        } else if (step == ActionStep::Active) {
-            const float snap = Smooth01(actionTimer / 0.18f);
-            PoseBoneTree(*enemyModel, root, -0.04f * snap, 0.0f, 0.0f);
-            PoseBoneTree(*enemyModel, chest, -0.16f * phaseScale * snap,
-                         0.0f, 0.05f * snap);
-            poseArms(-0.48f * phaseScale, -0.28f * phaseScale * snap,
-                     0.58f * snap);
-        } else {
-            PoseBoneTree(*enemyModel, chest, -0.04f, 0.0f, 0.0f);
-            poseArms(-0.10f, -0.08f, 0.16f);
         }
         break;
 

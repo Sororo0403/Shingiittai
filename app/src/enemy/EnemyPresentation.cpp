@@ -22,14 +22,6 @@ DirectX::XMFLOAT4 LerpColor(const DirectX::XMFLOAT4 &from,
             from.z + (to.z - from.z) * t, from.w + (to.w - from.w) * t};
 }
 
-float GetPhase3PhantomWarpMoveTime(bool finalWarp) {
-    return finalWarp ? 0.24f : 0.20f;
-}
-
-float GetPhase3PhantomWarpEndTime(bool finalWarp) {
-    return finalWarp ? 0.18f : 0.42f;
-}
-
 } // namespace
 
 void Enemy::UpdateParts() {
@@ -46,7 +38,7 @@ void Enemy::UpdateParts() {
     const bool suppressAttackBodyMotion =
         action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
         action_.kind == ActionKind::BladeClash ||
-        action_.kind == ActionKind::Wave || action_.kind == ActionKind::Cage;
+        action_.kind == ActionKind::Wave;
 
     bodyTf_ = tf_;
     bodyTf_.position = tf_.position;
@@ -97,7 +89,7 @@ void Enemy::UpdateParts() {
         action_.step == ActionStep::Charge &&
         (action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
          action_.kind == ActionKind::BladeClash ||
-         action_.kind == ActionKind::Wave || action_.kind == ActionKind::Cage);
+         action_.kind == ActionKind::Wave);
 
     if (tellActive_ || isTelegraphCharge) {
         const float chargePulse = tellActive_ ? (1.0f + 0.55f * pulse)
@@ -117,26 +109,6 @@ void Enemy::UpdateParts() {
         visualTf_.position.y += (isMeleeCharge ? 0.055f : 0.035f) * chargePulse;
         visualTf_.scale.x += (isMeleeCharge ? 0.050f : 0.026f) * chargePulse;
         visualTf_.scale.z += (isMeleeCharge ? 0.050f : 0.026f) * chargePulse;
-    }
-
-    if (fakeCommitActive_) {
-        rightHandTf_.position.y += 0.28f * pulse;
-        rightHandTf_.position.x += forwardX * 0.24f * pulse;
-        rightHandTf_.position.z += forwardZ * 0.24f * pulse;
-        rightHandTf_.scale.x += 0.10f * pulse;
-        rightHandTf_.scale.y += 0.10f * pulse;
-        rightHandTf_.scale.z += 0.10f * pulse;
-    }
-
-    if (freezeHoldActive_) {
-        bodyTf_.position.y -= 0.05f;
-        bodyTf_.scale.x += 0.06f;
-        bodyTf_.scale.z += 0.06f;
-        rightHandTf_.scale.x += 0.12f;
-        rightHandTf_.scale.y += 0.12f;
-        rightHandTf_.scale.z += 0.12f;
-        visualTf_.position.y -= 0.03f;
-        visualPitch -= 0.08f;
     }
 
     if (phase_ != BossPhase::Phase1) {
@@ -205,31 +177,9 @@ void Enemy::UpdateParts() {
         visualRoll += 0.08f * tremble + 0.12f * snap;
     }
 
-    if (!suppressActionPresentation && action_.kind == ActionKind::None &&
-        runtime_.isMargitComboATransition) {
-        bodyTf_.position.y -= 0.08f;
-        bodyTf_.position.x += rightX * 0.22f;
-        bodyTf_.position.z += rightZ * 0.22f;
-        bodyTf_.scale.x += 0.12f;
-        bodyTf_.scale.z += 0.06f;
-
-        rightHandTf_.position.y += 1.10f + 0.12f * pulse;
-        rightHandTf_.position.x += rightX * 1.65f + (-forwardX) * 0.20f;
-        rightHandTf_.position.z += rightZ * 1.65f + (-forwardZ) * 0.20f;
-        rightHandTf_.scale.x += 0.12f;
-        rightHandTf_.scale.y += 0.12f;
-        rightHandTf_.scale.z += 0.12f;
-
-        leftHandTf_.position.x += (-rightX) * 0.60f + forwardX * 0.12f;
-        leftHandTf_.position.z += (-rightZ) * 0.60f + forwardZ * 0.12f;
-        leftHandTf_.position.y += 0.14f;
-    }
-
     if (!suppressActionPresentation && action_.kind == ActionKind::Smash) {
         if (action_.step == ActionStep::Charge || action_.step == ActionStep::Hold) {
-            const bool isDelayBait =
-                action_.step == ActionStep::Hold || fakeCommitActive_ ||
-                freezeHoldActive_;
+            const bool isDelayBait = action_.step == ActionStep::Hold;
             bodyTf_.position.y -= 0.28f + 0.08f * pulse;
             bodyTf_.scale.y += 0.24f;
             bodyTf_.scale.x += 0.16f + 0.06f * pulse;
@@ -284,9 +234,7 @@ void Enemy::UpdateParts() {
         }
     } else if (!suppressActionPresentation && action_.kind == ActionKind::Sweep) {
         if (action_.step == ActionStep::Charge || action_.step == ActionStep::Hold) {
-            const bool isWideTell =
-                action_.step == ActionStep::Hold || fakeCommitActive_ ||
-                freezeHoldActive_;
+            const bool isWideTell = action_.step == ActionStep::Hold;
             bodyTf_.position.y -= 0.24f + 0.06f * pulse;
             bodyTf_.position.x += rightX * (0.44f + 0.10f * pulse);
             bodyTf_.position.z += rightZ * (0.44f + 0.10f * pulse);
@@ -413,46 +361,9 @@ void Enemy::UpdateParts() {
             rightHandTf_.position.z += forwardZ * 0.4f;
             visualPitch += 0.06f;
         }
-    } else if (!suppressActionPresentation && action_.kind == ActionKind::Cage) {
-        if (action_.step == ActionStep::Charge) {
-            bodyTf_.position.y -= 0.10f + 0.05f * pulse;
-            bodyTf_.scale.x += 0.08f + 0.08f * pulse;
-            bodyTf_.scale.z += 0.08f + 0.08f * pulse;
-            leftHandTf_.position.y += 0.86f + 0.18f * pulse;
-            leftHandTf_.position.x += (-rightX) * 0.32f + forwardX * 0.28f;
-            leftHandTf_.position.z += (-rightZ) * 0.32f + forwardZ * 0.28f;
-            rightHandTf_.position.y += 0.94f + 0.20f * pulse;
-            rightHandTf_.position.x += rightX * 0.32f + forwardX * 0.28f;
-            rightHandTf_.position.z += rightZ * 0.32f + forwardZ * 0.28f;
-            leftHandTf_.scale.x += 0.16f + 0.10f * pulse;
-            leftHandTf_.scale.y += 0.16f + 0.10f * pulse;
-            leftHandTf_.scale.z += 0.16f + 0.10f * pulse;
-            rightHandTf_.scale.x += 0.16f + 0.10f * pulse;
-            rightHandTf_.scale.y += 0.16f + 0.10f * pulse;
-            rightHandTf_.scale.z += 0.16f + 0.10f * pulse;
-            visualTf_.position.y += 0.05f * pulse;
-            visualPitch += 0.18f;
-        } else if (action_.step == ActionStep::Active) {
-            leftHandTf_.position.y += 0.70f;
-            rightHandTf_.position.y += 0.70f;
-            leftHandTf_.position.x += (-rightX) * 0.52f;
-            leftHandTf_.position.z += (-rightZ) * 0.52f;
-            rightHandTf_.position.x += rightX * 0.52f;
-            rightHandTf_.position.z += rightZ * 0.52f;
-            bodyTf_.scale.x += 0.10f;
-            bodyTf_.scale.z += 0.10f;
-            visualTf_.position.y += 0.08f;
-        } else if (action_.step == ActionStep::Recovery) {
-            leftHandTf_.position.y += 0.22f;
-            rightHandTf_.position.y += 0.22f;
-            visualPitch += 0.05f;
-        }
     } else if (!suppressActionPresentation && action_.kind == ActionKind::Warp) {
         if (action_.step == ActionStep::Start) {
-            const float warpStartTime =
-                warp_.phase3PhantomChain
-                    ? (warp_.phase3PhantomFinal ? 0.13f : 0.11f)
-                    : config_.warp.startTime;
+            const float warpStartTime = config_.warp.startTime;
             const float startT =
                 Saturate(stateTimer_ / (std::max)(warpStartTime, 0.0001f));
             const float vanish = startT * startT;
@@ -493,10 +404,7 @@ void Enemy::UpdateParts() {
             visualRoll += shimmer * 0.18f;
 
         } else if (action_.step == ActionStep::Move) {
-            const float warpMoveTime =
-                warp_.phase3PhantomChain
-                    ? GetPhase3PhantomWarpMoveTime(warp_.phase3PhantomFinal)
-                    : config_.warp.moveTime;
+            const float warpMoveTime = config_.warp.moveTime;
             const float moveT =
                 Saturate(stateTimer_ / (std::max)(warpMoveTime, 0.0001f));
             const float streak = 1.0f - std::abs(moveT * 2.0f - 1.0f);
@@ -522,14 +430,8 @@ void Enemy::UpdateParts() {
             visualYaw += 0.85f * slowPulse;
 
         } else if (action_.step == ActionStep::End) {
-            const float warpEndTime =
-                warp_.phase3PhantomChain
-                    ? GetPhase3PhantomWarpEndTime(warp_.phase3PhantomFinal)
-                    : config_.warp.endTime;
-            const float warpArrivalTime =
-                warp_.phase3PhantomChain && !warp_.phase3PhantomFinal
-                    ? 0.14f
-                    : warpEndTime;
+            const float warpEndTime = config_.warp.endTime;
+            const float warpArrivalTime = warpEndTime;
             const float endT =
                 Saturate(stateTimer_ / (std::max)(warpArrivalTime, 0.0001f));
             const float arrival = 1.0f - (1.0f - endT) * (1.0f - endT);
@@ -667,11 +569,6 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
         actionIntensity = 0.045f + 0.015f * actionPulse;
         actionNoise = 0.08f;
         break;
-    case ActionKind::Cage:
-        actionTint = {0.42f, 0.96f, 0.88f, 0.18f};
-        actionIntensity = 0.052f + 0.020f * actionPulse;
-        actionNoise = 0.10f;
-        break;
     case ActionKind::Warp:
         actionTint = {0.72f, 0.58f, 0.42f, 0.18f};
         actionIntensity = 0.060f + 0.018f * actionPulse;
@@ -690,7 +587,7 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
         action_.step == ActionStep::Charge &&
         (action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
          action_.kind == ActionKind::BladeClash ||
-         action_.kind == ActionKind::Wave || action_.kind == ActionKind::Cage);
+         action_.kind == ActionKind::Wave);
     if (isTelegraphCharge) {
         actionTint = LerpColor(actionTint, {0.82f, 0.72f, 0.42f, 0.22f},
                                0.08f + 0.08f * actionPulse);
@@ -734,13 +631,7 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
         action_.kind == ActionKind::Warp && action_.step == ActionStep::Move;
     ModelDrawEffect warpEffect{};
 
-    const float phase3NonFinalEndVisibleTime = 0.16f;
-    const bool showNormalDuringPhase3WarpSettle =
-        action_.kind == ActionKind::Warp && action_.step == ActionStep::End &&
-        warp_.phase3PhantomChain && !warp_.phase3PhantomFinal &&
-        stateTimer_ >= phase3NonFinalEndVisibleTime;
-
-    if (action_.kind == ActionKind::Warp && !showNormalDuringPhase3WarpSettle) {
+    if (action_.kind == ActionKind::Warp) {
         warpEffect.enabled = true;
         warpEffect.additiveBlend = true;
         warpEffect.color = actionTint;
@@ -748,14 +639,6 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
         warpEffect.fresnelPower = 1.9f;
         warpEffect.noiseAmount = (action_.step == ActionStep::Start) ? 0.56f : 0.38f;
         warpEffect.time = stateTimer_;
-        if (warp_.phase3PhantomChain) {
-            warpEffect.color =
-                warp_.phase3PhantomFinal
-                    ? DirectX::XMFLOAT4{0.42f, 1.0f, 0.58f, 0.92f}
-                    : DirectX::XMFLOAT4{0.64f, 0.74f, 1.0f, 0.82f};
-            warpEffect.intensity += warp_.phase3PhantomFinal ? 0.44f : 0.30f;
-            warpEffect.noiseAmount += 0.16f;
-        }
 
         if (isHitFlashing) {
             warpEffect.color = LerpColor(warpEffect.color,
@@ -832,102 +715,6 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
             trailVisual.position.y += warpArrivalPreviewHeight_;
             drawEnemyVisual(trailVisual);
         }
-    }
-
-    modelManager->ClearDrawEffect();
-
-    if (cage_.isActive) {
-        const int barCount = (std::max)(6, cage_.barCount);
-        const float lifeRatio =
-            cage_.maxLifeTime > 0.0001f
-                ? Saturate(cage_.lifeTime / cage_.maxLifeTime)
-                : 0.0f;
-        const float breakRatio =
-            cage_.maxBreakValue > 0.0001f
-                ? Saturate(cage_.breakValue / cage_.maxBreakValue)
-                : 0.0f;
-        const float pulseWave =
-            0.5f + 0.5f * std::sin(runtime_.stateTimer * 13.5f);
-        const float seamPulse =
-            0.5f + 0.5f * std::sin(runtime_.stateTimer * 28.0f);
-        const float ringY[2] = {0.18f, cage_.height};
-        const float segmentLength =
-            (2.0f * 3.14159265f * cage_.radius) /
-            static_cast<float>(barCount);
-
-        auto drawCagePiece = [&](Transform tf, const DirectX::XMFLOAT4 &color,
-                                 float intensity, float noise) {
-            ModelDrawEffect cageEffect{};
-            cageEffect.enabled = true;
-            cageEffect.additiveBlend = true;
-            cageEffect.disableCulling = true;
-            cageEffect.color = color;
-            cageEffect.intensity = intensity;
-            cageEffect.fresnelPower = 1.18f;
-            cageEffect.noiseAmount = noise;
-            cageEffect.time = runtime_.stateTimer;
-            modelManager->SetDrawEffect(cageEffect);
-            modelManager->Draw(effectModelId, tf, camera);
-        };
-
-        for (int i = 0; i < barCount; ++i) {
-            const float angle =
-                (static_cast<float>(i) / static_cast<float>(barCount)) *
-                6.28318530f;
-            float angleDiff = NormalizeAngle(angle - cage_.seamAngle);
-            const bool isSeamBar = std::fabs(angleDiff) <= cage_.seamWindow;
-            const float x = cage_.center.x + std::sin(angle) * cage_.radius;
-            const float z = cage_.center.z + std::cos(angle) * cage_.radius;
-
-            Transform barTf = tf_;
-            barTf.position = {x, cage_.center.y + cage_.height * 0.50f, z};
-            barTf.scale =
-                isSeamBar
-                    ? DirectX::XMFLOAT3{0.12f, cage_.height * 0.70f, 0.12f}
-                    : DirectX::XMFLOAT3{0.075f, cage_.height * 0.58f, 0.075f};
-            DirectX::XMStoreFloat4(
-                &barTf.rotation,
-                DirectX::XMQuaternionRotationRollPitchYaw(0.0f, angle, 0.0f));
-            const DirectX::XMFLOAT4 barColor =
-                isSeamBar
-                    ? DirectX::XMFLOAT4{1.0f, 0.94f, 0.52f,
-                                        0.62f + 0.24f * seamPulse}
-                    : DirectX::XMFLOAT4{0.42f, 0.96f, 0.88f,
-                                        0.30f + 0.18f * pulseWave};
-            const float barIntensity =
-                (isSeamBar ? 1.12f + 0.38f * seamPulse : 0.54f) +
-                (1.0f - breakRatio) * 0.24f;
-            drawCagePiece(barTf, barColor, barIntensity, 0.18f);
-
-            for (float y : ringY) {
-                Transform ringTf = tf_;
-                ringTf.position = {x, cage_.center.y + y, z};
-                ringTf.scale =
-                    {0.065f, 0.052f, segmentLength * (isSeamBar ? 0.62f : 0.48f)};
-                DirectX::XMStoreFloat4(
-                    &ringTf.rotation,
-                    DirectX::XMQuaternionRotationRollPitchYaw(0.0f,
-                                                              angle + 1.57079633f,
-                                                              0.0f));
-                drawCagePiece(ringTf, barColor,
-                              isSeamBar ? 0.84f + 0.22f * seamPulse : 0.42f,
-                              0.16f);
-            }
-        }
-
-        Transform pulseRing = tf_;
-        pulseRing.position = cage_.center;
-        pulseRing.position.y += 0.08f;
-        const float pulseScale =
-            cage_.radius * (1.72f + 0.08f * pulseWave) *
-            (0.82f + 0.18f * lifeRatio);
-        pulseRing.scale = {pulseScale, 0.045f, pulseScale};
-        DirectX::XMStoreFloat4(
-            &pulseRing.rotation,
-            DirectX::XMQuaternionRotationRollPitchYaw(0.0f, runtime_.stateTimer,
-                                                      0.0f));
-        drawCagePiece(pulseRing, {0.36f, 0.95f, 0.92f, 0.26f},
-                      0.34f + 0.24f * pulseWave, 0.20f);
     }
 
     modelManager->ClearDrawEffect();

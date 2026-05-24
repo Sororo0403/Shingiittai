@@ -6,7 +6,4 @@ struct SwordPose {
     DirectX::XMFLOAT4 orientation{0, 0, 0, 1};
     bool isSlashMode = false;
     bool isGuard = false;
-    bool isCounter = false;
-    bool isMouse = false;
-    bool isJoyCon = false;
 };
