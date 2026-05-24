@@ -45,7 +45,6 @@ class GameScene : public BaseScene {
     void DrawBladeClashFinishBackdrop();
     void DrawEnemyFocusMarker();
     void DrawEnemyWeaponTrail();
-    void DrawChargeWeakPoint();
     void DrawChargeWeakPointTimeGauge();
     void DrawBladeClashGauge();
     void DrawBladeClashFinishFrame();
@@ -79,6 +78,8 @@ class GameScene : public BaseScene {
     void EmitCombatParticles(const CombatFeedbackEvent &event);
     void EmitEnemyActionParticles(ActionKind kind, ActionStep step);
     void EmitEnemyCueParticles(float deltaTime);
+    bool ShouldLockPlayerAtEnemyAttackFront(
+        const DirectX::XMFLOAT3 &playerPosition) const;
     bool IsChargeWeakPointFocusActive() const;
     void UpdateChargeWeakPointFocus(float deltaTime);
     PlayerCombatObservation BuildPlayerCombatObservation() const;
@@ -165,7 +166,6 @@ class GameScene : public BaseScene {
     uint32_t enemyWeaponTrailModelId_ = 0;
     uint32_t chargeWeakPointModelId_ = 0;
     uint32_t chargeWeakPointBackplateModelId_ = 0;
-    uint32_t chargeWeakPointSlashModelId_ = 0;
     uint32_t slashSoundId_ = 0;
     uint32_t enemyReleaseSoundId_ = 0;
     uint32_t hitSoundId_ = 0;
@@ -180,8 +180,6 @@ class GameScene : public BaseScene {
     float enemyWeaponTrailLastDrawTime_ = 0.0f;
     ActionKind enemyWeaponTrailLastKind_ = ActionKind::None;
     ActionStep enemyWeaponTrailLastStep_ = ActionStep::None;
-    float enemyCueParticleTimer_ = 0.0f;
-    float enemyWeakPointParticleTimer_ = 0.0f;
     float enemySwordParticleTimer_ = 0.0f;
     uint32_t arenaNoiseTextureId_ = 0;
     std::string enemyAnimationName_{};

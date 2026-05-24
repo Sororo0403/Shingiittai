@@ -28,6 +28,9 @@ using namespace DirectX;
 
 namespace {
 constexpr float kPi = 3.14159265f;
+constexpr float kEnemyAttackFrontLockMinDistance = 1.45f;
+constexpr float kEnemyAttackFrontLockMaxDistance = 3.35f;
+constexpr float kEnemyAttackFrontLockHalfWidth = 1.20f;
 constexpr float kBladeClashWinGuardBreakLead = 0.52f;
 constexpr float kBladeClashWinGuardBreakImpactTime = 0.24f;
 constexpr float kBladeClashWinActionSlow = 0.95f;
@@ -356,33 +359,6 @@ bool IsChargeStanceSettled(ActionKind kind, ActionStep step, float timer) {
     return timer >= GetChargeStanceSettleTime(kind);
 }
 
-SwordCounterAxis RequiredVisualCounterAxisForAction(ActionKind kind,
-                                                    ActionKind farFollowupKind) {
-    switch (kind) {
-    case ActionKind::Smash:
-        return SwordCounterAxis::Vertical;
-    case ActionKind::Sweep:
-    case ActionKind::BladeClash:
-        return SwordCounterAxis::Horizontal;
-    case ActionKind::Laser:
-        return farFollowupKind == ActionKind::Sweep ? SwordCounterAxis::Horizontal
-                                                    : SwordCounterAxis::Vertical;
-    default:
-        return SwordCounterAxis::None;
-    }
-}
-
-XMFLOAT3 CounterAxisParticleDirection(SwordCounterAxis axis) {
-    switch (axis) {
-    case SwordCounterAxis::Vertical:
-        return {0.0f, 1.0f, 0.0f};
-    case SwordCounterAxis::Horizontal:
-        return {1.0f, 0.0f, 0.0f};
-    default:
-        return {1.0f, 0.0f, 0.0f};
-    }
-}
-
 void ApplyWeatheredMetalMaterials(ModelManager *modelManager, uint32_t modelId,
                                   uint32_t rustTextureId,
                                   const std::vector<XMFLOAT4> &palette,
@@ -634,8 +610,6 @@ void GameScene::Initialize(const SceneContext &ctx) {
     chargeWeakPointModelId_ = gSharedBattleModels.chargeWeakPointModelId;
     chargeWeakPointBackplateModelId_ =
         gSharedBattleModels.chargeWeakPointBackplateModelId;
-    chargeWeakPointSlashModelId_ =
-        gSharedBattleModels.chargeWeakPointSlashModelId;
     sparkParticles_.Initialize(dx, ctx_->rendering.srv, texture, particleTextureId_, 2048);
     sparkParticles_.SetEmission(1, 1000.0f);
     sparkParticles_.SetEmitterRadius(0.08f);
@@ -772,8 +746,6 @@ void GameScene::Initialize(const SceneContext &ctx) {
     chargeWeakPointSlashCount_ = 0;
     previousChargeWeakPointSlashStates_.fill(false);
     previousSwordSoundStates_.fill(false);
-    enemyCueParticleTimer_ = 0.0f;
-    enemyWeakPointParticleTimer_ = 0.0f;
     enemySwordParticleTimer_ = 0.0f;
     handTrackingStartRequested_ = false;
     player_.SetCameraSwordSlashSuppressed(false);
@@ -1506,11 +1478,19 @@ void GameScene::Update() {
         const bool lockPlayerPositionForFarLaser =
             enemy_.ShouldLockPlayerForFarLaserSkill();
         const XMFLOAT3 farLaserLockedPlayerPos = player_.GetTransform().position;
+        const XMFLOAT3 playerPosBeforeMove = player_.GetTransform().position;
+        const bool lockPlayerAtEnemyFrontBeforeMove =
+            ShouldLockPlayerAtEnemyAttackFront(playerPosBeforeMove);
         player_.SetCameraSwordSlashSuppressed(false);
         player_.Update(input, playerDeltaTime, enemy_.GetTransform().position,
                        cameraYaw_, forceRangedReflectMove, baseDeltaTime,
                        suppressLookAt);
-        if (lockPlayerPositionForFarLaser) {
+        if (lockPlayerAtEnemyFrontBeforeMove) {
+            player_.LockPosition(playerPosBeforeMove);
+        } else if (ShouldLockPlayerAtEnemyAttackFront(
+                       player_.GetTransform().position)) {
+            player_.LockPosition(player_.GetTransform().position);
+        } else if (lockPlayerPositionForFarLaser) {
             player_.LockPosition(farLaserLockedPlayerPos);
         }
     }
@@ -2128,10 +2108,6 @@ void GameScene::EmitEnemyActionParticles(ActionKind kind, ActionStep step) {
 }
 
 void GameScene::EmitEnemyCueParticles(float deltaTime) {
-    enemyCueParticleTimer_ =
-        (std::max)(0.0f, enemyCueParticleTimer_ - deltaTime);
-    enemyWeakPointParticleTimer_ =
-        (std::max)(0.0f, enemyWeakPointParticleTimer_ - deltaTime);
     enemySwordParticleTimer_ =
         (std::max)(0.0f, enemySwordParticleTimer_ - deltaTime);
 
@@ -2139,195 +2115,13 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
         return;
     }
 
-    const ActionKind kind = enemy_.GetActionKind();
-    const ActionStep actionStep = enemy_.GetActionStep();
-    const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
-    const bool chargeDirectionVisible =
-        !chargeWeakPointBroken_ &&
-        enemy_.GetChargeWeakPointTimeLimitForPresentation() > 0.0f;
-
-    if (chargeDirectionVisible && enemyWeakPointParticleTimer_ <= 0.0f) {
-        const size_t directionIndex = static_cast<size_t>(std::clamp(
-            chargeWeakPointSlashCount_, 0,
-            static_cast<int>(chargeWeakPointRequiredDirections_.size() - 1)));
-        const XMFLOAT2 slashDir =
-            chargeWeakPointRequiredDirections_[directionIndex];
-        XMFLOAT3 cuePos = enemyPos;
-        const XMFLOAT3 cameraPos = camera_.GetPosition();
-        float toCameraX = cameraPos.x - enemyPos.x;
-        float toCameraZ = cameraPos.z - enemyPos.z;
-        float toCameraLen =
-            std::sqrt(toCameraX * toCameraX + toCameraZ * toCameraZ);
-        if (toCameraLen < 0.0001f) {
-            toCameraLen = 1.0f;
-        }
-        cuePos.x += (toCameraX / toCameraLen) * 0.84f;
-        cuePos.y += 1.64f;
-        cuePos.z += (toCameraZ / toCameraLen) * 0.84f;
-
-        const XMFLOAT4 cueColor{0.34f, 1.0f, 0.38f, 1.0f};
-        EmitParticleBurst(sparkParticles_, cuePos, 112, 1.46f,
-                                  AppParticleBurstStyle::SlashLine,
-                                  cueColor, {slashDir.x, slashDir.y, 0.0f},
-                                  1.06f);
-        enemyWeakPointParticleTimer_ = 0.085f;
-    }
-
-    constexpr float kReleaseCounterWindowDuration = 0.62f;
-    const float releaseAnticipation = enemy_.GetReleaseAnticipationRatio();
-    const bool dualCounterCueVisible =
-        kind == ActionKind::BladeClash && enemy_.IsBladeClashWindow();
-    const bool phase2BladeClashStandbyCueVisible =
-        kind == ActionKind::BladeClash && enemy_.IsPhase2BladeClashStandby();
-    const bool preReleaseCounterCueVisible =
-        !chargeDirectionVisible && actionStep != ActionStep::Active &&
-        releaseAnticipation > 0.0f;
-    const bool activeReleaseCounterCueVisible =
-        actionStep == ActionStep::Active &&
-        enemy_.GetActionTimerForPresentation() <=
-            kReleaseCounterWindowDuration;
-    const bool farLaserCueVisible =
-        kind == ActionKind::Laser &&
-        (actionStep == ActionStep::Charge || actionStep == ActionStep::Active);
-    const bool phase3GuardCounterCueVisible =
-        enemy_.IsPhase3GuardCounterActive() &&
-        (kind == ActionKind::Smash || kind == ActionKind::Sweep) &&
-        (actionStep == ActionStep::Charge ||
-         actionStep == ActionStep::Active);
-    const bool releaseCounterCueVisible =
-        dualCounterCueVisible || phase2BladeClashStandbyCueVisible ||
-        farLaserCueVisible ||
-        (!chargeWeakPointFailedThisAction_ &&
-         (kind == ActionKind::Smash || kind == ActionKind::Sweep) &&
-         (phase3GuardCounterCueVisible || preReleaseCounterCueVisible ||
-          activeReleaseCounterCueVisible));
-    const bool badSlashCueVisible =
-        (kind == ActionKind::Smash || kind == ActionKind::Sweep ||
-         kind == ActionKind::BladeClash || kind == ActionKind::Laser) &&
-        !chargeDirectionVisible && !releaseCounterCueVisible &&
-        (actionStep == ActionStep::Charge || actionStep == ActionStep::Hold ||
-         actionStep == ActionStep::Active);
-
-    if (dualCounterCueVisible && enemyCueParticleTimer_ <= 0.0f) {
-        const float yaw = enemy_.GetTelegraphYaw();
-        const XMFLOAT3 forward = {std::sinf(yaw), 0.12f, std::cosf(yaw)};
-        auto emitDualCue = [&](const XMFLOAT3 &basePos,
-                               const XMFLOAT4 &sparkColor,
-                               const XMFLOAT4 &flashColor) {
-            XMFLOAT3 cuePos = basePos;
-            cuePos.y += 0.42f;
-            EmitParticleBurst(sparkParticles_, cuePos, 28, 0.34f,
-                                      AppParticleBurstStyle::Sparks,
-                                      sparkColor, forward, 1.85f);
-            EmitParticleBurst(smokeParticles_, cuePos, 2, 0.30f,
-                                      AppParticleBurstStyle::Flash,
-                                      flashColor, forward, 0.28f);
-        };
-
-        const XMFLOAT3 cueBase = enemy_.GetBodyTransform().position;
-        emitDualCue(cueBase, {0.22f, 1.0f, 0.34f, 0.92f},
-                    {0.18f, 1.0f, 0.28f, 0.78f});
-        enemyCueParticleTimer_ = 0.130f;
-    } else if ((releaseCounterCueVisible || badSlashCueVisible) &&
-        enemyCueParticleTimer_ <= 0.0f) {
-        const float yaw = enemy_.GetTelegraphYaw();
-        const XMFLOAT3 forward = {std::sinf(yaw), 0.12f, std::cosf(yaw)};
-        XMFLOAT3 cuePos = enemyPos;
-        cuePos.x += forward.x * 1.18f;
-        cuePos.y += 1.28f;
-        cuePos.z += forward.z * 1.18f;
-        if (kind == ActionKind::BladeClash) {
-            cuePos = enemy_.GetBodyTransform().position;
-            cuePos.y += 0.42f;
-        }
-        const XMFLOAT4 cueColor =
-            releaseCounterCueVisible ? XMFLOAT4{0.22f, 1.0f, 0.34f, 0.92f}
-                                     : XMFLOAT4{1.0f, 0.02f, 0.12f, 0.98f};
-        const float cuePower =
-            dualCounterCueVisible
-                ? 1.0f
-                : (activeReleaseCounterCueVisible ||
-                   phase3GuardCounterCueVisible)
-                ? 1.0f
-                : std::clamp(0.64f + releaseAnticipation * 0.28f, 0.64f,
-                             0.92f);
-        const uint32_t sparkCount =
-            kind == ActionKind::BladeClash
-                ? 30u
-                : releaseCounterCueVisible
-                ? ((activeReleaseCounterCueVisible ||
-                    phase3GuardCounterCueVisible || dualCounterCueVisible)
-                       ? 72u
-                       : 52u)
-                : 76u;
-        const float sparkRadius =
-            kind == ActionKind::BladeClash
-                ? 0.34f
-                : releaseCounterCueVisible ? 0.90f * cuePower : 1.18f;
-        const float sparkSpeed =
-            kind == ActionKind::BladeClash
-                ? 1.65f
-                : releaseCounterCueVisible ? 4.15f * cuePower : 4.70f;
-        EmitParticleBurst(sparkParticles_, cuePos, sparkCount, sparkRadius,
-                                  AppParticleBurstStyle::Sparks,
-                                  cueColor, forward, sparkSpeed);
-        const bool showCounterAxisLine =
-            kind == ActionKind::Smash || kind == ActionKind::Sweep ||
-            kind == ActionKind::Laser || phase2BladeClashStandbyCueVisible;
-        if ((releaseCounterCueVisible || badSlashCueVisible) &&
-            showCounterAxisLine) {
-            const SwordCounterAxis cueAxis =
-                RequiredVisualCounterAxisForAction(
-                    kind, enemy_.GetFarLaserFollowupKind());
-            EmitParticleBurst(sparkParticles_, 
-                cuePos, releaseCounterCueVisible ? 104u : 116u,
-                releaseCounterCueVisible ? 1.26f : 1.34f,
-                AppParticleBurstStyle::SlashLine, cueColor,
-                CounterAxisParticleDirection(cueAxis), 0.96f);
-            if (badSlashCueVisible) {
-                EmitParticleBurst(sparkParticles_, 
-                    cuePos, 46u, 0.74f,
-                    AppParticleBurstStyle::SlashLine,
-                    {1.0f, 0.16f, 0.10f, 0.82f},
-                    CounterAxisParticleDirection(cueAxis), 0.58f);
-            }
-        }
-        const XMFLOAT4 flashColor =
-            releaseCounterCueVisible ? XMFLOAT4{0.18f, 1.0f, 0.28f, 0.78f}
-                                     : XMFLOAT4{1.0f, 0.04f, 0.10f, 0.88f};
-        EmitParticleBurst(smokeParticles_, cuePos,
-                                  kind == ActionKind::BladeClash
-                                      ? 2
-                                      :
-                                  releaseCounterCueVisible
-                                      ? ((activeReleaseCounterCueVisible ||
-                                          phase3GuardCounterCueVisible ||
-                                          dualCounterCueVisible)
-                                             ? 7
-                                             : 4)
-                                      : 5,
-                                  kind == ActionKind::BladeClash
-                                      ? 0.30f
-                                      :
-                                  releaseCounterCueVisible
-                                      ? ((activeReleaseCounterCueVisible ||
-                                          phase3GuardCounterCueVisible ||
-                                          dualCounterCueVisible)
-                                             ? 0.82f
-                                             : 0.62f)
-                                      : 0.70f,
-                                  AppParticleBurstStyle::Flash,
-                                  flashColor, forward, 0.58f);
-        enemyCueParticleTimer_ =
-            kind == ActionKind::BladeClash ? 0.160f
-                                     : releaseCounterCueVisible ? 0.110f : 0.125f;
-    }
-
     const bool drawEnemySwordAfterimages = false;
     if (!drawEnemySwordAfterimages) {
         return;
     }
 
+    const ActionKind kind = enemy_.GetActionKind();
+    const ActionStep actionStep = enemy_.GetActionStep();
     if (enemySwordParticleTimer_ > 0.0f || ctx_->rendering.model == nullptr) {
         return;
     }
@@ -2370,6 +2164,37 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
 bool GameScene::IsChargeWeakPointFocusActive() const {
     return !chargeWeakPointBroken_ &&
            enemy_.GetChargeWeakPointTimeLimitForPresentation() > 0.0f;
+}
+
+bool GameScene::ShouldLockPlayerAtEnemyAttackFront(
+    const XMFLOAT3 &playerPosition) const {
+    const ActionKind kind = enemy_.GetActionKind();
+    const ActionStep step = enemy_.GetActionStep();
+    const bool isFrontLockAction =
+        kind == ActionKind::Smash || kind == ActionKind::Sweep ||
+        kind == ActionKind::Laser || kind == ActionKind::BladeClash;
+    const bool isFrontLockStep = step == ActionStep::Charge ||
+                                 step == ActionStep::Hold ||
+                                 step == ActionStep::Active;
+    if (!isFrontLockAction || !isFrontLockStep) {
+        return false;
+    }
+
+    const XMFLOAT3 enemyPosition = enemy_.GetTransform().position;
+    const float toPlayerX = playerPosition.x - enemyPosition.x;
+    const float toPlayerZ = playerPosition.z - enemyPosition.z;
+    const float yaw = enemy_.GetTelegraphYaw();
+    const float forwardX = std::sinf(yaw);
+    const float forwardZ = std::cosf(yaw);
+    const float rightX = forwardZ;
+    const float rightZ = -forwardX;
+    const float forwardDistance = toPlayerX * forwardX + toPlayerZ * forwardZ;
+    const float lateralDistance = std::fabs(toPlayerX * rightX +
+                                            toPlayerZ * rightZ);
+
+    return forwardDistance >= kEnemyAttackFrontLockMinDistance &&
+           forwardDistance <= kEnemyAttackFrontLockMaxDistance &&
+           lateralDistance <= kEnemyAttackFrontLockHalfWidth;
 }
 
 void GameScene::UpdateChargeWeakPointFocus(float deltaTime) {
@@ -3650,9 +3475,6 @@ void GameScene::DrawEnemyWeaponTrail() {
     }
 
     ctx_->rendering.model->ClearDrawEffect();
-}
-
-void GameScene::DrawChargeWeakPoint() {
 }
 
 void GameScene::DrawBladeClashFinishBackdrop() {
