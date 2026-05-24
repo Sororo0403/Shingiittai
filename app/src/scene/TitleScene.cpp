@@ -19,6 +19,12 @@ using namespace DirectX;
 
 namespace {
 constexpr float kFadeDuration = 0.35f;
+
+XMFLOAT4 MakeColor(float r, float g, float b, float a = 1.0f) {
+    return {r, g, b, a};
+}
+
+float SmoothStep(float t) { return t * t * (3.0f - 2.0f * t); }
 } // namespace
 
 void TitleScene::Initialize(const SceneContext &ctx) {
@@ -38,7 +44,6 @@ void TitleScene::Initialize(const SceneContext &ctx) {
     demoScene_ = std::make_unique<GameScene>(GameScene::RunMode::TitleDemo);
     demoScene_->SetSceneManager(sceneManager_);
     demoScene_->Initialize(ctx);
-    ResetTitlePostProcess();
 }
 
 void TitleScene::Update() {
@@ -47,18 +52,13 @@ void TitleScene::Update() {
     if (demoScene_) {
         demoScene_->Update();
     }
-    ResetTitlePostProcess();
 
     if (startRequested_) {
         fadeTimer_ += ctx_->frame.deltaTime;
         if (fadeTimer_ >= kFadeDuration) {
             if (ctx_->rendering.postProcessSystem != nullptr) {
-                PostProcessProfile postProfile{};
-                postProfile.vignette.enabled = true;
-                postProfile.vignette.strength = 0.20f;
-                postProfile.vignette.scale = 11.0f;
-                postProfile.vignette.power = 1.15f;
-                ctx_->rendering.postProcessSystem->SetProfile(postProfile);
+                ctx_->rendering.postProcessSystem->SetProfile(
+                    PostProcessProfile{});
             }
             sceneManager_->ChangeScene(std::make_unique<WeaponSelectScene>());
         }
@@ -83,6 +83,8 @@ void TitleScene::DrawTransparent() {
 
     ctx_->rendering.sprite->PreDraw();
 
+    DrawRect(0.0f, 0.0f, w, h, MakeColor(0.0f, 0.0f, 0.0f, 0.42f));
+
     const float logoScale =
         std::clamp(w * 0.50f / logoImage_.width, 0.58f, 1.0f);
     const float logoX = (w - logoImage_.width * logoScale) * 0.5f;
@@ -98,6 +100,13 @@ void TitleScene::DrawTransparent() {
         0.58f + 0.32f * (0.5f + 0.5f * std::sinf(sceneTime_ * 4.2f));
     DrawImage(pressAnyButtonImage_, pressX, pressY, pressAlpha, pressScale);
 
+    if (startRequested_) {
+        const float fadeT =
+            std::clamp(fadeTimer_ / kFadeDuration, 0.0f, 1.0f);
+        DrawRect(0.0f, 0.0f, w, h,
+                 MakeColor(0.0f, 0.0f, 0.0f, SmoothStep(fadeT)));
+    }
+
     ctx_->rendering.sprite->PostDraw();
 }
 
@@ -108,6 +117,16 @@ TitleScene::Image TitleScene::LoadTitleImage(const std::wstring &path) {
     image.height =
         static_cast<float>(ctx_->rendering.texture->GetHeight(image.textureId));
     return image;
+}
+
+void TitleScene::DrawRect(float x, float y, float w, float h,
+                          const XMFLOAT4 &color) {
+    Sprite sprite{};
+    sprite.position = {x, y};
+    sprite.size = {w, h};
+    sprite.color = color;
+    sprite.textureId = 0;
+    ctx_->rendering.sprite->DrawSprite(sprite);
 }
 
 void TitleScene::DrawImage(const Image &image, float x, float y, float alpha) {
@@ -126,14 +145,6 @@ void TitleScene::DrawImage(const Image &image, float x, float y, float alpha,
     sprite.color = {1.0f, 1.0f, 1.0f, alpha};
     sprite.textureId = image.textureId;
     ctx_->rendering.sprite->DrawSprite(sprite);
-}
-
-void TitleScene::ResetTitlePostProcess() const {
-    if (ctx_ == nullptr || ctx_->rendering.postProcessSystem == nullptr) {
-        return;
-    }
-
-    ctx_->rendering.postProcessSystem->SetProfile(PostProcessProfile{});
 }
 
 bool TitleScene::IsAnyButtonTriggered(const Input &input) const {

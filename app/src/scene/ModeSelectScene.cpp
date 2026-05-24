@@ -184,12 +184,12 @@ bool ModeSelectScene::IsMouseOver(const ButtonRect &rect) const {
 
 void ModeSelectScene::DrawBackground(float screenWidth, float screenHeight) {
     DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
-             MakeColor(1.0f, 1.0f, 1.0f, 1.0f));
+             MakeColor(0.025f, 0.028f, 0.034f, 1.0f));
     const float helpH = (std::max)(58.0f, screenHeight * 0.085f);
     DrawRect(screenWidth * 0.11f, screenHeight * 0.22f, screenWidth * 0.52f,
-             2.0f, MakeColor(0.0f, 0.0f, 0.0f, 0.18f));
+             2.0f, MakeColor(1.0f, 0.82f, 0.02f, 0.28f));
     DrawRect(screenWidth * 0.53f, screenHeight * 0.72f, screenWidth * 0.24f,
-             2.0f, MakeColor(0.0f, 0.0f, 0.0f, 0.14f));
+             2.0f, MakeColor(1.0f, 0.82f, 0.02f, 0.18f));
     DrawRect(0.0f, screenHeight - helpH, screenWidth, helpH,
              MakeColor(0.0f, 0.0f, 0.0f, 1.0f));
 }
@@ -207,11 +207,11 @@ void ModeSelectScene::DrawHelp(float screenWidth, float screenHeight) {
 void ModeSelectScene::DrawButton(const ButtonRect &rect, const Image &label,
                                  bool selected) {
     DrawRect(rect.x, rect.y, rect.w, rect.h,
-             MakeColor(1.0f, 1.0f, 1.0f, 0.82f));
+             MakeColor(0.12f, 0.13f, 0.15f, selected ? 0.94f : 0.72f));
     DrawRect(rect.x, rect.y + rect.h - 2.0f, rect.w, 2.0f,
-             MakeColor(0.0f, 0.0f, 0.0f, selected ? 0.78f : 0.34f));
+             MakeColor(1.0f, 0.82f, 0.02f, selected ? 0.86f : 0.28f));
     DrawRect(rect.x + rect.w - 2.0f, rect.y, 2.0f, rect.h,
-             MakeColor(0.0f, 0.0f, 0.0f, selected ? 0.68f : 0.24f));
+             MakeColor(1.0f, 0.82f, 0.02f, selected ? 0.66f : 0.18f));
 
     const float labelScale =
         (std::min)(1.0f, (rect.w * 0.72f) / (std::max)(label.width, 1.0f));

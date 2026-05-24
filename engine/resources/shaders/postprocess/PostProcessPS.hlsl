@@ -104,6 +104,22 @@ float4 ApplyRandomEffect(float4 baseColor, float2 uv)
     return baseColor;
 }
 
+bool IsPostProcessBypass()
+{
+    return colorMode == 0 &&
+           filterMode == 0 &&
+           edgeMode == 0 &&
+           tonemapEnabled == 0 &&
+           bloomEnabled == 0 &&
+           noiseEnabled == 0 &&
+           specialMode == 0 &&
+           lensFlareEnabled == 0 &&
+           enableVignetting == 0 &&
+           randomMode == 0 &&
+           radialBlurStrength <= 0.0f &&
+           sceneDimStrength <= 0.0f;
+}
+
 float3 ApplyDissolve(float3 color, float2 uv)
 {
     float noise = NoiseHash(uv * dissolveScale + noiseTime * 0.17f);
@@ -217,6 +233,11 @@ float3 ApplyLensFlare(float3 color, float2 uv)
 
 float4 main(PostProcessVSOutput input) : SV_TARGET
 {
+    if (IsPostProcessBypass())
+    {
+        return renderTexture.Sample(textureSampler, input.uv);
+    }
+
     float4 outputColor = ApplyFilterEffect(renderTexture, textureSampler,
                                            input.uv, filterMode);
     outputColor = ApplyRadialBlur(input.uv, outputColor);

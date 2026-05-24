@@ -49,6 +49,7 @@ class GameScene : public BaseScene {
     void DrawChargeWeakPointTimeGauge();
     void DrawBladeClashGauge();
     void DrawBladeClashFinishFrame();
+    void DrawTitleDemoFlash();
     void DrawVictoryFlash();
     void DrawDefeatFlash();
     void DrawBattleIntroFlash();

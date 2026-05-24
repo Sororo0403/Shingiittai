@@ -421,12 +421,12 @@ void WeaponSelectScene::UpdateLighting() {
 
 void WeaponSelectScene::DrawBackground(float screenWidth, float screenHeight) {
     DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
-             MakeColor(0.96f, 0.97f, 0.98f, 1.0f));
+             MakeColor(0.025f, 0.028f, 0.034f, 1.0f));
     DrawImage(backgroundImage_, 0.0f, 0.0f,
               (std::max)(screenWidth / (std::max)(backgroundImage_.width, 1.0f),
                          screenHeight /
                              (std::max)(backgroundImage_.height, 1.0f)),
-              0.78f);
+              0.62f);
     DrawRect(0.0f, 0.0f, screenWidth, 96.0f,
              MakeColor(0.03f, 0.03f, 0.035f, 0.86f));
     DrawRect(0.0f, 88.0f, screenWidth, 6.0f,
@@ -443,10 +443,10 @@ void WeaponSelectScene::DrawCards(float, float) {
         const float pulse = pulseTimers_[i];
         const float lift = selected ? 10.0f : 0.0f;
         const XMFLOAT4 body =
-            available ? (selected ? MakeColor(0.98f, 0.985f, 0.99f, 0.92f)
-                                  : MakeColor(0.88f, 0.90f, 0.93f, 0.64f))
-                      : (selected ? MakeColor(0.38f, 0.39f, 0.41f, 0.82f)
-                                  : MakeColor(0.27f, 0.28f, 0.30f, 0.58f));
+            available ? (selected ? MakeColor(0.16f, 0.18f, 0.21f, 0.92f)
+                                  : MakeColor(0.10f, 0.12f, 0.15f, 0.70f))
+                      : (selected ? MakeColor(0.18f, 0.18f, 0.20f, 0.82f)
+                                  : MakeColor(0.10f, 0.10f, 0.12f, 0.58f));
         DrawRect(rect.x, rect.y - lift, rect.w, rect.h, body);
         DrawRect(rect.x, rect.y + rect.h - lift - 8.0f, rect.w, 8.0f,
                  available

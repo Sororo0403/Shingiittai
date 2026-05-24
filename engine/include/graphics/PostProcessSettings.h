@@ -53,7 +53,7 @@ struct PostProcessEdgeSettings {
 };
 
 struct PostProcessTonemapSettings {
-    bool enabled = true;
+    bool enabled = false;
     float exposure = 1.0f;
     float gamma = 2.2f;
 };
@@ -154,7 +154,7 @@ struct PostProcessConstants {
     float nearZ = 0.1f;
     float farZ = 100.0f;
     float grayscaleWeights[3]{0.2125f, 0.7154f, 0.0721f};
-    int32_t tonemapEnabled = 1;
+    int32_t tonemapEnabled = 0;
     float exposure = 1.0f;
     float gamma = 2.2f;
     int32_t bloomEnabled = 0;

@@ -54,7 +54,8 @@ void CombatFeedbackDirector::Reset() {
         profile.randomNoise.mode = PostProcessRandomMode::None;
         profile.randomNoise.strength = 0.0f;
         profile.sceneDim.strength = 0.0f;
-        profile.vignette.strength = baseVignetteStrength_;
+        profile.vignette.enabled = false;
+        profile.vignette.strength = 0.0f;
         postProcessSystem_->SetProfile(profile);
     }
 }
@@ -98,7 +99,11 @@ void CombatFeedbackDirector::Update(float deltaTime, float sceneTime) {
     profile.radialBlur.center[1] = 0.5f;
     profile.radialBlur.strength = radialBlurStrength_ * eased;
     profile.radialBlur.sampleCount = 18;
-    profile.vignette.strength = baseVignetteStrength_ + vignetteBoost_ * eased;
+    const float vignetteStrength = vignetteBoost_ * eased;
+    profile.vignette.enabled = vignetteStrength > 0.001f;
+    profile.vignette.strength = vignetteStrength;
+    profile.vignette.scale = 11.0f;
+    profile.vignette.power = 1.15f;
     profile.randomNoise.time = sceneTime;
     profile.randomNoise.scale = 320.0f;
     profile.noise.time = sceneTime;

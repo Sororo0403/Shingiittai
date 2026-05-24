@@ -80,21 +80,8 @@ void ApplyBattlePostProcess(const SceneContext *ctx, float radialBlurStrength,
     SetPostProcessProfile(ctx, profile);
 }
 
-void ResetBattlePostProcessTransient(const SceneContext *ctx,
-                                     float vignetteStrength,
-                                     float vignetteScale = 11.0f,
-                                     float vignettePower = 1.15f) {
-    ApplyBattlePostProcess(ctx, 0.0f, vignetteStrength, 0.0f, 0.48f, 20,
-                           vignetteScale, vignettePower);
-}
-
-void SetBattlePostProcessTransient(const SceneContext *ctx,
-                                   float radialBlurStrength,
-                                   float sceneDimStrength) {
-    PostProcessProfile profile = GetPostProcessProfile(ctx);
-    profile.radialBlur.strength = radialBlurStrength;
-    profile.sceneDim.strength = sceneDimStrength;
-    SetPostProcessProfile(ctx, profile);
+void ClearBattlePostProcess(const SceneContext *ctx) {
+    SetPostProcessProfile(ctx, PostProcessProfile{});
 }
 
 struct SharedBattleModels {
@@ -446,12 +433,12 @@ void ApplyRustedRobotMaterials(ModelManager *modelManager, uint32_t modelId,
         Material material = modelManager->GetMaterial(subMesh.materialId);
         material.enableTexture = 1;
         material.baseColorTextureId = rustTextureId;
-        material.color = {0.68f, 0.62f, 0.50f, 1.0f};
+        material.color = {0.35f, 0.33f, 0.28f, 1.0f};
         XMStoreFloat4x4(&material.uvTransform,
                         XMMatrixTranspose(XMMatrixIdentity()));
-        material.reflectionStrength = 0.085f;
-        material.reflectionFresnelStrength = 0.030f;
-        material.reflectionRoughness = 0.82f;
+        material.reflectionStrength = 0.045f;
+        material.reflectionFresnelStrength = 0.012f;
+        material.reflectionRoughness = 0.94f;
         material.enableDissolve = 0.0f;
         material.dissolveEdgeColor = {0.68f, 0.24f, 0.08f, 0.46f};
         modelManager->SetMaterial(subMesh.materialId, material);
@@ -465,12 +452,7 @@ GameScene::~GameScene() { CloseDebugPreviewSocket(); }
 void GameScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
     ctx_->rendering.dxCommon->ResetClearColor();
-    PostProcessProfile postProfile{};
-    postProfile.vignette.enabled = true;
-    postProfile.vignette.strength = 0.20f;
-    postProfile.vignette.scale = 11.0f;
-    postProfile.vignette.power = 1.15f;
-    ctx_->rendering.postProcessSystem->SetProfile(postProfile);
+    ctx_->rendering.postProcessSystem->SetProfile(PostProcessProfile{});
     combatFeedback_.Initialize(ctx_->rendering.postProcessSystem);
 
     float aspect = static_cast<float>(ctx_->systems.winApp->GetWidth()) /
@@ -1928,6 +1910,7 @@ void GameScene::Draw() {
     DrawVictoryFlash();
     DrawDefeatFlash();
     DrawBattleIntroFlash();
+    DrawTitleDemoFlash();
 }
 
 void GameScene::DispatchCombatFeedback(const CombatFeedbackEvent &event) {
@@ -2458,6 +2441,13 @@ void GameScene::UpdateChargeWeakPointFocus(float deltaTime) {
     const float focus = chargeWeakPointFocusRatio_;
     if (focus <= 0.001f) {
         PostProcessProfile profile = GetPostProcessProfile(ctx_);
+        const bool hasFeedbackPost =
+            profile.radialBlur.strength > 0.001f ||
+            profile.randomNoise.strength > 0.001f;
+        if (!hasFeedbackPost) {
+            profile.vignette.enabled = false;
+            profile.vignette.strength = 0.0f;
+        }
         profile.vignette.scale = 11.0f;
         profile.vignette.power = 1.15f;
         profile.sceneDim.strength = 0.0f;
@@ -2531,7 +2521,7 @@ void GameScene::UpdatePhaseTransitionCinematic(float deltaTime) {
     if (!enemy_.IsPhaseTransitionActive()) {
         phaseTransitionWasActive_ = false;
         phaseTransitionReleaseEmitted_ = false;
-        ResetBattlePostProcessTransient(ctx_, 0.24f);
+        ClearBattlePostProcess(ctx_);
     }
 }
 
@@ -2645,7 +2635,7 @@ void GameScene::UpdateBattleIntro(float deltaTime) {
         battleIntroActive_ = false;
         battleIntroTimer_ = battleIntroDuration_;
         ApplyEnemyIntroDissolve(1.0f);
-        ResetBattlePostProcessTransient(ctx_, 0.20f);
+        ClearBattlePostProcess(ctx_);
     }
 }
 
@@ -2838,7 +2828,7 @@ void GameScene::ResetTitleDemoShowcase() {
     titleDemoCounterTimer_ = 0.90f;
     titleDemoPhaseTimer_ = 0.0f;
     titleDemoPhase_ = 0;
-    ResetBattlePostProcessTransient(ctx_, 0.20f);
+    ClearBattlePostProcess(ctx_);
     SyncEnemyAnimation();
 }
 
@@ -2902,8 +2892,8 @@ void GameScene::UpdateDefeatSequence(float deltaTime) {
 
     const float postProcessRatio =
         std::clamp(defeatSequenceTimer_ / defeatSequenceDuration_, 0.0f, 1.0f);
-    SetBattlePostProcessTransient(ctx_, 0.040f * (1.0f - postProcessRatio),
-                                  0.18f + 0.22f * postProcessRatio);
+    ApplyBattlePostProcess(ctx_, 0.040f * (1.0f - postProcessRatio), 0.62f,
+                           0.18f + 0.22f * postProcessRatio, 0.54f, 22);
 
     if (!defeatImpactEmitted_ && defeatSequenceTimer_ >= 1.58f) {
         defeatImpactEmitted_ = true;
@@ -2921,7 +2911,7 @@ void GameScene::UpdateDefeatSequence(float deltaTime) {
     if (defeatSequenceTimer_ >= defeatSequenceDuration_) {
         defeatSequenceActive_ = false;
         player_.SetDefeatPoseRatio(0.0f);
-        SetBattlePostProcessTransient(ctx_, 0.0f, 0.0f);
+        ClearBattlePostProcess(ctx_);
         sceneManager_->ChangeScene(std::make_unique<BattleResultScene>(
             BattleResultScene::ResultKind::GameOver, battleElapsedTime_,
             inputCalibration_));
@@ -2936,7 +2926,8 @@ void GameScene::UpdateVictorySequence(float deltaTime) {
 
     const float stepped = std::floor(ratio * 14.0f) / 14.0f;
     const float blur = (1.0f - stepped) * 0.070f;
-    SetBattlePostProcessTransient(ctx_, blur, 0.10f + stepped * 0.18f);
+    ApplyBattlePostProcess(ctx_, blur, 0.58f, 0.10f + stepped * 0.18f,
+                           0.48f, 24);
 
     if (!victoryFinalExplosionEmitted_ && victorySequenceTimer_ >= 3.90f) {
         victoryFinalExplosionEmitted_ = true;
@@ -2960,7 +2951,7 @@ void GameScene::UpdateVictorySequence(float deltaTime) {
 
     if (victorySequenceTimer_ >= victorySequenceDuration_) {
         victorySequenceActive_ = false;
-        SetBattlePostProcessTransient(ctx_, 0.0f, 0.0f);
+        ClearBattlePostProcess(ctx_);
         sceneManager_->ChangeScene(std::make_unique<BattleResultScene>(
             BattleResultScene::ResultKind::Clear, victoryClearTime_,
             inputCalibration_));
@@ -3044,6 +3035,30 @@ void GameScene::DrawBladeClashFinishFrame() {
                    std::clamp(screenH * 0.005f, 4.0f, 7.0f),
                    {1.0f, 0.72f, 0.28f, 0.22f * flash * alpha});
     }
+    ctx_->rendering.sprite->PostDraw();
+}
+
+void GameScene::DrawTitleDemoFlash() {
+    if (runMode_ != RunMode::TitleDemo || titleDemoPhase_ != 1 ||
+        ctx_ == nullptr || ctx_->rendering.sprite == nullptr || ctx_->systems.winApp == nullptr) {
+        return;
+    }
+
+    const float flash =
+        std::clamp(1.0f - titleDemoPhaseTimer_ / 0.52f, 0.0f, 1.0f);
+    if (flash <= 0.01f) {
+        return;
+    }
+
+    Sprite sprite{};
+    sprite.textureId = 0;
+    sprite.position = {0.0f, 0.0f};
+    sprite.size = {static_cast<float>(ctx_->systems.winApp->GetWidth()),
+                   static_cast<float>(ctx_->systems.winApp->GetHeight())};
+    sprite.color = {1.0f, 1.0f, 1.0f, flash};
+
+    ctx_->rendering.sprite->PreDraw();
+    ctx_->rendering.sprite->DrawSprite(sprite);
     ctx_->rendering.sprite->PostDraw();
 }
 
