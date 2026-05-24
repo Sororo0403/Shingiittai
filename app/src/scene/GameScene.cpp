@@ -1,3 +1,5 @@
+#include <WinSock2.h>
+#include <WS2tcpip.h>
 #include "GameScene.h"
 #include "BattleResultScene.h"
 #include "DirectXCommon.h"
@@ -11,9 +13,12 @@
 #include "WinApp.h"
 #include "PostEffectRenderer.h"
 #include "SceneManager.h"
+#include <DirectXTex.h>
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <exception>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -31,6 +36,12 @@ constexpr float kBladeClashGuardBreakRecoilDistance = 0.72f;
 constexpr float kBladeClashGuardBreakDrop = 0.16f;
 constexpr float kBladeClashGuardBreakLift = 0.32f;
 constexpr float kBladeClashGuardBreakPose = 0.48f;
+constexpr uint16_t kPreviewPort = 5006;
+constexpr float kDebugPreviewStaleSeconds = 0.75f;
+
+SOCKET ToSocket(uintptr_t value) {
+    return static_cast<SOCKET>(value);
+}
 
 struct SharedBattleModels {
     bool initialized = false;
@@ -337,6 +348,8 @@ void ApplyRustedRobotMaterials(ModelManager *modelManager, uint32_t modelId,
 
 } // namespace
 
+GameScene::~GameScene() { CloseDebugPreviewSocket(); }
+
 void GameScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
     ctx_->dxCommon->ResetClearColor();
@@ -353,6 +366,17 @@ void GameScene::Initialize(const SceneContext &ctx) {
     camera_.SetMode(CameraMode::LookAt);
     camera_.UpdateMatrices();
     camera_.SetPerspectiveFovDeg(currentFovDeg_);
+
+    debugPreviewFrame_ = {};
+    debugPreviewFrame_.textureId = ctx_->texture->CreateDynamicTexture(
+        debugPreviewFrame_.width, debugPreviewFrame_.height);
+    debugPreviewFrame_.rgbaPixels.resize(
+        static_cast<size_t>(debugPreviewFrame_.width) *
+        static_cast<size_t>(debugPreviewFrame_.height) * 4u);
+    debugPreviewJpegBuffer_.clear();
+    debugPreviewChunkReceived_.clear();
+    debugPreviewFrameId_ = 0;
+    debugPreviewReceivedChunks_ = 0;
 
     DirectXCommon *dx = ctx_->dxCommon;
     ModelManager *model = ctx_->model;
@@ -550,8 +574,10 @@ void GameScene::Initialize(const SceneContext &ctx) {
     player_.Initialize(playerModel, swordModel);
     player_.SetInputCalibration(inputCalibration_);
     playerModelId_ = playerModel;
+    swordModelId_ = swordModel;
     enemy_.Initialize(enemyModel, bulletModel);
     enemyModelId_ = enemyModel;
+    enemyProjectileModelId_ = bulletModel;
     if (ctx_->sound != nullptr) {
         slashSoundId_ =
             ctx_->sound->Load(L"app/resources/sounds/slash_hero.wav");
@@ -611,6 +637,8 @@ void GameScene::Initialize(const SceneContext &ctx) {
     phaseTransitionLoopTimer_ = 0.0f;
     titleDemoTimer_ = 0.0f;
     titleDemoCounterTimer_ = 1.15f;
+    titleDemoPhaseTimer_ = 0.0f;
+    titleDemoPhase_ = 0;
     battleResultRequested_ = false;
     victorySequenceActive_ = false;
     victorySequenceTimer_ = 0.0f;
@@ -659,6 +687,14 @@ void GameScene::Initialize(const SceneContext &ctx) {
     enemyCueParticleTimer_ = 0.0f;
     enemyWeakPointParticleTimer_ = 0.0f;
     enemySwordParticleTimer_ = 0.0f;
+    handTrackingStartRequested_ = false;
+    player_.SetCameraSwordSlashSuppressed(false);
+    if (inputCalibration_.controlType == InputControlType::Hand) {
+        if (ctx_->requestHandTrackingStart != nullptr) {
+            ctx_->requestHandTrackingStart();
+            handTrackingStartRequested_ = true;
+        }
+    }
     hud_.Initialize(*ctx_);
     enemy_.FaceTargetImmediately(player_.GetTransform().position);
     ApplyEnemyIntroDissolve(0.0f);
@@ -667,6 +703,10 @@ void GameScene::Initialize(const SceneContext &ctx) {
 void GameScene::Update() {
     Input *input = ctx_->input;
     const float baseDeltaTime = ctx_->deltaTime;
+    if (runMode_ == RunMode::Play &&
+        inputCalibration_.controlType == InputControlType::Hand) {
+        UpdateDebugCameraPreview(baseDeltaTime);
+    }
     if (battleIntroActive_) {
         if (runMode_ == RunMode::TitleDemo) {
             player_.UpdateJoyConCalibrationInput(input, baseDeltaTime);
@@ -715,41 +755,6 @@ void GameScene::Update() {
     }
     phaseTransitionWasActive_ = false;
     phaseTransitionReleaseEmitted_ = false;
-
-    if (runMode_ == RunMode::Play && input != nullptr &&
-        input->IsKeyTrigger(DIK_F8) && !bladeClashActive_ &&
-        !bladeClashFinishActive_ && !counterCinematicActive_) {
-        if (enemy_.ForcePhase3PhantomWarpSkill()) {
-            chargeWeakPointActionKind_ = ActionKind::None;
-            chargeWeakPointActionSerial_ = 0;
-            failedChargeWeakPointActionKind_ = ActionKind::None;
-            failedChargeWeakPointActionSerial_ = 0;
-            chargeWeakPointBroken_ = false;
-            chargeWeakPointFailedThisAction_ = false;
-            chargeWeakPointSlashCount_ = 0;
-            previousChargeWeakPointSlashStates_.fill(false);
-            enemyRedPunishUncounterable_ = false;
-            SetEnemyAnimationFrozen(false);
-            SyncEnemyAnimation();
-        }
-    }
-    if (runMode_ == RunMode::Play && input != nullptr &&
-        input->IsKeyTrigger(DIK_F9) && !bladeClashActive_ &&
-        !bladeClashFinishActive_ && !counterCinematicActive_) {
-        if (enemy_.ForceFarLaserSkill()) {
-            chargeWeakPointActionKind_ = ActionKind::None;
-            chargeWeakPointActionSerial_ = 0;
-            failedChargeWeakPointActionKind_ = ActionKind::None;
-            failedChargeWeakPointActionSerial_ = 0;
-            chargeWeakPointBroken_ = false;
-            chargeWeakPointFailedThisAction_ = false;
-            chargeWeakPointSlashCount_ = 0;
-            previousChargeWeakPointSlashStates_.fill(false);
-            enemyRedPunishUncounterable_ = false;
-            SetEnemyAnimationFrozen(false);
-            SyncEnemyAnimation();
-        }
-    }
 
     combatFeedback_.Update(baseDeltaTime, sceneLightTime_);
     UpdateChargeWeakPointFocus(baseDeltaTime);
@@ -816,7 +821,7 @@ void GameScene::Update() {
             bladeClashFinishTimer_ >= 0.78f) {
             bladeClashFinishSkidEmitted_ = true;
             bladeClashFinishImpactEmitted_ = true;
-            constexpr float clashLossDamage = 25.0f;
+            // constexpr float clashLossDamage = 25.0f;
             XMFLOAT3 sweepCenter = player_.GetTransform().position;
             sweepCenter.y += 1.02f;
             explosionParticles_.EmitBurst(
@@ -840,8 +845,9 @@ void GameScene::Update() {
                 {0.42f, 0.31f, 0.24f, 0.44f},
                 {-bladeClashDirection_.x, 0.04f, -bladeClashDirection_.z},
                 0.62f);
-            const float appliedDamage =
-                player_.TakeDamage(clashLossDamage);
+            const float appliedDamage = player_.TakeDamage(0.0f);
+            // const float appliedDamage =
+            //     player_.TakeDamage(clashLossDamage);
             CombatFeedbackEvent lossFeedback{};
             if (appliedDamage > 0.0f) {
                 lossFeedback.type = CombatFeedbackEventType::PlayerDamaged;
@@ -1412,6 +1418,7 @@ void GameScene::Update() {
         const bool lockPlayerPositionForFarLaser =
             enemy_.ShouldLockPlayerForFarLaserSkill();
         const XMFLOAT3 farLaserLockedPlayerPos = player_.GetTransform().position;
+        player_.SetCameraSwordSlashSuppressed(false);
         player_.Update(input, playerDeltaTime, enemy_.GetTransform().position,
                        cameraYaw_, forceRangedReflectMove, baseDeltaTime,
                        suppressLookAt);
@@ -1515,6 +1522,7 @@ void GameScene::Update() {
     if (runMode_ == RunMode::TitleDemo) {
         UpdateTitleDemo(baseDeltaTime);
     } else {
+        player_.SetCameraSwordSlashSuppressed(false);
         UpdateCombat(gameplayDeltaTime);
     }
     if (enemy_.IsPhaseTransitionActive() && !phaseTransitionWasActive_) {
@@ -1549,6 +1557,242 @@ void GameScene::Update() {
     swordFlashParticles_.Update(baseDeltaTime);
 }
 
+void GameScene::UpdateDebugCameraPreview(float deltaTime) {
+    debugPreviewFrame_.staleTimer += deltaTime;
+    ReceiveDebugPreviewPackets();
+}
+
+bool GameScene::EnsureDebugPreviewSocket() {
+    if (debugPreviewSocketReady_) {
+        return true;
+    }
+
+    WSADATA wsaData{};
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        return false;
+    }
+
+    SOCKET udpSocket = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (udpSocket == INVALID_SOCKET) {
+        WSACleanup();
+        return false;
+    }
+
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl(INADDR_ANY);
+    address.sin_port = htons(kPreviewPort);
+    if (bind(udpSocket, reinterpret_cast<sockaddr *>(&address),
+             sizeof(address)) == SOCKET_ERROR) {
+        closesocket(udpSocket);
+        WSACleanup();
+        return false;
+    }
+
+    u_long nonBlocking = 1;
+    if (ioctlsocket(udpSocket, FIONBIO, &nonBlocking) == SOCKET_ERROR) {
+        closesocket(udpSocket);
+        WSACleanup();
+        return false;
+    }
+
+    debugPreviewSocket_ = static_cast<uintptr_t>(udpSocket);
+    debugPreviewSocketReady_ = true;
+    return true;
+}
+
+void GameScene::CloseDebugPreviewSocket() {
+    if (debugPreviewSocketReady_) {
+        closesocket(ToSocket(debugPreviewSocket_));
+        WSACleanup();
+    }
+    debugPreviewSocket_ = UINTPTR_MAX;
+    debugPreviewSocketReady_ = false;
+}
+
+void GameScene::ReceiveDebugPreviewPackets() {
+    if (!EnsureDebugPreviewSocket()) {
+        return;
+    }
+
+    std::array<uint8_t, 1600> buffer{};
+    for (;;) {
+        sockaddr_in from{};
+        int fromLength = sizeof(from);
+        const int bytes = recvfrom(ToSocket(debugPreviewSocket_),
+                                   reinterpret_cast<char *>(buffer.data()),
+                                   static_cast<int>(buffer.size()), 0,
+                                   reinterpret_cast<sockaddr *>(&from),
+                                   &fromLength);
+        if (bytes == SOCKET_ERROR) {
+            return;
+        }
+        HandleDebugPreviewPacket(buffer.data(), bytes);
+    }
+}
+
+void GameScene::HandleDebugPreviewPacket(const uint8_t *data, int bytes) {
+    const uint8_t *newline = static_cast<const uint8_t *>(
+        std::memchr(data, '\n', static_cast<size_t>(bytes)));
+    if (newline == nullptr) {
+        return;
+    }
+
+    const std::string header(reinterpret_cast<const char *>(data),
+                             reinterpret_cast<const char *>(newline));
+    std::istringstream stream(header);
+    std::string magic;
+    uint32_t frameId = 0;
+    size_t chunkIndex = 0;
+    size_t chunkCount = 0;
+    size_t totalSize = 0;
+    if (!(stream >> magic >> frameId >> chunkIndex >> chunkCount >> totalSize) ||
+        magic != "SGCAM" || chunkCount == 0 || chunkIndex >= chunkCount ||
+        totalSize == 0 || totalSize > 1024u * 1024u) {
+        return;
+    }
+
+    const uint8_t *payload = newline + 1;
+    const size_t payloadSize = static_cast<size_t>(data + bytes - payload);
+    const size_t offset = chunkIndex * 1150u;
+    if (offset >= totalSize || payloadSize > totalSize - offset) {
+        return;
+    }
+
+    if (frameId != debugPreviewFrameId_ ||
+        debugPreviewChunkReceived_.size() != chunkCount ||
+        debugPreviewJpegBuffer_.size() != totalSize) {
+        debugPreviewFrameId_ = frameId;
+        debugPreviewJpegBuffer_.assign(totalSize, 0u);
+        debugPreviewChunkReceived_.assign(chunkCount, false);
+        debugPreviewReceivedChunks_ = 0;
+    }
+
+    if (!debugPreviewChunkReceived_[chunkIndex]) {
+        std::memcpy(debugPreviewJpegBuffer_.data() + offset, payload,
+                    payloadSize);
+        debugPreviewChunkReceived_[chunkIndex] = true;
+        ++debugPreviewReceivedChunks_;
+    }
+
+    if (debugPreviewReceivedChunks_ == debugPreviewChunkReceived_.size()) {
+        DecodeDebugPreviewJpeg(debugPreviewJpegBuffer_);
+    }
+}
+
+void GameScene::DecodeDebugPreviewJpeg(
+    const std::vector<uint8_t> &jpegData) {
+    if (jpegData.empty()) {
+        return;
+    }
+
+    DirectX::ScratchImage scratch;
+    DirectX::TexMetadata metadata{};
+    HRESULT hr = DirectX::LoadFromWICMemory(
+        jpegData.data(), jpegData.size(), DirectX::WIC_FLAGS_FORCE_RGB,
+        &metadata, scratch);
+    if (FAILED(hr)) {
+        return;
+    }
+
+    DirectX::ScratchImage converted;
+    const DirectX::Image *image = scratch.GetImage(0, 0, 0);
+    if (image != nullptr && image->format != DXGI_FORMAT_R8G8B8A8_UNORM) {
+        hr = DirectX::Convert(*image, DXGI_FORMAT_R8G8B8A8_UNORM,
+                              DirectX::TEX_FILTER_DEFAULT, 0.0f, converted);
+        if (FAILED(hr)) {
+            return;
+        }
+        image = converted.GetImage(0, 0, 0);
+    }
+
+    if (image == nullptr || image->pixels == nullptr || image->width == 0 ||
+        image->height == 0 || image->width != debugPreviewFrame_.width ||
+        image->height != debugPreviewFrame_.height) {
+        return;
+    }
+
+    const size_t rowBytes = static_cast<size_t>(debugPreviewFrame_.width) * 4u;
+    const size_t imageBytes =
+        rowBytes * static_cast<size_t>(debugPreviewFrame_.height);
+    if (debugPreviewFrame_.rgbaPixels.size() != imageBytes) {
+        debugPreviewFrame_.rgbaPixels.resize(imageBytes);
+    }
+
+    for (uint32_t y = 0; y < debugPreviewFrame_.height; ++y) {
+        std::memcpy(debugPreviewFrame_.rgbaPixels.data() + rowBytes * y,
+                    image->pixels + image->rowPitch * y, rowBytes);
+    }
+    debugPreviewFrame_.valid = true;
+    debugPreviewFrame_.dirty = true;
+    debugPreviewFrame_.staleTimer = 0.0f;
+}
+
+void GameScene::UploadDebugPreviewTextureIfNeeded() {
+    if (!debugPreviewFrame_.dirty || !debugPreviewFrame_.valid ||
+        debugPreviewFrame_.rgbaPixels.empty()) {
+        return;
+    }
+
+    if (ctx_->texture->UpdateDynamicTexture(
+            debugPreviewFrame_.textureId, debugPreviewFrame_.rgbaPixels.data(),
+            debugPreviewFrame_.width, debugPreviewFrame_.height)) {
+        debugPreviewFrame_.dirty = false;
+    }
+}
+
+void GameScene::DrawDebugCameraPreview() {
+    if (ctx_ == nullptr || ctx_->sprite == nullptr || ctx_->texture == nullptr ||
+        ctx_->winApp == nullptr) {
+        return;
+    }
+
+    UploadDebugPreviewTextureIfNeeded();
+    constexpr float kMargin = 16.0f;
+    constexpr float kPreviewWidth = 192.0f;
+    const float previewAspect =
+        static_cast<float>(debugPreviewFrame_.width) /
+        static_cast<float>((std::max)(debugPreviewFrame_.height, 1u));
+    const float previewHeight = kPreviewWidth / previewAspect;
+    const bool fresh = debugPreviewFrame_.valid &&
+                       debugPreviewFrame_.staleTimer <= kDebugPreviewStaleSeconds;
+    const float alpha = fresh ? 0.88f : 0.34f;
+
+    auto drawRect = [&](float x, float y, float w, float h,
+                        const XMFLOAT4 &color) {
+        Sprite sprite{};
+        sprite.textureId = 0;
+        sprite.position = {x, y};
+        sprite.size = {w, h};
+        sprite.color = color;
+        ctx_->sprite->DrawSprite(sprite);
+    };
+
+    ctx_->sprite->PreDraw();
+    drawRect(kMargin - 4.0f, kMargin - 4.0f, kPreviewWidth + 8.0f,
+             previewHeight + 8.0f, {0.0f, 0.0f, 0.0f, 0.52f});
+
+    if (debugPreviewFrame_.valid) {
+        Sprite preview{};
+        preview.textureId = debugPreviewFrame_.textureId;
+        preview.position = {kMargin, kMargin};
+        preview.size = {kPreviewWidth, previewHeight};
+        preview.color = {1.0f, 1.0f, 1.0f, alpha};
+        ctx_->sprite->DrawSprite(preview);
+    }
+
+    const XMFLOAT4 border =
+        fresh ? XMFLOAT4{0.32f, 0.72f, 1.0f, 0.62f}
+              : XMFLOAT4{0.90f, 0.72f, 0.22f, 0.50f};
+    drawRect(kMargin, kMargin, kPreviewWidth, 2.0f, border);
+    drawRect(kMargin, kMargin + previewHeight - 2.0f, kPreviewWidth, 2.0f,
+             border);
+    drawRect(kMargin, kMargin, 2.0f, previewHeight, border);
+    drawRect(kMargin + kPreviewWidth - 2.0f, kMargin, 2.0f, previewHeight,
+             border);
+    ctx_->sprite->PostDraw();
+}
+
 void GameScene::Draw() {
     ctx_->model->PreDraw();
 
@@ -1580,6 +1824,7 @@ void GameScene::Draw() {
     DrawVictoryFlash();
     DrawDefeatFlash();
     DrawBattleIntroFlash();
+    DrawTitleDemoFlash();
 }
 
 void GameScene::DispatchCombatFeedback(const CombatFeedbackEvent &event) {
@@ -2128,10 +2373,19 @@ void GameScene::UpdateChargeWeakPointFocus(float deltaTime) {
 }
 
 void GameScene::DrawOverlay() {
-    if (runMode_ == RunMode::TitleDemo || battleIntroActive_) {
+    if (runMode_ == RunMode::TitleDemo) {
+        return;
+    }
+    if (battleIntroActive_) {
+        if (inputCalibration_.controlType == InputControlType::Hand) {
+            DrawDebugCameraPreview();
+        }
         return;
     }
     hud_.Draw(*ctx_);
+    if (inputCalibration_.controlType == InputControlType::Hand) {
+        DrawDebugCameraPreview();
+    }
     DrawChargeWeakPointTimeGauge();
     DrawBladeClashGauge();
 }
@@ -2362,37 +2616,174 @@ void GameScene::ApplyEnemyIntroDissolve(float revealRatio) {
 
 void GameScene::UpdateTitleDemo(float deltaTime) {
     titleDemoTimer_ += deltaTime;
-    titleDemoCounterTimer_ -= deltaTime;
-    if (titleDemoCounterTimer_ > 0.0f) {
+    titleDemoPhaseTimer_ += deltaTime;
+    constexpr float kIdleBeforeShowcase = 5.35f;
+
+    auto applyTitleDemoPost = [&]() {
+        if (ctx_ == nullptr || ctx_->postEffectRenderer == nullptr) {
+            return;
+        }
+
+        const float cueFlash =
+            titleDemoPhase_ == 1
+                ? std::clamp(1.0f - titleDemoPhaseTimer_ / 0.52f, 0.0f, 1.0f)
+                : 0.0f;
+        ctx_->postEffectRenderer->SetColorMode(PostEffectRenderer::ColorMode::None);
+        ctx_->postEffectRenderer->SetRadialBlurCenter(0.5f, 0.48f);
+        ctx_->postEffectRenderer->SetRadialBlurSampleCount(24);
+        ctx_->postEffectRenderer->SetRadialBlurStrength(
+            0.018f + 0.048f * cueFlash +
+            (bladeClashActive_ ? 0.030f * bladeClashImpactPulse_ : 0.0f));
+        ctx_->postEffectRenderer->SetVignettingEnabled(true);
+        ctx_->postEffectRenderer->SetVignettingShape(8.6f, 1.24f);
+        ctx_->postEffectRenderer->SetVignettingStrength(
+            0.24f + 0.38f * cueFlash +
+            (bladeClashActive_ ? 0.16f * std::abs(bladeClashGauge_) : 0.0f));
+        ctx_->postEffectRenderer->SetSceneDimStrength(
+            0.05f + 0.18f * cueFlash);
+    };
+
+    if (titleDemoPhase_ == 0 && titleDemoPhaseTimer_ < kIdleBeforeShowcase) {
+        applyTitleDemoPost();
         return;
     }
 
-    titleDemoCounterTimer_ = 1.35f + 0.55f *
-        (0.5f + 0.5f * std::sinf(titleDemoTimer_ * 1.7f));
-    const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
-    const XMFLOAT3 playerPos = player_.GetTransform().position;
-    enemy_.NotifyCountered(0.82f);
-    if (enemy_.GetHP() > 45.0f) {
-        enemy_.TakeDamage(3.0f);
+    if (titleDemoPhase_ == 0) {
+        titleDemoPhase_ = 1;
+        titleDemoPhaseTimer_ = 0.0f;
+        titleDemoCounterTimer_ = 0.0f;
+        applyTitleDemoPost();
+        return;
     }
-    player_.NotifyCounterSuccess(1);
 
-    CombatFeedbackEvent feedback{};
-    feedback.type = CombatFeedbackEventType::CounterSuccess;
-    feedback.position = enemyPos;
-    feedback.position.y += 1.15f;
-    feedback.direction = {enemyPos.x - playerPos.x, 0.0f,
-                          enemyPos.z - playerPos.z};
-    feedback.power = 2.2f;
-    feedback.swordIndex = 1;
-    DispatchCombatFeedback(feedback);
-    counterCinematicActive_ = true;
-    counterCinematicTimer_ = 0.34f;
-    SetEnemyAnimationFrozen(true);
-
-    if (titleDemoTimer_ > 28.0f) {
-        titleDemoTimer_ = 0.0f;
+    if (titleDemoPhase_ == 1 && titleDemoPhaseTimer_ >= 0.52f) {
+        BeginTitleDemoBladeClash();
+        titleDemoPhase_ = 2;
+        titleDemoPhaseTimer_ = 0.0f;
+        titleDemoCounterTimer_ = 0.06f;
     }
+
+    if (titleDemoPhase_ == 2 && bladeClashActive_) {
+        titleDemoCounterTimer_ -= deltaTime;
+        if (titleDemoCounterTimer_ <= 0.0f) {
+            titleDemoCounterTimer_ = 0.16f;
+            bladeClashGauge_ =
+                std::clamp(bladeClashGauge_ + 0.40f, -1.1f, 1.1f);
+            bladeClashCameraPush_ =
+                (std::min)(bladeClashCameraPush_ + 0.72f, 1.0f);
+            bladeClashImpactPulse_ = 1.0f;
+            player_.NotifyCounterSuccess(1);
+
+            XMFLOAT3 strikeCenter = bladeClashCenter_;
+            strikeCenter.y += 0.08f;
+            sparkParticles_.EmitBurst(
+                strikeCenter, 92, 0.26f, GPUParticleSystem::BurstStyle::Sparks,
+                {1.0f, 0.72f, 0.24f, 0.86f}, bladeClashDirection_, 2.40f);
+            swordFlashParticles_.EmitBurst(
+                strikeCenter, 10, 0.28f, GPUParticleSystem::BurstStyle::Flash,
+                {1.0f, 1.0f, 0.84f, 0.72f}, bladeClashDirection_, 0.34f);
+
+            CombatFeedbackEvent feedback{};
+            feedback.type = CombatFeedbackEventType::CounterSuccess;
+            feedback.position = strikeCenter;
+            feedback.direction = bladeClashDirection_;
+            feedback.power = 10.0f;
+            feedback.swordIndex = 1;
+            DispatchCombatFeedback(feedback);
+        }
+        UpdateBladeClash(deltaTime);
+        applyTitleDemoPost();
+        return;
+    }
+
+    if (titleDemoPhase_ == 2 && bladeClashFinishActive_) {
+        applyTitleDemoPost();
+        return;
+    }
+
+    if (titleDemoPhase_ == 2 && !bladeClashActive_ &&
+        !bladeClashFinishActive_) {
+        titleDemoPhase_ = 3;
+        titleDemoPhaseTimer_ = 0.0f;
+    }
+
+    if (titleDemoPhase_ == 3) {
+        applyTitleDemoPost();
+        if (titleDemoPhaseTimer_ >= 1.35f) {
+            ResetTitleDemoShowcase();
+        }
+        return;
+    }
+    applyTitleDemoPost();
+}
+
+void GameScene::BeginTitleDemoBladeClash() {
+    if (bladeClashActive_ || bladeClashFinishActive_) {
+        return;
+    }
+
+    const XMFLOAT3 playerPos = {-1.35f, 0.0f, 0.70f};
+    const XMFLOAT3 enemyPos = {0.95f, 0.0f, 3.10f};
+    player_.LockPosition(playerPos);
+    enemy_.SetCinematicTransform(enemyPos, 0.0f);
+    enemy_.FaceTargetImmediately(playerPos);
+    player_.SetYaw(std::atan2f(enemyPos.x - playerPos.x,
+                               enemyPos.z - playerPos.z));
+    enemyLastStandPrimed_ = true;
+    counterCinematicActive_ = false;
+    counterCinematicTimer_ = 0.0f;
+    SetEnemyAnimationFrozen(false);
+    BeginBladeClash(1, true);
+}
+
+void GameScene::ResetTitleDemoShowcase() {
+    player_.Initialize(playerModelId_, swordModelId_);
+    player_.SetInputCalibration(inputCalibration_);
+    enemy_.Initialize(enemyModelId_, enemyProjectileModelId_);
+    enemy_.FaceTargetImmediately(player_.GetTransform().position);
+    player_.SetDefeatPoseRatio(0.0f);
+    player_.SetBladeClashPose(false);
+    counterCinematicActive_ = false;
+    counterCinematicTimer_ = 0.0f;
+    SetEnemyAnimationFrozen(false);
+    bladeClashActive_ = false;
+    bladeClashGauge_ = 0.0f;
+    bladeClashTimer_ = 0.0f;
+    bladeClashCameraPush_ = 0.0f;
+    bladeClashImpactPulse_ = 0.0f;
+    bladeClashEnemySurgeTimer_ = 0.0f;
+    bladeClashChainTimer_ = 0.0f;
+    bladeClashSlashChain_ = 0;
+    enemyLastStandPrimed_ = false;
+    bladeClashFinal_ = false;
+    bladeClashFinalBarrageStep_ = 0;
+    bladeClashFinishActive_ = false;
+    bladeClashFinishPlayerWon_ = false;
+    bladeClashFinishImpactEmitted_ = false;
+    bladeClashFinishGuardBreakEmitted_ = false;
+    bladeClashFinishSkidEmitted_ = false;
+    bladeClashFinishWallImpactEmitted_ = false;
+    bladeClashFinishPendingEnemyTransition_ = false;
+    bladeClashFinishTimer_ = 0.0f;
+    bladeClashPreviousSlashStates_.fill(false);
+    previousChargeWeakPointSlashStates_.fill(false);
+    previousSwordSoundStates_.fill(false);
+    playerHitCooldown_ = 0.0f;
+    enemyHitCooldown_ = 0.0f;
+    swordTrailRenderer_.Reset();
+    swordSlashArcRenderer_.Reset();
+    titleDemoTimer_ = 0.0f;
+    titleDemoCounterTimer_ = 0.90f;
+    titleDemoPhaseTimer_ = 0.0f;
+    titleDemoPhase_ = 0;
+    if (ctx_ != nullptr && ctx_->postEffectRenderer != nullptr) {
+        ctx_->postEffectRenderer->SetColorMode(PostEffectRenderer::ColorMode::None);
+        ctx_->postEffectRenderer->SetRadialBlurStrength(0.0f);
+        ctx_->postEffectRenderer->SetSceneDimStrength(0.0f);
+        ctx_->postEffectRenderer->SetVignettingShape(11.0f, 1.15f);
+        ctx_->postEffectRenderer->SetVignettingStrength(0.20f);
+    }
+    SyncEnemyAnimation();
 }
 
 void GameScene::BeginVictorySequence() {
@@ -2624,6 +3015,30 @@ void GameScene::DrawBladeClashFinishFrame() {
                    std::clamp(screenH * 0.005f, 4.0f, 7.0f),
                    {1.0f, 0.72f, 0.28f, 0.22f * flash * alpha});
     }
+    ctx_->sprite->PostDraw();
+}
+
+void GameScene::DrawTitleDemoFlash() {
+    if (runMode_ != RunMode::TitleDemo || titleDemoPhase_ != 1 ||
+        ctx_ == nullptr || ctx_->sprite == nullptr || ctx_->winApp == nullptr) {
+        return;
+    }
+
+    const float flash =
+        std::clamp(1.0f - titleDemoPhaseTimer_ / 0.52f, 0.0f, 1.0f);
+    if (flash <= 0.01f) {
+        return;
+    }
+
+    Sprite sprite{};
+    sprite.textureId = 0;
+    sprite.position = {0.0f, 0.0f};
+    sprite.size = {static_cast<float>(ctx_->winApp->GetWidth()),
+                   static_cast<float>(ctx_->winApp->GetHeight())};
+    sprite.color = {1.0f, 1.0f, 1.0f, flash};
+
+    ctx_->sprite->PreDraw();
+    ctx_->sprite->DrawSprite(sprite);
     ctx_->sprite->PostDraw();
 }
 

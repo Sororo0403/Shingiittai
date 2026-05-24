@@ -31,6 +31,10 @@ XMFLOAT4 Color(float r, float g, float b, float a = 1.0f) {
 
 float SmoothStep(float t) { return t * t * (3.0f - 2.0f * t); }
 
+bool IsHandControl(InputControlType controlType) {
+    return controlType == InputControlType::Hand;
+}
+
 std::filesystem::path RankingPathForControl(InputControlType controlType) {
     const std::filesystem::path rankingDir = "app/resources/result";
     switch (controlType) {
@@ -57,7 +61,7 @@ void BattleResultScene::Initialize(const SceneContext &ctx) {
     handSwingCount_ = 0;
     handSwingArmed_ = true;
 
-    if (inputCalibration_.controlType == InputControlType::Hand) {
+    if (IsHandControl(inputCalibration_.controlType)) {
         handController_.SetCalibration(inputCalibration_);
     }
 
@@ -107,7 +111,7 @@ void BattleResultScene::Update() {
     sceneTime_ += ctx_->deltaTime;
     Input *input = ctx_->input;
 
-    if (inputCalibration_.controlType == InputControlType::Hand) {
+    if (IsHandControl(inputCalibration_.controlType)) {
         UpdateHandResultInput(ctx_->deltaTime);
         return;
     }
@@ -295,7 +299,7 @@ void BattleResultScene::DrawGameOver(float screenWidth, float screenHeight) {
 
 void BattleResultScene::DrawHandInputStatus(float screenWidth,
                                             float screenHeight) {
-    if (inputCalibration_.controlType != InputControlType::Hand) {
+    if (!IsHandControl(inputCalibration_.controlType)) {
         return;
     }
 

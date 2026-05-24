@@ -155,7 +155,8 @@ void WeaponSelectScene::Update() {
             SwordInputCalibration calibration{};
             calibration.controlType = selectedType;
             if (selectedType == InputControlType::Hand) {
-                sceneManager_->ChangeScene(std::make_unique<TipScene>(calibration));
+                sceneManager_->ChangeScene(
+                    std::make_unique<TipScene>(calibration));
             } else if (selectedType == InputControlType::JoyCon) {
                 sceneManager_->ChangeScene(
                     std::make_unique<CalibrationScene>(selectedType));
@@ -253,6 +254,9 @@ void WeaponSelectScene::UpdateSelection(Input *input) {
     if (input->IsKeyTrigger(DIK_3)) {
         nextIndex = 2;
     }
+    if (input->IsKeyTrigger(DIK_4)) {
+        nextIndex = kRankingButtonIndex;
+    }
 
     if (input->IsGamepadConnected()) {
         if (input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_LEFT)) {
@@ -310,11 +314,8 @@ void WeaponSelectScene::BeginStart() {
 
     const InputControlType selectedType = SelectedControlType();
     if (selectedType == InputControlType::Hand) {
-        if (IsHandTrackingReady()) {
-            RequestHandTrackingStartOnce();
-        } else {
-            waitingForHandTrackingReady_ = true;
-        }
+        RequestHandTrackingStartOnce();
+        waitingForHandTrackingReady_ = !IsHandTrackingReady();
     }
 
     startRequested_ = true;
@@ -322,9 +323,9 @@ void WeaponSelectScene::BeginStart() {
 }
 
 void WeaponSelectScene::Layout(float screenWidth, float screenHeight) {
-    const float cardW = (std::min)(330.0f, screenWidth * 0.25f);
+    const float cardW = (std::min)(280.0f, screenWidth * 0.205f);
     const float cardH = (std::min)(390.0f, screenHeight * 0.55f);
-    const float gap = (std::max)(34.0f, screenWidth * 0.035f);
+    const float gap = (std::max)(24.0f, screenWidth * 0.022f);
     const float totalW = cardW * static_cast<float>(kWeaponCount) +
                          gap * static_cast<float>(kWeaponCount - 1);
     const float startX = (screenWidth - totalW) * 0.5f;
@@ -336,7 +337,7 @@ void WeaponSelectScene::Layout(float screenWidth, float screenHeight) {
 
     const float buttonW = (std::min)(122.0f, screenWidth * 0.10f);
     const float buttonH = 34.0f;
-    const ButtonRect &cameraCard = cardRects_[2];
+    const ButtonRect &cameraCard = cardRects_[kWeaponCount - 1];
     float buttonX = cameraCard.x + cameraCard.w + 16.0f;
     if (buttonX + buttonW > screenWidth - 24.0f) {
         buttonX = cameraCard.x + cameraCard.w - buttonW - 14.0f;
@@ -449,7 +450,6 @@ void WeaponSelectScene::DrawCards(float, float) {
                                  selected ? 0.86f : 0.54f));
         DrawRect(rect.x, rect.y - lift, rect.w, 8.0f,
                  WeaponColor(i, selected ? 0.95f : 0.42f, available));
-
         if (selected) {
             const float frame = 6.0f + pulse * 4.0f;
             const XMFLOAT4 color =

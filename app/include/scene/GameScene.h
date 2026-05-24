@@ -10,8 +10,10 @@
 #include "Transform.h"
 #include <DirectXMath.h>
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 #include "GameSceneHud.h"
 #include "SwordSlashArcRenderer.h"
 #include "SwordTrailRenderer.h"
@@ -27,6 +29,7 @@ class GameScene : public BaseScene {
     explicit GameScene(RunMode runMode = RunMode::Play,
                        const SwordInputCalibration &inputCalibration = {})
         : runMode_(runMode), inputCalibration_(inputCalibration) {}
+    ~GameScene() override;
 
     void Initialize(const SceneContext &ctx) override;
     void Update() override;
@@ -46,6 +49,7 @@ class GameScene : public BaseScene {
     void DrawChargeWeakPointTimeGauge();
     void DrawBladeClashGauge();
     void DrawBladeClashFinishFrame();
+    void DrawTitleDemoFlash();
     void DrawVictoryFlash();
     void DrawDefeatFlash();
     void DrawBattleIntroFlash();
@@ -56,6 +60,8 @@ class GameScene : public BaseScene {
     void EmitPhaseTransitionLoopEffects(float deltaTime);
     void EmitPhaseTransitionReleaseEffects();
     void UpdateTitleDemo(float deltaTime);
+    void BeginTitleDemoBladeClash();
+    void ResetTitleDemoShowcase();
     void BeginVictorySequence();
     void UpdateVictorySequence(float deltaTime);
     void BeginDefeatSequence();
@@ -78,6 +84,14 @@ class GameScene : public BaseScene {
     PlayerCombatObservation BuildPlayerCombatObservation() const;
     float ComputeGameplayTimeScale() const;
     void UpdateSwordVfx(float deltaTime);
+    void UpdateDebugCameraPreview(float deltaTime);
+    bool EnsureDebugPreviewSocket();
+    void CloseDebugPreviewSocket();
+    void ReceiveDebugPreviewPackets();
+    void HandleDebugPreviewPacket(const uint8_t *data, int bytes);
+    void DecodeDebugPreviewJpeg(const std::vector<uint8_t> &jpegData);
+    void UploadDebugPreviewTextureIfNeeded();
+    void DrawDebugCameraPreview();
     void BeginBladeClash(size_t swordIndex, bool finalClash = false);
     void UpdateBladeClash(float deltaTime);
     void ResolveBladeClash(bool playerWon);
@@ -95,6 +109,16 @@ class GameScene : public BaseScene {
         float thickness = 0.0f;
         float age = 0.0f;
         bool active = false;
+    };
+
+    struct CameraPreviewFrame {
+        bool valid = false;
+        bool dirty = false;
+        uint32_t textureId = 0;
+        uint32_t width = 320;
+        uint32_t height = 240;
+        float staleTimer = 999.0f;
+        std::vector<uint8_t> rgbaPixels;
     };
 
     RunMode runMode_ = RunMode::Play;
@@ -117,7 +141,9 @@ class GameScene : public BaseScene {
     std::array<bool, Player::kSwordCount> bladeClashPreviousSlashStates_{};
     uint32_t particleTextureId_ = 0;
     uint32_t playerModelId_ = 0;
+    uint32_t swordModelId_ = 0;
     uint32_t enemyModelId_ = 0;
+    uint32_t enemyProjectileModelId_ = 0;
     uint32_t arenaFloorModelId_ = 0;
     uint32_t arenaLowPolyTerrainModelId_ = 0;
     uint32_t arenaDistantTerrainModelId_ = 0;
@@ -241,6 +267,8 @@ class GameScene : public BaseScene {
     float phaseTransitionLoopTimer_ = 0.0f;
     float titleDemoTimer_ = 0.0f;
     float titleDemoCounterTimer_ = 1.15f;
+    float titleDemoPhaseTimer_ = 0.0f;
+    int titleDemoPhase_ = 0;
     bool battleResultRequested_ = false;
     bool victorySequenceActive_ = false;
     float victorySequenceTimer_ = 0.0f;
@@ -313,5 +341,13 @@ class GameScene : public BaseScene {
         DirectX::XMFLOAT2{-1.0f, 0.0f}};
     std::array<bool, Player::kSwordCount> previousChargeWeakPointSlashStates_{};
     std::array<bool, Player::kSwordCount> cageSlashPreviousStates_{};
+    CameraPreviewFrame debugPreviewFrame_{};
+    std::vector<uint8_t> debugPreviewJpegBuffer_{};
+    std::vector<bool> debugPreviewChunkReceived_{};
+    uintptr_t debugPreviewSocket_ = UINTPTR_MAX;
+    uint32_t debugPreviewFrameId_ = 0;
+    size_t debugPreviewReceivedChunks_ = 0;
+    bool handTrackingStartRequested_ = false;
+    bool debugPreviewSocketReady_ = false;
 
 };

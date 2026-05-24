@@ -33,13 +33,16 @@ class Player {
 
     void Initialize(uint32_t playerModelId, uint32_t swordModelId);
     void SetInputCalibration(const SwordInputCalibration &calibration);
+    void SetCameraSwordSlashSuppressed(bool suppressed) {
+        suppressCameraSwordSlash_ = suppressed;
+    }
 
     void Update(Input *input, float deltaTime,
                 const DirectX::XMFLOAT3 &lookTarget, float cameraYaw,
                 bool forceRangedReflectMove = false,
                 float controlDeltaTime = -1.0f,
                 bool suppressLookAt = false);
-    void UpdateJoyConCalibrationInput(Input *input, float deltaTime);
+    void UpdateJoyConCalibrationInput(Input *, float deltaTime);
 
     void Draw(ModelManager *modelManager, const Camera &camera,
               bool drawBody = true, bool forceOpaque = false,
@@ -132,7 +135,6 @@ class Player {
     bool UsesJoyConControls() const {
         return leftJoyCon_.IsConnected() || rightJoyCon_.IsConnected();
     }
-
   private:
     Transform BuildSwordTransform(const SwordPose &pose, bool isLeft) const;
     SwordPose MakeIdleSwordPose(bool isLeft) const;
@@ -207,6 +209,7 @@ class Player {
     SwordUdpController swordUdpController_;
     SwordInputCalibration inputCalibration_{};
     bool applyJoyConBaseOnNextUpdate_ = false;
+    bool suppressCameraSwordSlash_ = false;
     SwordControllerState gamepadSwordState_{};
     SwordControllerState keyboardLeftSwordState_{};
     PlayerGamepadControlMode gamepadControlMode_ =

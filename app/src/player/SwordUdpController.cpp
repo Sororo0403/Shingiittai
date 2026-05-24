@@ -6,40 +6,13 @@
 #include <cmath>
 #include <sstream>
 #include <string>
+#include <vector>
 
 using namespace DirectX;
 
 namespace {
-constexpr float kHandYawRange = 1.15f;
-constexpr float kHandPitchRange = 0.95f;
-constexpr float kHandSpeedDeadzone = 0.34f;
-constexpr float kHandSpeedToSwordSpeed = 2300.0f;
-constexpr float kHandMinConfidence = 0.28f;
-constexpr float kHandNoiseFrameDelta = 0.32f;
-constexpr float kHandPositionFollow = 0.62f;
-constexpr float kHandNoisyPositionFollow = 0.16f;
-constexpr float kHandVelocityFollow = 0.58f;
-constexpr float kHandNoisyVelocityDecay = 0.72f;
-constexpr float kHandPositionLead = 1.35f;
-constexpr float kHandMaxLead = 0.075f;
-constexpr float kSlashDirMinFrameDelta = 0.0055f;
-constexpr float kSlashDirStartRatio = 0.90f;
-constexpr size_t kSlashDirectionMinSamples = 3;
-constexpr float kSlashDirectionMinStability = 0.74f;
-constexpr float kSlashDirectionResetRatio = 0.35f;
-constexpr float kHandRestSpeedMultiplier = 2.2f;
-constexpr float kHandRestSpeedPadding = 0.16f;
-constexpr float kReturnRecoverySeconds = 0.22f;
-constexpr float kReturnRecoveryOppositeDot = -0.62f;
-constexpr float kLostSlashGraceSeconds = 0.16f;
-constexpr float kLostSlashSpeedDecay = 0.82f;
-
 SOCKET ToSocket(uintptr_t value) {
     return static_cast<SOCKET>(value);
-}
-
-float Lerp(float from, float to, float amount) {
-    return from + (to - from) * amount;
 }
 }
 
@@ -48,65 +21,51 @@ SwordUdpController::~SwordUdpController() {
 }
 
 bool SwordUdpController::IsActive(size_t handIndex) const {
-    const HandState *hand = GetHand(handIndex);
-    return HasFreshTracking(handIndex) ||
-           (hand != nullptr && hand->lostSlashGraceTimer > 0.0f &&
-            hand->state.isSlashMode);
+    if (handIndex >= actionSwordStates_.size() || !HasFreshActionInput()) {
+        return false;
+    }
+    return handIndex == 0 ||
+           actionInput_.slashConfidence[handIndex] > 0.0f ||
+           actionSwordStates_[handIndex].isSlashMode;
 }
 
 SwordPose SwordUdpController::GetPose(size_t handIndex) const {
-    const HandState *hand = GetHand(handIndex);
-    return hand != nullptr ? hand->state.ToPose() : SwordPose{};
+    if (handIndex < actionSwordStates_.size() && HasFreshActionInput()) {
+        return actionSwordStates_[handIndex].ToPose();
+    }
+    return SwordPose{};
 }
 
 float SwordUdpController::GetMotionSpeed(size_t handIndex) const {
-    const HandState *hand = GetHand(handIndex);
-    return hand != nullptr ? hand->motionSpeed : 0.0f;
+    return handIndex < actionInput_.slashSpeed.size() && HasFreshActionInput()
+               ? actionInput_.slashSpeed[handIndex]
+               : 0.0f;
 }
 
 float SwordUdpController::GetRawMotionSpeed(size_t handIndex) const {
-    const HandState *hand = GetHand(handIndex);
-    if (hand == nullptr || !IsActive(handIndex)) {
-        return 0.0f;
-    }
-    return hand->speed;
+    return GetMotionSpeed(handIndex);
 }
 
 bool SwordUdpController::GetHandCenter(size_t handIndex, float &x,
                                        float &y) const {
-    const HandState *hand = GetHand(handIndex);
-    if (hand == nullptr || !IsActive(handIndex)) {
+    if (handIndex >= actionSwordStates_.size() || !HasFreshActionInput()) {
         return false;
     }
-
-    x = hand->x;
-    y = hand->y;
+    x = 0.5f;
+    y = 0.5f;
     return true;
 }
 
 bool SwordUdpController::HasRecentPacket() const {
-    for (const HandState &hand : hands_) {
-        if (hand.hasPacket && hand.staleTimer < kStaleSeconds) {
-            return true;
-        }
-    }
-    return false;
+    return HasFreshActionInput();
 }
 
 void SwordUdpController::SetCalibration(
     const SwordInputCalibration &calibration) {
     calibration_ = calibration;
-    for (HandState &hand : hands_) {
-        hand.filterReady = false;
-        hand.motionSpeed = 0.0f;
-        hand.motionDirectionCount = 0;
-        hand.motionDirectionCursor = 0;
-        hand.directionStability = 0.0f;
-        hand.returnRecoveryTimer = 0.0f;
-        hand.lostSlashGraceTimer = 0.0f;
-        hand.lastActiveMotionSpeed = 0.0f;
-        hand.state.UpdateSlash(0.0f, 1.0f);
-    }
+    actionInput_ = {};
+    actionInput_.staleTimer = kStaleSeconds;
+    actionSwordStates_ = {};
 }
 
 void SwordUdpController::Update(float dt) {
@@ -115,9 +74,13 @@ void SwordUdpController::Update(float dt) {
     }
 
     ReceivePackets();
-    for (size_t i = 0; i < hands_.size(); ++i) {
-        hands_[i].staleTimer += dt;
-        ApplyHand(i, dt);
+    actionInput_.staleTimer += dt;
+    if (HasFreshActionInput()) {
+        ApplyActionInput(dt);
+    } else {
+        for (SwordControllerState &state : actionSwordStates_) {
+            state.UpdateSlash(0.0f, dt);
+        }
     }
 }
 
@@ -161,14 +124,12 @@ bool SwordUdpController::EnsureSocket() {
     return true;
 }
 
-bool SwordUdpController::HasFreshTracking(size_t handIndex) const {
-    const HandState *hand = GetHand(handIndex);
-    return hand != nullptr && hand->hasPacket &&
-           hand->staleTimer < kStaleSeconds && hand->valid != 0;
+bool SwordUdpController::HasFreshActionInput() const {
+    return actionInput_.hasPacket && actionInput_.staleTimer < kStaleSeconds;
 }
 
 void SwordUdpController::ReceivePackets() {
-    char buffer[256]{};
+    char buffer[512]{};
     for (;;) {
         sockaddr_in from{};
         int fromLength = sizeof(from);
@@ -187,230 +148,84 @@ void SwordUdpController::ReceivePackets() {
         buffer[bytes] = '\0';
 
         std::string tag;
-        int valid = 0;
-        float x = 0.5f;
-        float y = 0.5f;
-        float dx = 0.0f;
-        float dy = 0.0f;
-        float speed = 0.0f;
-        float confidence = 0.0f;
-        float angle = 0.0f;
-        float grip = 1.0f;
-        float wristSpeed = speed;
-
         std::istringstream stream(buffer);
-        if (stream >> tag >> valid >> x >> y >> dx >> dy >> speed >>
-            confidence) {
-            if (!(stream >> angle)) {
-                angle = 0.0f;
-            }
-            if (!(stream >> grip)) {
-                grip = 1.0f;
-            }
-            if (!(stream >> wristSpeed)) {
-                wristSpeed = speed;
-            }
+        stream >> tag;
+        if (tag != "PLAYER_INPUT") {
+            continue;
+        }
 
-            if (HandState *hand = FindHand(tag)) {
-                hand->valid = valid;
-                hand->x = std::clamp(x, 0.0f, 1.0f);
-                hand->y = std::clamp(y, 0.0f, 1.0f);
-                hand->dx = dx;
-                hand->dy = dy;
-                hand->speed = speed;
-                hand->confidence = std::clamp(confidence, 0.0f, 1.0f);
-                hand->angle = angle;
-                hand->grip = std::clamp(grip, 0.0f, 1.0f);
-                hand->wristSpeed = wristSpeed;
-                hand->hasPacket = true;
-                hand->staleTimer = 0.0f;
+        std::vector<double> values;
+        double value = 0.0;
+        while (stream >> value) {
+            values.push_back(value);
+        }
+        if (values.size() >= 9) {
+            const double timestamp = values[0];
+            (void)timestamp;
+            std::array<float, 2> slashSpeed = {0.0f, 0.0f};
+            std::array<float, 2> slashDirX = {1.0f, -1.0f};
+            std::array<float, 2> slashDirY = {0.0f, 0.0f};
+            std::array<float, 2> slashConfidence = {0.0f, 0.0f};
+            slashSpeed[0] = static_cast<float>(values[1]);
+            slashDirX[0] = static_cast<float>(values[2]);
+            slashDirY[0] = static_cast<float>(values[3]);
+            slashConfidence[0] = static_cast<float>(values[4]);
+            slashSpeed[1] = static_cast<float>(values[5]);
+            slashDirX[1] = static_cast<float>(values[6]);
+            slashDirY[1] = static_cast<float>(values[7]);
+            slashConfidence[1] = static_cast<float>(values[8]);
+            uint32_t debugFlags = 0;
+            if (values.size() >= 10) {
+                debugFlags = static_cast<uint32_t>(values[9]);
             }
+            actionInput_.hasPacket = true;
+            actionInput_.staleTimer = 0.0f;
+            for (size_t i = 0; i < actionInput_.slashSpeed.size(); ++i) {
+                actionInput_.slashSpeed[i] = (std::max)(0.0f, slashSpeed[i]);
+                actionInput_.slashDirX[i] = slashDirX[i];
+                actionInput_.slashDirY[i] = slashDirY[i];
+                actionInput_.slashConfidence[i] =
+                    std::clamp(slashConfidence[i], 0.0f, 1.0f);
+            }
+            actionInput_.debugFlags = debugFlags;
         }
     }
 }
 
-void SwordUdpController::ApplyHand(size_t handIndex, float dt) {
-    HandState *hand = handIndex < hands_.size() ? &hands_[handIndex] : nullptr;
-    if (hand == nullptr) {
-        return;
-    }
-
-    hand->state.isGuard = false;
-    hand->state.isCounter = false;
-    hand->state.counterTimer = SwordControllerState::kCounterFrames;
-
-    if (!HasFreshTracking(handIndex)) {
-        if (hand->lostSlashGraceTimer > 0.0f && hand->state.isSlashMode) {
-            hand->lostSlashGraceTimer =
-                (std::max)(0.0f, hand->lostSlashGraceTimer - dt);
-            hand->lastActiveMotionSpeed *= kLostSlashSpeedDecay;
-            hand->motionSpeed = (std::max)(
-                hand->lastActiveMotionSpeed,
-                SwordControllerState::kSlashThreshold * 0.55f);
-            hand->state.UpdateSlash(hand->motionSpeed, dt);
-            return;
+void SwordUdpController::ApplyActionInput(float dt) {
+    for (size_t i = 0; i < actionSwordStates_.size(); ++i) {
+        const float dirLen =
+            std::sqrt(actionInput_.slashDirX[i] * actionInput_.slashDirX[i] +
+                      actionInput_.slashDirY[i] * actionInput_.slashDirY[i]);
+        float dirX = i == 0 ? 1.0f : -1.0f;
+        float dirY = 0.0f;
+        if (dirLen > 0.001f) {
+            dirX = actionInput_.slashDirX[i] / dirLen;
+            dirY = actionInput_.slashDirY[i] / dirLen;
         }
 
-        hand->motionSpeed = 0.0f;
-        hand->filterReady = false;
-        hand->motionDirectionCount = 0;
-        hand->motionDirectionCursor = 0;
-        hand->directionStability = 0.0f;
-        hand->returnRecoveryTimer = 0.0f;
-        hand->lostSlashGraceTimer = 0.0f;
-        hand->lastActiveMotionSpeed = 0.0f;
-        hand->state.UpdateSlash(0.0f, dt);
-        return;
+        SwordControllerState &state = actionSwordStates_[i];
+        state.slashDir = {dirX, dirY};
+        const float yaw = dirX * 0.52f;
+        const float pitch = -dirY * 0.46f;
+        XMVECTOR qYaw =
+            XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), yaw);
+        XMVECTOR qPitch =
+            XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), pitch);
+        XMStoreFloat4(
+            &state.orientation,
+            XMQuaternionNormalize(XMQuaternionMultiply(qPitch, qYaw)));
+
+        const float confidence =
+            std::clamp(actionInput_.slashConfidence[i], 0.0f, 1.0f);
+        const float confidenceGate = confidence >= 0.22f ? 1.0f : 0.0f;
+        const float confidenceScaledSpeed =
+            actionInput_.slashSpeed[i] * (0.78f + confidence * 0.22f) *
+            confidenceGate;
+        state.UpdateSlash(confidenceScaledSpeed, dt);
+        state.isGuard = false;
+        state.isCounter = false;
     }
-
-    const float rawDeltaLength =
-        std::sqrt(hand->dx * hand->dx + hand->dy * hand->dy);
-    const float rawSpeed = hand->speed;
-    const bool noisyPacket =
-        hand->confidence < kHandMinConfidence ||
-        rawDeltaLength > kHandNoiseFrameDelta;
-
-    if (!hand->filterReady) {
-        hand->filteredX = hand->x;
-        hand->filteredY = hand->y;
-        hand->filteredDx = 0.0f;
-        hand->filteredDy = 0.0f;
-        hand->filteredSpeed = 0.0f;
-        hand->motionDirectionCount = 0;
-        hand->motionDirectionCursor = 0;
-        hand->directionStability = 0.0f;
-        hand->returnRecoveryTimer = 0.0f;
-        hand->filterReady = true;
-    }
-
-    const float positionFollow =
-        noisyPacket ? kHandNoisyPositionFollow : kHandPositionFollow;
-    hand->filteredX = Lerp(hand->filteredX, hand->x, positionFollow);
-    hand->filteredY = Lerp(hand->filteredY, hand->y, positionFollow);
-
-    if (noisyPacket) {
-        hand->filteredDx *= kHandNoisyVelocityDecay;
-        hand->filteredDy *= kHandNoisyVelocityDecay;
-        hand->filteredSpeed *= kHandNoisyVelocityDecay;
-    } else {
-        hand->filteredDx =
-            Lerp(hand->filteredDx, hand->dx, kHandVelocityFollow);
-        hand->filteredDy =
-            Lerp(hand->filteredDy, hand->dy, kHandVelocityFollow);
-        hand->filteredSpeed =
-            Lerp(hand->filteredSpeed, rawSpeed, kHandVelocityFollow);
-    }
-
-    const DirectX::XMFLOAT2 neutral =
-        calibration_.hasHandNeutral
-            ? calibration_.handNeutral[handIndex]
-            : DirectX::XMFLOAT2{0.5f, 0.5f};
-    const float leadX = std::clamp(hand->filteredDx * kHandPositionLead,
-                                   -kHandMaxLead, kHandMaxLead);
-    const float leadY = std::clamp(hand->filteredDy * kHandPositionLead,
-                                   -kHandMaxLead, kHandMaxLead);
-    const float ledX = noisyPacket ? hand->filteredX : hand->filteredX + leadX;
-    const float ledY = noisyPacket ? hand->filteredY : hand->filteredY + leadY;
-    const float calibratedX =
-        std::clamp(0.5f + ledX - neutral.x, 0.0f, 1.0f);
-    const float calibratedY =
-        std::clamp(0.5f + ledY - neutral.y, 0.0f, 1.0f);
-
-    const float yaw = (calibratedX - 0.5f) * 2.0f * kHandYawRange;
-    const float pitch = (calibratedY - 0.5f) * 2.0f * kHandPitchRange;
-    XMVECTOR qYaw = XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), yaw);
-    XMVECTOR qPitch =
-        XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), pitch);
-    XMVECTOR q = XMQuaternionNormalize(XMQuaternionMultiply(qPitch, qYaw));
-    XMStoreFloat4(&hand->state.orientation, q);
-
-    const float filteredDeltaLength = std::sqrt(
-        hand->filteredDx * hand->filteredDx + hand->filteredDy * hand->filteredDy);
-    const float calibratedDeadzone =
-        calibration_.hasHandRestSpeed
-            ? calibration_.handRestSpeed[handIndex] * kHandRestSpeedMultiplier +
-                  kHandRestSpeedPadding
-            : kHandSpeedDeadzone;
-    const float speedDeadzone = (std::max)(kHandSpeedDeadzone, calibratedDeadzone);
-    const float effectiveSpeed =
-        (std::max)(hand->filteredSpeed - speedDeadzone, 0.0f);
-    hand->motionSpeed = effectiveSpeed * kHandSpeedToSwordSpeed;
-
-    if (!noisyPacket && filteredDeltaLength > kSlashDirMinFrameDelta) {
-        const float invLength = 1.0f / filteredDeltaLength;
-        const float currentDirX = hand->filteredDx * invLength;
-        const float currentDirY = hand->filteredDy * invLength;
-        hand->motionDirX[hand->motionDirectionCursor] = currentDirX;
-        hand->motionDirY[hand->motionDirectionCursor] = currentDirY;
-        hand->motionDirectionCursor =
-            (hand->motionDirectionCursor + 1) % kMotionDirectionHistorySize;
-        if (hand->motionDirectionCount < kMotionDirectionHistorySize) {
-            ++hand->motionDirectionCount;
-        }
-
-        float dotTotal = 0.0f;
-        for (size_t i = 0; i < hand->motionDirectionCount; ++i) {
-            dotTotal += currentDirX * hand->motionDirX[i] +
-                        currentDirY * hand->motionDirY[i];
-        }
-        hand->directionStability = std::clamp(
-            dotTotal / static_cast<float>(hand->motionDirectionCount), -1.0f,
-            1.0f);
-    } else if (hand->motionSpeed <
-               SwordControllerState::kSlashThreshold *
-                   kSlashDirectionResetRatio) {
-        hand->motionDirectionCount = 0;
-        hand->motionDirectionCursor = 0;
-        hand->directionStability = 0.0f;
-    }
-
-    const bool stableSlashCandidate =
-        !noisyPacket && filteredDeltaLength > kSlashDirMinFrameDelta &&
-        hand->motionDirectionCount >= kSlashDirectionMinSamples &&
-        hand->directionStability >= kSlashDirectionMinStability &&
-        hand->motionSpeed >
-            SwordControllerState::kSlashThreshold * kSlashDirStartRatio;
-    float candidateDirX = hand->stableSlashDirX;
-    float candidateDirY = hand->stableSlashDirY;
-    if (filteredDeltaLength > kSlashDirMinFrameDelta) {
-        const float invLength = 1.0f / filteredDeltaLength;
-        candidateDirX = hand->filteredDx * invLength;
-        candidateDirY = hand->filteredDy * invLength;
-    }
-    const float returnDot = candidateDirX * hand->lastSlashDirX +
-                            candidateDirY * hand->lastSlashDirY;
-    const bool isReturnMotion =
-        hand->returnRecoveryTimer > 0.0f &&
-        returnDot <= kReturnRecoveryOppositeDot;
-    const bool canStartSlash = stableSlashCandidate && !isReturnMotion;
-    if (canStartSlash && !hand->state.isSlashMode) {
-        hand->stableSlashDirX = candidateDirX;
-        hand->stableSlashDirY = candidateDirY;
-    }
-
-    hand->state.slashDir = {hand->stableSlashDirX, -hand->stableSlashDirY};
-    const bool wasSlashing = hand->state.isSlashMode;
-    const float slashMotionSpeed =
-        (hand->state.isSlashMode || canStartSlash) ? hand->motionSpeed : 0.0f;
-    hand->state.UpdateSlash(slashMotionSpeed, dt);
-    if (!wasSlashing && hand->state.isSlashMode) {
-        hand->lastSlashDirX = hand->stableSlashDirX;
-        hand->lastSlashDirY = hand->stableSlashDirY;
-        hand->returnRecoveryTimer = 0.0f;
-    } else if (wasSlashing && !hand->state.isSlashMode) {
-        hand->returnRecoveryTimer = kReturnRecoverySeconds;
-    } else if (hand->returnRecoveryTimer > 0.0f) {
-        hand->returnRecoveryTimer =
-            (std::max)(0.0f, hand->returnRecoveryTimer - dt);
-    }
-    if (hand->state.isSlashMode) {
-        hand->lostSlashGraceTimer = kLostSlashGraceSeconds;
-        hand->lastActiveMotionSpeed = hand->motionSpeed;
-    } else {
-        hand->lostSlashGraceTimer = 0.0f;
-        hand->lastActiveMotionSpeed = 0.0f;
-    }
-    (void)hand->confidence;
 }
 
 void SwordUdpController::CloseSocket() {
@@ -421,23 +236,4 @@ void SwordUdpController::CloseSocket() {
 
     socket_ = UINTPTR_MAX;
     socketReady_ = false;
-}
-
-SwordUdpController::HandState *SwordUdpController::FindHand(
-    const std::string &tag) {
-    if (tag == "HAND1") {
-        return &hands_[0];
-    }
-    if (tag == "HAND2") {
-        return &hands_[1];
-    }
-    return nullptr;
-}
-
-const SwordUdpController::HandState *SwordUdpController::GetHand(
-    size_t handIndex) const {
-    if (handIndex >= hands_.size()) {
-        return nullptr;
-    }
-    return &hands_[handIndex];
 }

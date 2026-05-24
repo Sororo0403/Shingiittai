@@ -33,6 +33,7 @@ struct SceneContext {
     PostEffectRenderer *postEffectRenderer = nullptr;
     SkyboxRenderer *skyboxRenderer = nullptr;
     std::function<void()> requestHandTrackingStart{};
+    std::function<void()> requestHandTrackingRestart{};
     std::function<bool()> isCameraDeviceAvailable{};
     std::function<bool()> isHandTrackingReady{};
     float deltaTime = 0.0f;

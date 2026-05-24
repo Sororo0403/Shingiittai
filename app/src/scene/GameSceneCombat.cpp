@@ -715,8 +715,8 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     }
 
     const auto playerBox = player_.GetOBB();
-    const float playerRecoveryDamageScale =
-        player_.IsAttackRecovery() ? 1.65f : 1.0f;
+    // const float playerRecoveryDamageScale =
+    //     player_.IsAttackRecovery() ? 1.65f : 1.0f;
     const auto enemyBodyBox = enemy_.GetBodyOBB();
     const auto enemyLeftHandBox = enemy_.GetLeftHandOBB();
     const auto enemyRightHandBox = enemy_.GetRightHandOBB();
@@ -940,8 +940,9 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                     enemy_.GetTransform().position.x,
                 player_.GetTransform().position.z -
                     enemy_.GetTransform().position.z);
-            player_.TakeDamage(enemyAttackDamage * 1.25f *
-                               playerRecoveryDamageScale);
+            player_.TakeDamage(0.0f);
+            // player_.TakeDamage(enemyAttackDamage * 1.25f *
+            //                    playerRecoveryDamageScale);
             player_.AddKnockback(
                 {knockbackDir.x * enemyAttackKnockback, 0.0f,
                  knockbackDir.y * enemyAttackKnockback});
@@ -1133,7 +1134,8 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             } else {
                 enemy_.NotifyAttackConnected();
             }
-            player_.TakeDamage(enemyAttackDamage * playerRecoveryDamageScale);
+            player_.TakeDamage(0.0f);
+            // player_.TakeDamage(enemyAttackDamage * playerRecoveryDamageScale);
             player_.AddKnockback(
                 {knockbackDir.x * enemyAttackKnockback, 0.0f,
                  knockbackDir.y * enemyAttackKnockback});
@@ -1225,7 +1227,8 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                                              wave.damage * 2.0f,
                                              0.12f);
                 } else {
-                    player_.TakeDamage(wave.damage * playerRecoveryDamageScale);
+                    player_.TakeDamage(0.0f);
+                    // player_.TakeDamage(wave.damage * playerRecoveryDamageScale);
                     player_.AddKnockback(
                         {hitDir.x * wave.knockback, 0.0f,
                          hitDir.y * wave.knockback});

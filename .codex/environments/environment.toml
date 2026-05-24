@@ -8,4 +8,4 @@ script = ""
 [[actions]]
 name = "実行する"
 icon = "run"
-command = "& 'C:\\Users\\k024g\\source\\repos\\generated\\outputs\\Debug\\App\\App.exe'"
+command = "C:\\Users\\k024g\\source\\repos\\generated\\outputs\\Debug\\App\\App.exe"

@@ -10,7 +10,7 @@ using namespace DirectX;
 namespace {
 constexpr float kPlayerVisualScaleMultiplier = 1.45f;
 constexpr float kBaseSwordAttackDamage = 8.0f;
-constexpr float kPlayerDamageTakenScale = 1.45f;
+constexpr float kPlayerDamageTakenScale = 0.0f;
 }
 
 void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
@@ -143,6 +143,15 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
                       useUdpSword || useKeyboardMouse,
                       deltaTime);
 
+    if (suppressCameraSwordSlash_ && controlType == InputControlType::Hand) {
+        leftPose.isSlashMode = false;
+        rightPose.isSlashMode = false;
+        leftPose.isGuard = false;
+        rightPose.isGuard = false;
+        leftPose.isCounter = false;
+        rightPose.isCounter = false;
+    }
+
     if (bladeClashPoseActive_) {
         const float push = std::clamp(bladeClashPosePushRatio_, 0.0f, 1.0f);
         const float leanPitch = -0.11f - 0.15f * push;
@@ -250,20 +259,7 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
 
 }
 
-void Player::UpdateJoyConCalibrationInput(Input *input, float deltaTime) {
-    if (input->IsKeyTrigger(DIK_C)) {
-        leftJoyCon_.StartCalibration();
-        rightJoyCon_.StartCalibration();
-        leftSwordJoyConController_.ResetTracking(&leftJoyCon_);
-        rightSwordJoyConController_.ResetTracking(&rightJoyCon_);
-    }
-
-    if (input->IsKeyTrigger(DIK_R)) {
-        leftJoyCon_.SetBaseOrientation();
-        rightJoyCon_.SetBaseOrientation();
-        leftSwordJoyConController_.ResetTracking(&leftJoyCon_);
-        rightSwordJoyConController_.ResetTracking(&rightJoyCon_);
-    }
+void Player::UpdateJoyConCalibrationInput(Input *, float deltaTime) {
     if (leftJoyCon_.IsConnected() && leftJoyCon_.IsButtonTrigger(JSMASK_ZL)) {
         leftJoyCon_.SetBaseOrientation();
         leftSwordJoyConController_.ResetTracking(&leftJoyCon_);
