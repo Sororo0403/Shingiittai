@@ -1,9 +1,8 @@
 #pragma once
 #include "Camera.h"
+#include "PostProcessSystem.h"
 #include <DirectXMath.h>
 #include <cstddef>
-
-class PostEffectRenderer;
 
 enum class CombatFeedbackEventType {
     PlayerSlashHit,
@@ -25,7 +24,7 @@ struct CombatFeedbackEvent {
 
 class CombatFeedbackDirector {
   public:
-    void Initialize(PostEffectRenderer *postEffectRenderer);
+    void Initialize(PostProcessSystem *postProcessSystem);
     void Reset();
     void Update(float deltaTime, float sceneTime);
 
@@ -45,7 +44,7 @@ class CombatFeedbackDirector {
     float ShakeRatio() const;
 
   private:
-    PostEffectRenderer *postEffectRenderer_ = nullptr;
+    PostProcessSystem *postProcessSystem_ = nullptr;
 
     float hitStopTimer_ = 0.0f;
     float hitStopDuration_ = 0.0f;

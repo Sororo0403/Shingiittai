@@ -20,7 +20,7 @@
 #include "graphics/Culling.h"
 #include "graphics/DynamicBuffer.h"
 #include "graphics/Lighting.h"
-#include "graphics/PostEffectRenderer.h"
+#include "graphics/PostProcessSystem.h"
 #include "graphics/PipelineManager.h"
 #include "graphics/RenderContext.h"
 #include "graphics/RenderPass.h"

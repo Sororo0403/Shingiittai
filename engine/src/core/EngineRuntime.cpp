@@ -5,7 +5,7 @@
 #include "core/WinApp.h"
 #include "debug/DebugLog.h"
 #include "graphics/DirectXCommon.h"
-#include "graphics/PostEffectRenderer.h"
+#include "graphics/PostProcessSystem.h"
 #include "graphics/RenderPassController.h"
 #include "graphics/ShadowMapRenderer.h"
 #include "graphics/SrvManager.h"
@@ -34,7 +34,7 @@ struct EngineRuntime::Systems {
     TextureManager textureManager;
     MeshManager meshManager;
     MeshRenderer meshRenderer;
-    PostEffectRenderer postEffectRenderer;
+    PostProcessSystem postProcessSystem;
     ShadowMapRenderer shadowMapRenderer;
     TransparentRenderQueue transparentQueue;
     RenderPassController renderPassController;
@@ -124,7 +124,7 @@ void EngineRuntime::Initialize(HINSTANCE instance, int showCommand,
 
     systems_->meshManager.Initialize(&systems_->dxCommon);
     systems_->meshRenderer.Initialize(&systems_->dxCommon, &systems_->srvManager, &systems_->textureManager);
-    systems_->postEffectRenderer.Initialize(&systems_->dxCommon, &systems_->srvManager, currentWidth_,
+    systems_->postProcessSystem.Initialize(&systems_->dxCommon, &systems_->srvManager, currentWidth_,
                                    currentHeight_);
     systems_->shadowMapRenderer.Initialize(&systems_->dxCommon, &systems_->srvManager);
     systems_->renderPassController.Initialize(&systems_->dxCommon, &systems_->srvManager);
@@ -155,7 +155,7 @@ void EngineRuntime::Initialize(HINSTANCE instance, int showCommand,
     systems_->sceneContext.rendering.texture = &systems_->textureManager;
     systems_->sceneContext.rendering.dxCommon = &systems_->dxCommon;
     systems_->sceneContext.rendering.srv = &systems_->srvManager;
-    systems_->sceneContext.rendering.postEffectRenderer = &systems_->postEffectRenderer;
+    systems_->sceneContext.rendering.postProcessSystem = &systems_->postProcessSystem;
     systems_->sceneContext.rendering.shadowMapRenderer = &systems_->shadowMapRenderer;
     systems_->sceneContext.rendering.transparentQueue = &systems_->transparentQueue;
     systems_->sceneContext.render = systems_->renderPassController.GetContextPtr();
@@ -189,7 +189,7 @@ void EngineRuntime::ResizeIfNeeded() {
     currentWidth_ = width;
     currentHeight_ = height;
     systems_->dxCommon.Resize(currentWidth_, currentHeight_);
-    systems_->postEffectRenderer.Resize(currentWidth_, currentHeight_);
+    systems_->postProcessSystem.Resize(currentWidth_, currentHeight_);
 }
 
 void EngineRuntime::RenderFrame() {
@@ -228,8 +228,8 @@ void EngineRuntime::RenderFrame() {
 
     systems_->dxCommon.BeginBackBufferPass(false);
     systems_->dxCommon.TransitionDepthToShaderResource();
-    systems_->renderPassController.BeginPass(RenderPass::PostEffect);
-    systems_->postEffectRenderer.Draw(systems_->dxCommon.GetSceneSrvGpuHandle(&systems_->srvManager),
+    systems_->renderPassController.BeginPass(RenderPass::PostProcess);
+    systems_->postProcessSystem.Draw(systems_->dxCommon.GetSceneSrvGpuHandle(&systems_->srvManager),
                              systems_->dxCommon.GetDepthStencilGpuHandle());
     systems_->renderPassController.EndPass();
     systems_->dxCommon.TransitionDepthToWrite();

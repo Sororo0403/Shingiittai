@@ -2,7 +2,7 @@
 #include "DirectXCommon.h"
 #include "GameScene.h"
 #include "Input.h"
-#include "PostEffectRenderer.h"
+#include "PostProcessSystem.h"
 #include "SceneManager.h"
 #include "SpriteManager.h"
 #include "TitleScene.h"
@@ -65,11 +65,10 @@ void BattleResultScene::Initialize(const SceneContext &ctx) {
         handController_.SetCalibration(inputCalibration_);
     }
 
-    ctx_->rendering.postEffectRenderer->SetColorMode(PostEffectRenderer::ColorMode::None);
-    ctx_->rendering.postEffectRenderer->SetVignettingEnabled(true);
-    ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.30f);
-    ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.0f);
-    ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(0.0f);
+    PostProcessProfile postProfile{};
+    postProfile.vignette.enabled = true;
+    postProfile.vignette.strength = 0.30f;
+    ctx_->rendering.postProcessSystem->SetProfile(postProfile);
 
     clearTitle_ = LoadTextureImage(L"app/resources/result/clear_title.png");
     gameOverTitle_ =

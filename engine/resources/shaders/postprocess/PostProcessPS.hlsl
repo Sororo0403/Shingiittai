@@ -1,4 +1,4 @@
-#include "PostEffect.hlsli"
+#include "PostProcess.hlsli"
 #include "ColorEffect.hlsli"
 #include "EdgeEffect.hlsli"
 #include "FilterEffect.hlsli"
@@ -21,20 +21,30 @@ float3 ApplyNoise(float3 color, float2 uv)
     return saturate(color + (noise - 0.5f) * noiseStrength);
 }
 
-float4 SampleRadialBlur(float2 uv)
+float4 ApplyRadialBlur(float2 uv, float4 baseColor)
 {
-    float2 center = float2(0.5f, 0.5f);
-    float2 direction = center - uv;
-    float4 color = 0.0f;
-
-    [unroll]
-    for (int i = 0; i < 8; ++i)
+    if (radialBlurStrength <= 0.0f || radialBlurSampleCount <= 1)
     {
-        float amount = ((float)i / 7.0f - 0.5f) * radialBlurStrength;
-        color += renderTexture.Sample(textureSampler, uv + direction * amount);
+        return baseColor;
     }
 
-    return color * 0.125f;
+    int sampleCount = min(max(radialBlurSampleCount, 2), 32);
+    float2 direction = radialBlurCenter - uv;
+    float4 color = renderTexture.Sample(textureSampler, uv);
+
+    [loop]
+    for (int i = 1; i < 32; ++i)
+    {
+        if (i >= sampleCount)
+        {
+            break;
+        }
+        float percent = (float)i / (float)(sampleCount - 1);
+        float2 sampleUv = uv + direction * radialBlurStrength * percent;
+        color += renderTexture.Sample(textureSampler, sampleUv);
+    }
+
+    return color / (float)sampleCount;
 }
 
 float3 ApplyVignette(float3 color, float2 uv)
@@ -42,6 +52,56 @@ float3 ApplyVignette(float3 color, float2 uv)
     float distanceFromCenter = distance(uv, float2(0.5f, 0.5f));
     float edge = smoothstep(vignetteRadius, 0.86f, distanceFromCenter);
     return color * (1.0f - edge * vignetteStrength);
+}
+
+float3 ApplyVignetting(float3 color, float2 uv)
+{
+    if (enableVignetting == 0)
+    {
+        return color;
+    }
+
+    float2 correct = uv * (1.0f - uv.yx);
+    float vignette = max(correct.x * correct.y * vignettingScale, 0.0f);
+    vignette = saturate(pow(vignette, vignettingPower));
+    return lerp(color, color * vignette, saturate(vignetteStrength));
+}
+
+float3 ApplyScreenGrade(float3 color)
+{
+    float luminance = dot(color, float3(0.2125f, 0.7154f, 0.0721f));
+    color = lerp(float3(luminance, luminance, luminance), color, 1.07f);
+    color = (color - 0.5f) * 1.055f + 0.5f;
+    color *= float3(1.015f, 1.005f, 0.985f);
+    return saturate(color);
+}
+
+float Random2dTo1d(float2 value, float seed)
+{
+    float2 randomVector = float2(12.9898f, 78.233f);
+    float random = sin(dot(value, randomVector) + seed * 37.719f);
+    return frac(random * 43758.5453f);
+}
+
+float4 ApplyRandomEffect(float4 baseColor, float2 uv)
+{
+    if (randomMode == 0)
+    {
+        return baseColor;
+    }
+
+    float2 cell = floor(uv * max(randomScale, 1.0f));
+    float seed = floor(randomTime * 60.0f) + randomSeed;
+    float noise = Random2dTo1d(cell, seed);
+
+    if (randomMode == 1)
+    {
+        return float4(noise.xxx, baseColor.a);
+    }
+
+    float grain = (noise - 0.5f) * randomStrength;
+    baseColor.rgb = saturate(baseColor.rgb + grain.xxx);
+    return baseColor;
 }
 
 float3 ApplyDissolve(float3 color, float2 uv)
@@ -57,26 +117,6 @@ float3 ApplyDissolve(float3 color, float2 uv)
     return saturate(color * mask + ember);
 }
 
-float3 ApplySakuraAnime(float3 color, float2 uv)
-{
-    float luminance = dot(color, float3(0.2125f, 0.7154f, 0.0721f));
-    float3 shadowTint = float3(0.82f, 0.88f, 1.0f);
-    float3 highlightTint = float3(1.0f, 0.76f, 0.86f);
-    float3 tinted = lerp(color * shadowTint, color * highlightTint,
-                         saturate(luminance * 1.15f));
-
-    tinted = pow(saturate(tinted), 0.82f);
-    tinted = floor(tinted * 7.0f + 0.5f) / 7.0f;
-
-    float centerLight = 1.0f - smoothstep(0.0f, 0.72f,
-                                          distance(uv, float2(0.5f, 0.45f)));
-    tinted += float3(0.10f, 0.08f, 0.12f) * centerLight;
-
-    float grain = NoiseHash(uv * 680.0f + noiseTime * 0.11f);
-    tinted += (grain - 0.5f) * 0.026f;
-    return saturate(tinted);
-}
-
 float3 ApplySpecialEffect(float3 color, float2 uv)
 {
     if (specialMode == 1)
@@ -87,11 +127,6 @@ float3 ApplySpecialEffect(float3 color, float2 uv)
     if (specialMode == 3)
     {
         return ApplyDissolve(color, uv);
-    }
-
-    if (specialMode == 4)
-    {
-        return ApplySakuraAnime(color, uv);
     }
 
     return color;
@@ -180,15 +215,15 @@ float3 ApplyLensFlare(float3 color, float2 uv)
     return saturate(color + flare * visibility);
 }
 
-float4 main(PostEffectVSOutput input) : SV_TARGET
+float4 main(PostProcessVSOutput input) : SV_TARGET
 {
-    float4 outputColor = specialMode == 2
-                             ? SampleRadialBlur(input.uv)
-                             : ApplyFilterEffect(renderTexture, textureSampler,
-                                                 input.uv, filterMode);
+    float4 outputColor = ApplyFilterEffect(renderTexture, textureSampler,
+                                           input.uv, filterMode);
+    outputColor = ApplyRadialBlur(input.uv, outputColor);
 
     outputColor.rgb =
-        ApplyColorEffect(outputColor.rgb, colorMode, grayscaleWeights);
+        ApplyColorEffect(outputColor.rgb, colorMode, grayscaleWeights,
+                         sepiaTone);
 
     outputColor = ApplyEdgeEffect(outputColor, renderTexture, depthTexture,
                                   textureSampler, input.uv, edgeMode);
@@ -197,8 +232,12 @@ float4 main(PostEffectVSOutput input) : SV_TARGET
                                        outputColor.rgb, input.uv);
     outputColor.rgb = ApplyTonemapEffect(outputColor.rgb);
     outputColor.rgb = ApplyNoise(outputColor.rgb, input.uv);
+    outputColor.rgb = ApplyVignetting(outputColor.rgb, input.uv);
+    outputColor.rgb *= 1.0f - saturate(sceneDimStrength) * 0.62f;
+    outputColor.rgb = ApplyScreenGrade(outputColor.rgb);
     outputColor.rgb = ApplySpecialEffect(outputColor.rgb, input.uv);
     outputColor.rgb = ApplyLensFlare(outputColor.rgb, input.uv);
+    outputColor = ApplyRandomEffect(outputColor, input.uv);
 
     return outputColor;
 }

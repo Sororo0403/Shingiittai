@@ -24,11 +24,10 @@ class TitleScene : public BaseScene {
     };
 
     Image LoadTitleImage(const std::wstring &path);
-    void DrawRect(float x, float y, float w, float h,
-                  const DirectX::XMFLOAT4 &color);
     void DrawImage(const Image &image, float x, float y, float alpha = 1.0f);
     void DrawImage(const Image &image, float x, float y, float alpha,
                    float scale);
+    void ResetTitlePostProcess() const;
     bool IsAnyButtonTriggered(const Input &input) const;
 
   private:

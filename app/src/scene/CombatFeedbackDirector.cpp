@@ -1,5 +1,5 @@
 #include "CombatFeedbackDirector.h"
-#include "PostEffectRenderer.h"
+#include "PostProcessSystem.h"
 #include <algorithm>
 #include <cmath>
 
@@ -27,8 +27,8 @@ XMFLOAT3 Add(const XMFLOAT3 &a, const XMFLOAT3 &b) {
 
 } // namespace
 
-void CombatFeedbackDirector::Initialize(PostEffectRenderer *postEffectRenderer) {
-    postEffectRenderer_ = postEffectRenderer;
+void CombatFeedbackDirector::Initialize(PostProcessSystem *postProcessSystem) {
+    postProcessSystem_ = postProcessSystem;
     Reset();
 }
 
@@ -47,13 +47,15 @@ void CombatFeedbackDirector::Reset() {
     vignetteBoost_ = 0.0f;
     fovKickDeg_ = 0.0f;
 
-    if (postEffectRenderer_) {
-        postEffectRenderer_->SetRadialBlurStrength(0.0f);
-        postEffectRenderer_->SetRadialBlurSampleCount(14);
-        postEffectRenderer_->SetRandomMode(PostEffectRenderer::RandomMode::None);
-        postEffectRenderer_->SetRandomStrength(0.0f);
-        postEffectRenderer_->SetSceneDimStrength(0.0f);
-        postEffectRenderer_->SetVignettingStrength(baseVignetteStrength_);
+    if (postProcessSystem_) {
+        PostProcessProfile profile = postProcessSystem_->GetProfile();
+        profile.radialBlur.strength = 0.0f;
+        profile.radialBlur.sampleCount = 14;
+        profile.randomNoise.mode = PostProcessRandomMode::None;
+        profile.randomNoise.strength = 0.0f;
+        profile.sceneDim.strength = 0.0f;
+        profile.vignette.strength = baseVignetteStrength_;
+        postProcessSystem_->SetProfile(profile);
     }
 }
 
@@ -84,30 +86,32 @@ void CombatFeedbackDirector::Update(float deltaTime, float sceneTime) {
         fovKickDeg_ = 0.0f;
     }
 
-    if (!postEffectRenderer_) {
+    if (!postProcessSystem_) {
         return;
     }
 
     const float postRatio =
         postDuration_ > kMinVectorLength ? postTimer_ / postDuration_ : 0.0f;
     const float eased = EaseOut(postRatio);
-    postEffectRenderer_->SetRadialBlurCenter(0.5f, 0.5f);
-    postEffectRenderer_->SetRadialBlurStrength(radialBlurStrength_ * eased);
-    postEffectRenderer_->SetRadialBlurSampleCount(18);
-    postEffectRenderer_->SetVignettingStrength(baseVignetteStrength_ +
-                                               vignetteBoost_ * eased);
-    postEffectRenderer_->SetRandomTime(sceneTime);
-    postEffectRenderer_->SetRandomScale(320.0f);
+    PostProcessProfile profile = postProcessSystem_->GetProfile();
+    profile.radialBlur.center[0] = 0.5f;
+    profile.radialBlur.center[1] = 0.5f;
+    profile.radialBlur.strength = radialBlurStrength_ * eased;
+    profile.radialBlur.sampleCount = 18;
+    profile.vignette.strength = baseVignetteStrength_ + vignetteBoost_ * eased;
+    profile.randomNoise.time = sceneTime;
+    profile.randomNoise.scale = 320.0f;
+    profile.noise.time = sceneTime;
 
     if (randomStrength_ * eased > 0.001f) {
-        postEffectRenderer_->SetRandomMode(
-            PostEffectRenderer::RandomMode::OverlayNoise);
-        postEffectRenderer_->SetRandomStrength(randomStrength_ * eased);
+        profile.randomNoise.mode = PostProcessRandomMode::OverlayNoise;
+        profile.randomNoise.strength = randomStrength_ * eased;
     } else {
-        postEffectRenderer_->SetRandomMode(PostEffectRenderer::RandomMode::None);
-        postEffectRenderer_->SetRandomStrength(0.0f);
+        profile.randomNoise.mode = PostProcessRandomMode::None;
+        profile.randomNoise.strength = 0.0f;
     }
-    postEffectRenderer_->SetSceneDimStrength(0.0f);
+    profile.sceneDim.strength = 0.0f;
+    postProcessSystem_->SetProfile(profile);
 }
 
 void CombatFeedbackDirector::PushEvent(const CombatFeedbackEvent &event) {

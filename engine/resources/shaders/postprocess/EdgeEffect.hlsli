@@ -68,12 +68,14 @@ float4 ApplyEdgeEffect(float4 sourceColor, Texture2D sourceTexture,
                        Texture2D depthTexture, SamplerState sourceSampler,
                        float2 uv, int mode)
 {
+    float4 result = sourceColor;
+
     if (mode == 1)
     {
         float edge = CalcLuminanceEdge(sourceTexture, sourceSampler, uv);
         if (edge > luminanceEdgeThreshold)
         {
-            return float4(0.0f, 0.0f, 0.0f, sourceColor.a);
+            result = float4(0.0f, 0.0f, 0.0f, sourceColor.a);
         }
     }
     else if (mode == 2)
@@ -81,11 +83,11 @@ float4 ApplyEdgeEffect(float4 sourceColor, Texture2D sourceTexture,
         float edge = CalcDepthEdge(depthTexture, sourceSampler, uv);
         if (edge > depthEdgeThreshold)
         {
-            return float4(0.0f, 0.0f, 0.0f, sourceColor.a);
+            result = float4(0.0f, 0.0f, 0.0f, sourceColor.a);
         }
     }
 
-    return sourceColor;
+    return result;
 }
 
 #endif // EDGE_EFFECT_HLSLI

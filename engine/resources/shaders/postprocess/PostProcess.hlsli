@@ -1,13 +1,13 @@
 #ifndef POST_EFFECT_HLSLI
 #define POST_EFFECT_HLSLI
 
-struct PostEffectVSOutput
+struct PostProcessVSOutput
 {
     float4 pos : SV_POSITION;
     float2 uv : TEXCOORD;
 };
 
-cbuffer PostEffectConstants : register(b0)
+cbuffer PostProcessConstants : register(b0)
 {
     int colorMode;
     int filterMode;
@@ -56,6 +56,19 @@ cbuffer PostEffectConstants : register(b0)
     float lensFlareStreakAlpha;
     float3 lensFlareStreakColor;
     float lensFlarePadding1;
+    int enableVignetting;
+    int randomMode;
+    int radialBlurSampleCount;
+    float vignettingScale;
+    float vignettingPower;
+    float2 radialBlurCenter;
+    float randomStrength;
+    float randomScale;
+    float randomTime;
+    float randomSeed;
+    float sceneDimStrength;
+    float3 sepiaTone;
+    float legacyPadding0;
 };
 
 #endif // POST_EFFECT_HLSLI

@@ -5,7 +5,7 @@
 #include "DirectXCommon.h"
 #include "GameScene.h"
 #include "Input.h"
-#include "PostEffectRenderer.h"
+#include "PostProcessSystem.h"
 #include "SceneManager.h"
 #include "SpriteManager.h"
 #include "TextureManager.h"
@@ -86,11 +86,10 @@ void TipScene::Initialize(const SceneContext &ctx) {
         break;
     }
 
-    ctx_->rendering.postEffectRenderer->SetColorMode(PostEffectRenderer::ColorMode::None);
-    ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(0.0f);
-    ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.0f);
-    ctx_->rendering.postEffectRenderer->SetVignettingEnabled(true);
-    ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.26f);
+    PostProcessProfile postProfile{};
+    postProfile.vignette.enabled = true;
+    postProfile.vignette.strength = 0.26f;
+    ctx_->rendering.postProcessSystem->SetProfile(postProfile);
 }
 
 void TipScene::Update() {

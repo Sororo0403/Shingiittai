@@ -4,24 +4,6 @@
 #include <DirectXMath.h>
 #include <cmath>
 
-#define ResetEffects() SetSpecialMode(PostEffectSpecialMode::None)
-#define SetVignettingEnabled(enabled)                                           \
-    SetSpecialMode((enabled) ? PostEffectSpecialMode::Vignette                  \
-                             : PostEffectSpecialMode::None)
-#define SetVignettingStrength(strength) SetVignette((strength), 0.72f)
-#define SetVignettingShape(...) GetSpecialMode()
-#define SetSceneDimStrength(...) GetSpecialMode()
-#define SetRadialBlurStrength(strength) SetRadialBlur(strength)
-#define SetRadialBlurCenter(...) GetSpecialMode()
-#define SetRadialBlurSampleCount(...) GetSpecialMode()
-#define SetRandomMode(...) GetSpecialMode()
-#define SetRandomStrength(...) GetSpecialMode()
-#define SetRandomTime(time) SetNoiseTime(time)
-#define SetRandomScale(...) GetSpecialMode()
-
-#define SetClearColor(...) GetDevice()
-#define ResetClearColor() GetDevice()
-
 #define SetEmission(...) GetEmitterSettings()
 #define SetEmitterRadius(...) GetEmitterSettings()
 

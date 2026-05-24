@@ -13,7 +13,7 @@
 #include "SpriteManager.h"
 #include "TextureManager.h"
 #include "WinApp.h"
-#include "PostEffectRenderer.h"
+#include "PostProcessSystem.h"
 #include "SceneManager.h"
 #include <DirectXTex.h>
 #include <algorithm>
@@ -43,6 +43,58 @@ constexpr float kDebugPreviewStaleSeconds = 0.75f;
 
 SOCKET ToSocket(uintptr_t value) {
     return static_cast<SOCKET>(value);
+}
+
+PostProcessProfile GetPostProcessProfile(const SceneContext *ctx) {
+    if (ctx == nullptr || ctx->rendering.postProcessSystem == nullptr) {
+        return {};
+    }
+    return ctx->rendering.postProcessSystem->GetProfile();
+}
+
+void SetPostProcessProfile(const SceneContext *ctx,
+                           const PostProcessProfile &profile) {
+    if (ctx == nullptr || ctx->rendering.postProcessSystem == nullptr) {
+        return;
+    }
+    ctx->rendering.postProcessSystem->SetProfile(profile);
+}
+
+void ApplyBattlePostProcess(const SceneContext *ctx, float radialBlurStrength,
+                            float vignetteStrength, float sceneDimStrength,
+                            float centerY = 0.48f,
+                            int32_t sampleCount = 20,
+                            float vignetteScale = 11.0f,
+                            float vignettePower = 1.15f) {
+    PostProcessProfile profile = GetPostProcessProfile(ctx);
+    profile.colorGrade.mode = PostProcessColorMode::None;
+    profile.vignette.enabled = true;
+    profile.vignette.strength = vignetteStrength;
+    profile.vignette.scale = vignetteScale;
+    profile.vignette.power = vignettePower;
+    profile.radialBlur.center[0] = 0.5f;
+    profile.radialBlur.center[1] = centerY;
+    profile.radialBlur.sampleCount = sampleCount;
+    profile.radialBlur.strength = radialBlurStrength;
+    profile.sceneDim.strength = sceneDimStrength;
+    SetPostProcessProfile(ctx, profile);
+}
+
+void ResetBattlePostProcessTransient(const SceneContext *ctx,
+                                     float vignetteStrength,
+                                     float vignetteScale = 11.0f,
+                                     float vignettePower = 1.15f) {
+    ApplyBattlePostProcess(ctx, 0.0f, vignetteStrength, 0.0f, 0.48f, 20,
+                           vignetteScale, vignettePower);
+}
+
+void SetBattlePostProcessTransient(const SceneContext *ctx,
+                                   float radialBlurStrength,
+                                   float sceneDimStrength) {
+    PostProcessProfile profile = GetPostProcessProfile(ctx);
+    profile.radialBlur.strength = radialBlurStrength;
+    profile.sceneDim.strength = sceneDimStrength;
+    SetPostProcessProfile(ctx, profile);
 }
 
 struct SharedBattleModels {
@@ -413,11 +465,13 @@ GameScene::~GameScene() { CloseDebugPreviewSocket(); }
 void GameScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
     ctx_->rendering.dxCommon->ResetClearColor();
-    ctx_->rendering.postEffectRenderer->SetColorMode(PostEffectRenderer::ColorMode::None);
-    ctx_->rendering.postEffectRenderer->SetVignettingShape(11.0f, 1.15f);
-    ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.20f);
-    ctx_->rendering.postEffectRenderer->SetVignettingEnabled(true);
-    combatFeedback_.Initialize(ctx_->rendering.postEffectRenderer);
+    PostProcessProfile postProfile{};
+    postProfile.vignette.enabled = true;
+    postProfile.vignette.strength = 0.20f;
+    postProfile.vignette.scale = 11.0f;
+    postProfile.vignette.power = 1.15f;
+    ctx_->rendering.postProcessSystem->SetProfile(postProfile);
+    combatFeedback_.Initialize(ctx_->rendering.postProcessSystem);
 
     float aspect = static_cast<float>(ctx_->systems.winApp->GetWidth()) /
                    static_cast<float>(ctx_->systems.winApp->GetHeight());
@@ -1874,7 +1928,6 @@ void GameScene::Draw() {
     DrawVictoryFlash();
     DrawDefeatFlash();
     DrawBattleIntroFlash();
-    DrawTitleDemoFlash();
 }
 
 void GameScene::DispatchCombatFeedback(const CombatFeedbackEvent &event) {
@@ -2337,7 +2390,7 @@ void GameScene::UpdateChargeWeakPointFocus(float deltaTime) {
     chargeWeakPointFocusRatio_ +=
         (target - chargeWeakPointFocusRatio_) * alpha;
 
-    if (ctx_ == nullptr || ctx_->rendering.postEffectRenderer == nullptr) {
+    if (ctx_ == nullptr || ctx_->rendering.postProcessSystem == nullptr) {
         return;
     }
 
@@ -2396,30 +2449,24 @@ void GameScene::UpdateChargeWeakPointFocus(float deltaTime) {
             radialBlurStrength =
                 (std::max)(radialBlurStrength, piercePulse);
         }
-        ctx_->rendering.postEffectRenderer->SetRadialBlurCenter(0.5f, 0.48f);
-        ctx_->rendering.postEffectRenderer->SetRadialBlurSampleCount(18);
-        ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(radialBlurStrength);
-        ctx_->rendering.postEffectRenderer->SetVignettingEnabled(true);
-        ctx_->rendering.postEffectRenderer->SetVignettingShape(vignetteScale,
-                                                     vignettePower);
-        ctx_->rendering.postEffectRenderer->SetVignettingStrength(vignetteStrength);
-        ctx_->rendering.postEffectRenderer->SetSceneDimStrength(sceneDimStrength);
+        ApplyBattlePostProcess(ctx_, radialBlurStrength, vignetteStrength,
+                               sceneDimStrength, 0.48f, 18, vignetteScale,
+                               vignettePower);
         return;
     }
 
     const float focus = chargeWeakPointFocusRatio_;
     if (focus <= 0.001f) {
-        ctx_->rendering.postEffectRenderer->SetVignettingShape(11.0f, 1.15f);
-        ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.0f);
+        PostProcessProfile profile = GetPostProcessProfile(ctx_);
+        profile.vignette.scale = 11.0f;
+        profile.vignette.power = 1.15f;
+        profile.sceneDim.strength = 0.0f;
+        SetPostProcessProfile(ctx_, profile);
         return;
     }
 
-    ctx_->rendering.postEffectRenderer->SetRadialBlurCenter(0.5f, 0.48f);
-    ctx_->rendering.postEffectRenderer->SetRadialBlurSampleCount(20);
-    ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(0.030f * focus);
-    ctx_->rendering.postEffectRenderer->SetVignettingShape(11.0f, 1.15f);
-    ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.20f + 0.72f * focus);
-    ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.42f * focus);
+    ApplyBattlePostProcess(ctx_, 0.030f * focus, 0.20f + 0.72f * focus,
+                           0.42f * focus);
 }
 
 void GameScene::DrawTransparent() {
@@ -2458,15 +2505,8 @@ void GameScene::UpdatePhaseTransitionCinematic(float deltaTime) {
     const float charge = SmoothStep01(ratio / kReleaseStart);
     const float release = SmoothStep01((ratio - kReleaseStart) / kReleaseDuration);
     const float hold = charge * (1.0f - release);
-    if (ctx_ != nullptr && ctx_->rendering.postEffectRenderer != nullptr) {
-        ctx_->rendering.postEffectRenderer->SetVignettingEnabled(true);
-        ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.30f + 0.42f * hold);
-        ctx_->rendering.postEffectRenderer->SetRadialBlurCenter(0.5f, 0.48f);
-        ctx_->rendering.postEffectRenderer->SetRadialBlurSampleCount(20);
-        ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(
-            0.010f + 0.026f * hold + 0.036f * release);
-        ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.10f + 0.18f * hold);
-    }
+    ApplyBattlePostProcess(ctx_, 0.010f + 0.026f * hold + 0.036f * release,
+                           0.30f + 0.42f * hold, 0.10f + 0.18f * hold);
 
     enemy_.Update(BuildPlayerCombatObservation(), deltaTime);
     ctx_->rendering.model->UpdateAnimation(playerModelId_, deltaTime * 0.025f);
@@ -2491,11 +2531,7 @@ void GameScene::UpdatePhaseTransitionCinematic(float deltaTime) {
     if (!enemy_.IsPhaseTransitionActive()) {
         phaseTransitionWasActive_ = false;
         phaseTransitionReleaseEmitted_ = false;
-        if (ctx_ != nullptr && ctx_->rendering.postEffectRenderer != nullptr) {
-            ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(0.0f);
-            ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.0f);
-            ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.24f);
-        }
+        ResetBattlePostProcessTransient(ctx_, 0.24f);
     }
 }
 
@@ -2575,14 +2611,8 @@ void GameScene::UpdateBattleIntro(float deltaTime) {
         std::clamp((battleIntroTimer_ - 0.32f) / 2.02f, 0.0f, 1.0f);
     const float reveal = SmoothStep01(dissolveProgress);
     ApplyEnemyIntroDissolve(reveal);
-    if (ctx_ != nullptr && ctx_->rendering.postEffectRenderer != nullptr) {
-        ctx_->rendering.postEffectRenderer->SetVignettingEnabled(true);
-        ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.16f + 0.06f * ratio);
-        ctx_->rendering.postEffectRenderer->SetRadialBlurCenter(0.5f, 0.48f);
-        ctx_->rendering.postEffectRenderer->SetRadialBlurSampleCount(18);
-        ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(0.035f * (1.0f - ratio));
-        ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.0f);
-    }
+    ApplyBattlePostProcess(ctx_, 0.035f * (1.0f - ratio),
+                           0.16f + 0.06f * ratio, 0.0f, 0.48f, 18);
     if (!battleIntroRevealEmitted_ && battleIntroTimer_ >= 2.36f) {
         battleIntroRevealEmitted_ = true;
         const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
@@ -2615,11 +2645,7 @@ void GameScene::UpdateBattleIntro(float deltaTime) {
         battleIntroActive_ = false;
         battleIntroTimer_ = battleIntroDuration_;
         ApplyEnemyIntroDissolve(1.0f);
-        if (ctx_ != nullptr && ctx_->rendering.postEffectRenderer != nullptr) {
-            ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(0.0f);
-            ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.0f);
-            ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.20f);
-        }
+        ResetBattlePostProcessTransient(ctx_, 0.20f);
     }
 }
 
@@ -2662,7 +2688,7 @@ void GameScene::UpdateTitleDemo(float deltaTime) {
     constexpr float kIdleBeforeShowcase = 5.35f;
 
     auto applyTitleDemoPost = [&]() {
-        if (ctx_ == nullptr || ctx_->rendering.postEffectRenderer == nullptr) {
+        if (ctx_ == nullptr || ctx_->rendering.postProcessSystem == nullptr) {
             return;
         }
 
@@ -2670,19 +2696,13 @@ void GameScene::UpdateTitleDemo(float deltaTime) {
             titleDemoPhase_ == 1
                 ? std::clamp(1.0f - titleDemoPhaseTimer_ / 0.52f, 0.0f, 1.0f)
                 : 0.0f;
-        ctx_->rendering.postEffectRenderer->SetColorMode(PostEffectRenderer::ColorMode::None);
-        ctx_->rendering.postEffectRenderer->SetRadialBlurCenter(0.5f, 0.48f);
-        ctx_->rendering.postEffectRenderer->SetRadialBlurSampleCount(24);
-        ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(
+        ApplyBattlePostProcess(
+            ctx_,
             0.018f + 0.048f * cueFlash +
-            (bladeClashActive_ ? 0.030f * bladeClashImpactPulse_ : 0.0f));
-        ctx_->rendering.postEffectRenderer->SetVignettingEnabled(true);
-        ctx_->rendering.postEffectRenderer->SetVignettingShape(8.6f, 1.24f);
-        ctx_->rendering.postEffectRenderer->SetVignettingStrength(
+                (bladeClashActive_ ? 0.030f * bladeClashImpactPulse_ : 0.0f),
             0.24f + 0.38f * cueFlash +
-            (bladeClashActive_ ? 0.16f * std::abs(bladeClashGauge_) : 0.0f));
-        ctx_->rendering.postEffectRenderer->SetSceneDimStrength(
-            0.05f + 0.18f * cueFlash);
+                (bladeClashActive_ ? 0.16f * std::abs(bladeClashGauge_) : 0.0f),
+            0.05f + 0.18f * cueFlash, 0.48f, 24, 8.6f, 1.24f);
     };
 
     if (titleDemoPhase_ == 0 && titleDemoPhaseTimer_ < kIdleBeforeShowcase) {
@@ -2818,13 +2838,7 @@ void GameScene::ResetTitleDemoShowcase() {
     titleDemoCounterTimer_ = 0.90f;
     titleDemoPhaseTimer_ = 0.0f;
     titleDemoPhase_ = 0;
-    if (ctx_ != nullptr && ctx_->rendering.postEffectRenderer != nullptr) {
-        ctx_->rendering.postEffectRenderer->SetColorMode(PostEffectRenderer::ColorMode::None);
-        ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(0.0f);
-        ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.0f);
-        ctx_->rendering.postEffectRenderer->SetVignettingShape(11.0f, 1.15f);
-        ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.20f);
-    }
+    ResetBattlePostProcessTransient(ctx_, 0.20f);
     SyncEnemyAnimation();
 }
 
@@ -2842,14 +2856,7 @@ void GameScene::BeginVictorySequence() {
                     enemy_.GetMaxHP());
     }
 
-    if (ctx_ != nullptr && ctx_->rendering.postEffectRenderer != nullptr) {
-        ctx_->rendering.postEffectRenderer->SetVignettingEnabled(true);
-        ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.58f);
-        ctx_->rendering.postEffectRenderer->SetRadialBlurCenter(0.5f, 0.48f);
-        ctx_->rendering.postEffectRenderer->SetRadialBlurSampleCount(24);
-        ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(0.055f);
-        ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.10f);
-    }
+    ApplyBattlePostProcess(ctx_, 0.055f, 0.58f, 0.10f, 0.48f, 24);
 
     const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
     EmitParticleBurst(sparkParticles_, 
@@ -2871,14 +2878,7 @@ void GameScene::BeginDefeatSequence() {
     SetEnemyAnimationFrozen(false);
     player_.SetDefeatPoseRatio(0.0f);
 
-    if (ctx_ != nullptr && ctx_->rendering.postEffectRenderer != nullptr) {
-        ctx_->rendering.postEffectRenderer->SetVignettingEnabled(true);
-        ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.62f);
-        ctx_->rendering.postEffectRenderer->SetRadialBlurCenter(0.5f, 0.54f);
-        ctx_->rendering.postEffectRenderer->SetRadialBlurSampleCount(22);
-        ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(0.040f);
-        ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.18f);
-    }
+    ApplyBattlePostProcess(ctx_, 0.040f, 0.62f, 0.18f, 0.54f, 22);
 
     const XMFLOAT3 playerPos = player_.GetTransform().position;
     EmitParticleBurst(explosionParticles_, 
@@ -2900,14 +2900,10 @@ void GameScene::UpdateDefeatSequence(float deltaTime) {
                    1.0f);
     player_.SetDefeatPoseRatio(fallRatio);
 
-    if (ctx_ != nullptr && ctx_->rendering.postEffectRenderer != nullptr) {
-        const float ratio =
-            std::clamp(defeatSequenceTimer_ / defeatSequenceDuration_, 0.0f,
-                       1.0f);
-        ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(0.040f *
-                                                        (1.0f - ratio));
-        ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.18f + 0.22f * ratio);
-    }
+    const float postProcessRatio =
+        std::clamp(defeatSequenceTimer_ / defeatSequenceDuration_, 0.0f, 1.0f);
+    SetBattlePostProcessTransient(ctx_, 0.040f * (1.0f - postProcessRatio),
+                                  0.18f + 0.22f * postProcessRatio);
 
     if (!defeatImpactEmitted_ && defeatSequenceTimer_ >= 1.58f) {
         defeatImpactEmitted_ = true;
@@ -2925,10 +2921,7 @@ void GameScene::UpdateDefeatSequence(float deltaTime) {
     if (defeatSequenceTimer_ >= defeatSequenceDuration_) {
         defeatSequenceActive_ = false;
         player_.SetDefeatPoseRatio(0.0f);
-        if (ctx_ != nullptr && ctx_->rendering.postEffectRenderer != nullptr) {
-            ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(0.0f);
-            ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.0f);
-        }
+        SetBattlePostProcessTransient(ctx_, 0.0f, 0.0f);
         sceneManager_->ChangeScene(std::make_unique<BattleResultScene>(
             BattleResultScene::ResultKind::GameOver, battleElapsedTime_,
             inputCalibration_));
@@ -2941,12 +2934,9 @@ void GameScene::UpdateVictorySequence(float deltaTime) {
         std::clamp(victorySequenceTimer_ / victorySequenceDuration_, 0.0f,
                    1.0f);
 
-    if (ctx_ != nullptr && ctx_->rendering.postEffectRenderer != nullptr) {
-        const float stepped = std::floor(ratio * 14.0f) / 14.0f;
-        const float blur = (1.0f - stepped) * 0.070f;
-        ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(blur);
-        ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.10f + stepped * 0.18f);
-    }
+    const float stepped = std::floor(ratio * 14.0f) / 14.0f;
+    const float blur = (1.0f - stepped) * 0.070f;
+    SetBattlePostProcessTransient(ctx_, blur, 0.10f + stepped * 0.18f);
 
     if (!victoryFinalExplosionEmitted_ && victorySequenceTimer_ >= 3.90f) {
         victoryFinalExplosionEmitted_ = true;
@@ -2970,10 +2960,7 @@ void GameScene::UpdateVictorySequence(float deltaTime) {
 
     if (victorySequenceTimer_ >= victorySequenceDuration_) {
         victorySequenceActive_ = false;
-        if (ctx_ != nullptr && ctx_->rendering.postEffectRenderer != nullptr) {
-            ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(0.0f);
-            ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.0f);
-        }
+        SetBattlePostProcessTransient(ctx_, 0.0f, 0.0f);
         sceneManager_->ChangeScene(std::make_unique<BattleResultScene>(
             BattleResultScene::ResultKind::Clear, victoryClearTime_,
             inputCalibration_));
@@ -3057,30 +3044,6 @@ void GameScene::DrawBladeClashFinishFrame() {
                    std::clamp(screenH * 0.005f, 4.0f, 7.0f),
                    {1.0f, 0.72f, 0.28f, 0.22f * flash * alpha});
     }
-    ctx_->rendering.sprite->PostDraw();
-}
-
-void GameScene::DrawTitleDemoFlash() {
-    if (runMode_ != RunMode::TitleDemo || titleDemoPhase_ != 1 ||
-        ctx_ == nullptr || ctx_->rendering.sprite == nullptr || ctx_->systems.winApp == nullptr) {
-        return;
-    }
-
-    const float flash =
-        std::clamp(1.0f - titleDemoPhaseTimer_ / 0.52f, 0.0f, 1.0f);
-    if (flash <= 0.01f) {
-        return;
-    }
-
-    Sprite sprite{};
-    sprite.textureId = 0;
-    sprite.position = {0.0f, 0.0f};
-    sprite.size = {static_cast<float>(ctx_->systems.winApp->GetWidth()),
-                   static_cast<float>(ctx_->systems.winApp->GetHeight())};
-    sprite.color = {1.0f, 1.0f, 1.0f, flash};
-
-    ctx_->rendering.sprite->PreDraw();
-    ctx_->rendering.sprite->DrawSprite(sprite);
     ctx_->rendering.sprite->PostDraw();
 }
 

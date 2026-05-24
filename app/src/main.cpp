@@ -5,7 +5,7 @@
 #include "Lighting.h"
 #include "ModelManager.h"
 #include "RenderPassController.h"
-#include "PostEffectRenderer.h"
+#include "PostProcessSystem.h"
 #include "SceneContext.h"
 #include "SceneManager.h"
 #include "SoundManager.h"
@@ -414,9 +414,9 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
     dxCommon.RegisterSceneColorSRV(&srvManager);
     dxCommon.CreateDepthStencilSrv(&srvManager);
 
-    PostEffectRenderer postEffectRenderer;
-    postEffectRenderer.Initialize(&dxCommon, &srvManager, width, height);
-    postEffectRenderer.SetVignettingEnabled(false);
+    PostProcessSystem postProcessSystem;
+    postProcessSystem.Initialize(&dxCommon, &srvManager, width, height);
+    postProcessSystem.SetProfile(PostProcessProfile{});
 
     // Input
     Input input;
@@ -466,7 +466,7 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
     sceneCtx.rendering.srv = &srvManager;
     sceneCtx.rendering.texture = &textureManager;
     sceneCtx.rendering.dxCommon = &dxCommon;
-    sceneCtx.rendering.postEffectRenderer = &postEffectRenderer;
+    sceneCtx.rendering.postProcessSystem = &postProcessSystem;
     sceneCtx.frame.deltaTime = 0.0f;
     AppSceneServices::ConfigureHandTracking(
         [&handUdpSenderProcess, &winApp]() {
@@ -526,7 +526,7 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
             width = currentWidth;
             height = currentHeight;
             dxCommon.Resize(width, height);
-            postEffectRenderer.Resize(width, height);
+            postProcessSystem.Resize(width, height);
             spriteManager.Resize(width, height);
         }
 
@@ -545,7 +545,7 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
 
         dxCommon.BeginBackBufferPass(false);
         dxCommon.TransitionDepthToShaderResource();
-        postEffectRenderer.Draw(dxCommon.GetSceneSrvGpuHandle(&srvManager),
+        postProcessSystem.Draw(dxCommon.GetSceneSrvGpuHandle(&srvManager),
                                 dxCommon.GetDepthStencilGpuHandle());
         dxCommon.TransitionDepthToWrite();
 

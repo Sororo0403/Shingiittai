@@ -1,6 +1,6 @@
-#include "PostEffect.hlsli"
+#include "PostProcess.hlsli"
 
-PostEffectVSOutput main(uint vertexId : SV_VertexID)
+PostProcessVSOutput main(uint vertexId : SV_VertexID)
 {
     float2 positions[3] = {
         float2(-1.0f, 3.0f),
@@ -14,7 +14,7 @@ PostEffectVSOutput main(uint vertexId : SV_VertexID)
         float2(2.0f, 1.0f),
     };
 
-    PostEffectVSOutput output;
+    PostProcessVSOutput output;
     output.pos = float4(positions[vertexId], 0.0f, 1.0f);
     output.uv = uvs[vertexId];
     return output;

@@ -1,6 +1,6 @@
 #include "CalibrationScene.h"
 #include "DirectXCommon.h"
-#include "PostEffectRenderer.h"
+#include "PostProcessSystem.h"
 #include "SceneManager.h"
 #include "SpriteManager.h"
 #include "TextureManager.h"
@@ -58,9 +58,10 @@ void CalibrationScene::Initialize(const SceneContext &ctx) {
                              std::to_wstring(i) + L".png");
     }
 
-    ctx_->rendering.postEffectRenderer->ResetEffects();
-    ctx_->rendering.postEffectRenderer->SetVignettingEnabled(true);
-    ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.24f);
+    PostProcessProfile postProfile{};
+    postProfile.vignette.enabled = true;
+    postProfile.vignette.strength = 0.24f;
+    ctx_->rendering.postProcessSystem->SetProfile(postProfile);
 }
 
 void CalibrationScene::Update() {

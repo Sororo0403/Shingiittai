@@ -2,7 +2,7 @@
 #include "DirectXCommon.h"
 #include "GameScene.h"
 #include "Input.h"
-#include "PostEffectRenderer.h"
+#include "PostProcessSystem.h"
 #include "SceneManager.h"
 #include "SettingsScene.h"
 #include "SpriteManager.h"
@@ -39,8 +39,10 @@ void ModeSelectScene::Initialize(const SceneContext &ctx) {
     helpImages_[0] = LoadMenuImage(L"app/resources/menu/game_start_help.png");
     helpImages_[1] = LoadMenuImage(L"app/resources/menu/settings_help.png");
 
-    ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.22f);
-    ctx_->rendering.postEffectRenderer->SetVignettingEnabled(true);
+    PostProcessProfile postProfile{};
+    postProfile.vignette.enabled = true;
+    postProfile.vignette.strength = 0.22f;
+    ctx_->rendering.postProcessSystem->SetProfile(postProfile);
 }
 
 void ModeSelectScene::Update() {

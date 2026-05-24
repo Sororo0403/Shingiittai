@@ -4,7 +4,7 @@
 #include "DirectXCommon.h"
 #include "Input.h"
 #include "ModelManager.h"
-#include "PostEffectRenderer.h"
+#include "PostProcessSystem.h"
 #include "SceneManager.h"
 #include "SpriteManager.h"
 #include "TextureManager.h"
@@ -122,7 +122,7 @@ void WeaponSelectScene::Initialize(const SceneContext &ctx) {
     }
     LoadRankings();
 
-    ctx_->rendering.postEffectRenderer->ResetEffects();
+    ctx_->rendering.postProcessSystem->SetProfile(PostProcessProfile{});
     UpdateLighting();
 }
 

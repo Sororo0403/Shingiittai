@@ -50,8 +50,8 @@ std::string_view RenderPassController::GetPassName(RenderPass pass) {
         return "SceneColor";
     case RenderPass::Transparent:
         return "Transparent";
-    case RenderPass::PostEffect:
-        return "PostEffect";
+    case RenderPass::PostProcess:
+        return "PostProcess";
     case RenderPass::Debug:
         return "Debug";
     case RenderPass::UI:

@@ -2,7 +2,7 @@
 #include "DirectXCommon.h"
 #include "Input.h"
 #include "ModeSelectScene.h"
-#include "PostEffectRenderer.h"
+#include "PostProcessSystem.h"
 #include "SceneManager.h"
 #include "SoundManager.h"
 #include "SpriteManager.h"
@@ -33,8 +33,10 @@ void SettingsScene::Initialize(const SceneContext &ctx) {
     controlsImage_ =
         LoadSettingsImage(L"app/resources/menu/settings_controls.png");
 
-    ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.20f);
-    ctx_->rendering.postEffectRenderer->SetVignettingEnabled(true);
+    PostProcessProfile postProfile{};
+    postProfile.vignette.enabled = true;
+    postProfile.vignette.strength = 0.20f;
+    ctx_->rendering.postProcessSystem->SetProfile(postProfile);
 }
 
 void SettingsScene::Update() {

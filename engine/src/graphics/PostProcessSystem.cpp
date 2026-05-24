@@ -1,0 +1,243 @@
+#include "graphics/PostProcessSystem.h"
+#include "graphics/DirectXCommon.h"
+#include "graphics/DxHelpers.h"
+#include "graphics/DxUtils.h"
+#include "graphics/ShaderCompiler.h"
+#include "graphics/ShaderPaths.h"
+#include "graphics/SrvManager.h"
+#include <algorithm>
+
+using namespace DxUtils;
+
+void PostProcessSystem::Initialize(DirectXCommon *dxCommon,
+                                    SrvManager *srvManager, int width,
+                                    int height) {
+    dxCommon_ = dxCommon;
+    srvManager_ = srvManager;
+
+    CreateRootSignature();
+    CreatePipelineState();
+    CreateConstantBuffer();
+    Resize(width, height);
+}
+
+void PostProcessSystem::Resize(int width, int height) {
+    width_ = width > 0 ? width : 1;
+    height_ = height > 0 ? height : 1;
+
+    viewport_.TopLeftX = 0.0f;
+    viewport_.TopLeftY = 0.0f;
+    viewport_.Width = static_cast<float>(width_);
+    viewport_.Height = static_cast<float>(height_);
+    viewport_.MinDepth = 0.0f;
+    viewport_.MaxDepth = 1.0f;
+
+    scissorRect_.left = 0;
+    scissorRect_.top = 0;
+    scissorRect_.right = width_;
+    scissorRect_.bottom = height_;
+
+    UpdateConstantBuffer();
+}
+
+void PostProcessSystem::SetProfile(const PostProcessProfile &profile) {
+    profile_ = profile;
+    UpdateConstantBuffer();
+}
+
+void PostProcessSystem::Draw(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle,
+                              D3D12_GPU_DESCRIPTOR_HANDLE depthHandle) {
+    auto commandList = dxCommon_->GetCommandList();
+
+    ID3D12DescriptorHeap *heaps[] = {srvManager_->GetHeap()};
+    commandList->SetDescriptorHeaps(1, heaps);
+
+    commandList->RSSetViewports(1, &viewport_);
+    commandList->RSSetScissorRects(1, &scissorRect_);
+    commandList->SetPipelineState(pipelineState_.Get());
+    commandList->SetGraphicsRootSignature(rootSignature_.Get());
+    commandList->SetGraphicsRootDescriptorTable(0, textureHandle);
+    commandList->SetGraphicsRootDescriptorTable(1, depthHandle);
+    commandList->SetGraphicsRootConstantBufferView(
+        2, constBuffer_->GetGPUVirtualAddress());
+    commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    commandList->DrawInstanced(3, 1, 0, 0);
+}
+
+void PostProcessSystem::CreateRootSignature() {
+    CD3DX12_DESCRIPTOR_RANGE textureRange{};
+    textureRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+    CD3DX12_DESCRIPTOR_RANGE depthRange{};
+    depthRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1);
+
+    CD3DX12_ROOT_PARAMETER params[3]{};
+    params[0].InitAsDescriptorTable(1, &textureRange,
+                                    D3D12_SHADER_VISIBILITY_PIXEL);
+    params[1].InitAsDescriptorTable(1, &depthRange,
+                                    D3D12_SHADER_VISIBILITY_PIXEL);
+    params[2].InitAsConstantBufferView(0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
+
+    CD3DX12_STATIC_SAMPLER_DESC sampler{};
+    sampler.Init(0);
+    sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+
+    CD3DX12_ROOT_SIGNATURE_DESC desc{};
+    desc.Init(_countof(params), params, 1, &sampler,
+              D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+    Microsoft::WRL::ComPtr<ID3DBlob> blob;
+    Microsoft::WRL::ComPtr<ID3DBlob> error;
+    ThrowIfFailed(D3D12SerializeRootSignature(
+                      &desc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error),
+                  "Serialize post-process root signature failed");
+
+    ThrowIfFailed(dxCommon_->GetDevice()->CreateRootSignature(
+                      0, blob->GetBufferPointer(), blob->GetBufferSize(),
+                      IID_PPV_ARGS(&rootSignature_)),
+                  "Create post-process root signature failed");
+}
+
+void PostProcessSystem::CreatePipelineState() {
+    auto vs =
+        ShaderCompiler::Compile(ShaderPaths::PostProcessVS, "main", "vs_5_0");
+    auto ps =
+        ShaderCompiler::Compile(ShaderPaths::PostProcessPS, "main", "ps_5_0");
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
+    desc.pRootSignature = rootSignature_.Get();
+    desc.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
+    desc.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
+    desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    desc.NumRenderTargets = 1;
+    desc.RTVFormats[0] = DirectXCommon::kBackBufferFormat;
+    desc.DSVFormat = DXGI_FORMAT_UNKNOWN;
+    desc.SampleDesc.Count = 1;
+    desc.SampleMask = UINT_MAX;
+    desc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+    desc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+
+    D3D12_DEPTH_STENCIL_DESC depth = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+    depth.DepthEnable = FALSE;
+    depth.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+    desc.DepthStencilState = depth;
+    desc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+
+    ThrowIfFailed(dxCommon_->GetDevice()->CreateGraphicsPipelineState(
+                      &desc, IID_PPV_ARGS(&pipelineState_)),
+                  "Create post-process pipeline state failed");
+}
+
+void PostProcessSystem::CreateConstantBuffer() {
+    const UINT size = Align256(sizeof(PostProcessConstants));
+
+    CD3DX12_HEAP_PROPERTIES heap(D3D12_HEAP_TYPE_UPLOAD);
+    auto desc = CD3DX12_RESOURCE_DESC::Buffer(size);
+
+    ThrowIfFailed(dxCommon_->GetDevice()->CreateCommittedResource(
+                      &heap, D3D12_HEAP_FLAG_NONE, &desc,
+                      D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                      IID_PPV_ARGS(&constBuffer_)),
+                  "Create post-process constant buffer failed");
+
+    ThrowIfFailed(
+        constBuffer_->Map(0, nullptr,
+                          reinterpret_cast<void **>(&mappedConstBuffer_)),
+        "Map post-process constant buffer failed");
+
+    UpdateConstantBuffer();
+}
+
+void PostProcessSystem::UpdateConstantBuffer() {
+    if (!mappedConstBuffer_) {
+        return;
+    }
+
+    const auto &color = profile_.colorGrade;
+    const auto &filter = profile_.filter;
+    const auto &edge = profile_.edge;
+    const auto &tonemap = profile_.tonemap;
+    const auto &bloom = profile_.bloom;
+    const auto &noise = profile_.noise;
+    const auto &special = profile_.special;
+    const auto &vignette = profile_.vignette;
+    const auto &radialBlur = profile_.radialBlur;
+    const auto &randomNoise = profile_.randomNoise;
+    const auto &sceneDim = profile_.sceneDim;
+    const auto &dissolve = profile_.dissolve;
+    const auto &lensFlare = profile_.lensFlare;
+
+    mappedConstBuffer_->colorMode = static_cast<int32_t>(color.mode);
+    mappedConstBuffer_->filterMode = static_cast<int32_t>(filter.mode);
+    mappedConstBuffer_->texelSize[0] = 1.0f / static_cast<float>(width_);
+    mappedConstBuffer_->texelSize[1] = 1.0f / static_cast<float>(height_);
+    mappedConstBuffer_->edgeMode = static_cast<int32_t>(edge.mode);
+    mappedConstBuffer_->luminanceEdgeThreshold = edge.luminanceThreshold;
+    mappedConstBuffer_->depthEdgeThreshold = edge.depthThreshold;
+    mappedConstBuffer_->nearZ = edge.nearZ;
+    mappedConstBuffer_->farZ = edge.farZ;
+    mappedConstBuffer_->grayscaleWeights[0] = color.grayscaleWeights[0];
+    mappedConstBuffer_->grayscaleWeights[1] = color.grayscaleWeights[1];
+    mappedConstBuffer_->grayscaleWeights[2] = color.grayscaleWeights[2];
+    mappedConstBuffer_->tonemapEnabled = tonemap.enabled ? 1 : 0;
+    mappedConstBuffer_->exposure = tonemap.exposure;
+    mappedConstBuffer_->gamma = tonemap.gamma;
+    mappedConstBuffer_->bloomEnabled = bloom.enabled ? 1 : 0;
+    mappedConstBuffer_->bloomThreshold = bloom.threshold;
+    mappedConstBuffer_->bloomIntensity = bloom.intensity;
+    mappedConstBuffer_->bloomRadius = bloom.radius;
+    mappedConstBuffer_->noiseEnabled = noise.enabled ? 1 : 0;
+    mappedConstBuffer_->noiseStrength = noise.strength;
+    mappedConstBuffer_->noiseScale = noise.scale;
+    mappedConstBuffer_->noiseTime = noise.time;
+    mappedConstBuffer_->specialMode = static_cast<int32_t>(special.mode);
+    mappedConstBuffer_->vignetteStrength = vignette.strength;
+    mappedConstBuffer_->vignetteRadius = vignette.radius;
+    mappedConstBuffer_->radialBlurStrength = radialBlur.strength;
+    mappedConstBuffer_->dissolveAmount = dissolve.amount;
+    mappedConstBuffer_->dissolveSoftness = dissolve.softness;
+    mappedConstBuffer_->dissolveScale = dissolve.scale;
+    mappedConstBuffer_->lensFlareEnabled = lensFlare.enabled ? 1 : 0;
+    mappedConstBuffer_->lensFlareVisibility = lensFlare.visibility;
+    mappedConstBuffer_->lensFlareSunUv[0] = lensFlare.sunUv[0];
+    mappedConstBuffer_->lensFlareSunUv[1] = lensFlare.sunUv[1];
+    mappedConstBuffer_->lensFlareSunDepth = lensFlare.sunDepth;
+    mappedConstBuffer_->lensFlareOcclusionBias = lensFlare.occlusionBias;
+    mappedConstBuffer_->lensFlareGlareRadius = lensFlare.glareRadius;
+    mappedConstBuffer_->lensFlareGlareIntensity = lensFlare.glareIntensity;
+    mappedConstBuffer_->lensFlareGhostIntensity = lensFlare.ghostIntensity;
+    mappedConstBuffer_->lensFlareStreakIntensity = lensFlare.streakIntensity;
+    mappedConstBuffer_->lensFlareStreakWidth = lensFlare.streakWidth;
+    mappedConstBuffer_->lensFlarePadding0 = 0.0f;
+    mappedConstBuffer_->lensFlarePadding0b = 0.0f;
+    for (int i = 0; i < 3; ++i) {
+        mappedConstBuffer_->lensFlareGlareColor[i] = lensFlare.glareColor[i];
+        mappedConstBuffer_->lensFlareGhostWarmColor[i] =
+            lensFlare.ghostWarmColor[i];
+        mappedConstBuffer_->lensFlareGhostCoolColor[i] =
+            lensFlare.ghostCoolColor[i];
+        mappedConstBuffer_->lensFlareStreakColor[i] =
+            lensFlare.streakColor[i];
+    }
+    mappedConstBuffer_->lensFlareGlareAlpha = lensFlare.glareAlpha;
+    mappedConstBuffer_->lensFlareGhostAlpha = lensFlare.ghostAlpha;
+    mappedConstBuffer_->lensFlareStreakAlpha = lensFlare.streakAlpha;
+    mappedConstBuffer_->lensFlarePadding1 = 0.0f;
+    mappedConstBuffer_->enableVignetting = vignette.enabled ? 1 : 0;
+    mappedConstBuffer_->randomMode = static_cast<int32_t>(randomNoise.mode);
+    mappedConstBuffer_->radialBlurSampleCount = radialBlur.sampleCount;
+    mappedConstBuffer_->vignettingScale = vignette.scale;
+    mappedConstBuffer_->vignettingPower = vignette.power;
+    mappedConstBuffer_->radialBlurCenter[0] = radialBlur.center[0];
+    mappedConstBuffer_->radialBlurCenter[1] = radialBlur.center[1];
+    mappedConstBuffer_->randomStrength = randomNoise.strength;
+    mappedConstBuffer_->randomScale = randomNoise.scale;
+    mappedConstBuffer_->randomTime = randomNoise.time;
+    mappedConstBuffer_->randomSeed = randomNoise.seed;
+    mappedConstBuffer_->sceneDimStrength = sceneDim.strength;
+    mappedConstBuffer_->sepiaTone[0] = color.sepiaTone[0];
+    mappedConstBuffer_->sepiaTone[1] = color.sepiaTone[1];
+    mappedConstBuffer_->sepiaTone[2] = color.sepiaTone[2];
+    mappedConstBuffer_->legacyPadding0 = 0.0f;
+}

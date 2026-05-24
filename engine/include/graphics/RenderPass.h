@@ -6,12 +6,11 @@ enum class RenderPass : uint8_t {
     Shadow,
     SceneColor,
     Transparent,
-    PostEffect,
+    PostProcess,
     Debug,
     UI,
     BackBuffer,
 
     Scene = SceneColor,
-    PostProcess = PostEffect,
     DebugUi = UI,
 };

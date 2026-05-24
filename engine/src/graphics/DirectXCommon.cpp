@@ -49,7 +49,7 @@ void DirectXCommon::BeginScenePass() {
 
     ApplySceneViewportAndScissor();
     commandList_->OMSetRenderTargets(1, &sceneRtv, FALSE, &dsvHandle);
-    commandList_->ClearRenderTargetView(sceneRtv, kClearColor, 0, nullptr);
+    commandList_->ClearRenderTargetView(sceneRtv, clearColor_, 0, nullptr);
     commandList_->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f,
                                         0, 0, nullptr);
 }
@@ -202,7 +202,8 @@ void DirectXCommon::SetBackBufferRenderTarget(bool clear, bool bindDepth) {
     commandList_->OMSetRenderTargets(1, &rtvHandle, FALSE, dsvHandlePtr);
 
     if (clear) {
-        commandList_->ClearRenderTargetView(rtvHandle, kClearColor, 0, nullptr);
+        commandList_->ClearRenderTargetView(rtvHandle, clearColor_, 0,
+                                            nullptr);
         if (bindDepth) {
             commandList_->ClearDepthStencilView(
                 dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
@@ -280,6 +281,24 @@ void DirectXCommon::TransitionDepthToWrite() {
         depthBuffer_.Get(), depthState_, D3D12_RESOURCE_STATE_DEPTH_WRITE);
     commandList_->ResourceBarrier(1, &barrier);
     depthState_ = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+}
+
+void DirectXCommon::SetClearColor(const DirectX::XMFLOAT4 &color) {
+    SetClearColor(color.x, color.y, color.z, color.w);
+}
+
+void DirectXCommon::SetClearColor(float r, float g, float b, float a) {
+    clearColor_[0] = r;
+    clearColor_[1] = g;
+    clearColor_[2] = b;
+    clearColor_[3] = a;
+}
+
+void DirectXCommon::ResetClearColor() {
+    clearColor_[0] = kClearColor[0];
+    clearColor_[1] = kClearColor[1];
+    clearColor_[2] = kClearColor[2];
+    clearColor_[3] = kClearColor[3];
 }
 
 void DirectXCommon::CreateFactory() {
@@ -385,10 +404,10 @@ void DirectXCommon::CreateSceneRenderTarget(int width, int height) {
 
     D3D12_CLEAR_VALUE clearValue{};
     clearValue.Format = kSceneColorFormat;
-    clearValue.Color[0] = kClearColor[0];
-    clearValue.Color[1] = kClearColor[1];
-    clearValue.Color[2] = kClearColor[2];
-    clearValue.Color[3] = kClearColor[3];
+    clearValue.Color[0] = clearColor_[0];
+    clearValue.Color[1] = clearColor_[1];
+    clearValue.Color[2] = clearColor_[2];
+    clearValue.Color[3] = clearColor_[3];
 
     CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_DEFAULT);
 

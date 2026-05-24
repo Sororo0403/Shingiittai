@@ -94,7 +94,7 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)src\graphics\Culling.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)src\graphics\DynamicBuffer.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)src\graphics\PipelineManager.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)src\graphics\PostEffectRenderer.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\graphics\PostProcessSystem.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)src\graphics\RenderPassController.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)src\graphics\RenderTexture.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)src\graphics\ShadowMapRenderer.cpp" />
@@ -181,8 +181,8 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)include\graphics\DynamicBuffer.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)include\graphics\Lighting.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)include\graphics\PipelineManager.h" />
-    <ClInclude Include="$(MSBuildThisFileDirectory)include\graphics\PostEffectRenderer.h" />
-    <ClInclude Include="$(MSBuildThisFileDirectory)include\graphics\PostEffectSettings.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)include\graphics\PostProcessSystem.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)include\graphics\PostProcessSettings.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)include\graphics\RenderContext.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)include\graphics\RenderPass.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)include\graphics\RenderPassController.h" />
@@ -306,13 +306,13 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
-    <FxCompile Include="$(MSBuildThisFileDirectory)resources\shaders\posteffect\PostEffectPS.hlsl">
+    <FxCompile Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\PostProcessPS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
-    <FxCompile Include="$(MSBuildThisFileDirectory)resources\shaders\posteffect\PostEffectVS.hlsl">
+    <FxCompile Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\PostProcessVS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
@@ -354,7 +354,7 @@
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="$(MSBuildThisFileDirectory)resources\shaders\posteffect\BloomEffect.hlsli">
+    <None Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\BloomEffect.hlsli">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </None>
@@ -370,27 +370,27 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </None>
-    <None Include="$(MSBuildThisFileDirectory)resources\shaders\posteffect\ColorEffect.hlsli">
+    <None Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\ColorEffect.hlsli">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </None>
-    <None Include="$(MSBuildThisFileDirectory)resources\shaders\posteffect\EdgeEffect.hlsli">
+    <None Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\EdgeEffect.hlsli">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </None>
-    <None Include="$(MSBuildThisFileDirectory)resources\shaders\posteffect\FilterEffect.hlsli">
+    <None Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\FilterEffect.hlsli">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </None>
-    <None Include="$(MSBuildThisFileDirectory)resources\shaders\posteffect\NoiseEffect.hlsli">
+    <None Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\NoiseEffect.hlsli">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </None>
-    <None Include="$(MSBuildThisFileDirectory)resources\shaders\posteffect\PostEffect.hlsli">
+    <None Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\PostProcess.hlsli">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </None>
-    <None Include="$(MSBuildThisFileDirectory)resources\shaders\posteffect\TonemapEffect.hlsli">
+    <None Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\TonemapEffect.hlsli">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </None>

@@ -7,10 +7,10 @@ inline constexpr const wchar_t *SpriteVS =
 inline constexpr const wchar_t *SpritePS =
     L"engine/resources/shaders/sprite/SpritePS.hlsl";
 
-inline constexpr const wchar_t *PostEffectVS =
-    L"engine/resources/shaders/posteffect/PostEffectVS.hlsl";
-inline constexpr const wchar_t *PostEffectPS =
-    L"engine/resources/shaders/posteffect/PostEffectPS.hlsl";
+inline constexpr const wchar_t *PostProcessVS =
+    L"engine/resources/shaders/postprocess/PostProcessVS.hlsl";
+inline constexpr const wchar_t *PostProcessPS =
+    L"engine/resources/shaders/postprocess/PostProcessPS.hlsl";
 
 inline constexpr const wchar_t *SkyboxVS =
     L"engine/resources/shaders/skybox/SkyboxVS.hlsl";
