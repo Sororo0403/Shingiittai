@@ -4,6 +4,7 @@
 #include <DirectXMath.h>
 #include <cstdint>
 #include <d3d12.h>
+#include <initializer_list>
 #include <string>
 #include <vector>
 #include <wrl.h>
@@ -45,6 +46,15 @@ class GPUParticleSystem {
     /// カメラに向いたビルボードとして生存中のパーティクルを描画する
     /// </summary>
     void Draw(const Camera &camera);
+    static void DrawBatch(std::initializer_list<GPUParticleSystem *> systems,
+                          const Camera &camera);
+
+    /// <summary>
+    /// 保留中のGPU更新を描画とは別に実行する
+    /// </summary>
+    void DispatchPendingUpdate();
+    static void DispatchPendingUpdates(
+        std::initializer_list<GPUParticleSystem *> systems);
 
     /// <summary>
     /// パーティクル発生設定を差し替える
@@ -145,6 +155,7 @@ class GPUParticleSystem {
     /// 空きリスト用バッファを生成する
     /// </summary>
     void CreateFreeListBuffers();
+    void CreateActiveDrawBuffers();
 
     /// <summary>
     /// 更新・Emitter・描画用の定数バッファを生成する
@@ -155,6 +166,10 @@ class GPUParticleSystem {
     /// パーティクル更新用ComputeShaderを実行する
     /// </summary>
     void DispatchUpdate();
+    void RecordUpdateDispatch(uint32_t phase);
+    static void RecordDrawArgsDispatches(
+        DirectXCommon *dxCommon, SrvManager *srvManager,
+        const std::vector<GPUParticleSystem *> &jobs);
 
     EmitterForGPU BuildEmitterForGPU(uint32_t emit) const;
 
@@ -177,9 +192,12 @@ class GPUParticleSystem {
     GPUParticleMaterialSettings materialSettings_{};
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> updateRootSignature_;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> argsRootSignature_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> drawRootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> updatePSO_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> argsPSO_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> drawPSO_;
+    Microsoft::WRL::ComPtr<ID3D12CommandSignature> drawCommandSignature_;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> particleResource_;
     Microsoft::WRL::ComPtr<ID3D12Resource> particleUploadResource_;
@@ -201,6 +219,28 @@ class GPUParticleSystem {
     D3D12_GPU_DESCRIPTOR_HANDLE freeListIndexUavGpuHandle_{};
     D3D12_CPU_DESCRIPTOR_HANDLE freeListIndexUavCpuHandle_{};
     uint32_t freeListIndexUavIndex_ = UINT32_MAX;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> activeIndexResource_;
+    D3D12_GPU_DESCRIPTOR_HANDLE activeIndexSrvGpuHandle_{};
+    D3D12_CPU_DESCRIPTOR_HANDLE activeIndexSrvCpuHandle_{};
+    uint32_t activeIndexSrvIndex_ = UINT32_MAX;
+    D3D12_GPU_DESCRIPTOR_HANDLE activeIndexUavGpuHandle_{};
+    D3D12_CPU_DESCRIPTOR_HANDLE activeIndexUavCpuHandle_{};
+    uint32_t activeIndexUavIndex_ = UINT32_MAX;
+    D3D12_RESOURCE_STATES activeIndexState_ =
+        D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> activeCountResource_;
+    D3D12_GPU_DESCRIPTOR_HANDLE activeCountUavGpuHandle_{};
+    D3D12_CPU_DESCRIPTOR_HANDLE activeCountUavCpuHandle_{};
+    uint32_t activeCountUavIndex_ = UINT32_MAX;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> drawArgsResource_;
+    D3D12_GPU_DESCRIPTOR_HANDLE drawArgsUavGpuHandle_{};
+    D3D12_CPU_DESCRIPTOR_HANDLE drawArgsUavCpuHandle_{};
+    uint32_t drawArgsUavIndex_ = UINT32_MAX;
+    D3D12_RESOURCE_STATES drawArgsState_ =
+        D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> updateConstantBuffer_;
     Microsoft::WRL::ComPtr<ID3D12Resource> emitterConstantBuffer_;

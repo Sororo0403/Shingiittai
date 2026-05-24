@@ -89,8 +89,8 @@ MeshPipelineSet MeshPipelineFactory::CreatePipelineSet(
     const MeshPipelineDesc &desc, D3D12_INPUT_LAYOUT_DESC inputLayout,
     DXGI_FORMAT renderTargetFormat, DXGI_FORMAT depthStencilFormat) {
     MeshPipelineSet pipelineSet{};
-    auto vs = ShaderCompiler::Compile(desc.vertexShader, "main", "vs_5_0");
-    auto ps = ShaderCompiler::Compile(desc.pixelShader, "main", "ps_5_0");
+    auto vs = ShaderCompiler::Compile(desc.vertexShader, "main", "vs_6_6");
+    auto ps = ShaderCompiler::Compile(desc.pixelShader, "main", "ps_6_6");
 
     auto makePso = [&](MeshBlendMode blendMode, MeshDepthMode depthMode,
                        D3D12_CULL_MODE cullMode,

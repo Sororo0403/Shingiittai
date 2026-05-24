@@ -664,3 +664,25 @@ void ModelManager::DrawInstancedShadow(
     modelRenderer_.DrawInstancedShadow(*model, instances, instanceCount,
                                        lightViewProjection);
 }
+
+void ModelManager::PrepareSkinning(uint32_t modelId) {
+    const Model *model = GetModel(modelId);
+    if (!model) {
+        return;
+    }
+
+    modelRenderer_.PrepareSkinning(*model);
+}
+
+void ModelManager::PrepareSkinning(std::initializer_list<uint32_t> modelIds) {
+    std::vector<const Model *> models;
+    models.reserve(modelIds.size());
+    for (uint32_t modelId : modelIds) {
+        const Model *model = GetModel(modelId);
+        if (model) {
+            models.push_back(model);
+        }
+    }
+
+    modelRenderer_.PrepareSkinning(models);
+}

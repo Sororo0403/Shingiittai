@@ -538,16 +538,22 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
         modelManager.BeginFrame();
         spriteManager.BeginFrame();
 
-        dxCommon.BeginScenePass();
-        sceneManager.Draw();
-        sceneManager.DrawTransparent();
-        dxCommon.EndScenePass();
+        if (postProcessSystem.RequiresPostProcess()) {
+            dxCommon.BeginScenePass();
+            sceneManager.Draw();
+            sceneManager.DrawTransparent();
+            dxCommon.EndScenePass();
 
-        dxCommon.BeginBackBufferPass(false);
-        dxCommon.TransitionDepthToShaderResource();
-        postProcessSystem.Draw(dxCommon.GetSceneSrvGpuHandle(&srvManager),
-                                dxCommon.GetDepthStencilGpuHandle());
-        dxCommon.TransitionDepthToWrite();
+            dxCommon.BeginBackBufferPass(false);
+            dxCommon.TransitionDepthToShaderResource();
+            postProcessSystem.Draw(dxCommon.GetSceneSrvGpuHandle(&srvManager),
+                                   dxCommon.GetDepthStencilGpuHandle());
+            dxCommon.TransitionDepthToWrite();
+        } else {
+            dxCommon.BeginBackBufferPass(true);
+            sceneManager.Draw();
+            sceneManager.DrawTransparent();
+        }
 
         dxCommon.EndFrame();
     }

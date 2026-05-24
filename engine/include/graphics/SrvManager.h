@@ -16,13 +16,14 @@ class SrvManager {
     /// </summary>
     /// <param name="dxCommon">DirectXCommonインスタンス</param>
     /// <param name="maxSrvCount">確保するSRV最大数</param>
-    void Initialize(DirectXCommon *dxCommon, UINT maxSrvCount = 256);
+    void Initialize(DirectXCommon *dxCommon, UINT maxSrvCount = 4096);
 
     /// <summary>
     /// SRVを1つ割り当てる
     /// </summary>
     /// <returns>割り当てられたSRVインデックス</returns>
     UINT Allocate();
+    UINT AllocateRange(UINT count);
 
     /// <summary>
     /// SRVを1つ割り当て、型付きハンドルで返す

@@ -301,10 +301,10 @@ void SwordTrailRenderer::CreatePipelineState() {
 
     auto vs = ShaderCompiler::Compile(
         L"app/resources/shaders/swordtrail/SwordTrailVS.hlsl", "main",
-        "vs_5_0");
+        "vs_6_6");
     auto ps = ShaderCompiler::Compile(
         L"app/resources/shaders/swordtrail/SwordTrailPS.hlsl", "main",
-        "ps_5_0");
+        "ps_6_6");
 
     D3D12_INPUT_ELEMENT_DESC layout[] = {
         {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,

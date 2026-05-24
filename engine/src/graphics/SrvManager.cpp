@@ -38,6 +38,19 @@ UINT SrvManager::Allocate() {
     return currentIndex_++;
 }
 
+UINT SrvManager::AllocateRange(UINT count) {
+    if (count == 0) {
+        return UINT_MAX;
+    }
+    if (currentIndex_ + count > maxSrvCount_) {
+        throw std::runtime_error("SRV descriptor heap exhausted");
+    }
+
+    const UINT startIndex = currentIndex_;
+    currentIndex_ += count;
+    return startIndex;
+}
+
 void SrvManager::Free(UINT index) {
     if (index >= maxSrvCount_) {
         throw std::out_of_range("SRV descriptor index out of range");

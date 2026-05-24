@@ -11,12 +11,6 @@
 using namespace DirectX;
 using namespace DxUtils;
 
-struct SpriteVertex {
-    XMFLOAT3 pos;
-    XMFLOAT2 uv;
-    XMFLOAT4 color;
-};
-
 struct SpriteConstBuffer {
     XMFLOAT4X4 mat;
 };
@@ -35,7 +29,6 @@ void SpriteRenderer::Initialize(DirectXCommon *dxCommon,
 }
 
 void SpriteRenderer::Draw(const Sprite &sprite) {
-    auto cmd = dxCommon_->GetCommandList();
     const float l = sprite.position.x;
     const float t = sprite.position.y;
     const float r = sprite.position.x + sprite.size.x;
@@ -50,33 +43,19 @@ void SpriteRenderer::Draw(const Sprite &sprite) {
             return;
         }
 
-        if (activePipelineKind_ != pipelineKind) {
-            activePipelineKind_ = pipelineKind;
-            cmd->SetPipelineState(
-                pipelineStates_[static_cast<uint32_t>(activePipelineKind_)]
-                    .Get());
-        }
-
-        SpriteVertex vertices[6] = {
-            {{l, t, 0.0f}, {u0, v0}, color}, {{r, t, 0.0f}, {u1, v0}, color},
-            {{l, b, 0.0f}, {u0, v1}, color},
-
-            {{l, b, 0.0f}, {u0, v1}, color}, {{r, t, 0.0f}, {u1, v0}, color},
-            {{r, b, 0.0f}, {u1, v1}, color},
+        QueuedDraw draw{};
+        draw.pipelineKind = pipelineKind;
+        draw.textureId = sprite.textureId;
+        draw.vertices = std::array<SpriteVertex, kVerticesPerSprite>{
+            SpriteVertex{{l, t, 0.0f}, {u0, v0}, color},
+            SpriteVertex{{r, t, 0.0f}, {u1, v0}, color},
+            SpriteVertex{{l, b, 0.0f}, {u0, v1}, color},
+            SpriteVertex{{l, b, 0.0f}, {u0, v1}, color},
+            SpriteVertex{{r, t, 0.0f}, {u1, v0}, color},
+            SpriteVertex{{r, b, 0.0f}, {u1, v1}, color},
         };
-
+        queuedDraws_.push_back(draw);
         ++drawCursor_;
-        const UploadAllocation allocation =
-            uploadBuffer_.WriteArray(vertices, kVerticesPerSprite,
-                                     alignof(SpriteVertex));
-        D3D12_VERTEX_BUFFER_VIEW view{};
-        view.BufferLocation = allocation.gpu;
-        view.SizeInBytes = sizeof(vertices);
-        view.StrideInBytes = sizeof(SpriteVertex);
-        cmd->IASetVertexBuffers(0, 1, &view);
-        cmd->SetGraphicsRootDescriptorTable(
-            1, textureManager_->GetGpuHandle(sprite.textureId));
-        cmd->DrawInstanced(6, 1, 0, 0);
     };
 
     switch (sprite.blendMode) {
@@ -104,6 +83,8 @@ void SpriteRenderer::Draw(const Sprite &sprite) {
 void SpriteRenderer::BeginFrame() {
     uploadBuffer_.BeginFrame();
     drawCursor_ = 0;
+    queuedDraws_.clear();
+    batchVertices_.clear();
 }
 
 void SpriteRenderer::PreDraw() {
@@ -123,9 +104,62 @@ void SpriteRenderer::PreDraw() {
     cmd->SetGraphicsRootConstantBufferView(0, allocation.gpu);
 
     cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    queuedDraws_.clear();
+    batchVertices_.clear();
 }
 
-void SpriteRenderer::PostDraw() {}
+void SpriteRenderer::PostDraw() { FlushQueuedDraws(); }
+
+void SpriteRenderer::FlushQueuedDraws() {
+    if (queuedDraws_.empty()) {
+        return;
+    }
+
+    auto cmd = dxCommon_->GetCommandList();
+    size_t runStart = 0;
+    while (runStart < queuedDraws_.size()) {
+        const QueuedDraw &first = queuedDraws_[runStart];
+        size_t runEnd = runStart + 1;
+        while (runEnd < queuedDraws_.size() &&
+               queuedDraws_[runEnd].pipelineKind == first.pipelineKind &&
+               queuedDraws_[runEnd].textureId == first.textureId) {
+            ++runEnd;
+        }
+
+        if (activePipelineKind_ != first.pipelineKind) {
+            activePipelineKind_ = first.pipelineKind;
+            cmd->SetPipelineState(
+                pipelineStates_[static_cast<uint32_t>(activePipelineKind_)]
+                    .Get());
+        }
+
+        batchVertices_.clear();
+        batchVertices_.reserve((runEnd - runStart) * kVerticesPerSprite);
+        for (size_t index = runStart; index < runEnd; ++index) {
+            const auto &vertices = queuedDraws_[index].vertices;
+            batchVertices_.insert(batchVertices_.end(), vertices.begin(),
+                                  vertices.end());
+        }
+
+        const UploadAllocation allocation = uploadBuffer_.WriteArray(
+            batchVertices_.data(), batchVertices_.size(),
+            alignof(SpriteVertex));
+        D3D12_VERTEX_BUFFER_VIEW view{};
+        view.BufferLocation = allocation.gpu;
+        view.SizeInBytes =
+            static_cast<UINT>(batchVertices_.size() * sizeof(SpriteVertex));
+        view.StrideInBytes = sizeof(SpriteVertex);
+        cmd->IASetVertexBuffers(0, 1, &view);
+        cmd->SetGraphicsRootDescriptorTable(
+            1, textureManager_->GetGpuHandle(first.textureId));
+        cmd->DrawInstanced(static_cast<UINT>(batchVertices_.size()), 1, 0, 0);
+
+        runStart = runEnd;
+    }
+
+    queuedDraws_.clear();
+    batchVertices_.clear();
+}
 
 void SpriteRenderer::CreateUploadBuffer() {
     uploadBuffer_.Initialize(dxCommon_->GetDevice(), kUploadBytesPerFrame, 2);
@@ -166,13 +200,13 @@ void SpriteRenderer::CreateRootSignature() {
 }
 
 void SpriteRenderer::CreatePipelineState() {
-    auto vs = ShaderCompiler::Compile(ShaderPaths::SpriteVS, "main", "vs_5_0");
+    auto vs = ShaderCompiler::Compile(ShaderPaths::SpriteVS, "main", "vs_6_6");
     auto psAlpha =
-        ShaderCompiler::Compile(ShaderPaths::SpritePS, "main", "ps_5_0");
+        ShaderCompiler::Compile(ShaderPaths::SpritePS, "main", "ps_6_6");
     auto psModulate = ShaderCompiler::Compile(ShaderPaths::SpritePS,
-                                              "mainModulate", "ps_5_0");
+                                              "mainModulate", "ps_6_6");
     auto psPremultipliedMask = ShaderCompiler::Compile(
-        ShaderPaths::SpritePS, "mainPremultipliedMask", "ps_5_0");
+        ShaderPaths::SpritePS, "mainPremultipliedMask", "ps_6_6");
 
     D3D12_INPUT_ELEMENT_DESC layout[] = {
         {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,

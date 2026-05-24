@@ -198,11 +198,11 @@ void MeshRenderer::CreateShadowRootSignature() {
 
 void MeshRenderer::CreatePipelineStates() {
     auto *device = dxCommon_->GetDevice();
-    auto vs = ShaderCompiler::Compile(ShaderPaths::MeshVS, "main", "vs_5_0");
+    auto vs = ShaderCompiler::Compile(ShaderPaths::MeshVS, "main", "vs_6_6");
     auto instancedVs =
         ShaderCompiler::Compile(ShaderPaths::MeshInstancedVS, "main",
-                                "vs_5_0");
-    auto ps = ShaderCompiler::Compile(ShaderPaths::MeshPS, "main", "ps_5_0");
+                                "vs_6_6");
+    auto ps = ShaderCompiler::Compile(ShaderPaths::MeshPS, "main", "ps_6_6");
 
     D3D12_INPUT_ELEMENT_DESC baseLayout[] = {
         {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
@@ -375,8 +375,8 @@ uint32_t MeshRenderer::CreateInstancedPipeline(
     auto *device = dxCommon_->GetDevice();
     InstancedPipelineSet pipelineSet{};
     auto instancedVs =
-        ShaderCompiler::Compile(vertexShaderPath, "main", "vs_5_0");
-    auto ps = ShaderCompiler::Compile(pixelShaderPath, "main", "ps_5_0");
+        ShaderCompiler::Compile(vertexShaderPath, "main", "vs_6_6");
+    auto ps = ShaderCompiler::Compile(pixelShaderPath, "main", "ps_6_6");
 
     D3D12_INPUT_ELEMENT_DESC instancedLayout[] = {
         {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
@@ -475,9 +475,9 @@ uint32_t MeshRenderer::CreateInstancedPipeline(
     }
 
     auto shadowInstancedVs =
-        ShaderCompiler::Compile(shadowVertexShaderPath, "main", "vs_5_0");
+        ShaderCompiler::Compile(shadowVertexShaderPath, "main", "vs_6_6");
     auto shadowPs =
-        ShaderCompiler::Compile(shadowPixelShaderPath, "main", "ps_5_0");
+        ShaderCompiler::Compile(shadowPixelShaderPath, "main", "ps_6_6");
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC shadowPso{};
     shadowPso.pRootSignature = shadowRootSignature_.Get();
@@ -516,11 +516,11 @@ uint32_t MeshRenderer::CreateInstancedPipeline(
 void MeshRenderer::CreateShadowPipelineStates() {
     auto *device = dxCommon_->GetDevice();
     auto vs =
-        ShaderCompiler::Compile(ShaderPaths::MeshShadowVS, "main", "vs_5_0");
+        ShaderCompiler::Compile(ShaderPaths::MeshShadowVS, "main", "vs_6_6");
     auto instancedVs = ShaderCompiler::Compile(
-        ShaderPaths::MeshShadowInstancedVS, "main", "vs_5_0");
+        ShaderPaths::MeshShadowInstancedVS, "main", "vs_6_6");
     auto ps =
-        ShaderCompiler::Compile(ShaderPaths::MeshShadowPS, "main", "ps_5_0");
+        ShaderCompiler::Compile(ShaderPaths::MeshShadowPS, "main", "ps_6_6");
 
     D3D12_INPUT_ELEMENT_DESC baseLayout[] = {
         {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,

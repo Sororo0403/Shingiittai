@@ -6,6 +6,7 @@
 #include "model/Model.h"
 #include "model/ModelRenderer.h"
 #include <cstdint>
+#include <initializer_list>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -200,6 +201,12 @@ class ModelManager {
     void DrawInstancedShadow(uint32_t modelId, const InstanceData *instances,
                              uint32_t instanceCount,
                              const DirectX::XMFLOAT4X4 &lightViewProjection);
+
+    /// <summary>
+    /// モデルIDから描画前のGPUスキニングだけを実行する
+    /// </summary>
+    void PrepareSkinning(uint32_t modelId);
+    void PrepareSkinning(std::initializer_list<uint32_t> modelIds);
 
     /// <summary>
     /// 毎フレーム変わる描画用Upload領域をリセットする

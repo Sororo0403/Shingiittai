@@ -47,8 +47,14 @@ inline constexpr const wchar_t *SkinningCS =
 
 inline constexpr const wchar_t *ParticleUpdateCS =
     L"engine/resources/shaders/particle/GPUParticleUpdateCS.hlsl";
+inline constexpr const wchar_t *ParticleArgsCS =
+    L"engine/resources/shaders/particle/GPUParticleArgsCS.hlsl";
+inline constexpr const wchar_t *ParticleBatchUpdateCS =
+    L"engine/resources/shaders/particle/GPUParticleBatchUpdateCS.hlsl";
 inline constexpr const wchar_t *ParticleVS =
     L"engine/resources/shaders/particle/GPUParticleVS.hlsl";
+inline constexpr const wchar_t *ParticleBatchVS =
+    L"engine/resources/shaders/particle/GPUParticleBatchVS.hlsl";
 inline constexpr const wchar_t *ParticlePS =
     L"engine/resources/shaders/particle/GPUParticlePS.hlsl";
 

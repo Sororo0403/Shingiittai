@@ -45,6 +45,19 @@ void PostProcessSystem::SetProfile(const PostProcessProfile &profile) {
     UpdateConstantBuffer();
 }
 
+bool PostProcessSystem::RequiresPostProcess() const {
+    return profile_.colorGrade.mode != PostProcessColorMode::None ||
+           profile_.filter.mode != PostProcessFilterMode::None ||
+           profile_.edge.mode != PostProcessEdgeMode::None ||
+           profile_.tonemap.enabled || profile_.bloom.enabled ||
+           profile_.noise.enabled ||
+           profile_.special.mode != PostProcessSpecialMode::None ||
+           profile_.lensFlare.enabled || profile_.vignette.enabled ||
+           profile_.randomNoise.mode != PostProcessRandomMode::None ||
+           profile_.radialBlur.strength > 0.0f ||
+           profile_.sceneDim.strength > 0.0f;
+}
+
 void PostProcessSystem::Draw(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle,
                               D3D12_GPU_DESCRIPTOR_HANDLE depthHandle) {
     auto commandList = dxCommon_->GetCommandList();
@@ -101,9 +114,9 @@ void PostProcessSystem::CreateRootSignature() {
 
 void PostProcessSystem::CreatePipelineState() {
     auto vs =
-        ShaderCompiler::Compile(ShaderPaths::PostProcessVS, "main", "vs_5_0");
+        ShaderCompiler::Compile(ShaderPaths::PostProcessVS, "main", "vs_6_6");
     auto ps =
-        ShaderCompiler::Compile(ShaderPaths::PostProcessPS, "main", "ps_5_0");
+        ShaderCompiler::Compile(ShaderPaths::PostProcessPS, "main", "ps_6_6");
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
     desc.pRootSignature = rootSignature_.Get();

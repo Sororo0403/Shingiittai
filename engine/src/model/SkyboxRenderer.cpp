@@ -126,9 +126,9 @@ void SkyboxRenderer::CreateRootSignature() {
 
 void SkyboxRenderer::CreatePipelineState() {
     auto vs =
-        ShaderCompiler::Compile(ShaderPaths::SkyboxVS, "main", "vs_5_0");
+        ShaderCompiler::Compile(ShaderPaths::SkyboxVS, "main", "vs_6_6");
     auto ps =
-        ShaderCompiler::Compile(ShaderPaths::SkyboxPS, "main", "ps_5_0");
+        ShaderCompiler::Compile(ShaderPaths::SkyboxPS, "main", "ps_6_6");
 
     D3D12_INPUT_ELEMENT_DESC layout[] = {
         {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,

@@ -19,6 +19,7 @@ class PostProcessSystem {
     void SetProfile(const PostProcessProfile &profile);
 
     const PostProcessProfile &GetProfile() const { return profile_; }
+    bool RequiresPostProcess() const;
 
   private:
     void CreateRootSignature();

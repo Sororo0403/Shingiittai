@@ -13,7 +13,7 @@ void PipelineManager::Initialize(DirectXCommon *dxCommon) {
     dxCommon_ = dxCommon;
 }
 
-ID3DBlob *PipelineManager::CompileShader(const std::wstring &path,
+IDxcBlob *PipelineManager::CompileShader(const std::wstring &path,
                                          const std::string &entry,
                                          const std::string &target) {
     const std::string key = MakeShaderKey(path, entry, target);
@@ -23,7 +23,7 @@ ID3DBlob *PipelineManager::CompileShader(const std::wstring &path,
     }
 
     auto shader = ShaderCompiler::Compile(path, entry, target);
-    ID3DBlob *result = shader.Get();
+    IDxcBlob *result = shader.Get();
     shaderCache_.emplace(key, std::move(shader));
     return result;
 }

@@ -1,5 +1,7 @@
 #include "GPUParticle.hlsli"
 
+#define MAX_PARTICLE_BATCH_JOBS 16
+
 cbuffer ParticleDrawParams : register(b0)
 {
     float4x4 viewProjection;
@@ -11,8 +13,14 @@ cbuffer ParticleDrawParams : register(b0)
     float4 materialParams1;
 };
 
-StructuredBuffer<Particle> gParticles : register(t0);
-StructuredBuffer<uint> gActiveIndices : register(t3);
+struct ParticleDrawItem
+{
+    uint systemIndex;
+    uint particleIndex;
+};
+
+StructuredBuffer<Particle> gParticles[MAX_PARTICLE_BATCH_JOBS] : register(t0);
+StructuredBuffer<ParticleDrawItem> gActiveItems : register(t32);
 
 static const float2 kPositions[6] =
 {
@@ -37,7 +45,9 @@ static const float2 kUvs[6] =
 ParticleVSOutput main(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID)
 {
     uint quadVertexId = vertexId % 6u;
-    Particle particle = gParticles[gActiveIndices[instanceId]];
+    ParticleDrawItem item = gActiveItems[instanceId];
+    uint resourceIndex = NonUniformResourceIndex(item.systemIndex);
+    Particle particle = gParticles[resourceIndex][item.particleIndex];
 
     if (particle.isActive == 0u || particle.color.a <= 0.0001f)
     {

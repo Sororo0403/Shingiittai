@@ -1,6 +1,6 @@
 #pragma once
 #include <d3d12.h>
-#include <d3dcompiler.h>
+#include <dxcapi.h>
 #include <string>
 #include <unordered_map>
 #include <wrl.h>
@@ -11,7 +11,7 @@ class PipelineManager {
   public:
     void Initialize(DirectXCommon *dxCommon);
 
-    ID3DBlob *CompileShader(const std::wstring &path, const std::string &entry,
+    IDxcBlob *CompileShader(const std::wstring &path, const std::string &entry,
                             const std::string &target);
 
     ID3D12PipelineState *
@@ -28,7 +28,7 @@ class PipelineManager {
                                      const std::string &target);
 
     DirectXCommon *dxCommon_ = nullptr;
-    std::unordered_map<std::string, Microsoft::WRL::ComPtr<ID3DBlob>>
+    std::unordered_map<std::string, Microsoft::WRL::ComPtr<IDxcBlob>>
         shaderCache_;
     std::unordered_map<std::string, Microsoft::WRL::ComPtr<ID3D12PipelineState>>
         graphicsPipelines_;

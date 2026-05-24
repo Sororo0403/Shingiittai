@@ -23,9 +23,7 @@ struct Well
 cbuffer SkinningInformation : register(b0)
 {
     uint vertexCount;
-    uint3 padding;
 };
-
 StructuredBuffer<Vertex> gInputVertices : register(t0);
 StructuredBuffer<VertexInfluence> gInfluences : register(t1);
 StructuredBuffer<Well> gMatrixPalette : register(t2);

@@ -1,9 +1,11 @@
 #pragma once
 #include "graphics/UploadRingBuffer.h"
 #include "sprite/Sprite.h"
+#include <array>
 #include <DirectXMath.h>
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 #include <d3d12.h>
 #include <wrl.h>
 
@@ -58,6 +60,22 @@ class SpriteRenderer {
         Count,
     };
 
+    static constexpr uint32_t kVerticesPerSprite = 6;
+    static constexpr uint32_t kMaxSpriteDraws = 4096;
+    static constexpr size_t kUploadBytesPerFrame = 4 * 1024 * 1024;
+
+    struct SpriteVertex {
+        DirectX::XMFLOAT3 pos;
+        DirectX::XMFLOAT2 uv;
+        DirectX::XMFLOAT4 color;
+    };
+
+    struct QueuedDraw {
+        PipelineKind pipelineKind = PipelineKind::Alpha;
+        uint32_t textureId = 0;
+        std::array<SpriteVertex, kVerticesPerSprite> vertices{};
+    };
+
     /// <summary>
     /// ルートシグネチャを生成する
     /// </summary>
@@ -69,6 +87,7 @@ class SpriteRenderer {
     void CreatePipelineState();
 
     void CreateUploadBuffer();
+    void FlushQueuedDraws();
 
   private:
     DirectXCommon *dxCommon_ = nullptr;
@@ -81,9 +100,8 @@ class SpriteRenderer {
 
     UploadRingBuffer uploadBuffer_;
     uint32_t drawCursor_ = 0;
-    static constexpr uint32_t kVerticesPerSprite = 6;
-    static constexpr uint32_t kMaxSpriteDraws = 4096;
-    static constexpr size_t kUploadBytesPerFrame = 4 * 1024 * 1024;
+    std::vector<QueuedDraw> queuedDraws_;
+    std::vector<SpriteVertex> batchVertices_;
 
     DirectX::XMFLOAT4X4 matProjection_{};
     PipelineKind activePipelineKind_ = PipelineKind::Alpha;

@@ -636,19 +636,19 @@ void GameScene::Initialize(const SceneContext &ctx) {
         gSharedBattleModels.chargeWeakPointBackplateModelId;
     chargeWeakPointSlashModelId_ =
         gSharedBattleModels.chargeWeakPointSlashModelId;
-    sparkParticles_.Initialize(dx, ctx_->rendering.srv, texture, particleTextureId_, 4096);
+    sparkParticles_.Initialize(dx, ctx_->rendering.srv, texture, particleTextureId_, 2048);
     sparkParticles_.SetEmission(1, 1000.0f);
     sparkParticles_.SetEmitterRadius(0.08f);
     explosionParticles_.Initialize(dx, ctx_->rendering.srv, texture, particleTextureId_,
-                                   4096);
+                                   2048);
     explosionParticles_.SetEmission(1, 1000.0f);
     explosionParticles_.SetEmitterRadius(0.25f);
-    smokeParticles_.Initialize(dx, ctx_->rendering.srv, texture, particleTextureId_, 2048);
+    smokeParticles_.Initialize(dx, ctx_->rendering.srv, texture, particleTextureId_, 1024);
     smokeParticles_.SetEmission(1, 1000.0f);
     smokeParticles_.SetEmitterRadius(0.40f);
 
     swordFlashParticles_.Initialize(dx, ctx_->rendering.srv, texture, particleTextureId_,
-                                    384);
+                                    256);
     swordFlashParticles_.SetEmission(1, 1000.0f);
     swordFlashParticles_.SetEmitterRadius(0.06f);
 
@@ -1881,9 +1881,17 @@ void GameScene::DrawDebugCameraPreview() {
 }
 
 void GameScene::Draw() {
-    ctx_->rendering.model->PreDraw();
     const bool bladeClashWinFinish =
         bladeClashFinishActive_ && bladeClashFinishPlayerWon_;
+    if (!bladeClashWinFinish) {
+        ctx_->rendering.model->PrepareSkinning(
+            {playerModelId_, enemyModelId_});
+        GPUParticleSystem::DispatchPendingUpdates(
+            {&smokeParticles_, &sparkParticles_, &explosionParticles_,
+             &swordFlashParticles_});
+    }
+
+    ctx_->rendering.model->PreDraw();
     if (bladeClashWinFinish) {
         DrawBladeClashFinishBackdrop();
     } else {
@@ -1902,10 +1910,10 @@ void GameScene::Draw() {
     swordSlashArcRenderer_.Draw(camera_);
 
     if (!bladeClashWinFinish) {
-        smokeParticles_.Draw(camera_);
-        sparkParticles_.Draw(camera_);
-        explosionParticles_.Draw(camera_);
-        swordFlashParticles_.Draw(camera_);
+        GPUParticleSystem::DrawBatch(
+            {&smokeParticles_, &sparkParticles_, &explosionParticles_,
+             &swordFlashParticles_},
+            camera_);
     }
     DrawVictoryFlash();
     DrawDefeatFlash();

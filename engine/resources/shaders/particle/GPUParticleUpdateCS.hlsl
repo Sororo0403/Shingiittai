@@ -24,9 +24,16 @@ cbuffer EmitterParams : register(b1)
     uint4 emitterConfig;
 };
 
+cbuffer ParticleDispatchParams : register(b2)
+{
+    uint updatePhase;
+};
+
 RWStructuredBuffer<Particle> gParticles : register(u0);
 RWStructuredBuffer<uint> gFreeList : register(u1);
 RWStructuredBuffer<int> gFreeListIndex : register(u2);
+RWStructuredBuffer<uint> gActiveIndices : register(u3);
+RWByteAddressBuffer gActiveCount : register(u4);
 
 #define PARTICLE_THREAD_COUNT 256
 #define SPAWN_SHAPE_POINT 0u
@@ -185,6 +192,21 @@ void Respawn(uint index, inout Particle particle)
     particle.isActive = 1;
 }
 
+void AppendActiveParticle(uint index, uint particleCount, Particle particle)
+{
+    if (particle.isActive == 0u || particle.color.a <= 0.0001f)
+    {
+        return;
+    }
+
+    uint activeIndex = 0u;
+    gActiveCount.InterlockedAdd(0, 1u, activeIndex);
+    if (activeIndex < particleCount)
+    {
+        gActiveIndices[activeIndex] = index;
+    }
+}
+
 [numthreads(PARTICLE_THREAD_COUNT, 1, 1)]
 void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
@@ -197,55 +219,62 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 
     Particle particle = gParticles[index];
 
-    if (particle.isActive != 0)
+    if (updatePhase == 0u)
     {
-        float deltaTime = time.y;
-        particle.currentTime += deltaTime;
-
-        if (particle.currentTime >= particle.lifeTime)
+        if (particle.isActive != 0)
         {
-            particle.isActive = 0;
-            particle.color.a = 0.0f;
-            gParticles[index] = particle;
+            float deltaTime = time.y;
+            particle.currentTime += deltaTime;
 
-            int freeListIndex = 0;
-            InterlockedAdd(gFreeListIndex[0], 1, freeListIndex);
-            if (freeListIndex < (int) particleCount)
+            if (particle.currentTime >= particle.lifeTime)
             {
-                gFreeList[freeListIndex] = index;
+                particle.isActive = 0;
+                particle.color.a = 0.0f;
+                gParticles[index] = particle;
+
+                int freeListIndex = 0;
+                InterlockedAdd(gFreeListIndex[0], 1, freeListIndex);
+                if (freeListIndex < (int) particleCount)
+                {
+                    gFreeList[freeListIndex] = index;
+                } else
+                {
+                    InterlockedAdd(gFreeListIndex[0], -1);
+                }
             } else
             {
-                InterlockedAdd(gFreeListIndex[0], -1);
-            }
-        } else
-        {
-            float turbulence = emitterAccelerationAndTurbulence.w;
-            float3 wander =
-                MakeTurbulence(particle.seed, particle.currentTime) * turbulence;
-            float damping = pow(max(emitterMotion.x, 0.0f), deltaTime * 60.0f);
-            particle.velocity +=
-                (emitterAccelerationAndTurbulence.xyz + wander) * deltaTime;
-            particle.velocity *= damping;
-            particle.translate += particle.velocity * deltaTime;
+                float deltaTime = time.y;
+                float turbulence = emitterAccelerationAndTurbulence.w;
+                float3 wander =
+                    MakeTurbulence(particle.seed, particle.currentTime) * turbulence;
+                float damping = pow(max(emitterMotion.x, 0.0f), deltaTime * 60.0f);
+                particle.velocity +=
+                    (emitterAccelerationAndTurbulence.xyz + wander) * deltaTime;
+                particle.velocity *= damping;
+                particle.translate += particle.velocity * deltaTime;
 
-            float alpha = emitterTintColor.a;
-            float fadeInTime = particle.params0.z;
-            if (fadeInTime > 0.0f)
-            {
-                alpha *= saturate(particle.currentTime / fadeInTime);
-            }
+                float alpha = emitterTintColor.a;
+                float fadeInTime = particle.params0.z;
+                if (fadeInTime > 0.0f)
+                {
+                    alpha *= saturate(particle.currentTime / fadeInTime);
+                }
 
-            float fadeOutTime = particle.params0.w;
-            if (fadeOutTime > 0.0f)
-            {
-                float remaining = particle.lifeTime - particle.currentTime;
-                float fade = saturate(remaining / fadeOutTime);
-                alpha *= pow(fade, particle.params1.x);
+                float fadeOutTime = particle.params0.w;
+                if (fadeOutTime > 0.0f)
+                {
+                    float remaining = particle.lifeTime - particle.currentTime;
+                    float fade = saturate(remaining / fadeOutTime);
+                    alpha *= pow(fade, particle.params1.x);
+                }
+                particle.color = emitterTintColor;
+                particle.color.a = alpha;
+                gParticles[index] = particle;
+                AppendActiveParticle(index, particleCount, particle);
             }
-            particle.color = emitterTintColor;
-            particle.color.a = alpha;
-            gParticles[index] = particle;
         }
+
+        return;
     }
 
     if (emitterConfig.w != 0u && index < emitterConfig.z)
@@ -261,6 +290,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
             Particle respawnParticle = gParticles[particleIndex];
             Respawn(particleIndex, respawnParticle);
             gParticles[particleIndex] = respawnParticle;
+            AppendActiveParticle(particleIndex, particleCount, respawnParticle);
         }
     }
 }

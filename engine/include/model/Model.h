@@ -67,6 +67,10 @@ struct SkinCluster {
     D3D12_GPU_DESCRIPTOR_HANDLE inputVertexSrvGpuHandle{};
     D3D12_CPU_DESCRIPTOR_HANDLE skinnedVertexUavCpuHandle{};
     D3D12_GPU_DESCRIPTOR_HANDLE skinnedVertexUavGpuHandle{};
+    mutable D3D12_RESOURCE_STATES skinnedVertexState =
+        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+    mutable uint64_t lastSkinningFrame = 0;
+    mutable bool skinningValid = false;
 };
 
 /// <summary>

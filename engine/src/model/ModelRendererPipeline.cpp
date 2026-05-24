@@ -176,17 +176,37 @@ struct SceneConstBufferData {
 
 void ModelRenderer::SetPipelineForMaterial(const Material &material) {
     auto *cmd = dxCommon_->GetCommandList();
-    cmd->SetGraphicsRootSignature(rootSignature_.Get());
-    cmd->SetPipelineState(
-        pipelineStates_[PipelineVariantIndex(material, currentEffect_)].Get());
+    ID3D12RootSignature *rootSignature = rootSignature_.Get();
+    if (currentGraphicsRootSignature_ != rootSignature) {
+        cmd->SetGraphicsRootSignature(rootSignature);
+        currentGraphicsRootSignature_ = rootSignature;
+        currentGraphicsPipelineState_ = nullptr;
+    }
+
+    ID3D12PipelineState *pipelineState =
+        pipelineStates_[PipelineVariantIndex(material, currentEffect_)].Get();
+    if (currentGraphicsPipelineState_ != pipelineState) {
+        cmd->SetPipelineState(pipelineState);
+        currentGraphicsPipelineState_ = pipelineState;
+    }
 }
 
 void ModelRenderer::SetInstancedPipelineForMaterial(const Material &material) {
     auto *cmd = dxCommon_->GetCommandList();
-    cmd->SetGraphicsRootSignature(rootSignature_.Get());
-    cmd->SetPipelineState(
+    ID3D12RootSignature *rootSignature = rootSignature_.Get();
+    if (currentGraphicsRootSignature_ != rootSignature) {
+        cmd->SetGraphicsRootSignature(rootSignature);
+        currentGraphicsRootSignature_ = rootSignature;
+        currentGraphicsPipelineState_ = nullptr;
+    }
+
+    ID3D12PipelineState *pipelineState =
         instancedPipelineStates_[PipelineVariantIndex(material, currentEffect_)]
-            .Get());
+            .Get();
+    if (currentGraphicsPipelineState_ != pipelineState) {
+        cmd->SetPipelineState(pipelineState);
+        currentGraphicsPipelineState_ = pipelineState;
+    }
 }
 
 void ModelRenderer::CreateRootSignature() {
@@ -274,13 +294,13 @@ void ModelRenderer::CreatePipelineState() {
     auto device = dxCommon_->GetDevice();
 
     auto vs =
-        ShaderCompiler::Compile(ShaderPaths::ModelVS, "main", "vs_5_0");
+        ShaderCompiler::Compile(ShaderPaths::ModelVS, "main", "vs_6_6");
     auto instancedVs =
         ShaderCompiler::Compile(ShaderPaths::ModelInstancedVS, "main",
-                                "vs_5_0");
+                                "vs_6_6");
 
     auto ps =
-        ShaderCompiler::Compile(ShaderPaths::ModelPS, "main", "ps_5_0");
+        ShaderCompiler::Compile(ShaderPaths::ModelPS, "main", "ps_6_6");
 
     D3D12_INPUT_ELEMENT_DESC baseLayout[] = {
         {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
@@ -401,11 +421,11 @@ void ModelRenderer::CreatePipelineState() {
 void ModelRenderer::CreateShadowPipelineState() {
     auto device = dxCommon_->GetDevice();
     auto vs =
-        ShaderCompiler::Compile(ShaderPaths::ModelShadowVS, "main", "vs_5_0");
+        ShaderCompiler::Compile(ShaderPaths::ModelShadowVS, "main", "vs_6_6");
     auto instancedVs = ShaderCompiler::Compile(
-        ShaderPaths::ModelShadowInstancedVS, "main", "vs_5_0");
+        ShaderPaths::ModelShadowInstancedVS, "main", "vs_6_6");
     auto ps =
-        ShaderCompiler::Compile(ShaderPaths::ModelShadowPS, "main", "ps_5_0");
+        ShaderCompiler::Compile(ShaderPaths::ModelShadowPS, "main", "ps_6_6");
 
     D3D12_INPUT_ELEMENT_DESC baseLayout[] = {
         {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,

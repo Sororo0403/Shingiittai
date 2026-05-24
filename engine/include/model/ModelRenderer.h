@@ -8,8 +8,10 @@
 #include "model/Model.h"
 #include "model/Transform.h"
 #include <DirectXMath.h>
+#include <array>
 #include <cstddef>
 #include <d3d12.h>
+#include <vector>
 #include <wrl.h>
 
 class DirectXCommon;
@@ -85,6 +87,12 @@ class ModelRenderer {
     void DrawInstancedShadow(const Model &model, const InstanceData *instances,
                              uint32_t instanceCount,
                              const DirectX::XMFLOAT4X4 &lightViewProjection);
+
+    /// <summary>
+    /// 描画前に必要なGPUスキニングを実行する
+    /// </summary>
+    void PrepareSkinning(const Model &model);
+    void PrepareSkinning(const std::vector<const Model *> &models);
 
     /// <summary>
     /// シーンライティングを設定する
@@ -200,9 +208,13 @@ class ModelRenderer {
     void SetInstancedPipelineForMaterial(const Material &material);
 
     /// <summary>
-    /// ComputeShaderでスキニング済み頂点を書き込む
+    /// ComputeShaderで必要なスキニング済み頂点をまとめて書き込む
     /// </summary>
+    void DispatchSkinningBatch(const Model &model);
+    void DispatchSkinningBatch(const std::vector<const Model *> &models);
+    void DispatchSkinningJobs(const std::vector<const ModelSubMesh *> &jobs);
     void DispatchSkinning(const ModelSubMesh &subMesh);
+    bool NeedsSkinningDispatch(const ModelSubMesh &subMesh) const;
 
   private:
     static constexpr uint32_t kMaxDraws = 4096;
@@ -230,11 +242,14 @@ class ModelRenderer {
 
     UploadRingBuffer uploadBuffer_;
     uint32_t drawIndex_ = 0;
+    uint64_t skinningFrameId_ = 0;
     SceneLighting currentLighting_{};
     SceneFog currentFog_{};
     uint32_t environmentTextureId_ = 0;
     uint32_t dissolveNoiseTextureId_ = 0;
     ModelDrawEffect currentEffect_{};
+    ID3D12RootSignature *currentGraphicsRootSignature_ = nullptr;
+    ID3D12PipelineState *currentGraphicsPipelineState_ = nullptr;
     bool hasEnvironmentTexture_ = false;
     D3D12_GPU_DESCRIPTOR_HANDLE shadowMapGpuHandle_{};
     DirectX::XMFLOAT4X4 shadowLightViewProjection_ = {

@@ -192,6 +192,10 @@ void ModelRenderer::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
 void ModelRenderer::BeginFrame() {
     uploadBuffer_.BeginFrame();
     drawIndex_ = 0;
+    ++skinningFrameId_;
+    if (skinningFrameId_ == 0) {
+        skinningFrameId_ = 1;
+    }
 }
 
 void ModelRenderer::PreDraw() {
@@ -201,6 +205,8 @@ void ModelRenderer::PreDraw() {
     cmd->SetDescriptorHeaps(1, heaps);
 
     cmd->SetGraphicsRootSignature(rootSignature_.Get());
+    currentGraphicsRootSignature_ = rootSignature_.Get();
+    currentGraphicsPipelineState_ = nullptr;
 
     drawIndex_ = 0;
 }
@@ -229,21 +235,18 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
     XMMATRIX worldInverseTranspose = MakeSafeInverseTranspose(world);
 
     XMMATRIX wvp = world * camera.GetView() * camera.GetProj();
+    const D3D12_GPU_VIRTUAL_ADDRESS objectCbAddr =
+        WriteObjectConstants(wvp, world, worldInverseTranspose);
+    const D3D12_GPU_VIRTUAL_ADDRESS sceneCbAddr = WriteSceneConstants(camera);
     const D3D12_GPU_VIRTUAL_ADDRESS effectCbAddr =
         WriteDrawEffectConstants();
 
-    for (const auto &subMesh : model.subMeshes) {
-        DispatchSkinning(subMesh);
-    }
+    DispatchSkinningBatch(model);
 
     auto drawSubMesh = [&](const ModelSubMesh &subMesh) {
         if (drawIndex_ >= kMaxDraws) {
             return;
         }
-
-        D3D12_GPU_VIRTUAL_ADDRESS objectCbAddr =
-            WriteObjectConstants(wvp, world, worldInverseTranspose);
-        D3D12_GPU_VIRTUAL_ADDRESS sceneCbAddr = WriteSceneConstants(camera);
 
         const Material &material =
             materialManager_->GetMaterial(subMesh.materialId);
@@ -322,9 +325,7 @@ void ModelRenderer::DrawInstanced(const Model &model,
     const D3D12_VERTEX_BUFFER_VIEW instanceView =
         WriteInstances(model, transforms, instanceCount);
 
-    for (const auto &subMesh : model.subMeshes) {
-        DispatchSkinning(subMesh);
-    }
+    DispatchSkinningBatch(model);
 
     auto drawSubMesh = [&](const ModelSubMesh &subMesh) {
         if (drawIndex_ >= kMaxDraws) {
@@ -407,9 +408,7 @@ void ModelRenderer::DrawInstanced(const Model &model,
     const D3D12_VERTEX_BUFFER_VIEW instanceView =
         WriteInstances(model, instances, instanceCount);
 
-    for (const auto &subMesh : model.subMeshes) {
-        DispatchSkinning(subMesh);
-    }
+    DispatchSkinningBatch(model);
 
     auto drawSubMesh = [&](const ModelSubMesh &subMesh) {
         if (drawIndex_ >= kMaxDraws) {
@@ -494,6 +493,8 @@ void ModelRenderer::PreDrawShadow() {
     cmd->SetDescriptorHeaps(1, heaps);
     cmd->SetGraphicsRootSignature(shadowRootSignature_.Get());
     cmd->SetPipelineState(shadowPSO_.Get());
+    currentGraphicsRootSignature_ = shadowRootSignature_.Get();
+    currentGraphicsPipelineState_ = shadowPSO_.Get();
 }
 
 void ModelRenderer::DrawShadow(
@@ -518,10 +519,10 @@ void ModelRenderer::DrawShadow(
 
     const XMMATRIX lightVP = XMLoadFloat4x4(&lightViewProjection);
     const XMMATRIX wvp = world * lightVP;
+    const D3D12_GPU_VIRTUAL_ADDRESS objectCbAddr =
+        WriteObjectConstants(wvp, world, XMMatrixIdentity());
 
-    for (const auto &subMesh : model.subMeshes) {
-        DispatchSkinning(subMesh);
-    }
+    DispatchSkinningBatch(model);
 
     auto drawSubMesh = [&](const ModelSubMesh &subMesh) {
         if (drawIndex_ >= kMaxDraws) {
@@ -536,8 +537,6 @@ void ModelRenderer::DrawShadow(
                 ? subMesh.skinCluster.skinnedVertexBufferView
                 : mesh.vbView;
 
-        const D3D12_GPU_VIRTUAL_ADDRESS objectCbAddr =
-            WriteObjectConstants(wvp, world, XMMatrixIdentity());
         const Material &material =
             materialManager_->GetMaterial(subMesh.materialId);
         const D3D12_GPU_VIRTUAL_ADDRESS materialCbAddr =
@@ -576,9 +575,7 @@ void ModelRenderer::DrawInstancedShadow(
     const D3D12_VERTEX_BUFFER_VIEW instanceView =
         WriteInstances(model, transforms, instanceCount);
 
-    for (const auto &subMesh : model.subMeshes) {
-        DispatchSkinning(subMesh);
-    }
+    DispatchSkinningBatch(model);
 
     auto drawSubMesh = [&](const ModelSubMesh &subMesh) {
         if (drawIndex_ >= kMaxDraws) {
@@ -632,9 +629,7 @@ void ModelRenderer::DrawInstancedShadow(
     const D3D12_VERTEX_BUFFER_VIEW instanceView =
         WriteInstances(model, instances, instanceCount);
 
-    for (const auto &subMesh : model.subMeshes) {
-        DispatchSkinning(subMesh);
-    }
+    DispatchSkinningBatch(model);
 
     auto drawSubMesh = [&](const ModelSubMesh &subMesh) {
         if (drawIndex_ >= kMaxDraws) {
