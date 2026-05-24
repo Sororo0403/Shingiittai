@@ -1,6 +1,5 @@
 #pragma once
 #include "SwordPose.h"
-#include "Transform.h"
 #include <DirectXMath.h>
 
 struct SwordControllerState {
@@ -22,33 +21,11 @@ struct SwordControllerState {
         }
     }
 
-    void UpdateSlashDir(const Transform &swordTransform) {
-        const DirectX::XMFLOAT2 current{swordTransform.position.x,
-                                        swordTransform.position.y};
-
-        if (!isSlashMode) {
-            prevPos = current;
-            return;
-        }
-
-        DirectX::XMVECTOR delta = DirectX::XMVectorSubtract(
-            DirectX::XMLoadFloat2(&current), DirectX::XMLoadFloat2(&prevPos));
-        const float len =
-            DirectX::XMVectorGetX(DirectX::XMVector2Length(delta));
-        if (len > 0.001f) {
-            delta = DirectX::XMVector2Normalize(delta);
-            DirectX::XMStoreFloat2(&slashDir, delta);
-        }
-
-        prevPos = current;
-    }
-
     SwordPose ToPose() const {
         SwordPose pose;
         pose.slashDir = slashDir;
         pose.orientation = orientation;
         pose.isSlashMode = isSlashMode;
-        pose.isGuard = isGuard;
         return pose;
     }
 
@@ -56,9 +33,7 @@ struct SwordControllerState {
     static constexpr float kSlashTimeLimit = 0.34f;
 
     DirectX::XMFLOAT4 orientation{0, 0, 0, 1};
-    DirectX::XMFLOAT2 prevPos{};
     DirectX::XMFLOAT2 slashDir{};
     bool isSlashMode = false;
-    bool isGuard = false;
     float slashTimer = 0.0f;
 };

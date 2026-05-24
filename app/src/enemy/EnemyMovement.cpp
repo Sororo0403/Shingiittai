@@ -3,9 +3,6 @@
 #include <cmath>
 #include <cstdlib>
 
-void Enemy::ClampToArena() {
-}
-
 void Enemy::UpdateStalkByStep(float deltaTime) {
     switch (action_.step) {
     case ActionStep::Move:
@@ -43,7 +40,7 @@ void Enemy::UpdateStalkMove(float deltaTime) {
         if (phase_ != BossPhase::Phase1) {
             chance += 0.18f;
         }
-        if (playerObs_.isAttacking || playerObs_.isGuarding) {
+        if (playerObs_.isAttacking) {
             chance += 0.10f;
         }
 
@@ -63,7 +60,6 @@ void Enemy::UpdateStalkMove(float deltaTime) {
 void Enemy::BeginStalkAction() {
     BeginAction(ActionKind::Stalk, ActionStep::Move);
     EnterHold(RandomRange(stalkDurationMin_, stalkDurationMax_));
-    stalkRepeatCount_++;
 }
 
 void Enemy::UpdateFacingToPlayer() {

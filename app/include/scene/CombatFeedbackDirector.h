@@ -6,12 +6,8 @@
 
 enum class CombatFeedbackEventType {
     PlayerSlashHit,
-    PlayerGuard,
     PlayerDamaged,
     CounterSuccess,
-    ProjectileReflect,
-    BladeClashGuardBreak,
-    BladeClashPierce,
 };
 
 struct CombatFeedbackEvent {

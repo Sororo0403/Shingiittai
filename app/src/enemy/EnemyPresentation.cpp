@@ -30,15 +30,12 @@ void Enemy::UpdateParts() {
     float visualPitch = 0.0f;
     float visualRoll = 0.0f;
     const float pulse = 0.5f + 0.5f * std::sin(runtime_.stateTimer * 18.0f);
-    const float slowPulse = std::sin(runtime_.stateTimer * 7.0f);
     const float forwardX = std::sin(usedYaw);
     const float forwardZ = std::cos(usedYaw);
     const float rightX = std::cos(usedYaw);
     const float rightZ = -std::sin(usedYaw);
     const bool suppressAttackBodyMotion =
-        action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
-        action_.kind == ActionKind::BladeClash ||
-        action_.kind == ActionKind::Wave;
+        action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep;
 
     bodyTf_ = tf_;
     bodyTf_.position = tf_.position;
@@ -87,28 +84,24 @@ void Enemy::UpdateParts() {
     const bool suppressActionPresentation = (counterRecoilTimer_ > 0.0f);
     const bool isTelegraphCharge =
         action_.step == ActionStep::Charge &&
-        (action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
-         action_.kind == ActionKind::BladeClash ||
-         action_.kind == ActionKind::Wave);
+        (action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep);
 
     if (tellActive_ || isTelegraphCharge) {
         const float chargePulse = tellActive_ ? (1.0f + 0.55f * pulse)
                                               : (0.72f + 0.42f * pulse);
-        const bool isMeleeCharge =
-            action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep;
-        const float bodyChargeScale = isMeleeCharge ? 0.24f : 0.12f;
-        const float handChargeScale = isMeleeCharge ? 0.36f : 0.18f;
+        constexpr float bodyChargeScale = 0.24f;
+        constexpr float handChargeScale = 0.36f;
         bodyTf_.scale.x += bodyChargeScale * chargePulse;
         bodyTf_.scale.z += bodyChargeScale * chargePulse;
-        bodyTf_.scale.y -= (isMeleeCharge ? 0.12f : 0.06f) * chargePulse;
-        bodyTf_.position.y += (isMeleeCharge ? 0.02f : 0.05f) * chargePulse;
+        bodyTf_.scale.y -= 0.12f * chargePulse;
+        bodyTf_.position.y += 0.02f * chargePulse;
         rightHandTf_.scale.x += handChargeScale * chargePulse;
         rightHandTf_.scale.y += handChargeScale * chargePulse;
         rightHandTf_.scale.z += handChargeScale * chargePulse;
-        rightHandTf_.position.y += (isMeleeCharge ? 0.18f : 0.10f) * chargePulse;
-        visualTf_.position.y += (isMeleeCharge ? 0.055f : 0.035f) * chargePulse;
-        visualTf_.scale.x += (isMeleeCharge ? 0.050f : 0.026f) * chargePulse;
-        visualTf_.scale.z += (isMeleeCharge ? 0.050f : 0.026f) * chargePulse;
+        rightHandTf_.position.y += 0.18f * chargePulse;
+        visualTf_.position.y += 0.055f * chargePulse;
+        visualTf_.scale.x += 0.050f * chargePulse;
+        visualTf_.scale.z += 0.050f * chargePulse;
     }
 
     if (phase_ != BossPhase::Phase1) {
@@ -281,208 +274,6 @@ void Enemy::UpdateParts() {
             rightHandTf_.position.z += rightZ * 0.3f;
             visualRoll += 0.10f;
         }
-    } else if (!suppressActionPresentation &&
-               action_.kind == ActionKind::BladeClash) {
-        const float bladeClashPulse =
-            0.5f + 0.5f * std::sin(bladeClashPresentationTime_ * 48.0f);
-        const float bladeClashTremble = (bladeClashPulse - 0.5f) * 2.0f;
-        if (action_.step == ActionStep::Charge) {
-            bodyTf_.scale.x -= 0.04f;
-            bodyTf_.scale.z -= 0.04f;
-            bodyTf_.scale.y += 0.06f;
-            leftHandTf_.position.y += 0.48f;
-            leftHandTf_.position.x += forwardX * 1.02f + (-rightX) * 0.48f;
-            leftHandTf_.position.z += forwardZ * 1.02f + (-rightZ) * 0.48f;
-            leftHandTf_.scale.x += 0.20f + 0.14f * pulse;
-            leftHandTf_.scale.y += 0.20f + 0.14f * pulse;
-            leftHandTf_.scale.z += 0.20f + 0.14f * pulse;
-            rightHandTf_.position.y += 0.44f;
-            rightHandTf_.position.x += forwardX * 0.72f + rightX * 0.52f;
-            rightHandTf_.position.z += forwardZ * 0.72f + rightZ * 0.52f;
-            rightHandTf_.scale.x += 0.10f + 0.08f * pulse;
-            rightHandTf_.scale.y += 0.10f + 0.08f * pulse;
-            rightHandTf_.scale.z += 0.10f + 0.08f * pulse;
-            visualTf_.position.x += (-forwardX) * 0.10f;
-            visualTf_.position.z += (-forwardZ) * 0.10f;
-            visualPitch -= 0.12f;
-        } else if (action_.step == ActionStep::Active) {
-            const float tremble = bladeClashTremble;
-            bodyTf_.position.y -= 0.10f;
-            bodyTf_.scale.x *= 0.96f;
-            bodyTf_.scale.y *= 0.92f;
-            bodyTf_.scale.z *= 1.06f;
-            rightHandTf_.position.y += 0.20f + 0.012f * bladeClashPulse;
-            rightHandTf_.position.x += forwardX * 0.30f + rightX * 0.06f;
-            rightHandTf_.position.z += forwardZ * 0.30f + rightZ * 0.06f;
-            leftHandTf_.position.y += 0.12f + 0.010f * bladeClashPulse;
-            leftHandTf_.position.x += (-rightX) * 0.10f + (-forwardX) * 0.04f;
-            leftHandTf_.position.z += (-rightZ) * 0.10f + (-forwardZ) * 0.04f;
-            visualTf_.position.x += rightX * 0.018f * tremble;
-            visualTf_.position.z += rightZ * 0.018f * tremble;
-            visualTf_.position.y -= 0.04f;
-            visualYaw += 0.014f * tremble;
-            visualRoll += 0.030f * tremble;
-            visualTf_.scale.x *= 0.985f;
-            visualTf_.scale.y *= 0.970f;
-            visualTf_.scale.z *= 1.020f;
-        } else if (action_.step == ActionStep::Recovery) {
-            leftHandTf_.position.y += 0.16f;
-            leftHandTf_.position.x += forwardX * 0.54f;
-            leftHandTf_.position.z += forwardZ * 0.54f;
-            visualPitch += 0.06f;
-        }
-    } else if (!suppressActionPresentation && action_.kind == ActionKind::Wave) {
-        if (action_.step == ActionStep::Charge) {
-            bodyTf_.position.y -= 0.12f + 0.04f * pulse;
-            rightHandTf_.position.y += 0.44f;
-            rightHandTf_.position.x += forwardX * 0.6f;
-            rightHandTf_.position.z += forwardZ * 0.6f;
-            bodyTf_.scale.x += 0.06f + 0.06f * pulse;
-            bodyTf_.scale.z += 0.06f + 0.06f * pulse;
-            rightHandTf_.scale.x += 0.10f + 0.06f * pulse;
-            rightHandTf_.scale.y += 0.10f + 0.06f * pulse;
-            rightHandTf_.scale.z += 0.10f + 0.06f * pulse;
-            visualTf_.position.y += 0.04f * pulse;
-            visualTf_.scale.x += 0.02f * pulse;
-            visualTf_.scale.z += 0.02f * pulse;
-            visualPitch += 0.26f;
-            leftHandTf_.position.y += 0.34f;
-            leftHandTf_.position.x += (-rightX) * 0.36f;
-            leftHandTf_.position.z += (-rightZ) * 0.36f;
-        } else if (action_.step == ActionStep::Active) {
-            rightHandTf_.position.y += 0.4f;
-            rightHandTf_.position.x += forwardX * 1.0f;
-            rightHandTf_.position.z += forwardZ * 1.0f;
-            visualTf_.position.x += forwardX * 0.14f;
-            visualTf_.position.z += forwardZ * 0.14f;
-        } else if (action_.step == ActionStep::Recovery) {
-            rightHandTf_.position.y += 0.2f;
-            rightHandTf_.position.x += forwardX * 0.4f;
-            rightHandTf_.position.z += forwardZ * 0.4f;
-            visualPitch += 0.06f;
-        }
-    } else if (!suppressActionPresentation && action_.kind == ActionKind::Warp) {
-        if (action_.step == ActionStep::Start) {
-            const float warpStartTime = config_.warp.startTime;
-            const float startT =
-                Saturate(stateTimer_ / (std::max)(warpStartTime, 0.0001f));
-            const float vanish = startT * startT;
-            const float shimmer =
-                std::sin(startT * 12.56637061f) * (1.0f - startT);
-            if (warp_.type == WarpType::Approach) {
-                if (warp_.approachSlot == WarpApproachSlot::Front) {
-                    bodyTf_.position.y += 0.07f;
-                    bodyTf_.position.x += (-forwardX) * 0.16f;
-                    bodyTf_.position.z += (-forwardZ) * 0.16f;
-                    rightHandTf_.position.x += (-forwardX) * 0.24f;
-                    rightHandTf_.position.z += (-forwardZ) * 0.24f;
-                    visualTf_.position.x += (-forwardX) * (0.10f + 0.16f * vanish);
-                    visualTf_.position.z += (-forwardZ) * (0.10f + 0.16f * vanish);
-                    visualPitch += 0.10f * vanish;
-                } else if (warp_.approachSlot == WarpApproachSlot::Back) {
-                    bodyTf_.position.y -= 0.10f;
-                    bodyTf_.scale.z += 0.10f;
-                    rightHandTf_.position.x += forwardX * 0.28f;
-                    rightHandTf_.position.z += forwardZ * 0.28f;
-                    visualTf_.position.x += forwardX * (0.12f + 0.20f * vanish);
-                    visualTf_.position.z += forwardZ * (0.12f + 0.20f * vanish);
-                    visualPitch -= 0.12f * vanish;
-                }
-            }
-
-            // メルゼナ風：消える前に少し締まる
-            bodyTf_.scale.x *= 0.96f;
-            bodyTf_.scale.y *= 0.92f;
-            bodyTf_.scale.z *= 0.96f;
-            visualTf_.scale.x *= 1.0f - 0.22f * vanish;
-            visualTf_.scale.y *= 1.0f + 0.16f * vanish;
-            visualTf_.scale.z *= 1.0f - 0.42f * vanish;
-            visualTf_.position.y += warpArrivalPreviewHeight_ * (0.5f + vanish);
-            visualTf_.position.x += rightX * shimmer * 0.08f;
-            visualTf_.position.z += rightZ * shimmer * 0.08f;
-            visualYaw += 0.35f * slowPulse * vanish + shimmer * 0.38f;
-            visualRoll += shimmer * 0.18f;
-
-        } else if (action_.step == ActionStep::Move) {
-            const float warpMoveTime = config_.warp.moveTime;
-            const float moveT =
-                Saturate(stateTimer_ / (std::max)(warpMoveTime, 0.0001f));
-            const float streak = 1.0f - std::abs(moveT * 2.0f - 1.0f);
-            // Move中は本体を見せず、出発/到着の残光だけにする
-            bodyTf_.scale.x *= 0.88f;
-            bodyTf_.scale.y *= 0.80f;
-            bodyTf_.scale.z *= 0.88f;
-
-            leftHandTf_.scale.x *= 0.82f;
-            leftHandTf_.scale.y *= 0.76f;
-            leftHandTf_.scale.z *= 0.82f;
-
-            rightHandTf_.scale.x *= 0.82f;
-            rightHandTf_.scale.y *= 0.76f;
-            rightHandTf_.scale.z *= 0.82f;
-
-            bodyTf_.position.y -= 0.01f;
-            visualTf_.scale.x *= warpMoveGhostScaleX_;
-            visualTf_.scale.y *= warpMoveGhostScaleY_;
-            visualTf_.scale.z *= warpMoveGhostScaleZ_;
-            visualTf_.position.y += warpArrivalPreviewHeight_ + 0.18f * streak;
-            visualPitch -= 0.22f * streak;
-            visualYaw += 0.85f * slowPulse;
-
-        } else if (action_.step == ActionStep::End) {
-            const float warpEndTime = config_.warp.endTime;
-            const float warpArrivalTime = warpEndTime;
-            const float endT =
-                Saturate(stateTimer_ / (std::max)(warpArrivalTime, 0.0001f));
-            const float arrival = 1.0f - (1.0f - endT) * (1.0f - endT);
-            rightHandTf_.position.y += 0.2f;
-            rightHandTf_.position.x += forwardX * 0.3f;
-            rightHandTf_.position.z += forwardZ * 0.3f;
-
-            if (warp_.type == WarpType::Approach) {
-                if (warp_.approachSlot == WarpApproachSlot::Front) {
-                    bodyTf_.position.y += 0.08f;
-                    bodyTf_.position.x += (-forwardX) * 0.10f;
-                    bodyTf_.position.z += (-forwardZ) * 0.10f;
-                    rightHandTf_.position.x += (-forwardX) * 0.25f;
-                    rightHandTf_.position.z += (-forwardZ) * 0.25f;
-                    visualTf_.position.x += (-forwardX) * warpArrivalEchoOffset_ *
-                                            (1.0f - arrival);
-                    visualTf_.position.z += (-forwardZ) * warpArrivalEchoOffset_ *
-                                            (1.0f - arrival);
-                    visualPitch += 0.14f * (1.0f - arrival);
-                } else if (warp_.approachSlot == WarpApproachSlot::Back) {
-                    bodyTf_.position.y -= 0.08f;
-                    bodyTf_.position.x += forwardX * 0.12f;
-                    bodyTf_.position.z += forwardZ * 0.12f;
-                    rightHandTf_.position.x += forwardX * 0.35f;
-                    rightHandTf_.position.z += forwardZ * 0.35f;
-                    visualTf_.position.x += forwardX * warpArrivalEchoOffset_ *
-                                            (1.0f - arrival);
-                    visualTf_.position.z += forwardZ * warpArrivalEchoOffset_ *
-                                            (1.0f - arrival);
-                    visualPitch -= 0.14f * (1.0f - arrival);
-                }
-            }
-
-            // メルゼナ風：arrivalで本体が少し戻ってくる
-            bodyTf_.scale.x *= 1.03f;
-            bodyTf_.scale.y *= 1.02f;
-            bodyTf_.scale.z *= 1.03f;
-
-            leftHandTf_.scale.x *= 1.02f;
-            leftHandTf_.scale.y *= 1.01f;
-            leftHandTf_.scale.z *= 1.02f;
-
-            rightHandTf_.scale.x *= 1.02f;
-            rightHandTf_.scale.y *= 1.01f;
-            rightHandTf_.scale.z *= 1.02f;
-            const float arrivalScale =
-                1.0f + (warpArrivalPreviewScale_ - 1.0f) * (1.0f - arrival);
-            visualTf_.scale.x *= arrivalScale;
-            visualTf_.scale.z *= arrivalScale;
-            visualTf_.position.y += warpArrivalPreviewHeight_ * (1.0f - arrival);
-        }
     } else if (!suppressActionPresentation && action_.kind == ActionKind::Stalk) {
         rightHandTf_.position.y += 0.35f;
         leftHandTf_.position.y += 0.20f;
@@ -494,24 +285,14 @@ void Enemy::UpdateParts() {
     }
 
     if (suppressAttackBodyMotion) {
-        const bool keepBladeClashPressure =
-            action_.kind == ActionKind::BladeClash &&
-            action_.step == ActionStep::Active;
         bodyTf_.position.x = tf_.position.x;
         bodyTf_.position.z = tf_.position.z;
         visualYaw = usedYaw;
-        if (!keepBladeClashPressure) {
-            visualTf_.position.x = tf_.position.x;
-            visualTf_.position.z = tf_.position.z;
-            visualPitch = 0.0f;
-            visualRoll = 0.0f;
-        } else {
-            visualRoll *= 0.18f;
-        }
+        visualTf_.position.x = tf_.position.x;
+        visualTf_.position.z = tf_.position.z;
+        visualPitch = 0.0f;
+        visualRoll = 0.0f;
     }
-
-    visualPitch += cinematicPitch_;
-    visualRoll += cinematicRoll_;
 
     DirectX::XMVECTOR hitboxRot =
         DirectX::XMQuaternionRotationRollPitchYaw(0.0f, usedYaw, 0.0f);
@@ -559,21 +340,6 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
         actionIntensity = 0.050f + 0.018f * actionPulse;
         actionNoise = 0.10f;
         break;
-    case ActionKind::BladeClash:
-        actionTint = {0.28f, 1.0f, 0.58f, 0.18f};
-        actionIntensity = 0.052f + 0.018f * actionPulse;
-        actionNoise = 0.10f;
-        break;
-    case ActionKind::Wave:
-        actionTint = {0.58f, 0.72f, 0.54f, 0.14f};
-        actionIntensity = 0.045f + 0.015f * actionPulse;
-        actionNoise = 0.08f;
-        break;
-    case ActionKind::Warp:
-        actionTint = {0.72f, 0.58f, 0.42f, 0.18f};
-        actionIntensity = 0.060f + 0.018f * actionPulse;
-        actionNoise = 0.10f;
-        break;
     case ActionKind::Stalk:
         actionTint = {0.58f, 0.60f, 0.52f, 0.12f};
         actionIntensity = 0.030f + 0.010f * actionPulse;
@@ -585,9 +351,7 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
 
     const bool isTelegraphCharge =
         action_.step == ActionStep::Charge &&
-        (action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
-         action_.kind == ActionKind::BladeClash ||
-         action_.kind == ActionKind::Wave);
+        (action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep);
     if (isTelegraphCharge) {
         actionTint = LerpColor(actionTint, {0.82f, 0.72f, 0.42f, 0.22f},
                                0.08f + 0.08f * actionPulse);
@@ -625,31 +389,7 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
         hitEffect.time = runtime_.stateTimer;
     }
 
-    const uint32_t effectModelId =
-        (projectileModelId_ != 0) ? projectileModelId_ : modelId_;
-    const bool isWarpMoveHidden =
-        action_.kind == ActionKind::Warp && action_.step == ActionStep::Move;
-    ModelDrawEffect warpEffect{};
-
-    if (action_.kind == ActionKind::Warp) {
-        warpEffect.enabled = true;
-        warpEffect.additiveBlend = true;
-        warpEffect.color = actionTint;
-        warpEffect.intensity = (action_.step == ActionStep::End) ? 0.86f : 0.58f;
-        warpEffect.fresnelPower = 1.9f;
-        warpEffect.noiseAmount = (action_.step == ActionStep::Start) ? 0.56f : 0.38f;
-        warpEffect.time = stateTimer_;
-
-        if (isHitFlashing) {
-            warpEffect.color = LerpColor(warpEffect.color,
-                                         {1.0f, 0.72f, 0.20f, 0.88f},
-                                         hitFlash);
-            warpEffect.intensity += 0.38f * hitFlash;
-            warpEffect.noiseAmount += 0.10f * hitFlash;
-        }
-
-        modelManager->SetDrawEffect(warpEffect);
-    } else if (isHitFlashing) {
+    if (isHitFlashing) {
         modelManager->SetDrawEffect(hitEffect);
     } else {
         ModelDrawEffect actionEffect{};
@@ -697,52 +437,8 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
         modelManager->Draw(modelId_, scaledVisual, camera);
     };
 
-    if (isVisible_ && !isWarpMoveHidden) {
+    if (isVisible_) {
         drawEnemyVisual(visualTf_);
-    }
-
-    if (action_.kind == ActionKind::Warp) {
-        for (const auto &trail : warpTrailGhosts_) {
-            if (!trail.isActive || trail.life <= 0.0f) {
-                continue;
-            }
-
-            Transform trailVisual = visualTf_;
-            trailVisual.position = trail.position;
-            trailVisual.scale.x *= trail.scale * 1.02f;
-            trailVisual.scale.y *= trail.scale * 1.10f;
-            trailVisual.scale.z *= trail.scale * 0.62f;
-            trailVisual.position.y += warpArrivalPreviewHeight_;
-            drawEnemyVisual(trailVisual);
-        }
-    }
-
-    modelManager->ClearDrawEffect();
-
-    for (const auto &wave : waves_) {
-        if (!wave.isAlive) {
-            continue;
-        }
-
-        Transform waveTf = tf_;
-        waveTf.position = wave.position;
-        waveTf.scale = {0.6f, 0.2f, 1.2f};
-        const float waveYaw = std::atan2(wave.direction.x, wave.direction.z);
-        DirectX::XMStoreFloat4(
-            &waveTf.rotation,
-            DirectX::XMQuaternionRotationRollPitchYaw(0.0f, waveYaw, 0.0f));
-        ModelDrawEffect waveEffect{};
-        waveEffect.enabled = true;
-        waveEffect.additiveBlend = true;
-        waveEffect.color =
-            wave.isReflected ? DirectX::XMFLOAT4{1.0f, 0.58f, 0.18f, 0.90f}
-                             : DirectX::XMFLOAT4{0.54f, 0.82f, 0.48f, 0.82f};
-        waveEffect.intensity = wave.isReflected ? 1.12f : 0.88f;
-        waveEffect.fresnelPower = 1.2f;
-        waveEffect.noiseAmount = 0.32f;
-        waveEffect.time = stateTimer_ + wave.traveledDistance;
-        modelManager->SetDrawEffect(waveEffect);
-        modelManager->Draw(effectModelId, waveTf, camera);
     }
 
     modelManager->ClearDrawEffect();

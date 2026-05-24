@@ -108,8 +108,6 @@
     <ClCompile Include="src\scene\CalibrationScene.cpp" />
     <ClCompile Include="src\scene\GameSceneHud.cpp" />
     <ClCompile Include="src\enemy\EnemyMelee.cpp" />
-    <ClCompile Include="src\enemy\EnemyRanged.cpp" />
-    <ClCompile Include="src\enemy\EnemyWarp.cpp" />
     <ClCompile Include="src\enemy\EnemyCombat.cpp" />
     <ClCompile Include="src\enemy\EnemyCore.cpp" />
     <ClCompile Include="src\enemy\EnemyDecision.cpp" />
@@ -174,9 +172,6 @@
     <None Include="resources\models\boss\boss.bin" />
     <None Include="resources\models\boss\boss.gltf" />
     <None Include="resources\models\boss\boss.png" />
-    <None Include="resources\models\bullet\bullet.mtl" />
-    <None Include="resources\models\bullet\bullet.obj" />
-    <None Include="resources\models\bullet\bullet.png" />
     <None Include="resources\models\player\player.glb" />
     <None Include="resources\models\player\sword.glb" />
     <None Include="resources\select\weapon_select_bg.png" />

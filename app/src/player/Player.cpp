@@ -26,23 +26,9 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
     rightSword_.Initialize(swordModelId);
     hp_ = 100.0f;
     velocity_ = {0.0f, 0.0f, 0.0f};
-    postSlashRecoveryTimer_ = 0.0f;
-    leftSlashRecoveryTimer_ = 0.0f;
-    rightSlashRecoveryTimer_ = 0.0f;
     leftSwordAttackDamage_ = kBaseSwordAttackDamage;
     rightSwordAttackDamage_ = kBaseSwordAttackDamage;
-    prevLeftSwordSlashMode_ = false;
-    prevRightSwordSlashMode_ = false;
-    leftSlashHitConfirmed_ = false;
-    rightSlashHitConfirmed_ = false;
-    recoveryVulnerableFlashTimer_ = 0.0f;
-    overSwingCount_ = 0;
-    overSwingResetTimer_ = 0.0f;
     defeatPoseRatio_ = 0.0f;
-    bladeClashPoseActive_ = false;
-    bladeClashPosePushRatio_ = 0.5f;
-    bladeClashCinematicSlashRatio_ = 0.0f;
-    dualNextManualLeft_ = true;
     useGamepadCameraLook_ = true;
     keyboardLeftSwordState_ = {};
     autoMoveOrbitDir_ = 1.0f;
@@ -60,8 +46,8 @@ void Player::SetInputCalibration(const SwordInputCalibration &calibration) {
 }
 
 void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
-                    float cameraYaw, bool forceRangedReflectMove,
-                    float controlDeltaTime, bool suppressLookAt) {
+                    float cameraYaw, float controlDeltaTime,
+                    bool suppressLookAt) {
     const float inputDeltaTime =
         controlDeltaTime > 0.0f ? controlDeltaTime : deltaTime;
 
@@ -73,8 +59,7 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     }
 
     (void)cameraYaw;
-    UpdateMovement(deltaTime, lookTarget, forceRangedReflectMove);
-    UpdateOverSwing(deltaTime);
+    UpdateMovement(deltaTime, lookTarget);
     KeepDistanceFromTarget(lookTarget);
     if (!suppressLookAt) {
         LookAt(lookTarget);
@@ -125,61 +110,7 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     if (suppressCameraSwordSlash_ && controlType == InputControlType::Hand) {
         leftPose.isSlashMode = false;
         rightPose.isSlashMode = false;
-        leftPose.isGuard = false;
-        rightPose.isGuard = false;
     }
-
-    if (bladeClashPoseActive_) {
-        const float push = std::clamp(bladeClashPosePushRatio_, 0.0f, 1.0f);
-        const float leanPitch = -0.11f - 0.15f * push;
-        auto makeClashOrientation = [&](bool isLeft) {
-            const float inwardYaw = isLeft ? 0.28f + 0.10f * push
-                                           : -0.28f - 0.10f * push;
-            const float roll = isLeft ? -0.22f : 0.22f;
-            XMVECTOR qPitch =
-                XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), leanPitch);
-            XMVECTOR qYaw =
-                XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), inwardYaw);
-            XMVECTOR qRoll =
-                XMQuaternionRotationAxis(XMVectorSet(0, 0, 1, 0), roll);
-            DirectX::XMFLOAT4 result{};
-            XMStoreFloat4(&result, XMQuaternionNormalize(XMQuaternionMultiply(
-                                       XMQuaternionMultiply(qPitch, qYaw),
-                                       qRoll)));
-            return result;
-        };
-        leftPose.orientation = makeClashOrientation(true);
-        rightPose.orientation = makeClashOrientation(false);
-        leftPose.isGuard = false;
-        rightPose.isGuard = false;
-    }
-
-    if (postSlashRecoveryTimer_ > 0.0f) {
-        postSlashRecoveryTimer_ -= deltaTime;
-        if (postSlashRecoveryTimer_ < 0.0f) {
-            postSlashRecoveryTimer_ = 0.0f;
-        }
-    }
-
-    const bool isInPostSlashRecovery = postSlashRecoveryTimer_ > 0.0f;
-    if (isInPostSlashRecovery) {
-        leftPose.isSlashMode = false;
-        rightPose.isSlashMode = false;
-        leftPose.isGuard = false;
-        rightPose.isGuard = false;
-    }
-
-    ApplyHandRecovery(leftPose, leftSlashRecoveryTimer_, deltaTime);
-    ApplyHandRecovery(rightPose, rightSlashRecoveryTimer_, deltaTime);
-
-    leftSword_.SetRecoveryReaction(GetSlashRecoveryRatio(leftSlashRecoveryTimer_));
-    rightSword_.SetRecoveryReaction(
-        (std::max)(GetSlashRecoveryRatio(rightSlashRecoveryTimer_),
-                   (kPostSlashRecoveryDuration > 0.0f)
-                       ? std::clamp(postSlashRecoveryTimer_ /
-                                        kPostSlashRecoveryDuration,
-                                    0.0f, 1.0f)
-                       : 0.0f));
 
     leftSword_.Update(BuildSwordTransform(leftPose, true), leftPose,
                       inputDeltaTime);
@@ -188,41 +119,8 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
 
     leftSwordSlashMode_ = leftPose.isSlashMode;
     rightSwordSlashMode_ = rightPose.isSlashMode;
-    if (prevLeftSwordSlashMode_ && !leftSwordSlashMode_) {
-        if (!leftSlashHitConfirmed_) {
-            RegisterAttackWhiff();
-        }
-        leftSlashRecoveryTimer_ =
-            (std::max)(leftSlashRecoveryTimer_,
-                       GetSlashRecoveryDuration(leftSlashHitConfirmed_));
-        leftSlashHitConfirmed_ = false;
-    } else if (!prevLeftSwordSlashMode_ && leftSwordSlashMode_) {
-        leftSlashHitConfirmed_ = false;
-    }
-    if (prevRightSwordSlashMode_ && !rightSwordSlashMode_) {
-        if (!rightSlashHitConfirmed_) {
-            RegisterAttackWhiff();
-        }
-        rightSlashRecoveryTimer_ =
-            (std::max)(rightSlashRecoveryTimer_,
-                       GetSlashRecoveryDuration(rightSlashHitConfirmed_));
-        rightSlashHitConfirmed_ = false;
-    } else if (!prevRightSwordSlashMode_ && rightSwordSlashMode_) {
-        rightSlashHitConfirmed_ = false;
-    }
-    prevLeftSwordSlashMode_ = leftSwordSlashMode_;
-    prevRightSwordSlashMode_ = rightSwordSlashMode_;
-
-    leftSwordSlashDir_ = leftPose.slashDir;
-    rightSwordSlashDir_ = rightPose.slashDir;
     leftSwordVisible_ = true;
     rightSwordVisible_ = true;
-    if (IsAttackRecovery()) {
-        recoveryVulnerableFlashTimer_ += deltaTime;
-    } else {
-        recoveryVulnerableFlashTimer_ = 0.0f;
-    }
-
 }
 
 void Player::UpdateJoyConCalibrationInput(Input *, float deltaTime) {
@@ -249,54 +147,10 @@ void Player::UpdateJoyConCalibrationInput(Input *, float deltaTime) {
 
 void Player::Draw(ModelManager *modelManager, const Camera &camera,
                   bool drawBody, bool forceOpaque, float visualScale) {
-    const bool isInPostSlashRecovery = postSlashRecoveryTimer_ > 0.0f;
-    const float attackRecoveryRatio = GetAttackRecoveryRatio();
-    const bool isAttackRecovery = attackRecoveryRatio > 0.0f;
-    const float vulnerablePulse =
-        0.5f + 0.5f * std::sinf(recoveryVulnerableFlashTimer_ * 30.0f);
-    const float recoveryRatio =
-        (kPostSlashRecoveryDuration > 0.0f)
-            ? std::clamp(postSlashRecoveryTimer_ / kPostSlashRecoveryDuration,
-                         0.0f, 1.0f)
-            : 0.0f;
-
     Transform playerVisual = tf_;
     playerVisual.scale.x *= kPlayerVisualScaleMultiplier * visualScale;
     playerVisual.scale.y *= kPlayerVisualScaleMultiplier * visualScale;
     playerVisual.scale.z *= kPlayerVisualScaleMultiplier * visualScale;
-    if (isInPostSlashRecovery) {
-        const float phase = (1.0f - recoveryRatio) * 64.0f;
-        const float shake = 0.035f * recoveryRatio;
-        playerVisual.position.x += std::sinf(phase) * shake;
-        playerVisual.position.z += std::cosf(phase * 1.37f) * shake;
-
-    }
-    if (isAttackRecovery) {
-        const float phase = recoveryVulnerableFlashTimer_ * 42.0f;
-        const float shake = (0.020f + 0.045f * vulnerablePulse) *
-                            attackRecoveryRatio;
-        playerVisual.position.x += std::sinf(phase) * shake;
-        playerVisual.position.z += std::cosf(phase * 1.53f) * shake;
-        playerVisual.position.y -= 0.055f * attackRecoveryRatio;
-        playerVisual.scale.x *= 1.0f + 0.045f * attackRecoveryRatio;
-        playerVisual.scale.y *= 1.0f - 0.075f * attackRecoveryRatio;
-        playerVisual.scale.z *= 1.0f + 0.045f * attackRecoveryRatio;
-    }
-    if (bladeClashPoseActive_) {
-        const float push = std::clamp(bladeClashPosePushRatio_, 0.0f, 1.0f);
-        const float cinematicSlash =
-            std::clamp(bladeClashCinematicSlashRatio_, 0.0f, 1.0f);
-        const float lean =
-            0.24f - 0.42f * push + 0.66f * cinematicSlash * push;
-        XMVECTOR baseRot = XMLoadFloat4(&playerVisual.rotation);
-        XMVECTOR qLean =
-            XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), lean);
-        XMStoreFloat4(&playerVisual.rotation,
-                      XMQuaternionNormalize(XMQuaternionMultiply(qLean, baseRot)));
-        playerVisual.position.y -=
-            0.035f * (1.0f - push) + 0.026f * cinematicSlash * push;
-        playerVisual.scale.z *= 1.0f + 0.035f * cinematicSlash * push;
-    }
     if (defeatPoseRatio_ > 0.0f) {
         const float fall = std::clamp(defeatPoseRatio_, 0.0f, 1.0f);
         const float eased = fall * fall * (3.0f - 2.0f * fall);
@@ -325,14 +179,11 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
             rimEffect.color = {1.0f, 0.78f, 0.38f, 0.24f};
             rimEffect.intensity = 0.28f;
             rimEffect.fresnelPower = 0.82f;
-            rimEffect.time = recoveryVulnerableFlashTimer_;
             modelManager->SetDrawEffect(rimEffect);
             modelManager->Draw(modelId_, rimVisual, camera);
             modelManager->ClearDrawEffect();
         }
         if (forceOpaque) {
-            const float animePulse =
-                0.5f + 0.5f * std::sinf(recoveryVulnerableFlashTimer_ * 18.0f);
             Transform glowVisual = playerVisual;
             glowVisual.scale.x *= 1.115f;
             glowVisual.scale.y *= 1.095f;
@@ -344,9 +195,8 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
             glowEffect.disableCulling = true;
             glowEffect.forceOpaqueMaterial = true;
             glowEffect.color = {1.0f, 0.98f, 0.86f, 0.88f};
-            glowEffect.intensity = 1.72f + 0.28f * animePulse;
+            glowEffect.intensity = 1.86f;
             glowEffect.fresnelPower = 0.70f;
-            glowEffect.time = recoveryVulnerableFlashTimer_;
             modelManager->SetDrawEffect(glowEffect);
             modelManager->Draw(modelId_, glowVisual, camera);
 
@@ -355,7 +205,7 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
             warmGlowVisual.scale.y *= 1.045f;
             warmGlowVisual.scale.z *= 1.055f;
             glowEffect.color = {1.0f, 0.82f, 0.28f, 0.58f};
-            glowEffect.intensity = 0.92f + 0.18f * animePulse;
+            glowEffect.intensity = 1.01f;
             glowEffect.fresnelPower = 1.05f;
             modelManager->SetDrawEffect(glowEffect);
             modelManager->Draw(modelId_, warmGlowVisual, camera);
@@ -367,31 +217,15 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
             opaqueEffect.color = {1.0f, 0.96f, 0.84f, 0.18f};
             opaqueEffect.intensity = 0.20f;
             opaqueEffect.fresnelPower = 2.0f;
-            opaqueEffect.time = recoveryVulnerableFlashTimer_;
             modelManager->SetDrawEffect(opaqueEffect);
         }
-        if (isAttackRecovery && !forceOpaque) {
-            ModelDrawEffect recoveryEffect{};
-            recoveryEffect.enabled = true;
-            recoveryEffect.additiveBlend = false;
-            recoveryEffect.color = {1.0f, 0.08f, 0.02f, 0.82f};
-            recoveryEffect.intensity =
-                0.26f + 0.28f * vulnerablePulse * attackRecoveryRatio;
-            recoveryEffect.fresnelPower = 1.35f;
-            recoveryEffect.noiseAmount = 0.34f + 0.18f * vulnerablePulse;
-            recoveryEffect.time = recoveryVulnerableFlashTimer_;
-            modelManager->SetDrawEffect(recoveryEffect);
-        }
         modelManager->Draw(modelId_, playerVisual, camera);
-        if (isAttackRecovery && !forceOpaque) {
-            modelManager->ClearDrawEffect();
-        }
     }
     if (!forceOpaque) {
         modelManager->ClearDrawEffect();
     }
 
-    auto drawSwordWithRecovery = [&](Sword &sword, float recoveryRatio) {
+    auto drawSword = [&](Sword &sword) {
         if (forceOpaque) {
             ModelDrawEffect bladeGlow{};
             bladeGlow.enabled = true;
@@ -401,7 +235,6 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
             bladeGlow.color = {1.0f, 0.88f, 0.30f, 0.78f};
             bladeGlow.intensity = 1.45f;
             bladeGlow.fresnelPower = 0.72f;
-            bladeGlow.time = recoveryVulnerableFlashTimer_;
             modelManager->SetDrawEffect(bladeGlow);
             sword.Draw(modelManager, camera, visualScale * 1.12f);
 
@@ -409,32 +242,14 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
             opaqueEffect.forceOpaqueMaterial = true;
             modelManager->SetDrawEffect(opaqueEffect);
         }
-        if (recoveryRatio > 0.0f && !forceOpaque) {
-            ModelDrawEffect recoveryEffect{};
-            recoveryEffect.enabled = true;
-            recoveryEffect.additiveBlend = true;
-            recoveryEffect.color = {0.18f, 0.78f, 1.0f, 0.72f};
-            recoveryEffect.intensity =
-                0.28f + 0.18f * vulnerablePulse * recoveryRatio;
-            recoveryEffect.fresnelPower = 1.0f;
-            recoveryEffect.noiseAmount = 0.10f;
-            recoveryEffect.time = recoveryVulnerableFlashTimer_;
-            modelManager->SetDrawEffect(recoveryEffect);
-        }
         sword.Draw(modelManager, camera, visualScale);
-        if (recoveryRatio > 0.0f && !forceOpaque) {
-            modelManager->ClearDrawEffect();
-        }
     };
 
     if (leftSwordVisible_) {
-        drawSwordWithRecovery(leftSword_, GetSlashRecoveryRatio(leftSlashRecoveryTimer_));
+        drawSword(leftSword_);
     }
     if (rightSwordVisible_) {
-        const float rightRecoveryRatio =
-            (std::max)(GetSlashRecoveryRatio(rightSlashRecoveryTimer_),
-                       recoveryRatio);
-        drawSwordWithRecovery(rightSword_, rightRecoveryRatio);
+        drawSword(rightSword_);
     }
 
     modelManager->ClearDrawEffect();
@@ -459,56 +274,6 @@ void Player::LookAt(const XMFLOAT3 &target) {
 
     XMVECTOR q = XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), yaw_);
     XMStoreFloat4(&tf_.rotation, q);
-}
-
-void Player::SetYaw(float yaw) {
-    yaw_ = yaw;
-    XMVECTOR q = XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), yaw_);
-    XMStoreFloat4(&tf_.rotation, q);
-}
-
-void Player::SetCinematicBladeClashPose(const XMFLOAT3 &position, float yaw,
-                                        float pushRatio) {
-    LockPosition(position);
-    SetYaw(yaw);
-
-    bladeClashPoseActive_ = true;
-    bladeClashPosePushRatio_ = std::clamp(pushRatio, 0.0f, 1.0f);
-    bladeClashCinematicSlashRatio_ = 1.0f;
-
-    const float push = bladeClashPosePushRatio_;
-    auto makeFinishPose = [&](bool isLeft) {
-        SwordPose pose = MakeIdleSwordPose(isLeft);
-        const float side = isLeft ? -1.0f : 1.0f;
-        const float sweep =
-            std::clamp((push - 0.70f) / 0.30f, 0.0f, 1.0f);
-        const float leading = isLeft ? 0.82f : 1.0f;
-        const float yawOut = side * (2.18f + 0.18f * sweep * leading);
-        const float pitchFlat = 0.0f;
-        const float rollThrough = side * (0.18f + 0.08f * sweep * leading);
-        XMVECTOR qPitch =
-            XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), pitchFlat);
-        XMVECTOR qYaw =
-            XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), yawOut);
-        XMVECTOR qRoll =
-            XMQuaternionRotationAxis(XMVectorSet(0, 0, 1, 0), rollThrough);
-        XMStoreFloat4(&pose.orientation,
-                      XMQuaternionNormalize(XMQuaternionMultiply(
-                          XMQuaternionMultiply(qPitch, qYaw), qRoll)));
-        pose.isGuard = false;
-        pose.isSlashMode = false;
-        pose.slashDir = {side, -0.08f};
-        return pose;
-    };
-
-    SwordPose leftPose = makeFinishPose(true);
-    SwordPose rightPose = makeFinishPose(false);
-    leftSword_.Update(BuildSwordTransform(leftPose, true), leftPose, 0.0f);
-    rightSword_.Update(BuildSwordTransform(rightPose, false), rightPose, 0.0f);
-    leftSwordVisible_ = true;
-    rightSwordVisible_ = true;
-    leftSwordSlashMode_ = false;
-    rightSwordSlashMode_ = false;
 }
 
 void Player::KeepDistanceFromTarget(const DirectX::XMFLOAT3 &target) {
@@ -542,8 +307,7 @@ void Player::KeepDistanceFromTarget(const DirectX::XMFLOAT3 &target) {
     knockbackVelocity_.z = 0.0f;
 }
 
-void Player::UpdateMovement(float deltaTime, const XMFLOAT3 &lookTarget,
-                            bool forceRangedReflectMove) {
+void Player::UpdateMovement(float deltaTime, const XMFLOAT3 &lookTarget) {
     autoMoveOrbitTimer_ -= deltaTime;
     if (autoMoveOrbitTimer_ <= 0.0f) {
         autoMoveOrbitTimer_ = 1.6f;
@@ -573,35 +337,16 @@ void Player::UpdateMovement(float deltaTime, const XMFLOAT3 &lookTarget,
             ? 0.35f
             : 1.0f;
 
-    float worldMoveX = 0.0f;
-    float worldMoveZ = 0.0f;
-    if (forceRangedReflectMove) {
-        const float retreatTargetDistance = 6.8f;
-        const float retreatNeed =
-            std::clamp(retreatTargetDistance - distance, 0.0f, 1.0f);
-        const float retreatSpeed = 4.8f * retreatNeed;
-        const float strafeSpeed = 2.35f;
-        worldMoveX = -towardX * retreatSpeed +
-                     rightX * autoMoveOrbitDir_ * strafeSpeed;
-        worldMoveZ = -towardZ * retreatSpeed +
-                     rightZ * autoMoveOrbitDir_ * strafeSpeed;
-    } else {
-        worldMoveX = rightX * autoMoveOrbitDir_ *
-                         kJoyConAutoMoveOrbitSpeed * orbitScale +
-                     towardX * distancePush * kJoyConAutoMoveDistanceSpeed;
-        worldMoveZ = rightZ * autoMoveOrbitDir_ *
-                         kJoyConAutoMoveOrbitSpeed * orbitScale +
-                     towardZ * distancePush * kJoyConAutoMoveDistanceSpeed;
-    }
+    const float worldMoveX =
+        rightX * autoMoveOrbitDir_ * kJoyConAutoMoveOrbitSpeed * orbitScale +
+        towardX * distancePush * kJoyConAutoMoveDistanceSpeed;
+    const float worldMoveZ =
+        rightZ * autoMoveOrbitDir_ * kJoyConAutoMoveOrbitSpeed * orbitScale +
+        towardZ * distancePush * kJoyConAutoMoveDistanceSpeed;
 
-    float speedScale = 1.0f;
-    if (IsAttackRecovery()) {
-        speedScale *= 0.38f;
-    }
-
-    velocity_.x = worldMoveX * speedScale;
+    velocity_.x = worldMoveX;
     velocity_.y = 0.0f;
-    velocity_.z = worldMoveZ * speedScale;
+    velocity_.z = worldMoveZ;
     tf_.position.x += velocity_.x * deltaTime;
     tf_.position.z += velocity_.z * deltaTime;
 
@@ -625,55 +370,6 @@ void Player::UpdateMovement(float deltaTime, const XMFLOAT3 &lookTarget,
         knockbackVelocity_.z = 0.0f;
 }
 
-void Player::NotifyAttackHit(float damage) {
-    RegisterAttackHit(damage);
-}
-
-void Player::NotifyAttackHit(size_t swordIndex, float damage) {
-    RegisterAttackHit(damage);
-    const float hitRecovery = GetHitConfirmRecoveryDuration();
-    postSlashRecoveryTimer_ = 0.0f;
-
-    if (swordIndex == 0) {
-        leftSlashHitConfirmed_ = true;
-        if (leftSlashRecoveryTimer_ > hitRecovery) {
-            leftSlashRecoveryTimer_ = hitRecovery;
-        }
-    } else if (swordIndex == 1) {
-        rightSlashHitConfirmed_ = true;
-        if (rightSlashRecoveryTimer_ > hitRecovery) {
-            rightSlashRecoveryTimer_ = hitRecovery;
-        }
-    }
-}
-
-void Player::RegisterAttackHit(float damage) {
-    (void)damage;
-    ResetOverSwing();
-}
-
-void Player::RegisterAttackWhiff() {
-    ResetOverSwing();
-}
-
-void Player::ResetOverSwing() {
-    overSwingCount_ = 0;
-    overSwingResetTimer_ = 0.0f;
-}
-
-void Player::UpdateOverSwing(float deltaTime) {
-    if (overSwingResetTimer_ <= 0.0f) {
-        overSwingCount_ = 0;
-        return;
-    }
-
-    overSwingResetTimer_ -= deltaTime;
-    if (overSwingResetTimer_ <= 0.0f) {
-        overSwingResetTimer_ = 0.0f;
-        overSwingCount_ = 0;
-    }
-}
-
 float Player::ComputeJoyConSwingDamageMultiplier(float angularVelocity) const {
     const float swingRatio =
         std::clamp((angularVelocity - 520.0f) / 1280.0f, 0.0f, 1.0f);
@@ -690,27 +386,7 @@ float Player::GetCounterDamageMultiplier() const {
     return 7.0f;
 }
 
-float Player::GetCounterVulnerabilityDuration() const {
-    return 1.35f;
-}
-
-void Player::NotifyCounterSuccess(size_t swordIndex) {
-    if (swordIndex == 0) {
-        leftSword_.NotifyCounterSuccess();
-    } else if (swordIndex == 1) {
-        rightSword_.NotifyCounterSuccess();
-    }
-
-    postSlashRecoveryTimer_ = 0.0f;
-    if (swordIndex == 0) {
-        leftSlashRecoveryTimer_ = 0.0f;
-        leftSlashHitConfirmed_ = true;
-    } else if (swordIndex == 1) {
-        rightSlashRecoveryTimer_ = 0.0f;
-        rightSlashHitConfirmed_ = true;
-    }
-    ResetOverSwing();
-}
+float Player::GetCounterVulnerabilityDuration() const { return 1.35f; }
 
 Transform Player::BuildSwordTransform(const SwordPose &pose, bool isLeft) const {
     Transform swordTransform{};
@@ -782,7 +458,6 @@ SwordPose Player::UpdateKeyboardLeftSword(Input *input, float deltaTime) {
         XMStoreFloat4(&keyboardLeftSwordState_.orientation, q);
     }
 
-    keyboardLeftSwordState_.isGuard = false;
     keyboardLeftSwordState_.UpdateSlash(
         slashTriggered ? SwordControllerState::kSlashThreshold + 1.0f : 0.0f,
         deltaTime);
@@ -807,73 +482,15 @@ void Player::UpdateWeaponRules(Input *input, SwordPose &leftPose,
         }
     };
 
-    leftPose.isGuard = false;
-    rightPose.isGuard = false;
-
     const bool singlePointerControl =
         !hasLeftJoyCon && !hasRightJoyCon && !useDualUdpControls;
     if (singlePointerControl && rightPose.isSlashMode) {
-        if (dualNextManualLeft_ && leftSlashRecoveryTimer_ <= 0.0f) {
-            leftPose = MakeMirroredSwordPose(rightPose);
-            rightPose.isSlashMode = false;
-        } else if (rightSlashRecoveryTimer_ <= 0.0f) {
-            leftPose = MakeIdleSwordPose(true);
-        } else if (leftSlashRecoveryTimer_ <= 0.0f) {
-            leftPose = MakeMirroredSwordPose(rightPose);
-            rightPose.isSlashMode = false;
-        } else {
-            leftPose = MakeIdleSwordPose(true);
-            rightPose.isSlashMode = false;
-        }
+        leftPose = MakeMirroredSwordPose(rightPose);
+        rightPose.isSlashMode = false;
     }
 
     (void)deltaTime;
     applyJoyConSwingDamage();
-}
-
-void Player::ApplyHandRecovery(SwordPose &pose, float &timer,
-                               float deltaTime) {
-    if (timer <= 0.0f) {
-        return;
-    }
-
-    timer -= deltaTime;
-    if (timer < 0.0f) {
-        timer = 0.0f;
-    }
-
-    pose.isSlashMode = false;
-    pose.isGuard = false;
-}
-
-float Player::GetSlashRecoveryDuration(bool hitConfirmed) const {
-    (void)hitConfirmed;
-    return 0.0f;
-}
-
-float Player::GetHitConfirmRecoveryDuration() const {
-    return 0.0f;
-}
-
-float Player::GetSlashRecoveryRatio(float timer) const {
-    const float duration = GetSlashRecoveryDuration(false);
-    if (duration <= 0.0f) {
-        return 0.0f;
-    }
-
-    return std::clamp(timer / duration, 0.0f, 1.0f);
-}
-
-float Player::GetAttackRecoveryRatio() const {
-    float ratio = 0.0f;
-    if (kPostSlashRecoveryDuration > 0.0f) {
-        ratio = (std::max)(ratio, std::clamp(postSlashRecoveryTimer_ /
-                                                 kPostSlashRecoveryDuration,
-                                             0.0f, 1.0f));
-    }
-    ratio = (std::max)(ratio, GetSlashRecoveryRatio(leftSlashRecoveryTimer_));
-    ratio = (std::max)(ratio, GetSlashRecoveryRatio(rightSlashRecoveryTimer_));
-    return ratio;
 }
 
 void Player::ToggleGamepadControlMode() {

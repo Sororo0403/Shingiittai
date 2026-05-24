@@ -9,7 +9,6 @@
 class SwordJoyConController {
   public:
     void Update(JoyCon *joyCon, float dt, const Transform &swordPos);
-    bool IsActive(const JoyCon *joyCon) const;
 
     float GetAngularVelocity() const { return angularVelocity_; }
     SwordPose GetPose() const;

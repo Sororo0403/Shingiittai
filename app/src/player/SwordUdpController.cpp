@@ -44,7 +44,7 @@ float SwordUdpController::GetMotionSpeed(size_t handIndex) const {
 
 void SwordUdpController::SetCalibration(
     const SwordInputCalibration &calibration) {
-    calibration_ = calibration;
+    (void)calibration;
     actionInput_ = {};
     actionInput_.staleTimer = kStaleSeconds;
     actionSwordStates_ = {};
@@ -156,10 +156,6 @@ void SwordUdpController::ReceivePackets() {
             slashDirX[1] = static_cast<float>(values[6]);
             slashDirY[1] = static_cast<float>(values[7]);
             slashConfidence[1] = static_cast<float>(values[8]);
-            uint32_t debugFlags = 0;
-            if (values.size() >= 10) {
-                debugFlags = static_cast<uint32_t>(values[9]);
-            }
             actionInput_.hasPacket = true;
             actionInput_.staleTimer = 0.0f;
             for (size_t i = 0; i < actionInput_.slashSpeed.size(); ++i) {
@@ -169,7 +165,6 @@ void SwordUdpController::ReceivePackets() {
                 actionInput_.slashConfidence[i] =
                     std::clamp(slashConfidence[i], 0.0f, 1.0f);
             }
-            actionInput_.debugFlags = debugFlags;
         }
     }
 }
@@ -205,7 +200,6 @@ void SwordUdpController::ApplyActionInput(float dt) {
             actionInput_.slashSpeed[i] * (0.78f + confidence * 0.22f) *
             confidenceGate;
         state.UpdateSlash(confidenceScaledSpeed, dt);
-        state.isGuard = false;
     }
 }
 

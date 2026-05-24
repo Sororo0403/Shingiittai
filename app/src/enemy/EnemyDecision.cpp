@@ -112,41 +112,23 @@ void Enemy::UpdateIdle(float deltaTime) {
 TacticState Enemy::DecideTactic() const {
     const float distance = GetDistanceToPlayer();
     const bool isNear = distance <= config_.core.nearAttackDistance;
-    const bool isFar = distance >= config_.core.farAttackDistance;
 
     if (isNear) {
         return TacticState::Melee;
     }
-    if (isFar) {
-        return TacticState::Ranged;
-    }
-    return TacticState::DistanceAdjust;
+    return TacticState::Chase;
 }
 
 void Enemy::BeginActionFromTactic(TacticState tactic) {
     switch (tactic) {
-    case TacticState::Warp:
-        BeginResetAction();
-        break;
     case TacticState::Melee:
         BeginPressureAction();
         break;
-    case TacticState::Ranged:
-        BeginNeutralAction();
-        break;
-    case TacticState::DistanceAdjust:
+    case TacticState::Chase:
     default:
         BeginChaseAction();
         break;
     }
-}
-
-ActionKind Enemy::SelectNeutralAction(float distance) const {
-    if (distance <= config_.core.nearAttackDistance) {
-        return SelectNearPressureAction();
-    }
-
-    return ActionKind::Stalk;
 }
 
 ActionKind Enemy::SelectNearPressureAction() const {
@@ -165,9 +147,6 @@ ActionKind Enemy::SelectNearPressureAction() const {
     if (playerObs_.isAttacking) {
         sweepWeight += 10;
     }
-    if (playerObs_.isGuarding) {
-        sweepWeight += 4;
-    }
     if (lastActionKind_ == ActionKind::Smash) {
         smashWeight /= 2;
     } else if (lastActionKind_ == ActionKind::Sweep) {
@@ -182,26 +161,11 @@ ActionKind Enemy::SelectNearPressureAction() const {
     }
 }
 
-ActionKind Enemy::SelectChaseAction() const { return ActionKind::Stalk; }
-
-void Enemy::BeginNeutralAction() {
-    const float distance = GetDistanceToPlayer();
-
-    if (distance <= config_.core.nearAttackDistance) {
-        BeginPressureAction();
-        return;
-    }
-
-    stalkRepeatCount_ = 0;
-    TryBeginTacticAction(SelectNeutralAction(distance));
-}
-
 void Enemy::BeginPressureAction() {
     const float distance = GetDistanceToPlayer();
 
     if (distance <= config_.core.nearAttackDistance) {
-        stalkRepeatCount_ = 0;
-        TryBeginTacticAction(SelectNearPressureAction());
+        BeginAction(SelectNearPressureAction(), ActionStep::Charge);
         return;
     }
 
@@ -216,93 +180,6 @@ void Enemy::BeginChaseAction() {
         return;
     }
 
-    if (distance >= config_.core.farAttackDistance && !isDistanceStagnant_) {
-        BeginNeutralAction();
-        return;
-    }
-
-    stalkRepeatCount_ = 0;
-    TryBeginTacticAction(SelectChaseAction());
-}
-
-void Enemy::BeginResetAction() {
-    if (IsWarpSuspendedForPresentation()) {
-        BeginChaseAction();
-        return;
-    }
-
-    if (TryBeginWarpBehindMeleeSkill(false)) {
-        return;
-    }
-
-    TryBeginTacticActionOrFallback(ActionKind::Warp, ActionKind::Stalk);
-}
-
-bool Enemy::TryBeginWarpBehindMeleeSkill(bool force) {
-    const float distance = GetDistanceToPlayer();
-    if (!force && (distance < 2.2f || distance > 8.5f)) {
-        return false;
-    }
-
-    float chance = 0.08f;
-    if (playerObs_.isGuarding) {
-        chance += 0.08f;
-    }
-    if (playerObs_.isAttacking) {
-        chance += 0.04f;
-    }
-    if (lastActionKind_ == ActionKind::Warp) {
-        chance *= 0.5f;
-    }
-
-    if (!force) {
-        const float roll = static_cast<float>(std::rand()) /
-                           static_cast<float>(RAND_MAX);
-        if (roll >= chance) {
-            return false;
-        }
-    }
-
-    float forwardX = std::sin(playerObs_.facingYaw);
-    float forwardZ = std::cos(playerObs_.facingYaw);
-    float forwardLength = std::sqrt(forwardX * forwardX + forwardZ * forwardZ);
-
-    if (forwardLength <= 0.0001f) {
-        forwardX = playerObs_.velocity.x;
-        forwardZ = playerObs_.velocity.z;
-        forwardLength = std::sqrt(forwardX * forwardX + forwardZ * forwardZ);
-    }
-
-    if (forwardLength <= 0.0001f) {
-        forwardX = std::sin(facingYaw_);
-        forwardZ = std::cos(facingYaw_);
-        forwardLength = 1.0f;
-    }
-
-    forwardX /= forwardLength;
-    forwardZ /= forwardLength;
-
-    constexpr float backDistance = 2.25f;
-    DirectX::XMFLOAT3 target = playerPos_;
-    target.x -= forwardX * backDistance;
-    target.z -= forwardZ * backDistance;
-    target.y = tf_.position.y;
-
-    ResetWarpContext();
-    warp_.type = WarpType::Approach;
-    warp_.approachSlot = WarpApproachSlot::Back;
-    FinalizeWarpTargetFacing(target);
-    warp_.targetPos = target;
-    warp_.hasValidTarget = true;
-    warp_.followupKind = SelectNearPressureAction();
-    if (warp_.followupKind != ActionKind::Smash &&
-        warp_.followupKind != ActionKind::Sweep) {
-        warp_.followupKind = ActionKind::Smash;
-    }
-    warp_.followupStep = ActionStep::Charge;
-
-    BeginAction(ActionKind::Warp, ActionStep::Start);
-    action_.id = ActionId::WarpBackstab;
-    return true;
+    BeginStalkAction();
 }
 

@@ -22,9 +22,6 @@
     <Filter Include="Resources\Model\boss">
       <UniqueIdentifier>{1abdc1c9-c80c-eca4-b2ae-bfa8d792511f}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Resources\Model\bullet">
-      <UniqueIdentifier>{12156a62-6047-2f1f-f10d-64b6aaea3650}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Resources\Model\enemy">
       <UniqueIdentifier>{7d5a4983-9ca7-5ac1-b285-9b2770c6f339}</UniqueIdentifier>
     </Filter>
@@ -70,12 +67,6 @@
       <Filter>Source Files\scene</Filter>
     </ClCompile>
     <ClCompile Include="src\enemy\EnemyMelee.cpp">
-      <Filter>Source Files\enemy</Filter>
-    </ClCompile>
-    <ClCompile Include="src\enemy\EnemyRanged.cpp">
-      <Filter>Source Files\enemy</Filter>
-    </ClCompile>
-    <ClCompile Include="src\enemy\EnemyWarp.cpp">
       <Filter>Source Files\enemy</Filter>
     </ClCompile>
     <ClCompile Include="src\enemy\EnemyCombat.cpp">
@@ -245,15 +236,6 @@
     </None>
     <None Include="resources\models\boss\boss.png">
       <Filter>Resources\Model\boss</Filter>
-    </None>
-    <None Include="resources\models\bullet\bullet.mtl">
-      <Filter>Resources\Model\bullet</Filter>
-    </None>
-    <None Include="resources\models\bullet\bullet.obj">
-      <Filter>Resources\Model\bullet</Filter>
-    </None>
-    <None Include="resources\models\bullet\bullet.png">
-      <Filter>Resources\Model\bullet</Filter>
     </None>
     <None Include="resources\models\player\player.glb">
       <Filter>Resources\Model\player</Filter>

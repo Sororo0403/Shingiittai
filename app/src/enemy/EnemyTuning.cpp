@@ -30,9 +30,6 @@ float Enemy::GetReleaseAnticipationRatio() const {
         case ActionKind::Sweep:
             releaseTime = GetCurrentSweepChargeTime();
             break;
-        case ActionKind::Wave:
-            releaseTime = config_.attacks.wave.chargeTime;
-            break;
         default:
             return 0.0f;
         }
@@ -55,22 +52,6 @@ float Enemy::GetReleaseAnticipationRatio() const {
     }
 
     return std::clamp(1.0f - remaining / cueWindow, 0.0f, 1.0f);
-}
-
-ActionId Enemy::MakeDefaultActionId(ActionKind kind) const {
-    switch (kind) {
-    case ActionKind::Smash:
-        return ActionId::Smash;
-    case ActionKind::Sweep:
-        return ActionId::Sweep;
-    case ActionKind::Wave:
-        return ActionId::Wave;
-    case ActionKind::Warp:
-        return (warp_.type == WarpType::Escape) ? ActionId::WarpEscape
-                                                : ActionId::WarpApproach;
-    default:
-        return ActionId::None;
-    }
 }
 
 void Enemy::ValidateTiming(AttackTimingParam &timing, float chargeTime) {

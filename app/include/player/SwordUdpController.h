@@ -31,7 +31,6 @@ class SwordUdpController {
         std::array<float, 2> slashDirX = {1.0f, -1.0f};
         std::array<float, 2> slashDirY = {0.0f, 0.0f};
         std::array<float, 2> slashConfidence = {0.0f, 0.0f};
-        uint32_t debugFlags = 0;
     };
 
     bool EnsureSocket();
@@ -42,7 +41,6 @@ class SwordUdpController {
 
     uintptr_t socket_ = UINTPTR_MAX;
     bool socketReady_ = false;
-    SwordInputCalibration calibration_{};
     PlayerActionInput actionInput_{};
     std::array<SwordControllerState, 2> actionSwordStates_{};
 };

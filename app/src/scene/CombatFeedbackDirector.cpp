@@ -130,12 +130,6 @@ void CombatFeedbackDirector::PushEvent(const CombatFeedbackEvent &event) {
         AddPostFlash(0.13f, 0.016f + 0.007f * power, 0.025f, 0.04f);
         fovKickDeg_ = (std::max)(fovKickDeg_, 1.6f + 0.42f * power);
         break;
-    case CombatFeedbackEventType::PlayerGuard:
-        AddHitStop(0.025f, 0.24f);
-        AddCameraShake(0.10f, 0.012f, 0.007f);
-        AddPostFlash(0.09f, 0.012f, 0.020f, 0.03f);
-        fovKickDeg_ = (std::max)(fovKickDeg_, 1.0f);
-        break;
     case CombatFeedbackEventType::PlayerDamaged:
         AddHitStop(0.115f, 0.035f);
         AddCameraShake(0.24f, 0.046f, 0.030f);
@@ -147,24 +141,6 @@ void CombatFeedbackDirector::PushEvent(const CombatFeedbackEvent &event) {
         AddCameraShake(0.42f, 0.082f, 0.052f);
         AddPostFlash(0.48f, 0.22f, 0.13f, 0.26f);
         fovKickDeg_ = (std::max)(fovKickDeg_, 7.0f);
-        break;
-    case CombatFeedbackEventType::ProjectileReflect:
-        AddHitStop(0.060f, 0.12f);
-        AddCameraShake(0.15f, 0.024f, 0.015f);
-        AddPostFlash(0.14f, 0.026f, 0.045f, 0.06f);
-        fovKickDeg_ = (std::max)(fovKickDeg_, 2.8f);
-        break;
-    case CombatFeedbackEventType::BladeClashGuardBreak:
-        AddHitStop(0.260f, 0.004f);
-        AddCameraShake(0.38f, 0.122f, 0.074f);
-        AddPostFlash(0.58f, 0.30f, 0.125f, 0.82f);
-        fovKickDeg_ = (std::max)(fovKickDeg_, 9.0f);
-        break;
-    case CombatFeedbackEventType::BladeClashPierce:
-        AddHitStop(0.044f, 0.14f);
-        AddCameraShake(0.34f, 0.110f, 0.060f);
-        AddPostFlash(0.40f, 0.60f, 0.052f, 0.24f);
-        fovKickDeg_ = (std::max)(fovKickDeg_, 10.0f);
         break;
     }
 
@@ -205,10 +181,10 @@ void CombatFeedbackDirector::ApplyCameraImpulse(XMFLOAT3 &cameraPosition,
         right = XMVector3Normalize(right);
     }
 
-    const float waveA = std::sinf(sceneTime * 72.0f);
-    const float waveB = std::cosf(sceneTime * 103.0f + 0.7f);
-    const float horizontal = shakeHorizontal_ * ratio * waveA;
-    const float vertical = shakeVertical_ * ratio * waveB;
+    const float shakeA = std::sinf(sceneTime * 72.0f);
+    const float shakeB = std::cosf(sceneTime * 103.0f + 0.7f);
+    const float horizontal = shakeHorizontal_ * ratio * shakeA;
+    const float vertical = shakeVertical_ * ratio * shakeB;
 
     XMFLOAT3 rightF{};
     XMFLOAT3 upF{};

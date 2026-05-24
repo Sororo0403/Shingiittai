@@ -14,7 +14,6 @@ class Sword {
     void Initialize(uint32_t modelId);
     void Update(const Transform &transform, const SwordPose &pose,
                 float deltaTime);
-    void SetRecoveryReaction(float reaction);
 
     void Draw(ModelManager *modelManager, const Camera &camera,
               float visualScale = 1.0f);
@@ -26,14 +25,10 @@ class Sword {
     DirectX::XMFLOAT3 GetVisualBladeTipWorld() const;
 
     bool IsSlashMode() const { return isSlashMode_; }
-    bool IsGuard() const { return isGuard_; }
     bool CanSlashCounter() const { return isSlashMode_; }
-
-    bool JustCountered() const { return justCountered_; }
 
     const DirectX::XMFLOAT2 &GetSlashDirection() const { return slashDir_; }
     SwordCounterAxis GetSlashAxis() const;
-    void NotifyCounterSuccess();
 
   private:
     Transform BuildVisualTransform() const;
@@ -50,14 +45,10 @@ class Sword {
     Transform tf_;
 
     bool isSlashMode_ = false;
-    bool isGuard_ = false;
 
     DirectX::XMFLOAT2 slashDir_{};
     DirectX::XMFLOAT4 orientation_{0, 0, 0, 1};
 
-    bool justCountered_ = false;
-
-    float recoveryReaction_ = 0.0f;
     float slashFollowThroughTimer_ = 0.0f;
     bool slashFollowThroughStarted_ = false;
     DirectX::XMFLOAT2 slashFollowThroughDir_{};

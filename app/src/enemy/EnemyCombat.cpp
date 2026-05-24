@@ -42,8 +42,6 @@ OBB Enemy::GetAttackOBB() const {
         return GetSmashAttackOBB();
     case ActionKind::Sweep:
         return GetSweepAttackOBB();
-    case ActionKind::BladeClash:
-        return MakeOBB(bodyTf_, GetCurrentAttackHitBoxSize());
     default:
         return OBB{};
     }
@@ -100,8 +98,6 @@ bool Enemy::IsPunishableRecovery() const {
     switch (action_.kind) {
     case ActionKind::Smash:
     case ActionKind::Sweep:
-    case ActionKind::BladeClash:
-    case ActionKind::Wave:
         return action_.step == ActionStep::Recovery && hitReactionTimer_ <= 0.0f;
     default:
         return false;
@@ -132,10 +128,6 @@ AttackParam *Enemy::GetCurrentAttackParam() {
         return &config_.attacks.smash.melee.base.attack;
     case ActionKind::Sweep:
         return &config_.attacks.sweep.melee.base.attack;
-    case ActionKind::BladeClash:
-        return &config_.attacks.bladeClash.attack;
-    case ActionKind::Wave:
-        return &config_.attacks.wave.attack;
     default:
         return nullptr;
     }
@@ -147,10 +139,6 @@ const AttackParam *Enemy::GetCurrentAttackParam() const {
         return &config_.attacks.smash.melee.base.attack;
     case ActionKind::Sweep:
         return &config_.attacks.sweep.melee.base.attack;
-    case ActionKind::BladeClash:
-        return &config_.attacks.bladeClash.attack;
-    case ActionKind::Wave:
-        return &config_.attacks.wave.attack;
     default:
         return nullptr;
     }
@@ -220,8 +208,6 @@ void Enemy::ResolveDeferredDamageTransitions() {
     hitReactionTimer_ = (std::max)(hitReactionTimer_, hitReactionDuration_);
 }
 
-void Enemy::NotifyAttackConnected() { currentActionConnected_ = true; }
-
 void Enemy::ForcePunishRelease() {
     if (!(action_.kind == ActionKind::Smash ||
           action_.kind == ActionKind::Sweep)) {
@@ -245,12 +231,6 @@ void Enemy::ForcePunishRelease() {
     }
 }
 
-bool Enemy::IsPhase3GuardCounterGuarding() const {
-    return false;
-}
-
-bool Enemy::NotifyCountered() { return ApplyCounterBreakReaction(); }
-
 bool Enemy::NotifyCountered(float vulnerabilityDuration) {
     return ApplyCounterBreakReaction(vulnerabilityDuration);
 }
@@ -265,8 +245,7 @@ void Enemy::FinishCounterRecoil() {
 
 bool Enemy::ApplyCounterBreakReaction(float vulnerabilityDuration) {
     const bool isCounterBreakableAction =
-        action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
-        action_.kind == ActionKind::BladeClash;
+        action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep;
     if (!isCounterBreakableAction) {
         return false;
     }
@@ -277,9 +256,6 @@ bool Enemy::ApplyCounterBreakReaction(float vulnerabilityDuration) {
     stateTimer_ = 0.0f;
 
     tactic_ = DecideTactic();
-    closePressureTimer_ = 0.0f;
-    stagnantTimer_ = 0.0f;
-    isDistanceStagnant_ = false;
 
     UpdateFacingToPlayer();
     UpdateParts();

@@ -13,8 +13,6 @@ constexpr CollisionManager::LayerMask kLayerPlayer = 1u << 0;
 constexpr CollisionManager::LayerMask kLayerEnemy = 1u << 1;
 constexpr CollisionManager::LayerMask kLayerPlayerAttack = 1u << 2;
 constexpr CollisionManager::LayerMask kLayerEnemyAttack = 1u << 3;
-constexpr CollisionManager::LayerMask kLayerEnemyProjectile = 1u << 5;
-constexpr CollisionManager::LayerMask kLayerReflectedProjectile = 1u << 6;
 constexpr float kReleaseCounterWindowDuration = 0.62f;
 
 CollisionManager::BodyId AddCollisionBody(
@@ -127,10 +125,6 @@ static float GetReadableMeleeRadius(const OBB &box) {
     return (std::max)(box.size.x, box.size.z) * 0.55f + 0.75f;
 }
 
-static float GetReadableProjectileRadius(const XMFLOAT3 &size) {
-    return (std::max)(size.x, size.z) * 0.70f + 0.45f;
-}
-
 static XMFLOAT4 MakeYawRotation(float yaw) {
     XMFLOAT4 rotation{};
     XMStoreFloat4(&rotation,
@@ -154,10 +148,6 @@ PlayerCombatObservation GameScene::BuildPlayerCombatObservation() const {
 
     PlayerCombatObservation observation{};
     observation.position = player_.GetTransform().position;
-    observation.velocity = player_.GetVelocity();
-    observation.facingYaw = player_.GetYaw();
-    observation.isGuarding = false;
-    observation.justCountered = player_.JustCountered();
 
     for (bool isSlashing : slashStates) {
         observation.isAttacking = observation.isAttacking || isSlashing;
@@ -185,16 +175,16 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     const auto enemyLeftHandBox = enemy_.GetLeftHandOBB();
     const auto enemyRightHandBox = enemy_.GetRightHandOBB();
     AddCollisionBody(collisionManager_, playerBox, kLayerPlayer,
-                     kLayerEnemyAttack | kLayerEnemyProjectile);
+                     kLayerEnemyAttack);
     const CollisionManager::BodyId enemyBody =
         AddCollisionBody(collisionManager_, enemyBodyBox, kLayerEnemy,
-                         kLayerPlayerAttack | kLayerReflectedProjectile);
+                         kLayerPlayerAttack);
     const CollisionManager::BodyId enemyLeftHandBody =
         AddCollisionBody(collisionManager_, enemyLeftHandBox, kLayerEnemy,
-                         kLayerPlayerAttack | kLayerReflectedProjectile);
+                         kLayerPlayerAttack);
     const CollisionManager::BodyId enemyRightHandBody =
         AddCollisionBody(collisionManager_, enemyRightHandBox, kLayerEnemy,
-                         kLayerPlayerAttack | kLayerReflectedProjectile);
+                         kLayerPlayerAttack);
     const std::array<CollisionManager::BodyId, 3> enemyHurtBodies = {
         enemyBody, enemyLeftHandBody, enemyRightHandBody};
     const ActionKind enemyActionKind = enemy_.GetActionKind();
@@ -212,12 +202,10 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                        130.0f);
         const float vulnerabilityDuration =
             player_.GetCounterVulnerabilityDuration();
-        player_.NotifyCounterSuccess(swordIndex);
         if (enemy_.NotifyCountered(vulnerabilityDuration)) {
             forceSyncEnemyAnimationThisFrame = true;
         }
         const float appliedDamage = ApplyEnemyDamage(counterDamage);
-        player_.NotifyAttackHit(swordIndex, appliedDamage);
         CombatFeedbackEvent feedback{};
         feedback.type = CombatFeedbackEventType::CounterSuccess;
         feedback.position = enemy_.GetTransform().position;
@@ -335,7 +323,6 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                                 player_.GetTransform().position);
             feedback.power = enemyAttackDamage / 8.0f;
             DispatchCombatFeedback(feedback);
-            enemy_.NotifyAttackConnected();
             playerHitCooldown_ = 0.45f;
             break;
         }
@@ -376,7 +363,6 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                 if (appliedDamage <= 0.0f) {
                     break;
                 }
-                player_.NotifyAttackHit(i, appliedDamage);
                 CombatFeedbackEvent feedback{};
                 feedback.type = CombatFeedbackEventType::PlayerSlashHit;
                 feedback.position = swordHitBox.center;
@@ -411,7 +397,6 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                 player_.GetTransform().position.z -
                     enemy_.GetTransform().position.z);
 
-            enemy_.NotifyAttackConnected();
             player_.AddKnockback(
                 {knockbackDir.x * enemyAttackKnockback, 0.0f,
                  knockbackDir.y * enemyAttackKnockback});
@@ -425,100 +410,6 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             feedback.power = enemyAttackDamage / 10.0f;
             DispatchCombatFeedback(feedback);
             playerHitCooldown_ = 0.4f;
-        }
-    }
-
-    const auto &waves = enemy_.GetWaves();
-    for (size_t i = 0; i < waves.size(); ++i) {
-        const auto &wave = waves[i];
-        if (!wave.isAlive) {
-            continue;
-        }
-
-        OBB waveBox{};
-        waveBox.center = wave.position;
-        waveBox.size = wave.hitBoxSize;
-        waveBox.rotation =
-            MakeYawRotation(std::atan2(wave.direction.x, wave.direction.z));
-        const float waveThreatRadius =
-            GetReadableProjectileRadius(waveBox.size);
-        const CollisionManager::BodyId waveBody = AddCollisionBody(
-            collisionManager_, waveBox,
-            wave.isReflected ? kLayerReflectedProjectile
-                             : kLayerEnemyProjectile,
-            wave.isReflected ? kLayerEnemy
-                             : kLayerPlayer);
-
-        size_t waveCounterSwordIndex = swords.size();
-        if (!wave.isReflected &&
-            IsNearXZ(wave.position, player_.GetTransform().position,
-                     waveThreatRadius + 0.85f) &&
-            FindSlashTowardPoint(swords, swordSlashStates, wave.position,
-                                 waveCounterSwordIndex, 0.00f)) {
-            enemy_.ReflectWave(i, enemy_.GetTransform().position);
-            CombatFeedbackEvent feedback{};
-            feedback.type = CombatFeedbackEventType::ProjectileReflect;
-            feedback.position = wave.position;
-            feedback.direction = DirectionFromTo(wave.position,
-                                                enemy_.GetTransform().position);
-            feedback.power = wave.damage / 5.0f;
-            DispatchCombatFeedback(feedback);
-            continue;
-        }
-
-        if (wave.isReflected) {
-            if (isEnemyHurtBodyHit(waveBody) &&
-                enemyHitCooldown_ <= 0.0f) {
-                const float damage = wave.damage * damageMultiplier_;
-                const float appliedDamage = ApplyEnemyDamage(damage);
-                if (appliedDamage <= 0.0f) {
-                    enemy_.DestroyWave(i);
-                    continue;
-                }
-                player_.NotifyAttackHit(appliedDamage);
-                enemy_.DestroyWave(i);
-                CombatFeedbackEvent feedback{};
-                feedback.type = CombatFeedbackEventType::ProjectileReflect;
-                feedback.position = wave.position;
-                feedback.direction = DirectionFromTo(player_.GetTransform().position,
-                                                    enemy_.GetTransform().position);
-                feedback.power = appliedDamage / 10.0f;
-                DispatchCombatFeedback(feedback);
-                enemyHitCooldown_ = 0.2f;
-            }
-            continue;
-        }
-
-        if (IsNearXZ(wave.position, player_.GetTransform().position,
-                     waveThreatRadius)) {
-            if (playerHitCooldown_ <= 0.0f) {
-                const XMFLOAT2 hitDir =
-                    NormalizeXZ(wave.direction.x, wave.direction.z);
-
-                size_t counterSwordIndex = swords.size();
-                if (FindSlashTowardPoint(swords, swordSlashStates,
-                                         wave.position, counterSwordIndex,
-                                         0.00f)) {
-                    triggerSuccessfulCounter(counterSwordIndex,
-                                             wave.damage * 2.0f,
-                                             0.12f);
-                } else {
-                    player_.AddKnockback(
-                        {hitDir.x * wave.knockback, 0.0f,
-                         hitDir.y * wave.knockback});
-                    CombatFeedbackEvent feedback{};
-                    feedback.type = CombatFeedbackEventType::PlayerDamaged;
-                    feedback.position = wave.position;
-                    feedback.direction = {hitDir.x, 0.0f, hitDir.y};
-                    feedback.power = wave.damage / 5.0f;
-                    DispatchCombatFeedback(feedback);
-                    enemy_.DestroyWave(i);
-                    playerHitCooldown_ = 0.35f;
-                }
-            }
-
-            enemy_.ConsumeWave(i);
-            break;
         }
     }
 

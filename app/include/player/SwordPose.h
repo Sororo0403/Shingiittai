@@ -5,5 +5,4 @@ struct SwordPose {
     DirectX::XMFLOAT2 slashDir{};
     DirectX::XMFLOAT4 orientation{0, 0, 0, 1};
     bool isSlashMode = false;
-    bool isGuard = false;
 };

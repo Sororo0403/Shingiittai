@@ -41,7 +41,6 @@ void Sword::Initialize(uint32_t modelId) {
     tf_.scale = {1, 1, 1};
     tf_.rotation = {0, 0, 0, 1};
 
-    justCountered_ = false;
     slashFollowThroughTimer_ = 0.0f;
     slashFollowThroughStarted_ = false;
     slashFollowThroughDir_ = {};
@@ -54,15 +53,9 @@ void Sword::Update(const Transform &transform, const SwordPose &pose,
                    float deltaTime) {
     tf_ = transform;
     isSlashMode_ = pose.isSlashMode;
-    isGuard_ = pose.isGuard;
-    justCountered_ = false;
     slashDir_ = pose.slashDir;
     orientation_ = pose.orientation;
     UpdateSlashFollowThrough(deltaTime);
-}
-
-void Sword::SetRecoveryReaction(float reaction) {
-    recoveryReaction_ = std::clamp(reaction, 0.0f, 1.0f);
 }
 
 OBB Sword::GetOBB() const {
@@ -100,14 +93,6 @@ Transform Sword::BuildVisualTransform() const {
     drawTransform.scale.x *= kSwordVisualScaleMultiplier;
     drawTransform.scale.y *= kSwordVisualScaleMultiplier;
     drawTransform.scale.z *= kSwordVisualScaleMultiplier;
-    if (recoveryReaction_ > 0.0f) {
-        const float phase = (1.0f - recoveryReaction_) * 36.0f;
-        const float pulse = std::sinf(phase);
-        const float scaleBoost = 1.0f + 0.08f * recoveryReaction_ * pulse;
-        drawTransform.scale.x *= scaleBoost;
-        drawTransform.scale.y *= scaleBoost;
-        drawTransform.scale.z *= 1.0f + 0.12f * recoveryReaction_;
-    }
     ApplySlashFollowThrough(drawTransform);
     return drawTransform;
 }
@@ -258,8 +243,4 @@ SwordCounterAxis Sword::GetSlashAxis() const {
     }
 
     return ComputeSlashAxis();
-}
-
-void Sword::NotifyCounterSuccess() {
-    justCountered_ = true;
 }

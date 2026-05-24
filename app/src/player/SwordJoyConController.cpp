@@ -34,17 +34,8 @@ void SwordJoyConController::Update(JoyCon *joyCon, float dt,
                                    const Transform &swordPos) {
     (void)swordPos;
     UpdateOrientation(joyCon, dt);
-    state_.isGuard = false;
     UpdateSlash(dt);
     UpdateSlashDirFromOrientation();
-}
-
-bool SwordJoyConController::IsActive(const JoyCon *joyCon) const {
-    if (joyCon == nullptr || !joyCon->IsConnected()) {
-        return false;
-    }
-
-    return angularVelocity_ > 30.0f;
 }
 
 void SwordJoyConController::UpdateOrientation(JoyCon *joyCon, float dt) {

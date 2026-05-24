@@ -34,7 +34,6 @@ class GameScene : public BaseScene {
     void UpdateSceneLighting();
     void DrawArena();
     void DrawDistantHazardBackdrop();
-    void DrawBladeClashFinishBackdrop();
     void DrawVictoryFlash();
     void DrawDefeatFlash();
     void DrawBattleIntroFlash();
@@ -49,7 +48,6 @@ class GameScene : public BaseScene {
     void BeginDefeatSequence();
     void UpdateDefeatSequence(float deltaTime);
     void SyncEnemyAnimation();
-    void UpdateBladeClashEnemyAnimation(float deltaTime);
     void UpdateBattleIntroEnemyAnimation(float deltaTime);
     void UpdatePhaseTransitionEnemyAnimation(float deltaTime);
     void ApplyEnemyProceduralAnimation();
@@ -82,12 +80,10 @@ class GameScene : public BaseScene {
     GPUParticleSystem swordFlashParticles_;
     SwordTrailRenderer swordTrailRenderer_;
     SwordSlashArcRenderer swordSlashArcRenderer_;
-    std::array<bool, Player::kSwordCount> bladeClashPreviousSlashStates_{};
     uint32_t particleTextureId_ = 0;
     uint32_t playerModelId_ = 0;
     uint32_t swordModelId_ = 0;
     uint32_t enemyModelId_ = 0;
-    uint32_t enemyProjectileModelId_ = 0;
     uint32_t arenaFloorModelId_ = 0;
     uint32_t arenaLowPolyTerrainModelId_ = 0;
     uint32_t arenaDistantTerrainModelId_ = 0;
@@ -135,16 +131,11 @@ class GameScene : public BaseScene {
     float lockOnAssistMaxStep_ = 5.8f;
     float lockOnInputReduce_ = 0.35f;
 
-    float lockOnCameraDistance_ = 8.0f;
-    float lockOnCameraHeight_ = 2.9f;
-    float lockOnCameraSideOffset_ = 0.20f;
     float lockOnLookPlayerWeight_ = 0.32f;
     float lockOnLookEnemyWeight_ = 0.68f;
 
     float lockOnDistanceMin_ = 2.5f;
     float lockOnDistanceMax_ = 11.0f;
-    float lockOnDistancePullBackMin_ = 0.0f;
-    float lockOnDistancePullBackMax_ = 2.5f;
 
     float lockOnOrbitRadius_ = 5.4f;
     float lockOnOrbitHeight_ = 2.95f;
@@ -156,23 +147,10 @@ class GameScene : public BaseScene {
     float lockOnLookAtLerpSpeed_ = 8.2f;
     DirectX::XMFLOAT3 lockOnLookAt_ = {0.0f, 0.0f, 0.0f};
 
-    float rushChargeAssistStrength_ = 4.8f;
-    float rushChargeAssistMaxStep_ = 7.0f;
-    float rushActiveAssistStrength_ = 5.8f;
-    float rushActiveAssistMaxStep_ = 8.5f;
-    float rushLeadDistance_ = 1.6f;
-
-    float warpStartAssistStrength_ = 4.5f;
-    float warpStartAssistMaxStep_ = 7.0f;
-    float warpEndAssistStrength_ = 6.0f;
-    float warpEndAssistMaxStep_ = 10.0f;
-
     float currentFovDeg_ = 82.0f;
     float targetFovDeg_ = 82.0f;
     float normalFovDeg_ = 82.0f;
     float lockOnFovDeg_ = 82.0f;
-    float rushFovDeg_ = 84.0f;
-    float warpFovDeg_ = 84.0f;
     float phaseTransitionFovDeg_ = 58.0f;
     float fovLerpSpeed_ = 6.5f;
     float phaseTransitionFovLerpSpeed_ = 8.0f;
@@ -212,44 +190,7 @@ class GameScene : public BaseScene {
     float counterCinematicTimer_ = 0.0f;
     float counterCinematicDuration_ = 0.66f;
     float counterTimeScale_ = 0.05f;
-    float counterCameraShakeX_ = 0.035f;
-    float counterCameraShakeY_ = 0.020f;
-    float counterCameraShakeFrequency_ = 18.0f;
-    bool bladeClashActive_ = false;
-    float bladeClashGauge_ = 0.0f;
-    float bladeClashTimer_ = 0.0f;
-    float bladeClashDuration_ = 4.8f;
-    float bladeClashEnemyPushSpeed_ = 0.29f;
-    float bladeClashSlashPush_ = 0.22f;
-    DirectX::XMFLOAT3 bladeClashPlayerLosePos_ = {0.0f, 0.0f, 0.0f};
-    DirectX::XMFLOAT3 bladeClashPlayerWinPos_ = {0.0f, 0.0f, 0.0f};
-    DirectX::XMFLOAT3 bladeClashPlayerFixedPos_ = {0.0f, 0.0f, 0.0f};
-    DirectX::XMFLOAT3 bladeClashCenter_ = {0.0f, 0.0f, 0.0f};
-    DirectX::XMFLOAT3 bladeClashDirection_ = {0.0f, 0.0f, 1.0f};
-    float bladeClashCameraPush_ = 0.0f;
-    float bladeClashImpactPulse_ = 0.0f;
-    float bladeClashEnemySurgeTimer_ = 0.0f;
-    float bladeClashChainTimer_ = 0.0f;
-    int bladeClashSlashChain_ = 0;
-    bool enemyLastStandPrimed_ = false;
-    bool bladeClashFinal_ = false;
-    int bladeClashFinalBarrageStep_ = 0;
-    bool bladeClashFinishActive_ = false;
-    bool bladeClashFinishPlayerWon_ = false;
-    bool bladeClashFinishImpactEmitted_ = false;
-    bool bladeClashFinishGuardBreakEmitted_ = false;
-    bool bladeClashFinishSkidEmitted_ = false;
-    bool bladeClashFinishWallImpactEmitted_ = false;
-    bool bladeClashFinishPendingEnemyTransition_ = false;
-    float bladeClashFinishTimer_ = 0.0f;
-    float bladeClashFinishDuration_ = 2.05f;
-    DirectX::XMFLOAT3 bladeClashFinishCenter_ = {0.0f, 0.0f, 0.0f};
-    DirectX::XMFLOAT3 bladeClashFinishPlayerStart_ = {0.0f, 0.0f, 0.0f};
-    DirectX::XMFLOAT3 bladeClashFinishPlayerEnd_ = {0.0f, 0.0f, 0.0f};
-    DirectX::XMFLOAT3 bladeClashFinishEnemyStart_ = {0.0f, 0.0f, 0.0f};
-    DirectX::XMFLOAT3 bladeClashFinishEnemyEnd_ = {0.0f, 0.0f, 0.0f};
 
-    float damageMultiplier_ = 2.0f;
     bool enemyRedPunishUncounterable_ = false;
     std::array<bool, Player::kSwordCount> previousCombatSlashStates_{};
     bool handTrackingStartRequested_ = false;

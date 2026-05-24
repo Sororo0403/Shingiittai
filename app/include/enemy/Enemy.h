@@ -6,7 +6,6 @@
 #include "Transform.h"
 #include <cstddef>
 #include <cstdint>
-#include <vector>
 
 class ModelManager;
 
@@ -15,81 +14,30 @@ enum class ActionStep {
     Charge,
     Active,
     Recovery,
-    Start,
     Move,
     Hold,
-    End
 };
-
-enum class WarpType { None, Approach, Escape };
-enum class WarpApproachSlot { None, Front, Back };
 
 // Enemy combat is driven by a two-part FSM:
 // - ActionKind decides which behavior is currently running.
 // - ActionStep tracks the local phase within that behavior.
 struct ActionState {
     ActionKind kind = ActionKind::None;
-    ActionId id = ActionId::None;
     ActionStep step = ActionStep::None;
-};
-
-struct WarpContext {
-    WarpType type = WarpType::None;
-    WarpApproachSlot approachSlot = WarpApproachSlot::None;
-    DirectX::XMFLOAT3 targetPos = {0.0f, 0.0f, 0.0f};
-    DirectX::XMFLOAT3 departurePos = {0.0f, 0.0f, 0.0f};
-    float targetYaw = 0.0f;
-
-    ActionKind followupKind = ActionKind::None;
-    ActionStep followupStep = ActionStep::None;
-
-    bool collisionDisabled = false;
-    bool hasValidTarget = false;
-    bool hasDeparturePos = false;
-    bool hasTargetYaw = false;
-    bool faceLivePlayerOnEnd = false;
-};
-
-struct EnemyWave {
-    DirectX::XMFLOAT3 position = {0.0f, 0.0f, 0.0f};
-    DirectX::XMFLOAT3 direction = {0.0f, 0.0f, 1.0f};
-    DirectX::XMFLOAT3 hitBoxSize = {2.25f, 0.95f, 2.6f};
-    float speed = 0.0f;
-    float traveledDistance = 0.0f;
-    float maxDistance = 0.0f;
-    float damage = 0.0f;
-    float knockback = 0.0f;
-    bool isAlive = false;
-    bool isReflected = false;
-};
-
-struct WarpTrailGhost {
-    DirectX::XMFLOAT3 position = {0.0f, 0.0f, 0.0f};
-    float life = 0.0f;
-    float scale = 1.0f;
-    bool isActive = false;
 };
 
 // 仕様書に合わせて BodyCenter -> BodyRight に整理
 
 // 上位戦術
 enum class TacticState {
-    Warp,
     Melee,
-    Ranged,
-    DistanceAdjust
+    Chase
 };
 
 enum class BossPhase { Phase1, Phase2, Phase3 };
 
-// GameScene 側から渡す観測情報
 struct PlayerCombatObservation {
     DirectX::XMFLOAT3 position = {0.0f, 0.0f, 0.0f};
-    DirectX::XMFLOAT3 velocity = {0.0f, 0.0f, 0.0f};
-    float facingYaw = 0.0f;
-
-    bool isGuarding = false;
-    bool justCountered = false;
     bool isAttacking = false;
 };
 
@@ -111,7 +59,6 @@ struct EnemyCoreConfig {
     float phase2HealthRatioThreshold = 0.74f;
     float phase3HealthRatioThreshold = 0.37f;
     float nearAttackDistance = 4.0f;
-    float farAttackDistance = 6.5f;
 };
 
 struct EnemyAttackProfile {
@@ -130,8 +77,6 @@ struct EnemySmashConfig {
     EnemyMeleeAttackProfile melee{};
     float attackForwardOffset = 0.0f;
     float attackHeightOffset = 0.0f;
-    float delayChance = 0.0f;
-    float delayExtraChargeTime = 0.0f;
 };
 
 struct EnemySweepConfig {
@@ -140,51 +85,21 @@ struct EnemySweepConfig {
     float attackHeightOffset = 0.0f;
 };
 
-struct EnemyBladeClashConfig {
-    AttackParam attack{};
-    float chargeTime = 0.0f;
-    float activeTime = 0.0f;
-    float recoveryTime = 0.0f;
-};
-
-struct EnemyWaveConfig {
-    AttackParam attack{};
-    float chargeTime = 0.0f;
-    float recoveryTime = 0.0f;
-    float speed = 0.0f;
-    float maxDistance = 0.0f;
-    float spawnForwardOffset = 0.0f;
-    float spawnHeightOffset = 0.0f;
-};
-
 struct EnemyAttackSet {
     EnemySmashConfig smash = {{{{15.0f, 4.0f, {2.8f, 2.1f, 3.2f}},
                                 {1.20f, 0.86f, 0.05f, 0.22f, 0.38f}, 1.64f},
                                {0.42f, 0.86f}, 0.62f},
-                              1.4f, 0.8f, 0.06f, 0.46f};
+                              1.4f, 0.8f};
     EnemySweepConfig sweep = {{{{15.0f, 4.0f, {5.0f, 1.65f, 2.6f}},
                                 {1.12f, 0.78f, 0.05f, 0.20f, 0.36f}, 1.52f},
                                {0.38f, 0.78f}, 0.48f},
                               0.2f, 0.8f};
-    EnemyBladeClashConfig bladeClash = {
-        {12.0f, 4.0f, {1.75f, 1.60f, 1.95f}}, 0.72f, 0.88f, 0.78f};
-    EnemyWaveConfig wave = {{10.0f, 3.0f, {2.25f, 0.95f, 2.6f}},
-                            1.76f, 0.92f, 5.2f, 8.0f, 1.5f, 0.0f};
-};
-
-struct EnemyWarpConfig {
-    float startTime = 0.55f;
-    float moveTime = 0.24f;
-    float endTime = 0.48f;
 };
 
 struct EnemyConfig {
     EnemyCoreConfig core{};
     EnemyAttackSet attacks{};
-    EnemyWarpConfig warp{};
 };
-
-enum class SmashStyle { Normal, Delay };
 
 struct EnemyRuntimeState {
     float hp = 1000.0f;
@@ -196,31 +111,19 @@ struct EnemyRuntimeState {
     float deathStartY = 0.0f;
 
     ActionState action{};
-    uint32_t actionSerial = 0;
     float stateTimer = 0.0f;
     ActionKind lastActionKind = ActionKind::None;
     bool isAttackActive = false;
 
     DirectX::XMFLOAT3 playerPos = {0.0f, 0.0f, 0.0f};
-    bool playerGuarding = false;
     PlayerCombatObservation playerObs{};
 
     float facingYaw = 0.0f;
     float lockedAttackYaw = 0.0f;
 
-    WarpContext warp{};
     bool isVisible = true;
 
-    std::vector<EnemyWave> waves{};
-    bool cageTrapSpawned = false;
-
-    float lastDistanceToPlayer = 0.0f;
-    float stagnantTimer = 0.0f;
-    bool isDistanceStagnant = false;
-
-    SmashStyle smashStyle = SmashStyle::Normal;
-
-    TacticState tactic = TacticState::DistanceAdjust;
+    TacticState tactic = TacticState::Chase;
     BossPhase phase = BossPhase::Phase1;
     bool phaseTransitionActive = false;
     float phaseTransitionTimer = 0.0f;
@@ -230,27 +133,14 @@ struct EnemyRuntimeState {
     bool tellActive = false;
     float tellDuration = 0.0f;
 
-    bool currentActionConnected = false;
     bool hasTrackingLocked = false;
 
-    float warpTrailEmitTimer = 0.0f;
-    static constexpr int kWarpTrailGhostCount = 4;
-    WarpTrailGhost warpTrailGhosts[kWarpTrailGhostCount]{};
-
-    int stalkRepeatCount = 0;
-    float stalkMoveDir = 1.0f;
-    float stalkForwardBias = 0.0f;
 };
 
 class Enemy {
   public:
-    void Initialize(uint32_t modelId, uint32_t projectileModelId = 0);
+    void Initialize(uint32_t modelId);
 
-    // 既存互換
-    void Update(const DirectX::XMFLOAT3 &playerPos, float deltaTime,
-                bool playerGuarding);
-
-    // 新版：観測情報ごと渡す
     void Update(const PlayerCombatObservation &playerObs, float deltaTime);
 
     void Draw(ModelManager *modelManager, const Camera &camera,
@@ -258,33 +148,16 @@ class Enemy {
     float TakeDamage(float damage);
     float TakeDamageDeferTransitions(float damage);
     void ResolveDeferredDamageTransitions();
-    void ConsumeWave(size_t index);
-    void NotifyAttackConnected();
     void ForcePunishRelease();
-    bool NotifyCountered();
     bool NotifyCountered(float vulnerabilityDuration);
-    bool TryBeginPhase3GuardCounter();
     void FinishCounterRecoil();
     void ApplyVictoryDefeatPose(float ratio,
                                 const DirectX::XMFLOAT3 &startPosition,
                                 const DirectX::XMFLOAT3 &playerPosition);
-    void SetCinematicTransform(const DirectX::XMFLOAT3 &position, float yaw);
-    void SetCinematicTransform(const DirectX::XMFLOAT3 &position, float yaw,
-                               float pitch, float roll);
     void FaceTargetImmediately(const DirectX::XMFLOAT3 &targetPosition);
-    void SetBladeClashPresentationTime(float time) {
-        bladeClashPresentationTime_ = time;
-    }
-
     const Transform &GetTransform() const { return tf_; }
-    bool IsAlive() const { return !runtime_.deathFinished; }
     float GetHP() const { return runtime_.hp; }
     float GetMaxHP() const { return config_.core.maxHp; }
-
-    const Transform &GetVisualTransform() const { return visualTf_; }
-    const Transform &GetBodyTransform() const { return bodyTf_; }
-    const Transform &GetLeftHandTransform() const { return leftHandTf_; }
-    const Transform &GetRightHandTransform() const { return rightHandTf_; }
 
     OBB GetBodyOBB() const;
     OBB GetLeftHandOBB() const;
@@ -292,11 +165,9 @@ class Enemy {
 
     ActionKind GetActionKind() const { return runtime_.action.kind; }
     ActionStep GetActionStep() const { return runtime_.action.step; }
-    uint32_t GetActionSerial() const { return runtime_.actionSerial; }
     float GetActionTimerForPresentation() const { return runtime_.stateTimer; }
     float GetReleaseAnticipationRatio() const;
     float GetTelegraphYaw() const;
-    bool IsPunishableRecovery() const;
     BossPhase GetBossPhase() const { return runtime_.phase; }
     bool IsPhaseTransitionActive() const { return runtime_.phaseTransitionActive; }
     bool GetIsPhaseChanging() const { return isPhaseChanging_; }
@@ -317,50 +188,9 @@ class Enemy {
 
     bool IsAttackActive() const { return runtime_.isAttackActive; }
     OBB GetAttackOBB() const;
-    bool IsPhase3GuardCounterGuarding() const;
-
-    float GetDistanceToPlayer() const;
-
-    bool IsVisible() const { return runtime_.isVisible; }
-    const DirectX::XMFLOAT3 &GetWarpTargetPos() const {
-        return runtime_.warp.targetPos;
-    }
-    const DirectX::XMFLOAT3 &GetWarpDeparturePos() const {
-        return runtime_.warp.departurePos;
-    }
-    bool HasWarpDeparturePos() const { return runtime_.warp.hasDeparturePos; }
-    WarpType GetWarpType() const { return runtime_.warp.type; }
-    bool IsWarpCollisionDisabled() const { return runtime_.warp.collisionDisabled; }
-
-    const std::vector<EnemyWave> &GetWaves() const { return runtime_.waves; }
-    void DestroyWave(size_t index);
-    void ReflectWave(size_t index, const DirectX::XMFLOAT3 &targetPos);
-    float GetWaveDamage() const { return config_.attacks.wave.attack.damage; }
-
-    float GetSmashKnockback() const { return config_.attacks.smash.melee.base.attack.knockback; }
-    float GetSweepKnockback() const { return config_.attacks.sweep.melee.base.attack.knockback; }
-    float GetWaveKnockback() const { return config_.attacks.wave.attack.knockback; }
-
-    DirectX::XMFLOAT3 GetWaveHitBoxSize() const {
-        return config_.attacks.wave.attack.hitBoxSize;
-    }
-    DirectX::XMFLOAT3 GetSmashAttackBoxSize() const {
-        return config_.attacks.smash.melee.base.attack.hitBoxSize;
-    }
-    DirectX::XMFLOAT3 GetSweepAttackBoxSize() const {
-        return config_.attacks.sweep.melee.base.attack.hitBoxSize;
-    }
 
     float GetCurrentAttackDamage() const;
     float GetCurrentAttackKnockback() const;
-    DirectX::XMFLOAT3 GetCurrentAttackHitBoxSize() const;
-
-    const AttackParam &GetSmashParam() const { return config_.attacks.smash.melee.base.attack; }
-    const AttackParam &GetSweepParam() const { return config_.attacks.sweep.melee.base.attack; }
-    const AttackParam &GetWaveParam() const { return config_.attacks.wave.attack; }
-
-    const AttackTimingParam &GetSmashTiming() const { return config_.attacks.smash.melee.base.timing; }
-    const AttackTimingParam &GetSweepTiming() const { return config_.attacks.sweep.melee.base.timing; }
 
   private:
     Transform tf_{};
@@ -371,7 +201,6 @@ class Enemy {
     Transform rightHandTf_{};
 
     uint32_t modelId_ = 0;
-    uint32_t projectileModelId_ = 0;
 
     DirectX::XMFLOAT3 bodySize_ = {1.45f, 1.8f, 1.25f};
     DirectX::XMFLOAT3 handSize_ = {0.82f, 0.82f, 0.82f};
@@ -382,7 +211,6 @@ class Enemy {
     bool &deathFinished_ = runtime_.deathFinished;
     float &hitReactionTimer_ = runtime_.hitReactionTimer;
     float hitReactionDuration_ = 0.16f;
-    float hitReactionMoveSpeed_ = 0.0f;
     float &counterRecoilTimer_ = runtime_.counterRecoilTimer;
     float counterRecoilDuration_ = 0.62f;
     float counterRecoilPitchRad_ = 0.14f;
@@ -403,17 +231,7 @@ class Enemy {
     float &facingYaw_ = runtime_.facingYaw;
     float &lockedAttackYaw_ = runtime_.lockedAttackYaw;
 
-    WarpContext &warp_ = runtime_.warp;
     bool &isVisible_ = runtime_.isVisible;
-
-    std::vector<EnemyWave> &waves_ = runtime_.waves;
-    bool &cageTrapSpawned_ = runtime_.cageTrapSpawned;
-
-    float &lastDistanceToPlayer_ = runtime_.lastDistanceToPlayer;
-    float &stagnantTimer_ = runtime_.stagnantTimer;
-    bool &isDistanceStagnant_ = runtime_.isDistanceStagnant;
-
-    SmashStyle &smashStyle_ = runtime_.smashStyle;
 
     TacticState &tactic_ = runtime_.tactic;
     BossPhase &phase_ = runtime_.phase;
@@ -436,119 +254,39 @@ class Enemy {
     float smashTellTime_ = 0.18f;
     float sweepTellTime_ = 0.16f;
 
-    float phase2PressureMaxDistanceBonus_ = 1.2f;
-    float phase2MidPressureTacticChance_ = 0.68f;
-    float sweepRecoveryTime_ = 1.0f;
-    bool &currentActionConnected_ = runtime_.currentActionConnected;
-    float punishWindowTurnSpeedScale_ = 0.55f;
-    float smashActiveLungeSpeed_ = 1.18f;
-    float sweepActiveLungeSpeed_ = 0.92f;
-    float phase2ActiveLungeScale_ = 1.12f;
-
-    bool suspendWarpForPresentation_ = false;
-    float bladeClashPresentationTime_ = 0.0f;
-    float warpDepartureEchoOffset_ = 0.28f;
-    float warpArrivalEchoOffset_ = 0.22f;
-    float warpArrivalPreviewHeight_ = 0.10f;
-    float warpMoveGhostScaleX_ = 0.78f;
-    float warpMoveGhostScaleY_ = 1.28f;
-    float warpMoveGhostScaleZ_ = 0.36f;
-    float warpArrivalPreviewScale_ = 1.18f;
-    float warpParticleRadius_ = 0.46f;
-    float warpParticleHeight_ = 0.72f;
-    float warpParticleScale_ = 0.10f;
-    int warpParticleCount_ = 5;
-    float warpTrailLife_ = 0.06f;
-    float warpTrailInterval_ = 0.032f;
-    float warpTrailScaleMin_ = 0.52f;
-    float warpTrailScaleMax_ = 0.88f;
-    float &warpTrailEmitTimer_ = runtime_.warpTrailEmitTimer;
-    static constexpr int kWarpTrailGhostCount_ =
-        EnemyRuntimeState::kWarpTrailGhostCount;
-    WarpTrailGhost (&warpTrailGhosts_)[kWarpTrailGhostCount_] =
-        runtime_.warpTrailGhosts;
-
-    float warpNearRadiusMin_ = 1.8f;
-    float warpNearRadiusMax_ = 3.0f;
-    float warpApproachFrontDistance_ = 2.55f;
-    float warpApproachBackDistance_ = 2.35f;
-    int warpApproachWeight_ = 8;
-    float farDistanceTimer_ = 0.0f;
-    float farDistanceWarpTimeThreshold_ = 999.0f;
-    int farDistanceWarpBonus_ = 50;
-
-    float closePressureDistance_ = 3.0f;
-    float closePressureTimeThreshold_ = 1.0f;
-    float closePressureTimer_ = 0.0f;
-
     int nearSmashWeight_ = 30;
     int nearSweepWeight_ = 25;
     int phase2NearSmashBonus_ = 8;
     int phase2NearSweepBonus_ = 14;
     int phase3NearSmashBonus_ = 4;
     int phase3NearSweepBonus_ = 6;
-    int midWaveWeight_ = 30;
-
-    int farWarpWeight_ = 30;
-    int farWaveWeight_ = 40;
-    int neutralMidWaveBonus_ = 10;
-
     float chargeTurnSpeed_ = 6.0f;
     float recoveryTurnSpeed_ = 2.0f;
     float idleTurnSpeed_ = 8.0f;
     bool &hasTrackingLocked_ = runtime_.hasTrackingLocked;
 
-    float stagnantDistanceThreshold_ = 0.15f;
-    float stagnantTimeThreshold_ = 2.4f;
-    int stagnantWarpBonus_ = 5;
-
     float stalkDurationMin_ = 0.45f;
     float stalkDurationMax_ = 1.10f;
     float stalkMoveSpeed_ = 1.45f;
-    float stalkStrafeRadiusWeight_ = 0.75f;
-    float stalkForwardAdjustWeight_ = 0.35f;
-    float stalkNearEnterChance_ = 0.28f;
     float stalkPounceDistanceBonus_ = 0.65f;
     float stalkPounceMinTime_ = 0.22f;
     float stalkPounceChance_ = 0.58f;
-    float stalkMidEnterChance_ = 0.18f;
-    int stalkRepeatLimit_ = 2;
-
-    float phase2WaveFanAngleRad_ = 0.28f;
-    float cinematicPitch_ = 0.0f;
-    float cinematicRoll_ = 0.0f;
-
-    int &stalkRepeatCount_ = runtime_.stalkRepeatCount;
-    float &stalkMoveDir_ = runtime_.stalkMoveDir;         // -1:left / +1:right
-    float &stalkForwardBias_ = runtime_.stalkForwardBias; // -1:後退 / +1:前進
-    float arenaClampRadius_ = 10.8f;
 
   private:
     void UpdateParts();
     OBB MakeOBB(const Transform &tf, const DirectX::XMFLOAT3 &size) const;
-    void ClampToArena();
 
     void UpdateByAction(float deltaTime);
 
     void UpdateSmashByStep(float deltaTime);
     void UpdateSweepByStep(float deltaTime);
-    void UpdateBladeClashByStep(float deltaTime);
-    void UpdateWaveByStep(float deltaTime);
-    void UpdateWarpByStep(float deltaTime);
     void UpdateIdle(float deltaTime);
 
     TacticState DecideTactic() const;
     void BeginActionFromTactic(TacticState tactic);
-    ActionKind SelectNeutralAction(float distance) const;
     ActionKind SelectNearPressureAction() const;
-    ActionKind SelectChaseAction() const;
-    bool TryBeginTacticActionOrFallback(ActionKind preferred, ActionKind fallback);
-    void BeginNeutralAction();
     void BeginPressureAction();
     void BeginChaseAction();
-    void BeginResetAction();
-    bool TryBeginWarpBehindMeleeSkill(bool force);
-    bool DecideWarpTargetInPlayerView(DirectX::XMFLOAT3 &outTarget);
 
     void UpdateSmashCharge(float deltaTime);
     void UpdateSmashHold(float deltaTime);
@@ -566,31 +304,6 @@ class Enemy {
     void UpdateFacingToPlayerWithSpeed(float deltaTime, float turnSpeed);
     float NormalizeAngle(float angle) const;
 
-    void UpdateBladeClashCharge(float deltaTime);
-    void UpdateBladeClashActive(float deltaTime);
-    void UpdateBladeClashRecovery(float deltaTime);
-
-    void UpdateWarpStart(float deltaTime);
-    void UpdateWarpMove(float deltaTime);
-    void UpdateWarpEnd(float deltaTime);
-    void UpdateWarpTrails(float deltaTime);
-    void EmitWarpTrailGhost(const DirectX::XMFLOAT3 &position, float scale);
-    void ResetWarpTrails();
-
-    bool PrepareWarpContext();
-    bool IsWarpSuspendedForPresentation() const;
-    bool DecideWarpTargetNearPlayer(DirectX::XMFLOAT3 &outTarget);
-    bool DecideWarpTargetFarFromPlayer(DirectX::XMFLOAT3 &outTarget);
-    void FinalizeWarpTargetFacing(DirectX::XMFLOAT3 &target);
-    void ResetWarpContext();
-
-    void UpdateWaveCharge(float deltaTime);
-    void UpdateWaveFire(float deltaTime);
-    void UpdateWaveRecovery(float deltaTime);
-
-    void SpawnWave();
-    void UpdateWaves(float deltaTime);
-
     void UpdateStalkByStep(float deltaTime);
     void UpdateStalkMove(float deltaTime);
     void BeginStalkAction();
@@ -601,16 +314,16 @@ class Enemy {
     OBB GetSmashAttackOBB() const;
     OBB GetSweepAttackOBB() const;
     float GetVisualYaw() const;
+    bool IsPunishableRecovery() const;
+    float GetDistanceToPlayer() const;
 
     const AttackTimingParam *GetCurrentAttackTiming() const;
     AttackParam *GetCurrentAttackParam();
     const AttackParam *GetCurrentAttackParam() const;
+    DirectX::XMFLOAT3 GetCurrentAttackHitBoxSize() const;
 
     bool ShouldUseLockedAttackYaw() const;
 
-    ActionId MakeDefaultActionId(ActionKind kind) const;
-
-    bool TryBeginTacticAction(ActionKind kind);
     void BeginAction(ActionKind kind, ActionStep step);
     void ChangeActionStep(ActionStep step);
     void EndAttack();
