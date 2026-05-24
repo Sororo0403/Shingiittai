@@ -1,16 +1,18 @@
-#include "ModelManager.h"
-#include "DirectXCommon.h"
-#include "MaterialManager.h"
-#include "SrvManager.h"
-#include "TextureManager.h"
-#include "Vertex.h"
+#include "model/ModelManager.h"
+#include "core/AssetManager.h"
+#include "graphics/DirectXCommon.h"
+#include "graphics/SrvManager.h"
+#include "model/MaterialManager.h"
+#include "model/Vertex.h"
+#include "texture/TextureManager.h"
 #include <DirectXMath.h>
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cwctype>
 #include <filesystem>
 #include <numbers>
-#include <cwctype>
+#include <stdexcept>
 #include <vector>
 
 using namespace DirectX;
@@ -26,55 +28,8 @@ constexpr std::array<Vertex, 4> kPlaneVertices = {{
 
 constexpr std::array<uint32_t, 6> kPlaneIndices = {0, 1, 2, 2, 1, 3};
 
-float Hash01(int32_t x, int32_t z, uint32_t seed) {
-    uint32_t h = static_cast<uint32_t>(x) * 374761393u ^
-                 static_cast<uint32_t>(z) * 668265263u ^ seed * 2246822519u;
-    h = (h ^ (h >> 13u)) * 1274126177u;
-    h ^= h >> 16u;
-    return static_cast<float>(h & 0x00FFFFFFu) /
-           static_cast<float>(0x00FFFFFFu);
-}
-
-float SmoothStep(float value) {
-    value = std::clamp(value, 0.0f, 1.0f);
-    return value * value * (3.0f - 2.0f * value);
-}
-
-XMFLOAT3 CalculateFaceNormal(const XMFLOAT3 &a, const XMFLOAT3 &b,
-                             const XMFLOAT3 &c) {
-    XMVECTOR av = XMLoadFloat3(&a);
-    XMVECTOR bv = XMLoadFloat3(&b);
-    XMVECTOR cv = XMLoadFloat3(&c);
-    XMVECTOR normal = XMVector3Normalize(XMVector3Cross(bv - av, cv - av));
-    XMFLOAT3 out{};
-    XMStoreFloat3(&out, normal);
-    if (out.y < 0.0f) {
-        out.x = -out.x;
-        out.y = -out.y;
-        out.z = -out.z;
-    }
-    return out;
-}
-
 std::filesystem::path ResolveModelPath(const std::filesystem::path &path) {
-    const std::filesystem::path normalized = path.lexically_normal();
-    if (normalized.is_absolute()) {
-        return normalized;
-    }
-
-    const std::filesystem::path cwd = std::filesystem::current_path();
-    for (std::filesystem::path dir = cwd; !dir.empty(); dir = dir.parent_path()) {
-        const std::filesystem::path candidate = dir / normalized;
-        if (std::filesystem::exists(candidate)) {
-            return candidate.lexically_normal();
-        }
-
-        if (dir == dir.root_path()) {
-            break;
-        }
-    }
-
-    return (cwd / normalized).lexically_normal();
+    return AssetManager::ResolvePath(path);
 }
 
 std::wstring NormalizeModelPathKey(const std::filesystem::path &path) {
@@ -98,6 +53,11 @@ void ResetModelPlayback(Model &model) {
 
 } // namespace
 
+ModelManager &ModelManager::GetInstance() {
+    static ModelManager instance;
+    return instance;
+}
+
 void ModelManager::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
                               TextureManager *textureManager) {
     dxCommon_ = dxCommon;
@@ -112,8 +72,21 @@ void ModelManager::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
                               textureManager_, &materialManager_);
 }
 
+void ModelManager::Finalize() {
+    modelPathToId_.clear();
+    models_.clear();
+    dxCommon_ = nullptr;
+    textureManager_ = nullptr;
+}
+
 uint32_t ModelManager::Load(const std::wstring &path) {
     std::filesystem::path p = ResolveModelPath(path);
+    if (!std::filesystem::exists(p)) {
+        throw std::runtime_error("Model file not found. requested=" +
+                                 std::filesystem::path(path).string() +
+                                 " resolved=" + p.string());
+    }
+
     const std::wstring pathKey = NormalizeModelPathKey(p);
     auto it = modelPathToId_.find(pathKey);
     if (it != modelPathToId_.end()) {
@@ -141,8 +114,12 @@ uint32_t ModelManager::Load(const std::wstring &path) {
     return modelId;
 }
 
-uint32_t ModelManager::CreatePlane(uint32_t textureId, const Material &material) {
+uint32_t ModelManager::CreatePlane(uint32_t textureId,
+                                   const Material &material) {
     Material planeMaterial = material;
+    if (planeMaterial.baseColorTextureId == UINT32_MAX) {
+        planeMaterial.baseColorTextureId = textureId;
+    }
     XMStoreFloat4x4(&planeMaterial.uvTransform,
                     XMMatrixTranspose(XMMatrixIdentity()));
 
@@ -167,74 +144,6 @@ uint32_t ModelManager::CreatePlane(uint32_t textureId, const Material &material)
     return static_cast<uint32_t>(models_.size() - 1);
 }
 
-uint32_t ModelManager::CreateBox(uint32_t textureId, const Material &material,
-                                 float width, float height, float depth) {
-    width = (std::max)(width, 0.001f);
-    height = (std::max)(height, 0.001f);
-    depth = (std::max)(depth, 0.001f);
-
-    Material boxMaterial = material;
-    XMStoreFloat4x4(&boxMaterial.uvTransform,
-                    XMMatrixTranspose(XMMatrixIdentity()));
-
-    const float hx = width * 0.5f;
-    const float hz = depth * 0.5f;
-    const float y0 = 0.0f;
-    const float y1 = height;
-
-    std::vector<Vertex> vertices;
-    std::vector<uint32_t> indices;
-    vertices.reserve(24u);
-    indices.reserve(36u);
-
-    auto addFace = [&](const XMFLOAT3 &normal, const XMFLOAT3 &bottomLeft,
-                       const XMFLOAT3 &topLeft, const XMFLOAT3 &bottomRight,
-                       const XMFLOAT3 &topRight) {
-        const uint32_t base = static_cast<uint32_t>(vertices.size());
-        vertices.push_back({bottomLeft, normal, {0.0f, 1.0f}});
-        vertices.push_back({topLeft, normal, {0.0f, 0.0f}});
-        vertices.push_back({bottomRight, normal, {1.0f, 1.0f}});
-        vertices.push_back({topRight, normal, {1.0f, 0.0f}});
-        indices.push_back(base + 0u);
-        indices.push_back(base + 1u);
-        indices.push_back(base + 2u);
-        indices.push_back(base + 2u);
-        indices.push_back(base + 1u);
-        indices.push_back(base + 3u);
-    };
-
-    addFace({0.0f, 0.0f, 1.0f}, {-hx, y0, hz}, {-hx, y1, hz},
-            {hx, y0, hz}, {hx, y1, hz});
-    addFace({0.0f, 0.0f, -1.0f}, {hx, y0, -hz}, {hx, y1, -hz},
-            {-hx, y0, -hz}, {-hx, y1, -hz});
-    addFace({1.0f, 0.0f, 0.0f}, {hx, y0, hz}, {hx, y1, hz},
-            {hx, y0, -hz}, {hx, y1, -hz});
-    addFace({-1.0f, 0.0f, 0.0f}, {-hx, y0, -hz}, {-hx, y1, -hz},
-            {-hx, y0, hz}, {-hx, y1, hz});
-    addFace({0.0f, 1.0f, 0.0f}, {-hx, y1, -hz}, {-hx, y1, hz},
-            {hx, y1, -hz}, {hx, y1, hz});
-    addFace({0.0f, -1.0f, 0.0f}, {-hx, y0, hz}, {-hx, y0, -hz},
-            {hx, y0, hz}, {hx, y0, -hz});
-
-    Model model{};
-    ModelSubMesh subMesh{};
-    subMesh.vertexCount = static_cast<uint32_t>(vertices.size());
-    subMesh.meshId = meshManager_.CreateMesh(
-        vertices.data(), sizeof(Vertex), static_cast<uint32_t>(vertices.size()),
-        indices.data(), static_cast<uint32_t>(indices.size()));
-    subMesh.textureId = textureId;
-    subMesh.materialId = materialManager_.CreateMaterial(boxMaterial);
-
-    model.subMeshes.push_back(subMesh);
-    model.meshId = subMesh.meshId;
-    model.textureId = textureId;
-    model.materialId = subMesh.materialId;
-
-    modelRenderer_.CreateSkinClusters(model);
-    models_.push_back(model);
-    return static_cast<uint32_t>(models_.size() - 1);
-}
-
 uint32_t ModelManager::CreateRing(uint32_t textureId, const Material &material,
                                   uint32_t divide, float outerRadius,
                                   float innerRadius) {
@@ -246,7 +155,11 @@ uint32_t ModelManager::CreateRing(uint32_t textureId, const Material &material,
     innerRadius = (std::clamp)(innerRadius, 0.0f, outerRadius - 0.0001f);
 
     Material ringMaterial = material;
-    XMStoreFloat4x4(&ringMaterial.uvTransform, XMMatrixTranspose(XMMatrixIdentity()));
+    if (ringMaterial.baseColorTextureId == UINT32_MAX) {
+        ringMaterial.baseColorTextureId = textureId;
+    }
+    XMStoreFloat4x4(&ringMaterial.uvTransform,
+                    XMMatrixTranspose(XMMatrixIdentity()));
 
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
@@ -271,18 +184,16 @@ uint32_t ModelManager::CreateRing(uint32_t textureId, const Material &material,
         const float uNext =
             static_cast<float>(index + 1) / static_cast<float>(divide);
 
-        vertices.push_back(
-            {{-sinV * outerRadius, cosV * outerRadius, 0.0f},
-             {0.0f, 0.0f, 1.0f},
-             {u, 0.0f}});
+        vertices.push_back({{-sinV * outerRadius, cosV * outerRadius, 0.0f},
+                            {0.0f, 0.0f, 1.0f},
+                            {u, 0.0f}});
         vertices.push_back(
             {{-sinNext * outerRadius, cosNext * outerRadius, 0.0f},
              {0.0f, 0.0f, 1.0f},
              {uNext, 0.0f}});
-        vertices.push_back(
-            {{-sinV * innerRadius, cosV * innerRadius, 0.0f},
-             {0.0f, 0.0f, 1.0f},
-             {u, 1.0f}});
+        vertices.push_back({{-sinV * innerRadius, cosV * innerRadius, 0.0f},
+                            {0.0f, 0.0f, 1.0f},
+                            {u, 1.0f}});
         vertices.push_back(
             {{-sinNext * innerRadius, cosNext * innerRadius, 0.0f},
              {0.0f, 0.0f, 1.0f},
@@ -328,6 +239,9 @@ uint32_t ModelManager::CreateCylinder(uint32_t textureId,
     height = (std::max)(height, 0.001f);
 
     Material cylinderMaterial = material;
+    if (cylinderMaterial.baseColorTextureId == UINT32_MAX) {
+        cylinderMaterial.baseColorTextureId = textureId;
+    }
     XMStoreFloat4x4(&cylinderMaterial.uvTransform,
                     XMMatrixTranspose(XMMatrixIdentity()));
 
@@ -336,8 +250,8 @@ uint32_t ModelManager::CreateCylinder(uint32_t textureId,
     vertices.reserve(static_cast<size_t>(divide) * 6u);
     indices.reserve(static_cast<size_t>(divide) * 6u);
 
-    const float radianPerDivide = std::numbers::pi_v<float> * 2.0f /
-                                  static_cast<float>(divide);
+    const float radianPerDivide =
+        std::numbers::pi_v<float> * 2.0f / static_cast<float>(divide);
 
     for (uint32_t index = 0; index < divide; ++index) {
         const uint32_t base = static_cast<uint32_t>(vertices.size());
@@ -354,27 +268,22 @@ uint32_t ModelManager::CreateCylinder(uint32_t textureId,
         const float uNext =
             static_cast<float>(index + 1) / static_cast<float>(divide);
 
-        vertices.push_back(
-            {{-sinV * topRadius, height, cosV * topRadius},
-             {-sinV, 0.0f, cosV},
-             {u, 1.0f}});
-        vertices.push_back(
-            {{-sinNext * topRadius, height, cosNext * topRadius},
-             {-sinNext, 0.0f, cosNext},
-             {uNext, 1.0f}});
-        vertices.push_back(
-            {{-sinV * bottomRadius, 0.0f, cosV * bottomRadius},
-             {-sinV, 0.0f, cosV},
-             {u, 0.0f}});
+        vertices.push_back({{-sinV * topRadius, height, cosV * topRadius},
+                            {-sinV, 0.0f, cosV},
+                            {u, 1.0f}});
+        vertices.push_back({{-sinNext * topRadius, height, cosNext * topRadius},
+                            {-sinNext, 0.0f, cosNext},
+                            {uNext, 1.0f}});
+        vertices.push_back({{-sinV * bottomRadius, 0.0f, cosV * bottomRadius},
+                            {-sinV, 0.0f, cosV},
+                            {u, 0.0f}});
 
-        vertices.push_back(
-            {{-sinV * bottomRadius, 0.0f, cosV * bottomRadius},
-             {-sinV, 0.0f, cosV},
-             {u, 0.0f}});
-        vertices.push_back(
-            {{-sinNext * topRadius, height, cosNext * topRadius},
-             {-sinNext, 0.0f, cosNext},
-             {uNext, 1.0f}});
+        vertices.push_back({{-sinV * bottomRadius, 0.0f, cosV * bottomRadius},
+                            {-sinV, 0.0f, cosV},
+                            {u, 0.0f}});
+        vertices.push_back({{-sinNext * topRadius, height, cosNext * topRadius},
+                            {-sinNext, 0.0f, cosNext},
+                            {uNext, 1.0f}});
         vertices.push_back(
             {{-sinNext * bottomRadius, 0.0f, cosNext * bottomRadius},
              {-sinNext, 0.0f, cosNext},
@@ -407,112 +316,16 @@ uint32_t ModelManager::CreateCylinder(uint32_t textureId,
     return static_cast<uint32_t>(models_.size() - 1);
 }
 
-uint32_t ModelManager::CreateLowPolyTerrain(uint32_t textureId,
-                                            const Material &material,
-                                            uint32_t grid, float size,
-                                            float maxHeight, float flatRadius,
-                                            uint32_t seed) {
-    grid = (std::max)(grid, 4u);
-    size = (std::max)(size, 1.0f);
-    maxHeight = (std::max)(maxHeight, 0.0f);
-    flatRadius = (std::max)(flatRadius, 0.0f);
+uint32_t ModelManager::CreateMesh(
+    const void *vertexData, uint32_t vertexStride, uint32_t vertexCount,
+    const uint32_t *indexData, uint32_t indexCount,
+    D3D12_PRIMITIVE_TOPOLOGY primitiveTopology) {
+    return meshManager_.CreateMesh(vertexData, vertexStride, vertexCount,
+                                   indexData, indexCount, primitiveTopology);
+}
 
-    Material terrainMaterial = material;
-    XMStoreFloat4x4(&terrainMaterial.uvTransform,
-                    XMMatrixTranspose(XMMatrixIdentity()));
-
-    const float halfSize = size * 0.5f;
-    const float step = size / static_cast<float>(grid);
-    const uint32_t pointCount = grid + 1u;
-    std::vector<float> heights(static_cast<size_t>(pointCount) * pointCount);
-
-    auto heightAt = [&](uint32_t xIndex, uint32_t zIndex) -> float & {
-        return heights[static_cast<size_t>(zIndex) * pointCount + xIndex];
-    };
-
-    for (uint32_t z = 0; z < pointCount; ++z) {
-        for (uint32_t x = 0; x < pointCount; ++x) {
-            const float worldX = -halfSize + static_cast<float>(x) * step;
-            const float worldZ = -halfSize + static_cast<float>(z) * step;
-            const float dist = std::sqrt(worldX * worldX + worldZ * worldZ);
-            const float outerT =
-                SmoothStep((dist - flatRadius) / (halfSize - flatRadius));
-
-            const float ridge =
-                0.45f * Hash01(static_cast<int32_t>(x), static_cast<int32_t>(z),
-                               seed) +
-                0.35f * Hash01(static_cast<int32_t>(x / 2u),
-                               static_cast<int32_t>(z / 2u), seed + 97u) +
-                0.20f * Hash01(static_cast<int32_t>(x / 4u),
-                               static_cast<int32_t>(z / 4u), seed + 193u);
-            const float wave =
-                0.5f + 0.5f * std::sinf(worldX * 0.22f + worldZ * 0.17f);
-            heightAt(x, z) =
-                (-0.28f + maxHeight * (0.35f + ridge * 0.78f + wave * 0.24f)) *
-                outerT;
-        }
-    }
-
-    std::vector<Vertex> vertices;
-    std::vector<uint32_t> indices;
-    vertices.reserve(static_cast<size_t>(grid) * grid * 6u);
-    indices.reserve(static_cast<size_t>(grid) * grid * 6u);
-
-    auto makePoint = [&](uint32_t xIndex, uint32_t zIndex) {
-        const float worldX = -halfSize + static_cast<float>(xIndex) * step;
-        const float worldZ = -halfSize + static_cast<float>(zIndex) * step;
-        return XMFLOAT3{worldX, heightAt(xIndex, zIndex), worldZ};
-    };
-
-    auto pushTriangle = [&](const XMFLOAT3 &a, const XMFLOAT3 &b,
-                            const XMFLOAT3 &c) {
-        const XMFLOAT3 normal = CalculateFaceNormal(a, b, c);
-        const uint32_t base = static_cast<uint32_t>(vertices.size());
-        vertices.push_back({a, normal, {0.0f, 0.0f}});
-        vertices.push_back({b, normal, {1.0f, 0.0f}});
-        vertices.push_back({c, normal, {0.5f, 1.0f}});
-        indices.push_back(base + 0u);
-        indices.push_back(base + 1u);
-        indices.push_back(base + 2u);
-    };
-
-    for (uint32_t z = 0; z < grid; ++z) {
-        for (uint32_t x = 0; x < grid; ++x) {
-            XMFLOAT3 p00 = makePoint(x, z);
-            XMFLOAT3 p10 = makePoint(x + 1u, z);
-            XMFLOAT3 p01 = makePoint(x, z + 1u);
-            XMFLOAT3 p11 = makePoint(x + 1u, z + 1u);
-
-            const bool flip =
-                Hash01(static_cast<int32_t>(x), static_cast<int32_t>(z),
-                       seed + 389u) > 0.5f;
-            if (flip) {
-                pushTriangle(p00, p10, p11);
-                pushTriangle(p00, p11, p01);
-            } else {
-                pushTriangle(p00, p10, p01);
-                pushTriangle(p10, p11, p01);
-            }
-        }
-    }
-
-    Model model{};
-    ModelSubMesh subMesh{};
-    subMesh.vertexCount = static_cast<uint32_t>(vertices.size());
-    subMesh.meshId = meshManager_.CreateMesh(
-        vertices.data(), sizeof(Vertex), static_cast<uint32_t>(vertices.size()),
-        indices.data(), static_cast<uint32_t>(indices.size()));
-    subMesh.textureId = textureId;
-    subMesh.materialId = materialManager_.CreateMaterial(terrainMaterial);
-
-    model.subMeshes.push_back(subMesh);
-    model.meshId = subMesh.meshId;
-    model.textureId = textureId;
-    model.materialId = subMesh.materialId;
-
-    modelRenderer_.CreateSkinClusters(model);
-    models_.push_back(model);
-    return static_cast<uint32_t>(models_.size() - 1);
+const Mesh &ModelManager::GetMesh(uint32_t meshId) const {
+    return meshManager_.GetMesh(meshId);
 }
 
 void ModelManager::UpdateAnimation(uint32_t modelId, float deltaTime) {
@@ -573,4 +386,66 @@ void ModelManager::Draw(uint32_t modelId, const Transform &transform,
     }
 
     modelRenderer_.Draw(*model, transform, camera, environmentTextureId);
+}
+
+void ModelManager::DrawInstanced(uint32_t modelId, const Transform *transforms,
+                                 uint32_t instanceCount,
+                                 const Camera &camera,
+                                 uint32_t environmentTextureId) {
+    const Model *model = GetModel(modelId);
+    if (!model) {
+        return;
+    }
+
+    modelRenderer_.DrawInstanced(*model, transforms, instanceCount, camera,
+                                 environmentTextureId);
+}
+
+void ModelManager::DrawInstanced(uint32_t modelId,
+                                 const InstanceData *instances,
+                                 uint32_t instanceCount,
+                                 const Camera &camera,
+                                 uint32_t environmentTextureId) {
+    const Model *model = GetModel(modelId);
+    if (!model) {
+        return;
+    }
+
+    modelRenderer_.DrawInstanced(*model, instances, instanceCount, camera,
+                                 environmentTextureId);
+}
+
+void ModelManager::DrawShadow(
+    uint32_t modelId, const Transform &transform,
+    const DirectX::XMFLOAT4X4 &lightViewProjection) {
+    const Model *model = GetModel(modelId);
+    if (!model) {
+        return;
+    }
+
+    modelRenderer_.DrawShadow(*model, transform, lightViewProjection);
+}
+
+void ModelManager::DrawInstancedShadow(
+    uint32_t modelId, const Transform *transforms, uint32_t instanceCount,
+    const DirectX::XMFLOAT4X4 &lightViewProjection) {
+    const Model *model = GetModel(modelId);
+    if (!model) {
+        return;
+    }
+
+    modelRenderer_.DrawInstancedShadow(*model, transforms, instanceCount,
+                                       lightViewProjection);
+}
+
+void ModelManager::DrawInstancedShadow(
+    uint32_t modelId, const InstanceData *instances, uint32_t instanceCount,
+    const DirectX::XMFLOAT4X4 &lightViewProjection) {
+    const Model *model = GetModel(modelId);
+    if (!model) {
+        return;
+    }
+
+    modelRenderer_.DrawInstancedShadow(*model, instances, instanceCount,
+                                       lightViewProjection);
 }

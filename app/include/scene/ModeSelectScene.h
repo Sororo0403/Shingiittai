@@ -13,7 +13,7 @@ class ModeSelectScene : public BaseScene {
     void Initialize(const SceneContext &ctx) override;
     void Update() override;
     void Draw() override;
-    void DrawOverlay() override;
+    void DrawTransparent() override;
 
   private:
     enum class NextScene {

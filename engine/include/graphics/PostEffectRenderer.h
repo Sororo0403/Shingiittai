@@ -1,6 +1,6 @@
 #pragma once
+#include "graphics/PostEffectSettings.h"
 #include <d3d12.h>
-#include <cstdint>
 #include <wrl.h>
 
 class DirectXCommon;
@@ -11,34 +11,13 @@ class SrvManager;
 /// </summary>
 class PostEffectRenderer {
   public:
-    enum class ColorMode : int32_t {
-        None = 0,
-        Grayscale = 1,
-        Sepia = 2,
-    };
-
-    enum class FilterMode : int32_t {
-        None = 0,
-        Box3x3 = 1,
-        Box5x5 = 2,
-        Gaussian3x3 = 3,
-        GaussianBlur7x7 = 4,
-    };
-
-    enum class EdgeMode : int32_t {
-        None = 0,
-        Luminance = 1,
-        Depth = 2,
-    };
-
-    enum class RandomMode : int32_t {
-        None = 0,
-        GrayscaleNoise = 1,
-        OverlayNoise = 2,
-    };
+    using ColorMode = PostEffectColorMode;
+    using FilterMode = PostEffectFilterMode;
+    using EdgeMode = PostEffectEdgeMode;
+    using SpecialMode = PostEffectSpecialMode;
 
     /// <summary>
-    /// 初期化処理
+    /// ポストエフェクト描画に必要なパイプラインと定数バッファを初期化する
     /// </summary>
     void Initialize(DirectXCommon *dxCommon, SrvManager *srvManager, int width,
                     int height);
@@ -47,11 +26,6 @@ class PostEffectRenderer {
     /// 描画領域を更新する
     /// </summary>
     void Resize(int width, int height);
-
-    /// <summary>
-    /// 全ポストエフェクトを無効状態へ戻す
-    /// </summary>
-    void ResetEffects();
 
     /// <summary>
     /// 指定SRVを全画面へ描画する
@@ -97,9 +71,7 @@ class PostEffectRenderer {
     /// <summary>
     /// 輝度エッジの閾値を取得する
     /// </summary>
-    float GetLuminanceEdgeThreshold() const {
-        return luminanceEdgeThreshold_;
-    }
+    float GetLuminanceEdgeThreshold() const { return luminanceEdgeThreshold_; }
 
     /// <summary>
     /// 深度エッジの閾値を設定する
@@ -117,144 +89,132 @@ class PostEffectRenderer {
     void SetDepthParameters(float nearZ, float farZ);
 
     /// <summary>
-    /// ビネット効果の有効/無効を設定する
-    /// </summary>
-    void SetVignettingEnabled(bool enabled);
-
-    /// <summary>
-    /// ビネット効果が有効か取得する
-    /// </summary>
-    bool IsVignettingEnabled() const { return enableVignetting_; }
-
-    /// <summary>
-    /// ビネット効果の強さを設定する
-    /// </summary>
-    void SetVignettingStrength(float strength);
-
-    /// <summary>
-    /// ビネット効果の強さを取得する
-    /// </summary>
-    float GetVignettingStrength() const { return vignettingStrength_; }
-
-    /// <summary>
-    /// ビネット効果の範囲とカーブを設定する
-    /// </summary>
-    void SetVignettingShape(float scale, float power);
-
-    /// <summary>
     /// グレースケール変換の輝度係数を設定する
     /// </summary>
     void SetGrayscaleWeights(float r, float g, float b);
 
     /// <summary>
-    /// セピア変換の色味を設定する
+    /// HDRトーンマップの有効状態を設定する
     /// </summary>
-    void SetSepiaTone(float r, float g, float b);
+    void SetTonemapEnabled(bool enabled);
 
     /// <summary>
-    /// ラジアルブラーの中心座標を設定する
+    /// HDRトーンマップの露光を設定する
     /// </summary>
-    void SetRadialBlurCenter(float x, float y);
+    void SetExposure(float exposure);
 
     /// <summary>
-    /// ラジアルブラーの中心座標を取得する
+    /// HDRトーンマップのガンマを設定する
     /// </summary>
-    const float *GetRadialBlurCenter() const { return radialBlurCenter_; }
+    void SetGamma(float gamma);
 
     /// <summary>
-    /// ラジアルブラーの強さを設定する
+    /// 簡易Bloomの有効状態を設定する
     /// </summary>
-    void SetRadialBlurStrength(float strength);
+    void SetBloomEnabled(bool enabled);
 
     /// <summary>
-    /// ラジアルブラーの強さを取得する
+    /// 簡易Bloomの閾値、強度、半径を設定する
     /// </summary>
-    float GetRadialBlurStrength() const { return radialBlurStrength_; }
+    void SetBloom(float threshold, float intensity, float radius);
 
     /// <summary>
-    /// ラジアルブラーのサンプル数を設定する
+    /// ポストノイズの有効状態を設定する
     /// </summary>
-    void SetRadialBlurSampleCount(int32_t sampleCount);
+    void SetNoiseEnabled(bool enabled);
 
     /// <summary>
-    /// ラジアルブラーのサンプル数を取得する
+    /// ポストノイズの強度とスケールを設定する
     /// </summary>
-    int32_t GetRadialBlurSampleCount() const { return radialBlurSampleCount_; }
+    void SetNoise(float strength, float scale);
 
     /// <summary>
-    /// 疑似乱数ノイズの表示方法を設定する
+    /// ポストノイズの時間を設定する
     /// </summary>
-    void SetRandomMode(RandomMode mode);
+    void SetNoiseTime(float time);
 
     /// <summary>
-    /// 疑似乱数ノイズの表示方法を取得する
+    /// 追加ポストエフェクトの種類を設定する
     /// </summary>
-    RandomMode GetRandomMode() const { return randomMode_; }
+    void SetSpecialMode(SpecialMode mode);
 
     /// <summary>
-    /// ノイズを重ねる強さを設定する
+    /// 周辺減光の強度と半径を設定する
     /// </summary>
-    void SetRandomStrength(float strength);
+    void SetVignette(float strength, float radius);
 
     /// <summary>
-    /// ノイズを重ねる強さを取得する
+    /// 放射ブラーの強度を設定する
     /// </summary>
-    float GetRandomStrength() const { return randomStrength_; }
+    void SetRadialBlur(float strength);
 
     /// <summary>
-    /// ノイズの粒の細かさを設定する
+    /// ディゾルブのしきい値、ぼかし幅、ノイズスケールを設定する
     /// </summary>
-    void SetRandomScale(float scale);
+    void SetDissolve(float amount, float softness, float scale);
 
     /// <summary>
-    /// ノイズの粒の細かさを取得する
+    /// 太陽のスクリーン空間レンズフレアを設定する
     /// </summary>
-    float GetRandomScale() const { return randomScale_; }
+    void SetLensFlare(bool enabled, float visibility, float sunUvX,
+                      float sunUvY, float sunDepth, float occlusionBias,
+                      float glareRadius, float glareIntensity,
+                      float glareAlpha, const float glareColor[3],
+                      float ghostIntensity, float ghostAlpha,
+                      const float ghostWarmColor[3],
+                      const float ghostCoolColor[3],
+                      float streakIntensity, float streakAlpha,
+                      float streakWidth, const float streakColor[3]);
 
     /// <summary>
-    /// ノイズ生成に使う時間を設定する
+    /// HDRトーンマップの有効状態を取得する
     /// </summary>
-    void SetRandomTime(float time);
+    bool IsTonemapEnabled() const { return tonemapEnabled_; }
 
     /// <summary>
-    /// ノイズパターンをずらす追加シード値を設定する
+    /// HDRトーンマップの露光を取得する
     /// </summary>
-    void SetRandomSeed(float seed);
+    float GetExposure() const { return exposure_; }
 
-    void SetSceneDimStrength(float strength);
+    /// <summary>
+    /// HDRトーンマップのガンマを取得する
+    /// </summary>
+    float GetGamma() const { return gamma_; }
+
+    /// <summary>
+    /// 簡易Bloomの有効状態を取得する
+    /// </summary>
+    bool IsBloomEnabled() const { return bloomEnabled_; }
+
+    /// <summary>
+    /// ポストノイズの有効状態を取得する
+    /// </summary>
+    bool IsNoiseEnabled() const { return noiseEnabled_; }
+
+    /// <summary>
+    /// 現在の追加ポストエフェクトの種類を取得する
+    /// </summary>
+    SpecialMode GetSpecialMode() const { return specialMode_; }
 
   private:
-    struct EffectConstBuffer {
-        int32_t colorMode = 0;
-        int32_t enableVignetting = 0;
-        int32_t filterMode = 0;
-        float vignettingStrength = 1.0f;
-        float texelSize[2]{};
-        float vignettingScale = 16.0f;
-        float vignettingPower = 0.8f;
-        int32_t edgeMode = 0;
-        float luminanceEdgeThreshold = 0.2f;
-        float depthEdgeThreshold = 0.02f;
-        float padding2 = 0.0f;
-        float nearZ = 0.1f;
-        float farZ = 100.0f;
-        float padding3[2]{};
-        float radialBlurCenter[2]{0.5f, 0.5f};
-        float radialBlurStrength = 0.0f;
-        int32_t radialBlurSampleCount = 10;
-        int32_t randomMode = 0;
-        float randomStrength = 0.0f;
-        float randomScale = 240.0f;
-        float randomTime = 0.0f;
-        float randomSeed = 0.0f;
-        float grayscaleWeights[3]{0.2125f, 0.7154f, 0.0721f};
-        float sepiaTone[3]{1.20f, 1.00f, 0.80f};
-        float sceneDimStrength = 0.0f;
-    };
-
+    /// <summary>
+    /// ルートシグネチャを生成する
+    /// </summary>
     void CreateRootSignature();
+
+    /// <summary>
+    /// パイプラインステートを生成する
+    /// </summary>
     void CreatePipelineState();
+
+    /// <summary>
+    /// エフェクト用定数バッファを生成する
+    /// </summary>
     void CreateConstantBuffer();
+
+    /// <summary>
+    /// 現在のエフェクト設定を定数バッファへ書き込む
+    /// </summary>
     void UpdateConstantBuffer();
 
     DirectXCommon *dxCommon_ = nullptr;
@@ -263,31 +223,52 @@ class PostEffectRenderer {
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
     Microsoft::WRL::ComPtr<ID3D12Resource> constBuffer_;
-    EffectConstBuffer *mappedConstBuffer_ = nullptr;
+    PostEffectConstants *mappedConstBuffer_ = nullptr;
     D3D12_VIEWPORT viewport_{};
     D3D12_RECT scissorRect_{};
     ColorMode colorMode_ = ColorMode::None;
     FilterMode filterMode_ = FilterMode::None;
     EdgeMode edgeMode_ = EdgeMode::None;
-    bool enableVignetting_ = true;
-    float vignettingStrength_ = 1.0f;
-    float vignettingScale_ = 16.0f;
-    float vignettingPower_ = 0.8f;
     float grayscaleWeights_[3]{0.2125f, 0.7154f, 0.0721f};
-    float sepiaTone_[3]{1.20f, 1.00f, 0.80f};
     float luminanceEdgeThreshold_ = 0.2f;
     float depthEdgeThreshold_ = 0.02f;
     float nearZ_ = 0.1f;
     float farZ_ = 100.0f;
-    float radialBlurCenter_[2]{0.5f, 0.5f};
+    bool tonemapEnabled_ = true;
+    float exposure_ = 1.0f;
+    float gamma_ = 2.2f;
+    bool bloomEnabled_ = false;
+    float bloomThreshold_ = 1.0f;
+    float bloomIntensity_ = 0.25f;
+    float bloomRadius_ = 2.0f;
+    bool noiseEnabled_ = false;
+    float noiseStrength_ = 0.025f;
+    float noiseScale_ = 240.0f;
+    float noiseTime_ = 0.0f;
+    SpecialMode specialMode_ = SpecialMode::None;
+    float vignetteStrength_ = 0.0f;
+    float vignetteRadius_ = 0.72f;
     float radialBlurStrength_ = 0.0f;
-    int32_t radialBlurSampleCount_ = 10;
-    RandomMode randomMode_ = RandomMode::None;
-    float randomStrength_ = 0.0f;
-    float randomScale_ = 240.0f;
-    float randomTime_ = 0.0f;
-    float randomSeed_ = 0.0f;
-    float sceneDimStrength_ = 0.0f;
+    float dissolveAmount_ = 0.0f;
+    float dissolveSoftness_ = 0.08f;
+    float dissolveScale_ = 42.0f;
+    bool lensFlareEnabled_ = false;
+    float lensFlareVisibility_ = 0.0f;
+    float lensFlareSunUv_[2]{0.5f, 0.5f};
+    float lensFlareSunDepth_ = 1.0f;
+    float lensFlareOcclusionBias_ = 0.0015f;
+    float lensFlareGlareRadius_ = 0.22f;
+    float lensFlareGlareIntensity_ = 0.0f;
+    float lensFlareGlareAlpha_ = 0.0f;
+    float lensFlareGlareColor_[3]{1.0f, 0.74f, 0.48f};
+    float lensFlareGhostIntensity_ = 0.0f;
+    float lensFlareGhostAlpha_ = 0.0f;
+    float lensFlareGhostWarmColor_[3]{1.0f, 0.50f, 0.30f};
+    float lensFlareGhostCoolColor_[3]{0.46f, 0.56f, 1.0f};
+    float lensFlareStreakIntensity_ = 0.0f;
+    float lensFlareStreakAlpha_ = 0.0f;
+    float lensFlareStreakWidth_ = 0.018f;
+    float lensFlareStreakColor_[3]{1.0f, 0.70f, 0.40f};
     int width_ = 1;
     int height_ = 1;
 };

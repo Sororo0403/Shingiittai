@@ -1,8 +1,29 @@
-#include "SceneManager.h"
-#include "BaseScene.h"
-#include "DirectXCommon.h"
+#include "scene/SceneManager.h"
+#include "scene/BaseScene.h"
+#include <stdexcept>
 
 void SceneManager::Initialize(const SceneContext &ctx) { ctx_ = &ctx; }
+
+void SceneManager::SetSceneFactory(AbstractSceneFactory *sceneFactory) {
+    sceneFactory_ = sceneFactory;
+}
+
+void SceneManager::ChangeScene(const std::string &sceneName) {
+    if (!sceneFactory_) {
+        throw std::runtime_error(
+            "SceneManager::ChangeScene requires a scene factory: " +
+            sceneName);
+    }
+
+    std::unique_ptr<BaseScene> nextScene =
+        sceneFactory_->CreateScene(sceneName);
+    if (!nextScene) {
+        throw std::runtime_error(
+            "Scene factory returned null scene: " + sceneName);
+    }
+
+    ChangeScene(std::move(nextScene));
+}
 
 void SceneManager::ChangeScene(std::unique_ptr<BaseScene> nextScene) {
     if (isUpdating_ || isDrawing_) {
@@ -14,8 +35,12 @@ void SceneManager::ChangeScene(std::unique_ptr<BaseScene> nextScene) {
 }
 
 void SceneManager::ApplySceneChange(std::unique_ptr<BaseScene> nextScene) {
-    if (ctx_ != nullptr && ctx_->dxCommon != nullptr && currentScene_) {
-        ctx_->dxCommon->WaitForGpu();
+    if (!ctx_) {
+        throw std::runtime_error(
+            "SceneManager::ApplySceneChange called before Initialize");
+    }
+    if (!nextScene) {
+        throw std::runtime_error("SceneManager received null scene");
     }
 
     currentScene_.reset();
@@ -49,10 +74,19 @@ void SceneManager::Draw() {
     }
 }
 
-void SceneManager::DrawOverlay() {
+void SceneManager::DrawTransparent() {
     if (currentScene_) {
         isDrawing_ = true;
-        currentScene_->DrawOverlay();
+        currentScene_->DrawTransparent();
         isDrawing_ = false;
     }
 }
+
+void SceneManager::DrawShadow() {
+    if (currentScene_) {
+        isDrawing_ = true;
+        currentScene_->DrawShadow();
+        isDrawing_ = false;
+    }
+}
+

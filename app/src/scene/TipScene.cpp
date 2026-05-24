@@ -1,6 +1,7 @@
 #include <WinSock2.h>
 #include <WS2tcpip.h>
 #include "TipScene.h"
+#include "AppSceneServices.h"
 #include "DirectXCommon.h"
 #include "GameScene.h"
 #include "Input.h"
@@ -56,18 +57,19 @@ void TipScene::Initialize(const SceneContext &ctx) {
         handController_.SetCalibration(inputCalibration_);
         RequestHandTrackingStartOnce();
         previewFrame_ = {};
-        previewFrame_.textureId = ctx_->texture->CreateDynamicTexture(
-            previewFrame_.width, previewFrame_.height);
         previewFrame_.rgbaPixels.resize(
             static_cast<size_t>(previewFrame_.width) *
             static_cast<size_t>(previewFrame_.height) * 4u);
+        previewFrame_.textureId = ctx_->rendering.texture->CreateFromRgbaPixels(
+            previewFrame_.width, previewFrame_.height,
+            previewFrame_.rgbaPixels.data());
         previewJpegBuffer_.clear();
         previewChunkReceived_.clear();
         previewFrameId_ = 0;
         previewReceivedChunks_ = 0;
     }
 
-    ctx_->dxCommon->BeginUpload();
+    ctx_->rendering.dxCommon->BeginUpload();
     backgroundImage_ =
         LoadTextureImage(L"app/resources/select/weapon_select_bg.png");
     titleImage_ = LoadTextureImage(L"app/resources/text/tip_title.png");
@@ -84,26 +86,26 @@ void TipScene::Initialize(const SceneContext &ctx) {
         promptImage_ = LoadTextureImage(L"app/resources/text/tip_kbm.png");
         break;
     }
-    ctx_->dxCommon->EndUpload();
-    ctx_->texture->ReleaseUploadBuffers();
+    ctx_->rendering.dxCommon->EndUpload();
+    ctx_->rendering.texture->ReleaseUploadBuffers();
 
-    ctx_->postEffectRenderer->SetColorMode(PostEffectRenderer::ColorMode::None);
-    ctx_->postEffectRenderer->SetRadialBlurStrength(0.0f);
-    ctx_->postEffectRenderer->SetSceneDimStrength(0.0f);
-    ctx_->postEffectRenderer->SetVignettingEnabled(true);
-    ctx_->postEffectRenderer->SetVignettingStrength(0.26f);
+    ctx_->rendering.postEffectRenderer->SetColorMode(PostEffectRenderer::ColorMode::None);
+    ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(0.0f);
+    ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.0f);
+    ctx_->rendering.postEffectRenderer->SetVignettingEnabled(true);
+    ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.26f);
 }
 
 void TipScene::Update() {
-    sceneTime_ += ctx_->deltaTime;
+    sceneTime_ += ctx_->frame.deltaTime;
     if (inputCalibration_.controlType == InputControlType::JoyCon) {
-        leftJoyCon_.Update(ctx_->deltaTime);
-        rightJoyCon_.Update(ctx_->deltaTime);
+        leftJoyCon_.Update(ctx_->frame.deltaTime);
+        rightJoyCon_.Update(ctx_->frame.deltaTime);
     }
     if (IsHandControl(inputCalibration_.controlType)) {
         RequestHandTrackingStartOnce();
-        handController_.Update(ctx_->deltaTime);
-        UpdateCameraPreview(ctx_->deltaTime);
+        handController_.Update(ctx_->frame.deltaTime);
+        UpdateCameraPreview(ctx_->frame.deltaTime);
     }
 
     if (ShouldStart()) {
@@ -113,10 +115,10 @@ void TipScene::Update() {
 }
 
 void TipScene::Draw() {
-    const float w = static_cast<float>(ctx_->winApp->GetWidth());
-    const float h = static_cast<float>(ctx_->winApp->GetHeight());
+    const float w = static_cast<float>(ctx_->systems.winApp->GetWidth());
+    const float h = static_cast<float>(ctx_->systems.winApp->GetHeight());
 
-    ctx_->sprite->PreDraw();
+    ctx_->rendering.sprite->PreDraw();
     DrawRect(0.0f, 0.0f, w, h, Color(0.018f, 0.020f, 0.024f, 1.0f));
     DrawImage(backgroundImage_, 0.0f, 0.0f,
               (std::max)(w / (std::max)(backgroundImage_.width, 1.0f),
@@ -142,10 +144,10 @@ void TipScene::Draw() {
                                          : Color(0.20f, 0.24f, 0.28f, 1.0f));
         }
     }
-    ctx_->sprite->PostDraw();
+    ctx_->rendering.sprite->PostDraw();
 }
 
-void TipScene::DrawOverlay() {
+void TipScene::DrawTransparent() {
     if (IsHandControl(inputCalibration_.controlType)) {
         DrawCameraPreview();
     }
@@ -153,17 +155,17 @@ void TipScene::DrawOverlay() {
 
 TipScene::Image TipScene::LoadTextureImage(const std::wstring &path) {
     Image image{};
-    image.textureId = ctx_->texture->Load(path);
-    image.width = static_cast<float>(ctx_->texture->GetWidth(image.textureId));
+    image.textureId = ctx_->rendering.texture->Load(path);
+    image.width = static_cast<float>(ctx_->rendering.texture->GetWidth(image.textureId));
     image.height =
-        static_cast<float>(ctx_->texture->GetHeight(image.textureId));
+        static_cast<float>(ctx_->rendering.texture->GetHeight(image.textureId));
     return image;
 }
 
 bool TipScene::ShouldStart() {
     switch (inputCalibration_.controlType) {
     case InputControlType::KeyboardMouse:
-        return ctx_->input->IsKeyTrigger(DIK_SPACE);
+        return ctx_->systems.input->IsKeyTrigger(DIK_SPACE);
     case InputControlType::JoyCon: {
         constexpr int kFaceButtons = JSMASK_S | JSMASK_E | JSMASK_W | JSMASK_N;
         const bool left =
@@ -175,9 +177,9 @@ bool TipScene::ShouldStart() {
         return left || right;
     }
     case InputControlType::Hand: {
-        if (ctx_->input != nullptr &&
-            (ctx_->input->IsKeyTrigger(DIK_SPACE) ||
-             ctx_->input->IsKeyTrigger(DIK_RETURN))) {
+        if (ctx_->systems.input != nullptr &&
+            (ctx_->systems.input->IsKeyTrigger(DIK_SPACE) ||
+             ctx_->systems.input->IsKeyTrigger(DIK_RETURN))) {
             return true;
         }
         const float speed =
@@ -202,8 +204,8 @@ void TipScene::RequestHandTrackingStartOnce() {
         return;
     }
 
-    if (ctx_->requestHandTrackingStart) {
-        ctx_->requestHandTrackingStart();
+    if (AppSceneServices::HasHandTrackingStart()) {
+        AppSceneServices::RequestHandTrackingStart();
     } else {
         return;
     }
@@ -385,16 +387,15 @@ void TipScene::UploadPreviewTextureIfNeeded() {
         return;
     }
 
-    if (ctx_->texture->UpdateDynamicTexture(
-            previewFrame_.textureId, previewFrame_.rgbaPixels.data(),
-            previewFrame_.width, previewFrame_.height)) {
-        previewFrame_.dirty = false;
-    }
+    ctx_->rendering.texture->UpdateTexture2D(
+        previewFrame_.textureId, previewFrame_.rgbaPixels.data(),
+        static_cast<size_t>(previewFrame_.width) * 4u);
+    previewFrame_.dirty = false;
 }
 
 void TipScene::DrawCameraPreview() {
-    if (ctx_ == nullptr || ctx_->sprite == nullptr || ctx_->texture == nullptr ||
-        ctx_->winApp == nullptr) {
+    if (ctx_ == nullptr || ctx_->rendering.sprite == nullptr || ctx_->rendering.texture == nullptr ||
+        ctx_->systems.winApp == nullptr) {
         return;
     }
 
@@ -409,7 +410,7 @@ void TipScene::DrawCameraPreview() {
         previewFrame_.valid && previewFrame_.staleTimer <= kPreviewStaleSeconds;
     const float alpha = fresh ? 0.88f : 0.34f;
 
-    ctx_->sprite->PreDraw();
+    ctx_->rendering.sprite->PreDraw();
     DrawRect(kMargin - 4.0f, kMargin - 4.0f, kPreviewWidth + 8.0f,
              previewHeight + 8.0f, Color(0.0f, 0.0f, 0.0f, 0.52f));
     if (previewFrame_.valid) {
@@ -418,7 +419,7 @@ void TipScene::DrawCameraPreview() {
         preview.position = {kMargin, kMargin};
         preview.size = {kPreviewWidth, previewHeight};
         preview.color = {1.0f, 1.0f, 1.0f, alpha};
-        ctx_->sprite->DrawSprite(preview);
+        ctx_->rendering.sprite->DrawSprite(preview);
     }
     const XMFLOAT4 border =
         fresh ? XMFLOAT4{0.32f, 0.72f, 1.0f, 0.62f}
@@ -429,7 +430,7 @@ void TipScene::DrawCameraPreview() {
     DrawRect(kMargin, kMargin, 2.0f, previewHeight, border);
     DrawRect(kMargin + kPreviewWidth - 2.0f, kMargin, 2.0f, previewHeight,
              border);
-    ctx_->sprite->PostDraw();
+    ctx_->rendering.sprite->PostDraw();
 }
 
 void TipScene::DrawRect(float x, float y, float w, float h,
@@ -439,7 +440,7 @@ void TipScene::DrawRect(float x, float y, float w, float h,
     sprite.size = {w, h};
     sprite.color = color;
     sprite.textureId = 0;
-    ctx_->sprite->DrawSprite(sprite);
+    ctx_->rendering.sprite->DrawSprite(sprite);
 }
 
 void TipScene::DrawImage(const Image &image, float x, float y, float scale,
@@ -453,5 +454,5 @@ void TipScene::DrawImage(const Image &image, float x, float y, float scale,
     sprite.size = {image.width * scale, image.height * scale};
     sprite.color = {1.0f, 1.0f, 1.0f, alpha};
     sprite.textureId = image.textureId;
-    ctx_->sprite->DrawSprite(sprite);
+    ctx_->rendering.sprite->DrawSprite(sprite);
 }

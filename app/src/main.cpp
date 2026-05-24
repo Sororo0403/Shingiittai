@@ -1,7 +1,10 @@
 #include "DirectXCommon.h"
 #include "GameScene.h"
 #include "Input.h"
+#include "AppSceneServices.h"
+#include "Lighting.h"
 #include "ModelManager.h"
+#include "RenderPassController.h"
 #include "PostEffectRenderer.h"
 #include "SceneContext.h"
 #include "SceneManager.h"
@@ -12,9 +15,11 @@
 #include "TitleScene.h"
 #include "WinApp.h"
 #include <Windows.h>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <sstream>
 #include <string>
 
 namespace {
@@ -376,9 +381,15 @@ class HandUdpSenderProcess {
     bool shouldKeepRunning_ = false;
     DWORD lastStartAttemptTick_ = 0;
 };
+
+void WriteCrashLog(const std::string &message) {
+    std::ofstream log(ResolveExecutableDirectory() / L"shingiittai_crash.log",
+                      std::ios::app);
+    log << message << '\n';
+}
 }
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
+int RunApp(HINSTANCE hInstance, int nCmdShow) {
     SetCurrentDirectoryW(ResolveExecutableDirectory().wstring().c_str());
 
     HandUdpSenderProcess handUdpSenderProcess;
@@ -419,44 +430,61 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     TextureManager textureManager;
     dxCommon.BeginUpload();
     textureManager.Initialize(&dxCommon, &srvManager);
+    const float dummyShadowDepth = 1.0f;
+    const uint32_t dummyShadowTextureId = textureManager.CreateTexture2D(
+        1, 1, DXGI_FORMAT_R32_FLOAT,
+        reinterpret_cast<const uint8_t *>(&dummyShadowDepth),
+        sizeof(dummyShadowDepth));
     dxCommon.EndUpload();
     textureManager.ReleaseUploadBuffers();
 
     // ModelManager
     ModelManager modelManager;
     modelManager.Initialize(&dxCommon, &srvManager, &textureManager);
+    DirectX::XMFLOAT4X4 identityLightViewProjection{
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f};
+    SceneShadowSettings noShadow{};
+    noShadow.strength = 0.0f;
+    modelManager.GetRenderer()->SetShadowMap(
+        textureManager.GetGpuHandle(dummyShadowTextureId),
+        identityLightViewProjection, noShadow);
+    modelManager.GetRenderer()->SetEnvironmentTexture(
+        textureManager.GetWhiteTextureId());
 
     // SpriteManager
-    SpriteManager spriteManager;
+    SpriteManager &spriteManager = SpriteManager::GetInstance();
     spriteManager.Initialize(&dxCommon, &textureManager, &srvManager, width,
                              height);
 
     SceneContext sceneCtx{};
-    sceneCtx.input = &input;
-    sceneCtx.winApp = &winApp;
-    sceneCtx.sound = &soundManager;
-    sceneCtx.model = &modelManager;
-    sceneCtx.sprite = &spriteManager;
-    sceneCtx.srv = &srvManager;
-    sceneCtx.texture = &textureManager;
-    sceneCtx.dxCommon = &dxCommon;
-    sceneCtx.postEffectRenderer = &postEffectRenderer;
-    sceneCtx.requestHandTrackingStart = [&handUdpSenderProcess, &winApp]() {
-        handUdpSenderProcess.ActivateCamera();
-        winApp.BringToFront();
-    };
-    sceneCtx.requestHandTrackingRestart = [&handUdpSenderProcess, &winApp]() {
-        handUdpSenderProcess.RestartCamera();
-        winApp.BringToFront();
-    };
-    sceneCtx.isCameraDeviceAvailable = [handTrackingRuntimeAvailable]() {
-        return handTrackingRuntimeAvailable;
-    };
-    sceneCtx.isHandTrackingReady = [&handUdpSenderProcess]() {
-        (void)handUdpSenderProcess;
-        return true;
-    };
-    sceneCtx.deltaTime = 0.0f;
+    sceneCtx.systems.input = &input;
+    sceneCtx.systems.winApp = &winApp;
+    sceneCtx.systems.sound = &soundManager;
+    sceneCtx.systems.texture = &textureManager;
+    sceneCtx.rendering.model = &modelManager;
+    sceneCtx.rendering.sprite = &spriteManager;
+    sceneCtx.rendering.srv = &srvManager;
+    sceneCtx.rendering.texture = &textureManager;
+    sceneCtx.rendering.dxCommon = &dxCommon;
+    sceneCtx.rendering.postEffectRenderer = &postEffectRenderer;
+    sceneCtx.frame.deltaTime = 0.0f;
+    AppSceneServices::ConfigureHandTracking(
+        [&handUdpSenderProcess, &winApp]() {
+            handUdpSenderProcess.ActivateCamera();
+            SetForegroundWindow(winApp.GetHwnd());
+        },
+        [&handUdpSenderProcess, &winApp]() {
+            handUdpSenderProcess.RestartCamera();
+            SetForegroundWindow(winApp.GetHwnd());
+        },
+        [handTrackingRuntimeAvailable]() { return handTrackingRuntimeAvailable; },
+        [&handUdpSenderProcess]() {
+            (void)handUdpSenderProcess;
+            return true;
+        });
     if (handTrackingRuntimeAvailable) {
         handUdpSenderProcess.ActivateCamera();
     }
@@ -485,7 +513,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
 
         prevTime = currentTime;
 
-        sceneCtx.deltaTime = deltaTime;
+        sceneCtx.frame.deltaTime = deltaTime;
         handUdpSenderProcess.Update();
 
         // 入力更新
@@ -510,22 +538,36 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
 
         // 描画
         dxCommon.BeginFrame();
+        modelManager.BeginFrame();
         spriteManager.BeginFrame();
 
         dxCommon.BeginScenePass();
         sceneManager.Draw();
+        sceneManager.DrawTransparent();
         dxCommon.EndScenePass();
 
-        dxCommon.BeginBackBufferPass();
+        dxCommon.BeginBackBufferPass(false);
         dxCommon.TransitionDepthToShaderResource();
         postEffectRenderer.Draw(dxCommon.GetSceneSrvGpuHandle(&srvManager),
                                 dxCommon.GetDepthStencilGpuHandle());
         dxCommon.TransitionDepthToWrite();
 
-        sceneManager.DrawOverlay();
-
         dxCommon.EndFrame();
     }
 
     return 0;
+}
+
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
+    try {
+        return RunApp(hInstance, nCmdShow);
+    } catch (const std::exception &e) {
+        WriteCrashLog(std::string("Unhandled exception: ") + e.what());
+        MessageBoxA(nullptr, e.what(), "Shingiittai runtime error", MB_OK | MB_ICONERROR);
+    } catch (...) {
+        WriteCrashLog("Unhandled unknown exception");
+        MessageBoxA(nullptr, "Unknown error", "Shingiittai runtime error",
+                    MB_OK | MB_ICONERROR);
+    }
+    return 1;
 }

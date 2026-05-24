@@ -24,36 +24,36 @@ XMFLOAT4 MakeColor(float r, float g, float b, float a = 1.0f) {
 void SettingsScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
     selectedIndex_ = 0;
-    volume_ = ctx_->sound ? ctx_->sound->GetMasterVolume() : 1.0f;
+    volume_ = ctx_->systems.sound ? ctx_->systems.sound->GetMasterVolume() : 1.0f;
     sceneTime_ = 0.0f;
 
-    ctx_->dxCommon->BeginUpload();
+    ctx_->rendering.dxCommon->BeginUpload();
     titleImage_ = LoadSettingsImage(L"app/resources/menu/settings_title.png");
     volumeImage_ = LoadSettingsImage(L"app/resources/menu/volume.png");
     backImage_ = LoadSettingsImage(L"app/resources/menu/back.png");
     controlsImage_ =
         LoadSettingsImage(L"app/resources/menu/settings_controls.png");
-    ctx_->dxCommon->EndUpload();
-    ctx_->texture->ReleaseUploadBuffers();
+    ctx_->rendering.dxCommon->EndUpload();
+    ctx_->rendering.texture->ReleaseUploadBuffers();
 
-    ctx_->postEffectRenderer->SetVignettingStrength(0.20f);
-    ctx_->postEffectRenderer->SetVignettingEnabled(true);
+    ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.20f);
+    ctx_->rendering.postEffectRenderer->SetVignettingEnabled(true);
 }
 
 void SettingsScene::Update() {
-    sceneTime_ += ctx_->deltaTime;
+    sceneTime_ += ctx_->frame.deltaTime;
 
-    const float w = static_cast<float>(ctx_->winApp->GetWidth());
-    const float h = static_cast<float>(ctx_->winApp->GetHeight());
+    const float w = static_cast<float>(ctx_->systems.winApp->GetWidth());
+    const float h = static_cast<float>(ctx_->systems.winApp->GetHeight());
     Layout(w, h);
-    UpdateInput(ctx_->input);
+    UpdateInput(ctx_->systems.input);
 }
 
 void SettingsScene::Draw() {
-    const float w = static_cast<float>(ctx_->winApp->GetWidth());
-    const float h = static_cast<float>(ctx_->winApp->GetHeight());
+    const float w = static_cast<float>(ctx_->systems.winApp->GetWidth());
+    const float h = static_cast<float>(ctx_->systems.winApp->GetHeight());
 
-    ctx_->sprite->PreDraw();
+    ctx_->rendering.sprite->PreDraw();
     DrawBackground(w, h);
     DrawImage(titleImage_, (w - titleImage_.width) * 0.5f, 84.0f);
     DrawVolumeControl();
@@ -62,17 +62,17 @@ void SettingsScene::Draw() {
     DrawImage(controlsImage_, (w - controlsImage_.width) * 0.5f,
               h - helpH + (helpH - controlsImage_.height) * 0.5f, 1.0f,
               1.0f);
-    ctx_->sprite->PostDraw();
+    ctx_->rendering.sprite->PostDraw();
 }
 
-void SettingsScene::DrawOverlay() {}
+void SettingsScene::DrawTransparent() {}
 
 SettingsScene::Image SettingsScene::LoadSettingsImage(const std::wstring &path) {
     Image image{};
-    image.textureId = ctx_->texture->Load(path);
-    image.width = static_cast<float>(ctx_->texture->GetWidth(image.textureId));
+    image.textureId = ctx_->rendering.texture->Load(path);
+    image.width = static_cast<float>(ctx_->rendering.texture->GetWidth(image.textureId));
     image.height =
-        static_cast<float>(ctx_->texture->GetHeight(image.textureId));
+        static_cast<float>(ctx_->rendering.texture->GetHeight(image.textureId));
     return image;
 }
 
@@ -139,8 +139,8 @@ void SettingsScene::UpdateInput(Input *input) {
 
 void SettingsScene::SetVolume(float volume) {
     volume_ = std::clamp(volume, 0.0f, 1.0f);
-    if (ctx_->sound) {
-        ctx_->sound->SetMasterVolume(volume_);
+    if (ctx_->systems.sound) {
+        ctx_->systems.sound->SetMasterVolume(volume_);
     }
 }
 
@@ -160,7 +160,7 @@ bool SettingsScene::IsMouseOver(const Rect &rect) const {
     if (!GetCursorPos(&cursor)) {
         return false;
     }
-    if (!ScreenToClient(ctx_->winApp->GetHwnd(), &cursor)) {
+    if (!ScreenToClient(ctx_->systems.winApp->GetHwnd(), &cursor)) {
         return false;
     }
 
@@ -173,7 +173,7 @@ bool SettingsScene::IsMouseOver(const Rect &rect) const {
 float SettingsScene::MouseX() const {
     POINT cursor{};
     if (!GetCursorPos(&cursor) ||
-        !ScreenToClient(ctx_->winApp->GetHwnd(), &cursor)) {
+        !ScreenToClient(ctx_->systems.winApp->GetHwnd(), &cursor)) {
         return volumeRect_.x;
     }
     return static_cast<float>(cursor.x);
@@ -271,7 +271,7 @@ void SettingsScene::DrawRect(float x, float y, float w, float h,
     sprite.size = {w, h};
     sprite.color = color;
     sprite.textureId = 0;
-    ctx_->sprite->DrawSprite(sprite);
+    ctx_->rendering.sprite->DrawSprite(sprite);
 }
 
 void SettingsScene::DrawImage(const Image &image, float x, float y,
@@ -285,5 +285,5 @@ void SettingsScene::DrawImage(const Image &image, float x, float y,
     sprite.size = {image.width * scale, image.height * scale};
     sprite.color = {1.0f, 1.0f, 1.0f, alpha};
     sprite.textureId = image.textureId;
-    ctx_->sprite->DrawSprite(sprite);
+    ctx_->rendering.sprite->DrawSprite(sprite);
 }

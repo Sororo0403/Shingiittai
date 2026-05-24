@@ -1,6 +1,8 @@
 #pragma once
-#include "Sprite.h"
+#include "graphics/UploadRingBuffer.h"
+#include "sprite/Sprite.h"
 #include <DirectXMath.h>
+#include <cstddef>
 #include <cstdint>
 #include <d3d12.h>
 #include <wrl.h>
@@ -12,7 +14,7 @@ class SrvManager;
 class SpriteRenderer {
   public:
     /// <summary>
-    /// 初期化処理
+    /// スプライト描画に必要なパイプラインとバッファを初期化する
     /// </summary>
     /// <param name="dxCommon">DirectXCommonインスタンス</param>
     /// <param name="textureManager">TextureManagerインスタンス</param>
@@ -23,7 +25,7 @@ class SpriteRenderer {
                     SrvManager *srvManager, int width, int height);
 
     /// <summary>
-    /// 描画処理
+    /// スプライト1枚分の頂点を一時バッファへ書き込んで描画する
     /// </summary>
     /// <param name="sprite">描画するスプライト</param>
     void Draw(const Sprite &sprite);
@@ -34,12 +36,12 @@ class SpriteRenderer {
     void BeginFrame();
 
     /// <summary>
-    /// 描画前処理
+    /// スプライト用パイプラインを描画前に設定する
     /// </summary>
     void PreDraw();
 
     /// <summary>
-    /// 描画後処理
+    /// スプライト描画後の状態を整理する
     /// </summary>
     void PostDraw();
 
@@ -52,15 +54,21 @@ class SpriteRenderer {
     enum class PipelineKind : uint32_t {
         Alpha = 0,
         Modulate = 1,
-        DarkSmoke = 2,
+        PremultipliedMask = 2,
         Count,
     };
 
-    // Create
+    /// <summary>
+    /// ルートシグネチャを生成する
+    /// </summary>
     void CreateRootSignature();
+
+    /// <summary>
+    /// パイプラインステートを生成する
+    /// </summary>
     void CreatePipelineState();
-    void CreateVertexBuffer();
-    void CreateConstantBuffer();
+
+    void CreateUploadBuffer();
 
   private:
     DirectXCommon *dxCommon_ = nullptr;
@@ -71,13 +79,11 @@ class SpriteRenderer {
     Microsoft::WRL::ComPtr<ID3D12PipelineState>
         pipelineStates_[static_cast<uint32_t>(PipelineKind::Count)];
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> vertexBuffer_;
-    D3D12_VERTEX_BUFFER_VIEW vbView_{};
+    UploadRingBuffer uploadBuffer_;
     uint32_t drawCursor_ = 0;
     static constexpr uint32_t kVerticesPerSprite = 6;
     static constexpr uint32_t kMaxSpriteDraws = 4096;
-
-    Microsoft::WRL::ComPtr<ID3D12Resource> constBuffer_;
+    static constexpr size_t kUploadBytesPerFrame = 4 * 1024 * 1024;
 
     DirectX::XMFLOAT4X4 matProjection_{};
     PipelineKind activePipelineKind_ = PipelineKind::Alpha;

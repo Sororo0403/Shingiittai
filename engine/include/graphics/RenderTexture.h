@@ -37,10 +37,20 @@ class RenderTexture {
     /// </summary>
     D3D12_GPU_DESCRIPTOR_HANDLE GetGpuHandle() const;
 
+    /// <summary>
+    /// テクスチャ幅を取得する
+    /// </summary>
     int GetWidth() const { return width_; }
+
+    /// <summary>
+    /// テクスチャ高さを取得する
+    /// </summary>
     int GetHeight() const { return height_; }
 
   private:
+    /// <summary>
+    /// 描画先リソースとビューを生成する
+    /// </summary>
     void CreateResources();
 
     DirectXCommon *dxCommon_ = nullptr;

@@ -292,12 +292,12 @@ float GameScene::ComputeGameplayTimeScale() const {
 }
 
 void GameScene::SetEnemyAnimationFrozen(bool frozen) {
-    if (ctx_ == nullptr || ctx_->model == nullptr) {
+    if (ctx_ == nullptr || ctx_->rendering.model == nullptr) {
         enemyAnimationFrozen_ = frozen;
         return;
     }
 
-    Model *enemyModel = ctx_->model->GetModel(enemyModelId_);
+    Model *enemyModel = ctx_->rendering.model->GetModel(enemyModelId_);
     if (enemyModel == nullptr) {
         enemyAnimationFrozen_ = frozen;
         return;
@@ -305,14 +305,14 @@ void GameScene::SetEnemyAnimationFrozen(bool frozen) {
 
     if (frozen) {
         if (HasAnimation(enemyModel, kBossAnimIdle)) {
-            ctx_->model->PlayAnimation(enemyModelId_, kBossAnimIdle, true);
-            ctx_->model->UpdateAnimation(enemyModelId_, 0.0f);
+            ctx_->rendering.model->PlayAnimation(enemyModelId_, kBossAnimIdle, true);
+            ctx_->rendering.model->UpdateAnimation(enemyModelId_, 0.0f);
             enemyAnimationName_ = kBossAnimIdle;
             enemyAnimationLoop_ = true;
         } else {
             enemyModel->currentAnimation.clear();
             enemyModel->animationTime = 0.0f;
-            ctx_->model->UpdateAnimation(enemyModelId_, 0.0f);
+            ctx_->rendering.model->UpdateAnimation(enemyModelId_, 0.0f);
             enemyAnimationName_.clear();
             enemyAnimationLoop_ = true;
         }
@@ -331,7 +331,7 @@ void GameScene::SetEnemyAnimationFrozen(bool frozen) {
 }
 
 void GameScene::SyncEnemyAnimation() {
-    ModelManager *modelManager = ctx_->model;
+    ModelManager *modelManager = ctx_->rendering.model;
     Model *enemyModel = modelManager->GetModel(enemyModelId_);
     if (!enemyModel || enemyModel->animations.empty()) {
         return;
@@ -392,11 +392,11 @@ void GameScene::SyncEnemyAnimation() {
 
 void GameScene::UpdateBladeClashEnemyAnimation(float deltaTime) {
     (void)deltaTime;
-    if (ctx_ == nullptr || ctx_->model == nullptr) {
+    if (ctx_ == nullptr || ctx_->rendering.model == nullptr) {
         return;
     }
 
-    ModelManager *modelManager = ctx_->model;
+    ModelManager *modelManager = ctx_->rendering.model;
     Model *enemyModel = modelManager->GetModel(enemyModelId_);
     if (enemyModel == nullptr || enemyModel->animations.empty()) {
         return;
@@ -544,11 +544,11 @@ void GameScene::UpdateBladeClashEnemyAnimation(float deltaTime) {
 
 void GameScene::UpdateCageEnemyAnimation(float deltaTime) {
     (void)deltaTime;
-    if (ctx_ == nullptr || ctx_->model == nullptr) {
+    if (ctx_ == nullptr || ctx_->rendering.model == nullptr) {
         return;
     }
 
-    ModelManager *modelManager = ctx_->model;
+    ModelManager *modelManager = ctx_->rendering.model;
     Model *enemyModel = modelManager->GetModel(enemyModelId_);
     if (enemyModel == nullptr || enemyModel->animations.empty() ||
         enemy_.GetActionKind() != ActionKind::Cage) {
@@ -607,11 +607,11 @@ void GameScene::UpdateCageEnemyAnimation(float deltaTime) {
 }
 
 void GameScene::UpdateBattleIntroEnemyAnimation(float) {
-    if (ctx_ == nullptr || ctx_->model == nullptr) {
+    if (ctx_ == nullptr || ctx_->rendering.model == nullptr) {
         return;
     }
 
-    ModelManager *modelManager = ctx_->model;
+    ModelManager *modelManager = ctx_->rendering.model;
     Model *enemyModel = modelManager->GetModel(enemyModelId_);
     if (enemyModel == nullptr || enemyModel->animations.empty()) {
         return;
@@ -649,11 +649,11 @@ void GameScene::UpdateBattleIntroEnemyAnimation(float) {
 }
 
 void GameScene::UpdatePhaseTransitionEnemyAnimation(float deltaTime) {
-    if (ctx_ == nullptr || ctx_->model == nullptr) {
+    if (ctx_ == nullptr || ctx_->rendering.model == nullptr) {
         return;
     }
 
-    ModelManager *modelManager = ctx_->model;
+    ModelManager *modelManager = ctx_->rendering.model;
     Model *enemyModel = modelManager->GetModel(enemyModelId_);
     if (enemyModel == nullptr || enemyModel->animations.empty()) {
         return;
@@ -713,11 +713,11 @@ void GameScene::UpdatePhaseTransitionEnemyAnimation(float deltaTime) {
 }
 
 void GameScene::ApplyEnemyProceduralAnimation() {
-    if (ctx_ == nullptr || ctx_->model == nullptr) {
+    if (ctx_ == nullptr || ctx_->rendering.model == nullptr) {
         return;
     }
 
-    Model *enemyModel = ctx_->model->GetModel(enemyModelId_);
+    Model *enemyModel = ctx_->rendering.model->GetModel(enemyModelId_);
     if (enemyModel == nullptr || enemyModel->bones.empty() ||
         enemyModel->skeletonSpaceMatrices.empty()) {
         return;
@@ -758,7 +758,7 @@ void GameScene::ApplyEnemyProceduralAnimation() {
     const float idleMotion = chargeSettled ? 0.10f : 1.0f;
 
     if (bladeClashFinishActive_ && bladeClashFinishPlayerWon_) {
-        ctx_->model->GetRenderer()->UpdateSkinClusters(*enemyModel);
+        ctx_->rendering.model->GetRenderer()->UpdateSkinClusters(*enemyModel);
         return;
     }
 
@@ -815,7 +815,7 @@ void GameScene::ApplyEnemyProceduralAnimation() {
                      (-0.66f * open - 0.034f * snap -
                       0.028f * collapse) *
                          armBreak);
-            ctx_->model->GetRenderer()->UpdateSkinClusters(*enemyModel);
+            ctx_->rendering.model->GetRenderer()->UpdateSkinClusters(*enemyModel);
             return;
         }
 
@@ -869,7 +869,7 @@ void GameScene::ApplyEnemyProceduralAnimation() {
             poseArms(0.10f, 1.38f * hit + 0.30f * followThrough,
                      -0.68f * hit);
         }
-        ctx_->model->GetRenderer()->UpdateSkinClusters(*enemyModel);
+        ctx_->rendering.model->GetRenderer()->UpdateSkinClusters(*enemyModel);
         return;
     }
 
@@ -880,7 +880,7 @@ void GameScene::ApplyEnemyProceduralAnimation() {
                      0.006f * pulse * guard, 0.008f * pulse * guard);
         poseArms(-0.22f * phaseScale * guard, 0.02f * pulse * guard,
                  0.06f * guard);
-        ctx_->model->GetRenderer()->UpdateSkinClusters(*enemyModel);
+        ctx_->rendering.model->GetRenderer()->UpdateSkinClusters(*enemyModel);
         return;
     }
 
@@ -992,5 +992,5 @@ void GameScene::ApplyEnemyProceduralAnimation() {
         break;
     }
 
-    ctx_->model->GetRenderer()->UpdateSkinClusters(*enemyModel);
+    ctx_->rendering.model->GetRenderer()->UpdateSkinClusters(*enemyModel);
 }

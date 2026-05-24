@@ -1,4 +1,5 @@
 #include "WeaponSelectScene.h"
+#include "AppSceneServices.h"
 #include "CalibrationScene.h"
 #include "DirectXCommon.h"
 #include "Input.h"
@@ -65,14 +66,12 @@ void WeaponSelectScene::Initialize(const SceneContext &ctx) {
     leftJoyCon_.Initialize(true);
     rightJoyCon_.Initialize(false);
 
-    const float aspect = static_cast<float>(ctx_->winApp->GetWidth()) /
-                         static_cast<float>(ctx_->winApp->GetHeight());
-    camera_.Initialize(aspect);
-    camera_.SetMode(CameraMode::LookAt);
-    camera_.SetPerspectiveFovDeg(39.0f);
+    const float aspect = static_cast<float>(ctx_->systems.winApp->GetWidth()) /
+                         static_cast<float>(ctx_->systems.winApp->GetHeight());
+    camera_.Initialize(aspect);    camera_.SetPerspectiveFovDeg(39.0f);
     UpdateCamera();
 
-    ctx_->dxCommon->BeginUpload();
+    ctx_->rendering.dxCommon->BeginUpload();
     backgroundImage_ =
         LoadTextureImage(L"app/resources/select/weapon_select_bg.png");
     titleImage_ = LoadTextureImage(L"app/resources/text/input_title.png");
@@ -113,24 +112,32 @@ void WeaponSelectScene::Initialize(const SceneContext &ctx) {
     dotImage_ = LoadTextureImage(L"app/resources/result/char_dot.png");
     dashImage_ = LoadTextureImage(L"app/resources/result/char_dash.png");
     secondImage_ = LoadTextureImage(L"app/resources/result/char_s.png");
-    swordModelId_ = ctx_->model->Load(L"app/resources/models/player/sword.glb");
-    ctx_->dxCommon->EndUpload();
-    ctx_->texture->ReleaseUploadBuffers();
+    swordModelId_ = ctx_->rendering.model->Load(L"app/resources/models/player/sword.glb");
+    if (Model *swordModel = ctx_->rendering.model->GetModel(swordModelId_)) {
+        for (ModelSubMesh &subMesh : swordModel->subMeshes) {
+            Material material = ctx_->rendering.model->GetMaterial(subMesh.materialId);
+            material.reflectionStrength = 0.0f;
+            material.reflectionFresnelStrength = 0.0f;
+            ctx_->rendering.model->SetMaterial(subMesh.materialId, material);
+        }
+    }
+    ctx_->rendering.dxCommon->EndUpload();
+    ctx_->rendering.texture->ReleaseUploadBuffers();
     LoadRankings();
 
-    ctx_->postEffectRenderer->ResetEffects();
+    ctx_->rendering.postEffectRenderer->ResetEffects();
     UpdateLighting();
 }
 
 void WeaponSelectScene::Update() {
-    sceneTime_ += ctx_->deltaTime;
+    sceneTime_ += ctx_->frame.deltaTime;
     UpdateDeviceAvailability();
     for (float &pulse : pulseTimers_) {
-        pulse = (std::max)(0.0f, pulse - ctx_->deltaTime * 3.0f);
+        pulse = (std::max)(0.0f, pulse - ctx_->frame.deltaTime * 3.0f);
     }
 
-    const float w = static_cast<float>(ctx_->winApp->GetWidth());
-    const float h = static_cast<float>(ctx_->winApp->GetHeight());
+    const float w = static_cast<float>(ctx_->systems.winApp->GetWidth());
+    const float h = static_cast<float>(ctx_->systems.winApp->GetHeight());
     Layout(w, h);
 
     if (startRequested_) {
@@ -139,7 +146,7 @@ void WeaponSelectScene::Update() {
             waitingForHandTrackingReady_) {
             if (!IsHandTrackingReady()) {
                 transitionTimer_ =
-                    (std::min)(transitionTimer_ + ctx_->deltaTime,
+                    (std::min)(transitionTimer_ + ctx_->frame.deltaTime,
                                kTransitionDuration * 0.72f);
                 return;
             }
@@ -148,7 +155,7 @@ void WeaponSelectScene::Update() {
             waitingForHandTrackingReady_ = false;
             transitionTimer_ = 0.0f;
         } else {
-            transitionTimer_ += ctx_->deltaTime;
+            transitionTimer_ += ctx_->frame.deltaTime;
         }
 
         if (transitionTimer_ >= kTransitionDuration) {
@@ -168,37 +175,37 @@ void WeaponSelectScene::Update() {
         return;
     }
 
-    UpdateSelection(ctx_->input);
+    UpdateSelection(ctx_->systems.input);
     UpdateCamera();
     UpdateLighting();
 }
 
 void WeaponSelectScene::Draw() {
-    const float w = static_cast<float>(ctx_->winApp->GetWidth());
-    const float h = static_cast<float>(ctx_->winApp->GetHeight());
+    const float w = static_cast<float>(ctx_->systems.winApp->GetWidth());
+    const float h = static_cast<float>(ctx_->systems.winApp->GetHeight());
 
-    ctx_->sprite->PreDraw();
+    ctx_->rendering.sprite->PreDraw();
     DrawBackground(w, h);
     DrawCards(w, h);
-    ctx_->sprite->PostDraw();
+    ctx_->rendering.sprite->PostDraw();
 
     DrawModelPreviews();
 
-    ctx_->sprite->PreDraw();
+    ctx_->rendering.sprite->PreDraw();
     DrawLabels(w, h);
     DrawRankingButton(w, h);
     DrawRankingPanel(w, h);
     DrawStartTransition(w, h);
-    ctx_->sprite->PostDraw();
+    ctx_->rendering.sprite->PostDraw();
 }
 
 WeaponSelectScene::Image
 WeaponSelectScene::LoadTextureImage(const std::wstring &path) {
     Image image{};
-    image.textureId = ctx_->texture->Load(path);
-    image.width = static_cast<float>(ctx_->texture->GetWidth(image.textureId));
+    image.textureId = ctx_->rendering.texture->Load(path);
+    image.width = static_cast<float>(ctx_->rendering.texture->GetWidth(image.textureId));
     image.height =
-        static_cast<float>(ctx_->texture->GetHeight(image.textureId));
+        static_cast<float>(ctx_->rendering.texture->GetHeight(image.textureId));
     return image;
 }
 
@@ -290,13 +297,13 @@ void WeaponSelectScene::UpdateSelection(Input *input) {
 }
 
 void WeaponSelectScene::UpdateDeviceAvailability() {
-    leftJoyCon_.Update(ctx_->deltaTime);
-    rightJoyCon_.Update(ctx_->deltaTime);
+    leftJoyCon_.Update(ctx_->frame.deltaTime);
+    rightJoyCon_.Update(ctx_->frame.deltaTime);
 
     joyConAvailable_ =
         leftJoyCon_.IsConnected() || rightJoyCon_.IsConnected();
-    cameraAvailable_ = !ctx_->isCameraDeviceAvailable ||
-                       ctx_->isCameraDeviceAvailable();
+    cameraAvailable_ = !AppSceneServices::HasCameraDeviceAvailable() ||
+                       AppSceneServices::IsCameraDeviceAvailable();
 }
 
 void WeaponSelectScene::BeginStart() {
@@ -361,14 +368,16 @@ InputControlType WeaponSelectScene::ControlTypeForIndex(int index) const {
 }
 
 bool WeaponSelectScene::IsHandTrackingReady() const {
-    return !ctx_->isHandTrackingReady || ctx_->isHandTrackingReady();
+    return !AppSceneServices::HasHandTrackingReady() ||
+           AppSceneServices::IsHandTrackingReady();
 }
 
 void WeaponSelectScene::RequestHandTrackingStartOnce() {
-    if (handTrackingStartRequested_ || !ctx_->requestHandTrackingStart) {
+    if (handTrackingStartRequested_ ||
+        !AppSceneServices::HasHandTrackingStart()) {
         return;
     }
-    ctx_->requestHandTrackingStart();
+    AppSceneServices::RequestHandTrackingStart();
     handTrackingStartRequested_ = true;
 }
 
@@ -387,14 +396,14 @@ bool WeaponSelectScene::IsModeAvailable(int index) const {
 void WeaponSelectScene::ShowUnavailableMessage(int index) {
     const wchar_t *message =
         index == 1 ? L"Joy-Conがありません" : L"ウェブカメラがありません";
-    MessageBoxW(ctx_->winApp->GetHwnd(), message, L"入力モード",
+    MessageBoxW(ctx_->systems.winApp->GetHwnd(), message, L"入力モード",
                 MB_OK | MB_ICONWARNING | MB_SETFOREGROUND | MB_TOPMOST);
-    ctx_->winApp->BringToFront();
+    SetForegroundWindow(ctx_->systems.winApp->GetHwnd());
 }
 
 void WeaponSelectScene::UpdateCamera() {
     camera_.SetPosition({0.0f, 2.5f, -8.2f});
-    camera_.LookAt({0.0f, 1.05f, 0.0f});
+    AppLookAt(camera_, {0.0f, 1.05f, 0.0f});
     camera_.UpdateMatrices();
 }
 
@@ -410,7 +419,7 @@ void WeaponSelectScene::UpdateLighting() {
     lighting.pointLights[0].colorIntensity = {1.0f, 0.38f, 0.14f, 1.65f};
     lighting.pointLights[1].positionRange = {0.0f, 1.7f, 1.8f, 8.0f};
     lighting.pointLights[1].colorIntensity = {0.12f, 0.50f, 1.0f, 1.05f};
-    ctx_->model->SetSceneLighting(lighting);
+    ctx_->rendering.model->SetSceneLighting(lighting);
 }
 
 void WeaponSelectScene::DrawBackground(float screenWidth, float screenHeight) {
@@ -468,7 +477,7 @@ void WeaponSelectScene::DrawCards(float, float) {
 }
 
 void WeaponSelectScene::DrawModelPreviews() {
-    ctx_->model->PreDraw();
+    ctx_->rendering.model->PreDraw();
     for (int i = 0; i < kWeaponCount; ++i) {
         const bool available = IsModeAvailable(i);
         const bool selected = i == selectedIndex_;
@@ -481,16 +490,16 @@ void WeaponSelectScene::DrawModelPreviews() {
         effect.intensity =
             available ? (selected ? 0.62f : 0.18f) : (selected ? 0.16f : 0.08f);
         effect.fresnelPower = 1.6f;
-        ctx_->model->SetDrawEffect(effect);
+        ctx_->rendering.model->SetDrawEffect(effect);
 
         const int swordCount = 2;
         for (int swordIndex = 0; swordIndex < swordCount; ++swordIndex) {
-            ctx_->model->Draw(swordModelId_, MakeSwordTransform(i, swordIndex),
+            ctx_->rendering.model->Draw(swordModelId_, MakeSwordTransform(i, swordIndex),
                               camera_);
         }
     }
-    ctx_->model->ClearDrawEffect();
-    ctx_->model->PostDraw();
+    ctx_->rendering.model->ClearDrawEffect();
+    ctx_->rendering.model->PostDraw();
 }
 
 void WeaponSelectScene::DrawLabels(float screenWidth, float screenHeight) {
@@ -669,7 +678,7 @@ void WeaponSelectScene::DrawRect(float x, float y, float w, float h,
     sprite.size = {w, h};
     sprite.color = color;
     sprite.textureId = 0;
-    ctx_->sprite->DrawSprite(sprite);
+    ctx_->rendering.sprite->DrawSprite(sprite);
 }
 
 void WeaponSelectScene::DrawImage(const Image &image, float x, float y,
@@ -683,7 +692,7 @@ void WeaponSelectScene::DrawImage(const Image &image, float x, float y,
     sprite.size = {image.width * scale, image.height * scale};
     sprite.color = {1.0f, 1.0f, 1.0f, alpha};
     sprite.textureId = image.textureId;
-    ctx_->sprite->DrawSprite(sprite);
+    ctx_->rendering.sprite->DrawSprite(sprite);
 }
 
 void WeaponSelectScene::DrawTextLine(const std::string &text, float centerX,

@@ -50,7 +50,7 @@ void CalibrationScene::Initialize(const SceneContext &ctx) {
         rightJoyCon_.StartCalibration();
     }
 
-    ctx_->dxCommon->BeginUpload();
+    ctx_->rendering.dxCommon->BeginUpload();
     backgroundImage_ =
         LoadTextureImage(L"app/resources/select/weapon_select_bg.png");
     for (int i = 0; i < 10; ++i) {
@@ -58,25 +58,25 @@ void CalibrationScene::Initialize(const SceneContext &ctx) {
             LoadTextureImage(L"app/resources/result/char_" +
                              std::to_wstring(i) + L".png");
     }
-    ctx_->dxCommon->EndUpload();
-    ctx_->texture->ReleaseUploadBuffers();
+    ctx_->rendering.dxCommon->EndUpload();
+    ctx_->rendering.texture->ReleaseUploadBuffers();
 
-    ctx_->postEffectRenderer->ResetEffects();
-    ctx_->postEffectRenderer->SetVignettingEnabled(true);
-    ctx_->postEffectRenderer->SetVignettingStrength(0.24f);
+    ctx_->rendering.postEffectRenderer->ResetEffects();
+    ctx_->rendering.postEffectRenderer->SetVignettingEnabled(true);
+    ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.24f);
 }
 
 void CalibrationScene::Update() {
-    sceneTime_ += ctx_->deltaTime;
+    sceneTime_ += ctx_->frame.deltaTime;
 
     if (controlType_ == InputControlType::JoyCon) {
-        leftJoyCon_.Update(ctx_->deltaTime);
-        rightJoyCon_.Update(ctx_->deltaTime);
-        UpdateJoyConStability(ctx_->deltaTime);
+        leftJoyCon_.Update(ctx_->frame.deltaTime);
+        rightJoyCon_.Update(ctx_->frame.deltaTime);
+        UpdateJoyConStability(ctx_->frame.deltaTime);
     }
 
     if (IsJoyConStable()) {
-        stableTimer_ += ctx_->deltaTime;
+        stableTimer_ += ctx_->frame.deltaTime;
     } else {
         stableTimer_ = 0.0f;
     }
@@ -87,25 +87,25 @@ void CalibrationScene::Update() {
 }
 
 void CalibrationScene::Draw() {
-    const float w = static_cast<float>(ctx_->winApp->GetWidth());
-    const float h = static_cast<float>(ctx_->winApp->GetHeight());
+    const float w = static_cast<float>(ctx_->systems.winApp->GetWidth());
+    const float h = static_cast<float>(ctx_->systems.winApp->GetHeight());
 
-    ctx_->sprite->PreDraw();
+    ctx_->rendering.sprite->PreDraw();
     DrawBackground(w, h);
     DrawProgress(w, h);
     DrawStatusBars(w, h);
-    ctx_->sprite->PostDraw();
+    ctx_->rendering.sprite->PostDraw();
 }
 
-void CalibrationScene::DrawOverlay() {}
+void CalibrationScene::DrawTransparent() {}
 
 CalibrationScene::Image
 CalibrationScene::LoadTextureImage(const std::wstring &path) {
     Image image{};
-    image.textureId = ctx_->texture->Load(path);
-    image.width = static_cast<float>(ctx_->texture->GetWidth(image.textureId));
+    image.textureId = ctx_->rendering.texture->Load(path);
+    image.width = static_cast<float>(ctx_->rendering.texture->GetWidth(image.textureId));
     image.height =
-        static_cast<float>(ctx_->texture->GetHeight(image.textureId));
+        static_cast<float>(ctx_->rendering.texture->GetHeight(image.textureId));
     return image;
 }
 
@@ -248,7 +248,7 @@ void CalibrationScene::DrawRect(float x, float y, float w, float h,
     sprite.size = {w, h};
     sprite.color = color;
     sprite.textureId = 0;
-    ctx_->sprite->DrawSprite(sprite);
+    ctx_->rendering.sprite->DrawSprite(sprite);
 }
 
 void CalibrationScene::DrawImage(const Image &image, float x, float y,
@@ -262,5 +262,5 @@ void CalibrationScene::DrawImage(const Image &image, float x, float y,
     sprite.size = {image.width * scale, image.height * scale};
     sprite.color = {1.0f, 1.0f, 1.0f, alpha};
     sprite.textureId = image.textureId;
-    ctx_->sprite->DrawSprite(sprite);
+    ctx_->rendering.sprite->DrawSprite(sprite);
 }

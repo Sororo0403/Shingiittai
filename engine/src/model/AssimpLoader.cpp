@@ -1,4 +1,4 @@
-#include "AssimpLoader.h"
+#include "model/AssimpLoader.h"
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
@@ -20,12 +20,13 @@ Model AssimpLoader::Load(const std::string &path) {
 
     const aiScene *scene = importer.ReadFile(
         path, aiProcess_Triangulate | aiProcess_FlipUVs |
-                  aiProcess_JoinIdenticalVertices | aiProcess_LimitBoneWeights);
+                  aiProcess_JoinIdenticalVertices |
+                  aiProcess_LimitBoneWeights | aiProcess_CalcTangentSpace);
 
     if (!scene || !scene->HasMeshes()) {
         std::ostringstream oss;
-        oss << "[AssimpLoader] Load failed. path='" << path
-            << "' error='" << importer.GetErrorString() << "'";
+        oss << "[AssimpLoader] Load failed. path='" << path << "' error='"
+            << importer.GetErrorString() << "'";
         throw std::runtime_error(oss.str());
     }
 

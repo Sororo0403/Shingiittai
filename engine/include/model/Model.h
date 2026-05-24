@@ -1,5 +1,5 @@
 #pragma once
-#include "AnimationTypes.h"
+#include "animation/AnimationTypes.h"
 #include <DirectXMath.h>
 #include <array>
 #include <cstdint>
@@ -25,9 +25,6 @@ struct JointWeightData {
     std::vector<VertexWeightData> vertexWeights;
 };
 
-/// <summary>
-/// 1頂点に影響する最大ジョイント数
-/// </summary>
 constexpr uint32_t kNumMaxInfluence = 4;
 
 /// <summary>
@@ -89,6 +86,7 @@ struct BoneInfo {
 struct ModelSubMesh {
     uint32_t meshId = 0;
     uint32_t textureId = 0;
+    uint32_t normalTextureId = UINT32_MAX;
     uint32_t materialId = 0;
     uint32_t vertexCount = 0;
     std::vector<DirectX::XMFLOAT3> sourcePositions;
@@ -126,9 +124,6 @@ struct Model {
 
     bool hasRootAnimation = false;
     DirectX::XMFLOAT4X4 rootAnimationMatrix = {
-        1.0f, 0.0f, 0.0f, 0.0f, //
-        0.0f, 1.0f, 0.0f, 0.0f, //
-        0.0f, 0.0f, 1.0f, 0.0f, //
-        0.0f, 0.0f, 0.0f, 1.0f  //
-    };
+        1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f};
 };

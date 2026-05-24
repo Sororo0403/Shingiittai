@@ -85,7 +85,7 @@ void SwordSlashArcRenderer::Emit(const XMFLOAT3 &root, const XMFLOAT3 &tip,
     attackDir.y = 0.0f;
     attackDir = NormalizeSafe(attackDir, {0.0f, 0.0f, 1.0f});
     const XMFLOAT3 cameraForward =
-        NormalizeSafe(Sub(camera.GetTarget(), camera.GetPosition()),
+        NormalizeSafe(AppCameraForward(camera),
                       {0.0f, 0.0f, 1.0f});
     const XMFLOAT3 worldUp{0.0f, 1.0f, 0.0f};
     XMFLOAT3 cameraRight = NormalizeSafe(Cross(worldUp, cameraForward),
@@ -126,7 +126,7 @@ void SwordSlashArcRenderer::EmitHitLine(const XMFLOAT3 &position,
                                         const Camera &camera, float power,
                                         const XMFLOAT2 &slashDirection) {
     const XMFLOAT3 cameraForward =
-        NormalizeSafe(Sub(camera.GetTarget(), camera.GetPosition()),
+        NormalizeSafe(AppCameraForward(camera),
                       {0.0f, 0.0f, 1.0f});
     const XMFLOAT3 worldUp{0.0f, 1.0f, 0.0f};
     const XMFLOAT3 cameraRight =
@@ -365,10 +365,10 @@ void SwordSlashArcRenderer::CreatePipelineState() {
     auto *device = dxCommon_->GetDevice();
 
     auto vs = ShaderCompiler::Compile(
-        L"engine/resources/shaders/swordarc/SwordArcVS.hlsl", "main",
+        L"app/resources/shaders/swordarc/SwordArcVS.hlsl", "main",
         "vs_5_0");
     auto ps = ShaderCompiler::Compile(
-        L"engine/resources/shaders/swordarc/SwordArcPS.hlsl", "main",
+        L"app/resources/shaders/swordarc/SwordArcPS.hlsl", "main",
         "ps_5_0");
 
     D3D12_INPUT_ELEMENT_DESC layout[] = {
@@ -389,7 +389,7 @@ void SwordSlashArcRenderer::CreatePipelineState() {
     pso.InputLayout = {layout, _countof(layout)};
     pso.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     pso.NumRenderTargets = 1;
-    pso.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    pso.RTVFormats[0] = DirectXCommon::kSceneColorFormat;
     pso.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
     pso.SampleDesc.Count = 1;
     pso.SampleMask = UINT_MAX;

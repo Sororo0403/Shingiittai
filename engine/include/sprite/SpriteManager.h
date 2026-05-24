@@ -1,6 +1,6 @@
 #pragma once
-#include "Sprite.h"
-#include "SpriteRenderer.h"
+#include "sprite/Sprite.h"
+#include "sprite/SpriteRenderer.h"
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -11,7 +11,15 @@ class TextureManager;
 class SpriteManager {
   public:
     /// <summary>
-    /// 初期化処理
+    /// SpriteManagerの唯一のインスタンスを取得する
+    /// </summary>
+    static SpriteManager &GetInstance();
+
+    SpriteManager(const SpriteManager &) = delete;
+    SpriteManager &operator=(const SpriteManager &) = delete;
+
+    /// <summary>
+    /// スプライト管理と描画器を初期化する
     /// </summary>
     /// <param name="dxCommon">DirectXCommonインスタンス</param>
     /// <param name="textureManager">TextureManagerインスタンス</param>
@@ -22,10 +30,19 @@ class SpriteManager {
                     SrvManager *srvManager, int width, int height);
 
     /// <summary>
-    /// 描画処理
+    /// 指定IDのスプライトを描画する
     /// </summary>
     /// <param name="id">描画するスプライトのid</param>
     void Draw(uint32_t id);
+
+    /// <summary>
+    /// 管理中のスプライトをzOrder順に描画する
+    /// </summary>
+    void DrawAllSorted(bool backToFront = false);
+
+    /// <summary>
+    /// 指定スプライトを一時描画領域へ直接描画する
+    /// </summary>
     void DrawSprite(const Sprite &sprite);
 
     /// <summary>
@@ -41,18 +58,28 @@ class SpriteManager {
     void BeginFrame();
 
     /// <summary>
-    /// 描画前処理
+    /// スプライト描画の開始状態を設定する
     /// </summary>
     void PreDraw();
 
     /// <summary>
-    /// 描画後処理
+    /// スプライト描画の終了状態を設定する
     /// </summary>
     void PostDraw();
 
-    // Getter
+    /// <summary>
+    /// スプライトを取得する
+    /// </summary>
     Sprite &GetSprite(uint32_t id);
+
+    /// <summary>
+    /// スプライトを読み取り専用で取得する
+    /// </summary>
     const Sprite &GetSprite(uint32_t id) const;
+
+    /// <summary>
+    /// 管理中のスプライト数を取得する
+    /// </summary>
     size_t GetCount() const { return sprites_.size(); }
 
     /// <summary>
@@ -61,6 +88,8 @@ class SpriteManager {
     void Resize(int width, int height);
 
   private:
+    SpriteManager() = default;
+
     DirectXCommon *dxCommon_ = nullptr;
     TextureManager *textureManager_ = nullptr;
 

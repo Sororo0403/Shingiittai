@@ -1,7 +1,7 @@
-#include "SrvManager.h"
-#include "DirectXCommon.h"
-#include "DxHelpers.h"
-#include "DxUtils.h"
+#include "graphics/SrvManager.h"
+#include "graphics/DirectXCommon.h"
+#include "graphics/DxHelpers.h"
+#include "graphics/DxUtils.h"
 #include <stdexcept>
 
 using namespace DxUtils;

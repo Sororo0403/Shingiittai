@@ -1,10 +1,17 @@
-#include "DirectXCommon.h"
-#include "DxHelpers.h"
-#include "DxUtils.h"
-#include "SrvManager.h"
+#include "graphics/DirectXCommon.h"
+#include "graphics/DxHelpers.h"
+#include "graphics/DxUtils.h"
+#include "graphics/SrvManager.h"
 #include <stdexcept>
 
 using namespace DxUtils;
+
+DirectXCommon::~DirectXCommon() {
+    if (fenceEvent_) {
+        CloseHandle(fenceEvent_);
+        fenceEvent_ = nullptr;
+    }
+}
 
 void DirectXCommon::Initialize(HWND hwnd, int width, int height) {
     CreateFactory();
@@ -22,69 +29,64 @@ void DirectXCommon::Initialize(HWND hwnd, int width, int height) {
 }
 
 void DirectXCommon::BeginFrame() {
-    WaitForFenceValue(frameFenceValues_[backBufferIndex_]);
-
-    ID3D12CommandAllocator *allocator =
+    WaitForFrame(backBufferIndex_);
+    ID3D12CommandAllocator* commandAllocator =
         commandAllocators_[backBufferIndex_].Get();
-    ThrowIfFailed(allocator->Reset(),
+    ThrowIfFailed(commandAllocator->Reset(),
                   "commandAllocator_->Reset failed");
-    ThrowIfFailed(commandList_->Reset(allocator, nullptr),
+    ThrowIfFailed(commandList_->Reset(commandAllocator, nullptr),
                   "commandList_->Reset failed");
     isCommandListRecording_ = true;
 
-    commandList_->RSSetViewports(1, &viewport_);
-    commandList_->RSSetScissorRects(1, &scissorRect_);
+    ApplySceneViewportAndScissor();
 }
 
 void DirectXCommon::BeginScenePass() {
-    auto toRenderTarget = CD3DX12_RESOURCE_BARRIER::Transition(
-        sceneColorBuffer_.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-        D3D12_RESOURCE_STATE_RENDER_TARGET);
-    commandList_->ResourceBarrier(1, &toRenderTarget);
+    TransitionSceneColor(D3D12_RESOURCE_STATE_RENDER_TARGET);
 
     auto sceneRtv = GetSceneRtvHandle();
     auto dsvHandle = dsvHeap_->GetCPUDescriptorHandleForHeapStart();
 
+    ApplySceneViewportAndScissor();
     commandList_->OMSetRenderTargets(1, &sceneRtv, FALSE, &dsvHandle);
-    commandList_->ClearRenderTargetView(sceneRtv, clearColor_, 0, nullptr);
+    commandList_->ClearRenderTargetView(sceneRtv, kClearColor, 0, nullptr);
     commandList_->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f,
                                         0, 0, nullptr);
 }
 
-void DirectXCommon::EndScenePass() {
-    auto toShaderResource = CD3DX12_RESOURCE_BARRIER::Transition(
-        sceneColorBuffer_.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET,
-        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    commandList_->ResourceBarrier(1, &toShaderResource);
+void DirectXCommon::RestoreSceneRenderState(bool clearDepth) {
+    TransitionSceneColor(D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+    auto sceneRtv = GetSceneRtvHandle();
+    auto dsvHandle = dsvHeap_->GetCPUDescriptorHandleForHeapStart();
+
+    ApplySceneViewportAndScissor();
+    commandList_->OMSetRenderTargets(1, &sceneRtv, FALSE, &dsvHandle);
+    if (clearDepth) {
+        commandList_->ClearDepthStencilView(
+            dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+    }
 }
 
-void DirectXCommon::BeginBackBufferPass() {
-    auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-        backBuffers_[backBufferIndex_].Get(), D3D12_RESOURCE_STATE_PRESENT,
-        D3D12_RESOURCE_STATE_RENDER_TARGET);
-    commandList_->ResourceBarrier(1, &barrier);
+void DirectXCommon::EndScenePass() {
+    TransitionSceneColor(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+}
 
-    SetBackBufferRenderTarget(true, false);
+void DirectXCommon::BeginBackBufferPass(bool bindDepth) {
+    TransitionBackBuffer(backBufferIndex_,
+                         D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+    SetBackBufferRenderTarget(true, bindDepth);
 }
 
 void DirectXCommon::EndFrame() {
-    auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-        backBuffers_[backBufferIndex_].Get(),
-        D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-    commandList_->ResourceBarrier(1, &barrier);
+    TransitionBackBuffer(backBufferIndex_, D3D12_RESOURCE_STATE_PRESENT);
 
     ThrowIfFailed(commandList_->Close(), "commandList_->Close failed");
     isCommandListRecording_ = false;
 
     ID3D12CommandList *lists[] = {commandList_.Get()};
     commandQueue_->ExecuteCommandLists(1, lists);
-
-    const UINT frameIndex = backBufferIndex_;
-    fenceValue_++;
-    const UINT64 currentFenceValue = fenceValue_;
-    ThrowIfFailed(commandQueue_->Signal(fence_.Get(), currentFenceValue),
-                  "commandQueue_->Signal failed");
-    frameFenceValues_[frameIndex] = currentFenceValue;
 
     HRESULT presentResult = swapChain_->Present(1, 0);
     if (FAILED(presentResult)) {
@@ -94,6 +96,12 @@ void DirectXCommon::EndFrame() {
         }
         ThrowIfFailed(presentResult, "swapChain_->Present failed");
     }
+
+    const UINT presentedBufferIndex = backBufferIndex_;
+    fenceValue_++;
+    ThrowIfFailed(commandQueue_->Signal(fence_.Get(), fenceValue_),
+                  "commandQueue_->Signal failed");
+    frameFenceValues_[presentedBufferIndex] = fenceValue_;
 
     backBufferIndex_ = swapChain_->GetCurrentBackBufferIndex();
 }
@@ -111,11 +119,10 @@ void DirectXCommon::Resize(int width, int height) {
     sceneColorBuffer_.Reset();
     depthBuffer_.Reset();
 
-    ThrowIfFailed(
-        swapChain_->ResizeBuffers(kSwapChainBufferCount, static_cast<UINT>(width),
-                                  static_cast<UINT>(height),
-                                  DXGI_FORMAT_R8G8B8A8_UNORM, 0),
-        "swapChain_->ResizeBuffers failed");
+    ThrowIfFailed(swapChain_->ResizeBuffers(
+                      kSwapChainBufferCount, static_cast<UINT>(width),
+                      static_cast<UINT>(height), kBackBufferFormat, 0),
+                  "swapChain_->ResizeBuffers failed");
 
     backBufferIndex_ = swapChain_->GetCurrentBackBufferIndex();
 
@@ -124,19 +131,18 @@ void DirectXCommon::Resize(int width, int height) {
     CreateViewport(width, height);
     CreateScissor(width, height);
     CreateDepthStencil(width, height);
-    UpdateSceneColorSrv();
     UpdateDepthStencilSrv();
+    UpdateSceneColorSrv();
 }
 
 void DirectXCommon::BeginUpload() {
-    WaitForGpu();
-
-    ID3D12CommandAllocator *allocator =
+    WaitForFrame(backBufferIndex_);
+    ID3D12CommandAllocator* commandAllocator =
         commandAllocators_[backBufferIndex_].Get();
-    ThrowIfFailed(allocator->Reset(),
+    ThrowIfFailed(commandAllocator->Reset(),
                   "commandAllocator_->Reset failed");
 
-    ThrowIfFailed(commandList_->Reset(allocator, nullptr),
+    ThrowIfFailed(commandList_->Reset(commandAllocator, nullptr),
                   "commandList_->Reset failed");
     isCommandListRecording_ = true;
 }
@@ -156,20 +162,14 @@ void DirectXCommon::WaitForGpu() {
     ThrowIfFailed(commandQueue_->Signal(fence_.Get(), fenceValue_),
                   "commandQueue_->Signal failed");
 
-    WaitForFenceValue(fenceValue_);
+    if (fence_->GetCompletedValue() < fenceValue_) {
+        ThrowIfFailed(fence_->SetEventOnCompletion(fenceValue_, fenceEvent_),
+                      "fence_->SetEventOnCompletion failed");
+        WaitForSingleObject(fenceEvent_, INFINITE);
+    }
     for (UINT i = 0; i < kSwapChainBufferCount; ++i) {
         frameFenceValues_[i] = fenceValue_;
     }
-}
-
-void DirectXCommon::WaitForFenceValue(UINT64 fenceValue) {
-    if (fenceValue == 0 || fence_->GetCompletedValue() >= fenceValue) {
-        return;
-    }
-
-    ThrowIfFailed(fence_->SetEventOnCompletion(fenceValue, fenceEvent_),
-                  "fence_->SetEventOnCompletion failed");
-    WaitForSingleObject(fenceEvent_, INFINITE);
 }
 
 void DirectXCommon::SetBackBufferRenderTarget(bool clear, bool bindDepth) {
@@ -179,17 +179,45 @@ void DirectXCommon::SetBackBufferRenderTarget(bool clear, bool bindDepth) {
     D3D12_CPU_DESCRIPTOR_HANDLE *dsvHandlePtr =
         bindDepth ? &dsvHandle : nullptr;
 
-    commandList_->RSSetViewports(1, &viewport_);
-    commandList_->RSSetScissorRects(1, &scissorRect_);
+    ApplySceneViewportAndScissor();
     commandList_->OMSetRenderTargets(1, &rtvHandle, FALSE, dsvHandlePtr);
 
     if (clear) {
-        commandList_->ClearRenderTargetView(rtvHandle, clearColor_, 0, nullptr);
+        commandList_->ClearRenderTargetView(rtvHandle, kClearColor, 0, nullptr);
         if (bindDepth) {
             commandList_->ClearDepthStencilView(
                 dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
         }
     }
+}
+
+void DirectXCommon::ApplySceneViewportAndScissor() {
+    commandList_->RSSetViewports(1, &sceneViewport_);
+    commandList_->RSSetScissorRects(1, &sceneScissorRect_);
+}
+
+void DirectXCommon::TransitionSceneColor(D3D12_RESOURCE_STATES afterState) {
+    if (!sceneColorBuffer_ || sceneColorState_ == afterState) {
+        return;
+    }
+
+    auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+        sceneColorBuffer_.Get(), sceneColorState_, afterState);
+    commandList_->ResourceBarrier(1, &barrier);
+    sceneColorState_ = afterState;
+}
+
+void DirectXCommon::TransitionBackBuffer(
+    UINT index, D3D12_RESOURCE_STATES afterState) {
+    if (index >= kSwapChainBufferCount || !backBuffers_[index] ||
+        backBufferStates_[index] == afterState) {
+        return;
+    }
+
+    auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+        backBuffers_[index].Get(), backBufferStates_[index], afterState);
+    commandList_->ResourceBarrier(1, &barrier);
+    backBufferStates_[index] = afterState;
 }
 
 void DirectXCommon::CreateDepthStencilSrv(SrvManager *srvManager) {
@@ -205,42 +233,15 @@ void DirectXCommon::RegisterSceneColorSRV(SrvManager *srvManager) {
     }
 
     srvManager_ = srvManager;
-    sceneSrvIndex_ = srvManager->Allocate();
+    if (sceneSrvIndex_ == UINT_MAX) {
+        sceneSrvIndex_ = srvManager_->Allocate();
+    }
     UpdateSceneColorSrv();
 }
 
-void DirectXCommon::SetClearColor(const DirectX::XMFLOAT4 &color) {
-    clearColor_[0] = color.x;
-    clearColor_[1] = color.y;
-    clearColor_[2] = color.z;
-    clearColor_[3] = color.w;
-}
-
-void DirectXCommon::ResetClearColor() {
-    clearColor_[0] = kClearColor[0];
-    clearColor_[1] = kClearColor[1];
-    clearColor_[2] = kClearColor[2];
-    clearColor_[3] = kClearColor[3];
-}
-
-void DirectXCommon::UpdateSceneColorSrv() {
-    if (!srvManager_ || sceneSrvIndex_ == UINT_MAX || !sceneColorBuffer_) {
-        return;
-    }
-
-    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
-    srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srvDesc.Texture2D.MipLevels = 1;
-
-    device_->CreateShaderResourceView(
-        sceneColorBuffer_.Get(), &srvDesc,
-        srvManager_->GetCpuHandle(sceneSrvIndex_));
-}
-
 void DirectXCommon::TransitionDepthToShaderResource() {
-    if (!depthBuffer_ || depthState_ == D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE) {
+    if (!depthBuffer_ ||
+        depthState_ == D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE) {
         return;
     }
 
@@ -281,17 +282,18 @@ void DirectXCommon::CreateCommandQueue() {
 }
 
 void DirectXCommon::CreateCommandAllocator() {
-    for (auto &allocator : commandAllocators_) {
+    for (UINT i = 0; i < kSwapChainBufferCount; ++i) {
         ThrowIfFailed(
             device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
-                                            IID_PPV_ARGS(&allocator)),
+                                            IID_PPV_ARGS(&commandAllocators_[i])),
             "CreateCommandAllocator failed");
     }
 }
 
 void DirectXCommon::CreateCommandList() {
     ThrowIfFailed(device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
-                                             commandAllocators_[0].Get(), nullptr,
+                                             commandAllocators_[backBufferIndex_].Get(),
+                                             nullptr,
                                              IID_PPV_ARGS(&commandList_)),
                   "CreateCommandList failed");
 
@@ -302,7 +304,7 @@ void DirectXCommon::CreateSwapChain(HWND hwnd, int width, int height) {
     DXGI_SWAP_CHAIN_DESC1 desc{};
     desc.Width = width;
     desc.Height = height;
-    desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    desc.Format = kBackBufferFormat;
     desc.SampleDesc.Count = 1;
     desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     desc.BufferCount = kSwapChainBufferCount;
@@ -340,10 +342,11 @@ void DirectXCommon::CreateRTV() {
 
         D3D12_RENDER_TARGET_VIEW_DESC rtvDesc{};
         rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
-        rtvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        rtvDesc.Format = kBackBufferFormat;
 
         device_->CreateRenderTargetView(backBuffers_[i].Get(), &rtvDesc,
                                         handle);
+        backBufferStates_[i] = D3D12_RESOURCE_STATE_PRESENT;
 
         handle.Offset(1, rtvDescriptorSize_);
     }
@@ -356,13 +359,13 @@ void DirectXCommon::CreateSceneRenderTarget(int width, int height) {
     resDesc.Height = static_cast<UINT>(height);
     resDesc.DepthOrArraySize = 1;
     resDesc.MipLevels = 1;
-    resDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    resDesc.Format = kSceneColorFormat;
     resDesc.SampleDesc.Count = 1;
     resDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
     resDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 
     D3D12_CLEAR_VALUE clearValue{};
-    clearValue.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    clearValue.Format = kSceneColorFormat;
     clearValue.Color[0] = kClearColor[0];
     clearValue.Color[1] = kClearColor[1];
     clearValue.Color[2] = kClearColor[2];
@@ -375,29 +378,30 @@ void DirectXCommon::CreateSceneRenderTarget(int width, int height) {
                       D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, &clearValue,
                       IID_PPV_ARGS(&sceneColorBuffer_)),
                   "CreateCommittedResource(SceneRenderTarget) failed");
+    sceneColorState_ = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 
     D3D12_RENDER_TARGET_VIEW_DESC rtvDesc{};
     rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
-    rtvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    rtvDesc.Format = kSceneColorFormat;
 
     device_->CreateRenderTargetView(sceneColorBuffer_.Get(), &rtvDesc,
                                     GetSceneRtvHandle());
 }
 
 void DirectXCommon::CreateViewport(int width, int height) {
-    viewport_.TopLeftX = 0.0f;
-    viewport_.TopLeftY = 0.0f;
-    viewport_.Width = static_cast<float>(width);
-    viewport_.Height = static_cast<float>(height);
-    viewport_.MinDepth = 0.0f;
-    viewport_.MaxDepth = 1.0f;
+    sceneViewport_.TopLeftX = 0.0f;
+    sceneViewport_.TopLeftY = 0.0f;
+    sceneViewport_.Width = static_cast<float>(width);
+    sceneViewport_.Height = static_cast<float>(height);
+    sceneViewport_.MinDepth = 0.0f;
+    sceneViewport_.MaxDepth = 1.0f;
 }
 
 void DirectXCommon::CreateScissor(int width, int height) {
-    scissorRect_.left = 0;
-    scissorRect_.top = 0;
-    scissorRect_.right = width;
-    scissorRect_.bottom = height;
+    sceneScissorRect_.left = 0;
+    sceneScissorRect_.top = 0;
+    sceneScissorRect_.right = width;
+    sceneScissorRect_.bottom = height;
 }
 
 void DirectXCommon::CreateDepthStencil(int width, int height) {
@@ -415,12 +419,12 @@ void DirectXCommon::CreateDepthStencil(int width, int height) {
     resDesc.Height = height;
     resDesc.DepthOrArraySize = 1;
     resDesc.MipLevels = 1;
-    resDesc.Format = DXGI_FORMAT_R24G8_TYPELESS;
+    resDesc.Format = kDepthResourceFormat;
     resDesc.SampleDesc.Count = 1;
     resDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 
     D3D12_CLEAR_VALUE clearValue{};
-    clearValue.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    clearValue.Format = kDepthStencilFormat;
     clearValue.DepthStencil.Depth = 1.0f;
     clearValue.DepthStencil.Stencil = 0;
 
@@ -433,7 +437,7 @@ void DirectXCommon::CreateDepthStencil(int width, int height) {
                   "CreateCommittedResource(DepthStencil) failed");
 
     D3D12_DEPTH_STENCIL_VIEW_DESC dsvDescView{};
-    dsvDescView.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    dsvDescView.Format = kDepthStencilFormat;
     dsvDescView.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
 
     device_->CreateDepthStencilView(
@@ -449,12 +453,29 @@ void DirectXCommon::UpdateDepthStencilSrv() {
 
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    srvDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+    srvDesc.Format = kDepthSrvFormat;
     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     srvDesc.Texture2D.MipLevels = 1;
 
-    device_->CreateShaderResourceView(depthBuffer_.Get(), &srvDesc,
-                                      srvManager_->GetCpuHandle(depthSrvIndex_));
+    device_->CreateShaderResourceView(
+        depthBuffer_.Get(), &srvDesc,
+        srvManager_->GetCpuHandle(depthSrvIndex_));
+}
+
+void DirectXCommon::UpdateSceneColorSrv() {
+    if (!srvManager_ || sceneSrvIndex_ == UINT_MAX || !sceneColorBuffer_) {
+        return;
+    }
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+    srvDesc.Format = kSceneColorFormat;
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = 1;
+
+    device_->CreateShaderResourceView(
+        sceneColorBuffer_.Get(), &srvDesc,
+        srvManager_->GetCpuHandle(sceneSrvIndex_));
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE DirectXCommon::GetBackBufferRtvHandle() const {
@@ -484,4 +505,19 @@ void DirectXCommon::CreateFence() {
     if (!fenceEvent_) {
         throw std::runtime_error("CreateEvent failed");
     }
+}
+
+void DirectXCommon::WaitForFrame(UINT frameIndex) {
+    if (frameIndex >= kSwapChainBufferCount) {
+        return;
+    }
+
+    const UINT64 fenceValue = frameFenceValues_[frameIndex];
+    if (fenceValue == 0 || fence_->GetCompletedValue() >= fenceValue) {
+        return;
+    }
+
+    ThrowIfFailed(fence_->SetEventOnCompletion(fenceValue, fenceEvent_),
+                  "fence_->SetEventOnCompletion failed");
+    WaitForSingleObject(fenceEvent_, INFINITE);
 }

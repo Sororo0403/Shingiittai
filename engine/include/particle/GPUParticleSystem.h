@@ -1,8 +1,10 @@
 #pragma once
-#include "Camera.h"
+#include "camera/Camera.h"
+#include "particle/ParticleEmitterSettings.h"
 #include <DirectXMath.h>
 #include <cstdint>
 #include <d3d12.h>
+#include <string>
 #include <vector>
 #include <wrl.h>
 
@@ -10,66 +12,71 @@ class DirectXCommon;
 class SrvManager;
 class TextureManager;
 
+struct GPUParticleMaterialSettings {
+    std::wstring pixelShaderPath;
+    DirectX::XMFLOAT4 params0{0.0f, 0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT4 params1{0.0f, 0.0f, 0.0f, 0.0f};
+    uint32_t noiseTextureId = UINT32_MAX;
+};
+
 /// <summary>
-/// ComputeShaderで更新し、StructuredBufferを使ってインスタンス描画するGPU Particle
+/// 計算シェーダーで更新し、構造化バッファを使ってインスタンス描画するGPUパーティクル。
 /// </summary>
 class GPUParticleSystem {
   public:
-    enum class BurstStyle : uint32_t {
-        Sparks = 0,
-        Explosion = 1,
-        Smoke = 2,
-        SlashLine = 3,
-        Flash = 4,
-        Ember = 5,
-        Spirit = 6,
-        SpiritSparkle = 7,
-    };
-
+    /// <summary>
+    /// GPUパーティクル用リソースを解放する
+    /// </summary>
     ~GPUParticleSystem();
 
     /// <summary>
-    /// 初期化する
+    /// GPUパーティクルの各種バッファ、SRV/UAV、描画設定を作成する
     /// </summary>
     void Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
                     TextureManager *textureManager, uint32_t textureId,
                     uint32_t maxParticles = 1024);
 
     /// <summary>
-    /// 更新する
+    /// 経過時間とEmitter設定をGPUへ渡し、パーティクルシミュレーションを進める
     /// </summary>
     void Update(float deltaTime);
 
     /// <summary>
-    /// 描画する
+    /// カメラに向いたビルボードとして生存中のパーティクルを描画する
     /// </summary>
     void Draw(const Camera &camera);
 
     /// <summary>
-    /// 発生位置を設定する
+    /// パーティクル発生設定を差し替える
     /// </summary>
-    void SetEmitterPosition(const DirectX::XMFLOAT3 &position) {
-        emitterPosition_ = position;
+    void SetEmitterSettings(const ParticleEmitterSettings &settings);
+
+    /// <summary>
+    /// 現在のパーティクル発生設定を取得する
+    /// </summary>
+    const ParticleEmitterSettings &GetEmitterSettings() const {
+        return emitterSettings_;
     }
 
     /// <summary>
-    /// 発生頻度と一度に出す数を設定する
+    /// 描画に使うテクスチャIDを切り替える
     /// </summary>
-    void SetEmission(uint32_t count, float frequency);
+    void SetTexture(uint32_t textureId) { textureId_ = textureId; }
 
     /// <summary>
-    /// 発生範囲の半径を設定する
+    /// 描画用PixelShaderとマテリアル定数を設定する
     /// </summary>
-    void SetEmitterRadius(float radius);
+    void SetMaterialSettings(const GPUParticleMaterialSettings &settings);
 
     /// <summary>
-    /// 指定位置へ一度だけ粒子を発生させる
+    /// TextureManager経由でテクスチャを読み込み、描画テクスチャを切り替える
     /// </summary>
-    void EmitBurst(const DirectX::XMFLOAT3 &position, uint32_t count,
-                   float radius, BurstStyle style,
-                   const DirectX::XMFLOAT4 &tintColor,
-                   const DirectX::XMFLOAT3 &direction = {0.0f, 1.0f, 0.0f},
-                   float speed = 1.0f);
+    void SetTextureFromFile(const std::wstring &filePath);
+
+    /// <summary>
+    /// 指定した設定で一度だけ粒子を発生させる
+    /// </summary>
+    void EmitOnce(const ParticleEmitterSettings &settings);
 
   private:
     struct ParticleForGPU {
@@ -81,7 +88,8 @@ class GPUParticleSystem {
         DirectX::XMFLOAT2 scale{0.1f, 0.1f};
         float seed = 0.0f;
         uint32_t isActive = 0;
-        DirectX::XMFLOAT3 padding{};
+        DirectX::XMFLOAT4 params0{};
+        DirectX::XMFLOAT4 params1{};
     };
 
     struct UpdateConstantBufferData {
@@ -89,16 +97,23 @@ class GPUParticleSystem {
     };
 
     struct EmitterForGPU {
-        DirectX::XMFLOAT3 translate{};
-        float radius = 0.35f;
-        uint32_t count = 10;
-        float frequency = 0.5f;
-        float frequencyTime = 0.0f;
-        uint32_t emit = 0;
-        DirectX::XMFLOAT4 tintColor{1.0f, 0.92f, 0.66f, 1.0f};
-        DirectX::XMFLOAT4 directionSpeed{0.0f, 1.0f, 0.0f, 1.0f};
-        uint32_t style = 0;
-        DirectX::XMFLOAT3 padding{};
+        DirectX::XMFLOAT4 position{};
+        DirectX::XMFLOAT4 spawnOffsetScale{0.1f, 0.1f, 0.1f, 0.0f};
+        DirectX::XMFLOAT4 spawnShapeParams{};
+        DirectX::XMFLOAT4 basisRight{1.0f, 0.0f, 0.0f, 0.0f};
+        DirectX::XMFLOAT4 basisUp{0.0f, 1.0f, 0.0f, 0.0f};
+        DirectX::XMFLOAT4 basisForward{0.0f, 0.0f, 1.0f, 0.0f};
+        DirectX::XMFLOAT4 directionAndDirectionalVelocity{0.0f, 1.0f, 0.0f,
+                                                          0.0f};
+        DirectX::XMFLOAT4 velocityBiasAndRadialVelocity{0.0f, 0.0f, 0.0f,
+                                                        1.0f};
+        DirectX::XMFLOAT4 lifeAndFade{0.5f, 0.2f, 0.0f, 0.2f};
+        DirectX::XMFLOAT4 scale{0.2f, 0.0f, 0.1f, 0.0f};
+        DirectX::XMFLOAT4 accelerationAndTurbulence{};
+        DirectX::XMFLOAT4 motion{1.0f, 1.0f, 0.0f, 0.0f};
+        DirectX::XMFLOAT4 atlasAndRotation{0.0f, 1.0f, 0.7f, 0.0f};
+        DirectX::XMFLOAT4 tintColor{1.0f, 1.0f, 1.0f, 1.0f};
+        DirectX::XMUINT4 config{};
     };
 
     struct DrawConstantBufferData {
@@ -106,14 +121,46 @@ class GPUParticleSystem {
         DirectX::XMFLOAT4 cameraRight{};
         DirectX::XMFLOAT4 cameraUp{};
         DirectX::XMFLOAT4 tintColor{};
+        DirectX::XMFLOAT4 atlasInfo{1.0f, 1.0f, 0.0f, 0.0f};
+        DirectX::XMFLOAT4 materialParams0{};
+        DirectX::XMFLOAT4 materialParams1{};
     };
 
+    /// <summary>
+    /// 更新用と描画用のルートシグネチャを生成する
+    /// </summary>
     void CreateRootSignatures();
+
+    /// <summary>
+    /// 更新用と描画用のパイプラインステートを生成する
+    /// </summary>
     void CreatePipelineStates();
+
+    /// <summary>
+    /// パーティクルバッファを生成して初期データを書き込む
+    /// </summary>
     void CreateParticleBuffer(const std::vector<ParticleForGPU> &particles);
+
+    /// <summary>
+    /// 空きリスト用バッファを生成する
+    /// </summary>
     void CreateFreeListBuffers();
+
+    /// <summary>
+    /// 更新・Emitter・描画用の定数バッファを生成する
+    /// </summary>
     void CreateConstantBuffers();
+
+    /// <summary>
+    /// パーティクル更新用ComputeShaderを実行する
+    /// </summary>
     void DispatchUpdate();
+
+    EmitterForGPU BuildEmitterForGPU(uint32_t emit) const;
+
+    /// <summary>
+    /// 保持しているGPUリソースを解放する
+    /// </summary>
     void ReleaseResources();
 
     DirectXCommon *dxCommon_ = nullptr;
@@ -122,10 +169,12 @@ class GPUParticleSystem {
     uint32_t textureId_ = 0;
     uint32_t maxParticles_ = 0;
     float totalTime_ = 0.0f;
+    float emitterFrequencyTime_ = 0.0f;
+    float activeTimeRemaining_ = 0.0f;
     bool updatePending_ = false;
-    bool burstPending_ = false;
-    EmitterForGPU emitter_{};
-    DirectX::XMFLOAT3 emitterPosition_{0.0f, 1.2f, 0.0f};
+    bool emitOncePending_ = false;
+    ParticleEmitterSettings emitterSettings_{};
+    GPUParticleMaterialSettings materialSettings_{};
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> updateRootSignature_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> drawRootSignature_;

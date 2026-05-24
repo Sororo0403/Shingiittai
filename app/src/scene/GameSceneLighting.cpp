@@ -6,7 +6,7 @@
 using namespace DirectX;
 
 void GameScene::UpdateSceneLighting() {
-    if (ctx_ == nullptr || ctx_->model == nullptr) {
+    if (ctx_ == nullptr || ctx_->rendering.model == nullptr) {
         return;
     }
 
@@ -167,5 +167,5 @@ void GameScene::UpdateSceneLighting() {
         };
     }
 
-    ctx_->model->SetSceneLighting(lighting);
+    ctx_->rendering.model->SetSceneLighting(lighting);
 }

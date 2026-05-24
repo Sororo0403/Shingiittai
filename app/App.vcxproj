@@ -64,8 +64,8 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>$(ProjectDir)include\enemy;$(ProjectDir)include\player;$(ProjectDir)include\scene;$(ProjectDir)..\engine\include\particle;$(ProjectDir)..\engine\include\collision;$(ProjectDir)..\engine\include\scene;$(ProjectDir)..\engine\include\input;$(ProjectDir)..\engine\include\camera;$(ProjectDir)..\engine\include\core;$(ProjectDir)..\engine\include\graphics;$(ProjectDir)..\engine\include\model;$(ProjectDir)..\engine\include\animation;$(ProjectDir)..\engine\include\sound;$(ProjectDir)..\engine\include\sprite;$(ProjectDir)..\engine\include\texture;$(ProjectDir)..\engine\externals;$(ProjectDir)..\engine\externals\assimp\include;$(ProjectDir)..\engine\externals\assimp\include\assimp;$(ProjectDir)..\engine\externals\DirectX-Headers;$(ProjectDir)..\engine\externals\DirectXTex;$(ProjectDir)..\engine\externals\JoyShockLibrary\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;$(ProjectDir)include\enemy;$(ProjectDir)include\player;$(ProjectDir)include\scene;$(ProjectDir)..\engine\include;$(ProjectDir)..\engine\include\particle;$(ProjectDir)..\engine\include\collision;$(ProjectDir)..\engine\include\scene;$(ProjectDir)..\engine\include\input;$(ProjectDir)..\engine\include\camera;$(ProjectDir)..\engine\include\core;$(ProjectDir)..\engine\include\graphics;$(ProjectDir)..\engine\include\model;$(ProjectDir)..\engine\include\animation;$(ProjectDir)..\engine\include\sound;$(ProjectDir)..\engine\include\sprite;$(ProjectDir)..\engine\include\texture;$(ProjectDir)..\engine\externals;$(ProjectDir)..\engine\externals\assimp\include;$(ProjectDir)..\engine\externals\assimp\include\assimp;$(ProjectDir)..\engine\externals\DirectX-Headers;$(ProjectDir)..\engine\externals\DirectXTex;$(ProjectDir)externals\JoyShockLibrary\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>/utf-8 /FI"$(ProjectDir)include\compat\EngineCompat.h" %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
@@ -73,8 +73,8 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
-      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;dinput8.lib;dxguid.lib;xinput.lib;ws2_32.lib;JoyShockLibrary.lib;assimp-vc145-mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(ProjectDir)..\engine\externals\assimp\lib\;$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;dinput8.lib;dxguid.lib;xinput.lib;ws2_32.lib;mfplat.lib;mfreadwrite.lib;mfuuid.lib;JoyShockLibrary.lib;assimp-vc145-mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ProjectDir)..\engine\externals\assimp\lib\;$(ProjectDir)externals\JoyShockLibrary\lib\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -87,8 +87,8 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>$(ProjectDir)include\enemy;$(ProjectDir)include\player;$(ProjectDir)include\scene;$(ProjectDir)..\engine\include\particle;$(ProjectDir)..\engine\include\collision;$(ProjectDir)..\engine\include\scene;$(ProjectDir)..\engine\include\input;$(ProjectDir)..\engine\include\camera;$(ProjectDir)..\engine\include\core;$(ProjectDir)..\engine\include\graphics;$(ProjectDir)..\engine\include\model;$(ProjectDir)..\engine\include\animation;$(ProjectDir)..\engine\include\sound;$(ProjectDir)..\engine\include\sprite;$(ProjectDir)..\engine\include\texture;$(ProjectDir)..\engine\externals;$(ProjectDir)..\engine\externals\assimp\include;$(ProjectDir)..\engine\externals\assimp\include\assimp;$(ProjectDir)..\engine\externals\DirectX-Headers;$(ProjectDir)..\engine\externals\DirectXTex;$(ProjectDir)..\engine\externals\JoyShockLibrary\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;$(ProjectDir)include\enemy;$(ProjectDir)include\player;$(ProjectDir)include\scene;$(ProjectDir)..\engine\include;$(ProjectDir)..\engine\include\particle;$(ProjectDir)..\engine\include\collision;$(ProjectDir)..\engine\include\scene;$(ProjectDir)..\engine\include\input;$(ProjectDir)..\engine\include\camera;$(ProjectDir)..\engine\include\core;$(ProjectDir)..\engine\include\graphics;$(ProjectDir)..\engine\include\model;$(ProjectDir)..\engine\include\animation;$(ProjectDir)..\engine\include\sound;$(ProjectDir)..\engine\include\sprite;$(ProjectDir)..\engine\include\texture;$(ProjectDir)..\engine\externals;$(ProjectDir)..\engine\externals\assimp\include;$(ProjectDir)..\engine\externals\assimp\include\assimp;$(ProjectDir)..\engine\externals\DirectX-Headers;$(ProjectDir)..\engine\externals\DirectXTex;$(ProjectDir)externals\JoyShockLibrary\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>/utf-8 /FI"$(ProjectDir)include\compat\EngineCompat.h" %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
@@ -96,8 +96,8 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
-      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;dinput8.lib;dxguid.lib;xinput.lib;ws2_32.lib;JoyShockLibrary.lib;assimp-vc145-mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(ProjectDir)..\engine\externals\assimp\lib\;$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;dinput8.lib;dxguid.lib;xinput.lib;ws2_32.lib;mfplat.lib;mfreadwrite.lib;mfuuid.lib;JoyShockLibrary.lib;assimp-vc145-mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ProjectDir)..\engine\externals\assimp\lib\;$(ProjectDir)externals\JoyShockLibrary\lib\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -116,6 +116,8 @@
     <ClCompile Include="src\enemy\EnemyPresentation.cpp" />
     <ClCompile Include="src\enemy\EnemyTuning.cpp" />
     <ClCompile Include="src\player\Player.cpp" />
+    <ClCompile Include="src\player\JoyCon.cpp" />
+    <ClCompile Include="src\player\MahonyFilter.cpp" />
     <ClCompile Include="src\scene\CombatFeedbackDirector.cpp" />
     <ClCompile Include="src\scene\GameScene.cpp" />
     <ClCompile Include="src\scene\GameSceneAnimation.cpp" />
@@ -137,6 +139,11 @@
     <ClInclude Include="include\player\SwordSlashArcRenderer.h" />
     <ClInclude Include="include\player\SwordTrailRenderer.h" />
     <ClInclude Include="include\player\InputControlType.h" />
+    <ClInclude Include="include\compat\EngineCompat.h" />
+    <ClInclude Include="include\compat\ParticleCompat.h" />
+    <ClInclude Include="include\player\JoyCon.h" />
+    <ClInclude Include="include\player\MahonyFilter.h" />
+    <ClInclude Include="include\scene\AppSceneServices.h" />
     <ClInclude Include="include\scene\BattleResultScene.h" />
     <ClInclude Include="include\scene\CalibrationScene.h" />
     <ClInclude Include="include\scene\GameSceneHud.h" />
@@ -216,7 +223,7 @@
   </Target>
   <Target Name="CopyRuntimeDlls" AfterTargets="Build">
     <ItemGroup>
-      <RuntimeDll Include="$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\JoyShockLibrary.dll" Condition="Exists('$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\JoyShockLibrary.dll')" />
+      <RuntimeDll Include="$(ProjectDir)externals\JoyShockLibrary\lib\JoyShockLibrary.dll" Condition="Exists('$(ProjectDir)externals\JoyShockLibrary\lib\JoyShockLibrary.dll')" />
       <RuntimeDll Include="$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" Condition="Exists('$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll')" />
       <AppResource Include="$(ProjectDir)resources\**\*" />
       <EngineResource Include="$(ProjectDir)..\engine\resources\**\*" />

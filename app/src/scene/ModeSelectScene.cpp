@@ -34,27 +34,27 @@ void ModeSelectScene::Initialize(const SceneContext &ctx) {
     transitionTimer_ = 0.0f;
     nextScene_ = NextScene::None;
 
-    ctx_->dxCommon->BeginUpload();
+    ctx_->rendering.dxCommon->BeginUpload();
     buttonImages_[0] = LoadMenuImage(L"app/resources/menu/game_start.png");
     buttonImages_[1] = LoadMenuImage(L"app/resources/menu/settings.png");
     helpImages_[0] = LoadMenuImage(L"app/resources/menu/game_start_help.png");
     helpImages_[1] = LoadMenuImage(L"app/resources/menu/settings_help.png");
-    ctx_->dxCommon->EndUpload();
-    ctx_->texture->ReleaseUploadBuffers();
+    ctx_->rendering.dxCommon->EndUpload();
+    ctx_->rendering.texture->ReleaseUploadBuffers();
 
-    ctx_->postEffectRenderer->SetVignettingStrength(0.22f);
-    ctx_->postEffectRenderer->SetVignettingEnabled(true);
+    ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.22f);
+    ctx_->rendering.postEffectRenderer->SetVignettingEnabled(true);
 }
 
 void ModeSelectScene::Update() {
-    sceneTime_ += ctx_->deltaTime;
+    sceneTime_ += ctx_->frame.deltaTime;
 
-    const float w = static_cast<float>(ctx_->winApp->GetWidth());
-    const float h = static_cast<float>(ctx_->winApp->GetHeight());
+    const float w = static_cast<float>(ctx_->systems.winApp->GetWidth());
+    const float h = static_cast<float>(ctx_->systems.winApp->GetHeight());
     LayoutButtons(w, h);
 
     if (nextScene_ != NextScene::None) {
-        transitionTimer_ += ctx_->deltaTime;
+        transitionTimer_ += ctx_->frame.deltaTime;
         if (transitionTimer_ >= kTransitionDuration) {
             if (nextScene_ == NextScene::Game) {
                 sceneManager_->ChangeScene(
@@ -66,14 +66,14 @@ void ModeSelectScene::Update() {
         return;
     }
 
-    UpdateSelection(ctx_->input);
+    UpdateSelection(ctx_->systems.input);
 }
 
 void ModeSelectScene::Draw() {
-    const float w = static_cast<float>(ctx_->winApp->GetWidth());
-    const float h = static_cast<float>(ctx_->winApp->GetHeight());
+    const float w = static_cast<float>(ctx_->systems.winApp->GetWidth());
+    const float h = static_cast<float>(ctx_->systems.winApp->GetHeight());
 
-    ctx_->sprite->PreDraw();
+    ctx_->rendering.sprite->PreDraw();
     DrawBackground(w, h);
 
     for (int i = 0; i < kButtonCount; ++i) {
@@ -89,18 +89,18 @@ void ModeSelectScene::Draw() {
                  MakeColor(0.0f, 0.0f, 0.0f, SmoothStep(fadeT)));
     }
 
-    ctx_->sprite->PostDraw();
+    ctx_->rendering.sprite->PostDraw();
 }
 
-void ModeSelectScene::DrawOverlay() {}
+void ModeSelectScene::DrawTransparent() {}
 
 ModeSelectScene::Image
 ModeSelectScene::LoadMenuImage(const std::wstring &path) {
     Image image{};
-    image.textureId = ctx_->texture->Load(path);
-    image.width = static_cast<float>(ctx_->texture->GetWidth(image.textureId));
+    image.textureId = ctx_->rendering.texture->Load(path);
+    image.width = static_cast<float>(ctx_->rendering.texture->GetWidth(image.textureId));
     image.height =
-        static_cast<float>(ctx_->texture->GetHeight(image.textureId));
+        static_cast<float>(ctx_->rendering.texture->GetHeight(image.textureId));
     return image;
 }
 
@@ -173,7 +173,7 @@ bool ModeSelectScene::IsMouseOver(const ButtonRect &rect) const {
     if (!GetCursorPos(&cursor)) {
         return false;
     }
-    if (!ScreenToClient(ctx_->winApp->GetHwnd(), &cursor)) {
+    if (!ScreenToClient(ctx_->systems.winApp->GetHwnd(), &cursor)) {
         return false;
     }
 
@@ -243,7 +243,7 @@ void ModeSelectScene::DrawRect(float x, float y, float w, float h,
     sprite.size = {w, h};
     sprite.color = color;
     sprite.textureId = 0;
-    ctx_->sprite->DrawSprite(sprite);
+    ctx_->rendering.sprite->DrawSprite(sprite);
 }
 
 void ModeSelectScene::DrawImage(const Image &image, float x, float y,
@@ -257,5 +257,5 @@ void ModeSelectScene::DrawImage(const Image &image, float x, float y,
     sprite.size = {image.width * scale, image.height * scale};
     sprite.color = {1.0f, 1.0f, 1.0f, alpha};
     sprite.textureId = image.textureId;
-    ctx_->sprite->DrawSprite(sprite);
+    ctx_->rendering.sprite->DrawSprite(sprite);
 }

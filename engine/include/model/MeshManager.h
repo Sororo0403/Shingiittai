@@ -28,13 +28,13 @@ struct Mesh {
 class MeshManager {
   public:
     /// <summary>
-    /// 初期化処理
+    /// メッシュ用GPUリソースを生成できるようDirectX参照を設定する
     /// </summary>
     /// <param name="dxCommon">DirectXCommonインスタンス</param>
     void Initialize(DirectXCommon *dxCommon);
 
     /// <summary>
-    /// Meshを作成する
+    /// 頂点配列とインデックス配列からGPUメッシュを作成して登録する
     /// </summary>
     /// <param name="vertexData">頂点データへのポインタ</param>
     /// <param name="vertexStride">1頂点あたりのバイトサイズ</param>

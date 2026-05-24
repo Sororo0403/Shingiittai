@@ -1,6 +1,6 @@
 #pragma once
-#include "AABB.h"
-#include "OBB.h"
+#include "collision/AABB.h"
+#include "collision/OBB.h"
 #include <DirectXMath.h>
 
 /// <summary>
@@ -15,7 +15,7 @@ struct CollisionResult {
 };
 
 /// <summary>
-/// 2つのOBBの衝突情報を取得
+/// 2つのOBBの衝突有無と接触情報を計算する
 /// </summary>
 /// <param name="a">判定対象となる1つ目のOBB</param>
 /// <param name="b">判定対象となる2つ目のOBB</param>
@@ -23,7 +23,7 @@ struct CollisionResult {
 CollisionResult TestOBB(const OBB &a, const OBB &b);
 
 /// <summary>
-/// 2つのOBBが衝突しているかを判定
+/// 2つのOBBが交差しているかを判定する
 /// </summary>
 /// <param name="a">判定対象となる1つ目のOBB</param>
 /// <param name="b">判定対象となる2つ目のOBB</param>
@@ -31,7 +31,7 @@ CollisionResult TestOBB(const OBB &a, const OBB &b);
 bool CheckOBB(const OBB &a, const OBB &b);
 
 /// <summary>
-/// 矩形の当たり判定
+/// 2つのAABBが交差しているかを判定する
 /// </summary>
 /// <param name="a">当たり判定を行う矩形a</param>
 /// <param name="b">当たり判定を行う矩形b</param>

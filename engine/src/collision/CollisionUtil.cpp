@@ -1,4 +1,4 @@
-#include "CollisionUtil.h"
+#include "collision/CollisionUtil.h"
 #include <algorithm>
 #include <cfloat>
 #include <cmath>
@@ -22,8 +22,7 @@ float Dot(DirectX::FXMVECTOR a, DirectX::FXMVECTOR b) {
 
 DirectX::XMVECTOR NormalizeQuaternion(const DirectX::XMFLOAT4 &rotation) {
     DirectX::XMVECTOR q = DirectX::XMLoadFloat4(&rotation);
-    const float lengthSq =
-        DirectX::XMVectorGetX(DirectX::XMVector4LengthSq(q));
+    const float lengthSq = DirectX::XMVectorGetX(DirectX::XMVector4LengthSq(q));
     if (lengthSq <= kEpsilon) {
         return DirectX::XMQuaternionIdentity();
     }
@@ -67,9 +66,8 @@ bool TestAxis(const OBBBasis &aBasis, const OBBBasis &bBasis,
     const DirectX::XMVECTOR normalizedAxis = DirectX::XMVector3Normalize(axis);
     const float signedDistance = Dot(centerDelta, normalizedAxis);
     const float centerDistance = std::fabs(signedDistance);
-    const float radius =
-        ProjectRadius(aBasis, normalizedAxis) +
-        ProjectRadius(bBasis, normalizedAxis);
+    const float radius = ProjectRadius(aBasis, normalizedAxis) +
+                         ProjectRadius(bBasis, normalizedAxis);
     const float penetration = radius - centerDistance;
     if (penetration < -kEpsilon) {
         return false;

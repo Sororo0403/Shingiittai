@@ -17,7 +17,7 @@ float4 mainModulate(SpriteVSOutput input) : SV_TARGET
     return float4(modulation, alphaMask);
 }
 
-float4 mainDarkSmoke(SpriteVSOutput input) : SV_TARGET
+float4 mainPremultipliedMask(SpriteVSOutput input) : SV_TARGET
 {
     float alphaMask = tex0.Sample(samp0, input.uv).a * input.color.a;
     alphaMask = saturate(alphaMask * 2.35f);

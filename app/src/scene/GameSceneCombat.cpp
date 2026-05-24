@@ -1,4 +1,5 @@
 #include "GameScene.h"
+#include "compat/ParticleCompat.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -26,9 +27,9 @@ CollisionManager::BodyId AddCollisionBody(
     CollisionManager &collisionManager, const OBB &box,
     CollisionManager::LayerMask layer, CollisionManager::LayerMask mask) {
     CollisionManager::BodyDesc desc{};
-    desc.box = box;
-    desc.layer = layer;
-    desc.mask = mask;
+    desc.shape = CollisionManager::Shape::FromOBB(box);
+    desc.filter.layer = layer;
+    desc.filter.mask = mask;
     return collisionManager.AddBody(desc);
 }
 } // namespace
@@ -278,15 +279,15 @@ float GameScene::ApplyEnemyDamage(float damage, bool deferTransitions,
 
         XMFLOAT3 standCenter = enemy_.GetTransform().position;
         standCenter.y += 1.34f;
-        swordFlashParticles_.EmitBurst(
-            standCenter, 12, 0.72f, GPUParticleSystem::BurstStyle::Flash,
+        EmitParticleBurst(swordFlashParticles_, 
+            standCenter, 12, 0.72f, AppParticleBurstStyle::Flash,
             {1.0f, 0.98f, 0.86f, 0.82f}, {0.0f, 1.0f, 0.0f}, 0.42f);
-        explosionParticles_.EmitBurst(
+        EmitParticleBurst(explosionParticles_, 
             standCenter, 116, 1.38f,
-            GPUParticleSystem::BurstStyle::SpiritSparkle,
+            AppParticleBurstStyle::SpiritSparkle,
             {1.0f, 1.0f, 0.96f, 0.72f}, {0.0f, 1.0f, 0.0f}, 1.52f);
-        smokeParticles_.EmitBurst(
-            standCenter, 34, 0.86f, GPUParticleSystem::BurstStyle::Smoke,
+        EmitParticleBurst(smokeParticles_, 
+            standCenter, 34, 0.86f, AppParticleBurstStyle::Smoke,
             {0.42f, 0.34f, 0.28f, 0.40f}, {0.0f, 1.0f, 0.0f}, 0.62f);
 
         CombatFeedbackEvent feedback{};
@@ -318,20 +319,20 @@ bool GameScene::TryBeginFinalBladeClash(size_t swordIndex,
 
     XMFLOAT3 cue = hitPosition;
     cue.y += 0.22f;
-    swordFlashParticles_.EmitBurst(
-        cue, 16, 0.58f, GPUParticleSystem::BurstStyle::Flash,
+    EmitParticleBurst(swordFlashParticles_, 
+        cue, 16, 0.58f, AppParticleBurstStyle::Flash,
         {1.0f, 0.94f, 0.74f, 0.86f},
         DirectionFromTo(player_.GetTransform().position,
                         enemy_.GetTransform().position),
         0.36f);
-    sparkParticles_.EmitBurst(
-        cue, 120, 0.72f, GPUParticleSystem::BurstStyle::Sparks,
+    EmitParticleBurst(sparkParticles_, 
+        cue, 120, 0.72f, AppParticleBurstStyle::Sparks,
         {1.0f, 0.62f, 0.18f, 0.86f},
         DirectionFromTo(player_.GetTransform().position,
                         enemy_.GetTransform().position),
         2.20f);
-    explosionParticles_.EmitBurst(
-        cue, 92, 1.18f, GPUParticleSystem::BurstStyle::SpiritSparkle,
+    EmitParticleBurst(explosionParticles_, 
+        cue, 92, 1.18f, AppParticleBurstStyle::SpiritSparkle,
         {1.0f, 1.0f, 0.96f, 0.70f}, {0.0f, 1.0f, 0.0f}, 1.20f);
 
     BeginBladeClash(swordIndex, true);
@@ -347,14 +348,14 @@ void GameScene::ApplyEnemyCageConstraint(float deltaTime) {
     auto emitCageBreak = [&](const XMFLOAT3 &position) {
         XMFLOAT3 burstPos = position;
         burstPos.y += 0.95f;
-        sparkParticles_.EmitBurst(
-            burstPos, 112, 0.26f, GPUParticleSystem::BurstStyle::Sparks,
+        EmitParticleBurst(sparkParticles_, 
+            burstPos, 112, 0.26f, AppParticleBurstStyle::Sparks,
             {1.0f, 0.88f, 0.38f, 0.92f}, {0.0f, 1.0f, 0.0f}, 1.90f);
-        explosionParticles_.EmitBurst(
-            burstPos, 80, 0.42f, GPUParticleSystem::BurstStyle::Explosion,
+        EmitParticleBurst(explosionParticles_, 
+            burstPos, 80, 0.42f, AppParticleBurstStyle::Explosion,
             {0.60f, 1.0f, 0.92f, 0.72f}, {0.0f, 1.0f, 0.0f}, 1.20f);
-        smokeParticles_.EmitBurst(
-            burstPos, 24, 0.45f, GPUParticleSystem::BurstStyle::Smoke,
+        EmitParticleBurst(smokeParticles_, 
+            burstPos, 24, 0.45f, AppParticleBurstStyle::Smoke,
             {0.34f, 0.42f, 0.40f, 0.42f}, {0.0f, 1.0f, 0.0f}, 0.58f);
     };
 
@@ -434,8 +435,8 @@ void GameScene::ApplyEnemyCageConstraint(float deltaTime) {
     if (enemy_.ConsumeCagePulse()) {
         XMFLOAT3 pulsePos = cage.center;
         pulsePos.y += 0.28f;
-        explosionParticles_.EmitBurst(
-            pulsePos, 44, 0.28f, GPUParticleSystem::BurstStyle::SpiritSparkle,
+        EmitParticleBurst(explosionParticles_, 
+            pulsePos, 44, 0.28f, AppParticleBurstStyle::SpiritSparkle,
             {0.40f, 1.0f, 0.92f, 0.48f}, {0.0f, 1.0f, 0.0f}, 0.95f);
     }
 }
@@ -482,19 +483,19 @@ void GameScene::BeginBladeClash(size_t swordIndex, bool finalClash) {
     SyncEnemyAnimation();
     player_.NotifyCounterSuccess(swordIndex);
 
-    sparkParticles_.EmitBurst(
+    EmitParticleBurst(sparkParticles_, 
         bladeClashCenter_, finalClash ? 90 : 22, finalClash ? 0.64f : 0.16f,
-        GPUParticleSystem::BurstStyle::Sparks,
+        AppParticleBurstStyle::Sparks,
         finalClash ? XMFLOAT4{1.0f, 0.54f, 0.16f, 0.86f}
                    : XMFLOAT4{0.90f, 0.98f, 1.0f, 0.60f},
         bladeClashDirection_, finalClash ? 2.35f : 1.05f);
     if (finalClash) {
-        explosionParticles_.EmitBurst(
+        EmitParticleBurst(explosionParticles_, 
             bladeClashCenter_, 130, 1.40f,
-            GPUParticleSystem::BurstStyle::SpiritSparkle,
+            AppParticleBurstStyle::SpiritSparkle,
             {1.0f, 1.0f, 0.92f, 0.76f}, {0.0f, 1.0f, 0.0f}, 1.75f);
-        smokeParticles_.EmitBurst(
-            bladeClashCenter_, 44, 1.05f, GPUParticleSystem::BurstStyle::Smoke,
+        EmitParticleBurst(smokeParticles_, 
+            bladeClashCenter_, 44, 1.05f, AppParticleBurstStyle::Smoke,
             {0.48f, 0.36f, 0.28f, 0.42f}, {0.0f, 1.0f, 0.0f}, 0.82f);
     }
 }
@@ -535,8 +536,8 @@ void GameScene::UpdateBladeClash(float deltaTime) {
         sparkPos.x += bladeClashDirection_.x * 0.10f;
         sparkPos.y += 0.14f;
         sparkPos.z += bladeClashDirection_.z * 0.10f;
-        sparkParticles_.EmitBurst(sparkPos, 16, 0.11f,
-                                  GPUParticleSystem::BurstStyle::Sparks,
+        EmitParticleBurst(sparkParticles_, sparkPos, 16, 0.11f,
+                                  AppParticleBurstStyle::Sparks,
                                   bladeClashFinal_
                                       ? XMFLOAT4{1.0f, 0.92f, 0.62f, 0.82f}
                                       : XMFLOAT4{0.90f, 0.98f, 1.0f, 0.62f},
@@ -559,8 +560,8 @@ void GameScene::UpdateBladeClash(float deltaTime) {
         surgeSpark.x -= bladeClashDirection_.x * 0.12f;
         surgeSpark.y += 0.10f;
         surgeSpark.z -= bladeClashDirection_.z * 0.12f;
-        sparkParticles_.EmitBurst(surgeSpark, 8, 0.08f,
-                                  GPUParticleSystem::BurstStyle::Sparks,
+        EmitParticleBurst(sparkParticles_, surgeSpark, 8, 0.08f,
+                                  AppParticleBurstStyle::Sparks,
                                   bladeClashFinal_
                                       ? XMFLOAT4{1.0f, 0.34f, 0.10f, 0.70f}
                                       : XMFLOAT4{1.0f, 0.48f, 0.18f, 0.42f},
@@ -699,8 +700,8 @@ void GameScene::ResolveBladeClash(bool playerWon) {
 
     XMFLOAT3 warningCenter = playerPos;
     warningCenter.y += 1.16f;
-    sparkParticles_.EmitBurst(
-        warningCenter, 18, 0.24f, GPUParticleSystem::BurstStyle::Sparks,
+    EmitParticleBurst(sparkParticles_, 
+        warningCenter, 18, 0.24f, AppParticleBurstStyle::Sparks,
         {1.0f, 0.50f, 0.18f, 0.42f},
         {bladeClashDirection_.z, 0.04f, -bladeClashDirection_.x}, 0.66f);
 }

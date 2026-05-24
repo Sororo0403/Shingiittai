@@ -1,6 +1,8 @@
 #include <WinSock2.h>
 #include <WS2tcpip.h>
 #include "GameScene.h"
+#include "AppSceneServices.h"
+#include "compat/ParticleCompat.h"
 #include "BattleResultScene.h"
 #include "DirectXCommon.h"
 #include "Input.h"
@@ -79,7 +81,7 @@ Material MakeArenaMaterial(const XMFLOAT4 &color, bool useTexture = false,
     material.color = color;
     material.enableTexture = useTexture ? 1 : 0;
     material.reflectionStrength = reflection;
-    material.reflectionFresnelStrength = reflection * 0.58f;
+    material.reflectionFresnelStrength = reflection * 0.42f;
     material.reflectionRoughness = roughness;
     return material;
 }
@@ -108,6 +110,62 @@ float DistanceSq(const XMFLOAT3 &a, const XMFLOAT3 &b) {
     const float dy = a.y - b.y;
     const float dz = a.z - b.z;
     return dx * dx + dy * dy + dz * dz;
+}
+
+uint32_t Hash2D(uint32_t x, uint32_t y, uint32_t seed) {
+    uint32_t h = x * 374761393u + y * 668265263u + seed * 2246822519u;
+    h = (h ^ (h >> 13u)) * 1274126177u;
+    return h ^ (h >> 16u);
+}
+
+uint32_t CreateProceduralTexture(TextureManager *texture, uint32_t width,
+                                 uint32_t height,
+                                 const XMFLOAT3 &baseColor,
+                                 const XMFLOAT3 &accentColor, uint32_t seed,
+                                 float grainStrength) {
+    std::vector<uint8_t> pixels(static_cast<size_t>(width) * height * 4u);
+    for (uint32_t y = 0; y < height; ++y) {
+        for (uint32_t x = 0; x < width; ++x) {
+            const uint32_t h = Hash2D(x / 3u, y / 3u, seed);
+            const float noise = static_cast<float>(h & 255u) / 255.0f;
+            const float streak =
+                static_cast<float>(Hash2D(x / 19u, y / 7u, seed + 17u) & 255u) /
+                255.0f;
+            const float t = std::clamp(noise * grainStrength +
+                                           streak * (1.0f - grainStrength),
+                                       0.0f, 1.0f);
+            const float fine =
+                static_cast<float>(Hash2D(x, y, seed + 31u) & 63u) / 255.0f;
+            XMFLOAT3 color{
+                std::clamp(baseColor.x + (accentColor.x - baseColor.x) * t + fine,
+                           0.0f, 1.0f),
+                std::clamp(baseColor.y + (accentColor.y - baseColor.y) * t + fine,
+                           0.0f, 1.0f),
+                std::clamp(baseColor.z + (accentColor.z - baseColor.z) * t + fine,
+                           0.0f, 1.0f),
+            };
+            const size_t index = (static_cast<size_t>(y) * width + x) * 4u;
+            pixels[index + 0] = static_cast<uint8_t>(color.x * 255.0f);
+            pixels[index + 1] = static_cast<uint8_t>(color.y * 255.0f);
+            pixels[index + 2] = static_cast<uint8_t>(color.z * 255.0f);
+            pixels[index + 3] = 255u;
+        }
+    }
+    return texture->CreateFromRgbaPixels(width, height, pixels.data());
+}
+
+uint32_t AppCreateRustedMetalTexture(TextureManager *texture, uint32_t width,
+                                     uint32_t height) {
+    return CreateProceduralTexture(texture, width, height,
+                                   {0.23f, 0.22f, 0.20f},
+                                   {0.70f, 0.30f, 0.12f}, 0x914Au, 0.62f);
+}
+
+uint32_t AppCreateArenaStoneTexture(TextureManager *texture, uint32_t width,
+                                    uint32_t height) {
+    return CreateProceduralTexture(texture, width, height,
+                                   {0.07f, 0.08f, 0.09f},
+                                   {0.22f, 0.24f, 0.22f}, 0x51C3u, 0.48f);
 }
 
 XMFLOAT3 Lerp(const XMFLOAT3 &a, const XMFLOAT3 &b, float t) {
@@ -306,11 +364,12 @@ void ApplyWeatheredMetalMaterials(ModelManager *modelManager, uint32_t modelId,
 
         Material material = modelManager->GetMaterial(subMesh.materialId);
         material.enableTexture = 1;
+        material.baseColorTextureId = rustTextureId;
         material.color = palette[colorIndex % palette.size()];
         material.reflectionStrength = reflection;
         material.reflectionFresnelStrength = fresnel;
         material.reflectionRoughness = roughness;
-        material.enableDissolve = 0;
+        material.enableDissolve = 0.0f;
         material.dissolveEdgeColor = {1.0f, 0.44f, 0.14f, 1.0f};
         modelManager->SetMaterial(subMesh.materialId, material);
         ++colorIndex;
@@ -334,13 +393,14 @@ void ApplyRustedRobotMaterials(ModelManager *modelManager, uint32_t modelId,
 
         Material material = modelManager->GetMaterial(subMesh.materialId);
         material.enableTexture = 1;
+        material.baseColorTextureId = rustTextureId;
         material.color = {0.68f, 0.62f, 0.50f, 1.0f};
         XMStoreFloat4x4(&material.uvTransform,
                         XMMatrixTranspose(XMMatrixIdentity()));
         material.reflectionStrength = 0.085f;
         material.reflectionFresnelStrength = 0.030f;
         material.reflectionRoughness = 0.82f;
-        material.enableDissolve = 0;
+        material.enableDissolve = 0.0f;
         material.dissolveEdgeColor = {0.68f, 0.24f, 0.08f, 0.46f};
         modelManager->SetMaterial(subMesh.materialId, material);
     }
@@ -352,35 +412,34 @@ GameScene::~GameScene() { CloseDebugPreviewSocket(); }
 
 void GameScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
-    ctx_->dxCommon->ResetClearColor();
-    ctx_->postEffectRenderer->SetColorMode(PostEffectRenderer::ColorMode::None);
-    ctx_->postEffectRenderer->SetVignettingShape(11.0f, 1.15f);
-    ctx_->postEffectRenderer->SetVignettingStrength(0.20f);
-    ctx_->postEffectRenderer->SetVignettingEnabled(true);
-    combatFeedback_.Initialize(ctx_->postEffectRenderer);
+    ctx_->rendering.dxCommon->ResetClearColor();
+    ctx_->rendering.postEffectRenderer->SetColorMode(PostEffectRenderer::ColorMode::None);
+    ctx_->rendering.postEffectRenderer->SetVignettingShape(11.0f, 1.15f);
+    ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.20f);
+    ctx_->rendering.postEffectRenderer->SetVignettingEnabled(true);
+    combatFeedback_.Initialize(ctx_->rendering.postEffectRenderer);
 
-    float aspect = static_cast<float>(ctx_->winApp->GetWidth()) /
-                   static_cast<float>(ctx_->winApp->GetHeight());
+    float aspect = static_cast<float>(ctx_->systems.winApp->GetWidth()) /
+                   static_cast<float>(ctx_->systems.winApp->GetHeight());
 
-    camera_.Initialize(aspect);
-    camera_.SetMode(CameraMode::LookAt);
-    camera_.UpdateMatrices();
+    camera_.Initialize(aspect);    camera_.UpdateMatrices();
     camera_.SetPerspectiveFovDeg(currentFovDeg_);
 
     debugPreviewFrame_ = {};
-    debugPreviewFrame_.textureId = ctx_->texture->CreateDynamicTexture(
-        debugPreviewFrame_.width, debugPreviewFrame_.height);
     debugPreviewFrame_.rgbaPixels.resize(
         static_cast<size_t>(debugPreviewFrame_.width) *
         static_cast<size_t>(debugPreviewFrame_.height) * 4u);
+    debugPreviewFrame_.textureId = ctx_->rendering.texture->CreateFromRgbaPixels(
+        debugPreviewFrame_.width, debugPreviewFrame_.height,
+        debugPreviewFrame_.rgbaPixels.data());
     debugPreviewJpegBuffer_.clear();
     debugPreviewChunkReceived_.clear();
     debugPreviewFrameId_ = 0;
     debugPreviewReceivedChunks_ = 0;
 
-    DirectXCommon *dx = ctx_->dxCommon;
-    ModelManager *model = ctx_->model;
-    TextureManager *texture = ctx_->texture;
+    DirectXCommon *dx = ctx_->rendering.dxCommon;
+    ModelManager *model = ctx_->rendering.model;
+    TextureManager *texture = ctx_->rendering.texture;
 
     dx->BeginUpload();
 
@@ -389,14 +448,14 @@ void GameScene::Initialize(const SceneContext &ctx) {
     uint32_t swordModel = model->Load(L"app/resources/models/player/sword.glb");
     uint32_t enemyModel = model->Load(L"app/resources/models/boss/boss.gltf");
     uint32_t bulletModel =
-        ctx_->model->Load(L"app/resources/models/bullet/bullet.obj");
+        ctx_->rendering.model->Load(L"app/resources/models/bullet/bullet.obj");
     particleTextureId_ = texture->Load(L"app/resources/sprites/smoke.png");
     const uint32_t enemyRustTextureId =
-        texture->CreateRustedMetalTexture(512, 512);
+        AppCreateRustedMetalTexture(texture, 512, 512);
     const uint32_t worldRustTextureId =
-        texture->CreateRustedMetalTexture(768, 768);
+        AppCreateRustedMetalTexture(texture, 768, 768);
     const uint32_t arenaStoneTextureId =
-        texture->CreateArenaStoneTexture(1024, 1024);
+        AppCreateArenaStoneTexture(texture, 1024, 1024);
     ApplyWeatheredMetalMaterials(model, playerModel, worldRustTextureId,
                                  {{0.22f, 0.31f, 0.56f, 0.98f},
                                   {0.11f, 0.17f, 0.32f, 0.98f},
@@ -420,17 +479,15 @@ void GameScene::Initialize(const SceneContext &ctx) {
         MakeArenaMaterial({0.070f, 0.085f, 0.105f, 1.0f}, true, 0.025f,
                           0.84f));
         gSharedBattleModels.arenaLowPolyTerrainModelId =
-            model->CreateLowPolyTerrain(
+            model->CreatePlane(
                 arenaStoneTextureId,
                 MakeArenaMaterial({0.075f, 0.10f, 0.13f, 1.0f}, true, 0.016f,
-                                  0.80f),
-                42, 78.0f, 1.25f, 15.0f, 0x4107u);
+                                  0.80f));
         gSharedBattleModels.arenaDistantTerrainModelId =
-            model->CreateLowPolyTerrain(
+            model->CreatePlane(
                 arenaStoneTextureId,
                 MakeArenaMaterial({0.12f, 0.18f, 0.22f, 1.0f}, true, 0.02f,
-                                  0.88f),
-                18, 58.0f, 5.6f, 0.0f, 0x671Du);
+                                  0.88f));
         gSharedBattleModels.arenaHazardSpireModelId = model->CreateCylinder(
             arenaStoneTextureId,
             MakeArenaMaterial({0.10f, 0.15f, 0.15f, 1.0f}, true, 0.025f,
@@ -440,11 +497,11 @@ void GameScene::Initialize(const SceneContext &ctx) {
             0, MakeArenaMaterial({0.55f, 0.88f, 0.96f, 0.42f}, false, 0.0f,
                                  0.46f),
             48, 2.45f, 0.34f);
-        gSharedBattleModels.arenaCityTowerModelId = model->CreateBox(
+        gSharedBattleModels.arenaCityTowerModelId = model->CreateCylinder(
             arenaStoneTextureId,
             MakeArenaMaterial({0.18f, 0.24f, 0.29f, 1.0f}, true, 0.025f,
                               0.76f),
-            1.0f, 1.0f, 1.0f);
+            4, 0.72f, 0.72f, 1.0f);
         gSharedBattleModels.arenaCityWindowModelId = model->CreatePlane(
             0, MakeArenaMaterial({0.72f, 0.90f, 0.96f, 0.58f}, false, 0.0f,
                                  0.40f));
@@ -545,18 +602,18 @@ void GameScene::Initialize(const SceneContext &ctx) {
         gSharedBattleModels.chargeWeakPointBackplateModelId;
     chargeWeakPointSlashModelId_ =
         gSharedBattleModels.chargeWeakPointSlashModelId;
-    sparkParticles_.Initialize(dx, ctx_->srv, texture, particleTextureId_, 4096);
+    sparkParticles_.Initialize(dx, ctx_->rendering.srv, texture, particleTextureId_, 4096);
     sparkParticles_.SetEmission(1, 1000.0f);
     sparkParticles_.SetEmitterRadius(0.08f);
-    explosionParticles_.Initialize(dx, ctx_->srv, texture, particleTextureId_,
+    explosionParticles_.Initialize(dx, ctx_->rendering.srv, texture, particleTextureId_,
                                    4096);
     explosionParticles_.SetEmission(1, 1000.0f);
     explosionParticles_.SetEmitterRadius(0.25f);
-    smokeParticles_.Initialize(dx, ctx_->srv, texture, particleTextureId_, 2048);
+    smokeParticles_.Initialize(dx, ctx_->rendering.srv, texture, particleTextureId_, 2048);
     smokeParticles_.SetEmission(1, 1000.0f);
     smokeParticles_.SetEmitterRadius(0.40f);
 
-    swordFlashParticles_.Initialize(dx, ctx_->srv, texture, particleTextureId_,
+    swordFlashParticles_.Initialize(dx, ctx_->rendering.srv, texture, particleTextureId_,
                                     384);
     swordFlashParticles_.SetEmission(1, 1000.0f);
     swordFlashParticles_.SetEmitterRadius(0.06f);
@@ -578,19 +635,19 @@ void GameScene::Initialize(const SceneContext &ctx) {
     enemy_.Initialize(enemyModel, bulletModel);
     enemyModelId_ = enemyModel;
     enemyProjectileModelId_ = bulletModel;
-    if (ctx_->sound != nullptr) {
+    if (ctx_->systems.sound != nullptr) {
         slashSoundId_ =
-            ctx_->sound->Load(L"app/resources/sounds/slash_hero.wav");
+            ctx_->systems.sound->Load(L"app/resources/sounds/slash_hero.wav");
         enemyReleaseSoundId_ =
-            ctx_->sound->Load(L"app/resources/sounds/enemy_release_snap.wav");
+            ctx_->systems.sound->Load(L"app/resources/sounds/enemy_release_snap.wav");
         hitSoundId_ =
-            ctx_->sound->Load(L"app/resources/sounds/hit_impact.wav");
+            ctx_->systems.sound->Load(L"app/resources/sounds/hit_impact.wav");
         counterSoundId_ =
-            ctx_->sound->Load(L"app/resources/sounds/counter_burst.wav");
+            ctx_->systems.sound->Load(L"app/resources/sounds/counter_burst.wav");
         damageSoundId_ =
-            ctx_->sound->Load(L"app/resources/sounds/damage_heavy.wav");
+            ctx_->systems.sound->Load(L"app/resources/sounds/damage_heavy.wav");
         explosionSoundId_ =
-            ctx_->sound->Load(L"app/resources/sounds/explosion_boss.wav");
+            ctx_->systems.sound->Load(L"app/resources/sounds/explosion_boss.wav");
         soundsLoaded_ = true;
     }
     cameraYaw_ = 0.0f;
@@ -690,8 +747,8 @@ void GameScene::Initialize(const SceneContext &ctx) {
     handTrackingStartRequested_ = false;
     player_.SetCameraSwordSlashSuppressed(false);
     if (inputCalibration_.controlType == InputControlType::Hand) {
-        if (ctx_->requestHandTrackingStart != nullptr) {
-            ctx_->requestHandTrackingStart();
+        if (AppSceneServices::HasHandTrackingStart()) {
+            AppSceneServices::RequestHandTrackingStart();
             handTrackingStartRequested_ = true;
         }
     }
@@ -701,8 +758,8 @@ void GameScene::Initialize(const SceneContext &ctx) {
 }
 
 void GameScene::Update() {
-    Input *input = ctx_->input;
-    const float baseDeltaTime = ctx_->deltaTime;
+    Input *input = ctx_->systems.input;
+    const float baseDeltaTime = ctx_->frame.deltaTime;
     if (runMode_ == RunMode::Play &&
         inputCalibration_.controlType == InputControlType::Hand) {
         UpdateDebugCameraPreview(baseDeltaTime);
@@ -727,8 +784,8 @@ void GameScene::Update() {
             player_.GetTransform().position);
         UpdateBattleCamera();
         camera_.UpdateMatrices();
-        ctx_->model->UpdateAnimation(playerModelId_, baseDeltaTime * 0.08f);
-        ctx_->model->UpdateAnimation(enemyModelId_, baseDeltaTime * 0.002f);
+        ctx_->rendering.model->UpdateAnimation(playerModelId_, baseDeltaTime * 0.08f);
+        ctx_->rendering.model->UpdateAnimation(enemyModelId_, baseDeltaTime * 0.002f);
         ApplyEnemyProceduralAnimation();
         sparkParticles_.Update(baseDeltaTime);
         explosionParticles_.Update(baseDeltaTime);
@@ -741,8 +798,8 @@ void GameScene::Update() {
         UpdateDefeatSequence(baseDeltaTime);
         UpdateBattleCamera();
         camera_.UpdateMatrices();
-        ctx_->model->UpdateAnimation(playerModelId_, baseDeltaTime * 0.035f);
-        ctx_->model->UpdateAnimation(enemyModelId_, baseDeltaTime * 0.28f);
+        ctx_->rendering.model->UpdateAnimation(playerModelId_, baseDeltaTime * 0.035f);
+        ctx_->rendering.model->UpdateAnimation(enemyModelId_, baseDeltaTime * 0.28f);
         ApplyEnemyProceduralAnimation();
         sparkParticles_.Update(baseDeltaTime);
         explosionParticles_.Update(baseDeltaTime);
@@ -787,24 +844,24 @@ void GameScene::Update() {
             bladeClashFinishGuardBreakEmitted_ = true;
             XMFLOAT3 breakCenter = enemy_.GetTransform().position;
             breakCenter.y += 1.22f;
-            explosionParticles_.EmitBurst(
+            EmitParticleBurst(explosionParticles_, 
                 breakCenter, 92, 0.86f,
-                GPUParticleSystem::BurstStyle::Explosion,
+                AppParticleBurstStyle::Explosion,
                 {1.0f, 0.86f, 0.42f, 0.72f},
                 {-bladeClashDirection_.x, 0.16f, -bladeClashDirection_.z},
                 1.72f);
-            sparkParticles_.EmitBurst(
-                breakCenter, 128, 0.72f, GPUParticleSystem::BurstStyle::Sparks,
+            EmitParticleBurst(sparkParticles_, 
+                breakCenter, 128, 0.72f, AppParticleBurstStyle::Sparks,
                 {1.0f, 0.92f, 0.48f, 0.88f},
                 {bladeClashDirection_.z, 0.18f, -bladeClashDirection_.x},
                 2.25f);
-            swordFlashParticles_.EmitBurst(
-                breakCenter, 10, 0.58f, GPUParticleSystem::BurstStyle::Flash,
+            EmitParticleBurst(swordFlashParticles_, 
+                breakCenter, 10, 0.58f, AppParticleBurstStyle::Flash,
                 {1.0f, 1.0f, 0.82f, 0.66f},
                 {-bladeClashDirection_.x, 0.0f, -bladeClashDirection_.z},
                 0.34f);
-            smokeParticles_.EmitBurst(
-                breakCenter, 24, 0.62f, GPUParticleSystem::BurstStyle::Smoke,
+            EmitParticleBurst(smokeParticles_, 
+                breakCenter, 24, 0.62f, AppParticleBurstStyle::Smoke,
                 {0.36f, 0.32f, 0.26f, 0.42f},
                 {-bladeClashDirection_.x, 0.06f, -bladeClashDirection_.z},
                 0.76f);
@@ -824,24 +881,24 @@ void GameScene::Update() {
             // constexpr float clashLossDamage = 25.0f;
             XMFLOAT3 sweepCenter = player_.GetTransform().position;
             sweepCenter.y += 1.02f;
-            explosionParticles_.EmitBurst(
+            EmitParticleBurst(explosionParticles_, 
                 sweepCenter, 92, 1.24f,
-                GPUParticleSystem::BurstStyle::SlashLine,
+                AppParticleBurstStyle::SlashLine,
                 {1.0f, 0.28f, 0.06f, 0.96f},
                 {bladeClashDirection_.z, -0.04f, -bladeClashDirection_.x},
                 1.92f);
-            swordFlashParticles_.EmitBurst(
-                sweepCenter, 14, 0.92f, GPUParticleSystem::BurstStyle::Flash,
+            EmitParticleBurst(swordFlashParticles_, 
+                sweepCenter, 14, 0.92f, AppParticleBurstStyle::Flash,
                 {1.0f, 0.56f, 0.16f, 0.82f},
                 {-bladeClashDirection_.x, 0.0f, -bladeClashDirection_.z},
                 0.48f);
-            sparkParticles_.EmitBurst(
-                sweepCenter, 46, 0.42f, GPUParticleSystem::BurstStyle::Sparks,
+            EmitParticleBurst(sparkParticles_, 
+                sweepCenter, 46, 0.42f, AppParticleBurstStyle::Sparks,
                 {1.0f, 0.46f, 0.12f, 0.82f},
                 {-bladeClashDirection_.x, 0.08f, -bladeClashDirection_.z},
                 1.48f);
-            smokeParticles_.EmitBurst(
-                sweepCenter, 18, 0.44f, GPUParticleSystem::BurstStyle::Smoke,
+            EmitParticleBurst(smokeParticles_, 
+                sweepCenter, 18, 0.44f, AppParticleBurstStyle::Smoke,
                 {0.42f, 0.31f, 0.24f, 0.44f},
                 {-bladeClashDirection_.x, 0.04f, -bladeClashDirection_.z},
                 0.62f);
@@ -863,14 +920,14 @@ void GameScene::Update() {
             bladeClashFinishTimer_ >= 1.24f && bladeClashFinishTimer_ < 1.28f) {
             XMFLOAT3 skidCenter = player_.GetTransform().position;
             skidCenter.y += 0.28f;
-            explosionParticles_.EmitBurst(
+            EmitParticleBurst(explosionParticles_, 
                 skidCenter, 36, 0.56f,
-                GPUParticleSystem::BurstStyle::SlashLine,
+                AppParticleBurstStyle::SlashLine,
                 {1.0f, 0.42f, 0.10f, 0.38f},
                 {bladeClashDirection_.z, 0.02f, -bladeClashDirection_.x},
                 0.92f);
-            smokeParticles_.EmitBurst(
-                skidCenter, 38, 0.64f, GPUParticleSystem::BurstStyle::Smoke,
+            EmitParticleBurst(smokeParticles_, 
+                skidCenter, 38, 0.64f, AppParticleBurstStyle::Smoke,
                 {0.34f, 0.28f, 0.24f, 0.44f},
                 {-bladeClashDirection_.x, 0.03f, -bladeClashDirection_.z},
                 0.62f);
@@ -881,26 +938,26 @@ void GameScene::Update() {
             bladeClashFinishWallImpactEmitted_ = true;
             XMFLOAT3 crashCenter = player_.GetTransform().position;
             crashCenter.y += 0.86f;
-            explosionParticles_.EmitBurst(
+            EmitParticleBurst(explosionParticles_, 
                 crashCenter, 110, 0.96f,
-                GPUParticleSystem::BurstStyle::Explosion,
+                AppParticleBurstStyle::Explosion,
                 {1.0f, 0.36f, 0.10f, 0.78f},
                 {-bladeClashDirection_.x, 0.12f, -bladeClashDirection_.z},
                 2.35f);
-            sparkParticles_.EmitBurst(
-                crashCenter, 72, 0.58f, GPUParticleSystem::BurstStyle::Sparks,
+            EmitParticleBurst(sparkParticles_, 
+                crashCenter, 72, 0.58f, AppParticleBurstStyle::Sparks,
                 {1.0f, 0.56f, 0.16f, 0.86f},
                 {bladeClashDirection_.z, 0.10f, -bladeClashDirection_.x},
                 2.10f);
-            swordFlashParticles_.EmitBurst(
-                crashCenter, 12, 0.82f, GPUParticleSystem::BurstStyle::Flash,
+            EmitParticleBurst(swordFlashParticles_, 
+                crashCenter, 12, 0.82f, AppParticleBurstStyle::Flash,
                 {1.0f, 0.82f, 0.48f, 0.58f},
                 {-bladeClashDirection_.x, 0.0f, -bladeClashDirection_.z},
                 0.40f);
             XMFLOAT3 dustCenter = crashCenter;
             dustCenter.y -= 0.52f;
-            smokeParticles_.EmitBurst(
-                dustCenter, 50, 0.94f, GPUParticleSystem::BurstStyle::Smoke,
+            EmitParticleBurst(smokeParticles_, 
+                dustCenter, 50, 0.94f, AppParticleBurstStyle::Smoke,
                 {0.38f, 0.32f, 0.28f, 0.58f},
                 {-bladeClashDirection_.x, 0.05f, -bladeClashDirection_.z},
                 1.25f);
@@ -953,13 +1010,13 @@ void GameScene::Update() {
             if (slideT > 0.02f && slideT < 0.96f) {
                 XMFLOAT3 trailCenter = enemyPos;
                 trailCenter.y += 0.18f;
-                smokeParticles_.EmitBurst(
-                    trailCenter, 4, 0.34f, GPUParticleSystem::BurstStyle::Smoke,
+                EmitParticleBurst(smokeParticles_, 
+                    trailCenter, 4, 0.34f, AppParticleBurstStyle::Smoke,
                     {0.34f, 0.29f, 0.24f, 0.30f},
                     {-bladeClashDirection_.x, 0.04f, -bladeClashDirection_.z},
                     0.48f);
-                sparkParticles_.EmitBurst(
-                    trailCenter, 3, 0.16f, GPUParticleSystem::BurstStyle::Sparks,
+                EmitParticleBurst(sparkParticles_, 
+                    trailCenter, 3, 0.16f, AppParticleBurstStyle::Sparks,
                     {1.0f, 0.66f, 0.18f, 0.36f},
                     {bladeClashDirection_.z, 0.02f, -bladeClashDirection_.x},
                     0.54f);
@@ -971,30 +1028,30 @@ void GameScene::Update() {
             bladeClashFinishImpactEmitted_ = true;
             XMFLOAT3 cutCenter = enemy_.GetTransform().position;
             cutCenter.y += 1.18f;
-            explosionParticles_.EmitBurst(
+            EmitParticleBurst(explosionParticles_, 
                 cutCenter, 104, 0.86f,
-                GPUParticleSystem::BurstStyle::SlashLine,
+                AppParticleBurstStyle::SlashLine,
                 {1.0f, 0.90f, 0.58f, 0.66f},
                 {bladeClashDirection_.z, 0.12f, -bladeClashDirection_.x},
                 1.72f);
-            explosionParticles_.EmitBurst(
+            EmitParticleBurst(explosionParticles_, 
                 cutCenter, 42, 0.68f,
-                GPUParticleSystem::BurstStyle::Explosion,
+                AppParticleBurstStyle::Explosion,
                 {1.0f, 0.78f, 0.34f, 0.50f},
                 {bladeClashDirection_.x, 0.16f, bladeClashDirection_.z},
                 1.18f);
-            swordFlashParticles_.EmitBurst(
-                cutCenter, 8, 0.42f, GPUParticleSystem::BurstStyle::Flash,
+            EmitParticleBurst(swordFlashParticles_, 
+                cutCenter, 8, 0.42f, AppParticleBurstStyle::Flash,
                 {1.0f, 0.96f, 0.80f, 0.56f},
                 {bladeClashDirection_.z, 0.0f, -bladeClashDirection_.x},
                 0.26f);
-            sparkParticles_.EmitBurst(
-                cutCenter, 46, 0.26f, GPUParticleSystem::BurstStyle::Sparks,
+            EmitParticleBurst(sparkParticles_, 
+                cutCenter, 46, 0.26f, AppParticleBurstStyle::Sparks,
                 {1.0f, 0.82f, 0.28f, 0.58f},
                 {bladeClashDirection_.z, 0.16f, -bladeClashDirection_.x},
                 1.08f);
-            smokeParticles_.EmitBurst(
-                cutCenter, 18, 0.52f, GPUParticleSystem::BurstStyle::Smoke,
+            EmitParticleBurst(smokeParticles_, 
+                cutCenter, 18, 0.52f, AppParticleBurstStyle::Smoke,
                 {0.38f, 0.32f, 0.25f, 0.34f},
                 {-bladeClashDirection_.x, 0.10f, -bladeClashDirection_.z},
                 0.62f);
@@ -1012,12 +1069,12 @@ void GameScene::Update() {
             bladeClashFinalBarrageStep_ = 1;
             XMFLOAT3 pressureCenter = bladeClashCenter_;
             pressureCenter.y += 0.16f;
-            swordFlashParticles_.EmitBurst(
-                pressureCenter, 7, 0.38f, GPUParticleSystem::BurstStyle::Flash,
+            EmitParticleBurst(swordFlashParticles_, 
+                pressureCenter, 7, 0.38f, AppParticleBurstStyle::Flash,
                 {1.0f, 1.0f, 0.88f, 0.46f}, bladeClashDirection_, 0.24f);
-            explosionParticles_.EmitBurst(
+            EmitParticleBurst(explosionParticles_, 
                 pressureCenter, 70, 0.72f,
-                GPUParticleSystem::BurstStyle::SpiritSparkle,
+                AppParticleBurstStyle::SpiritSparkle,
                 {1.0f, 0.96f, 0.78f, 0.54f}, {0.0f, 1.0f, 0.0f}, 0.88f);
             CombatFeedbackEvent pressureFeedback{};
             pressureFeedback.type = CombatFeedbackEventType::CounterSuccess;
@@ -1032,15 +1089,15 @@ void GameScene::Update() {
             bladeClashFinishImpactEmitted_ = true;
             XMFLOAT3 blastCenter = enemy_.GetTransform().position;
             blastCenter.y += 1.10f;
-            explosionParticles_.EmitBurst(
+            EmitParticleBurst(explosionParticles_, 
                 blastCenter, 270, 1.26f,
-                GPUParticleSystem::BurstStyle::Explosion,
+                AppParticleBurstStyle::Explosion,
                 {1.0f, 0.96f, 0.70f, 0.88f}, bladeClashDirection_, 2.65f);
-            sparkParticles_.EmitBurst(
-                blastCenter, 170, 0.76f, GPUParticleSystem::BurstStyle::Sparks,
+            EmitParticleBurst(sparkParticles_, 
+                blastCenter, 170, 0.76f, AppParticleBurstStyle::Sparks,
                 {1.0f, 0.66f, 0.14f, 0.86f}, bladeClashDirection_, 2.42f);
-            swordFlashParticles_.EmitBurst(
-                blastCenter, 14, 0.68f, GPUParticleSystem::BurstStyle::Flash,
+            EmitParticleBurst(swordFlashParticles_, 
+                blastCenter, 14, 0.68f, AppParticleBurstStyle::Flash,
                 {1.0f, 1.0f, 0.86f, 0.72f}, bladeClashDirection_, 0.48f);
             CombatFeedbackEvent blowbackFeedback{};
             blowbackFeedback.type = CombatFeedbackEventType::CounterSuccess;
@@ -1055,19 +1112,19 @@ void GameScene::Update() {
             bladeClashFinishSkidEmitted_ = true;
             XMFLOAT3 skidCenter = enemy_.GetTransform().position;
             skidCenter.y += 0.22f;
-            explosionParticles_.EmitBurst(
+            EmitParticleBurst(explosionParticles_, 
                 skidCenter, 112, 0.82f,
-                GPUParticleSystem::BurstStyle::Explosion,
+                AppParticleBurstStyle::Explosion,
                 {1.0f, 0.58f, 0.14f, 0.66f},
                 {bladeClashDirection_.x, 0.22f, bladeClashDirection_.z},
                 1.62f);
-            sparkParticles_.EmitBurst(
-                skidCenter, 88, 0.54f, GPUParticleSystem::BurstStyle::Sparks,
+            EmitParticleBurst(sparkParticles_, 
+                skidCenter, 88, 0.54f, AppParticleBurstStyle::Sparks,
                 {1.0f, 0.72f, 0.18f, 0.84f},
                 {bladeClashDirection_.z, 0.10f, -bladeClashDirection_.x},
                 1.42f);
-            smokeParticles_.EmitBurst(
-                skidCenter, 86, 1.02f, GPUParticleSystem::BurstStyle::Smoke,
+            EmitParticleBurst(smokeParticles_, 
+                skidCenter, 86, 1.02f, AppParticleBurstStyle::Smoke,
                 {0.42f, 0.34f, 0.26f, 0.58f}, bladeClashDirection_, 1.26f);
         }
         if (bladeClashFinishPlayerWon_ && bladeClashFinal_ &&
@@ -1076,17 +1133,17 @@ void GameScene::Update() {
             bladeClashFinishWallImpactEmitted_ = true;
             XMFLOAT3 crashCenter = enemy_.GetTransform().position;
             crashCenter.y += 0.42f;
-            explosionParticles_.EmitBurst(
+            EmitParticleBurst(explosionParticles_, 
                 crashCenter, 240, 1.36f,
-                GPUParticleSystem::BurstStyle::Explosion,
+                AppParticleBurstStyle::Explosion,
                 {1.0f, 0.48f, 0.10f, 0.78f}, bladeClashDirection_, 2.70f);
-            sparkParticles_.EmitBurst(
-                crashCenter, 150, 0.86f, GPUParticleSystem::BurstStyle::Sparks,
+            EmitParticleBurst(sparkParticles_, 
+                crashCenter, 150, 0.86f, AppParticleBurstStyle::Sparks,
                 {1.0f, 0.76f, 0.22f, 0.86f},
                 {-bladeClashDirection_.x, 0.12f, -bladeClashDirection_.z},
                 2.10f);
-            smokeParticles_.EmitBurst(
-                crashCenter, 124, 1.36f, GPUParticleSystem::BurstStyle::Smoke,
+            EmitParticleBurst(smokeParticles_, 
+                crashCenter, 124, 1.36f, AppParticleBurstStyle::Smoke,
                 {0.36f, 0.30f, 0.26f, 0.62f}, bladeClashDirection_, 1.56f);
         }
         if (bladeClashFinishPlayerWon_ && !bladeClashFinal_ &&
@@ -1097,19 +1154,19 @@ void GameScene::Update() {
                 enemy_.GetTransform().position.x + bladeClashDirection_.x * 6.8f,
                 player_.GetTransform().position.y + 0.54f,
                 enemy_.GetTransform().position.z + bladeClashDirection_.z * 6.8f};
-            explosionParticles_.EmitBurst(
+            EmitParticleBurst(explosionParticles_, 
                 skidCenter, 78, 0.92f,
-                GPUParticleSystem::BurstStyle::SlashLine,
+                AppParticleBurstStyle::SlashLine,
                 {1.0f, 0.78f, 0.32f, 0.58f},
                 {bladeClashDirection_.z, 0.02f, -bladeClashDirection_.x},
                 1.46f);
-            sparkParticles_.EmitBurst(
-                skidCenter, 48, 0.46f, GPUParticleSystem::BurstStyle::Sparks,
+            EmitParticleBurst(sparkParticles_, 
+                skidCenter, 48, 0.46f, AppParticleBurstStyle::Sparks,
                 {1.0f, 0.70f, 0.20f, 0.70f},
                 {-bladeClashDirection_.x, 0.04f, -bladeClashDirection_.z},
                 1.08f);
-            smokeParticles_.EmitBurst(
-                skidCenter, 52, 0.94f, GPUParticleSystem::BurstStyle::Smoke,
+            EmitParticleBurst(smokeParticles_, 
+                skidCenter, 52, 0.94f, AppParticleBurstStyle::Smoke,
                 {0.36f, 0.30f, 0.25f, 0.52f},
                 {bladeClashDirection_.x, 0.08f, bladeClashDirection_.z},
                 1.08f);
@@ -1155,7 +1212,7 @@ void GameScene::Update() {
     }
     UpdateCamera(input);
 
-    ctx_->model->UpdateAnimation(playerModelId_, playerDeltaTime);
+    ctx_->rendering.model->UpdateAnimation(playerModelId_, playerDeltaTime);
 
     bool forceRangedReflectMove = false;
     for (const auto &wave : enemy_.GetWaves()) {
@@ -1345,13 +1402,13 @@ void GameScene::Update() {
             if (enemySlamT > 0.02f && enemySlideT < 0.82f) {
                 XMFLOAT3 burstCenter = enemyPos;
                 burstCenter.y += 0.26f;
-                smokeParticles_.EmitBurst(
-                    burstCenter, 5, 0.30f, GPUParticleSystem::BurstStyle::Smoke,
+                EmitParticleBurst(smokeParticles_, 
+                    burstCenter, 5, 0.30f, AppParticleBurstStyle::Smoke,
                     {0.34f, 0.29f, 0.24f, 0.24f},
                     {-bladeClashDirection_.x, 0.06f, -bladeClashDirection_.z},
                     0.52f);
-                sparkParticles_.EmitBurst(
-                    burstCenter, 4, 0.14f, GPUParticleSystem::BurstStyle::Sparks,
+                EmitParticleBurst(sparkParticles_, 
+                    burstCenter, 4, 0.14f, AppParticleBurstStyle::Sparks,
                     {1.0f, 0.66f, 0.18f, 0.32f},
                     {right.x * side, 0.08f, right.z * side}, 0.64f);
             }
@@ -1427,11 +1484,11 @@ void GameScene::Update() {
         }
     }
     UpdateSwordVfx(baseDeltaTime);
-    if (soundsLoaded_ && ctx_->sound != nullptr) {
+    if (soundsLoaded_ && ctx_->systems.sound != nullptr) {
         const auto slashStates = player_.GetSwordSlashStates();
         for (size_t i = 0; i < slashStates.size(); ++i) {
             if (slashStates[i] && !previousSwordSoundStates_[i]) {
-                ctx_->sound->Play(slashSoundId_);
+                ctx_->systems.sound->Play(slashSoundId_);
             }
         }
         previousSwordSoundStates_ = slashStates;
@@ -1458,8 +1515,8 @@ void GameScene::Update() {
                  currentEnemyActionKind == ActionKind::Cage) &&
                 currentEnemyActionStep == ActionStep::Active;
             if (isEnemyAttackRelease) {
-                if (soundsLoaded_ && ctx_->sound != nullptr) {
-                    ctx_->sound->Play(enemyReleaseSoundId_);
+                if (soundsLoaded_ && ctx_->systems.sound != nullptr) {
+                    ctx_->systems.sound->Play(enemyReleaseSoundId_);
                 }
             }
         }
@@ -1511,7 +1568,7 @@ void GameScene::Update() {
             }
         }
         if (!bladeClashActive_) {
-            ctx_->model->UpdateAnimation(enemyModelId_, enemyAnimationDeltaTime);
+            ctx_->rendering.model->UpdateAnimation(enemyModelId_, enemyAnimationDeltaTime);
         }
     }
     ApplyEnemyProceduralAnimation();
@@ -1734,16 +1791,15 @@ void GameScene::UploadDebugPreviewTextureIfNeeded() {
         return;
     }
 
-    if (ctx_->texture->UpdateDynamicTexture(
-            debugPreviewFrame_.textureId, debugPreviewFrame_.rgbaPixels.data(),
-            debugPreviewFrame_.width, debugPreviewFrame_.height)) {
-        debugPreviewFrame_.dirty = false;
-    }
+    ctx_->rendering.texture->UpdateTexture2D(
+        debugPreviewFrame_.textureId, debugPreviewFrame_.rgbaPixels.data(),
+        static_cast<size_t>(debugPreviewFrame_.width) * 4u);
+    debugPreviewFrame_.dirty = false;
 }
 
 void GameScene::DrawDebugCameraPreview() {
-    if (ctx_ == nullptr || ctx_->sprite == nullptr || ctx_->texture == nullptr ||
-        ctx_->winApp == nullptr) {
+    if (ctx_ == nullptr || ctx_->rendering.sprite == nullptr || ctx_->rendering.texture == nullptr ||
+        ctx_->systems.winApp == nullptr) {
         return;
     }
 
@@ -1765,10 +1821,10 @@ void GameScene::DrawDebugCameraPreview() {
         sprite.position = {x, y};
         sprite.size = {w, h};
         sprite.color = color;
-        ctx_->sprite->DrawSprite(sprite);
+        ctx_->rendering.sprite->DrawSprite(sprite);
     };
 
-    ctx_->sprite->PreDraw();
+    ctx_->rendering.sprite->PreDraw();
     drawRect(kMargin - 4.0f, kMargin - 4.0f, kPreviewWidth + 8.0f,
              previewHeight + 8.0f, {0.0f, 0.0f, 0.0f, 0.52f});
 
@@ -1778,7 +1834,7 @@ void GameScene::DrawDebugCameraPreview() {
         preview.position = {kMargin, kMargin};
         preview.size = {kPreviewWidth, previewHeight};
         preview.color = {1.0f, 1.0f, 1.0f, alpha};
-        ctx_->sprite->DrawSprite(preview);
+        ctx_->rendering.sprite->DrawSprite(preview);
     }
 
     const XMFLOAT4 border =
@@ -1790,12 +1846,11 @@ void GameScene::DrawDebugCameraPreview() {
     drawRect(kMargin, kMargin, 2.0f, previewHeight, border);
     drawRect(kMargin + kPreviewWidth - 2.0f, kMargin, 2.0f, previewHeight,
              border);
-    ctx_->sprite->PostDraw();
+    ctx_->rendering.sprite->PostDraw();
 }
 
 void GameScene::Draw() {
-    ctx_->model->PreDraw();
-
+    ctx_->rendering.model->PreDraw();
     const bool bladeClashWinFinish =
         bladeClashFinishActive_ && bladeClashFinishPlayerWon_;
     if (bladeClashWinFinish) {
@@ -1805,13 +1860,13 @@ void GameScene::Draw() {
     }
     const float playerVisualScale = bladeClashWinFinish ? 0.68f : 1.0f;
     const float enemyVisualScale = bladeClashWinFinish ? 1.32f : 1.0f;
-    player_.Draw(ctx_->model, camera_,
+    player_.Draw(ctx_->rendering.model, camera_,
                  !playerViewCamera_ || bladeClashFinishActive_,
                  bladeClashFinishActive_, playerVisualScale);
     if (!(victorySequenceActive_ && victoryFinalExplosionEmitted_)) {
-        enemy_.Draw(ctx_->model, camera_, enemyVisualScale);
+        enemy_.Draw(ctx_->rendering.model, camera_, enemyVisualScale);
     }
-    ctx_->model->PostDraw();
+    ctx_->rendering.model->PostDraw();
     swordTrailRenderer_.Draw(camera_);
     swordSlashArcRenderer_.Draw(camera_);
 
@@ -1840,24 +1895,24 @@ void GameScene::DispatchCombatFeedback(const CombatFeedbackEvent &event) {
                                            camera_, event.power,
                                            slashDirection);
     }
-    if (!soundsLoaded_ || ctx_ == nullptr || ctx_->sound == nullptr) {
+    if (!soundsLoaded_ || ctx_ == nullptr || ctx_->systems.sound == nullptr) {
         return;
     }
 
     switch (event.type) {
     case CombatFeedbackEventType::CounterSuccess:
     case CombatFeedbackEventType::BladeClashGuardBreak:
-        ctx_->sound->Play(counterSoundId_);
+        ctx_->systems.sound->Play(counterSoundId_);
         break;
     case CombatFeedbackEventType::PlayerSlashHit:
     case CombatFeedbackEventType::BladeClashPierce:
-        ctx_->sound->Play(hitSoundId_);
+        ctx_->systems.sound->Play(hitSoundId_);
         break;
     case CombatFeedbackEventType::PlayerDamaged:
-        ctx_->sound->Play(damageSoundId_);
+        ctx_->systems.sound->Play(damageSoundId_);
         break;
     case CombatFeedbackEventType::ProjectileReflect:
-        ctx_->sound->Play(counterSoundId_);
+        ctx_->systems.sound->Play(counterSoundId_);
         break;
     case CombatFeedbackEventType::PlayerGuard:
     default:
@@ -1886,78 +1941,78 @@ void GameScene::EmitCombatParticles(const CombatFeedbackEvent &event) {
 
     switch (event.type) {
     case CombatFeedbackEventType::PlayerSlashHit:
-        sparkParticles_.EmitBurst(position,
+        EmitParticleBurst(sparkParticles_, position,
                                   static_cast<uint32_t>(34.0f + power * 12.0f),
-                                  0.050f, GPUParticleSystem::BurstStyle::Sparks,
+                                  0.050f, AppParticleBurstStyle::Sparks,
                                   {0.94f, 0.97f, 1.00f, 0.76f}, direction,
                                   2.35f + power * 0.38f);
-        swordFlashParticles_.EmitBurst(
+        EmitParticleBurst(swordFlashParticles_, 
             position, static_cast<uint32_t>(14.0f + power * 4.0f),
-            0.088f + power * 0.012f, GPUParticleSystem::BurstStyle::Flash,
+            0.088f + power * 0.012f, AppParticleBurstStyle::Flash,
             {1.0f, 0.98f, 1.00f, 0.72f}, direction, 0.38f + power * 0.05f);
-        explosionParticles_.EmitBurst(
+        EmitParticleBurst(explosionParticles_, 
             position, static_cast<uint32_t>(54.0f + power * 12.0f),
-            0.18f + power * 0.016f, GPUParticleSystem::BurstStyle::SlashLine,
+            0.18f + power * 0.016f, AppParticleBurstStyle::SlashLine,
             {0.94f, 0.90f, 1.00f, 0.82f}, direction, 2.18f + power * 0.30f);
-        smokeParticles_.EmitBurst(
+        EmitParticleBurst(smokeParticles_, 
             position, static_cast<uint32_t>(6.0f + power * 2.0f),
-            0.13f + power * 0.012f, GPUParticleSystem::BurstStyle::Smoke,
+            0.13f + power * 0.012f, AppParticleBurstStyle::Smoke,
             {0.96f, 0.97f, 1.00f, 0.16f}, direction, 1.26f + power * 0.12f);
         break;
     case CombatFeedbackEventType::BladeClashPierce:
-        sparkParticles_.EmitBurst(position,
+        EmitParticleBurst(sparkParticles_, position,
                                   static_cast<uint32_t>(64.0f + power * 28.0f),
-                                  0.13f, GPUParticleSystem::BurstStyle::Sparks,
+                                  0.13f, AppParticleBurstStyle::Sparks,
                                   {1.00f, 0.68f, 0.28f, 1.0f}, direction,
                                   1.55f + power * 0.38f);
         break;
     case CombatFeedbackEventType::PlayerGuard:
-        sparkParticles_.EmitBurst(position, 92, 0.20f,
-                                  GPUParticleSystem::BurstStyle::Sparks,
+        EmitParticleBurst(sparkParticles_, position, 92, 0.20f,
+                                  AppParticleBurstStyle::Sparks,
                                   {1.00f, 0.74f, 0.36f, 1.0f}, direction, 1.95f);
-        explosionParticles_.EmitBurst(position, 14, 0.16f,
-                                      GPUParticleSystem::BurstStyle::Explosion,
+        EmitParticleBurst(explosionParticles_, position, 14, 0.16f,
+                                      AppParticleBurstStyle::Explosion,
                                       {0.92f, 0.50f, 0.22f, 1.0f}, direction,
                                       0.72f);
-        smokeParticles_.EmitBurst(position, 10, 0.24f,
-                                  GPUParticleSystem::BurstStyle::Smoke,
+        EmitParticleBurst(smokeParticles_, position, 10, 0.24f,
+                                  AppParticleBurstStyle::Smoke,
                                   {0.42f, 0.36f, 0.31f, 1.0f}, direction, 0.48f);
         break;
     case CombatFeedbackEventType::PlayerDamaged:
-        sparkParticles_.EmitBurst(position, 110, 0.24f,
-                                  GPUParticleSystem::BurstStyle::Sparks,
+        EmitParticleBurst(sparkParticles_, position, 110, 0.24f,
+                                  AppParticleBurstStyle::Sparks,
                                   {1.00f, 0.52f, 0.20f, 1.0f}, direction, 2.15f);
-        explosionParticles_.EmitBurst(position, 42, 0.30f,
-                                      GPUParticleSystem::BurstStyle::Explosion,
+        EmitParticleBurst(explosionParticles_, position, 42, 0.30f,
+                                      AppParticleBurstStyle::Explosion,
                                       {1.00f, 0.30f, 0.10f, 1.0f}, direction,
                                       1.15f);
-        smokeParticles_.EmitBurst(position, 34, 0.40f,
-                                  GPUParticleSystem::BurstStyle::Smoke,
+        EmitParticleBurst(smokeParticles_, position, 34, 0.40f,
+                                  AppParticleBurstStyle::Smoke,
                                   {0.48f, 0.36f, 0.28f, 1.0f}, direction, 0.78f);
         break;
     case CombatFeedbackEventType::CounterSuccess:
     case CombatFeedbackEventType::BladeClashGuardBreak:
-        sparkParticles_.EmitBurst(position, 170, 0.34f,
-                                  GPUParticleSystem::BurstStyle::Sparks,
+        EmitParticleBurst(sparkParticles_, position, 170, 0.34f,
+                                  AppParticleBurstStyle::Sparks,
                                   {1.00f, 0.76f, 0.26f, 1.0f}, direction, 2.1f);
-        explosionParticles_.EmitBurst(position, 78, 0.46f,
-                                      GPUParticleSystem::BurstStyle::Explosion,
+        EmitParticleBurst(explosionParticles_, position, 78, 0.46f,
+                                      AppParticleBurstStyle::Explosion,
                                       {1.00f, 0.46f, 0.12f, 1.0f}, direction,
                                       1.48f);
-        smokeParticles_.EmitBurst(position, 54, 0.56f,
-                                  GPUParticleSystem::BurstStyle::Smoke,
+        EmitParticleBurst(smokeParticles_, position, 54, 0.56f,
+                                  AppParticleBurstStyle::Smoke,
                                   {0.36f, 0.31f, 0.27f, 1.0f}, direction, 0.92f);
         break;
     case CombatFeedbackEventType::ProjectileReflect:
-        sparkParticles_.EmitBurst(position, 118, 0.24f,
-                                  GPUParticleSystem::BurstStyle::Sparks,
+        EmitParticleBurst(sparkParticles_, position, 118, 0.24f,
+                                  AppParticleBurstStyle::Sparks,
                                   {0.96f, 0.86f, 0.64f, 1.0f}, direction, 2.15f);
-        explosionParticles_.EmitBurst(position, 46, 0.30f,
-                                      GPUParticleSystem::BurstStyle::Explosion,
+        EmitParticleBurst(explosionParticles_, position, 46, 0.30f,
+                                      AppParticleBurstStyle::Explosion,
                                       {0.68f, 0.78f, 0.72f, 1.0f}, direction,
                                       1.12f);
-        smokeParticles_.EmitBurst(position, 24, 0.36f,
-                                  GPUParticleSystem::BurstStyle::Smoke,
+        EmitParticleBurst(smokeParticles_, position, 24, 0.36f,
+                                  AppParticleBurstStyle::Smoke,
                                   {0.38f, 0.34f, 0.31f, 1.0f}, direction, 0.66f);
         break;
     default:
@@ -1980,50 +2035,50 @@ void GameScene::EmitEnemyActionParticles(ActionKind kind, ActionStep step) {
         origin.z += forward.z * 1.10f;
         switch (kind) {
         case ActionKind::Smash:
-            explosionParticles_.EmitBurst(
+            EmitParticleBurst(explosionParticles_, 
                 origin, 150, 2.10f,
-                GPUParticleSystem::BurstStyle::SpiritSparkle,
+                AppParticleBurstStyle::SpiritSparkle,
                 {1.0f, 1.0f, 0.96f, 0.72f}, forward, 1.68f);
             break;
         case ActionKind::Sweep:
-            explosionParticles_.EmitBurst(
+            EmitParticleBurst(explosionParticles_, 
                 origin, 158, 2.18f,
-                GPUParticleSystem::BurstStyle::SpiritSparkle,
+                AppParticleBurstStyle::SpiritSparkle,
                 {1.0f, 1.0f, 0.96f, 0.70f}, forward, 1.58f);
             break;
         case ActionKind::BladeClash:
-            explosionParticles_.EmitBurst(
+            EmitParticleBurst(explosionParticles_, 
                 origin, 56, 1.05f,
-                GPUParticleSystem::BurstStyle::SpiritSparkle,
+                AppParticleBurstStyle::SpiritSparkle,
                 {0.94f, 1.0f, 0.96f, 0.50f}, forward, 0.92f);
-            smokeParticles_.EmitBurst(
-                origin, 2, 0.34f, GPUParticleSystem::BurstStyle::Flash,
+            EmitParticleBurst(smokeParticles_, 
+                origin, 2, 0.34f, AppParticleBurstStyle::Flash,
                 {0.92f, 1.0f, 0.96f, 0.22f}, forward, 0.22f);
             break;
         case ActionKind::Wave:
-            explosionParticles_.EmitBurst(
+            EmitParticleBurst(explosionParticles_, 
                 origin, 130, 2.02f,
-                GPUParticleSystem::BurstStyle::SpiritSparkle,
+                AppParticleBurstStyle::SpiritSparkle,
                 {0.96f, 1.0f, 0.96f, 0.68f}, forward, 1.48f);
             break;
         case ActionKind::Laser:
-            explosionParticles_.EmitBurst(
+            EmitParticleBurst(explosionParticles_, 
                 origin, 150, 2.24f,
-                GPUParticleSystem::BurstStyle::SpiritSparkle,
+                AppParticleBurstStyle::SpiritSparkle,
                 {0.58f, 0.96f, 1.0f, 0.72f}, forward, 1.72f);
-            sparkParticles_.EmitBurst(
-                origin, 96, 0.52f, GPUParticleSystem::BurstStyle::SlashLine,
+            EmitParticleBurst(sparkParticles_, 
+                origin, 96, 0.52f, AppParticleBurstStyle::SlashLine,
                 {0.70f, 1.0f, 1.0f, 0.86f}, forward, 1.05f);
             break;
         case ActionKind::Cage: {
             XMFLOAT3 cageOrigin = player_.GetTransform().position;
             cageOrigin.y += 0.72f;
-            explosionParticles_.EmitBurst(
+            EmitParticleBurst(explosionParticles_, 
                 cageOrigin, 120, 1.70f,
-                GPUParticleSystem::BurstStyle::SpiritSparkle,
+                AppParticleBurstStyle::SpiritSparkle,
                 {0.54f, 1.0f, 0.94f, 0.66f}, {0.0f, 1.0f, 0.0f}, 1.35f);
-            sparkParticles_.EmitBurst(
-                cageOrigin, 64, 0.34f, GPUParticleSystem::BurstStyle::SlashLine,
+            EmitParticleBurst(sparkParticles_, 
+                cageOrigin, 64, 0.34f, AppParticleBurstStyle::SlashLine,
                 {1.0f, 0.94f, 0.54f, 0.78f}, {1.0f, 0.0f, 0.0f}, 0.82f);
             break;
         }
@@ -2072,8 +2127,8 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
         cuePos.z += (toCameraZ / toCameraLen) * 0.84f;
 
         const XMFLOAT4 cueColor{0.34f, 1.0f, 0.38f, 1.0f};
-        sparkParticles_.EmitBurst(cuePos, 112, 1.46f,
-                                  GPUParticleSystem::BurstStyle::SlashLine,
+        EmitParticleBurst(sparkParticles_, cuePos, 112, 1.46f,
+                                  AppParticleBurstStyle::SlashLine,
                                   cueColor, {slashDir.x, slashDir.y, 0.0f},
                                   1.06f);
         enemyWeakPointParticleTimer_ = 0.085f;
@@ -2122,11 +2177,11 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
                                const XMFLOAT4 &flashColor) {
             XMFLOAT3 cuePos = basePos;
             cuePos.y += 0.42f;
-            sparkParticles_.EmitBurst(cuePos, 28, 0.34f,
-                                      GPUParticleSystem::BurstStyle::Sparks,
+            EmitParticleBurst(sparkParticles_, cuePos, 28, 0.34f,
+                                      AppParticleBurstStyle::Sparks,
                                       sparkColor, forward, 1.85f);
-            smokeParticles_.EmitBurst(cuePos, 2, 0.30f,
-                                      GPUParticleSystem::BurstStyle::Flash,
+            EmitParticleBurst(smokeParticles_, cuePos, 2, 0.30f,
+                                      AppParticleBurstStyle::Flash,
                                       flashColor, forward, 0.28f);
         };
 
@@ -2174,8 +2229,8 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
             kind == ActionKind::BladeClash
                 ? 1.65f
                 : releaseCounterCueVisible ? 4.15f * cuePower : 4.70f;
-        sparkParticles_.EmitBurst(cuePos, sparkCount, sparkRadius,
-                                  GPUParticleSystem::BurstStyle::Sparks,
+        EmitParticleBurst(sparkParticles_, cuePos, sparkCount, sparkRadius,
+                                  AppParticleBurstStyle::Sparks,
                                   cueColor, forward, sparkSpeed);
         const bool showCounterAxisLine =
             kind == ActionKind::Smash || kind == ActionKind::Sweep ||
@@ -2185,15 +2240,15 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
             const SwordCounterAxis cueAxis =
                 RequiredVisualCounterAxisForAction(
                     kind, enemy_.GetFarLaserFollowupKind());
-            sparkParticles_.EmitBurst(
+            EmitParticleBurst(sparkParticles_, 
                 cuePos, releaseCounterCueVisible ? 104u : 116u,
                 releaseCounterCueVisible ? 1.26f : 1.34f,
-                GPUParticleSystem::BurstStyle::SlashLine, cueColor,
+                AppParticleBurstStyle::SlashLine, cueColor,
                 CounterAxisParticleDirection(cueAxis), 0.96f);
             if (badSlashCueVisible) {
-                sparkParticles_.EmitBurst(
+                EmitParticleBurst(sparkParticles_, 
                     cuePos, 46u, 0.74f,
-                    GPUParticleSystem::BurstStyle::SlashLine,
+                    AppParticleBurstStyle::SlashLine,
                     {1.0f, 0.16f, 0.10f, 0.82f},
                     CounterAxisParticleDirection(cueAxis), 0.58f);
             }
@@ -2201,7 +2256,7 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
         const XMFLOAT4 flashColor =
             releaseCounterCueVisible ? XMFLOAT4{0.18f, 1.0f, 0.28f, 0.78f}
                                      : XMFLOAT4{1.0f, 0.04f, 0.10f, 0.88f};
-        smokeParticles_.EmitBurst(cuePos,
+        EmitParticleBurst(smokeParticles_, cuePos,
                                   kind == ActionKind::BladeClash
                                       ? 2
                                       :
@@ -2222,7 +2277,7 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
                                              ? 0.82f
                                              : 0.62f)
                                       : 0.70f,
-                                  GPUParticleSystem::BurstStyle::Flash,
+                                  AppParticleBurstStyle::Flash,
                                   flashColor, forward, 0.58f);
         enemyCueParticleTimer_ =
             kind == ActionKind::BladeClash ? 0.160f
@@ -2234,14 +2289,14 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
         return;
     }
 
-    if (enemySwordParticleTimer_ > 0.0f || ctx_->model == nullptr) {
+    if (enemySwordParticleTimer_ > 0.0f || ctx_->rendering.model == nullptr) {
         return;
     }
 
     XMFLOAT3 bladeRoot{};
     XMFLOAT3 bladeTip{};
     const XMFLOAT3 enemyBodyPos = enemy_.GetBodyTransform().position;
-    if (Model *enemyModel = ctx_->model->GetModel(enemyModelId_)) {
+    if (Model *enemyModel = ctx_->rendering.model->GetModel(enemyModelId_)) {
         if (TryGetEnemySwordMeshSegment(*enemyModel, enemy_.GetVisualTransform(),
                                         enemyBodyPos, bladeRoot, bladeTip)) {
             const XMFLOAT3 bladeCenter = Lerp(bladeRoot, bladeTip, 0.56f);
@@ -2264,9 +2319,9 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
                 kind == ActionKind::Sweep
                     ? XMFLOAT4{0.34f, 0.92f, 1.0f, 0.90f}
                     : XMFLOAT4{1.0f, 0.76f, 0.20f, 0.90f};
-            explosionParticles_.EmitBurst(
+            EmitParticleBurst(explosionParticles_, 
                 bladeCenter, count, radius,
-                GPUParticleSystem::BurstStyle::SlashLine, bladeColor,
+                AppParticleBurstStyle::SlashLine, bladeColor,
                 {dirX, dirY, 0.0f}, speed);
             enemySwordParticleTimer_ = attackActive ? 0.024f : 0.040f;
         }
@@ -2287,7 +2342,7 @@ void GameScene::UpdateChargeWeakPointFocus(float deltaTime) {
     chargeWeakPointFocusRatio_ +=
         (target - chargeWeakPointFocusRatio_) * alpha;
 
-    if (ctx_ == nullptr || ctx_->postEffectRenderer == nullptr) {
+    if (ctx_ == nullptr || ctx_->rendering.postEffectRenderer == nullptr) {
         return;
     }
 
@@ -2346,33 +2401,33 @@ void GameScene::UpdateChargeWeakPointFocus(float deltaTime) {
             radialBlurStrength =
                 (std::max)(radialBlurStrength, piercePulse);
         }
-        ctx_->postEffectRenderer->SetRadialBlurCenter(0.5f, 0.48f);
-        ctx_->postEffectRenderer->SetRadialBlurSampleCount(18);
-        ctx_->postEffectRenderer->SetRadialBlurStrength(radialBlurStrength);
-        ctx_->postEffectRenderer->SetVignettingEnabled(true);
-        ctx_->postEffectRenderer->SetVignettingShape(vignetteScale,
+        ctx_->rendering.postEffectRenderer->SetRadialBlurCenter(0.5f, 0.48f);
+        ctx_->rendering.postEffectRenderer->SetRadialBlurSampleCount(18);
+        ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(radialBlurStrength);
+        ctx_->rendering.postEffectRenderer->SetVignettingEnabled(true);
+        ctx_->rendering.postEffectRenderer->SetVignettingShape(vignetteScale,
                                                      vignettePower);
-        ctx_->postEffectRenderer->SetVignettingStrength(vignetteStrength);
-        ctx_->postEffectRenderer->SetSceneDimStrength(sceneDimStrength);
+        ctx_->rendering.postEffectRenderer->SetVignettingStrength(vignetteStrength);
+        ctx_->rendering.postEffectRenderer->SetSceneDimStrength(sceneDimStrength);
         return;
     }
 
     const float focus = chargeWeakPointFocusRatio_;
     if (focus <= 0.001f) {
-        ctx_->postEffectRenderer->SetVignettingShape(11.0f, 1.15f);
-        ctx_->postEffectRenderer->SetSceneDimStrength(0.0f);
+        ctx_->rendering.postEffectRenderer->SetVignettingShape(11.0f, 1.15f);
+        ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.0f);
         return;
     }
 
-    ctx_->postEffectRenderer->SetRadialBlurCenter(0.5f, 0.48f);
-    ctx_->postEffectRenderer->SetRadialBlurSampleCount(20);
-    ctx_->postEffectRenderer->SetRadialBlurStrength(0.030f * focus);
-    ctx_->postEffectRenderer->SetVignettingShape(11.0f, 1.15f);
-    ctx_->postEffectRenderer->SetVignettingStrength(0.20f + 0.72f * focus);
-    ctx_->postEffectRenderer->SetSceneDimStrength(0.42f * focus);
+    ctx_->rendering.postEffectRenderer->SetRadialBlurCenter(0.5f, 0.48f);
+    ctx_->rendering.postEffectRenderer->SetRadialBlurSampleCount(20);
+    ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(0.030f * focus);
+    ctx_->rendering.postEffectRenderer->SetVignettingShape(11.0f, 1.15f);
+    ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.20f + 0.72f * focus);
+    ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.42f * focus);
 }
 
-void GameScene::DrawOverlay() {
+void GameScene::DrawTransparent() {
     if (runMode_ == RunMode::TitleDemo) {
         return;
     }
@@ -2408,18 +2463,18 @@ void GameScene::UpdatePhaseTransitionCinematic(float deltaTime) {
     const float charge = SmoothStep01(ratio / kReleaseStart);
     const float release = SmoothStep01((ratio - kReleaseStart) / kReleaseDuration);
     const float hold = charge * (1.0f - release);
-    if (ctx_ != nullptr && ctx_->postEffectRenderer != nullptr) {
-        ctx_->postEffectRenderer->SetVignettingEnabled(true);
-        ctx_->postEffectRenderer->SetVignettingStrength(0.30f + 0.42f * hold);
-        ctx_->postEffectRenderer->SetRadialBlurCenter(0.5f, 0.48f);
-        ctx_->postEffectRenderer->SetRadialBlurSampleCount(20);
-        ctx_->postEffectRenderer->SetRadialBlurStrength(
+    if (ctx_ != nullptr && ctx_->rendering.postEffectRenderer != nullptr) {
+        ctx_->rendering.postEffectRenderer->SetVignettingEnabled(true);
+        ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.30f + 0.42f * hold);
+        ctx_->rendering.postEffectRenderer->SetRadialBlurCenter(0.5f, 0.48f);
+        ctx_->rendering.postEffectRenderer->SetRadialBlurSampleCount(20);
+        ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(
             0.010f + 0.026f * hold + 0.036f * release);
-        ctx_->postEffectRenderer->SetSceneDimStrength(0.10f + 0.18f * hold);
+        ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.10f + 0.18f * hold);
     }
 
     enemy_.Update(BuildPlayerCombatObservation(), deltaTime);
-    ctx_->model->UpdateAnimation(playerModelId_, deltaTime * 0.025f);
+    ctx_->rendering.model->UpdateAnimation(playerModelId_, deltaTime * 0.025f);
     UpdatePhaseTransitionEnemyAnimation(deltaTime);
     ApplyEnemyProceduralAnimation();
     UpdateSceneLighting();
@@ -2441,10 +2496,10 @@ void GameScene::UpdatePhaseTransitionCinematic(float deltaTime) {
     if (!enemy_.IsPhaseTransitionActive()) {
         phaseTransitionWasActive_ = false;
         phaseTransitionReleaseEmitted_ = false;
-        if (ctx_ != nullptr && ctx_->postEffectRenderer != nullptr) {
-            ctx_->postEffectRenderer->SetRadialBlurStrength(0.0f);
-            ctx_->postEffectRenderer->SetSceneDimStrength(0.0f);
-            ctx_->postEffectRenderer->SetVignettingStrength(0.24f);
+        if (ctx_ != nullptr && ctx_->rendering.postEffectRenderer != nullptr) {
+            ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(0.0f);
+            ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.0f);
+            ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.24f);
         }
     }
 }
@@ -2452,16 +2507,16 @@ void GameScene::UpdatePhaseTransitionCinematic(float deltaTime) {
 void GameScene::EmitPhaseTransitionStartEffects() {
     const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
     const XMFLOAT3 origin{enemyPos.x, enemyPos.y + 1.18f, enemyPos.z};
-    smokeParticles_.EmitBurst(origin, 54, 1.00f,
-                              GPUParticleSystem::BurstStyle::Flash,
+    EmitParticleBurst(smokeParticles_, origin, 54, 1.00f,
+                              AppParticleBurstStyle::Flash,
                               {1.0f, 0.52f, 0.12f, 0.86f},
                               {0.0f, 1.0f, 0.0f}, 0.62f);
-    sparkParticles_.EmitBurst(origin, 150, 1.45f,
-                              GPUParticleSystem::BurstStyle::Sparks,
+    EmitParticleBurst(sparkParticles_, origin, 150, 1.45f,
+                              AppParticleBurstStyle::Sparks,
                               {1.0f, 0.72f, 0.24f, 0.96f},
                               {0.0f, 1.0f, 0.0f}, 3.2f);
-    if (soundsLoaded_ && ctx_ != nullptr && ctx_->sound != nullptr) {
-        ctx_->sound->Play(enemyReleaseSoundId_);
+    if (soundsLoaded_ && ctx_ != nullptr && ctx_->systems.sound != nullptr) {
+        ctx_->systems.sound->Play(enemyReleaseSoundId_);
     }
 }
 
@@ -2482,13 +2537,13 @@ void GameScene::EmitPhaseTransitionLoopEffects(float deltaTime) {
     const XMFLOAT3 origin{enemyPos.x, enemyPos.y + 1.28f, enemyPos.z};
     const uint32_t sparkCount =
         static_cast<uint32_t>(28.0f + 44.0f * hold);
-    sparkParticles_.EmitBurst(origin, sparkCount, 0.58f + 0.46f * hold,
-                              GPUParticleSystem::BurstStyle::Sparks,
+    EmitParticleBurst(sparkParticles_, origin, sparkCount, 0.58f + 0.46f * hold,
+                              AppParticleBurstStyle::Sparks,
                               {1.0f, 0.28f, 0.04f, 0.86f},
                               {0.0f, 1.0f, 0.0f}, 2.4f + 2.0f * hold);
     if (hold > 0.35f) {
-        smokeParticles_.EmitBurst(origin, 3, 0.58f,
-                                  GPUParticleSystem::BurstStyle::Flash,
+        EmitParticleBurst(smokeParticles_, origin, 3, 0.58f,
+                                  AppParticleBurstStyle::Flash,
                                   {1.0f, 0.20f, 0.04f, 0.52f},
                                   {0.0f, 1.0f, 0.0f}, 0.38f);
     }
@@ -2497,20 +2552,20 @@ void GameScene::EmitPhaseTransitionLoopEffects(float deltaTime) {
 void GameScene::EmitPhaseTransitionReleaseEffects() {
     const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
     const XMFLOAT3 origin{enemyPos.x, enemyPos.y + 1.30f, enemyPos.z};
-    explosionParticles_.EmitBurst(origin, 110, 1.38f,
-                                  GPUParticleSystem::BurstStyle::Explosion,
+    EmitParticleBurst(explosionParticles_, origin, 110, 1.38f,
+                                  AppParticleBurstStyle::Explosion,
                                   {1.0f, 0.30f, 0.05f, 0.92f},
                                   {0.0f, 1.0f, 0.0f}, 3.0f);
-    sparkParticles_.EmitBurst(origin, 230, 1.85f,
-                              GPUParticleSystem::BurstStyle::Sparks,
+    EmitParticleBurst(sparkParticles_, origin, 230, 1.85f,
+                              AppParticleBurstStyle::Sparks,
                               {1.0f, 0.86f, 0.30f, 1.0f},
                               {0.0f, 1.0f, 0.0f}, 7.0f);
-    smokeParticles_.EmitBurst(origin, 52, 1.42f,
-                              GPUParticleSystem::BurstStyle::Flash,
+    EmitParticleBurst(smokeParticles_, origin, 52, 1.42f,
+                              AppParticleBurstStyle::Flash,
                               {1.0f, 0.58f, 0.12f, 0.76f},
                               {0.0f, 1.0f, 0.0f}, 1.0f);
-    if (soundsLoaded_ && ctx_ != nullptr && ctx_->sound != nullptr) {
-        ctx_->sound->Play(explosionSoundId_);
+    if (soundsLoaded_ && ctx_ != nullptr && ctx_->systems.sound != nullptr) {
+        ctx_->systems.sound->Play(explosionSoundId_);
     }
 }
 
@@ -2525,42 +2580,31 @@ void GameScene::UpdateBattleIntro(float deltaTime) {
         std::clamp((battleIntroTimer_ - 0.32f) / 2.02f, 0.0f, 1.0f);
     const float reveal = SmoothStep01(dissolveProgress);
     ApplyEnemyIntroDissolve(reveal);
-    if (ctx_ != nullptr && ctx_->postEffectRenderer != nullptr) {
-        ctx_->postEffectRenderer->SetVignettingEnabled(true);
-        ctx_->postEffectRenderer->SetVignettingStrength(0.16f + 0.06f * ratio);
-        ctx_->postEffectRenderer->SetRadialBlurCenter(0.5f, 0.48f);
-        ctx_->postEffectRenderer->SetRadialBlurSampleCount(18);
-        ctx_->postEffectRenderer->SetRadialBlurStrength(0.035f * (1.0f - ratio));
-        ctx_->postEffectRenderer->SetSceneDimStrength(0.0f);
+    if (ctx_ != nullptr && ctx_->rendering.postEffectRenderer != nullptr) {
+        ctx_->rendering.postEffectRenderer->SetVignettingEnabled(true);
+        ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.16f + 0.06f * ratio);
+        ctx_->rendering.postEffectRenderer->SetRadialBlurCenter(0.5f, 0.48f);
+        ctx_->rendering.postEffectRenderer->SetRadialBlurSampleCount(18);
+        ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(0.035f * (1.0f - ratio));
+        ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.0f);
     }
-    if (ctx_ != nullptr && ctx_->dxCommon != nullptr) {
-        const float whiteBg =
-            SmoothStep01((battleIntroTimer_ - 2.34f) / 0.38f);
-        const XMFLOAT4 darkBg = {0.040f, 0.050f, 0.088f, 1.0f};
-        const XMFLOAT4 paperWhite = {0.34f, 0.365f, 0.390f, 1.0f};
-        ctx_->dxCommon->SetClearColor(
-            {darkBg.x + (paperWhite.x - darkBg.x) * whiteBg,
-             darkBg.y + (paperWhite.y - darkBg.y) * whiteBg,
-             darkBg.z + (paperWhite.z - darkBg.z) * whiteBg, 1.0f});
-    }
-
     if (!battleIntroRevealEmitted_ && battleIntroTimer_ >= 2.36f) {
         battleIntroRevealEmitted_ = true;
         const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
-        swordFlashParticles_.EmitBurst(
+        EmitParticleBurst(swordFlashParticles_, 
             {enemyPos.x, enemyPos.y + 1.45f, enemyPos.z}, 8, 0.38f,
-            GPUParticleSystem::BurstStyle::Flash,
+            AppParticleBurstStyle::Flash,
             {1.0f, 0.98f, 0.88f, 0.82f}, {0.0f, 1.0f, 0.0f}, 0.22f);
-        explosionParticles_.EmitBurst(
+        EmitParticleBurst(explosionParticles_, 
             {enemyPos.x, enemyPos.y + 1.30f, enemyPos.z}, 156, 2.12f,
-            GPUParticleSystem::BurstStyle::SpiritSparkle,
+            AppParticleBurstStyle::SpiritSparkle,
             {1.0f, 1.0f, 0.96f, 0.68f}, {0.0f, 1.0f, 0.0f}, 1.52f);
-        if (soundsLoaded_ && ctx_ != nullptr && ctx_->sound != nullptr) {
-            ctx_->sound->Play(enemyReleaseSoundId_);
+        if (soundsLoaded_ && ctx_ != nullptr && ctx_->systems.sound != nullptr) {
+            ctx_->systems.sound->Play(enemyReleaseSoundId_);
         }
     }
 
-    ctx_->model->UpdateAnimation(playerModelId_, deltaTime * 0.04f);
+    ctx_->rendering.model->UpdateAnimation(playerModelId_, deltaTime * 0.04f);
     enemy_.FaceTargetImmediately(player_.GetTransform().position);
     UpdateBattleIntroEnemyAnimation(deltaTime);
     ApplyEnemyProceduralAnimation();
@@ -2576,22 +2620,19 @@ void GameScene::UpdateBattleIntro(float deltaTime) {
         battleIntroActive_ = false;
         battleIntroTimer_ = battleIntroDuration_;
         ApplyEnemyIntroDissolve(1.0f);
-        if (ctx_ != nullptr && ctx_->dxCommon != nullptr) {
-            ctx_->dxCommon->SetClearColor({0.34f, 0.365f, 0.390f, 1.0f});
-        }
-        if (ctx_ != nullptr && ctx_->postEffectRenderer != nullptr) {
-            ctx_->postEffectRenderer->SetRadialBlurStrength(0.0f);
-            ctx_->postEffectRenderer->SetSceneDimStrength(0.0f);
-            ctx_->postEffectRenderer->SetVignettingStrength(0.20f);
+        if (ctx_ != nullptr && ctx_->rendering.postEffectRenderer != nullptr) {
+            ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(0.0f);
+            ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.0f);
+            ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.20f);
         }
     }
 }
 
 void GameScene::ApplyEnemyIntroDissolve(float revealRatio) {
-    if (ctx_ == nullptr || ctx_->model == nullptr || enemyModelId_ == 0) {
+    if (ctx_ == nullptr || ctx_->rendering.model == nullptr || enemyModelId_ == 0) {
         return;
     }
-    Model *model = ctx_->model->GetModel(enemyModelId_);
+    Model *model = ctx_->rendering.model->GetModel(enemyModelId_);
     if (model == nullptr) {
         return;
     }
@@ -2604,13 +2645,19 @@ void GameScene::ApplyEnemyIntroDissolve(float revealRatio) {
                        : 0.0f;
     const float threshold =
         std::clamp(1.08f - reveal * 1.18f + liquidRipple, 0.0f, 1.0f);
+    const float alpha = SmoothStep01(reveal);
     for (ModelSubMesh &subMesh : model->subMeshes) {
-        Material material = ctx_->model->GetMaterial(subMesh.materialId);
-        material.enableDissolve = dissolveActive ? 1 : 0;
+        Material material = ctx_->rendering.model->GetMaterial(subMesh.materialId);
+        material.enableDissolve = dissolveActive ? 1.0f : 0.0f;
         material.dissolveThreshold = threshold;
         material.dissolveEdgeWidth = 0.11f + 0.11f * (1.0f - reveal);
         material.dissolveEdgeColor = {1.0f, 0.70f, 0.30f, 0.70f};
-        ctx_->model->SetMaterial(subMesh.materialId, material);
+        material.color.w = dissolveActive ? alpha : 1.0f;
+        material.blendMode = dissolveActive
+                                 ? static_cast<int32_t>(BlendMode::Transparent)
+                                 : static_cast<int32_t>(BlendMode::Opaque);
+        material.depthWrite = dissolveActive ? 0 : 1;
+        ctx_->rendering.model->SetMaterial(subMesh.materialId, material);
     }
 }
 
@@ -2620,7 +2667,7 @@ void GameScene::UpdateTitleDemo(float deltaTime) {
     constexpr float kIdleBeforeShowcase = 5.35f;
 
     auto applyTitleDemoPost = [&]() {
-        if (ctx_ == nullptr || ctx_->postEffectRenderer == nullptr) {
+        if (ctx_ == nullptr || ctx_->rendering.postEffectRenderer == nullptr) {
             return;
         }
 
@@ -2628,18 +2675,18 @@ void GameScene::UpdateTitleDemo(float deltaTime) {
             titleDemoPhase_ == 1
                 ? std::clamp(1.0f - titleDemoPhaseTimer_ / 0.52f, 0.0f, 1.0f)
                 : 0.0f;
-        ctx_->postEffectRenderer->SetColorMode(PostEffectRenderer::ColorMode::None);
-        ctx_->postEffectRenderer->SetRadialBlurCenter(0.5f, 0.48f);
-        ctx_->postEffectRenderer->SetRadialBlurSampleCount(24);
-        ctx_->postEffectRenderer->SetRadialBlurStrength(
+        ctx_->rendering.postEffectRenderer->SetColorMode(PostEffectRenderer::ColorMode::None);
+        ctx_->rendering.postEffectRenderer->SetRadialBlurCenter(0.5f, 0.48f);
+        ctx_->rendering.postEffectRenderer->SetRadialBlurSampleCount(24);
+        ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(
             0.018f + 0.048f * cueFlash +
             (bladeClashActive_ ? 0.030f * bladeClashImpactPulse_ : 0.0f));
-        ctx_->postEffectRenderer->SetVignettingEnabled(true);
-        ctx_->postEffectRenderer->SetVignettingShape(8.6f, 1.24f);
-        ctx_->postEffectRenderer->SetVignettingStrength(
+        ctx_->rendering.postEffectRenderer->SetVignettingEnabled(true);
+        ctx_->rendering.postEffectRenderer->SetVignettingShape(8.6f, 1.24f);
+        ctx_->rendering.postEffectRenderer->SetVignettingStrength(
             0.24f + 0.38f * cueFlash +
             (bladeClashActive_ ? 0.16f * std::abs(bladeClashGauge_) : 0.0f));
-        ctx_->postEffectRenderer->SetSceneDimStrength(
+        ctx_->rendering.postEffectRenderer->SetSceneDimStrength(
             0.05f + 0.18f * cueFlash);
     };
 
@@ -2676,11 +2723,11 @@ void GameScene::UpdateTitleDemo(float deltaTime) {
 
             XMFLOAT3 strikeCenter = bladeClashCenter_;
             strikeCenter.y += 0.08f;
-            sparkParticles_.EmitBurst(
-                strikeCenter, 92, 0.26f, GPUParticleSystem::BurstStyle::Sparks,
+            EmitParticleBurst(sparkParticles_, 
+                strikeCenter, 92, 0.26f, AppParticleBurstStyle::Sparks,
                 {1.0f, 0.72f, 0.24f, 0.86f}, bladeClashDirection_, 2.40f);
-            swordFlashParticles_.EmitBurst(
-                strikeCenter, 10, 0.28f, GPUParticleSystem::BurstStyle::Flash,
+            EmitParticleBurst(swordFlashParticles_, 
+                strikeCenter, 10, 0.28f, AppParticleBurstStyle::Flash,
                 {1.0f, 1.0f, 0.84f, 0.72f}, bladeClashDirection_, 0.34f);
 
             CombatFeedbackEvent feedback{};
@@ -2776,12 +2823,12 @@ void GameScene::ResetTitleDemoShowcase() {
     titleDemoCounterTimer_ = 0.90f;
     titleDemoPhaseTimer_ = 0.0f;
     titleDemoPhase_ = 0;
-    if (ctx_ != nullptr && ctx_->postEffectRenderer != nullptr) {
-        ctx_->postEffectRenderer->SetColorMode(PostEffectRenderer::ColorMode::None);
-        ctx_->postEffectRenderer->SetRadialBlurStrength(0.0f);
-        ctx_->postEffectRenderer->SetSceneDimStrength(0.0f);
-        ctx_->postEffectRenderer->SetVignettingShape(11.0f, 1.15f);
-        ctx_->postEffectRenderer->SetVignettingStrength(0.20f);
+    if (ctx_ != nullptr && ctx_->rendering.postEffectRenderer != nullptr) {
+        ctx_->rendering.postEffectRenderer->SetColorMode(PostEffectRenderer::ColorMode::None);
+        ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(0.0f);
+        ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.0f);
+        ctx_->rendering.postEffectRenderer->SetVignettingShape(11.0f, 1.15f);
+        ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.20f);
     }
     SyncEnemyAnimation();
 }
@@ -2800,23 +2847,23 @@ void GameScene::BeginVictorySequence() {
                     enemy_.GetMaxHP());
     }
 
-    if (ctx_ != nullptr && ctx_->postEffectRenderer != nullptr) {
-        ctx_->postEffectRenderer->SetVignettingEnabled(true);
-        ctx_->postEffectRenderer->SetVignettingStrength(0.58f);
-        ctx_->postEffectRenderer->SetRadialBlurCenter(0.5f, 0.48f);
-        ctx_->postEffectRenderer->SetRadialBlurSampleCount(24);
-        ctx_->postEffectRenderer->SetRadialBlurStrength(0.055f);
-        ctx_->postEffectRenderer->SetSceneDimStrength(0.10f);
+    if (ctx_ != nullptr && ctx_->rendering.postEffectRenderer != nullptr) {
+        ctx_->rendering.postEffectRenderer->SetVignettingEnabled(true);
+        ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.58f);
+        ctx_->rendering.postEffectRenderer->SetRadialBlurCenter(0.5f, 0.48f);
+        ctx_->rendering.postEffectRenderer->SetRadialBlurSampleCount(24);
+        ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(0.055f);
+        ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.10f);
     }
 
     const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
-    sparkParticles_.EmitBurst(
+    EmitParticleBurst(sparkParticles_, 
         {enemyPos.x, enemyPos.y + 1.45f, enemyPos.z}, 220, 1.85f,
-        GPUParticleSystem::BurstStyle::Flash, {1.0f, 0.96f, 0.82f, 0.95f},
+        AppParticleBurstStyle::Flash, {1.0f, 0.96f, 0.82f, 0.95f},
         {0.0f, 1.0f, 0.0f}, 0.72f);
-    explosionParticles_.EmitBurst(
+    EmitParticleBurst(explosionParticles_, 
         {enemyPos.x, enemyPos.y + 1.25f, enemyPos.z}, 96, 1.35f,
-        GPUParticleSystem::BurstStyle::Explosion,
+        AppParticleBurstStyle::Explosion,
         {1.0f, 0.84f, 0.32f, 0.72f}, {0.0f, 1.0f, 0.0f}, 1.15f);
 }
 
@@ -2829,23 +2876,23 @@ void GameScene::BeginDefeatSequence() {
     SetEnemyAnimationFrozen(false);
     player_.SetDefeatPoseRatio(0.0f);
 
-    if (ctx_ != nullptr && ctx_->postEffectRenderer != nullptr) {
-        ctx_->postEffectRenderer->SetVignettingEnabled(true);
-        ctx_->postEffectRenderer->SetVignettingStrength(0.62f);
-        ctx_->postEffectRenderer->SetRadialBlurCenter(0.5f, 0.54f);
-        ctx_->postEffectRenderer->SetRadialBlurSampleCount(22);
-        ctx_->postEffectRenderer->SetRadialBlurStrength(0.040f);
-        ctx_->postEffectRenderer->SetSceneDimStrength(0.18f);
+    if (ctx_ != nullptr && ctx_->rendering.postEffectRenderer != nullptr) {
+        ctx_->rendering.postEffectRenderer->SetVignettingEnabled(true);
+        ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.62f);
+        ctx_->rendering.postEffectRenderer->SetRadialBlurCenter(0.5f, 0.54f);
+        ctx_->rendering.postEffectRenderer->SetRadialBlurSampleCount(22);
+        ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(0.040f);
+        ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.18f);
     }
 
     const XMFLOAT3 playerPos = player_.GetTransform().position;
-    explosionParticles_.EmitBurst(
+    EmitParticleBurst(explosionParticles_, 
         {playerPos.x, playerPos.y + 1.05f, playerPos.z}, 180, 1.55f,
-        GPUParticleSystem::BurstStyle::Explosion,
+        AppParticleBurstStyle::Explosion,
         {1.0f, 0.12f, 0.05f, 0.82f}, {0.0f, 1.0f, 0.0f}, 2.2f);
-    sparkParticles_.EmitBurst(
+    EmitParticleBurst(sparkParticles_, 
         {playerPos.x, playerPos.y + 1.18f, playerPos.z}, 260, 1.35f,
-        GPUParticleSystem::BurstStyle::Sparks,
+        AppParticleBurstStyle::Sparks,
         {1.0f, 0.32f, 0.16f, 0.92f}, {0.0f, 1.0f, 0.0f}, 5.2f);
 }
 
@@ -2858,34 +2905,34 @@ void GameScene::UpdateDefeatSequence(float deltaTime) {
                    1.0f);
     player_.SetDefeatPoseRatio(fallRatio);
 
-    if (ctx_ != nullptr && ctx_->postEffectRenderer != nullptr) {
+    if (ctx_ != nullptr && ctx_->rendering.postEffectRenderer != nullptr) {
         const float ratio =
             std::clamp(defeatSequenceTimer_ / defeatSequenceDuration_, 0.0f,
                        1.0f);
-        ctx_->postEffectRenderer->SetRadialBlurStrength(0.040f *
+        ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(0.040f *
                                                         (1.0f - ratio));
-        ctx_->postEffectRenderer->SetSceneDimStrength(0.18f + 0.22f * ratio);
+        ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.18f + 0.22f * ratio);
     }
 
     if (!defeatImpactEmitted_ && defeatSequenceTimer_ >= 1.58f) {
         defeatImpactEmitted_ = true;
         const XMFLOAT3 playerPos = player_.GetTransform().position;
-        smokeParticles_.EmitBurst(
+        EmitParticleBurst(smokeParticles_, 
             {playerPos.x, playerPos.y + 0.28f, playerPos.z}, 160, 2.15f,
-            GPUParticleSystem::BurstStyle::Smoke,
+            AppParticleBurstStyle::Smoke,
             {0.18f, 0.17f, 0.16f, 0.88f}, {0.0f, 1.0f, 0.0f}, 0.85f);
-        sparkParticles_.EmitBurst(
+        EmitParticleBurst(sparkParticles_, 
             {playerPos.x, playerPos.y + 0.42f, playerPos.z}, 180, 1.05f,
-            GPUParticleSystem::BurstStyle::Sparks,
+            AppParticleBurstStyle::Sparks,
             {1.0f, 0.18f, 0.08f, 0.86f}, {0.0f, 1.0f, 0.0f}, 4.2f);
     }
 
     if (defeatSequenceTimer_ >= defeatSequenceDuration_) {
         defeatSequenceActive_ = false;
         player_.SetDefeatPoseRatio(0.0f);
-        if (ctx_ != nullptr && ctx_->postEffectRenderer != nullptr) {
-            ctx_->postEffectRenderer->SetRadialBlurStrength(0.0f);
-            ctx_->postEffectRenderer->SetSceneDimStrength(0.0f);
+        if (ctx_ != nullptr && ctx_->rendering.postEffectRenderer != nullptr) {
+            ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(0.0f);
+            ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.0f);
         }
         sceneManager_->ChangeScene(std::make_unique<BattleResultScene>(
             BattleResultScene::ResultKind::GameOver, battleElapsedTime_,
@@ -2899,38 +2946,38 @@ void GameScene::UpdateVictorySequence(float deltaTime) {
         std::clamp(victorySequenceTimer_ / victorySequenceDuration_, 0.0f,
                    1.0f);
 
-    if (ctx_ != nullptr && ctx_->postEffectRenderer != nullptr) {
+    if (ctx_ != nullptr && ctx_->rendering.postEffectRenderer != nullptr) {
         const float stepped = std::floor(ratio * 14.0f) / 14.0f;
         const float blur = (1.0f - stepped) * 0.070f;
-        ctx_->postEffectRenderer->SetRadialBlurStrength(blur);
-        ctx_->postEffectRenderer->SetSceneDimStrength(0.10f + stepped * 0.18f);
+        ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(blur);
+        ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.10f + stepped * 0.18f);
     }
 
     if (!victoryFinalExplosionEmitted_ && victorySequenceTimer_ >= 3.90f) {
         victoryFinalExplosionEmitted_ = true;
         const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
-        if (soundsLoaded_ && ctx_ != nullptr && ctx_->sound != nullptr) {
-            ctx_->sound->Play(explosionSoundId_);
+        if (soundsLoaded_ && ctx_ != nullptr && ctx_->systems.sound != nullptr) {
+            ctx_->systems.sound->Play(explosionSoundId_);
         }
-        explosionParticles_.EmitBurst(
+        EmitParticleBurst(explosionParticles_, 
             {enemyPos.x, enemyPos.y + 1.05f, enemyPos.z}, 3200, 8.40f,
-            GPUParticleSystem::BurstStyle::Explosion,
+            AppParticleBurstStyle::Explosion,
             {1.0f, 0.64f, 0.08f, 1.0f}, {0.0f, 1.0f, 0.0f}, 5.80f);
-        sparkParticles_.EmitBurst(
+        EmitParticleBurst(sparkParticles_, 
             {enemyPos.x, enemyPos.y + 1.22f, enemyPos.z}, 3600, 9.20f,
-            GPUParticleSystem::BurstStyle::Sparks,
+            AppParticleBurstStyle::Sparks,
             {1.0f, 0.98f, 0.58f, 1.0f}, {0.0f, 1.0f, 0.0f}, 12.4f);
-        smokeParticles_.EmitBurst(
+        EmitParticleBurst(smokeParticles_, 
             {enemyPos.x, enemyPos.y + 1.12f, enemyPos.z}, 680, 6.80f,
-            GPUParticleSystem::BurstStyle::Flash,
+            AppParticleBurstStyle::Flash,
             {1.0f, 0.94f, 0.70f, 1.0f}, {0.0f, 1.0f, 0.0f}, 1.55f);
     }
 
     if (victorySequenceTimer_ >= victorySequenceDuration_) {
         victorySequenceActive_ = false;
-        if (ctx_ != nullptr && ctx_->postEffectRenderer != nullptr) {
-            ctx_->postEffectRenderer->SetRadialBlurStrength(0.0f);
-            ctx_->postEffectRenderer->SetSceneDimStrength(0.0f);
+        if (ctx_ != nullptr && ctx_->rendering.postEffectRenderer != nullptr) {
+            ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(0.0f);
+            ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.0f);
         }
         sceneManager_->ChangeScene(std::make_unique<BattleResultScene>(
             BattleResultScene::ResultKind::Clear, victoryClearTime_,
@@ -2940,12 +2987,12 @@ void GameScene::UpdateVictorySequence(float deltaTime) {
 
 void GameScene::DrawBladeClashFinishFrame() {
     if (!bladeClashFinishActive_ || !bladeClashFinishPlayerWon_ ||
-        ctx_ == nullptr || ctx_->sprite == nullptr || ctx_->winApp == nullptr) {
+        ctx_ == nullptr || ctx_->rendering.sprite == nullptr || ctx_->systems.winApp == nullptr) {
         return;
     }
 
-    const float screenW = static_cast<float>(ctx_->winApp->GetWidth());
-    const float screenH = static_cast<float>(ctx_->winApp->GetHeight());
+    const float screenW = static_cast<float>(ctx_->systems.winApp->GetWidth());
+    const float screenH = static_cast<float>(ctx_->systems.winApp->GetHeight());
     if (screenW <= 1.0f || screenH <= 1.0f) {
         return;
     }
@@ -2984,10 +3031,10 @@ void GameScene::DrawBladeClashFinishFrame() {
         sprite.position = {x, y};
         sprite.size = {w, h};
         sprite.color = color;
-        ctx_->sprite->DrawSprite(sprite);
+        ctx_->rendering.sprite->DrawSprite(sprite);
     };
 
-    ctx_->sprite->PreDraw();
+    ctx_->rendering.sprite->PreDraw();
     drawSprite(0.0f, 0.0f, screenW, barH,
                {0.0f, 0.0f, 0.0f, 0.30f * alpha});
     drawSprite(0.0f, screenH - barH, screenW, barH,
@@ -3015,12 +3062,12 @@ void GameScene::DrawBladeClashFinishFrame() {
                    std::clamp(screenH * 0.005f, 4.0f, 7.0f),
                    {1.0f, 0.72f, 0.28f, 0.22f * flash * alpha});
     }
-    ctx_->sprite->PostDraw();
+    ctx_->rendering.sprite->PostDraw();
 }
 
 void GameScene::DrawTitleDemoFlash() {
     if (runMode_ != RunMode::TitleDemo || titleDemoPhase_ != 1 ||
-        ctx_ == nullptr || ctx_->sprite == nullptr || ctx_->winApp == nullptr) {
+        ctx_ == nullptr || ctx_->rendering.sprite == nullptr || ctx_->systems.winApp == nullptr) {
         return;
     }
 
@@ -3033,18 +3080,18 @@ void GameScene::DrawTitleDemoFlash() {
     Sprite sprite{};
     sprite.textureId = 0;
     sprite.position = {0.0f, 0.0f};
-    sprite.size = {static_cast<float>(ctx_->winApp->GetWidth()),
-                   static_cast<float>(ctx_->winApp->GetHeight())};
+    sprite.size = {static_cast<float>(ctx_->systems.winApp->GetWidth()),
+                   static_cast<float>(ctx_->systems.winApp->GetHeight())};
     sprite.color = {1.0f, 1.0f, 1.0f, flash};
 
-    ctx_->sprite->PreDraw();
-    ctx_->sprite->DrawSprite(sprite);
-    ctx_->sprite->PostDraw();
+    ctx_->rendering.sprite->PreDraw();
+    ctx_->rendering.sprite->DrawSprite(sprite);
+    ctx_->rendering.sprite->PostDraw();
 }
 
 void GameScene::DrawVictoryFlash() {
-    if (!victorySequenceActive_ || ctx_ == nullptr || ctx_->sprite == nullptr ||
-        ctx_->winApp == nullptr) {
+    if (!victorySequenceActive_ || ctx_ == nullptr || ctx_->rendering.sprite == nullptr ||
+        ctx_->systems.winApp == nullptr) {
         return;
     }
 
@@ -3082,18 +3129,18 @@ void GameScene::DrawVictoryFlash() {
     Sprite flash{};
     flash.textureId = 0;
     flash.position = {0.0f, 0.0f};
-    flash.size = {static_cast<float>(ctx_->winApp->GetWidth()),
-                  static_cast<float>(ctx_->winApp->GetHeight())};
+    flash.size = {static_cast<float>(ctx_->systems.winApp->GetWidth()),
+                  static_cast<float>(ctx_->systems.winApp->GetHeight())};
     flash.color = {1.0f, 1.0f, 1.0f, alpha};
 
-    ctx_->sprite->PreDraw();
-    ctx_->sprite->DrawSprite(flash);
-    ctx_->sprite->PostDraw();
+    ctx_->rendering.sprite->PreDraw();
+    ctx_->rendering.sprite->DrawSprite(flash);
+    ctx_->rendering.sprite->PostDraw();
 }
 
 void GameScene::DrawDefeatFlash() {
-    if (!defeatSequenceActive_ || ctx_ == nullptr || ctx_->sprite == nullptr ||
-        ctx_->winApp == nullptr) {
+    if (!defeatSequenceActive_ || ctx_ == nullptr || ctx_->rendering.sprite == nullptr ||
+        ctx_->systems.winApp == nullptr) {
         return;
     }
 
@@ -3108,17 +3155,17 @@ void GameScene::DrawDefeatFlash() {
         std::clamp((defeatSequenceTimer_ - 1.55f) /
                        (defeatSequenceDuration_ - 1.55f),
                    0.0f, 0.72f);
-    const float w = static_cast<float>(ctx_->winApp->GetWidth());
-    const float h = static_cast<float>(ctx_->winApp->GetHeight());
+    const float w = static_cast<float>(ctx_->systems.winApp->GetWidth());
+    const float h = static_cast<float>(ctx_->systems.winApp->GetHeight());
 
-    ctx_->sprite->PreDraw();
+    ctx_->rendering.sprite->PreDraw();
     if (red > 0.01f) {
         Sprite flash{};
         flash.textureId = 0;
         flash.position = {0.0f, 0.0f};
         flash.size = {w, h};
         flash.color = {1.0f, 0.06f, 0.02f, red};
-        ctx_->sprite->DrawSprite(flash);
+        ctx_->rendering.sprite->DrawSprite(flash);
     }
     if (black > 0.01f) {
         Sprite fade{};
@@ -3126,14 +3173,14 @@ void GameScene::DrawDefeatFlash() {
         fade.position = {0.0f, 0.0f};
         fade.size = {w, h};
         fade.color = {0.0f, 0.0f, 0.0f, black};
-        ctx_->sprite->DrawSprite(fade);
+        ctx_->rendering.sprite->DrawSprite(fade);
     }
-    ctx_->sprite->PostDraw();
+    ctx_->rendering.sprite->PostDraw();
 }
 
 void GameScene::DrawBattleIntroFlash() {
-    if (!battleIntroActive_ || ctx_ == nullptr || ctx_->sprite == nullptr ||
-        ctx_->winApp == nullptr) {
+    if (!battleIntroActive_ || ctx_ == nullptr || ctx_->rendering.sprite == nullptr ||
+        ctx_->systems.winApp == nullptr) {
         return;
     }
 
@@ -3150,30 +3197,30 @@ void GameScene::DrawBattleIntroFlash() {
         return;
     }
 
-    const float w = static_cast<float>(ctx_->winApp->GetWidth());
-    const float h = static_cast<float>(ctx_->winApp->GetHeight());
-    ctx_->sprite->PreDraw();
+    const float w = static_cast<float>(ctx_->systems.winApp->GetWidth());
+    const float h = static_cast<float>(ctx_->systems.winApp->GetHeight());
+    ctx_->rendering.sprite->PreDraw();
     Sprite flash{};
     flash.textureId = 0;
     flash.position = {0.0f, 0.0f};
     flash.size = {w, h};
     flash.color = {1.0f, 0.985f, 0.93f, alpha};
-    ctx_->sprite->DrawSprite(flash);
+    ctx_->rendering.sprite->DrawSprite(flash);
     if (appearFlash > 0.01f) {
         Sprite flare{};
         flare.textureId = 0;
         flare.position = {w * 0.15f, h * 0.39f};
         flare.size = {w * 0.70f, h * 0.18f};
         flare.color = {1.0f, 1.0f, 1.0f, appearFlash * 0.16f};
-        ctx_->sprite->DrawSprite(flare);
+        ctx_->rendering.sprite->DrawSprite(flare);
     }
-    ctx_->sprite->PostDraw();
+    ctx_->rendering.sprite->PostDraw();
 }
 
 void GameScene::DrawChargeWeakPointTimeGauge() {
     const float limit = enemy_.GetChargeWeakPointTimeLimitForPresentation();
     if (limit <= 0.0001f || chargeWeakPointBroken_ || ctx_ == nullptr ||
-        ctx_->sprite == nullptr || ctx_->winApp == nullptr) {
+        ctx_->rendering.sprite == nullptr || ctx_->systems.winApp == nullptr) {
         return;
     }
 
@@ -3183,8 +3230,8 @@ void GameScene::DrawChargeWeakPointTimeGauge() {
     const float focus = std::clamp(chargeWeakPointFocusRatio_, 0.0f, 1.0f);
     const float alpha = std::clamp(0.16f + focus * 0.34f, 0.0f, 0.50f);
 
-    const float screenW = static_cast<float>(ctx_->winApp->GetWidth());
-    const float screenH = static_cast<float>(ctx_->winApp->GetHeight());
+    const float screenW = static_cast<float>(ctx_->systems.winApp->GetWidth());
+    const float screenH = static_cast<float>(ctx_->systems.winApp->GetHeight());
     const XMFLOAT2 center(screenW * 0.5f, screenH * 0.47f);
     const float radius = std::clamp(screenH * 0.34f, 190.0f, 290.0f);
     const float thickness = std::clamp(radius * 0.075f, 14.0f, 22.0f);
@@ -3207,10 +3254,10 @@ void GameScene::DrawChargeWeakPointTimeGauge() {
         sprite.position = {x - size * 0.5f, y - size * 0.5f};
         sprite.size = {size, size};
         sprite.color = color;
-        ctx_->sprite->DrawSprite(sprite);
+        ctx_->rendering.sprite->DrawSprite(sprite);
     };
 
-    ctx_->sprite->PreDraw();
+    ctx_->rendering.sprite->PreDraw();
     for (int i = 0; i < kSegments; ++i) {
         const float t = static_cast<float>(i) / static_cast<float>(kSegments);
         const float angle = startAngle + kPi * 2.0f * t;
@@ -3237,17 +3284,17 @@ void GameScene::DrawChargeWeakPointTimeGauge() {
         drawBlock(center.x + std::cos(angle) * radius,
                   center.y + std::sin(angle) * radius, thickness, color);
     }
-    ctx_->sprite->PostDraw();
+    ctx_->rendering.sprite->PostDraw();
 }
 
 void GameScene::DrawBladeClashGauge() {
-    if (!bladeClashActive_ || ctx_ == nullptr || ctx_->sprite == nullptr ||
-        ctx_->winApp == nullptr) {
+    if (!bladeClashActive_ || ctx_ == nullptr || ctx_->rendering.sprite == nullptr ||
+        ctx_->systems.winApp == nullptr) {
         return;
     }
 
-    const float screenW = static_cast<float>(ctx_->winApp->GetWidth());
-    const float screenH = static_cast<float>(ctx_->winApp->GetHeight());
+    const float screenW = static_cast<float>(ctx_->systems.winApp->GetWidth());
+    const float screenH = static_cast<float>(ctx_->systems.winApp->GetHeight());
     const float centerX = screenW * 0.5f;
     const float centerY = screenH * 0.52f;
     const float width = std::clamp(screenW * 0.36f, 360.0f, 620.0f);
@@ -3270,10 +3317,10 @@ void GameScene::DrawBladeClashGauge() {
         sprite.position = {x, y};
         sprite.size = {w, h};
         sprite.color = color;
-        ctx_->sprite->DrawSprite(sprite);
+        ctx_->rendering.sprite->DrawSprite(sprite);
     };
 
-    ctx_->sprite->PreDraw();
+    ctx_->rendering.sprite->PreDraw();
     const XMFLOAT4 frameColor =
         bladeClashFinal_ ? XMFLOAT4{0.30f, 0.08f, 0.02f, 0.84f}
                          : XMFLOAT4{0.02f, 0.025f, 0.030f, 0.72f};
@@ -3339,7 +3386,7 @@ void GameScene::DrawBladeClashGauge() {
                    : (timeRatio < 0.28f
                           ? XMFLOAT4{1.0f, 0.14f, 0.06f, 0.92f}
                           : XMFLOAT4{0.94f, 0.82f, 0.30f, 0.90f}));
-    ctx_->sprite->PostDraw();
+    ctx_->rendering.sprite->PostDraw();
 }
 
 void GameScene::DrawEnemyWeaponTrail() {
@@ -3446,8 +3493,8 @@ void GameScene::DrawEnemyWeaponTrail() {
         effect.fresnelPower = 0.65f;
         effect.noiseAmount = noise;
         effect.time = sceneLightTime_;
-        ctx_->model->SetDrawEffect(effect);
-        ctx_->model->Draw(enemyWeaponTrailModelId_, tf, camera_);
+        ctx_->rendering.model->SetDrawEffect(effect);
+        ctx_->rendering.model->Draw(enemyWeaponTrailModelId_, tf, camera_);
     };
 
     for (const EnemyWeaponTrailSample &sample : enemyWeaponTrailSamples_) {
@@ -3475,7 +3522,7 @@ void GameScene::DrawEnemyWeaponTrail() {
     }
 
     if (!shouldRecordCurrent) {
-        ctx_->model->ClearDrawEffect();
+        ctx_->rendering.model->ClearDrawEffect();
         enemyWeaponTrailSampleTimer_ = 0.0f;
         enemyWeaponTrailLastKind_ = ActionKind::None;
         enemyWeaponTrailLastStep_ = ActionStep::None;
@@ -3513,8 +3560,8 @@ void GameScene::DrawEnemyWeaponTrail() {
     }
 
     if (kind != ActionKind::BladeClash && ctx_ != nullptr &&
-        ctx_->model != nullptr) {
-        if (Model *enemyModel = ctx_->model->GetModel(enemyModelId_)) {
+        ctx_->rendering.model != nullptr) {
+        if (Model *enemyModel = ctx_->rendering.model->GetModel(enemyModelId_)) {
             TryGetEnemySwordMeshSegment(*enemyModel, enemy_.GetVisualTransform(),
                                         enemyBodyPos, bladeRoot, bladeTip);
         }
@@ -3621,7 +3668,7 @@ void GameScene::DrawEnemyWeaponTrail() {
                        1.02f + 0.28f * clashGlow, 0.012f);
     }
 
-    ctx_->model->ClearDrawEffect();
+    ctx_->rendering.model->ClearDrawEffect();
 }
 
 void GameScene::DrawChargeWeakPoint() {
@@ -3632,7 +3679,7 @@ void GameScene::DrawBladeClashFinishBackdrop() {
 }
 
 void GameScene::DrawDistantHazardBackdrop() {
-    ModelManager *model = ctx_->model;
+    ModelManager *model = ctx_->rendering.model;
     const float pulse = 0.5f + 0.5f * std::sinf(sceneLightTime_ * 1.8f);
 
     ModelDrawEffect cityEffect{};
@@ -3645,6 +3692,8 @@ void GameScene::DrawDistantHazardBackdrop() {
     cityEffect.noiseAmount = 0.0f;
     cityEffect.time = sceneLightTime_ * 0.45f;
     model->SetDrawEffect(cityEffect);
+    std::vector<Transform> cityTowers;
+    cityTowers.reserve(4u * 3u * 17u);
     for (int side = 0; side < 4; ++side) {
         const bool alongX = side < 2;
         const float sign = (side == 0 || side == 2) ? 1.0f : -1.0f;
@@ -3668,9 +3717,13 @@ void GameScene::DrawDistantHazardBackdrop() {
                                height,
                                0.78f + static_cast<float>((i * 3 + row) % 2) *
                                            0.24f};
-                model->Draw(arenaCityTowerModelId_, tower, camera_);
+                cityTowers.push_back(tower);
             }
         }
+    }
+    if (!cityTowers.empty()) {
+        model->DrawInstanced(arenaCityTowerModelId_, cityTowers.data(),
+                             static_cast<uint32_t>(cityTowers.size()), camera_);
     }
     model->ClearDrawEffect();
 
@@ -3678,6 +3731,8 @@ void GameScene::DrawDistantHazardBackdrop() {
     blockEffect.color = {0.07f, 0.10f, 0.13f, 0.92f};
     blockEffect.intensity = 0.18f;
     model->SetDrawEffect(blockEffect);
+    std::vector<Transform> cityBlocks;
+    cityBlocks.reserve(23u);
     for (int i = 0; i < 15; ++i) {
         const float offset = static_cast<float>(i - 7);
         Transform wall{};
@@ -3687,7 +3742,7 @@ void GameScene::DrawDistantHazardBackdrop() {
         wall.scale = {1.28f + 0.12f * static_cast<float>(i % 3),
                       5.3f + static_cast<float>((i * 5) % 5) * 0.72f,
                       1.08f};
-        model->Draw(arenaCityTowerModelId_, wall, camera_);
+        cityBlocks.push_back(wall);
     }
     for (int side = 0; side < 2; ++side) {
         const float sign = side == 0 ? -1.0f : 1.0f;
@@ -3699,8 +3754,12 @@ void GameScene::DrawDistantHazardBackdrop() {
             brace.rotation = MakeQuat(0.0f, sign * 0.12f, 0.0f);
             brace.scale = {2.8f - static_cast<float>(step) * 0.22f, 0.30f,
                            0.78f};
-            model->Draw(arenaCityTowerModelId_, brace, camera_);
+            cityBlocks.push_back(brace);
         }
+    }
+    if (!cityBlocks.empty()) {
+        model->DrawInstanced(arenaCityTowerModelId_, cityBlocks.data(),
+                             static_cast<uint32_t>(cityBlocks.size()), camera_);
     }
     model->ClearDrawEffect();
 
@@ -3714,6 +3773,8 @@ void GameScene::DrawDistantHazardBackdrop() {
     lightEffect.noiseAmount = 0.0f;
     lightEffect.time = sceneLightTime_;
     model->SetDrawEffect(lightEffect);
+    std::vector<Transform> cityWindows;
+    cityWindows.reserve(4u * 11u);
     for (int side = 0; side < 4; ++side) {
         const bool alongX = side < 2;
         const float sign = (side == 0 || side == 2) ? 1.0f : -1.0f;
@@ -3730,14 +3791,18 @@ void GameScene::DrawDistantHazardBackdrop() {
                 MakeQuat(0.0f, alongX ? 0.0f : kPi * 0.5f, 0.0f);
             panel.scale = {0.16f, 1.05f + static_cast<float>(i % 2) * 0.40f,
                            1.0f};
-            model->Draw(arenaCityWindowModelId_, panel, camera_);
+            cityWindows.push_back(panel);
         }
+    }
+    if (!cityWindows.empty()) {
+        model->DrawInstanced(arenaCityWindowModelId_, cityWindows.data(),
+                             static_cast<uint32_t>(cityWindows.size()), camera_);
     }
     model->ClearDrawEffect();
 }
 
 void GameScene::DrawArena() {
-    ModelManager *model = ctx_->model;
+    ModelManager *model = ctx_->rendering.model;
     const float pulse = 0.5f + 0.5f * std::sinf(sceneLightTime_ * 2.2f);
     constexpr float kPatternSpacing = 3.55f;
     constexpr float kLaneSpacing = 4.25f;
@@ -3761,6 +3826,8 @@ void GameScene::DrawArena() {
     fieldEffect.time = sceneLightTime_;
     model->SetDrawEffect(fieldEffect);
 
+    std::vector<Transform> fieldTiles;
+    fieldTiles.reserve(480u);
     for (int z = -14; z <= 14; ++z) {
         for (int x = -14; x <= 14; ++x) {
             if ((std::abs(x) + std::abs(z)) % 2 != 0) {
@@ -3771,7 +3838,7 @@ void GameScene::DrawArena() {
                              static_cast<float>(z) * kPatternSpacing};
             tile.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
             tile.scale = {2.26f, 2.26f, 1.0f};
-            model->Draw(arenaSpokeModelId_, tile, camera_);
+            fieldTiles.push_back(tile);
         }
     }
 
@@ -3779,7 +3846,7 @@ void GameScene::DrawArena() {
     center.position = {0.0f, 0.012f, 0.0f};
     center.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
     center.scale = {4.8f, 4.8f, 1.0f};
-    model->Draw(arenaSpokeModelId_, center, camera_);
+    fieldTiles.push_back(center);
 
     for (int i = -13; i <= 13; ++i) {
         Transform laneX{};
@@ -3787,14 +3854,18 @@ void GameScene::DrawArena() {
                           static_cast<float>(i) * kLaneSpacing};
         laneX.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
         laneX.scale = {168.0f, i == 0 ? 0.080f : 0.034f, 1.0f};
-        model->Draw(arenaSpokeModelId_, laneX, camera_);
+        fieldTiles.push_back(laneX);
 
         Transform laneZ{};
         laneZ.position = {static_cast<float>(i) * kLaneSpacing, 0.017f,
                           0.0f};
         laneZ.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
         laneZ.scale = {i == 0 ? 0.080f : 0.034f, 168.0f, 1.0f};
-        model->Draw(arenaSpokeModelId_, laneZ, camera_);
+        fieldTiles.push_back(laneZ);
+    }
+    if (!fieldTiles.empty()) {
+        model->DrawInstanced(arenaSpokeModelId_, fieldTiles.data(),
+                             static_cast<uint32_t>(fieldTiles.size()), camera_);
     }
     model->ClearDrawEffect();
 
@@ -3808,20 +3879,26 @@ void GameScene::DrawArena() {
     lineEffect.noiseAmount = 0.0f;
     lineEffect.time = sceneLightTime_;
     model->SetDrawEffect(lineEffect);
+    std::vector<Transform> glowLines;
+    glowLines.reserve(62u);
     for (int i = -15; i <= 15; ++i) {
         Transform lightX{};
         lightX.position = {0.0f, 0.034f,
                            static_cast<float>(i) * kPatternSpacing};
         lightX.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
         lightX.scale = {160.0f, 0.016f, 1.0f};
-        model->Draw(arenaCityWindowModelId_, lightX, camera_);
+        glowLines.push_back(lightX);
 
         Transform lightZ{};
         lightZ.position = {static_cast<float>(i) * kPatternSpacing, 0.035f,
                            0.0f};
         lightZ.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
         lightZ.scale = {0.016f, 160.0f, 1.0f};
-        model->Draw(arenaCityWindowModelId_, lightZ, camera_);
+        glowLines.push_back(lightZ);
+    }
+    if (!glowLines.empty()) {
+        model->DrawInstanced(arenaCityWindowModelId_, glowLines.data(),
+                             static_cast<uint32_t>(glowLines.size()), camera_);
     }
     model->ClearDrawEffect();
 }
@@ -3865,7 +3942,7 @@ void GameScene::DrawEnemyFocusMarker() {
     effect.fresnelPower = 1.0f;
     effect.noiseAmount = 0.02f;
     effect.time = sceneLightTime_;
-    ctx_->model->SetDrawEffect(effect);
-    ctx_->model->Draw(enemyFocusRingModelId_, marker, camera_);
-    ctx_->model->ClearDrawEffect();
+    ctx_->rendering.model->SetDrawEffect(effect);
+    ctx_->rendering.model->Draw(enemyFocusRingModelId_, marker, camera_);
+    ctx_->rendering.model->ClearDrawEffect();
 }

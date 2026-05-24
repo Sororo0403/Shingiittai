@@ -1,8 +1,8 @@
-#include "RenderTexture.h"
-#include "DirectXCommon.h"
-#include "DxHelpers.h"
-#include "DxUtils.h"
-#include "SrvManager.h"
+#include "graphics/RenderTexture.h"
+#include "graphics/DirectXCommon.h"
+#include "graphics/DxHelpers.h"
+#include "graphics/DxUtils.h"
+#include "graphics/SrvManager.h"
 
 using namespace DxUtils;
 
@@ -83,20 +83,20 @@ void RenderTexture::CreateResources() {
     D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc{};
     rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
     rtvHeapDesc.NumDescriptors = 1;
-    ThrowIfFailed(device->CreateDescriptorHeap(&rtvHeapDesc,
-                                               IID_PPV_ARGS(&rtvHeap_)),
-                  "Create RenderTexture RTV heap failed");
+    ThrowIfFailed(
+        device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&rtvHeap_)),
+        "Create RenderTexture RTV heap failed");
 
     rtvDescriptorSize_ = device->GetDescriptorHandleIncrementSize(
         D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
     auto resourceDesc = CD3DX12_RESOURCE_DESC::Tex2D(
-        DXGI_FORMAT_R8G8B8A8_TYPELESS, static_cast<UINT64>(width_),
+        DirectXCommon::kSceneColorFormat, static_cast<UINT64>(width_),
         static_cast<UINT>(height_), 1, 1, 1, 0,
         D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
 
     D3D12_CLEAR_VALUE clearValue{};
-    clearValue.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    clearValue.Format = DirectXCommon::kSceneColorFormat;
     clearValue.Color[0] = 0.1f;
     clearValue.Color[1] = 0.2f;
     clearValue.Color[2] = 0.4f;
@@ -110,14 +110,15 @@ void RenderTexture::CreateResources() {
                   "Create RenderTexture resource failed");
 
     D3D12_RENDER_TARGET_VIEW_DESC rtvDesc{};
-    rtvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    rtvDesc.Format = DirectXCommon::kSceneColorFormat;
     rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
     device->CreateRenderTargetView(
-        resource_.Get(), &rtvDesc, rtvHeap_->GetCPUDescriptorHandleForHeapStart());
+        resource_.Get(), &rtvDesc,
+        rtvHeap_->GetCPUDescriptorHandleForHeapStart());
 
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    srvDesc.Format = DirectXCommon::kSceneColorFormat;
     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     srvDesc.Texture2D.MipLevels = 1;
     device->CreateShaderResourceView(resource_.Get(), &srvDesc,

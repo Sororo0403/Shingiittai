@@ -96,6 +96,12 @@
     <ClCompile Include="src\player\Player.cpp">
       <Filter>Source Files\player</Filter>
     </ClCompile>
+    <ClCompile Include="src\player\JoyCon.cpp">
+      <Filter>Source Files\player</Filter>
+    </ClCompile>
+    <ClCompile Include="src\player\MahonyFilter.cpp">
+      <Filter>Source Files\player</Filter>
+    </ClCompile>
     <ClCompile Include="src\scene\CombatFeedbackDirector.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
@@ -216,6 +222,21 @@
     <ClInclude Include="include\player\SwordTrailRenderer.h" />
     <ClInclude Include="include\player\InputControlType.h">
       <Filter>Header Files\player</Filter>
+    </ClInclude>
+    <ClInclude Include="include\compat\EngineCompat.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\compat\ParticleCompat.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\player\JoyCon.h">
+      <Filter>Header Files\player</Filter>
+    </ClInclude>
+    <ClInclude Include="include\player\MahonyFilter.h">
+      <Filter>Header Files\player</Filter>
+    </ClInclude>
+    <ClInclude Include="include\scene\AppSceneServices.h">
+      <Filter>Header Files\scene</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\TipScene.h">
       <Filter>Header Files\scene</Filter>

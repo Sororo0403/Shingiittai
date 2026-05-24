@@ -65,13 +65,13 @@ void BattleResultScene::Initialize(const SceneContext &ctx) {
         handController_.SetCalibration(inputCalibration_);
     }
 
-    ctx_->postEffectRenderer->SetColorMode(PostEffectRenderer::ColorMode::None);
-    ctx_->postEffectRenderer->SetVignettingEnabled(true);
-    ctx_->postEffectRenderer->SetVignettingStrength(0.30f);
-    ctx_->postEffectRenderer->SetSceneDimStrength(0.0f);
-    ctx_->postEffectRenderer->SetRadialBlurStrength(0.0f);
+    ctx_->rendering.postEffectRenderer->SetColorMode(PostEffectRenderer::ColorMode::None);
+    ctx_->rendering.postEffectRenderer->SetVignettingEnabled(true);
+    ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.30f);
+    ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.0f);
+    ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(0.0f);
 
-    ctx_->dxCommon->BeginUpload();
+    ctx_->rendering.dxCommon->BeginUpload();
     clearTitle_ = LoadTextureImage(L"app/resources/result/clear_title.png");
     gameOverTitle_ =
         LoadTextureImage(L"app/resources/result/game_over_title.png");
@@ -98,8 +98,8 @@ void BattleResultScene::Initialize(const SceneContext &ctx) {
     dotImage_ = LoadTextureImage(L"app/resources/result/char_dot.png");
     dashImage_ = LoadTextureImage(L"app/resources/result/char_dash.png");
     secondImage_ = LoadTextureImage(L"app/resources/result/char_s.png");
-    ctx_->dxCommon->EndUpload();
-    ctx_->texture->ReleaseUploadBuffers();
+    ctx_->rendering.dxCommon->EndUpload();
+    ctx_->rendering.texture->ReleaseUploadBuffers();
 
     LoadRanking();
     if (resultKind_ == ResultKind::Clear) {
@@ -108,11 +108,11 @@ void BattleResultScene::Initialize(const SceneContext &ctx) {
 }
 
 void BattleResultScene::Update() {
-    sceneTime_ += ctx_->deltaTime;
-    Input *input = ctx_->input;
+    sceneTime_ += ctx_->frame.deltaTime;
+    Input *input = ctx_->systems.input;
 
     if (IsHandControl(inputCalibration_.controlType)) {
-        UpdateHandResultInput(ctx_->deltaTime);
+        UpdateHandResultInput(ctx_->frame.deltaTime);
         return;
     }
 
@@ -165,10 +165,10 @@ void BattleResultScene::UpdateHandResultInput(float deltaTime) {
 }
 
 void BattleResultScene::Draw() {
-    const float w = static_cast<float>(ctx_->winApp->GetWidth());
-    const float h = static_cast<float>(ctx_->winApp->GetHeight());
+    const float w = static_cast<float>(ctx_->systems.winApp->GetWidth());
+    const float h = static_cast<float>(ctx_->systems.winApp->GetHeight());
 
-    ctx_->sprite->PreDraw();
+    ctx_->rendering.sprite->PreDraw();
     DrawBackground(w, h);
     if (resultKind_ == ResultKind::Clear) {
         DrawClear(w, h);
@@ -176,18 +176,18 @@ void BattleResultScene::Draw() {
         DrawGameOver(w, h);
     }
     DrawHandInputStatus(w, h);
-    ctx_->sprite->PostDraw();
+    ctx_->rendering.sprite->PostDraw();
 }
 
-void BattleResultScene::DrawOverlay() {}
+void BattleResultScene::DrawTransparent() {}
 
 BattleResultScene::Image
 BattleResultScene::LoadTextureImage(const std::wstring &path) {
     Image image{};
-    image.textureId = ctx_->texture->Load(path);
-    image.width = static_cast<float>(ctx_->texture->GetWidth(image.textureId));
+    image.textureId = ctx_->rendering.texture->Load(path);
+    image.width = static_cast<float>(ctx_->rendering.texture->GetWidth(image.textureId));
     image.height =
-        static_cast<float>(ctx_->texture->GetHeight(image.textureId));
+        static_cast<float>(ctx_->rendering.texture->GetHeight(image.textureId));
     return image;
 }
 
@@ -332,7 +332,7 @@ void BattleResultScene::DrawImage(const Image &image, float x, float y,
     sprite.position = {x, y};
     sprite.size = {image.width * scale, image.height * scale};
     sprite.color = {1.0f, 1.0f, 1.0f, alpha};
-    ctx_->sprite->DrawSprite(sprite);
+    ctx_->rendering.sprite->DrawSprite(sprite);
 }
 
 void BattleResultScene::DrawRect(float x, float y, float w, float h,
@@ -342,7 +342,7 @@ void BattleResultScene::DrawRect(float x, float y, float w, float h,
     sprite.position = {x, y};
     sprite.size = {w, h};
     sprite.color = color;
-    ctx_->sprite->DrawSprite(sprite);
+    ctx_->rendering.sprite->DrawSprite(sprite);
 }
 
 void BattleResultScene::DrawTextLine(const std::string &text, float centerX,

@@ -1,9 +1,10 @@
-#include "PostEffectRenderer.h"
-#include "DirectXCommon.h"
-#include "DxHelpers.h"
-#include "DxUtils.h"
-#include "ShaderCompiler.h"
-#include "SrvManager.h"
+#include "graphics/PostEffectRenderer.h"
+#include "graphics/DirectXCommon.h"
+#include "graphics/DxHelpers.h"
+#include "graphics/DxUtils.h"
+#include "graphics/ShaderCompiler.h"
+#include "graphics/ShaderPaths.h"
+#include "graphics/SrvManager.h"
 #include <algorithm>
 
 using namespace DxUtils;
@@ -36,37 +37,6 @@ void PostEffectRenderer::Resize(int width, int height) {
     scissorRect_.right = width_;
     scissorRect_.bottom = height_;
 
-    UpdateConstantBuffer();
-}
-
-void PostEffectRenderer::ResetEffects() {
-    colorMode_ = ColorMode::None;
-    filterMode_ = FilterMode::None;
-    edgeMode_ = EdgeMode::None;
-    enableVignetting_ = false;
-    vignettingStrength_ = 0.0f;
-    vignettingScale_ = 16.0f;
-    vignettingPower_ = 0.8f;
-    grayscaleWeights_[0] = 0.2125f;
-    grayscaleWeights_[1] = 0.7154f;
-    grayscaleWeights_[2] = 0.0721f;
-    sepiaTone_[0] = 1.20f;
-    sepiaTone_[1] = 1.00f;
-    sepiaTone_[2] = 0.80f;
-    luminanceEdgeThreshold_ = 0.2f;
-    depthEdgeThreshold_ = 0.02f;
-    nearZ_ = 0.1f;
-    farZ_ = 100.0f;
-    radialBlurCenter_[0] = 0.5f;
-    radialBlurCenter_[1] = 0.5f;
-    radialBlurStrength_ = 0.0f;
-    radialBlurSampleCount_ = 10;
-    randomMode_ = RandomMode::None;
-    randomStrength_ = 0.0f;
-    randomScale_ = 240.0f;
-    randomTime_ = 0.0f;
-    randomSeed_ = 0.0f;
-    sceneDimStrength_ = 0.0f;
     UpdateConstantBuffer();
 }
 
@@ -120,22 +90,6 @@ void PostEffectRenderer::SetDepthParameters(float nearZ, float farZ) {
     UpdateConstantBuffer();
 }
 
-void PostEffectRenderer::SetVignettingEnabled(bool enabled) {
-    enableVignetting_ = enabled;
-    UpdateConstantBuffer();
-}
-
-void PostEffectRenderer::SetVignettingStrength(float strength) {
-    vignettingStrength_ = std::clamp(strength, 0.0f, 1.0f);
-    UpdateConstantBuffer();
-}
-
-void PostEffectRenderer::SetVignettingShape(float scale, float power) {
-    vignettingScale_ = std::clamp(scale, 0.0f, 64.0f);
-    vignettingPower_ = std::clamp(power, 0.01f, 8.0f);
-    UpdateConstantBuffer();
-}
-
 void PostEffectRenderer::SetGrayscaleWeights(float r, float g, float b) {
     grayscaleWeights_[0] = r;
     grayscaleWeights_[1] = g;
@@ -143,56 +97,101 @@ void PostEffectRenderer::SetGrayscaleWeights(float r, float g, float b) {
     UpdateConstantBuffer();
 }
 
-void PostEffectRenderer::SetSepiaTone(float r, float g, float b) {
-    sepiaTone_[0] = std::clamp(r, 0.0f, 4.0f);
-    sepiaTone_[1] = std::clamp(g, 0.0f, 4.0f);
-    sepiaTone_[2] = std::clamp(b, 0.0f, 4.0f);
+void PostEffectRenderer::SetTonemapEnabled(bool enabled) {
+    tonemapEnabled_ = enabled;
     UpdateConstantBuffer();
 }
 
-void PostEffectRenderer::SetRadialBlurCenter(float x, float y) {
-    radialBlurCenter_[0] = std::clamp(x, 0.0f, 1.0f);
-    radialBlurCenter_[1] = std::clamp(y, 0.0f, 1.0f);
+void PostEffectRenderer::SetExposure(float exposure) {
+    exposure_ = (std::max)(exposure, 0.0f);
     UpdateConstantBuffer();
 }
 
-void PostEffectRenderer::SetRadialBlurStrength(float strength) {
-    radialBlurStrength_ = std::clamp(strength, 0.0f, 1.0f);
+void PostEffectRenderer::SetGamma(float gamma) {
+    gamma_ = (std::max)(gamma, 0.001f);
     UpdateConstantBuffer();
 }
 
-void PostEffectRenderer::SetRadialBlurSampleCount(int32_t sampleCount) {
-    radialBlurSampleCount_ = std::clamp(sampleCount, 2, 32);
+void PostEffectRenderer::SetBloomEnabled(bool enabled) {
+    bloomEnabled_ = enabled;
     UpdateConstantBuffer();
 }
 
-void PostEffectRenderer::SetRandomMode(RandomMode mode) {
-    randomMode_ = mode;
+void PostEffectRenderer::SetBloom(float threshold, float intensity,
+                                  float radius) {
+    bloomThreshold_ = (std::max)(threshold, 0.0f);
+    bloomIntensity_ = (std::max)(intensity, 0.0f);
+    bloomRadius_ = (std::max)(radius, 0.0f);
     UpdateConstantBuffer();
 }
 
-void PostEffectRenderer::SetRandomStrength(float strength) {
-    randomStrength_ = std::clamp(strength, 0.0f, 1.0f);
+void PostEffectRenderer::SetNoiseEnabled(bool enabled) {
+    noiseEnabled_ = enabled;
     UpdateConstantBuffer();
 }
 
-void PostEffectRenderer::SetRandomScale(float scale) {
-    randomScale_ = std::clamp(scale, 1.0f, 4096.0f);
+void PostEffectRenderer::SetNoise(float strength, float scale) {
+    noiseStrength_ = (std::max)(strength, 0.0f);
+    noiseScale_ = (std::max)(scale, 0.001f);
     UpdateConstantBuffer();
 }
 
-void PostEffectRenderer::SetRandomTime(float time) {
-    randomTime_ = time;
+void PostEffectRenderer::SetNoiseTime(float time) {
+    noiseTime_ = time;
     UpdateConstantBuffer();
 }
 
-void PostEffectRenderer::SetRandomSeed(float seed) {
-    randomSeed_ = seed;
+void PostEffectRenderer::SetSpecialMode(SpecialMode mode) {
+    specialMode_ = mode;
     UpdateConstantBuffer();
 }
 
-void PostEffectRenderer::SetSceneDimStrength(float strength) {
-    sceneDimStrength_ = std::clamp(strength, 0.0f, 1.0f);
+void PostEffectRenderer::SetVignette(float strength, float radius) {
+    vignetteStrength_ = std::clamp(strength, 0.0f, 1.0f);
+    vignetteRadius_ = std::clamp(radius, 0.0f, 1.25f);
+    UpdateConstantBuffer();
+}
+
+void PostEffectRenderer::SetRadialBlur(float strength) {
+    radialBlurStrength_ = std::clamp(strength, 0.0f, 0.18f);
+    UpdateConstantBuffer();
+}
+
+void PostEffectRenderer::SetDissolve(float amount, float softness,
+                                     float scale) {
+    dissolveAmount_ = std::clamp(amount, 0.0f, 1.0f);
+    dissolveSoftness_ = (std::max)(softness, 0.001f);
+    dissolveScale_ = (std::max)(scale, 0.001f);
+    UpdateConstantBuffer();
+}
+
+void PostEffectRenderer::SetLensFlare(
+    bool enabled, float visibility, float sunUvX, float sunUvY, float sunDepth,
+    float occlusionBias, float glareRadius, float glareIntensity,
+    float glareAlpha, const float glareColor[3], float ghostIntensity,
+    float ghostAlpha, const float ghostWarmColor[3],
+    const float ghostCoolColor[3], float streakIntensity, float streakAlpha,
+    float streakWidth, const float streakColor[3]) {
+    lensFlareEnabled_ = enabled;
+    lensFlareVisibility_ = std::clamp(visibility, 0.0f, 1.0f);
+    lensFlareSunUv_[0] = std::clamp(sunUvX, -0.25f, 1.25f);
+    lensFlareSunUv_[1] = std::clamp(sunUvY, -0.25f, 1.25f);
+    lensFlareSunDepth_ = std::clamp(sunDepth, 0.0f, 1.0f);
+    lensFlareOcclusionBias_ = (std::max)(occlusionBias, 0.0f);
+    lensFlareGlareRadius_ = (std::max)(glareRadius, 0.001f);
+    lensFlareGlareIntensity_ = (std::max)(glareIntensity, 0.0f);
+    lensFlareGlareAlpha_ = std::clamp(glareAlpha, 0.0f, 1.0f);
+    lensFlareGhostIntensity_ = (std::max)(ghostIntensity, 0.0f);
+    lensFlareGhostAlpha_ = std::clamp(ghostAlpha, 0.0f, 1.0f);
+    lensFlareStreakIntensity_ = (std::max)(streakIntensity, 0.0f);
+    lensFlareStreakAlpha_ = std::clamp(streakAlpha, 0.0f, 1.0f);
+    lensFlareStreakWidth_ = (std::max)(streakWidth, 0.001f);
+    for (int i = 0; i < 3; ++i) {
+        lensFlareGlareColor_[i] = glareColor[i];
+        lensFlareGhostWarmColor_[i] = ghostWarmColor[i];
+        lensFlareGhostCoolColor_[i] = ghostCoolColor[i];
+        lensFlareStreakColor_[i] = streakColor[i];
+    }
     UpdateConstantBuffer();
 }
 
@@ -232,12 +231,10 @@ void PostEffectRenderer::CreateRootSignature() {
 }
 
 void PostEffectRenderer::CreatePipelineState() {
-    auto vs = ShaderCompiler::Compile(
-        L"engine/resources/shaders/posteffect/PostEffectVS.hlsl", "main",
-        "vs_5_0");
-    auto ps = ShaderCompiler::Compile(
-        L"engine/resources/shaders/posteffect/PostEffectPS.hlsl", "main",
-        "ps_5_0");
+    auto vs =
+        ShaderCompiler::Compile(ShaderPaths::PostEffectVS, "main", "vs_5_0");
+    auto ps =
+        ShaderCompiler::Compile(ShaderPaths::PostEffectPS, "main", "ps_5_0");
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
     desc.pRootSignature = rootSignature_.Get();
@@ -245,15 +242,14 @@ void PostEffectRenderer::CreatePipelineState() {
     desc.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
     desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     desc.NumRenderTargets = 1;
-    desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-    desc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    desc.RTVFormats[0] = DirectXCommon::kBackBufferFormat;
+    desc.DSVFormat = DXGI_FORMAT_UNKNOWN;
     desc.SampleDesc.Count = 1;
     desc.SampleMask = UINT_MAX;
     desc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
     desc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 
-    D3D12_DEPTH_STENCIL_DESC depth =
-        CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+    D3D12_DEPTH_STENCIL_DESC depth = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
     depth.DepthEnable = FALSE;
     depth.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
     desc.DepthStencilState = depth;
@@ -265,7 +261,7 @@ void PostEffectRenderer::CreatePipelineState() {
 }
 
 void PostEffectRenderer::CreateConstantBuffer() {
-    const UINT size = Align256(sizeof(EffectConstBuffer));
+    const UINT size = Align256(sizeof(PostEffectConstants));
 
     CD3DX12_HEAP_PROPERTIES heap(D3D12_HEAP_TYPE_UPLOAD);
     auto desc = CD3DX12_RESOURCE_DESC::Buffer(size);
@@ -276,10 +272,10 @@ void PostEffectRenderer::CreateConstantBuffer() {
                       IID_PPV_ARGS(&constBuffer_)),
                   "Create PostEffect constant buffer failed");
 
-    ThrowIfFailed(constBuffer_->Map(
-                      0, nullptr,
-                      reinterpret_cast<void **>(&mappedConstBuffer_)),
-                  "Map PostEffect constant buffer failed");
+    ThrowIfFailed(
+        constBuffer_->Map(0, nullptr,
+                          reinterpret_cast<void **>(&mappedConstBuffer_)),
+        "Map PostEffect constant buffer failed");
 
     UpdateConstantBuffer();
 }
@@ -290,32 +286,58 @@ void PostEffectRenderer::UpdateConstantBuffer() {
     }
 
     mappedConstBuffer_->colorMode = static_cast<int32_t>(colorMode_);
-    mappedConstBuffer_->enableVignetting = enableVignetting_ ? 1 : 0;
     mappedConstBuffer_->filterMode = static_cast<int32_t>(filterMode_);
-    mappedConstBuffer_->vignettingStrength = vignettingStrength_;
     mappedConstBuffer_->texelSize[0] = 1.0f / static_cast<float>(width_);
     mappedConstBuffer_->texelSize[1] = 1.0f / static_cast<float>(height_);
-    mappedConstBuffer_->vignettingScale = vignettingScale_;
-    mappedConstBuffer_->vignettingPower = vignettingPower_;
     mappedConstBuffer_->edgeMode = static_cast<int32_t>(edgeMode_);
     mappedConstBuffer_->luminanceEdgeThreshold = luminanceEdgeThreshold_;
     mappedConstBuffer_->depthEdgeThreshold = depthEdgeThreshold_;
     mappedConstBuffer_->nearZ = nearZ_;
     mappedConstBuffer_->farZ = farZ_;
-    mappedConstBuffer_->radialBlurCenter[0] = radialBlurCenter_[0];
-    mappedConstBuffer_->radialBlurCenter[1] = radialBlurCenter_[1];
-    mappedConstBuffer_->radialBlurStrength = radialBlurStrength_;
-    mappedConstBuffer_->radialBlurSampleCount = radialBlurSampleCount_;
-    mappedConstBuffer_->randomMode = static_cast<int32_t>(randomMode_);
-    mappedConstBuffer_->randomStrength = randomStrength_;
-    mappedConstBuffer_->randomScale = randomScale_;
-    mappedConstBuffer_->randomTime = randomTime_;
-    mappedConstBuffer_->randomSeed = randomSeed_;
     mappedConstBuffer_->grayscaleWeights[0] = grayscaleWeights_[0];
     mappedConstBuffer_->grayscaleWeights[1] = grayscaleWeights_[1];
     mappedConstBuffer_->grayscaleWeights[2] = grayscaleWeights_[2];
-    mappedConstBuffer_->sepiaTone[0] = sepiaTone_[0];
-    mappedConstBuffer_->sepiaTone[1] = sepiaTone_[1];
-    mappedConstBuffer_->sepiaTone[2] = sepiaTone_[2];
-    mappedConstBuffer_->sceneDimStrength = sceneDimStrength_;
+    mappedConstBuffer_->tonemapEnabled = tonemapEnabled_ ? 1 : 0;
+    mappedConstBuffer_->exposure = exposure_;
+    mappedConstBuffer_->gamma = gamma_;
+    mappedConstBuffer_->bloomEnabled = bloomEnabled_ ? 1 : 0;
+    mappedConstBuffer_->bloomThreshold = bloomThreshold_;
+    mappedConstBuffer_->bloomIntensity = bloomIntensity_;
+    mappedConstBuffer_->bloomRadius = bloomRadius_;
+    mappedConstBuffer_->noiseEnabled = noiseEnabled_ ? 1 : 0;
+    mappedConstBuffer_->noiseStrength = noiseStrength_;
+    mappedConstBuffer_->noiseScale = noiseScale_;
+    mappedConstBuffer_->noiseTime = noiseTime_;
+    mappedConstBuffer_->specialMode = static_cast<int32_t>(specialMode_);
+    mappedConstBuffer_->vignetteStrength = vignetteStrength_;
+    mappedConstBuffer_->vignetteRadius = vignetteRadius_;
+    mappedConstBuffer_->radialBlurStrength = radialBlurStrength_;
+    mappedConstBuffer_->dissolveAmount = dissolveAmount_;
+    mappedConstBuffer_->dissolveSoftness = dissolveSoftness_;
+    mappedConstBuffer_->dissolveScale = dissolveScale_;
+    mappedConstBuffer_->lensFlareEnabled = lensFlareEnabled_ ? 1 : 0;
+    mappedConstBuffer_->lensFlareVisibility = lensFlareVisibility_;
+    mappedConstBuffer_->lensFlareSunUv[0] = lensFlareSunUv_[0];
+    mappedConstBuffer_->lensFlareSunUv[1] = lensFlareSunUv_[1];
+    mappedConstBuffer_->lensFlareSunDepth = lensFlareSunDepth_;
+    mappedConstBuffer_->lensFlareOcclusionBias = lensFlareOcclusionBias_;
+    mappedConstBuffer_->lensFlareGlareRadius = lensFlareGlareRadius_;
+    mappedConstBuffer_->lensFlareGlareIntensity = lensFlareGlareIntensity_;
+    mappedConstBuffer_->lensFlareGhostIntensity = lensFlareGhostIntensity_;
+    mappedConstBuffer_->lensFlareStreakIntensity = lensFlareStreakIntensity_;
+    mappedConstBuffer_->lensFlareStreakWidth = lensFlareStreakWidth_;
+    mappedConstBuffer_->lensFlarePadding0 = 0.0f;
+    for (int i = 0; i < 3; ++i) {
+        mappedConstBuffer_->lensFlareGlareColor[i] = lensFlareGlareColor_[i];
+        mappedConstBuffer_->lensFlareGhostWarmColor[i] =
+            lensFlareGhostWarmColor_[i];
+        mappedConstBuffer_->lensFlareGhostCoolColor[i] =
+            lensFlareGhostCoolColor_[i];
+        mappedConstBuffer_->lensFlareStreakColor[i] =
+            lensFlareStreakColor_[i];
+    }
+    mappedConstBuffer_->lensFlareGlareAlpha = lensFlareGlareAlpha_;
+    mappedConstBuffer_->lensFlareGhostAlpha = lensFlareGhostAlpha_;
+    mappedConstBuffer_->lensFlareStreakAlpha = lensFlareStreakAlpha_;
+    mappedConstBuffer_->lensFlarePadding1 = 0.0f;
 }
