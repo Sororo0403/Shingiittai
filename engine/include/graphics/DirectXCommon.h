@@ -304,6 +304,8 @@ class DirectXCommon {
         commandAllocators_[kSwapChainBufferCount];
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList_;
     bool isCommandListRecording_ = false;
+    bool uploadPassActive_ = false;
+    UINT uploadPassDepth_ = 0;
 
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtvHeap_;
     Microsoft::WRL::ComPtr<ID3D12Resource> backBuffers_[kSwapChainBufferCount];

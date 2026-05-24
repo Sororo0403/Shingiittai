@@ -1,5 +1,7 @@
 #include "scene/SceneManager.h"
+#include "graphics/DirectXCommon.h"
 #include "scene/BaseScene.h"
+#include "texture/TextureManager.h"
 #include <stdexcept>
 
 void SceneManager::Initialize(const SceneContext &ctx) { ctx_ = &ctx; }
@@ -43,11 +45,42 @@ void SceneManager::ApplySceneChange(std::unique_ptr<BaseScene> nextScene) {
         throw std::runtime_error("SceneManager received null scene");
     }
 
+    DirectXCommon *dxCommon = ctx_->rendering.dxCommon;
+    TextureManager *textureManager = ctx_->rendering.texture;
+
+    if (dxCommon != nullptr) {
+        dxCommon->WaitForGpu();
+    }
+
     currentScene_.reset();
 
     currentScene_ = std::move(nextScene);
     currentScene_->SetSceneManager(this);
-    currentScene_->Initialize(*ctx_);
+
+    const bool ownsUploadPass =
+        dxCommon != nullptr && !dxCommon->IsCommandListRecording();
+    if (ownsUploadPass) {
+        dxCommon->BeginUpload();
+    }
+
+    try {
+        currentScene_->Initialize(*ctx_);
+    } catch (...) {
+        if (ownsUploadPass) {
+            dxCommon->EndUpload();
+            if (textureManager != nullptr) {
+                textureManager->ReleaseUploadBuffers();
+            }
+        }
+        throw;
+    }
+
+    if (ownsUploadPass) {
+        dxCommon->EndUpload();
+        if (textureManager != nullptr) {
+            textureManager->ReleaseUploadBuffers();
+        }
+    }
 }
 
 void SceneManager::Update() {

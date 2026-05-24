@@ -16,7 +16,7 @@
     <ProjectGuid>{7f7e8d20-0e95-4e5a-b1a9-5df7d0d1f4e2}</ProjectGuid>
     <RootNamespace>App</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>App</ProjectName>
+    <ProjectName>Shingiittai</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
@@ -45,14 +45,14 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <OutDir>$(SolutionDir)..\generated\outputs\$(Configuration)\$(ProjectName)\</OutDir>
-    <IntDir>$(SolutionDir)..\generated\intermediate\$(Configuration)\$(ProjectName)\</IntDir>
+    <OutDir>$(SolutionDir)generated\outputs\$(Platform)\$(Configuration)\$(ProjectName)\</OutDir>
+    <IntDir>$(SolutionDir)generated\intermediate\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
     <IncludePath>$(IncludePath)</IncludePath>
     <LibraryPath>$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <OutDir>$(SolutionDir)..\generated\outputs\$(Configuration)\$(ProjectName)\</OutDir>
-    <IntDir>$(SolutionDir)..\generated\intermediate\$(Configuration)\$(ProjectName)\</IntDir>
+    <OutDir>$(SolutionDir)generated\outputs\$(Platform)\$(Configuration)\$(ProjectName)\</OutDir>
+    <IntDir>$(SolutionDir)generated\intermediate\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
     <IncludePath>$(IncludePath)</IncludePath>
     <LibraryPath>$(LibraryPath)</LibraryPath>
   </PropertyGroup>
@@ -169,9 +169,6 @@
     <ProjectReference Include="..\engine\Engine.vcxproj">
       <Project>{8d69c2b4-4f39-47f0-9a40-4cb78ec442a1}</Project>
     </ProjectReference>
-    <ProjectReference Include="..\engine\externals\DirectXTex\DirectXTex_Desktop_2022.vcxproj">
-      <Project>{371b9fa9-4c90-4ac6-a123-aced756d6c77}</Project>
-    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
   </ItemGroup>
@@ -213,11 +210,7 @@
     <None Include="resources\text\weapon_ready.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <Target Name="BuildHandTrackingHelper"
-          BeforeTargets="CopyRuntimeDlls"
-          Condition="'$(Configuration)' == 'Release'"
-          Inputs="$(SolutionDir)tools\hand_tracking\build-hand-udp-exe.ps1;$(SolutionDir)tools\hand_tracking\hand_udp_sender.py;$(SolutionDir)tools\hand_tracking\requirements-hand-udp.txt;$(SolutionDir)tools\hand_tracking\models\hand_landmarker.task;$(SolutionDir)tools\hand_tracking\models\pose_landmarker_full.task"
-          Outputs="$(SolutionDir)tools\hand_tracking\dist\hand_udp_sender\hand_udp_sender.exe">
+  <Target Name="BuildHandTrackingHelper" BeforeTargets="CopyRuntimeDlls" Condition="'$(Configuration)' == 'Release'" Inputs="$(SolutionDir)tools\hand_tracking\build-hand-udp-exe.ps1;$(SolutionDir)tools\hand_tracking\hand_udp_sender.py;$(SolutionDir)tools\hand_tracking\requirements-hand-udp.txt;$(SolutionDir)tools\hand_tracking\models\hand_landmarker.task;$(SolutionDir)tools\hand_tracking\models\pose_landmarker_full.task" Outputs="$(SolutionDir)tools\hand_tracking\dist\hand_udp_sender\hand_udp_sender.exe">
     <Message Text="Building hand tracking helper for Release output." Importance="High" />
     <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(SolutionDir)tools\hand_tracking\build-hand-udp-exe.ps1&quot;" />
   </Target>

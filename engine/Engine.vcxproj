@@ -144,87 +144,14 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)src\texture\TextureManagerAsync.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)src\texture\TextureManagerDynamic.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)src\animation\SkeletonPoseBuilder.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)externals\imgui\imgui.cpp">
-      <TreatWarningAsError>false</TreatWarningAsError>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)externals\imgui\imgui_draw.cpp">
-      <TreatWarningAsError>false</TreatWarningAsError>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)externals\imgui\imgui_impl_dx12.cpp">
-      <TreatWarningAsError>false</TreatWarningAsError>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)externals\imgui\imgui_impl_win32.cpp">
-      <TreatWarningAsError>false</TreatWarningAsError>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)externals\imgui\imgui_tables.cpp">
-      <TreatWarningAsError>false</TreatWarningAsError>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)externals\imgui\imgui_widgets.cpp">
-      <TreatWarningAsError>false</TreatWarningAsError>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)externals\DirectXTex\DirectXTexDDS.cpp">
-      <TreatWarningAsError>false</TreatWarningAsError>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)externals\DirectXTex\DirectXTexImage.cpp">
-      <TreatWarningAsError>false</TreatWarningAsError>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)externals\DirectXTex\DirectXTexUtil.cpp">
-      <TreatWarningAsError>false</TreatWarningAsError>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)externals\DirectXTex\DirectXTexWIC.cpp">
-      <TreatWarningAsError>false</TreatWarningAsError>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)externals\DirectXTex\BC.cpp">
-      <TreatWarningAsError>false</TreatWarningAsError>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)externals\DirectXTex\BC4BC5.cpp">
-      <TreatWarningAsError>false</TreatWarningAsError>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)externals\DirectXTex\BC6HBC7.cpp">
-      <TreatWarningAsError>false</TreatWarningAsError>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)externals\DirectXTex\DirectXTexCompress.cpp">
-      <TreatWarningAsError>false</TreatWarningAsError>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)externals\DirectXTex\DirectXTexConvert.cpp">
-      <TreatWarningAsError>false</TreatWarningAsError>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)externals\DirectXTex\DirectXTexD3D11.cpp">
-      <TreatWarningAsError>false</TreatWarningAsError>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)externals\DirectXTex\DirectXTexD3D12.cpp">
-      <TreatWarningAsError>false</TreatWarningAsError>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)externals\DirectXTex\DirectXTexFlipRotate.cpp">
-      <TreatWarningAsError>false</TreatWarningAsError>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)externals\DirectXTex\DirectXTexHDR.cpp">
-      <TreatWarningAsError>false</TreatWarningAsError>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)externals\DirectXTex\DirectXTexMipmaps.cpp">
-      <TreatWarningAsError>false</TreatWarningAsError>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)externals\DirectXTex\DirectXTexMisc.cpp">
-      <TreatWarningAsError>false</TreatWarningAsError>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)externals\DirectXTex\DirectXTexNormalMaps.cpp">
-      <TreatWarningAsError>false</TreatWarningAsError>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)externals\DirectXTex\DirectXTexPMAlpha.cpp">
-      <TreatWarningAsError>false</TreatWarningAsError>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)externals\DirectXTex\DirectXTexResize.cpp">
-      <TreatWarningAsError>false</TreatWarningAsError>
-    </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)externals\DirectXTex\DirectXTexTGA.cpp">
-      <TreatWarningAsError>false</TreatWarningAsError>
-    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="$(MSBuildThisFileDirectory)externals\DirectXTex\DirectXTex_Desktop_2022.vcxproj">
+      <Project>{371b9fa9-4c90-4ac6-a123-aced756d6c77}</Project>
+    </ProjectReference>
+    <ProjectReference Include="$(MSBuildThisFileDirectory)externals\imgui\imgui.vcxproj" Condition="'$(Configuration)'=='Debug'">
+      <Project>{f6ba9c36-46d4-4c55-9c90-d016c833a837}</Project>
+    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(MSBuildThisFileDirectory)public\Engine.h" />
@@ -286,6 +213,7 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)include\model\MeshPipelineFactory.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)include\model\MeshRenderer.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)include\model\ModelRenderer.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)include\model\ModelDrawEffect.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)include\model\MeshManager.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)include\model\ModelManager.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)include\sound\AudioFileLoader.h" />

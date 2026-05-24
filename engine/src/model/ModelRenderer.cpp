@@ -117,6 +117,25 @@ static void NormalizeInfluence(VertexInfluence &influence) {
     }
 }
 
+static std::vector<uint8_t> CreateDissolveNoisePixels(uint32_t width,
+                                                      uint32_t height) {
+    std::vector<uint8_t> pixels(static_cast<size_t>(width) * height * 4u);
+    for (uint32_t y = 0; y < height; ++y) {
+        for (uint32_t x = 0; x < width; ++x) {
+            uint32_t h = x * 374761393u ^ y * 668265263u ^ 0x8DA6B343u;
+            h = (h ^ (h >> 13u)) * 1274126177u;
+            h ^= h >> 16u;
+            const uint8_t value = static_cast<uint8_t>(h & 0xFFu);
+            const size_t index = (static_cast<size_t>(y) * width + x) * 4u;
+            pixels[index + 0u] = value;
+            pixels[index + 1u] = value;
+            pixels[index + 2u] = value;
+            pixels[index + 3u] = 255u;
+        }
+    }
+    return pixels;
+}
+
 struct PerObjectConstBufferData {
     XMFLOAT4X4 matWVP;
     XMFLOAT4X4 matWorld;
@@ -155,6 +174,11 @@ void ModelRenderer::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
     meshManager_ = meshManager;
     textureManager_ = textureManager;
     materialManager_ = materialManager;
+    dissolveNoiseTextureId_ = textureManager_->GetWhiteTextureId();
+    const std::vector<uint8_t> dissolveNoise =
+        CreateDissolveNoisePixels(128u, 128u);
+    dissolveNoiseTextureId_ = textureManager_->CreateFromRgbaPixels(
+        128u, 128u, dissolveNoise.data());
 
     CreateRootSignature();
     CreateShadowRootSignature();
@@ -205,6 +229,8 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
     XMMATRIX worldInverseTranspose = MakeSafeInverseTranspose(world);
 
     XMMATRIX wvp = world * camera.GetView() * camera.GetProj();
+    const D3D12_GPU_VIRTUAL_ADDRESS effectCbAddr =
+        WriteDrawEffectConstants();
 
     for (const auto &subMesh : model.subMeshes) {
         DispatchSkinning(subMesh);
@@ -254,6 +280,9 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
         cmd->SetGraphicsRootDescriptorTable(
             7, textureManager_->GetGpuHandle(ResolveNormalTextureId(
                    textureManager_, material, subMesh.normalTextureId)));
+        cmd->SetGraphicsRootConstantBufferView(8, effectCbAddr);
+        cmd->SetGraphicsRootDescriptorTable(
+            9, textureManager_->GetGpuHandle(dissolveNoiseTextureId_));
 
         cmd->IASetVertexBuffers(0, 1, &vertexBufferView);
         cmd->IASetIndexBuffer(&mesh.ibView);
@@ -288,6 +317,8 @@ void ModelRenderer::DrawInstanced(const Model &model,
         WriteObjectConstants(XMMatrixIdentity(), XMMatrixIdentity(),
                              XMMatrixIdentity());
     const D3D12_GPU_VIRTUAL_ADDRESS sceneCbAddr = WriteSceneConstants(camera);
+    const D3D12_GPU_VIRTUAL_ADDRESS effectCbAddr =
+        WriteDrawEffectConstants();
     const D3D12_VERTEX_BUFFER_VIEW instanceView =
         WriteInstances(model, transforms, instanceCount);
 
@@ -336,6 +367,9 @@ void ModelRenderer::DrawInstanced(const Model &model,
         cmd->SetGraphicsRootDescriptorTable(
             7, textureManager_->GetGpuHandle(ResolveNormalTextureId(
                    textureManager_, material, subMesh.normalTextureId)));
+        cmd->SetGraphicsRootConstantBufferView(8, effectCbAddr);
+        cmd->SetGraphicsRootDescriptorTable(
+            9, textureManager_->GetGpuHandle(dissolveNoiseTextureId_));
 
         cmd->IASetVertexBuffers(0, 2, views);
         cmd->IASetIndexBuffer(&mesh.ibView);
@@ -368,6 +402,8 @@ void ModelRenderer::DrawInstanced(const Model &model,
         WriteObjectConstants(XMMatrixIdentity(), XMMatrixIdentity(),
                              XMMatrixIdentity());
     const D3D12_GPU_VIRTUAL_ADDRESS sceneCbAddr = WriteSceneConstants(camera);
+    const D3D12_GPU_VIRTUAL_ADDRESS effectCbAddr =
+        WriteDrawEffectConstants();
     const D3D12_VERTEX_BUFFER_VIEW instanceView =
         WriteInstances(model, instances, instanceCount);
 
@@ -416,6 +452,9 @@ void ModelRenderer::DrawInstanced(const Model &model,
         cmd->SetGraphicsRootDescriptorTable(
             7, textureManager_->GetGpuHandle(ResolveNormalTextureId(
                    textureManager_, material, subMesh.normalTextureId)));
+        cmd->SetGraphicsRootConstantBufferView(8, effectCbAddr);
+        cmd->SetGraphicsRootDescriptorTable(
+            9, textureManager_->GetGpuHandle(dissolveNoiseTextureId_));
 
         cmd->IASetVertexBuffers(0, 2, views);
         cmd->IASetIndexBuffer(&mesh.ibView);

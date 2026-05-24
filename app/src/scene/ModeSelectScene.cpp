@@ -34,13 +34,10 @@ void ModeSelectScene::Initialize(const SceneContext &ctx) {
     transitionTimer_ = 0.0f;
     nextScene_ = NextScene::None;
 
-    ctx_->rendering.dxCommon->BeginUpload();
     buttonImages_[0] = LoadMenuImage(L"app/resources/menu/game_start.png");
     buttonImages_[1] = LoadMenuImage(L"app/resources/menu/settings.png");
     helpImages_[0] = LoadMenuImage(L"app/resources/menu/game_start_help.png");
     helpImages_[1] = LoadMenuImage(L"app/resources/menu/settings_help.png");
-    ctx_->rendering.dxCommon->EndUpload();
-    ctx_->rendering.texture->ReleaseUploadBuffers();
 
     ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.22f);
     ctx_->rendering.postEffectRenderer->SetVignettingEnabled(true);

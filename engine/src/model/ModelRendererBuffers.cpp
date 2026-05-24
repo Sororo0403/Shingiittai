@@ -146,6 +146,12 @@ struct SceneConstBufferData {
     XMFLOAT4 shadowFilterParams;
 };
 
+struct DrawEffectConstBufferData {
+    XMFLOAT4 color{1.0f, 1.0f, 1.0f, 1.0f};
+    XMFLOAT4 params0{};
+    XMFLOAT4 params1{};
+};
+
 void ModelRenderer::CreateUploadBuffer() {
     uploadBuffer_.Initialize(dxCommon_->GetDevice(), kUploadBytesPerFrame, 2);
 }
@@ -193,6 +199,24 @@ ModelRenderer::WriteSceneConstants(const Camera &camera) {
         XMMatrixTranspose(XMLoadFloat4x4(&shadowLightViewProjection_)));
     data.shadowParams = shadowParams_;
     data.shadowFilterParams = shadowFilterParams_;
+    return uploadBuffer_.Write(data).gpu;
+}
+
+D3D12_GPU_VIRTUAL_ADDRESS ModelRenderer::WriteDrawEffectConstants() {
+    DrawEffectConstBufferData data{};
+    data.color = currentEffect_.color;
+    data.params0 = {
+        currentEffect_.enabled ? 1.0f : 0.0f,
+        currentEffect_.enabled ? currentEffect_.intensity : 0.0f,
+        currentEffect_.fresnelPower,
+        currentEffect_.noiseAmount,
+    };
+    data.params1 = {
+        currentEffect_.time,
+        currentEffect_.baseDim,
+        currentEffect_.alphaBoost,
+        currentEffect_.forceOpaqueMaterial ? 1.0f : 0.0f,
+    };
     return uploadBuffer_.Write(data).gpu;
 }
 

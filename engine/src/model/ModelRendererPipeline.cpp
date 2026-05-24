@@ -23,6 +23,12 @@ namespace {
 
 constexpr UINT kSkinningThreadCount = 1024u;
 
+enum class ModelBlendMode : size_t {
+    Opaque = 0,
+    Alpha = 1,
+    Additive = 2,
+};
+
 bool IsTransparentMaterial(const Material &material) {
     return material.blendMode == static_cast<int32_t>(BlendMode::Transparent) ||
            material.color.w < 1.0f;
@@ -40,15 +46,16 @@ D3D12_CULL_MODE ToD3D12CullMode(const MaterialCullMode mode) {
     }
 }
 
-size_t PipelineVariantIndex(bool transparent, MaterialCullMode cullMode,
+size_t PipelineVariantIndex(ModelBlendMode blendMode, MaterialCullMode cullMode,
                             bool depthWrite) {
-    const size_t blendIndex = transparent ? 1 : 0;
+    const size_t blendIndex = static_cast<size_t>(blendMode);
     const size_t cullIndex = static_cast<size_t>(cullMode);
     const size_t depthIndex = depthWrite ? 1 : 0;
     return blendIndex * 6 + cullIndex * 2 + depthIndex;
 }
 
-size_t PipelineVariantIndex(const Material &material) {
+size_t PipelineVariantIndex(const Material &material,
+                            const ModelDrawEffect &effect) {
     const Material drawMaterial = NormalizeMaterialForDraw(material);
     MaterialCullMode cullMode =
         static_cast<MaterialCullMode>(drawMaterial.cullMode);
@@ -56,8 +63,29 @@ size_t PipelineVariantIndex(const Material &material) {
         drawMaterial.cullMode > static_cast<int32_t>(MaterialCullMode::Back)) {
         cullMode = MaterialCullMode::Back;
     }
-    return PipelineVariantIndex(IsTransparentMaterial(drawMaterial), cullMode,
-                                drawMaterial.depthWrite != 0);
+    if (effect.enabled && effect.disableCulling) {
+        cullMode = MaterialCullMode::None;
+    }
+
+    ModelBlendMode blendMode = IsTransparentMaterial(drawMaterial)
+                                   ? ModelBlendMode::Alpha
+                                   : ModelBlendMode::Opaque;
+    if (effect.forceOpaqueMaterial ||
+        effect.blendOverride == ModelDrawEffectBlendOverride::Opaque) {
+        blendMode = ModelBlendMode::Opaque;
+    } else if (effect.enabled) {
+        if (effect.additiveBlend ||
+            effect.blendOverride == ModelDrawEffectBlendOverride::Additive) {
+            blendMode = ModelBlendMode::Additive;
+        } else if (effect.blendOverride ==
+                   ModelDrawEffectBlendOverride::Alpha) {
+            blendMode = ModelBlendMode::Alpha;
+        }
+    }
+
+    const bool depthWrite =
+        blendMode == ModelBlendMode::Opaque && drawMaterial.depthWrite != 0;
+    return PipelineVariantIndex(blendMode, cullMode, depthWrite);
 }
 
 uint32_t ResolveNormalTextureId(TextureManager *textureManager,
@@ -149,18 +177,20 @@ struct SceneConstBufferData {
 void ModelRenderer::SetPipelineForMaterial(const Material &material) {
     auto *cmd = dxCommon_->GetCommandList();
     cmd->SetGraphicsRootSignature(rootSignature_.Get());
-    cmd->SetPipelineState(pipelineStates_[PipelineVariantIndex(material)].Get());
+    cmd->SetPipelineState(
+        pipelineStates_[PipelineVariantIndex(material, currentEffect_)].Get());
 }
 
 void ModelRenderer::SetInstancedPipelineForMaterial(const Material &material) {
     auto *cmd = dxCommon_->GetCommandList();
     cmd->SetGraphicsRootSignature(rootSignature_.Get());
     cmd->SetPipelineState(
-        instancedPipelineStates_[PipelineVariantIndex(material)].Get());
+        instancedPipelineStates_[PipelineVariantIndex(material, currentEffect_)]
+            .Get());
 }
 
 void ModelRenderer::CreateRootSignature() {
-    CD3DX12_ROOT_PARAMETER params[8];
+    CD3DX12_ROOT_PARAMETER params[10];
 
     params[0].InitAsConstantBufferView(0);
     params[1].InitAsConstantBufferView(1);
@@ -185,6 +215,12 @@ void ModelRenderer::CreateRootSignature() {
     CD3DX12_DESCRIPTOR_RANGE normalRange;
     normalRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 4);
     params[7].InitAsDescriptorTable(1, &normalRange);
+
+    params[8].InitAsConstantBufferView(3);
+
+    CD3DX12_DESCRIPTOR_RANGE dissolveNoiseRange;
+    dissolveNoiseRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 5);
+    params[9].InitAsDescriptorTable(1, &dissolveNoiseRange);
 
     CD3DX12_STATIC_SAMPLER_DESC sampler(0, D3D12_FILTER_MIN_MAG_MIP_LINEAR);
     sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -292,7 +328,8 @@ void ModelRenderer::CreatePipelineState() {
     };
 
     auto makePso = [&](D3D12_SHADER_BYTECODE vertexShader,
-                       D3D12_INPUT_LAYOUT_DESC inputLayout, bool transparent,
+                       D3D12_INPUT_LAYOUT_DESC inputLayout,
+                       ModelBlendMode blendMode,
                        MaterialCullMode cullMode, bool depthWrite,
                        ComPtr<ID3D12PipelineState> &psoOut) {
         D3D12_GRAPHICS_PIPELINE_STATE_DESC pso{};
@@ -310,12 +347,17 @@ void ModelRenderer::CreatePipelineState() {
         pso.RasterizerState.CullMode = ToD3D12CullMode(cullMode);
 
         D3D12_BLEND_DESC blend = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-        blend.RenderTarget[0].BlendEnable = transparent ? TRUE : FALSE;
+        blend.RenderTarget[0].BlendEnable =
+            blendMode == ModelBlendMode::Opaque ? FALSE : TRUE;
         blend.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
-        blend.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+        blend.RenderTarget[0].DestBlend =
+            blendMode == ModelBlendMode::Additive ? D3D12_BLEND_ONE
+                                                  : D3D12_BLEND_INV_SRC_ALPHA;
         blend.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
         blend.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-        blend.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+        blend.RenderTarget[0].DestBlendAlpha =
+            blendMode == ModelBlendMode::Additive ? D3D12_BLEND_ONE
+                                                  : D3D12_BLEND_ZERO;
         blend.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
         blend.RenderTarget[0].RenderTargetWriteMask =
             D3D12_COLOR_WRITE_ENABLE_ALL;
@@ -334,20 +376,22 @@ void ModelRenderer::CreatePipelineState() {
                       "CreateGraphicsPipelineState(ModelRenderer) failed");
     };
 
-    for (bool transparent : {false, true}) {
+    for (ModelBlendMode blendMode :
+         {ModelBlendMode::Opaque, ModelBlendMode::Alpha,
+          ModelBlendMode::Additive}) {
         for (MaterialCullMode cullMode :
              {MaterialCullMode::None, MaterialCullMode::Front,
               MaterialCullMode::Back}) {
             for (bool depthWrite : {false, true}) {
                 const size_t index =
-                    PipelineVariantIndex(transparent, cullMode, depthWrite);
+                    PipelineVariantIndex(blendMode, cullMode, depthWrite);
                 makePso({vs->GetBufferPointer(), vs->GetBufferSize()},
-                        {baseLayout, _countof(baseLayout)}, transparent,
+                        {baseLayout, _countof(baseLayout)}, blendMode,
                         cullMode, depthWrite, pipelineStates_[index]);
                 makePso({instancedVs->GetBufferPointer(),
                          instancedVs->GetBufferSize()},
-                        {instancedLayout, _countof(instancedLayout)},
-                        transparent, cullMode, depthWrite,
+                        {instancedLayout, _countof(instancedLayout)}, blendMode,
+                        cullMode, depthWrite,
                         instancedPipelineStates_[index]);
             }
         }

@@ -71,7 +71,6 @@ void WeaponSelectScene::Initialize(const SceneContext &ctx) {
     camera_.Initialize(aspect);    camera_.SetPerspectiveFovDeg(39.0f);
     UpdateCamera();
 
-    ctx_->rendering.dxCommon->BeginUpload();
     backgroundImage_ =
         LoadTextureImage(L"app/resources/select/weapon_select_bg.png");
     titleImage_ = LoadTextureImage(L"app/resources/text/input_title.png");
@@ -121,8 +120,6 @@ void WeaponSelectScene::Initialize(const SceneContext &ctx) {
             ctx_->rendering.model->SetMaterial(subMesh.materialId, material);
         }
     }
-    ctx_->rendering.dxCommon->EndUpload();
-    ctx_->rendering.texture->ReleaseUploadBuffers();
     LoadRankings();
 
     ctx_->rendering.postEffectRenderer->ResetEffects();

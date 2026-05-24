@@ -37,12 +37,9 @@ void TitleScene::Initialize(const SceneContext &ctx) {
         AppSceneServices::RequestHandTrackingStart();
     }
 
-    ctx_->rendering.dxCommon->BeginUpload();
     logoImage_ = LoadTitleImage(L"app/resources/title/gamelogo.png");
     pressAnyButtonImage_ =
         LoadTitleImage(L"app/resources/title/press_any_button.png");
-    ctx_->rendering.dxCommon->EndUpload();
-    ctx_->rendering.texture->ReleaseUploadBuffers();
 
     demoScene_ = std::make_unique<GameScene>(GameScene::RunMode::TitleDemo);
     demoScene_->SetSceneManager(sceneManager_);

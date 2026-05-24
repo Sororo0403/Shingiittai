@@ -4,6 +4,7 @@
 #include "graphics/UploadRingBuffer.h"
 #include "model/InstanceData.h"
 #include "model/MaterialManager.h"
+#include "model/ModelDrawEffect.h"
 #include "model/Model.h"
 #include "model/Transform.h"
 #include <DirectXMath.h>
@@ -94,6 +95,16 @@ class ModelRenderer {
     }
 
     /// <summary>
+    /// 現在フレームの描画エフェクトを設定する
+    /// </summary>
+    void SetDrawEffect(const ModelDrawEffect &effect) { currentEffect_ = effect; }
+
+    /// <summary>
+    /// 描画エフェクト設定を初期状態へ戻す
+    /// </summary>
+    void ClearDrawEffect() { currentEffect_ = ModelDrawEffect{}; }
+
+    /// <summary>
     /// シーンフォグを設定する
     /// </summary>
     /// <param name="fog">適用するフォグ定数</param>
@@ -178,6 +189,7 @@ class ModelRenderer {
         const DirectX::XMMATRIX &wvp, const DirectX::XMMATRIX &world,
         const DirectX::XMMATRIX &worldInverseTranspose);
     D3D12_GPU_VIRTUAL_ADDRESS WriteSceneConstants(const Camera &camera);
+    D3D12_GPU_VIRTUAL_ADDRESS WriteDrawEffectConstants();
     D3D12_VERTEX_BUFFER_VIEW WriteInstances(const Model &model,
                                             const Transform *transforms,
                                             uint32_t instanceCount);
@@ -195,7 +207,7 @@ class ModelRenderer {
   private:
     static constexpr uint32_t kMaxDraws = 4096;
     static constexpr size_t kUploadBytesPerFrame = 16 * 1024 * 1024;
-    static constexpr size_t kPipelineVariantCount = 12;
+    static constexpr size_t kPipelineVariantCount = 18;
 
     DirectXCommon *dxCommon_ = nullptr;
     SrvManager *srvManager_ = nullptr;
@@ -221,6 +233,8 @@ class ModelRenderer {
     SceneLighting currentLighting_{};
     SceneFog currentFog_{};
     uint32_t environmentTextureId_ = 0;
+    uint32_t dissolveNoiseTextureId_ = 0;
+    ModelDrawEffect currentEffect_{};
     bool hasEnvironmentTexture_ = false;
     D3D12_GPU_DESCRIPTOR_HANDLE shadowMapGpuHandle_{};
     DirectX::XMFLOAT4X4 shadowLightViewProjection_ = {

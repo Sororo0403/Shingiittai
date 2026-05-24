@@ -441,8 +441,6 @@ void GameScene::Initialize(const SceneContext &ctx) {
     ModelManager *model = ctx_->rendering.model;
     TextureManager *texture = ctx_->rendering.texture;
 
-    dx->BeginUpload();
-
     uint32_t playerModel =
         model->Load(L"app/resources/models/player/player.glb");
     uint32_t swordModel = model->Load(L"app/resources/models/player/sword.glb");
@@ -624,9 +622,6 @@ void GameScene::Initialize(const SceneContext &ctx) {
     swordSlashArcRenderer_.Reset();
     prevSwordSlashStates_.fill(false);
     bladeClashPreviousSlashStates_.fill(false);
-    dx->EndUpload();
-
-    texture->ReleaseUploadBuffers();
 
     player_.Initialize(playerModel, swordModel);
     player_.SetInputCalibration(inputCalibration_);

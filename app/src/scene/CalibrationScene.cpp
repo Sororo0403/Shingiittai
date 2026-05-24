@@ -50,7 +50,6 @@ void CalibrationScene::Initialize(const SceneContext &ctx) {
         rightJoyCon_.StartCalibration();
     }
 
-    ctx_->rendering.dxCommon->BeginUpload();
     backgroundImage_ =
         LoadTextureImage(L"app/resources/select/weapon_select_bg.png");
     for (int i = 0; i < 10; ++i) {
@@ -58,8 +57,6 @@ void CalibrationScene::Initialize(const SceneContext &ctx) {
             LoadTextureImage(L"app/resources/result/char_" +
                              std::to_wstring(i) + L".png");
     }
-    ctx_->rendering.dxCommon->EndUpload();
-    ctx_->rendering.texture->ReleaseUploadBuffers();
 
     ctx_->rendering.postEffectRenderer->ResetEffects();
     ctx_->rendering.postEffectRenderer->SetVignettingEnabled(true);

@@ -428,15 +428,12 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
 
     // TextureManager
     TextureManager textureManager;
-    dxCommon.BeginUpload();
     textureManager.Initialize(&dxCommon, &srvManager);
     const float dummyShadowDepth = 1.0f;
     const uint32_t dummyShadowTextureId = textureManager.CreateTexture2D(
         1, 1, DXGI_FORMAT_R32_FLOAT,
         reinterpret_cast<const uint8_t *>(&dummyShadowDepth),
         sizeof(dummyShadowDepth));
-    dxCommon.EndUpload();
-    textureManager.ReleaseUploadBuffers();
 
     // ModelManager
     ModelManager modelManager;

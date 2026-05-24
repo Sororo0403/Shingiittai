@@ -1,22 +1,8 @@
 #pragma once
 #include "camera/Camera.h"
+#include "model/ModelDrawEffect.h"
 #include <DirectXMath.h>
 #include <cmath>
-
-struct ModelDrawEffect {
-    bool enabled = false;
-    bool additiveBlend = false;
-    bool disableCulling = false;
-    bool forceOpaqueMaterial = false;
-    DirectX::XMFLOAT4 color{1.0f, 1.0f, 1.0f, 1.0f};
-    float intensity = 0.0f;
-    float fresnelPower = 1.0f;
-    float noiseAmount = 0.0f;
-    float time = 0.0f;
-};
-
-#define SetDrawEffect(...) GetRenderer()
-#define ClearDrawEffect() GetRenderer()
 
 #define ResetEffects() SetSpecialMode(PostEffectSpecialMode::None)
 #define SetVignettingEnabled(enabled)                                           \
@@ -41,8 +27,6 @@ struct ModelDrawEffect {
 
 #define CreateRustedMetalTexture(...) GetWhiteTextureId()
 #define CreateArenaStoneTexture(...) GetWhiteTextureId()
-#define CreateLowPolyTerrain(textureId, material, ...) CreatePlane(textureId, material)
-#define CreateBox(textureId, material, ...) CreatePlane(textureId, material)
 
 #define enableDissolve customParams.x
 #define dissolveThreshold customParams.y

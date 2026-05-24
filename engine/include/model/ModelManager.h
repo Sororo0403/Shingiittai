@@ -54,6 +54,13 @@ class ModelManager {
     uint32_t CreatePlane(uint32_t textureId, const Material &material);
 
     /// <summary>
+    /// Y軸方向に伸びる直方体Primitiveを生成する
+    /// </summary>
+    uint32_t CreateBox(uint32_t textureId, const Material &material,
+                       float width = 1.0f, float height = 1.0f,
+                       float depth = 1.0f);
+
+    /// <summary>
     /// XY平面のリング形状を生成する
     /// </summary>
     /// <param name="textureId">貼り付けるテクスチャID</param>
@@ -79,6 +86,15 @@ class ModelManager {
     uint32_t CreateCylinder(uint32_t textureId, const Material &material,
                             uint32_t divide = 32, float topRadius = 1.0f,
                             float bottomRadius = 1.0f, float height = 3.0f);
+
+    /// <summary>
+    /// 三角面を強調した低ポリ地形Primitiveを生成する
+    /// </summary>
+    uint32_t CreateLowPolyTerrain(uint32_t textureId, const Material &material,
+                                  uint32_t grid = 36, float size = 72.0f,
+                                  float maxHeight = 6.0f,
+                                  float flatRadius = 13.0f,
+                                  uint32_t seed = 0x5A17u);
 
     /// <summary>
     /// 頂点配列とインデックス配列から汎用メッシュを作成する
@@ -211,6 +227,18 @@ class ModelManager {
     void SetSceneLighting(const SceneLighting &lighting) {
         modelRenderer_.SetSceneLighting(lighting);
     }
+
+    /// <summary>
+    /// 現在フレームの描画エフェクトを設定する
+    /// </summary>
+    void SetDrawEffect(const ModelDrawEffect &effect) {
+        modelRenderer_.SetDrawEffect(effect);
+    }
+
+    /// <summary>
+    /// 描画エフェクトを初期状態へ戻す
+    /// </summary>
+    void ClearDrawEffect() { modelRenderer_.ClearDrawEffect(); }
 
     /// <summary>
     /// シーンフォグを設定する

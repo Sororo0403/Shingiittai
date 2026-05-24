@@ -178,6 +178,12 @@ uint32_t TextureManager::LoadFromMemory(const uint8_t *data, size_t size) {
 
 uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
                                        const TexMetadata &metadata) {
+    const bool ownsUploadPass =
+        dxCommon_ != nullptr && !dxCommon_->IsCommandListRecording();
+    if (ownsUploadPass) {
+        dxCommon_->BeginUpload();
+    }
+
     Texture texture;
 
     auto texDesc = CD3DX12_RESOURCE_DESC::Tex2D(
@@ -269,10 +275,20 @@ uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
 
     uint32_t textureId = static_cast<uint32_t>(textures_.size() - 1);
 
+    if (ownsUploadPass) {
+        dxCommon_->EndUpload();
+        ReleaseUploadBuffers();
+    }
+
     return textureId;
 }
 
-void TextureManager::ReleaseUploadBuffers() { uploadBuffers_.clear(); }
+void TextureManager::ReleaseUploadBuffers() {
+    if (dxCommon_ && dxCommon_->IsCommandListRecording()) {
+        return;
+    }
+    uploadBuffers_.clear();
+}
 
 D3D12_GPU_DESCRIPTOR_HANDLE
 TextureManager::GetGpuHandle(uint32_t textureId) const {

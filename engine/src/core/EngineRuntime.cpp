@@ -120,10 +120,7 @@ void EngineRuntime::Initialize(HINSTANCE instance, int showCommand,
     systems_->dxCommon.CreateDepthStencilSrv(&systems_->srvManager);
     systems_->dxCommon.RegisterSceneColorSRV(&systems_->srvManager);
 
-    systems_->dxCommon.BeginUpload();
     systems_->textureManager.Initialize(&systems_->dxCommon, &systems_->srvManager);
-    systems_->dxCommon.EndUpload();
-    systems_->textureManager.ReleaseUploadBuffers();
 
     systems_->meshManager.Initialize(&systems_->dxCommon);
     systems_->meshRenderer.Initialize(&systems_->dxCommon, &systems_->srvManager, &systems_->textureManager);

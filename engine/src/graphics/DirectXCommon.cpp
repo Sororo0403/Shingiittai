@@ -136,6 +136,13 @@ void DirectXCommon::Resize(int width, int height) {
 }
 
 void DirectXCommon::BeginUpload() {
+    if (isCommandListRecording_) {
+        if (uploadPassActive_) {
+            ++uploadPassDepth_;
+        }
+        return;
+    }
+
     WaitForFrame(backBufferIndex_);
     ID3D12CommandAllocator* commandAllocator =
         commandAllocators_[backBufferIndex_].Get();
@@ -145,11 +152,23 @@ void DirectXCommon::BeginUpload() {
     ThrowIfFailed(commandList_->Reset(commandAllocator, nullptr),
                   "commandList_->Reset failed");
     isCommandListRecording_ = true;
+    uploadPassActive_ = true;
+    uploadPassDepth_ = 1;
 }
 
 void DirectXCommon::EndUpload() {
+    if (!uploadPassActive_) {
+        return;
+    }
+    if (uploadPassDepth_ > 1) {
+        --uploadPassDepth_;
+        return;
+    }
+
     ThrowIfFailed(commandList_->Close(), "commandList_->Close failed");
     isCommandListRecording_ = false;
+    uploadPassActive_ = false;
+    uploadPassDepth_ = 0;
 
     ID3D12CommandList *lists[] = {commandList_.Get()};
     commandQueue_->ExecuteCommandLists(1, lists);

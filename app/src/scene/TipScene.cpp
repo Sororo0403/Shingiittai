@@ -69,7 +69,6 @@ void TipScene::Initialize(const SceneContext &ctx) {
         previewReceivedChunks_ = 0;
     }
 
-    ctx_->rendering.dxCommon->BeginUpload();
     backgroundImage_ =
         LoadTextureImage(L"app/resources/select/weapon_select_bg.png");
     titleImage_ = LoadTextureImage(L"app/resources/text/tip_title.png");
@@ -86,8 +85,6 @@ void TipScene::Initialize(const SceneContext &ctx) {
         promptImage_ = LoadTextureImage(L"app/resources/text/tip_kbm.png");
         break;
     }
-    ctx_->rendering.dxCommon->EndUpload();
-    ctx_->rendering.texture->ReleaseUploadBuffers();
 
     ctx_->rendering.postEffectRenderer->SetColorMode(PostEffectRenderer::ColorMode::None);
     ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(0.0f);

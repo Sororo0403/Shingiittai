@@ -71,7 +71,6 @@ void BattleResultScene::Initialize(const SceneContext &ctx) {
     ctx_->rendering.postEffectRenderer->SetSceneDimStrength(0.0f);
     ctx_->rendering.postEffectRenderer->SetRadialBlurStrength(0.0f);
 
-    ctx_->rendering.dxCommon->BeginUpload();
     clearTitle_ = LoadTextureImage(L"app/resources/result/clear_title.png");
     gameOverTitle_ =
         LoadTextureImage(L"app/resources/result/game_over_title.png");
@@ -98,8 +97,6 @@ void BattleResultScene::Initialize(const SceneContext &ctx) {
     dotImage_ = LoadTextureImage(L"app/resources/result/char_dot.png");
     dashImage_ = LoadTextureImage(L"app/resources/result/char_dash.png");
     secondImage_ = LoadTextureImage(L"app/resources/result/char_s.png");
-    ctx_->rendering.dxCommon->EndUpload();
-    ctx_->rendering.texture->ReleaseUploadBuffers();
 
     LoadRanking();
     if (resultKind_ == ResultKind::Clear) {

@@ -392,6 +392,9 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)include\model\ModelRenderer.h">
       <Filter>include\model</Filter>
     </ClInclude>
+    <ClInclude Include="$(MSBuildThisFileDirectory)include\model\ModelDrawEffect.h">
+      <Filter>include\model</Filter>
+    </ClInclude>
     <ClInclude Include="$(MSBuildThisFileDirectory)include\model\InstanceData.h">
       <Filter>include\model</Filter>
     </ClInclude>

@@ -27,14 +27,11 @@ void SettingsScene::Initialize(const SceneContext &ctx) {
     volume_ = ctx_->systems.sound ? ctx_->systems.sound->GetMasterVolume() : 1.0f;
     sceneTime_ = 0.0f;
 
-    ctx_->rendering.dxCommon->BeginUpload();
     titleImage_ = LoadSettingsImage(L"app/resources/menu/settings_title.png");
     volumeImage_ = LoadSettingsImage(L"app/resources/menu/volume.png");
     backImage_ = LoadSettingsImage(L"app/resources/menu/back.png");
     controlsImage_ =
         LoadSettingsImage(L"app/resources/menu/settings_controls.png");
-    ctx_->rendering.dxCommon->EndUpload();
-    ctx_->rendering.texture->ReleaseUploadBuffers();
 
     ctx_->rendering.postEffectRenderer->SetVignettingStrength(0.20f);
     ctx_->rendering.postEffectRenderer->SetVignettingEnabled(true);
