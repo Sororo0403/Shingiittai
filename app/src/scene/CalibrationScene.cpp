@@ -51,10 +51,10 @@ void CalibrationScene::Initialize(const SceneContext &ctx) {
     }
 
     backgroundImage_ =
-        LoadTextureImage(L"app/resources/select/weapon_select_bg.png");
+        LoadTextureImage(L"app/resources/ui/weapon_select/weapon_select_bg.png");
     for (int i = 0; i < 10; ++i) {
         digitImages_[static_cast<size_t>(i)] =
-            LoadTextureImage(L"app/resources/result/char_" +
+            LoadTextureImage(L"app/resources/ui/result/glyphs/char_" +
                              std::to_wstring(i) + L".png");
     }
 

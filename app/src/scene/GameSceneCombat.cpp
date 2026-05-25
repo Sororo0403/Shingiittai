@@ -176,15 +176,22 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     const auto enemyRightHandBox = enemy_.GetRightHandOBB();
     AddCollisionBody(collisionManager_, playerBox, kLayerPlayer,
                      kLayerEnemyAttack);
+    const bool enemyCollisionDisabled = enemy_.IsWarpCollisionDisabled();
     const CollisionManager::BodyId enemyBody =
-        AddCollisionBody(collisionManager_, enemyBodyBox, kLayerEnemy,
-                         kLayerPlayerAttack);
+        enemyCollisionDisabled
+            ? CollisionManager::kInvalidBodyId
+            : AddCollisionBody(collisionManager_, enemyBodyBox, kLayerEnemy,
+                               kLayerPlayerAttack);
     const CollisionManager::BodyId enemyLeftHandBody =
-        AddCollisionBody(collisionManager_, enemyLeftHandBox, kLayerEnemy,
-                         kLayerPlayerAttack);
+        enemyCollisionDisabled
+            ? CollisionManager::kInvalidBodyId
+            : AddCollisionBody(collisionManager_, enemyLeftHandBox,
+                               kLayerEnemy, kLayerPlayerAttack);
     const CollisionManager::BodyId enemyRightHandBody =
-        AddCollisionBody(collisionManager_, enemyRightHandBox, kLayerEnemy,
-                         kLayerPlayerAttack);
+        enemyCollisionDisabled
+            ? CollisionManager::kInvalidBodyId
+            : AddCollisionBody(collisionManager_, enemyRightHandBox,
+                               kLayerEnemy, kLayerPlayerAttack);
     const std::array<CollisionManager::BodyId, 3> enemyHurtBodies = {
         enemyBody, enemyLeftHandBody, enemyRightHandBody};
     const ActionKind enemyActionKind = enemy_.GetActionKind();

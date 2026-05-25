@@ -54,29 +54,29 @@ void WeaponSelectScene::Initialize(const SceneContext &ctx) {
     UpdateCamera();
 
     backgroundImage_ =
-        LoadTextureImage(L"app/resources/select/weapon_select_bg.png");
-    titleImage_ = LoadTextureImage(L"app/resources/text/input_title.png");
+        LoadTextureImage(L"app/resources/ui/weapon_select/weapon_select_bg.png");
+    titleImage_ = LoadTextureImage(L"app/resources/ui/weapon_select/text/input_title.png");
     controlsImage_ =
-        LoadTextureImage(L"app/resources/text/weapon_controls.png");
-    readyImage_ = LoadTextureImage(L"app/resources/text/weapon_ready.png");
+        LoadTextureImage(L"app/resources/ui/weapon_select/text/weapon_controls.png");
+    readyImage_ = LoadTextureImage(L"app/resources/ui/weapon_select/text/weapon_ready.png");
     weaponNameImages_[0] =
-        LoadTextureImage(L"app/resources/text/input_kbm.png");
+        LoadTextureImage(L"app/resources/ui/weapon_select/text/input_kbm.png");
     weaponNameImages_[1] =
-        LoadTextureImage(L"app/resources/text/input_joycon.png");
+        LoadTextureImage(L"app/resources/ui/weapon_select/text/input_joycon.png");
     weaponNameImages_[2] =
-        LoadTextureImage(L"app/resources/text/input_hand.png");
+        LoadTextureImage(L"app/resources/ui/weapon_select/text/input_hand.png");
     weaponDescImages_[0] =
-        LoadTextureImage(L"app/resources/text/input_ready_kbm.png");
+        LoadTextureImage(L"app/resources/ui/weapon_select/text/input_ready_kbm.png");
     weaponDescImages_[1] =
-        LoadTextureImage(L"app/resources/text/input_ready_joycon.png");
+        LoadTextureImage(L"app/resources/ui/weapon_select/text/input_ready_joycon.png");
     weaponDescImages_[2] =
-        LoadTextureImage(L"app/resources/text/input_ready_hand.png");
+        LoadTextureImage(L"app/resources/ui/weapon_select/text/input_ready_hand.png");
     weaponBottomImages_[0] =
-        LoadTextureImage(L"app/resources/text/input_ready_kbm.png");
+        LoadTextureImage(L"app/resources/ui/weapon_select/text/input_ready_kbm.png");
     weaponBottomImages_[1] =
-        LoadTextureImage(L"app/resources/text/input_ready_joycon.png");
+        LoadTextureImage(L"app/resources/ui/weapon_select/text/input_ready_joycon.png");
     weaponBottomImages_[2] =
-        LoadTextureImage(L"app/resources/text/input_ready_hand.png");
+        LoadTextureImage(L"app/resources/ui/weapon_select/text/input_ready_hand.png");
     swordModelId_ = ctx_->rendering.model->Load(L"app/resources/models/player/sword.glb");
     if (Model *swordModel = ctx_->rendering.model->GetModel(swordModelId_)) {
         for (ModelSubMesh &subMesh : swordModel->subMeshes) {

@@ -11,12 +11,16 @@ class ModelManager;
 
 enum class ActionStep {
     None,
+    Start,
     Charge,
     Active,
     Recovery,
     Move,
     Hold,
+    End,
 };
+
+enum class WarpApproachSlot { None, Front, Back };
 
 // Enemy combat is driven by a two-part FSM:
 // - ActionKind decides which behavior is currently running.
@@ -24,6 +28,28 @@ enum class ActionStep {
 struct ActionState {
     ActionKind kind = ActionKind::None;
     ActionStep step = ActionStep::None;
+};
+
+struct WarpContext {
+    WarpApproachSlot approachSlot = WarpApproachSlot::None;
+    DirectX::XMFLOAT3 targetPos = {0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT3 departurePos = {0.0f, 0.0f, 0.0f};
+    float targetYaw = 0.0f;
+    ActionKind followupKind = ActionKind::None;
+    ActionStep followupStep = ActionStep::None;
+    bool isCutIn = false;
+    bool isFeint = false;
+    bool collisionDisabled = false;
+    bool hasValidTarget = false;
+    bool hasDeparturePos = false;
+    bool hasTargetYaw = false;
+};
+
+struct WarpTrailGhost {
+    DirectX::XMFLOAT3 position = {0.0f, 0.0f, 0.0f};
+    float life = 0.0f;
+    float scale = 1.0f;
+    bool isActive = false;
 };
 
 // 仕様書に合わせて BodyCenter -> BodyRight に整理
@@ -96,9 +122,16 @@ struct EnemyAttackSet {
                               0.2f, 0.8f};
 };
 
+struct EnemyWarpConfig {
+    float startTime = 0.55f;
+    float moveTime = 0.24f;
+    float endTime = 0.48f;
+};
+
 struct EnemyConfig {
     EnemyCoreConfig core{};
     EnemyAttackSet attacks{};
+    EnemyWarpConfig warp{};
 };
 
 struct EnemyRuntimeState {
@@ -121,7 +154,11 @@ struct EnemyRuntimeState {
     float facingYaw = 0.0f;
     float lockedAttackYaw = 0.0f;
 
+    WarpContext warp{};
     bool isVisible = true;
+    float warpTrailEmitTimer = 0.0f;
+    static constexpr int kWarpTrailGhostCount = 4;
+    WarpTrailGhost warpTrailGhosts[kWarpTrailGhostCount]{};
 
     TacticState tactic = TacticState::Chase;
     BossPhase phase = BossPhase::Phase1;
@@ -188,6 +225,7 @@ class Enemy {
 
     bool IsAttackActive() const { return runtime_.isAttackActive; }
     OBB GetAttackOBB() const;
+    bool IsWarpCollisionDisabled() const { return runtime_.warp.collisionDisabled; }
 
     float GetCurrentAttackDamage() const;
     float GetCurrentAttackKnockback() const;
@@ -231,6 +269,7 @@ class Enemy {
     float &facingYaw_ = runtime_.facingYaw;
     float &lockedAttackYaw_ = runtime_.lockedAttackYaw;
 
+    WarpContext &warp_ = runtime_.warp;
     bool &isVisible_ = runtime_.isVisible;
 
     TacticState &tactic_ = runtime_.tactic;
@@ -271,6 +310,22 @@ class Enemy {
     float stalkPounceDistanceBonus_ = 0.65f;
     float stalkPounceMinTime_ = 0.22f;
     float stalkPounceChance_ = 0.58f;
+    float warpApproachFrontDistance_ = 2.55f;
+    float warpApproachBackDistance_ = 2.35f;
+    float warpNearChance_ = 0.22f;
+    float warpFarChance_ = 0.58f;
+    float warpCutInDistance_ = 5.8f;
+    float warpCutInChance_ = 0.86f;
+    float warpFeintChance_ = 0.26f;
+    float warpFeintEndTimeScale_ = 0.55f;
+    float warpArrivalPreviewHeight_ = 0.10f;
+    float warpTrailLife_ = 0.06f;
+    float warpTrailScaleMax_ = 0.88f;
+    float &warpTrailEmitTimer_ = runtime_.warpTrailEmitTimer;
+    static constexpr int kWarpTrailGhostCount_ =
+        EnemyRuntimeState::kWarpTrailGhostCount;
+    WarpTrailGhost (&warpTrailGhosts_)[kWarpTrailGhostCount_] =
+        runtime_.warpTrailGhosts;
 
   private:
     void UpdateParts();
@@ -280,11 +335,13 @@ class Enemy {
 
     void UpdateSmashByStep(float deltaTime);
     void UpdateSweepByStep(float deltaTime);
+    void UpdateWarpByStep(float deltaTime);
     void UpdateIdle(float deltaTime);
 
     TacticState DecideTactic() const;
     void BeginActionFromTactic(TacticState tactic);
     ActionKind SelectNearPressureAction() const;
+    bool TryBeginWarpAction(float chance);
     void BeginPressureAction();
     void BeginChaseAction();
 
@@ -303,6 +360,17 @@ class Enemy {
     void SyncBaseRotationToFacing();
     void UpdateFacingToPlayerWithSpeed(float deltaTime, float turnSpeed);
     float NormalizeAngle(float angle) const;
+
+    void UpdateWarpStart(float deltaTime);
+    void UpdateWarpMove(float deltaTime);
+    void UpdateWarpEnd(float deltaTime);
+    void UpdateWarpTrails(float deltaTime);
+    void EmitWarpTrailGhost(const DirectX::XMFLOAT3 &position, float scale);
+    void ResetWarpTrails();
+    bool PrepareWarpContext();
+    bool DecideWarpTargetNearPlayer(DirectX::XMFLOAT3 &outTarget);
+    void FinalizeWarpTargetFacing(DirectX::XMFLOAT3 &target);
+    void ResetWarpContext();
 
     void UpdateStalkByStep(float deltaTime);
     void UpdateStalkMove(float deltaTime);

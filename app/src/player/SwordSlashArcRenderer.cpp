@@ -365,10 +365,10 @@ void SwordSlashArcRenderer::CreatePipelineState() {
     auto *device = dxCommon_->GetDevice();
 
     auto vs = ShaderCompiler::Compile(
-        L"app/resources/shaders/swordarc/SwordArcVS.hlsl", "main",
+        L"app/resources/shaders/sword_arc/SwordArcVS.hlsl", "main",
         "vs_6_6");
     auto ps = ShaderCompiler::Compile(
-        L"app/resources/shaders/swordarc/SwordArcPS.hlsl", "main",
+        L"app/resources/shaders/sword_arc/SwordArcPS.hlsl", "main",
         "ps_6_6");
 
     D3D12_INPUT_ELEMENT_DESC layout[] = {

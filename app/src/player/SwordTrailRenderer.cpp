@@ -300,10 +300,10 @@ void SwordTrailRenderer::CreatePipelineState() {
     auto *device = dxCommon_->GetDevice();
 
     auto vs = ShaderCompiler::Compile(
-        L"app/resources/shaders/swordtrail/SwordTrailVS.hlsl", "main",
+        L"app/resources/shaders/sword_trail/SwordTrailVS.hlsl", "main",
         "vs_6_6");
     auto ps = ShaderCompiler::Compile(
-        L"app/resources/shaders/swordtrail/SwordTrailPS.hlsl", "main",
+        L"app/resources/shaders/sword_trail/SwordTrailPS.hlsl", "main",
         "ps_6_6");
 
     D3D12_INPUT_ELEMENT_DESC layout[] = {

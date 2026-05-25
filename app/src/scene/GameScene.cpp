@@ -86,6 +86,7 @@ struct SharedBattleModels {
     uint32_t arenaColumnCapModelId = 0;
     uint32_t arenaDomeModelId = 0;
     uint32_t arenaBarrierRingModelId = 0;
+    uint32_t chargeWeakPointModelId = 0;
 };
 
 SharedBattleModels gSharedBattleModels;
@@ -106,6 +107,10 @@ XMFLOAT4 MakeQuat(float pitch, float yaw, float roll) {
     XMFLOAT4 q{};
     XMStoreFloat4(&q, XMQuaternionRotationRollPitchYaw(pitch, yaw, roll));
     return q;
+}
+
+float BillboardYawToCamera(const XMFLOAT3 &position, const XMFLOAT3 &cameraPos) {
+    return std::atan2f(cameraPos.x - position.x, cameraPos.z - position.z);
 }
 
 float DistanceSq(const XMFLOAT3 &a, const XMFLOAT3 &b) {
@@ -271,8 +276,11 @@ GameScene::~GameScene() = default;
 void GameScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
     ctx_->rendering.dxCommon->ResetClearColor();
-    ctx_->rendering.postProcessSystem->SetProfile(PostProcessProfile{});
-    combatFeedback_.Initialize(ctx_->rendering.postProcessSystem);
+    if (ctx_->rendering.postProcessSystem != nullptr) {
+        ctx_->rendering.postProcessSystem->SetProfile(PostProcessProfile{});
+    }
+    combatFeedback_.Initialize(titleDemoMode_ ? nullptr
+                                              : ctx_->rendering.postProcessSystem);
 
     float aspect = static_cast<float>(ctx_->systems.winApp->GetWidth()) /
                    static_cast<float>(ctx_->systems.winApp->GetHeight());
@@ -288,7 +296,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
         model->Load(L"app/resources/models/player/player.glb");
     uint32_t swordModel = model->Load(L"app/resources/models/player/sword.glb");
     uint32_t enemyModel = model->Load(L"app/resources/models/boss/boss.gltf");
-    particleTextureId_ = texture->Load(L"app/resources/sprites/smoke.png");
+    particleTextureId_ = texture->Load(L"app/resources/effects/particles/smoke.png");
     const uint32_t enemyRustTextureId =
         AppCreateRustedMetalTexture(texture, 512, 512);
     const uint32_t worldRustTextureId =
@@ -386,8 +394,11 @@ void GameScene::Initialize(const SceneContext &ctx) {
         gSharedBattleModels.arenaBarrierRingModelId = model->CreateRing(
             arenaStoneTextureId,
             MakeArenaMaterial({0.24f, 0.30f, 0.46f, 0.42f}, false, 0.00f,
-                              0.34f),
+                               0.34f),
             128, 13.1f, 12.9f);
+        gSharedBattleModels.chargeWeakPointModelId = model->CreatePlane(
+            0, MakeArenaMaterial({1.0f, 0.96f, 0.78f, 0.92f}, false, 0.02f,
+                                 0.20f));
         gSharedBattleModels.initialized = true;
     }
 
@@ -412,6 +423,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
     arenaColumnCapModelId_ = gSharedBattleModels.arenaColumnCapModelId;
     arenaDomeModelId_ = gSharedBattleModels.arenaDomeModelId;
     arenaBarrierRingModelId_ = gSharedBattleModels.arenaBarrierRingModelId;
+    chargeWeakPointModelId_ = gSharedBattleModels.chargeWeakPointModelId;
     sparkParticles_.Initialize(dx, ctx_->rendering.srv, texture, particleTextureId_, 2048);
     sparkParticles_.SetEmission(1, 1000.0f);
     sparkParticles_.SetEmitterRadius(0.08f);
@@ -441,17 +453,17 @@ void GameScene::Initialize(const SceneContext &ctx) {
     enemyModelId_ = enemyModel;
     if (ctx_->systems.sound != nullptr) {
         slashSoundId_ =
-            ctx_->systems.sound->Load(L"app/resources/sounds/slash_hero.wav");
+            ctx_->systems.sound->Load(L"app/resources/audio/sfx/slash_hero.wav");
         enemyReleaseSoundId_ =
-            ctx_->systems.sound->Load(L"app/resources/sounds/enemy_release_snap.wav");
+            ctx_->systems.sound->Load(L"app/resources/audio/sfx/enemy_release_snap.wav");
         hitSoundId_ =
-            ctx_->systems.sound->Load(L"app/resources/sounds/hit_impact.wav");
+            ctx_->systems.sound->Load(L"app/resources/audio/sfx/hit_impact.wav");
         counterSoundId_ =
-            ctx_->systems.sound->Load(L"app/resources/sounds/counter_burst.wav");
+            ctx_->systems.sound->Load(L"app/resources/audio/sfx/counter_burst.wav");
         damageSoundId_ =
-            ctx_->systems.sound->Load(L"app/resources/sounds/damage_heavy.wav");
+            ctx_->systems.sound->Load(L"app/resources/audio/sfx/damage_heavy.wav");
         explosionSoundId_ =
-            ctx_->systems.sound->Load(L"app/resources/sounds/explosion_boss.wav");
+            ctx_->systems.sound->Load(L"app/resources/audio/sfx/explosion_boss.wav");
         soundsLoaded_ = true;
     }
     cameraYaw_ = 0.0f;
@@ -698,6 +710,7 @@ void GameScene::Draw() {
                  1.0f);
     if (!(victorySequenceActive_ && victoryFinalExplosionEmitted_)) {
         enemy_.Draw(ctx_->rendering.model, camera_, 1.0f);
+        DrawEnemySlashDirectionCue();
     }
     ctx_->rendering.model->PostDraw();
     swordTrailRenderer_.Draw(camera_);
@@ -869,7 +882,8 @@ bool GameScene::ShouldLockPlayerAtEnemyAttackFront(
 
 void GameScene::UpdateBattlePostProcessState(float deltaTime) {
     (void)deltaTime;
-    if (ctx_ == nullptr || ctx_->rendering.postProcessSystem == nullptr) {
+    if (titleDemoMode_ || ctx_ == nullptr ||
+        ctx_->rendering.postProcessSystem == nullptr) {
         return;
     }
 
@@ -894,6 +908,88 @@ void GameScene::DrawTransparent() {
     hud_.Draw(*ctx_);
 }
 
+void GameScene::DrawEnemySlashDirectionCue() {
+    if (ctx_ == nullptr || ctx_->rendering.model == nullptr ||
+        chargeWeakPointModelId_ == 0 || battleIntroActive_ ||
+        victorySequenceActive_ || defeatSequenceActive_) {
+        return;
+    }
+
+    const ActionKind actionKind = enemy_.GetActionKind();
+    const ActionStep actionStep = enemy_.GetActionStep();
+    const bool isAttackCue =
+        actionKind == ActionKind::Smash || actionKind == ActionKind::Sweep;
+    const bool isCueStep = actionStep == ActionStep::Charge ||
+                           actionStep == ActionStep::Hold ||
+                           actionStep == ActionStep::Active;
+    if (!isAttackCue || !isCueStep) {
+        return;
+    }
+
+    const XMFLOAT3 &enemyPos = enemy_.GetTransform().position;
+    const XMFLOAT3 &cameraPos = camera_.GetPosition();
+    float toCameraX = cameraPos.x - enemyPos.x;
+    float toCameraZ = cameraPos.z - enemyPos.z;
+    float toCameraLen = std::sqrt(toCameraX * toCameraX + toCameraZ * toCameraZ);
+    if (toCameraLen < 0.0001f) {
+        toCameraLen = 1.0f;
+    }
+    toCameraX /= toCameraLen;
+    toCameraZ /= toCameraLen;
+
+    const float releaseRatio =
+        actionStep == ActionStep::Active
+            ? 1.0f
+            : std::clamp(enemy_.GetReleaseAnticipationRatio(), 0.0f, 1.0f);
+    const bool isGoodTiming = releaseRatio > 0.0f;
+    const float pulse = 0.5f + 0.5f * std::sinf(sceneLightTime_ * 24.0f);
+    const float yaw = BillboardYawToCamera(enemyPos, cameraPos);
+
+    Transform plate{};
+    plate.position = {enemyPos.x + toCameraX * 0.72f, enemyPos.y + 1.62f,
+                      enemyPos.z + toCameraZ * 0.72f};
+    plate.rotation = MakeQuat(0.0f, yaw, 0.0f);
+    plate.scale = {1.20f + 0.28f * pulse, 1.20f + 0.28f * pulse, 1.0f};
+
+    ModelDrawEffect plateEffect{};
+    plateEffect.enabled = true;
+    plateEffect.additiveBlend = true;
+    plateEffect.disableCulling = true;
+    plateEffect.blendOverride = ModelDrawEffectBlendOverride::Additive;
+    plateEffect.color = isGoodTiming
+                            ? XMFLOAT4{0.16f, 1.0f, 0.28f, 0.42f}
+                            : XMFLOAT4{1.0f, 0.12f, 0.04f, 0.58f};
+    plateEffect.intensity = 0.42f + 0.18f * pulse + 0.22f * releaseRatio;
+    plateEffect.fresnelPower = 1.2f;
+    plateEffect.noiseAmount = 0.18f;
+    plateEffect.time = sceneLightTime_;
+    ctx_->rendering.model->SetDrawEffect(plateEffect);
+    ctx_->rendering.model->Draw(chargeWeakPointModelId_, plate, camera_);
+
+    Transform slash = plate;
+    slash.position.x += toCameraX * 0.018f;
+    slash.position.z += toCameraZ * 0.018f;
+    slash.scale = actionKind == ActionKind::Smash
+                      ? XMFLOAT3{0.18f, 1.22f, 1.0f}
+                      : XMFLOAT3{1.22f, 0.18f, 1.0f};
+
+    ModelDrawEffect slashEffect{};
+    slashEffect.enabled = true;
+    slashEffect.additiveBlend = true;
+    slashEffect.disableCulling = true;
+    slashEffect.blendOverride = ModelDrawEffectBlendOverride::Additive;
+    slashEffect.color = isGoodTiming
+                            ? XMFLOAT4{0.24f, 1.0f, 0.34f, 0.96f}
+                            : XMFLOAT4{1.0f, 0.16f, 0.08f, 0.84f};
+    slashEffect.intensity = 0.70f + 0.38f * pulse + 0.34f * releaseRatio;
+    slashEffect.fresnelPower = 1.0f;
+    slashEffect.noiseAmount = 0.05f;
+    slashEffect.time = sceneLightTime_;
+    ctx_->rendering.model->SetDrawEffect(slashEffect);
+    ctx_->rendering.model->Draw(chargeWeakPointModelId_, slash, camera_);
+    ctx_->rendering.model->ClearDrawEffect();
+}
+
 void GameScene::UpdatePhaseTransitionCinematic(float deltaTime) {
     if (!phaseTransitionWasActive_) {
         phaseTransitionWasActive_ = true;
@@ -912,8 +1008,10 @@ void GameScene::UpdatePhaseTransitionCinematic(float deltaTime) {
     const float charge = SmoothStep01(ratio / kReleaseStart);
     const float release = SmoothStep01((ratio - kReleaseStart) / kReleaseDuration);
     const float hold = charge * (1.0f - release);
-    ApplyBattlePostProcess(ctx_, 0.010f + 0.026f * hold + 0.036f * release,
-                           0.30f + 0.42f * hold, 0.10f + 0.18f * hold);
+    if (!titleDemoMode_) {
+        ApplyBattlePostProcess(ctx_, 0.010f + 0.026f * hold + 0.036f * release,
+                               0.30f + 0.42f * hold, 0.10f + 0.18f * hold);
+    }
 
     enemy_.Update(BuildPlayerCombatObservation(), deltaTime);
     ctx_->rendering.model->UpdateAnimation(playerModelId_, deltaTime * 0.025f);
@@ -1018,8 +1116,10 @@ void GameScene::UpdateBattleIntro(float deltaTime) {
         std::clamp((battleIntroTimer_ - 0.32f) / 2.02f, 0.0f, 1.0f);
     const float reveal = SmoothStep01(dissolveProgress);
     ApplyEnemyIntroDissolve(reveal);
-    ApplyBattlePostProcess(ctx_, 0.035f * (1.0f - ratio),
-                           0.16f + 0.06f * ratio, 0.0f, 0.48f, 18);
+    if (!titleDemoMode_) {
+        ApplyBattlePostProcess(ctx_, 0.035f * (1.0f - ratio),
+                               0.16f + 0.06f * ratio, 0.0f, 0.48f, 18);
+    }
     if (!battleIntroRevealEmitted_ && battleIntroTimer_ >= 2.36f) {
         battleIntroRevealEmitted_ = true;
         const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
@@ -1103,7 +1203,9 @@ void GameScene::BeginVictorySequence() {
                     enemy_.GetMaxHP());
     }
 
-    ApplyBattlePostProcess(ctx_, 0.055f, 0.58f, 0.10f, 0.48f, 24);
+    if (!titleDemoMode_) {
+        ApplyBattlePostProcess(ctx_, 0.055f, 0.58f, 0.10f, 0.48f, 24);
+    }
 
     const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
     EmitParticleBurst(sparkParticles_, 
@@ -1125,7 +1227,9 @@ void GameScene::BeginDefeatSequence() {
     SetEnemyAnimationFrozen(false);
     player_.SetDefeatPoseRatio(0.0f);
 
-    ApplyBattlePostProcess(ctx_, 0.040f, 0.62f, 0.18f, 0.54f, 22);
+    if (!titleDemoMode_) {
+        ApplyBattlePostProcess(ctx_, 0.040f, 0.62f, 0.18f, 0.54f, 22);
+    }
 
     const XMFLOAT3 playerPos = player_.GetTransform().position;
     EmitParticleBurst(explosionParticles_, 
@@ -1149,8 +1253,10 @@ void GameScene::UpdateDefeatSequence(float deltaTime) {
 
     const float postProcessRatio =
         std::clamp(defeatSequenceTimer_ / defeatSequenceDuration_, 0.0f, 1.0f);
-    ApplyBattlePostProcess(ctx_, 0.040f * (1.0f - postProcessRatio), 0.62f,
-                           0.18f + 0.22f * postProcessRatio, 0.54f, 22);
+    if (!titleDemoMode_) {
+        ApplyBattlePostProcess(ctx_, 0.040f * (1.0f - postProcessRatio), 0.62f,
+                               0.18f + 0.22f * postProcessRatio, 0.54f, 22);
+    }
 
     if (!defeatImpactEmitted_ && defeatSequenceTimer_ >= 1.58f) {
         defeatImpactEmitted_ = true;
@@ -1169,6 +1275,18 @@ void GameScene::UpdateDefeatSequence(float deltaTime) {
         defeatSequenceActive_ = false;
         player_.SetDefeatPoseRatio(0.0f);
         ClearBattlePostProcess(ctx_);
+        if (titleDemoMode_) {
+            battleResultRequested_ = false;
+            battleIntroActive_ = true;
+            battleIntroTimer_ = 0.0f;
+            battleIntroRevealEmitted_ = false;
+            player_.Initialize(playerModelId_, swordModelId_);
+            player_.SetInputCalibration(inputCalibration_);
+            enemy_.Initialize(enemyModelId_);
+            enemy_.FaceTargetImmediately(player_.GetTransform().position);
+            ApplyEnemyIntroDissolve(0.0f);
+            return;
+        }
         sceneManager_->ChangeScene(std::make_unique<BattleResultScene>(
             BattleResultScene::ResultKind::GameOver, battleElapsedTime_,
             inputCalibration_));
@@ -1183,8 +1301,10 @@ void GameScene::UpdateVictorySequence(float deltaTime) {
 
     const float stepped = std::floor(ratio * 14.0f) / 14.0f;
     const float blur = (1.0f - stepped) * 0.070f;
-    ApplyBattlePostProcess(ctx_, blur, 0.58f, 0.10f + stepped * 0.18f,
-                           0.48f, 24);
+    if (!titleDemoMode_) {
+        ApplyBattlePostProcess(ctx_, blur, 0.58f, 0.10f + stepped * 0.18f,
+                               0.48f, 24);
+    }
 
     if (!victoryFinalExplosionEmitted_ && victorySequenceTimer_ >= 3.90f) {
         victoryFinalExplosionEmitted_ = true;
@@ -1209,6 +1329,18 @@ void GameScene::UpdateVictorySequence(float deltaTime) {
     if (victorySequenceTimer_ >= victorySequenceDuration_) {
         victorySequenceActive_ = false;
         ClearBattlePostProcess(ctx_);
+        if (titleDemoMode_) {
+            battleResultRequested_ = false;
+            battleIntroActive_ = true;
+            battleIntroTimer_ = 0.0f;
+            battleIntroRevealEmitted_ = false;
+            player_.Initialize(playerModelId_, swordModelId_);
+            player_.SetInputCalibration(inputCalibration_);
+            enemy_.Initialize(enemyModelId_);
+            enemy_.FaceTargetImmediately(player_.GetTransform().position);
+            ApplyEnemyIntroDissolve(0.0f);
+            return;
+        }
         sceneManager_->ChangeScene(std::make_unique<BattleResultScene>(
             BattleResultScene::ResultKind::Clear, victoryClearTime_,
             inputCalibration_));

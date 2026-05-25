@@ -21,6 +21,8 @@ class GameScene : public BaseScene {
   public:
     explicit GameScene(const SwordInputCalibration &inputCalibration = {})
         : inputCalibration_(inputCalibration) {}
+    explicit GameScene(bool titleDemoMode)
+        : titleDemoMode_(titleDemoMode) {}
     ~GameScene() override;
 
     void Initialize(const SceneContext &ctx) override;
@@ -34,6 +36,7 @@ class GameScene : public BaseScene {
     void UpdateSceneLighting();
     void DrawArena();
     void DrawDistantHazardBackdrop();
+    void DrawEnemySlashDirectionCue();
     void DrawVictoryFlash();
     void DrawDefeatFlash();
     void DrawBattleIntroFlash();
@@ -66,6 +69,7 @@ class GameScene : public BaseScene {
 
   private:
     SwordInputCalibration inputCalibration_{};
+    bool titleDemoMode_ = false;
 
     Camera camera_;
 
@@ -101,6 +105,7 @@ class GameScene : public BaseScene {
     uint32_t arenaColumnCapModelId_ = 0;
     uint32_t arenaDomeModelId_ = 0;
     uint32_t arenaBarrierRingModelId_ = 0;
+    uint32_t chargeWeakPointModelId_ = 0;
     uint32_t slashSoundId_ = 0;
     uint32_t enemyReleaseSoundId_ = 0;
     uint32_t hitSoundId_ = 0;

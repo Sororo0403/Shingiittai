@@ -53,24 +53,24 @@ void BattleResultScene::Initialize(const SceneContext &ctx) {
     postProfile.vignette.strength = 0.30f;
     ctx_->rendering.postProcessSystem->SetProfile(postProfile);
 
-    clearTitle_ = LoadTextureImage(L"app/resources/result/clear_title.png");
+    clearTitle_ = LoadTextureImage(L"app/resources/ui/result/clear_title.png");
     gameOverTitle_ =
-        LoadTextureImage(L"app/resources/result/game_over_title.png");
+        LoadTextureImage(L"app/resources/ui/result/game_over_title.png");
     clearTimeLabel_ =
-        LoadTextureImage(L"app/resources/result/clear_time.png");
+        LoadTextureImage(L"app/resources/ui/result/clear_time.png");
     noClearTimeLabel_ =
-        LoadTextureImage(L"app/resources/result/no_clear_time.png");
-    retryLabel_ = LoadTextureImage(L"app/resources/result/retry.png");
-    menuLabel_ = LoadTextureImage(L"app/resources/result/menu.png");
+        LoadTextureImage(L"app/resources/ui/result/no_clear_time.png");
+    retryLabel_ = LoadTextureImage(L"app/resources/ui/result/retry.png");
+    menuLabel_ = LoadTextureImage(L"app/resources/ui/result/menu.png");
     for (int i = 0; i < 10; ++i) {
         digitImages_[static_cast<size_t>(i)] =
-            LoadTextureImage(L"app/resources/result/char_" +
+            LoadTextureImage(L"app/resources/ui/result/glyphs/char_" +
                              std::to_wstring(i) + L".png");
     }
-    colonImage_ = LoadTextureImage(L"app/resources/result/char_colon.png");
-    dotImage_ = LoadTextureImage(L"app/resources/result/char_dot.png");
-    dashImage_ = LoadTextureImage(L"app/resources/result/char_dash.png");
-    secondImage_ = LoadTextureImage(L"app/resources/result/char_s.png");
+    colonImage_ = LoadTextureImage(L"app/resources/ui/result/glyphs/char_colon.png");
+    dotImage_ = LoadTextureImage(L"app/resources/ui/result/glyphs/char_dot.png");
+    dashImage_ = LoadTextureImage(L"app/resources/ui/result/glyphs/char_dash.png");
+    secondImage_ = LoadTextureImage(L"app/resources/ui/result/glyphs/char_s.png");
 }
 
 void BattleResultScene::Update() {

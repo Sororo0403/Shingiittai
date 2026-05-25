@@ -340,6 +340,11 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
         actionIntensity = 0.050f + 0.018f * actionPulse;
         actionNoise = 0.10f;
         break;
+    case ActionKind::Warp:
+        actionTint = {0.46f, 0.72f, 0.92f, 0.24f};
+        actionIntensity = 0.075f + 0.030f * actionPulse;
+        actionNoise = 0.16f;
+        break;
     case ActionKind::Stalk:
         actionTint = {0.58f, 0.60f, 0.52f, 0.12f};
         actionIntensity = 0.030f + 0.010f * actionPulse;
@@ -439,6 +444,36 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
 
     if (isVisible_) {
         drawEnemyVisual(visualTf_);
+    }
+
+    if (action_.kind == ActionKind::Warp) {
+        for (const auto &trail : warpTrailGhosts_) {
+            if (!trail.isActive) {
+                continue;
+            }
+            const float alpha = warpTrailLife_ > 0.0001f
+                                    ? std::clamp(trail.life / warpTrailLife_,
+                                                 0.0f, 1.0f)
+                                    : 0.0f;
+            Transform trailVisual = visualTf_;
+            trailVisual.position = trail.position;
+            trailVisual.position.y += warpArrivalPreviewHeight_;
+            trailVisual.scale.x *= trail.scale * visualScale;
+            trailVisual.scale.y *= trail.scale * visualScale;
+            trailVisual.scale.z *= trail.scale * visualScale;
+
+            ModelDrawEffect trailEffect{};
+            trailEffect.enabled = true;
+            trailEffect.additiveBlend = true;
+            trailEffect.disableCulling = true;
+            trailEffect.color = {0.42f, 0.78f, 1.0f, 0.30f * alpha};
+            trailEffect.intensity = 0.24f * alpha;
+            trailEffect.fresnelPower = 1.7f;
+            trailEffect.noiseAmount = 0.14f;
+            trailEffect.time = runtime_.stateTimer;
+            modelManager->SetDrawEffect(trailEffect);
+            modelManager->Draw(modelId_, trailVisual, camera);
+        }
     }
 
     modelManager->ClearDrawEffect();

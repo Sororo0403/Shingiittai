@@ -34,9 +34,9 @@ int PickWeightedIndex(std::initializer_list<int> weights) {
 bool Enemy::ShouldEnterSmashHold() const {
     float chance = config_.attacks.smash.melee.feintChance;
     if (playerObs_.isAttacking) {
-        chance += 0.16f;
+        chance += 0.20f;
     }
-    chance = (std::clamp)(chance, 0.0f, 0.75f);
+    chance = (std::clamp)(chance, 0.0f, 0.88f);
     float r = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
     return r < chance;
 }
@@ -44,9 +44,9 @@ bool Enemy::ShouldEnterSmashHold() const {
 bool Enemy::ShouldEnterSweepHold() const {
     float chance = config_.attacks.sweep.melee.feintChance;
     if (playerObs_.isAttacking) {
-        chance += 0.16f;
+        chance += 0.20f;
     }
-    chance = (std::clamp)(chance, 0.0f, 0.75f);
+    chance = (std::clamp)(chance, 0.0f, 0.88f);
     float r = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
     return r < chance;
 }
@@ -92,6 +92,10 @@ void Enemy::ResetPreAttackPresentationState() {
 
 bool Enemy::ShouldSnapReleaseFromRead() const {
     if (currentHoldDuration_ <= 0.0f) {
+        return false;
+    }
+
+    if (!playerObs_.isAttacking) {
         return false;
     }
 
@@ -161,10 +165,30 @@ ActionKind Enemy::SelectNearPressureAction() const {
     }
 }
 
+bool Enemy::TryBeginWarpAction(float chance) {
+    if (lastActionKind_ == ActionKind::Warp) {
+        chance *= 0.35f;
+    }
+    chance = std::clamp(chance, 0.0f, 1.0f);
+    const float roll =
+        static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+    if (roll >= chance || !PrepareWarpContext()) {
+        return false;
+    }
+
+    BeginAction(ActionKind::Warp, ActionStep::Start);
+    return true;
+}
+
 void Enemy::BeginPressureAction() {
     const float distance = GetDistanceToPlayer();
 
     if (distance <= config_.core.nearAttackDistance) {
+        const float chance = playerObs_.isAttacking ? warpNearChance_ * 1.35f
+                                                    : warpNearChance_;
+        if (TryBeginWarpAction(chance)) {
+            return;
+        }
         BeginAction(SelectNearPressureAction(), ActionStep::Charge);
         return;
     }
@@ -177,6 +201,12 @@ void Enemy::BeginChaseAction() {
 
     if (distance <= config_.core.nearAttackDistance) {
         BeginPressureAction();
+        return;
+    }
+
+    const float chance =
+        distance >= warpCutInDistance_ ? warpCutInChance_ : warpFarChance_;
+    if (TryBeginWarpAction(chance)) {
         return;
     }
 

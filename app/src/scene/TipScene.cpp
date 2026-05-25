@@ -52,19 +52,19 @@ void TipScene::Initialize(const SceneContext &ctx) {
     }
 
     backgroundImage_ =
-        LoadTextureImage(L"app/resources/select/weapon_select_bg.png");
-    titleImage_ = LoadTextureImage(L"app/resources/text/tip_title.png");
-    bodyImage_ = LoadTextureImage(L"app/resources/text/tip_body.png");
+        LoadTextureImage(L"app/resources/ui/weapon_select/weapon_select_bg.png");
+    titleImage_ = LoadTextureImage(L"app/resources/ui/tip/text/tip_title.png");
+    bodyImage_ = LoadTextureImage(L"app/resources/ui/tip/text/tip_body.png");
     switch (inputCalibration_.controlType) {
     case InputControlType::JoyCon:
-        promptImage_ = LoadTextureImage(L"app/resources/text/tip_joycon.png");
+        promptImage_ = LoadTextureImage(L"app/resources/ui/tip/text/tip_joycon.png");
         break;
     case InputControlType::Hand:
-        promptImage_ = LoadTextureImage(L"app/resources/text/tip_hand.png");
+        promptImage_ = LoadTextureImage(L"app/resources/ui/tip/text/tip_hand.png");
         break;
     case InputControlType::KeyboardMouse:
     default:
-        promptImage_ = LoadTextureImage(L"app/resources/text/tip_kbm.png");
+        promptImage_ = LoadTextureImage(L"app/resources/ui/tip/text/tip_kbm.png");
         break;
     }
 

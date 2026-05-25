@@ -13,6 +13,7 @@ void Enemy::Initialize(uint32_t modelId) {
     tf_.position = {0.0f, 0.0f, 10.0f};
     tf_.scale = {1.0f, 1.0f, 1.0f};
     tf_.rotation = {0.0f, 0.0f, 0.0f, 1.0f};
+    ResetWarpTrails();
     visualTf_ = tf_;
     UpdateParts();
     ValidateAllTimings();
@@ -26,6 +27,7 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
     runtime_.playerObs = playerObs;
     runtime_.playerPos = playerObs.position;
     UpdateBossPhase();
+    UpdateWarpTrails(deltaTime);
 
     if (counterRecoilTimer_ > 0.0f) {
         counterRecoilTimer_ -= deltaTime;
@@ -109,6 +111,9 @@ void Enemy::UpdateByAction(float deltaTime) {
     case ActionKind::Sweep:
         UpdateSweepByStep(deltaTime);
         break;
+    case ActionKind::Warp:
+        UpdateWarpByStep(deltaTime);
+        break;
     case ActionKind::Stalk:
         UpdateStalkByStep(deltaTime);
         break;
@@ -120,6 +125,12 @@ void Enemy::UpdateByAction(float deltaTime) {
 
 void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     lastActionKind_ = kind;
+
+    if (kind == ActionKind::Warp) {
+        ResetWarpTrails();
+    } else {
+        ResetWarpContext();
+    }
 
     action_.kind = kind;
 
@@ -146,6 +157,7 @@ void Enemy::EndAttack() {
     action_.kind = ActionKind::None;
     action_.step = ActionStep::None;
 
+    ResetWarpContext();
     isVisible_ = true;
 
     hasTrackingLocked_ = false;
