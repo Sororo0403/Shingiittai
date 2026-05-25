@@ -217,6 +217,104 @@ void SwordSlashArcRenderer::EmitHitLine(const XMFLOAT3 &position,
                0.012f, 0.088f, 0.016f, {1.0f, 1.0f, 1.0f, 0.66f});
 }
 
+void SwordSlashArcRenderer::EmitParryLine(const XMFLOAT3 &position,
+                                          const XMFLOAT3 &direction,
+                                          const Camera &camera, float power,
+                                          const XMFLOAT2 &slashDirection) {
+    const XMFLOAT3 cameraForward =
+        NormalizeSafe(Sub(camera.GetTarget(), camera.GetPosition()),
+                      {0.0f, 0.0f, 1.0f});
+    const XMFLOAT3 worldUp{0.0f, 1.0f, 0.0f};
+    const XMFLOAT3 cameraRight =
+        NormalizeSafe(Cross(worldUp, cameraForward), {1.0f, 0.0f, 0.0f});
+    const XMFLOAT3 cameraUp =
+        NormalizeSafe(Cross(cameraForward, cameraRight), {0.0f, 1.0f, 0.0f});
+
+    XMFLOAT3 hitDir = direction;
+    hitDir.y *= 0.28f;
+    hitDir = NormalizeSafe(hitDir, cameraRight);
+    XMFLOAT3 lineDir =
+        NormalizeSafe(Add(Scale(cameraRight, hitDir.x >= 0.0f ? 0.85f : -0.85f),
+                          Scale(cameraUp, 0.46f)),
+                      cameraRight);
+    const float slashDirLenSq =
+        slashDirection.x * slashDirection.x + slashDirection.y * slashDirection.y;
+    if (slashDirLenSq > 0.010f) {
+        const float invSlashDirLen = 1.0f / std::sqrt(slashDirLenSq);
+        const XMFLOAT2 normalizedSlashDir{
+            slashDirection.x * invSlashDirLen,
+            slashDirection.y * invSlashDirLen};
+        lineDir = NormalizeSafe(
+            Add(Scale(cameraRight, normalizedSlashDir.x),
+                Scale(cameraUp, normalizedSlashDir.y)),
+            lineDir);
+    }
+    XMFLOAT3 lineNormal =
+        NormalizeSafe(Cross(cameraForward, lineDir), cameraUp);
+
+    const float clampedPower = std::clamp(power, 0.8f, 4.0f);
+
+    auto emitStroke = [&](const XMFLOAT3 &axis, float alongOffset,
+                          float normalOffset, float heightOffset,
+                          float halfLength, float thickness, float life,
+                          float delay, const XMFLOAT4 &color) {
+        ArcInstance &arc = arcs_[nextArc_];
+        nextArc_ = (nextArc_ + 1) % arcs_.size();
+
+        const XMFLOAT3 strokeNormal =
+            NormalizeSafe(Cross(cameraForward, axis), lineNormal);
+        arc.center = Add(position, Scale(axis, alongOffset));
+        arc.center = Add(arc.center, Scale(strokeNormal, normalOffset));
+        arc.center.y += heightOffset;
+        arc.axisA = axis;
+        arc.axisB = strokeNormal;
+        arc.radius = halfLength;
+        arc.thickness = thickness;
+        arc.life = life;
+        arc.age = -delay;
+        arc.color = color;
+        arc.startAngle = 0.0f;
+        arc.endAngle = 0.0f;
+        arc.isLine = true;
+        arc.active = true;
+    };
+
+    emitStroke(lineDir, -0.08f, 0.00f, 0.58f,
+               4.25f + clampedPower * 0.84f,
+               0.185f + clampedPower * 0.028f, 0.225f, 0.0f,
+               {0.05f, 0.72f, 1.00f, 0.52f});
+    emitStroke(lineDir, -0.04f, 0.00f, 0.60f,
+               4.62f + clampedPower * 0.92f,
+               0.056f + clampedPower * 0.010f, 0.148f, 0.0f,
+               {0.94f, 1.00f, 1.00f, 1.00f});
+    emitStroke(lineDir, -0.28f, -0.070f, 0.54f,
+               3.55f + clampedPower * 0.58f,
+               0.082f + clampedPower * 0.012f, 0.180f, 0.018f,
+               {0.74f, 0.12f, 1.00f, 0.62f});
+
+    const XMFLOAT3 splashUp =
+        NormalizeSafe(Add(Scale(lineNormal, 0.82f), Scale(lineDir, 0.18f)),
+                      lineNormal);
+    const XMFLOAT3 splashDown =
+        NormalizeSafe(Add(Scale(lineNormal, -0.72f), Scale(lineDir, 0.28f)),
+                      Scale(lineNormal, -1.0f));
+    const XMFLOAT3 crossA =
+        NormalizeSafe(Add(Scale(cameraUp, 0.92f), Scale(lineDir, -0.32f)),
+                      cameraUp);
+    const XMFLOAT3 crossB =
+        NormalizeSafe(Add(Scale(cameraUp, -0.82f), Scale(lineDir, -0.24f)),
+                      Scale(cameraUp, -1.0f));
+
+    emitStroke(splashUp, 0.22f, 0.05f, 0.60f, 1.42f + clampedPower * 0.18f,
+               0.026f, 0.126f, 0.0f, {0.16f, 0.86f, 1.00f, 0.82f});
+    emitStroke(splashDown, 0.18f, -0.04f, 0.52f, 1.12f + clampedPower * 0.13f,
+               0.020f, 0.112f, 0.010f, {0.80f, 0.18f, 1.00f, 0.68f});
+    emitStroke(crossA, 0.08f, 0.00f, 0.66f, 0.92f + clampedPower * 0.10f,
+               0.014f, 0.094f, 0.018f, {0.96f, 1.00f, 1.00f, 0.70f});
+    emitStroke(crossB, 0.12f, 0.02f, 0.46f, 0.82f + clampedPower * 0.08f,
+               0.012f, 0.088f, 0.024f, {0.52f, 0.55f, 1.00f, 0.58f});
+}
+
 void SwordSlashArcRenderer::Update(float deltaTime) {
     for (ArcInstance &arc : arcs_) {
         if (!arc.active) {

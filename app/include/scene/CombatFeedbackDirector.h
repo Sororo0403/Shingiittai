@@ -41,7 +41,9 @@ class CombatFeedbackDirector {
     void AddHitStop(float duration, float timeScale);
     void AddCameraShake(float duration, float horizontal, float vertical);
     void AddPostFlash(float duration, float blurStrength, float noiseStrength,
-                      float vignetteBoost);
+                      float vignetteBoost,
+                      float damageVignetteStrength = 0.0f,
+                      float parryVignetteStrength = 0.0f);
     float ShakeRatio() const;
 
   private:
@@ -61,6 +63,8 @@ class CombatFeedbackDirector {
     float radialBlurStrength_ = 0.0f;
     float randomStrength_ = 0.0f;
     float vignetteBoost_ = 0.0f;
+    float damageVignetteStrength_ = 0.0f;
+    float parryVignetteStrength_ = 0.0f;
     float fovKickDeg_ = 0.0f;
 
     float baseVignetteStrength_ = 0.20f;

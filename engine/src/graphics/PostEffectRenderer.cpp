@@ -67,6 +67,8 @@ void PostEffectRenderer::ResetEffects() {
     randomTime_ = 0.0f;
     randomSeed_ = 0.0f;
     sceneDimStrength_ = 0.0f;
+    damageVignetteStrength_ = 0.0f;
+    parryVignetteStrength_ = 0.0f;
     UpdateConstantBuffer();
 }
 
@@ -196,6 +198,16 @@ void PostEffectRenderer::SetSceneDimStrength(float strength) {
     UpdateConstantBuffer();
 }
 
+void PostEffectRenderer::SetDamageVignetteStrength(float strength) {
+    damageVignetteStrength_ = std::clamp(strength, 0.0f, 1.0f);
+    UpdateConstantBuffer();
+}
+
+void PostEffectRenderer::SetParryVignetteStrength(float strength) {
+    parryVignetteStrength_ = std::clamp(strength, 0.0f, 1.0f);
+    UpdateConstantBuffer();
+}
+
 void PostEffectRenderer::CreateRootSignature() {
     CD3DX12_DESCRIPTOR_RANGE textureRange{};
     textureRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
@@ -318,4 +330,6 @@ void PostEffectRenderer::UpdateConstantBuffer() {
     mappedConstBuffer_->sepiaTone[1] = sepiaTone_[1];
     mappedConstBuffer_->sepiaTone[2] = sepiaTone_[2];
     mappedConstBuffer_->sceneDimStrength = sceneDimStrength_;
+    mappedConstBuffer_->damageVignetteStrength = damageVignetteStrength_;
+    mappedConstBuffer_->parryVignetteStrength = parryVignetteStrength_;
 }

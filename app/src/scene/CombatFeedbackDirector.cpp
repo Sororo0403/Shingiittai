@@ -45,6 +45,8 @@ void CombatFeedbackDirector::Reset() {
     radialBlurStrength_ = 0.0f;
     randomStrength_ = 0.0f;
     vignetteBoost_ = 0.0f;
+    damageVignetteStrength_ = 0.0f;
+    parryVignetteStrength_ = 0.0f;
     fovKickDeg_ = 0.0f;
 
     if (postEffectRenderer_) {
@@ -53,6 +55,8 @@ void CombatFeedbackDirector::Reset() {
         postEffectRenderer_->SetRandomMode(PostEffectRenderer::RandomMode::None);
         postEffectRenderer_->SetRandomStrength(0.0f);
         postEffectRenderer_->SetSceneDimStrength(0.0f);
+        postEffectRenderer_->SetDamageVignetteStrength(0.0f);
+        postEffectRenderer_->SetParryVignetteStrength(0.0f);
         postEffectRenderer_->SetVignettingStrength(baseVignetteStrength_);
     }
 }
@@ -81,6 +85,8 @@ void CombatFeedbackDirector::Update(float deltaTime, float sceneTime) {
         radialBlurStrength_ = 0.0f;
         randomStrength_ = 0.0f;
         vignetteBoost_ = 0.0f;
+        damageVignetteStrength_ = 0.0f;
+        parryVignetteStrength_ = 0.0f;
         fovKickDeg_ = 0.0f;
     }
 
@@ -96,6 +102,10 @@ void CombatFeedbackDirector::Update(float deltaTime, float sceneTime) {
     postEffectRenderer_->SetRadialBlurSampleCount(18);
     postEffectRenderer_->SetVignettingStrength(baseVignetteStrength_ +
                                                vignetteBoost_ * eased);
+    postEffectRenderer_->SetDamageVignetteStrength(damageVignetteStrength_ *
+                                                   eased);
+    postEffectRenderer_->SetParryVignetteStrength(parryVignetteStrength_ *
+                                                  eased);
     postEffectRenderer_->SetRandomTime(sceneTime);
     postEffectRenderer_->SetRandomScale(320.0f);
 
@@ -130,13 +140,13 @@ void CombatFeedbackDirector::PushEvent(const CombatFeedbackEvent &event) {
     case CombatFeedbackEventType::PlayerDamaged:
         AddHitStop(0.115f, 0.035f);
         AddCameraShake(0.24f, 0.046f, 0.030f);
-        AddPostFlash(0.22f, 0.034f, 0.072f, 0.12f);
+        AddPostFlash(0.34f, 0.034f, 0.072f, 0.12f, 0.88f);
         fovKickDeg_ = (std::max)(fovKickDeg_, 2.6f);
         break;
     case CombatFeedbackEventType::CounterSuccess:
         AddHitStop(0.285f, 0.012f);
         AddCameraShake(0.42f, 0.082f, 0.052f);
-        AddPostFlash(0.48f, 0.22f, 0.13f, 0.26f);
+        AddPostFlash(0.48f, 0.22f, 0.13f, 0.18f, 0.0f, 0.94f);
         fovKickDeg_ = (std::max)(fovKickDeg_, 7.0f);
         break;
     case CombatFeedbackEventType::ProjectileReflect:
@@ -236,7 +246,9 @@ void CombatFeedbackDirector::AddCameraShake(float duration, float horizontal,
 
 void CombatFeedbackDirector::AddPostFlash(float duration, float blurStrength,
                                           float noiseStrength,
-                                          float vignetteBoost) {
+                                          float vignetteBoost,
+                                          float damageVignetteStrength,
+                                          float parryVignetteStrength) {
     if (duration > postTimer_) {
         postTimer_ = duration;
         postDuration_ = duration;
@@ -244,6 +256,10 @@ void CombatFeedbackDirector::AddPostFlash(float duration, float blurStrength,
     radialBlurStrength_ = (std::max)(radialBlurStrength_, blurStrength);
     randomStrength_ = (std::max)(randomStrength_, noiseStrength);
     vignetteBoost_ = (std::max)(vignetteBoost_, vignetteBoost);
+    damageVignetteStrength_ =
+        (std::max)(damageVignetteStrength_, damageVignetteStrength);
+    parryVignetteStrength_ =
+        (std::max)(parryVignetteStrength_, parryVignetteStrength);
 }
 
 float CombatFeedbackDirector::ShakeRatio() const {
