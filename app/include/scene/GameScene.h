@@ -1,6 +1,7 @@
 #pragma once
 #include "BaseScene.h"
 #include "Camera.h"
+#include "CameraPreviewReceiver.h"
 #include "CollisionManager.h"
 #include "CombatFeedbackDirector.h"
 #include "Enemy.h"
@@ -24,6 +25,8 @@ class GameScene : public BaseScene {
         TitleDemo,
         BackgroundOnly,
         ReadyPreview,
+        TutorialBackgroundOnly,
+        Tutorial,
     };
 
     explicit GameScene(const SwordInputCalibration &inputCalibration = {})
@@ -31,8 +34,18 @@ class GameScene : public BaseScene {
     explicit GameScene(bool titleDemoMode) : titleDemoMode_(titleDemoMode) {}
     explicit GameScene(Mode mode)
         : titleDemoMode_(mode == Mode::TitleDemo),
-          backgroundOnlyMode_(mode == Mode::BackgroundOnly),
-          readyPreviewMode_(mode == Mode::ReadyPreview) {}
+          backgroundOnlyMode_(mode == Mode::BackgroundOnly ||
+                              mode == Mode::TutorialBackgroundOnly),
+          readyPreviewMode_(mode == Mode::ReadyPreview),
+          tutorialBackgroundMode_(mode == Mode::TutorialBackgroundOnly) {}
+    GameScene(const SwordInputCalibration &inputCalibration, Mode mode)
+        : inputCalibration_(inputCalibration),
+          titleDemoMode_(mode == Mode::TitleDemo),
+          backgroundOnlyMode_(mode == Mode::BackgroundOnly ||
+                              mode == Mode::TutorialBackgroundOnly),
+          readyPreviewMode_(mode == Mode::ReadyPreview),
+          tutorialBackgroundMode_(mode == Mode::TutorialBackgroundOnly),
+          tutorialMode_(mode == Mode::Tutorial) {}
     ~GameScene() override;
 
     void Initialize(const SceneContext &ctx) override;
@@ -43,14 +56,15 @@ class GameScene : public BaseScene {
   private:
     void UpdateCamera(Input *input);
     void UpdateBattleCamera();
+    void UpdateTutorial(float deltaTime);
     void UpdateBackgroundCamera(float deltaTime);
     void UpdateReadyPreviewCamera(float deltaTime);
     void UpdateSceneLighting();
     void DrawArena();
     void DrawDistantHazardBackdrop(float buildProgress);
+    void DrawBladeClashFinishBackdrop();
     float BackgroundBuildProgress(float delay, float duration) const;
     float BattleIntroWorldRevealProgress() const;
-    void DrawEnemySlashDirectionCue();
     void DrawVictoryFlash();
     void DrawDefeatFlash();
     void DrawBattleIntroFlash();
@@ -59,13 +73,18 @@ class GameScene : public BaseScene {
     void UpdatePauseMenu(Input *input);
     void ExecutePauseMenuSelection();
     void DrawPauseMenu();
+    void DrawTutorialOverlay();
+    void UpdateHandCameraPreview(float deltaTime);
+    void DrawHandCameraPreview();
     void DrawPauseRect(float x, float y, float w, float h,
                        const DirectX::XMFLOAT4 &color);
     void DrawPauseImage(uint32_t textureId, float textureWidth,
                         float textureHeight, float x, float y, float scale,
                         float alpha = 1.0f);
     void LoadPauseMenuImages();
+    void LoadTutorialImages();
     void UpdateBattleIntro(float deltaTime);
+    void FinishBattleIntro();
     void ApplyEnemyIntroDissolve(float revealRatio);
     void UpdatePhaseTransitionCinematic(float deltaTime);
     void EmitPhaseTransitionStartEffects();
@@ -76,16 +95,26 @@ class GameScene : public BaseScene {
     void BeginDefeatSequence();
     void UpdateDefeatSequence(float deltaTime);
     void SyncEnemyAnimation();
+    void UpdateBladeClashEnemyAnimation(float deltaTime);
     void UpdateBattleIntroEnemyAnimation(float deltaTime);
     void UpdatePhaseTransitionEnemyAnimation(float deltaTime);
     void ApplyEnemyProceduralAnimation();
     void SetEnemyAnimationFrozen(bool frozen);
     void UpdateCombat(float gameplayDeltaTime);
+    void TriggerDebugBladeClash();
+    void BeginBladeClash(size_t swordIndex);
+    void UpdateBladeClash(float gameplayDeltaTime);
+    void FinishBladeClash(bool playerWon);
+    void DrawBladeClashOverlay();
+    void UpdateBladeClashFinish(float deltaTime);
+    float AdvanceBladeClashFinishTimer(float deltaTime);
+    void ApplyBladeClashFinishPostProcess();
+    void CompleteBladeClashFinish();
+    void DrawBladeClashFinishFrame();
     void DispatchCombatFeedback(const CombatFeedbackEvent &event);
     void EmitCombatParticles(const CombatFeedbackEvent &event);
     void EmitEnemyActionParticles(ActionKind kind, ActionStep step);
-    bool ShouldLockPlayerAtEnemyAttackFront(
-        const DirectX::XMFLOAT3 &playerPosition) const;
+    void EmitEnemyCueParticles(float deltaTime);
     void UpdateBattlePostProcessState(float deltaTime);
     PlayerCombatObservation BuildPlayerCombatObservation() const;
     float ComputeGameplayTimeScale() const;
@@ -97,6 +126,8 @@ class GameScene : public BaseScene {
     bool titleDemoMode_ = false;
     bool backgroundOnlyMode_ = false;
     bool readyPreviewMode_ = false;
+    bool tutorialBackgroundMode_ = false;
+    bool tutorialMode_ = false;
 
     Camera camera_;
 
@@ -105,6 +136,7 @@ class GameScene : public BaseScene {
     GameSceneHud hud_;
     CollisionManager collisionManager_;
     CombatFeedbackDirector combatFeedback_;
+    CameraPreviewReceiver cameraPreviewReceiver_{};
     GPUParticleSystem sparkParticles_;
     GPUParticleSystem explosionParticles_;
     GPUParticleSystem smokeParticles_;
@@ -141,6 +173,7 @@ class GameScene : public BaseScene {
     uint32_t explosionSoundId_ = 0;
     bool soundsLoaded_ = false;
     std::array<bool, Player::kSwordCount> previousSwordSoundStates_{};
+    float enemyCueParticleTimer_ = 0.0f;
     uint32_t arenaNoiseTextureId_ = 0;
     std::string enemyAnimationName_{};
     bool enemyAnimationLoop_ = true;
@@ -208,6 +241,8 @@ class GameScene : public BaseScene {
     float phaseTransitionLoopTimer_ = 0.0f;
     bool battleResultRequested_ = false;
     bool paused_ = false;
+    bool pausePostProcessSaved_ = false;
+    PostProcessProfile pauseSavedPostProcess_{};
     int pauseMenuIndex_ = 0;
     bool pauseMenuImagesLoaded_ = false;
     std::array<uint32_t, 4> pauseMenuTextureIds_{};
@@ -232,5 +267,46 @@ class GameScene : public BaseScene {
 
     bool enemyRedPunishUncounterable_ = false;
     std::array<bool, Player::kSwordCount> previousCombatSlashStates_{};
+    bool bladeClashActive_ = false;
+    float bladeClashTimer_ = 0.0f;
+    float bladeClashDuration_ = 4.8f;
+    float bladeClashGauge_ = 0.0f;
+    float bladeClashEnemyPushSpeed_ = 0.29f;
+    float bladeClashSlashPush_ = 0.22f;
+    std::array<bool, Player::kSwordCount> bladeClashPreviousSlashStates_{};
+    DirectX::XMFLOAT3 bladeClashPlayerLosePos_ = {0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT3 bladeClashPlayerWinPos_ = {0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT3 bladeClashPlayerFixedPos_ = {0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT3 bladeClashCenter_ = {0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT3 bladeClashDirection_ = {0.0f, 0.0f, 1.0f};
+    float bladeClashCameraPush_ = 0.0f;
+    float bladeClashImpactPulse_ = 0.0f;
+    float bladeClashEnemySurgeTimer_ = 0.0f;
+    float bladeClashChainTimer_ = 0.0f;
+    int bladeClashSlashChain_ = 0;
+    bool bladeClashFinishActive_ = false;
+    bool bladeClashFinishPlayerWon_ = false;
+    bool bladeClashFinishImpactEmitted_ = false;
+    bool bladeClashFinishSkidEmitted_ = false;
+    bool bladeClashFinishGuardBreakEmitted_ = false;
+    bool bladeClashFinishWallImpactEmitted_ = false;
+    bool bladeClashFinishPendingEnemyTransition_ = false;
+    float bladeClashFinishTimer_ = 0.0f;
+    float bladeClashFinishDuration_ = 2.05f;
+    DirectX::XMFLOAT3 bladeClashFinishCenter_ = {0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT3 bladeClashFinishPlayerStart_ = {0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT3 bladeClashFinishPlayerEnd_ = {0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT3 bladeClashFinishEnemyStart_ = {0.0f, 0.0f, 0.0f};
     bool handTrackingStartRequested_ = false;
+    float tutorialTimer_ = 0.0f;
+    float tutorialAttackDelay_ = 1.2f;
+    float tutorialSuccessTimer_ = 0.0f;
+    float tutorialMissTimer_ = 0.0f;
+    int tutorialAttackIndex_ = 0;
+    bool tutorialAttackInProgress_ = false;
+    bool tutorialCounterSuccess_ = false;
+    bool tutorialImagesLoaded_ = false;
+    std::array<uint32_t, 7> tutorialTextureIds_{};
+    std::array<float, 7> tutorialTextureWidths_{};
+    std::array<float, 7> tutorialTextureHeights_{};
 };

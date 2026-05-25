@@ -2,16 +2,20 @@
 #include <functional>
 
 namespace AppSceneServices {
-using VoidCallback = std::function<void()>;
+using StartCallback = std::function<bool()>;
 using BoolCallback = std::function<bool()>;
+using VoidCallback = std::function<void()>;
 
-inline VoidCallback requestHandTrackingStart;
+inline StartCallback requestHandTrackingStart;
+inline VoidCallback requestHandTrackingStop;
 inline BoolCallback isCameraDeviceAvailable;
 inline BoolCallback isHandTrackingReady;
 
-inline void ConfigureHandTracking(VoidCallback start, BoolCallback cameraAvailable,
+inline void ConfigureHandTracking(StartCallback start, VoidCallback stop,
+                                  BoolCallback cameraAvailable,
                                   BoolCallback handReady) {
     requestHandTrackingStart = std::move(start);
+    requestHandTrackingStop = std::move(stop);
     isCameraDeviceAvailable = std::move(cameraAvailable);
     isHandTrackingReady = std::move(handReady);
 }
@@ -20,9 +24,20 @@ inline bool HasHandTrackingStart() {
     return static_cast<bool>(requestHandTrackingStart);
 }
 
-inline void RequestHandTrackingStart() {
+inline bool RequestHandTrackingStart() {
     if (requestHandTrackingStart) {
-        requestHandTrackingStart();
+        return requestHandTrackingStart();
+    }
+    return false;
+}
+
+inline bool HasHandTrackingStop() {
+    return static_cast<bool>(requestHandTrackingStop);
+}
+
+inline void RequestHandTrackingStop() {
+    if (requestHandTrackingStop) {
+        requestHandTrackingStop();
     }
 }
 

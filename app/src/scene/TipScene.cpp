@@ -298,17 +298,17 @@ bool TipScene::ShouldStart() {
     }
 }
 
-void TipScene::RequestHandTrackingStartOnce() {
+bool TipScene::RequestHandTrackingStartOnce() {
     if (handTrackingStartRequested_ || ctx_ == nullptr) {
-        return;
+        return handTrackingStartRequested_;
     }
 
     if (AppSceneServices::HasHandTrackingStart()) {
-        AppSceneServices::RequestHandTrackingStart();
+        handTrackingStartRequested_ = AppSceneServices::RequestHandTrackingStart();
     } else {
-        return;
+        return false;
     }
-    handTrackingStartRequested_ = true;
+    return handTrackingStartRequested_;
 }
 
 void TipScene::UpdateCameraPreview(float deltaTime) {

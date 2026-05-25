@@ -29,6 +29,8 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
     leftSwordAttackDamage_ = kBaseSwordAttackDamage;
     rightSwordAttackDamage_ = kBaseSwordAttackDamage;
     defeatPoseRatio_ = 0.0f;
+    bladeClashPoseActive_ = false;
+    bladeClashPosePushRatio_ = 0.5f;
     useGamepadCameraLook_ = true;
     keyboardLeftSwordState_ = {};
     autoMoveOrbitDir_ = 1.0f;
@@ -106,6 +108,29 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     UpdateWeaponRules(input, leftPose, rightPose, hasLeftJoyCon,
                       hasRightJoyCon, useUdpSword || useKeyboardMouse,
                       deltaTime);
+
+    if (bladeClashPoseActive_) {
+        const float push = std::clamp(bladeClashPosePushRatio_, 0.0f, 1.0f);
+        const float leanPitch = -0.11f - 0.15f * push;
+        auto makeClashOrientation = [&](bool isLeft) {
+            const float inwardYaw = isLeft ? 0.28f + 0.10f * push
+                                           : -0.28f - 0.10f * push;
+            const float roll = isLeft ? -0.22f : 0.22f;
+            XMVECTOR qPitch =
+                XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), leanPitch);
+            XMVECTOR qYaw =
+                XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), inwardYaw);
+            XMVECTOR qRoll =
+                XMQuaternionRotationAxis(XMVectorSet(0, 0, 1, 0), roll);
+            XMFLOAT4 result{};
+            XMStoreFloat4(&result, XMQuaternionNormalize(XMQuaternionMultiply(
+                                       XMQuaternionMultiply(qPitch, qYaw),
+                                       qRoll)));
+            return result;
+        };
+        leftPose.orientation = makeClashOrientation(true);
+        rightPose.orientation = makeClashOrientation(false);
+    }
 
     if (suppressCameraSwordSlash_ && controlType == InputControlType::Hand) {
         leftPose.isSlashMode = false;
@@ -239,6 +264,51 @@ void Player::LookAt(const XMFLOAT3 &target) {
 
     XMVECTOR q = XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), yaw_);
     XMStoreFloat4(&tf_.rotation, q);
+}
+
+void Player::SetYaw(float yaw) {
+    yaw_ = yaw;
+    XMVECTOR q = XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), yaw_);
+    XMStoreFloat4(&tf_.rotation, q);
+}
+
+void Player::SetCinematicBladeClashPose(const XMFLOAT3 &position, float yaw,
+                                        float pushRatio) {
+    LockPosition(position);
+    SetYaw(yaw);
+
+    bladeClashPoseActive_ = true;
+    bladeClashPosePushRatio_ = std::clamp(pushRatio, 0.0f, 1.0f);
+
+    const float push = bladeClashPosePushRatio_;
+    auto makeFinishPose = [&](bool isLeft) {
+        SwordPose pose = MakeIdleSwordPose(isLeft);
+        const float side = isLeft ? -1.0f : 1.0f;
+        const float swingOut = 0.72f + 0.28f * push;
+        const float yawOut = side * (1.92f + 0.38f * swingOut);
+        const float pitchDown = 0.22f + 0.20f * swingOut;
+        const float rollThrough = side * (0.78f + 0.38f * swingOut);
+        XMVECTOR qPitch =
+            XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), pitchDown);
+        XMVECTOR qYaw =
+            XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), yawOut);
+        XMVECTOR qRoll =
+            XMQuaternionRotationAxis(XMVectorSet(0, 0, 1, 0), rollThrough);
+        XMStoreFloat4(&pose.orientation,
+                      XMQuaternionNormalize(XMQuaternionMultiply(
+                          XMQuaternionMultiply(qPitch, qYaw), qRoll)));
+        pose.isSlashMode = false;
+        return pose;
+    };
+
+    SwordPose leftPose = makeFinishPose(true);
+    SwordPose rightPose = makeFinishPose(false);
+    leftSword_.Update(BuildSwordTransform(leftPose, true), leftPose, 0.0f);
+    rightSword_.Update(BuildSwordTransform(rightPose, false), rightPose, 0.0f);
+    leftSwordVisible_ = true;
+    rightSwordVisible_ = true;
+    leftSwordSlashMode_ = false;
+    rightSwordSlashMode_ = false;
 }
 
 void Player::KeepDistanceFromTarget(const DirectX::XMFLOAT3 &target) {

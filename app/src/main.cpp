@@ -71,12 +71,18 @@ class HandUdpSenderProcess {
                 std::filesystem::exists(scriptPath));
     }
 
-    void ActivateCamera() {
+    bool ActivateCamera() {
         shouldKeepRunning_ = true;
         RefreshProcessState();
         if (!isRunning_) {
-            Start();
+            return Start();
         }
+        return true;
+    }
+
+    void DeactivateCamera() {
+        shouldKeepRunning_ = false;
+        Stop();
     }
 
     void Update() {
@@ -242,6 +248,11 @@ class HandUdpSenderProcess {
         jobHandle_ = jobHandle;
         isRunning_ = true;
         return true;
+    }
+
+    bool IsRunning() {
+        RefreshProcessState();
+        return isRunning_;
     }
 
   private:
@@ -412,6 +423,9 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
     // SoundManager
     SoundManager soundManager;
     soundManager.Initialize();
+    soundManager.Play(soundManager.LoadOrCreateSilent(
+                          L"app/resources/audio/bgm/bgm_Battle.wav"),
+                      0.36f, true);
 
     // TextureManager
     TextureManager textureManager;
@@ -457,17 +471,21 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
     sceneCtx.frame.deltaTime = 0.0f;
     AppSceneServices::ConfigureHandTracking(
         [&handUdpSenderProcess, &winApp]() {
-            handUdpSenderProcess.ActivateCamera();
-            SetForegroundWindow(winApp.GetHwnd());
+            if (handUdpSenderProcess.IsRunning()) {
+                return true;
+            }
+
+            HWND hwnd = winApp.GetHwnd();
+            SetForegroundWindow(hwnd);
+            const bool started = handUdpSenderProcess.ActivateCamera();
+            SetForegroundWindow(hwnd);
+            return started;
         },
+        [&handUdpSenderProcess]() { handUdpSenderProcess.DeactivateCamera(); },
         [handTrackingRuntimeAvailable]() { return handTrackingRuntimeAvailable; },
         [&handUdpSenderProcess]() {
-            (void)handUdpSenderProcess;
-            return true;
+            return handUdpSenderProcess.IsRunning();
         });
-    if (handTrackingRuntimeAvailable) {
-        handUdpSenderProcess.ActivateCamera();
-    }
 
     // SceneManager
     SceneManager sceneManager;

@@ -42,6 +42,7 @@ ModelVSOutput main(ModelInstanceInput input)
     output.uv = input.uv;
     output.worldPos = worldPos.xyz;
     output.worldNormal = worldNormal;
+    output.localPos = input.pos;
     float3 worldTangent = mul(input.tangent.xyz, (float3x3) world);
     float tangentLength = length(worldTangent);
     output.worldTangent = float4(tangentLength > 0.0001f ? worldTangent / tangentLength : float3(1.0f, 0.0f, 0.0f), input.tangent.w);

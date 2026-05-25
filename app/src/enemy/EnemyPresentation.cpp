@@ -35,7 +35,8 @@ void Enemy::UpdateParts() {
     const float rightX = std::cos(usedYaw);
     const float rightZ = -std::sin(usedYaw);
     const bool suppressAttackBodyMotion =
-        action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep;
+        action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
+        action_.kind == ActionKind::BladeClash;
 
     bodyTf_ = tf_;
     bodyTf_.position = tf_.position;
@@ -274,6 +275,38 @@ void Enemy::UpdateParts() {
             rightHandTf_.position.z += rightZ * 0.3f;
             visualRoll += 0.10f;
         }
+    } else if (!suppressActionPresentation &&
+               action_.kind == ActionKind::BladeClash) {
+        if (action_.step == ActionStep::Charge) {
+            bodyTf_.position.y -= 0.18f + 0.06f * pulse;
+            bodyTf_.position.x += forwardX * 0.18f;
+            bodyTf_.position.z += forwardZ * 0.18f;
+            bodyTf_.scale.x += 0.18f + 0.08f * pulse;
+            bodyTf_.scale.z += 0.18f + 0.08f * pulse;
+            leftHandTf_.position.x += (-rightX) * 0.34f + forwardX * 0.52f;
+            leftHandTf_.position.z += (-rightZ) * 0.34f + forwardZ * 0.52f;
+            rightHandTf_.position.x += rightX * 0.34f + forwardX * 0.52f;
+            rightHandTf_.position.z += rightZ * 0.34f + forwardZ * 0.52f;
+            leftHandTf_.position.y += 0.28f;
+            rightHandTf_.position.y += 0.34f;
+            visualPitch -= 0.22f + 0.04f * pulse;
+        } else if (action_.step == ActionStep::Active) {
+            bodyTf_.position.x += forwardX * 0.24f;
+            bodyTf_.position.z += forwardZ * 0.24f;
+            bodyTf_.scale.x += 0.22f;
+            bodyTf_.scale.z += 0.16f;
+            leftHandTf_.position.x += forwardX * 1.10f;
+            leftHandTf_.position.z += forwardZ * 1.10f;
+            rightHandTf_.position.x += forwardX * 1.26f;
+            rightHandTf_.position.z += forwardZ * 1.26f;
+            leftHandTf_.scale.x += 0.26f;
+            rightHandTf_.scale.x += 0.30f;
+            visualPitch += 0.14f;
+        } else if (action_.step == ActionStep::Recovery) {
+            bodyTf_.position.x += (-forwardX) * 0.08f;
+            bodyTf_.position.z += (-forwardZ) * 0.08f;
+            visualPitch += 0.08f;
+        }
     } else if (!suppressActionPresentation && action_.kind == ActionKind::Stalk) {
         rightHandTf_.position.y += 0.35f;
         leftHandTf_.position.y += 0.20f;
@@ -293,6 +326,9 @@ void Enemy::UpdateParts() {
         visualPitch = 0.0f;
         visualRoll = 0.0f;
     }
+
+    visualPitch += cinematicPitch_;
+    visualRoll += cinematicRoll_;
 
     DirectX::XMVECTOR hitboxRot =
         DirectX::XMQuaternionRotationRollPitchYaw(0.0f, usedYaw, 0.0f);
@@ -339,6 +375,11 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
         actionTint = {0.86f, 0.66f, 0.38f, 0.18f};
         actionIntensity = 0.050f + 0.018f * actionPulse;
         actionNoise = 0.10f;
+        break;
+    case ActionKind::BladeClash:
+        actionTint = {0.96f, 0.78f, 0.34f, 0.26f};
+        actionIntensity = 0.072f + 0.034f * actionPulse;
+        actionNoise = 0.14f;
         break;
     case ActionKind::Warp:
         actionTint = {0.46f, 0.72f, 0.92f, 0.24f};

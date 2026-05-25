@@ -10,8 +10,6 @@ class Input;
 
 class TitleScene : public BaseScene {
   public:
-    ~TitleScene() override;
-
     void Initialize(const SceneContext &ctx) override;
     void Update() override;
     void Draw() override;
@@ -26,8 +24,6 @@ class TitleScene : public BaseScene {
 
     Image LoadTitleImage(const std::wstring &path);
     void UpdateExitConfirm(Input &input);
-    void StopTitleBgm();
-    void UpdateTitleBgmVolume();
     void DrawTitleOverlay(float screenWidth, float screenHeight);
     void DrawExitConfirmWindow(float screenWidth, float screenHeight);
     void DrawStartupFrame(float screenWidth, float screenHeight);
@@ -49,6 +45,4 @@ class TitleScene : public BaseScene {
     bool startRequested_ = false;
     bool exitConfirmVisible_ = false;
     int exitConfirmIndex_ = 1;
-    uint32_t titleBgmSoundId_ = 0;
-    uint32_t titleBgmVoice_ = UINT32_MAX;
 };

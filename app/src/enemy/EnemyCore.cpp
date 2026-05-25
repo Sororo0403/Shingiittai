@@ -28,6 +28,18 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
     runtime_.playerPos = playerObs.position;
     UpdateBossPhase();
     UpdateWarpTrails(deltaTime);
+    if (phantomWarpCooldown_ > 0.0f) {
+        phantomWarpCooldown_ -= deltaTime;
+        if (phantomWarpCooldown_ < 0.0f) {
+            phantomWarpCooldown_ = 0.0f;
+        }
+    }
+    if (phantomFinalLockTimer_ > 0.0f) {
+        phantomFinalLockTimer_ -= deltaTime;
+        if (phantomFinalLockTimer_ < 0.0f) {
+            phantomFinalLockTimer_ = 0.0f;
+        }
+    }
 
     if (counterRecoilTimer_ > 0.0f) {
         counterRecoilTimer_ -= deltaTime;
@@ -98,6 +110,123 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
     UpdateParts();
 }
 
+void Enemy::UpdateTutorial(const PlayerCombatObservation &playerObs,
+                           float deltaTime) {
+    if (deathFinished_) {
+        return;
+    }
+
+    runtime_.playerObs = playerObs;
+    runtime_.playerPos = playerObs.position;
+    UpdateWarpTrails(deltaTime);
+
+    if (counterRecoilTimer_ > 0.0f) {
+        counterRecoilTimer_ -= deltaTime;
+        if (counterRecoilTimer_ < 0.0f) {
+            counterRecoilTimer_ = 0.0f;
+        }
+    }
+
+    if (action_.kind == ActionKind::None) {
+        UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_);
+        UpdateParts();
+        return;
+    }
+
+    stateTimer_ += deltaTime;
+    isAttackActive_ = false;
+
+    if (hitReactionTimer_ > 0.0f) {
+        stateTimer_ -= deltaTime;
+        if (stateTimer_ < 0.0f) {
+            stateTimer_ = 0.0f;
+        }
+
+        hitReactionTimer_ -= deltaTime;
+        if (hitReactionTimer_ < 0.0f) {
+            hitReactionTimer_ = 0.0f;
+        }
+
+        UpdateParts();
+        return;
+    }
+
+    switch (action_.kind) {
+    case ActionKind::Smash:
+        UpdateSmashByStep(deltaTime);
+        break;
+    case ActionKind::Sweep:
+        UpdateSweepByStep(deltaTime);
+        break;
+    default:
+        EndAttack();
+        break;
+    }
+    UpdateParts();
+}
+
+void Enemy::BeginTutorialAttack(ActionKind kind) {
+    if (kind != ActionKind::Smash && kind != ActionKind::Sweep) {
+        kind = ActionKind::Smash;
+    }
+    BeginAction(kind, ActionStep::Charge);
+}
+
+void Enemy::BeginDebugBladeClash(const DirectX::XMFLOAT3 &targetPosition) {
+    if (deathFinished_ || isDying_ || phaseTransitionActive_) {
+        return;
+    }
+
+    hitReactionTimer_ = 0.0f;
+    counterRecoilTimer_ = 0.0f;
+    playerPos_ = targetPosition;
+    FaceTargetImmediately(targetPosition);
+    BeginAction(ActionKind::BladeClash, ActionStep::Active);
+    LockCurrentFacing();
+    stateTimer_ = config_.attacks.bladeClash.profile.timing.activeStartTime;
+    isAttackActive_ = true;
+    UpdateParts();
+}
+
+void Enemy::ResetTutorialState() {
+    EndAttack();
+    runtime_.hp = config_.core.maxHp;
+    runtime_.phase = BossPhase::Phase1;
+    runtime_.phaseTransitionActive = false;
+    runtime_.phaseTransitionTimer = 0.0f;
+    runtime_.hitReactionTimer = 0.0f;
+    runtime_.counterRecoilTimer = 0.0f;
+    runtime_.isDying = false;
+    runtime_.deathFinished = false;
+    runtime_.deathTimer = 0.0f;
+    ResetWarpTrails();
+    UpdateParts();
+}
+
+void Enemy::SetTutorialPosition(const DirectX::XMFLOAT3 &position) {
+    tf_.position = position;
+    visualTf_ = tf_;
+    UpdateParts();
+}
+
+void Enemy::SetCinematicTransform(const DirectX::XMFLOAT3 &position,
+                                  float yaw) {
+    SetCinematicTransform(position, yaw, 0.0f, 0.0f);
+}
+
+void Enemy::SetCinematicTransform(const DirectX::XMFLOAT3 &position, float yaw,
+                                  float pitch, float roll) {
+    tf_.position = position;
+    facingYaw_ = yaw;
+    lockedAttackYaw_ = yaw;
+    cinematicPitch_ = pitch;
+    cinematicRoll_ = roll;
+    DirectX::XMVECTOR rot =
+        DirectX::XMQuaternionRotationRollPitchYaw(0.0f, yaw, 0.0f);
+    DirectX::XMStoreFloat4(&tf_.rotation, rot);
+    UpdateParts();
+}
+
 void Enemy::UpdateByAction(float deltaTime) {
     if (action_.kind == ActionKind::None) {
         UpdateIdle(deltaTime);
@@ -110,6 +239,9 @@ void Enemy::UpdateByAction(float deltaTime) {
         break;
     case ActionKind::Sweep:
         UpdateSweepByStep(deltaTime);
+        break;
+    case ActionKind::BladeClash:
+        UpdateBladeClashByStep(deltaTime);
         break;
     case ActionKind::Warp:
         UpdateWarpByStep(deltaTime);
@@ -138,8 +270,16 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     hasTrackingLocked_ = false;
     holdConfigured_ = false;
     currentHoldDuration_ = 0.0f;
+    quickSlashActive_ = false;
+    farSlashActive_ = false;
+    warpFeintFollowupLocked_ = false;
+    warpFeintImmediate_ = false;
+    warpFeintDecisionMade_ = false;
+    directionFeintDecisionMade_ = false;
     isAttackActive_ = false;
     stateTimer_ = 0.0f;
+    cinematicPitch_ = 0.0f;
+    cinematicRoll_ = 0.0f;
     ResetPreAttackPresentationState();
 }
 
@@ -163,8 +303,16 @@ void Enemy::EndAttack() {
     hasTrackingLocked_ = false;
     holdConfigured_ = false;
     currentHoldDuration_ = 0.0f;
+    quickSlashActive_ = false;
+    farSlashActive_ = false;
+    warpFeintFollowupLocked_ = false;
+    warpFeintImmediate_ = false;
+    warpFeintDecisionMade_ = false;
+    directionFeintDecisionMade_ = false;
     isAttackActive_ = false;
     stateTimer_ = 0.0f;
+    cinematicPitch_ = 0.0f;
+    cinematicRoll_ = 0.0f;
 
     ResetPreAttackPresentationState();
 }

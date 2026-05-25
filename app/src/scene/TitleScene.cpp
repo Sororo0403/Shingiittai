@@ -3,7 +3,6 @@
 #include "Input.h"
 #include "PostProcessSystem.h"
 #include "SceneManager.h"
-#include "SoundManager.h"
 #include "Sprite.h"
 #include "SpriteManager.h"
 #include "TextureManager.h"
@@ -32,22 +31,15 @@ float Smooth01(float t) {
 }
 } // namespace
 
-TitleScene::~TitleScene() { StopTitleBgm(); }
-
 void TitleScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
+    AppSceneServices::RequestHandTrackingStop();
     sceneTime_ = 0.0f;
     frameIntroTimer_ = 0.0f;
     fadeTimer_ = 0.0f;
     startRequested_ = false;
     exitConfirmVisible_ = false;
     exitConfirmIndex_ = 1;
-    titleBgmSoundId_ = 0;
-    titleBgmVoice_ = SoundManager::kInvalidVoiceHandle;
-
-    if (AppSceneServices::HasHandTrackingStart()) {
-        AppSceneServices::RequestHandTrackingStart();
-    }
 
     logoImage_ = LoadTitleImage(L"app/resources/ui/title/gamelogo.png");
     pressAnyButtonImage_ =
@@ -61,13 +53,6 @@ void TitleScene::Initialize(const SceneContext &ctx) {
     backgroundScene_ =
         std::make_unique<GameScene>(GameScene::Mode::TitleDemo);
     backgroundScene_->Initialize(ctx);
-
-    if (ctx_->systems.sound != nullptr) {
-        titleBgmSoundId_ = ctx_->systems.sound->LoadOrCreateSilent(
-            L"app/resources/audio/bgm/maou_game_battle20.mp3");
-        titleBgmVoice_ =
-            ctx_->systems.sound->Play(titleBgmSoundId_, 0.54f, true);
-    }
 }
 
 void TitleScene::Update() {
@@ -86,16 +71,13 @@ void TitleScene::Update() {
                 ctx_->rendering.postProcessSystem->SetProfile(
                     PostProcessProfile{});
             }
-            StopTitleBgm();
             sceneManager_->ChangeScene(std::make_unique<WeaponSelectScene>());
         }
-        UpdateTitleBgmVolume();
         return;
     }
 
     if (exitConfirmVisible_) {
         UpdateExitConfirm(*ctx_->systems.input);
-        UpdateTitleBgmVolume();
         return;
     }
 
@@ -109,7 +91,6 @@ void TitleScene::Update() {
         startRequested_ = true;
         fadeTimer_ = 0.0f;
     }
-    UpdateTitleBgmVolume();
 }
 
 void TitleScene::Draw() {
@@ -161,30 +142,10 @@ void TitleScene::UpdateExitConfirm(Input &input) {
     }
 
     if (exitConfirmIndex_ == 0) {
-        StopTitleBgm();
         ctx_->systems.winApp->RequestClose();
     } else {
         exitConfirmVisible_ = false;
     }
-}
-
-void TitleScene::StopTitleBgm() {
-    if (ctx_ == nullptr || ctx_->systems.sound == nullptr ||
-        titleBgmVoice_ == SoundManager::kInvalidVoiceHandle) {
-        return;
-    }
-    ctx_->systems.sound->Stop(titleBgmVoice_);
-    titleBgmVoice_ = SoundManager::kInvalidVoiceHandle;
-}
-
-void TitleScene::UpdateTitleBgmVolume() {
-    if (ctx_ == nullptr || ctx_->systems.sound == nullptr ||
-        titleBgmVoice_ == SoundManager::kInvalidVoiceHandle) {
-        return;
-    }
-    const float fadeOut =
-        startRequested_ ? 1.0f - Smooth01(fadeTimer_ / kFadeDuration) : 1.0f;
-    ctx_->systems.sound->SetVoiceVolume(titleBgmVoice_, 0.54f * fadeOut);
 }
 
 void TitleScene::DrawTitleOverlay(float screenWidth, float screenHeight) {

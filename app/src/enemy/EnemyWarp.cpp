@@ -8,6 +8,10 @@ namespace {
 float Random01() {
     return static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
 }
+
+float PhantomWarpMoveTime(bool finalWarp) { return finalWarp ? 0.24f : 0.20f; }
+
+float PhantomWarpEndTime(bool finalWarp) { return finalWarp ? 0.18f : 0.42f; }
 } // namespace
 
 void Enemy::UpdateWarpByStep(float deltaTime) {
@@ -56,6 +60,91 @@ bool Enemy::DecideWarpTargetNearPlayer(DirectX::XMFLOAT3 &outTarget) {
     outTarget.y = tf_.position.y;
     FinalizeWarpTargetFacing(outTarget);
     return true;
+}
+
+bool Enemy::DecideWarpTargetFarSlash(DirectX::XMFLOAT3 &outTarget) {
+    float forwardX = playerPos_.x - tf_.position.x;
+    float forwardZ = playerPos_.z - tf_.position.z;
+    float forwardLength = std::sqrt(forwardX * forwardX + forwardZ * forwardZ);
+    if (forwardLength <= 0.0001f) {
+        forwardX = std::sin(facingYaw_);
+        forwardZ = std::cos(facingYaw_);
+        forwardLength = 1.0f;
+    }
+    forwardX /= forwardLength;
+    forwardZ /= forwardLength;
+
+    const float sideSign = (std::rand() % 2 == 0) ? -1.0f : 1.0f;
+    const float sideT = Random01();
+    const float rightX = forwardZ;
+    const float rightZ = -forwardX;
+
+    outTarget = playerPos_;
+    outTarget.x -= forwardX * farWarpSlashDistance_;
+    outTarget.z -= forwardZ * farWarpSlashDistance_;
+    outTarget.x += rightX * sideSign * (1.6f + 2.4f * sideT);
+    outTarget.z += rightZ * sideSign * (1.6f + 2.4f * sideT);
+    outTarget.y = tf_.position.y;
+    FinalizeWarpTargetFacing(outTarget);
+    return true;
+}
+
+bool Enemy::DecideWarpTargetInPlayerView(DirectX::XMFLOAT3 &outTarget) {
+    float forwardX = playerPos_.x - tf_.position.x;
+    float forwardZ = playerPos_.z - tf_.position.z;
+    float forwardLength = std::sqrt(forwardX * forwardX + forwardZ * forwardZ);
+    if (forwardLength <= 0.0001f) {
+        forwardX = std::sin(facingYaw_);
+        forwardZ = std::cos(facingYaw_);
+        forwardLength = 1.0f;
+    }
+    forwardX /= forwardLength;
+    forwardZ /= forwardLength;
+    const float rightX = forwardZ;
+    const float rightZ = -forwardX;
+
+    const float sideSign = (std::rand() % 2 == 0) ? -1.0f : 1.0f;
+    const float laneT = Random01();
+    const float sideOffset = sideSign * (2.2f + 4.2f * Random01());
+    const float forwardOffset = 2.0f + 5.8f * laneT;
+
+    outTarget = playerPos_;
+    outTarget.x += forwardX * forwardOffset + rightX * sideOffset;
+    outTarget.z += forwardZ * forwardOffset + rightZ * sideOffset;
+    outTarget.y = tf_.position.y;
+    FinalizeWarpTargetFacing(outTarget);
+    return true;
+}
+
+bool Enemy::DecideWarpTargetBehindPlayer(DirectX::XMFLOAT3 &outTarget) {
+    float forwardX = playerPos_.x - tf_.position.x;
+    float forwardZ = playerPos_.z - tf_.position.z;
+    float forwardLength = std::sqrt(forwardX * forwardX + forwardZ * forwardZ);
+    if (forwardLength <= 0.0001f) {
+        forwardX = std::sin(facingYaw_);
+        forwardZ = std::cos(facingYaw_);
+        forwardLength = 1.0f;
+    }
+    forwardX /= forwardLength;
+    forwardZ /= forwardLength;
+
+    outTarget = playerPos_;
+    outTarget.x += forwardX * warpApproachBackDistance_;
+    outTarget.z += forwardZ * warpApproachBackDistance_;
+    outTarget.y = tf_.position.y;
+    FinalizeWarpTargetFacing(outTarget);
+    return true;
+}
+
+bool Enemy::RefreshLiveBehindWarpTarget() {
+    const bool shouldRefresh =
+        (warp_.feintFollowup && warp_.approachSlot == WarpApproachSlot::Back) ||
+        (warp_.phantomChain && warp_.phantomFinal);
+    if (!shouldRefresh) {
+        return false;
+    }
+
+    return DecideWarpTargetBehindPlayer(warp_.targetPos);
 }
 
 void Enemy::FinalizeWarpTargetFacing(DirectX::XMFLOAT3 &target) {
@@ -113,7 +202,16 @@ void Enemy::UpdateWarpStart(float deltaTime) {
     isVisible_ = true;
     warp_.collisionDisabled = false;
 
-    if (stateTimer_ >= config_.warp.startTime) {
+    float startTime = config_.warp.startTime;
+    if (warp_.phantomChain) {
+        startTime = warp_.phantomFinal ? 0.13f : 0.11f;
+    } else if (warp_.feintFollowup) {
+        startTime *= 0.55f;
+    } else if (warp_.farSlashFollowup) {
+        startTime *= 0.72f;
+    }
+
+    if (stateTimer_ >= startTime) {
         isVisible_ = false;
         warp_.collisionDisabled = true;
         EmitWarpTrailGhost(warp_.departurePos, warpTrailScaleMax_);
@@ -128,10 +226,14 @@ void Enemy::UpdateWarpMove(float deltaTime) {
         EndAttack();
         return;
     }
+    RefreshLiveBehindWarpTarget();
 
     float t = 1.0f;
-    if (config_.warp.moveTime > 0.0001f) {
-        t = stateTimer_ / config_.warp.moveTime;
+    const float moveTime =
+        warp_.phantomChain ? PhantomWarpMoveTime(warp_.phantomFinal)
+                           : config_.warp.moveTime;
+    if (moveTime > 0.0001f) {
+        t = stateTimer_ / moveTime;
     }
     t = std::clamp(t, 0.0f, 1.0f);
 
@@ -151,10 +253,19 @@ void Enemy::UpdateWarpMove(float deltaTime) {
         LockCurrentFacing();
     }
 
-    if (stateTimer_ >= config_.warp.moveTime) {
+    if (stateTimer_ >= moveTime) {
         tf_.position = warp_.targetPos;
-        UpdateFacingToPlayer();
-        LockCurrentFacing();
+        const bool delayFinalLock = warp_.phantomChain && warp_.phantomFinal;
+        if ((warp_.faceLivePlayerOnEnd ||
+             warp_.followupKind == ActionKind::Smash ||
+             warp_.followupKind == ActionKind::Sweep) &&
+            !delayFinalLock) {
+            UpdateFacingToPlayer();
+            LockCurrentFacing();
+        } else if (warp_.hasTargetYaw) {
+            facingYaw_ = NormalizeAngle(warp_.targetYaw);
+            LockCurrentFacing();
+        }
         ResetWarpTrails();
         EmitWarpTrailGhost(warp_.targetPos, warpTrailScaleMax_ * 1.14f);
         ChangeActionStep(ActionStep::End);
@@ -164,11 +275,27 @@ void Enemy::UpdateWarpMove(float deltaTime) {
 void Enemy::UpdateWarpEnd(float deltaTime) {
     isVisible_ = true;
     warp_.collisionDisabled = false;
-    UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_ * 0.75f);
+    RefreshLiveBehindWarpTarget();
+    const bool delayFinalLock = warp_.phantomChain && warp_.phantomFinal;
+    if ((warp_.faceLivePlayerOnEnd || warp_.followupKind == ActionKind::Smash ||
+         warp_.followupKind == ActionKind::Sweep) &&
+        !delayFinalLock) {
+        UpdateFacingToPlayer();
+        LockCurrentFacing();
+    } else if (warp_.hasTargetYaw) {
+        facingYaw_ = NormalizeAngle(warp_.targetYaw);
+        LockCurrentFacing();
+    } else {
+        UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_ * 0.75f);
+    }
 
     const float endTime =
-        warp_.isFeint ? config_.warp.endTime * warpFeintEndTimeScale_
-                      : config_.warp.endTime;
+        warp_.phantomChain
+            ? PhantomWarpEndTime(warp_.phantomFinal)
+            : warp_.isFeint ? config_.warp.endTime * warpFeintEndTimeScale_
+                             : warp_.farSlashFollowup
+                                   ? config_.warp.endTime * 0.62f
+                                   : config_.warp.endTime;
     if (stateTimer_ < endTime) {
         return;
     }
@@ -176,16 +303,50 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
     const ActionKind followupKind = warp_.followupKind;
     const ActionStep followupStep = warp_.followupStep;
     const bool isFeint = warp_.isFeint;
+    const bool feintFollowup = warp_.feintFollowup;
+    const bool immediateFollowup = warp_.immediateFollowup;
+    const bool farSlashFollowup = warp_.farSlashFollowup;
+    const bool phantomChain = warp_.phantomChain;
+    const bool phantomFinal = warp_.phantomFinal;
+    const int phantomRemaining = warp_.phantomViewWarpsRemaining;
     EndAttack();
+    if (phantomChain && !phantomFinal) {
+        if (phantomRemaining > 1) {
+            BeginPhantomWarpStep(phantomRemaining - 1, false,
+                                 ActionKind::None);
+        } else {
+            const ActionKind finisher =
+                (std::rand() % 2 == 0) ? ActionKind::Smash
+                                       : ActionKind::Sweep;
+            BeginPhantomWarpStep(0, true, finisher);
+        }
+        return;
+    }
     if (isFeint) {
         BeginStalkAction();
         return;
     }
 
     if (followupKind == ActionKind::Smash || followupKind == ActionKind::Sweep) {
-        UpdateFacingToPlayer();
-        LockCurrentFacing();
+        if (!(phantomChain && phantomFinal)) {
+            UpdateFacingToPlayer();
+            LockCurrentFacing();
+        }
+        if (!IsPlayerInMeleeFront()) {
+            BeginChaseAction();
+            return;
+        }
         BeginAction(followupKind, followupStep);
+        quickSlashActive_ = immediateFollowup || (phantomChain && phantomFinal);
+        farSlashActive_ = farSlashFollowup;
+        warpFeintFollowupLocked_ = feintFollowup;
+        warpFeintImmediate_ = feintFollowup && immediateFollowup;
+        if (phantomChain && phantomFinal) {
+            LockCurrentFacing();
+            phantomFinalLockTimer_ = phantomFinalLockDuration_;
+            warpFeintDecisionMade_ = true;
+            directionFeintDecisionMade_ = true;
+        }
         return;
     }
 

@@ -42,6 +42,8 @@ OBB Enemy::GetAttackOBB() const {
         return GetSmashAttackOBB();
     case ActionKind::Sweep:
         return GetSweepAttackOBB();
+    case ActionKind::BladeClash:
+        return MakeOBB(bodyTf_, GetCurrentAttackHitBoxSize());
     default:
         return OBB{};
     }
@@ -98,6 +100,7 @@ bool Enemy::IsPunishableRecovery() const {
     switch (action_.kind) {
     case ActionKind::Smash:
     case ActionKind::Sweep:
+    case ActionKind::BladeClash:
         return action_.step == ActionStep::Recovery && hitReactionTimer_ <= 0.0f;
     default:
         return false;
@@ -117,6 +120,8 @@ const AttackTimingParam *Enemy::GetCurrentAttackTiming() const {
         return &config_.attacks.smash.melee.base.timing;
     case ActionKind::Sweep:
         return &config_.attacks.sweep.melee.base.timing;
+    case ActionKind::BladeClash:
+        return &config_.attacks.bladeClash.profile.timing;
     default:
         return nullptr;
     }
@@ -128,6 +133,8 @@ AttackParam *Enemy::GetCurrentAttackParam() {
         return &config_.attacks.smash.melee.base.attack;
     case ActionKind::Sweep:
         return &config_.attacks.sweep.melee.base.attack;
+    case ActionKind::BladeClash:
+        return &config_.attacks.bladeClash.profile.attack;
     default:
         return nullptr;
     }
@@ -139,6 +146,8 @@ const AttackParam *Enemy::GetCurrentAttackParam() const {
         return &config_.attacks.smash.melee.base.attack;
     case ActionKind::Sweep:
         return &config_.attacks.sweep.melee.base.attack;
+    case ActionKind::BladeClash:
+        return &config_.attacks.bladeClash.profile.attack;
     default:
         return nullptr;
     }
@@ -148,6 +157,7 @@ bool Enemy::ShouldUseLockedAttackYaw() const {
     switch (action_.kind) {
     case ActionKind::Smash:
     case ActionKind::Sweep:
+    case ActionKind::BladeClash:
         return true;
     default:
         return false;
@@ -235,6 +245,42 @@ bool Enemy::NotifyCountered(float vulnerabilityDuration) {
     return ApplyCounterBreakReaction(vulnerabilityDuration);
 }
 
+bool Enemy::IsBladeClashAction() const {
+    return action_.kind == ActionKind::BladeClash;
+}
+
+bool Enemy::IsBladeClashWindow() const {
+    if (!IsBladeClashAction() || action_.step != ActionStep::Active) {
+        return false;
+    }
+
+    const AttackTimingParam &timing = config_.attacks.bladeClash.profile.timing;
+    return stateTimer_ >= timing.activeStartTime &&
+           stateTimer_ <= timing.activeEndTime;
+}
+
+void Enemy::NotifyBladeClashLanded() {
+    if (IsBladeClashAction()) {
+        EndAttack();
+    }
+}
+
+void Enemy::ResolveBladeClash(bool playerWon) {
+    if (playerWon) {
+        EndAttack();
+        hitReactionTimer_ = 0.0f;
+        counterRecoilTimer_ = 0.0f;
+        stateTimer_ = 0.0f;
+        UpdateFacingToPlayer();
+        UpdateParts();
+        return;
+    }
+
+    EndAttack();
+    UpdateFacingToPlayer();
+    UpdateParts();
+}
+
 void Enemy::FinishCounterRecoil() {
     counterRecoilTimer_ = 0.0f;
     if (hitReactionTimer_ > hitReactionDuration_) {
@@ -245,7 +291,8 @@ void Enemy::FinishCounterRecoil() {
 
 bool Enemy::ApplyCounterBreakReaction(float vulnerabilityDuration) {
     const bool isCounterBreakableAction =
-        action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep;
+        action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
+        action_.kind == ActionKind::BladeClash;
     if (!isCounterBreakableAction) {
         return false;
     }

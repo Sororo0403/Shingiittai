@@ -32,19 +32,24 @@ class WeaponSelectScene : public BaseScene {
     };
 
     static constexpr int kWeaponCount = 2;
-    static constexpr int kSelectableCount = kWeaponCount;
+    static constexpr int kButtonCount = 3;
+    static constexpr int kTutorialButtonIndex = 2;
+    static constexpr int kSelectableCount = kButtonCount;
 
     Image LoadTextureImage(const std::wstring &path);
     void UpdateSelection(Input *input);
     void UpdateDeviceAvailability();
     void BeginStart();
+    void BeginHandCameraConfirm();
+    void ContinueHandStart();
     void BeginReturnToTitle();
+    void UpdateHandCameraConfirm(Input *input);
     void Layout(float screenWidth, float screenHeight);
     float ButtonIntroProgress(int index, float offset = 0.0f) const;
     InputControlType SelectedControlType() const;
     InputControlType ControlTypeForIndex(int index) const;
     bool IsHandTrackingReady() const;
-    void RequestHandTrackingStartOnce();
+    bool RequestHandTrackingStartOnce();
     bool IsModeAvailable(int index) const;
     void ShowUnavailableMessage();
     void DrawOverlay(float screenWidth, float screenHeight);
@@ -52,6 +57,7 @@ class WeaponSelectScene : public BaseScene {
     void DrawButtonIllustration(int index, const ButtonRect &rect, float lift,
                                 float alpha, bool selected);
     void DrawLabels(float screenWidth, float screenHeight);
+    void DrawHandCameraConfirmWindow(float screenWidth, float screenHeight);
     void DrawStartTransition(float screenWidth, float screenHeight);
     void DrawRect(float x, float y, float w, float h,
                   const DirectX::XMFLOAT4 &color);
@@ -68,11 +74,16 @@ class WeaponSelectScene : public BaseScene {
     bool titleReturnRequested_ = false;
     bool waitingForHandTrackingReady_ = false;
     bool handTrackingStartRequested_ = false;
+    bool handCameraConfirmVisible_ = false;
+    int handCameraConfirmIndex_ = 1;
 
     std::unique_ptr<GameScene> backgroundScene_;
     Image controlsImage_{};
-    std::array<Image, kWeaponCount> modeNameImages_{};
-    std::array<ButtonRect, kWeaponCount> buttonRects_{};
-    std::array<float, kWeaponCount> pulseTimers_{};
+    std::array<Image, kButtonCount> modeNameImages_{};
+    Image handCameraConfirmMessageImage_{};
+    Image handCameraConfirmYesImage_{};
+    Image handCameraConfirmNoImage_{};
+    std::array<ButtonRect, kButtonCount> buttonRects_{};
+    std::array<float, kButtonCount> pulseTimers_{};
     bool cameraAvailable_ = false;
 };

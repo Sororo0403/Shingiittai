@@ -1,4 +1,5 @@
 #include "GameScene.h"
+#include "BladeClashCinematic.h"
 #include "compat/ParticleCompat.h"
 #include <algorithm>
 #include <array>
@@ -9,6 +10,8 @@ using namespace DirectX;
 static constexpr float kMinVectorLength = 0.0001f;
 
 namespace {
+namespace Clash = BladeClashCinematic;
+
 constexpr CollisionManager::LayerMask kLayerPlayer = 1u << 0;
 constexpr CollisionManager::LayerMask kLayerEnemy = 1u << 1;
 constexpr CollisionManager::LayerMask kLayerPlayerAttack = 1u << 2;
@@ -143,6 +146,17 @@ static void TickCooldown(float &cooldown, float deltaTime) {
     }
 }
 
+static XMFLOAT3 Lerp3(const XMFLOAT3 &from, const XMFLOAT3 &to, float alpha) {
+    return {from.x + (to.x - from.x) * alpha,
+            from.y + (to.y - from.y) * alpha,
+            from.z + (to.z - from.z) * alpha};
+}
+
+static float SmoothStep01(float value) {
+    const float t = std::clamp(value, 0.0f, 1.0f);
+    return t * t * (3.0f - 2.0f * t);
+}
+
 PlayerCombatObservation GameScene::BuildPlayerCombatObservation() const {
     const auto slashStates = player_.GetSwordSlashStates();
 
@@ -167,7 +181,263 @@ float GameScene::ApplyEnemyDamage(float damage, bool deferTransitions) {
     return actualDamage;
 }
 
+void GameScene::BeginBladeClash(size_t swordIndex) {
+    if (bladeClashActive_) {
+        return;
+    }
+
+    const XMFLOAT3 playerPos = player_.GetTransform().position;
+    const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
+    const XMFLOAT2 toEnemy =
+        NormalizeXZ(enemyPos.x - playerPos.x, enemyPos.z - playerPos.z);
+    bladeClashDirection_ = {toEnemy.x, 0.0f, toEnemy.y};
+    bladeClashPlayerWinPos_ = {enemyPos.x - toEnemy.x * 1.25f, playerPos.y,
+                               enemyPos.z - toEnemy.y * 1.25f};
+    bladeClashPlayerLosePos_ = {enemyPos.x - toEnemy.x * 2.36f, playerPos.y,
+                                enemyPos.z - toEnemy.y * 2.36f};
+    bladeClashPlayerFixedPos_ = {enemyPos.x - toEnemy.x * 1.86f, playerPos.y,
+                                 enemyPos.z - toEnemy.y * 1.86f};
+    bladeClashCenter_ = {enemyPos.x - toEnemy.x * 1.42f,
+                         playerPos.y + 1.10f,
+                         enemyPos.z - toEnemy.y * 1.42f};
+    bladeClashGauge_ = 0.0f;
+    bladeClashTimer_ = bladeClashDuration_;
+    bladeClashCameraPush_ = 0.0f;
+    bladeClashImpactPulse_ = 0.18f;
+    bladeClashEnemySurgeTimer_ = 0.0f;
+    bladeClashChainTimer_ = 0.0f;
+    bladeClashSlashChain_ = 0;
+    bladeClashPreviousSlashStates_ = player_.GetSwordSlashStates();
+    bladeClashActive_ = true;
+    player_.LockPosition(bladeClashPlayerFixedPos_);
+    player_.SetBladeClashPose(true, 0.5f);
+    counterCinematicActive_ = false;
+    counterCinematicTimer_ = 0.0f;
+    SetEnemyAnimationFrozen(false);
+    SyncEnemyAnimation();
+
+    CombatFeedbackEvent feedback{};
+    feedback.type = CombatFeedbackEventType::CounterSuccess;
+    feedback.position = bladeClashCenter_;
+    feedback.direction = bladeClashDirection_;
+    feedback.power = 7.0f;
+    feedback.swordIndex = swordIndex;
+    DispatchCombatFeedback(feedback);
+
+    EmitParticleBurst(sparkParticles_, bladeClashCenter_, 22, 0.16f,
+                      AppParticleBurstStyle::Sparks,
+                      {0.90f, 0.98f, 1.0f, 0.60f}, bladeClashDirection_,
+                      1.05f);
+}
+
+void GameScene::UpdateBladeClash(float gameplayDeltaTime) {
+    if (!bladeClashActive_) {
+        return;
+    }
+
+    const auto swords = player_.GetSwords();
+    const auto slashStates = player_.GetSwordSlashStates();
+    bool slashLanded = false;
+    for (size_t i = 0; i < slashStates.size(); ++i) {
+        const bool slashStarted =
+            slashStates[i] && !bladeClashPreviousSlashStates_[i];
+        bladeClashPreviousSlashStates_[i] = slashStates[i];
+        if (!slashStarted || swords[i] == nullptr) {
+            continue;
+        }
+
+        slashLanded = true;
+        if (bladeClashChainTimer_ > 0.0f) {
+            bladeClashSlashChain_ = (std::min)(bladeClashSlashChain_ + 1, 5);
+        } else {
+            bladeClashSlashChain_ = 1;
+        }
+        bladeClashChainTimer_ = 0.42f;
+        const float chainBonus =
+            static_cast<float>((std::max)(bladeClashSlashChain_ - 1, 0)) *
+            0.020f;
+        bladeClashGauge_ += bladeClashSlashPush_ + chainBonus;
+        bladeClashCameraPush_ =
+            (std::min)(bladeClashCameraPush_ + 0.64f, 1.0f);
+        bladeClashImpactPulse_ = 1.0f;
+
+        CombatFeedbackEvent feedback{};
+        feedback.type = CombatFeedbackEventType::PlayerSlashHit;
+        feedback.position = bladeClashCenter_;
+        feedback.position.y += 0.14f;
+        feedback.direction = bladeClashDirection_;
+        feedback.power = 5.0f + bladeClashGauge_ * 4.0f;
+        feedback.swordIndex = i;
+        DispatchCombatFeedback(feedback);
+
+        XMFLOAT3 sparkPos = bladeClashCenter_;
+        sparkPos.x += bladeClashDirection_.x * 0.10f;
+        sparkPos.y += 0.14f;
+        sparkPos.z += bladeClashDirection_.z * 0.10f;
+        EmitParticleBurst(sparkParticles_, sparkPos, 16, 0.11f,
+                          AppParticleBurstStyle::Sparks,
+                          {0.90f, 0.98f, 1.0f, 0.62f},
+                          bladeClashDirection_, 1.08f);
+    }
+
+    if (bladeClashChainTimer_ > 0.0f) {
+        bladeClashChainTimer_ =
+            (std::max)(0.0f, bladeClashChainTimer_ - gameplayDeltaTime);
+    } else {
+        bladeClashSlashChain_ = 0;
+    }
+
+    bladeClashEnemySurgeTimer_ += gameplayDeltaTime;
+    if (bladeClashEnemySurgeTimer_ >= 0.62f) {
+        bladeClashEnemySurgeTimer_ -= 0.62f;
+        bladeClashImpactPulse_ = (std::max)(bladeClashImpactPulse_, 0.48f);
+        XMFLOAT3 surgeSpark = bladeClashCenter_;
+        surgeSpark.x -= bladeClashDirection_.x * 0.12f;
+        surgeSpark.y += 0.10f;
+        surgeSpark.z -= bladeClashDirection_.z * 0.12f;
+        EmitParticleBurst(sparkParticles_, surgeSpark, 8, 0.08f,
+                          AppParticleBurstStyle::Sparks,
+                          {1.0f, 0.48f, 0.18f, 0.42f},
+                          {-bladeClashDirection_.x, 0.0f,
+                           -bladeClashDirection_.z},
+                          0.64f);
+    }
+
+    const float elapsedRatio =
+        bladeClashDuration_ > 0.0001f
+            ? std::clamp(1.0f - bladeClashTimer_ / bladeClashDuration_, 0.0f,
+                         1.0f)
+            : 1.0f;
+    const float enemySurge =
+        0.78f + 0.22f * std::sinf(bladeClashEnemySurgeTimer_ * 10.1f);
+    const float lowTimePressure =
+        bladeClashTimer_ < 1.35f ? (1.35f - bladeClashTimer_) * 0.26f : 0.0f;
+    bladeClashGauge_ -=
+        (bladeClashEnemyPushSpeed_ + elapsedRatio * 0.08f + lowTimePressure) *
+        enemySurge * gameplayDeltaTime;
+    bladeClashGauge_ = std::clamp(bladeClashGauge_, -1.1f, 1.1f);
+    bladeClashCameraPush_ =
+        (std::max)(0.0f, bladeClashCameraPush_ - gameplayDeltaTime * 3.1f);
+    bladeClashImpactPulse_ =
+        (std::max)(0.0f, bladeClashImpactPulse_ -
+                             gameplayDeltaTime * (slashLanded ? 2.2f : 3.0f));
+    bladeClashTimer_ -= gameplayDeltaTime;
+
+    const float progress = SmoothStep01((bladeClashGauge_ + 1.0f) * 0.5f);
+    bladeClashPlayerFixedPos_ =
+        Lerp3(bladeClashPlayerLosePos_, bladeClashPlayerWinPos_, progress);
+    bladeClashCenter_ = {
+        bladeClashPlayerFixedPos_.x +
+            bladeClashDirection_.x * (0.74f + 0.22f * progress),
+        bladeClashPlayerFixedPos_.y + 1.10f + 0.04f * bladeClashImpactPulse_,
+        bladeClashPlayerFixedPos_.z +
+            bladeClashDirection_.z * (0.74f + 0.22f * progress)};
+    player_.LockPosition(bladeClashPlayerFixedPos_);
+    player_.SetBladeClashPose(true, progress);
+
+    if (bladeClashGauge_ >= 1.0f) {
+        FinishBladeClash(true);
+        return;
+    }
+    if (bladeClashGauge_ <= -1.0f || bladeClashTimer_ <= 0.0f) {
+        FinishBladeClash(false);
+    }
+}
+
+void GameScene::FinishBladeClash(bool playerWon) {
+    if (!bladeClashActive_) {
+        return;
+    }
+
+    bladeClashActive_ = false;
+    bladeClashTimer_ = 0.0f;
+    bladeClashPreviousSlashStates_.fill(false);
+    bladeClashCameraPush_ = 0.0f;
+    bladeClashImpactPulse_ = 0.0f;
+    bladeClashEnemySurgeTimer_ = 0.0f;
+    bladeClashChainTimer_ = 0.0f;
+    bladeClashSlashChain_ = 0;
+    bladeClashFinishActive_ = true;
+    bladeClashFinishPlayerWon_ = playerWon;
+    bladeClashFinishImpactEmitted_ = false;
+    bladeClashFinishSkidEmitted_ = false;
+    bladeClashFinishGuardBreakEmitted_ = false;
+    bladeClashFinishWallImpactEmitted_ = false;
+    bladeClashFinishPendingEnemyTransition_ = false;
+    bladeClashFinishTimer_ = 0.0f;
+    bladeClashFinishDuration_ = playerWon ? 2.05f : 2.38f;
+    bladeClashFinishCenter_ =
+        playerWon ? XMFLOAT3{enemy_.GetTransform().position.x,
+                             enemy_.GetTransform().position.y + 1.22f,
+                             enemy_.GetTransform().position.z}
+                  : XMFLOAT3{(player_.GetTransform().position.x +
+                              enemy_.GetTransform().position.x) *
+                                 0.5f,
+                             player_.GetTransform().position.y + 1.10f,
+                             (player_.GetTransform().position.z +
+                              enemy_.GetTransform().position.z) *
+                                 0.5f};
+    bladeClashFinishPlayerStart_ = player_.GetTransform().position;
+    bladeClashFinishEnemyStart_ = enemy_.GetTransform().position;
+    bladeClashFinishPlayerEnd_ =
+        playerWon ? XMFLOAT3{enemy_.GetTransform().position.x +
+                                 bladeClashDirection_.x * 8.45f,
+                             player_.GetTransform().position.y,
+                             enemy_.GetTransform().position.z +
+                                 bladeClashDirection_.z * 8.45f}
+                  : XMFLOAT3{player_.GetTransform().position.x -
+                                 bladeClashDirection_.x *
+                                     Clash::kLossTotalRetreat,
+                             player_.GetTransform().position.y,
+                             player_.GetTransform().position.z -
+                                 bladeClashDirection_.z *
+                                     Clash::kLossTotalRetreat};
+    player_.SetBladeClashPose(!playerWon, 0.0f);
+    enemy_.ResolveBladeClash(playerWon);
+    SetEnemyAnimationFrozen(false);
+
+    if (playerWon) {
+        const float appliedDamage = ApplyEnemyDamage(370.0f, true);
+        bladeClashFinishPendingEnemyTransition_ = appliedDamage > 0.0f;
+        CombatFeedbackEvent feedback{};
+        feedback.type = CombatFeedbackEventType::CounterSuccess;
+        feedback.position = enemy_.GetTransform().position;
+        feedback.position.y += 1.05f;
+        feedback.direction = bladeClashDirection_;
+        feedback.power = (std::max)(appliedDamage / 10.0f, 10.0f);
+        DispatchCombatFeedback(feedback);
+        enemyHitCooldown_ = 0.24f;
+        playerHitCooldown_ = 0.25f;
+        return;
+    }
+
+    enemy_.NotifyBladeClashLanded();
+    XMFLOAT3 warningCenter = player_.GetTransform().position;
+    warningCenter.y += 1.16f;
+    EmitParticleBurst(sparkParticles_, warningCenter, 18, 0.24f,
+                      AppParticleBurstStyle::Sparks,
+                      {1.0f, 0.50f, 0.18f, 0.42f},
+                      {bladeClashDirection_.z, 0.04f,
+                       -bladeClashDirection_.x},
+                      0.66f);
+    CombatFeedbackEvent feedback{};
+    feedback.type = CombatFeedbackEventType::PlayerDamaged;
+    feedback.position = player_.GetTransform().position;
+    feedback.position.y += 1.0f;
+    feedback.direction = {-bladeClashDirection_.x, 0.0f,
+                          -bladeClashDirection_.z};
+    feedback.power = 7.5f;
+    DispatchCombatFeedback(feedback);
+    playerHitCooldown_ = 0.55f;
+}
+
 void GameScene::UpdateCombat(float gameplayDeltaTime) {
+    if (bladeClashActive_) {
+        UpdateBladeClash(gameplayDeltaTime);
+        previousCombatSlashStates_ = player_.GetSwordSlashStates();
+        return;
+    }
+
     collisionManager_.Clear();
 
     const auto playerBox = player_.GetOBB();
@@ -248,14 +518,21 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     const bool isEnemySweepCommitted =
         (enemyActionKind == ActionKind::Sweep &&
          enemyActionStep == ActionStep::Active);
+    const bool isEnemyBladeClashCommitted =
+        (enemyActionKind == ActionKind::BladeClash &&
+         enemyActionStep == ActionStep::Active);
     const bool isEnemySmashMeleeWindow =
         isEnemySmashCommitted && enemy_.IsAttackActive();
     const bool isEnemySweepMeleeWindow =
         isEnemySweepCommitted && enemy_.IsAttackActive();
+    const bool isEnemyBladeClashMeleeWindow =
+        isEnemyBladeClashCommitted && enemy_.IsBladeClashWindow();
     const bool isEnemyMeleeActive =
-        isEnemySmashMeleeWindow || isEnemySweepMeleeWindow;
+        isEnemySmashMeleeWindow || isEnemySweepMeleeWindow ||
+        isEnemyBladeClashMeleeWindow;
     const bool isEnemyMeleeCommitted =
-        isEnemySmashCommitted || isEnemySweepCommitted;
+        isEnemySmashCommitted || isEnemySweepCommitted ||
+        isEnemyBladeClashCommitted;
     if (enemyRedPunishUncounterable_ &&
         (!(enemyActionKind == ActionKind::Smash ||
            enemyActionKind == ActionKind::Sweep) ||
@@ -282,7 +559,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
           enemy_.GetActionTimerForPresentation() <=
               kReleaseCounterWindowDuration));
     const bool suppressNormalSlashHitDuringEnemyMelee =
-        isEnemyMeleePreparationOrRelease;
+        isEnemyMeleePreparationOrRelease || isEnemyBladeClashCommitted;
 
     const float enemyAttackDamage = enemy_.GetCurrentAttackDamage();
     const float enemyAttackKnockback = enemy_.GetCurrentAttackKnockback();
@@ -355,6 +632,18 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                      GetReadableMeleeRadius(enemyAttackBox) + 0.85f) &&
             IsSlashAxisMatched(*sword,
                                RequiredCounterAxisForAction(enemyActionKind));
+        const bool canBladeClashCounter =
+            isEnemyBladeClashMeleeWindow && playerHitCooldown_ <= 0.0f &&
+            !previousCombatSlashStates_[i] &&
+            enemyAttackBody != CollisionManager::kInvalidBodyId &&
+            IsNearXZ(player_.GetTransform().position, enemyAttackBox.center,
+                     GetReadableMeleeRadius(enemyAttackBox) + 0.95f);
+
+        if (canBladeClashCounter) {
+            BeginBladeClash(i);
+            counterTriggeredThisFrame = true;
+            break;
+        }
 
         if (canSlashCounter) {
             triggerSuccessfulCounter(i, enemyAttackDamage, 0.2f);

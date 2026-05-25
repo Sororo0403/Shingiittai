@@ -31,7 +31,7 @@ class TipScene : public BaseScene {
 
     Image LoadTextureImage(const std::wstring &path);
     bool ShouldStart();
-    void RequestHandTrackingStartOnce();
+    bool RequestHandTrackingStartOnce();
     void UpdateCameraPreview(float deltaTime);
     void DrawCameraPreview();
     Image CurrentTipBodyImage() const;

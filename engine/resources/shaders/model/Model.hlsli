@@ -33,6 +33,7 @@ struct ModelVSOutput
     float3 worldPos : TEXCOORD1;
     float3 worldNormal : TEXCOORD2;
     float4 worldTangent : TEXCOORD3;
+    float3 localPos : TEXCOORD4;
     float4 color : COLOR;
 };
 

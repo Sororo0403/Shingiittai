@@ -60,6 +60,7 @@ cbuffer DrawEffect : register(b3)
     float4 drawEffectColor;
     float4 drawEffectParams0;
     float4 drawEffectParams1;
+    float4 drawEffectParams2;
 };
 
 float3 ApplyNormalMap(float3 vertexNormal, float4 vertexTangent, float2 uv)
@@ -93,7 +94,23 @@ float4 main(ModelVSOutput input) : SV_TARGET
     float4 texColor = float4(1, 1, 1, 1);
     if (enableTexture != 0)
     {
-        texColor = tex0.Sample(samp0, uv);
+        if (customParams2.x > 0.5f)
+        {
+            float rustScale = max(customParams2.y, 0.001f);
+            float3 p = input.localPos * rustScale;
+            float3 n = abs(normalize(input.worldNormal));
+            n = pow(n, 4.0f);
+            n /= max(n.x + n.y + n.z, 0.0001f);
+
+            float4 sampleX = tex0.Sample(samp0, p.zy);
+            float4 sampleY = tex0.Sample(samp0, p.xz);
+            float4 sampleZ = tex0.Sample(samp0, p.xy);
+            texColor = sampleX * n.x + sampleY * n.y + sampleZ * n.z;
+        }
+        else
+        {
+            texColor = tex0.Sample(samp0, uv);
+        }
     }
 
     float4 finalColor = texColor * color * input.color;
@@ -234,6 +251,7 @@ float4 main(ModelVSOutput input) : SV_TARGET
         float time = drawEffectParams1.x;
         float baseDim = saturate(drawEffectParams1.y);
         float alphaBoost = max(drawEffectParams1.z, 0.0f);
+        float surfaceTint = saturate(drawEffectParams2.x);
 
         float effectRim = pow(saturate(1.0f - abs(dot(normal, viewDir))),
                               fresnelPower);
@@ -252,6 +270,14 @@ float4 main(ModelVSOutput input) : SV_TARGET
                                        saturate(drawEffectColor.rgb), 0.28f);
         finalColor.rgb = lerp(finalColor.rgb, finalColor.rgb * effectShadowTint,
                               baseDim * 0.55f);
+
+        if (surfaceTint > 0.0001f)
+        {
+            float surfaceMix = saturate(surfaceTint * drawEffectColor.a);
+            finalColor.rgb = lerp(finalColor.rgb, drawEffectColor.rgb, surfaceMix);
+            finalColor.a = saturate(max(finalColor.a * (1.0f - surfaceTint * 0.45f),
+                                        drawEffectColor.a * surfaceTint));
+        }
 
         finalColor.rgb += drawEffectColor.rgb * glow;
         finalColor.a =

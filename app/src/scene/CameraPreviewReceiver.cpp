@@ -209,9 +209,16 @@ void CameraPreviewReceiver::DecodeJpeg(
     }
 
     if (image == nullptr || image->pixels == nullptr || image->width == 0 ||
-        image->height == 0 || image->width != frame_.width ||
-        image->height != frame_.height) {
+        image->height == 0) {
         return;
+    }
+
+    const uint32_t imageWidth = static_cast<uint32_t>(image->width);
+    const uint32_t imageHeight = static_cast<uint32_t>(image->height);
+    if (imageWidth != frame_.width || imageHeight != frame_.height) {
+        frame_.width = imageWidth;
+        frame_.height = imageHeight;
+        frame_.textureSizeDirty = true;
     }
 
     const size_t rowBytes = static_cast<size_t>(frame_.width) * 4u;
@@ -235,8 +242,14 @@ void CameraPreviewReceiver::UploadTextureIfNeeded(TextureManager *texture) {
         return;
     }
 
-    texture->UpdateTexture2D(frame_.textureId, frame_.rgbaPixels.data(),
-                             static_cast<size_t>(frame_.width) * 4u);
+    if (frame_.textureSizeDirty) {
+        frame_.textureId = texture->CreateFromRgbaPixels(
+            frame_.width, frame_.height, frame_.rgbaPixels.data());
+        frame_.textureSizeDirty = false;
+    } else {
+        texture->UpdateTexture2D(frame_.textureId, frame_.rgbaPixels.data(),
+                                 static_cast<size_t>(frame_.width) * 4u);
+    }
     frame_.dirty = false;
 }
 

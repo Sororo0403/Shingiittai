@@ -142,6 +142,18 @@ void CombatFeedbackDirector::PushEvent(const CombatFeedbackEvent &event) {
         AddPostFlash(0.48f, 0.22f, 0.13f, 0.26f);
         fovKickDeg_ = (std::max)(fovKickDeg_, 7.0f);
         break;
+    case CombatFeedbackEventType::BladeClashGuardBreak:
+        AddHitStop(0.260f, 0.004f);
+        AddCameraShake(0.38f, 0.122f, 0.074f);
+        AddPostFlash(0.58f, 0.30f, 0.125f, 0.82f);
+        fovKickDeg_ = (std::max)(fovKickDeg_, 9.0f);
+        break;
+    case CombatFeedbackEventType::BladeClashPierce:
+        AddHitStop(0.044f, 0.14f);
+        AddCameraShake(0.34f, 0.110f, 0.060f);
+        AddPostFlash(0.40f, 0.60f, 0.052f, 0.24f);
+        fovKickDeg_ = (std::max)(fovKickDeg_, 10.0f);
+        break;
     }
 
     (void)event.position;

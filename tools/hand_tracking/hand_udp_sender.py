@@ -33,42 +33,88 @@ def open_camera(source, width, height):
     return cap
 
 
-def create_hands_detector():
+def create_hands_detector(model_path):
     try:
         import mediapipe as mp
     except Exception as error:
         print(f"MediaPipe unavailable: {error}", flush=True)
-        return None, None
-    return mp, mp.solutions.hands.Hands(
-        static_image_mode=False,
-        max_num_hands=2,
-        model_complexity=1,
-        min_detection_confidence=0.45,
+        return None
+
+    if hasattr(mp, "solutions") and hasattr(mp.solutions, "hands"):
+        return {
+            "type": "solutions",
+            "mp": mp,
+            "detector": mp.solutions.hands.Hands(
+                static_image_mode=False,
+                max_num_hands=2,
+                model_complexity=1,
+                min_detection_confidence=0.45,
+                min_tracking_confidence=0.45,
+            ),
+        }
+
+    try:
+        from mediapipe.tasks import python as mp_python
+        from mediapipe.tasks.python import vision
+    except Exception as error:
+        print(f"MediaPipe Tasks unavailable: {error}", flush=True)
+        return None
+
+    if not model_path:
+        print("MediaPipe Tasks model path is empty", flush=True)
+        return None
+
+    options = vision.HandLandmarkerOptions(
+        base_options=mp_python.BaseOptions(model_asset_path=model_path),
+        running_mode=vision.RunningMode.VIDEO,
+        num_hands=2,
+        min_hand_detection_confidence=0.45,
+        min_hand_presence_confidence=0.45,
         min_tracking_confidence=0.45,
     )
+    return {
+        "type": "tasks",
+        "mp": mp,
+        "detector": vision.HandLandmarker.create_from_options(options),
+    }
 
 
-def detect_hands(mp, hands, frame):
-    if hands is None:
+def detect_hands(detector, frame, timestamp_ms):
+    if detector is None:
         return []
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    result = hands.process(rgb)
-    if not result.multi_hand_landmarks:
+
+    if detector["type"] == "solutions":
+        result = detector["detector"].process(rgb)
+        hand_landmarks = result.multi_hand_landmarks or []
+        handedness = result.multi_handedness or []
+        landmark_groups = [landmarks.landmark for landmarks in hand_landmarks]
+    else:
+        mp_image = detector["mp"].Image(
+            image_format=detector["mp"].ImageFormat.SRGB,
+            data=rgb,
+        )
+        result = detector["detector"].detect_for_video(mp_image, timestamp_ms)
+        landmark_groups = result.hand_landmarks or []
+        handedness = result.handedness or []
+
+    if not landmark_groups:
         return []
 
     detected = []
-    handedness = result.multi_handedness or []
-    for index, landmarks in enumerate(result.multi_hand_landmarks):
-        points = [(lm.x, lm.y) for lm in landmarks.landmark]
+    for index, landmarks in enumerate(landmark_groups):
+        points = [(lm.x, lm.y) for lm in landmarks]
         palm_indices = (0, 5, 9, 13, 17)
         center_x = sum(points[i][0] for i in palm_indices) / len(palm_indices)
         center_y = sum(points[i][1] for i in palm_indices) / len(palm_indices)
         confidence = 0.85
         label = "Hand"
-        if index < len(handedness) and handedness[index].classification:
-            cls = handedness[index].classification[0]
-            label = cls.label
-            confidence = float(cls.score)
+        if index < len(handedness):
+            classifications = getattr(handedness[index], "classification", handedness[index])
+            if classifications:
+                cls = classifications[0]
+                label = getattr(cls, "label", getattr(cls, "category_name", label))
+                confidence = float(getattr(cls, "score", confidence))
         detected.append(
             {
                 "x": clamp01(center_x),
@@ -214,7 +260,7 @@ def main():
         print(f"Camera failed: could not open {args.camera}", flush=True)
         return 1
 
-    mp, hands = create_hands_detector()
+    hands = create_hands_detector(args.model)
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     target = (args.udp_host, args.udp_port)
     preview_target = (args.preview_host, args.preview_port)
@@ -234,7 +280,8 @@ def main():
             dt = now - last_time
             last_time = now
 
-            detections = detect_hands(mp, hands, frame)
+            timestamp_ms = int(time.time() * 1000)
+            detections = detect_hands(hands, frame, timestamp_ms)
             hand_states = update_hand_states(detections, previous, dt)
             draw_hands(frame, detections)
             cv2.putText(
@@ -248,7 +295,7 @@ def main():
                 cv2.LINE_AA,
             )
 
-            packet = build_player_packet(int(time.time() * 1000), hand_states)
+            packet = build_player_packet(timestamp_ms, hand_states)
             sock.sendto(packet.encode("ascii"), target)
             send_preview(sock, preview_target, frame, preview_state, args, now)
 
@@ -258,7 +305,7 @@ def main():
                     break
     finally:
         if hands is not None:
-            hands.close()
+            hands["detector"].close()
         cap.release()
         sock.close()
         if args.show_window:

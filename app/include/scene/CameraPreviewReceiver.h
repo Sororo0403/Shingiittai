@@ -12,7 +12,7 @@ class CameraPreviewReceiver {
     ~CameraPreviewReceiver();
 
     void Initialize(TextureManager *texture, uint16_t port = 5006,
-                    uint32_t width = 320, uint32_t height = 240);
+                    uint32_t width = 320, uint32_t height = 180);
     void Update(float deltaTime);
     void Close();
     void Draw(SpriteManager *sprite, TextureManager *texture,
@@ -22,9 +22,10 @@ class CameraPreviewReceiver {
     struct Frame {
         bool valid = false;
         bool dirty = false;
+        bool textureSizeDirty = false;
         uint32_t textureId = 0;
         uint32_t width = 320;
-        uint32_t height = 240;
+        uint32_t height = 180;
         float staleTimer = 999.0f;
         std::vector<uint8_t> rgbaPixels;
     };

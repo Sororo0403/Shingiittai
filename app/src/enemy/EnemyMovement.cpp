@@ -35,7 +35,7 @@ void Enemy::UpdateStalkMove(float deltaTime) {
     const float pounceDistance =
         config_.core.nearAttackDistance + stalkPounceDistanceBonus_;
     if (stateTimer_ >= stalkPounceMinTime_ &&
-        GetDistanceToPlayer() <= pounceDistance) {
+        GetDistanceToPlayer() <= pounceDistance && IsPlayerInMeleeFront()) {
         float chance = stalkPounceChance_;
         if (phase_ != BossPhase::Phase1) {
             chance += 0.18f;

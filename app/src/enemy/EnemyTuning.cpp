@@ -3,6 +3,12 @@
 #include <algorithm>
 
 float Enemy::GetCurrentSmashChargeTime() const {
+    if (quickSlashActive_ || farSlashActive_) {
+        return quickSmashChargeTime_;
+    }
+    if (warpFeintImmediate_) {
+        return (std::max)(0.18f, quickSmashChargeTime_ * 0.72f);
+    }
     float result = config_.attacks.smash.melee.base.chargeTime;
     if (result < 0.05f) {
         result = 0.05f;
@@ -11,6 +17,12 @@ float Enemy::GetCurrentSmashChargeTime() const {
 }
 
 float Enemy::GetCurrentSweepChargeTime() const {
+    if (quickSlashActive_ || farSlashActive_) {
+        return quickSweepChargeTime_;
+    }
+    if (warpFeintImmediate_) {
+        return (std::max)(0.18f, quickSweepChargeTime_ * 0.72f);
+    }
     float result = config_.attacks.sweep.melee.base.chargeTime;
     if (result < 0.05f) {
         result = 0.05f;
@@ -83,5 +95,7 @@ void Enemy::ValidateAllTimings() {
                    config_.attacks.smash.melee.base.chargeTime);
     ValidateTiming(config_.attacks.sweep.melee.base.timing,
                    config_.attacks.sweep.melee.base.chargeTime);
+    ValidateTiming(config_.attacks.bladeClash.profile.timing,
+                   config_.attacks.bladeClash.profile.chargeTime);
 }
 

@@ -31,6 +31,9 @@
     <Filter Include="Resources\Audio\sfx">
       <UniqueIdentifier>{75cd1bbf-105d-4073-bb6d-ea37b8d7e644}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Resources\Audio\bgm">
+      <UniqueIdentifier>{a354bf52-f80e-4a4f-8f11-c96723e605af}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Resources\Effects">
       <UniqueIdentifier>{fea49a77-7765-acdf-93f8-af892e0ffed2}</UniqueIdentifier>
     </Filter>
@@ -150,6 +153,12 @@
     <ClCompile Include="src\scene\TipScene.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
+    <ClCompile Include="src\scene\TutorialScene.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\scene\TutorialSelectScene.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
     <ClCompile Include="src\scene\WeaponSelectScene.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
@@ -200,6 +209,9 @@
     </ClInclude>
     <ClInclude Include="include\enemy\Enemy.h">
       <Filter>Header Files\enemy</Filter>
+    </ClInclude>
+    <ClInclude Include="include\scene\BladeClashCinematic.h">
+      <Filter>Header Files\scene</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\CombatFeedbackDirector.h">
       <Filter>Header Files\scene</Filter>
@@ -256,8 +268,17 @@
     <ClInclude Include="include\scene\TipScene.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
+    <ClInclude Include="include\scene\TutorialScene.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="include\scene\TutorialSelectScene.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
+    <None Include="resources\audio\bgm\bgm_Battle.wav">
+      <Filter>Resources\Audio\bgm</Filter>
+    </None>
     <None Include="resources\audio\sfx\counter_burst.wav">
       <Filter>Resources\Audio\sfx</Filter>
     </None>

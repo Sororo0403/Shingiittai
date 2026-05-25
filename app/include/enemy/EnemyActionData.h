@@ -5,6 +5,7 @@ enum class ActionKind {
     None,
     Smash,
     Sweep,
+    BladeClash,
     Warp,
     Stalk,
 };

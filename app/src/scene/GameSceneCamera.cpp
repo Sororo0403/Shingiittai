@@ -1,6 +1,8 @@
 #include "GameScene.h"
+#include "BladeClashCinematic.h"
 #include "Input.h"
 #include "WinApp.h"
+#include <algorithm>
 #include <cmath>
 
 using namespace DirectX;
@@ -8,6 +10,7 @@ using namespace DirectX;
 static constexpr float kPi = 3.14159265f;
 static constexpr float kTwoPi = 6.28318530f;
 static constexpr float kMinVectorLength = 0.0001f;
+namespace Clash = BladeClashCinematic;
 
 static float Clamp(float value, float minValue, float maxValue) {
     if (value < minValue) {
@@ -290,12 +293,204 @@ void GameScene::UpdateBattleCamera() {
         AppLookAt(camera_, lockOnLookAt_);
         return;
     }
+    if (bladeClashFinishActive_) {
+        const XMFLOAT2 line =
+            bladeClashFinishPlayerWon_
+                ? NormalizeXZ(bladeClashDirection_.x, bladeClashDirection_.z)
+                : NormalizeXZ(enemyPos.x - playerPos.x,
+                              enemyPos.z - playerPos.z);
+        const XMFLOAT3 right = {line.y, 0.0f, -line.x};
+        const float ratio =
+            Clamp01(bladeClashFinishTimer_ / bladeClashFinishDuration_);
+        const float strike = std::sinf(Clamp01(ratio / 0.18f) * kPi);
+        const float hold = 1.0f - Clamp01((ratio - 0.10f) / 0.30f);
+        const XMFLOAT3 center =
+            bladeClashFinishPlayerWon_
+                ? XMFLOAT3{bladeClashFinishCenter_.x,
+                           bladeClashFinishCenter_.y + 0.06f,
+                           bladeClashFinishCenter_.z}
+                : XMFLOAT3{(playerPos.x + enemyPos.x) * 0.5f,
+                           playerPos.y + 1.18f,
+                           (playerPos.z + enemyPos.z) * 0.5f};
+
+        if (bladeClashFinishPlayerWon_) {
+            const float winActionTimer =
+                Clash::WinActionTimer(bladeClashFinishTimer_);
+            const float winDuration =
+                (std::max)(0.001f, bladeClashFinishDuration_ -
+                                      Clash::kWinGuardBreakLead) /
+                Clash::kWinActionSlow;
+            const float winRatio = Clamp01(winActionTimer / winDuration);
+            const float cameraBlend = Clamp01(
+                (bladeClashFinishTimer_ -
+                 Clash::kWinGuardBreakCameraMoveStart) /
+                (Clash::kWinGuardBreakCameraMoveEnd -
+                 Clash::kWinGuardBreakCameraMoveStart));
+            const float cameraSnap =
+                1.0f - std::pow(1.0f - cameraBlend, 4.0f);
+            const float guardBreakSnap =
+                std::sinf(Clamp01((bladeClashFinishTimer_ -
+                                   Clash::kWinGuardBreakImpactTime) /
+                                  0.08f) *
+                          kPi);
+            const XMFLOAT3 guardBreakCamera = {
+                bladeClashFinishEnemyStart_.x - line.x * 7.35f +
+                    right.x * (3.05f + 0.16f * guardBreakSnap),
+                bladeClashFinishEnemyStart_.y + 1.74f +
+                    0.05f * guardBreakSnap,
+                bladeClashFinishEnemyStart_.z - line.y * 7.35f +
+                    right.z * (3.05f + 0.16f * guardBreakSnap)};
+            const XMFLOAT3 guardBreakLookAt = {
+                bladeClashFinishEnemyStart_.x + line.x * 0.10f +
+                    right.x * 0.08f * guardBreakSnap,
+                bladeClashFinishEnemyStart_.y + 1.18f -
+                    0.05f * guardBreakSnap,
+                bladeClashFinishEnemyStart_.z + line.y * 0.10f +
+                    right.z * 0.08f * guardBreakSnap};
+            const float cutT = Clamp01(winActionTimer / 0.18f);
+            const float slideT = Clamp01((winActionTimer - 0.11f) / 0.44f);
+            const float cutEase = 1.0f - std::pow(1.0f - cutT, 4.0f);
+            const float slideEase = 1.0f - std::pow(1.0f - slideT, 2.0f);
+            const float dashEase = Clamp01(0.86f * cutEase + 0.24f * slideEase);
+            const float slide =
+                1.0f - std::pow(1.0f - Clamp01(winRatio / 0.42f), 2.0f);
+            const XMFLOAT3 cinematicPlayer =
+                Lerp(bladeClashFinishPlayerStart_,
+                     bladeClashFinishPlayerEnd_, dashEase);
+            const XMFLOAT3 enemyChest = {enemyPos.x, enemyPos.y + 1.16f,
+                                         enemyPos.z};
+            const XMFLOAT3 lookAtBase = {
+                cinematicPlayer.x + line.x * (2.70f + 4.20f * slide),
+                cinematicPlayer.y + 1.20f + 0.16f * slide,
+                cinematicPlayer.z + line.y * (2.70f + 4.20f * slide)};
+            const float shake = (0.064f * strike + 0.014f * hold) * 0.74f;
+            const float phase = sceneLightTime_ * 44.0f;
+            XMFLOAT3 cameraPos = {
+                cinematicPlayer.x - line.x * (3.05f - 0.44f * slide) +
+                    right.x * (2.18f + 0.42f * slide) +
+                    right.x * std::sinf(phase) * shake,
+                cinematicPlayer.y + 1.30f + 0.10f * slide +
+                    std::cosf(phase * 1.27f) * shake * 0.5f,
+                cinematicPlayer.z - line.y * (3.05f - 0.44f * slide) +
+                    right.z * (2.18f + 0.42f * slide) +
+                    right.z * std::sinf(phase) * shake};
+            XMFLOAT3 lookAt = {
+                lookAtBase.x * (1.0f - 0.38f * slide) +
+                    enemyChest.x * (0.38f * slide) + right.x * 0.10f,
+                lookAtBase.y * (1.0f - 0.38f * slide) +
+                    (enemyChest.y + 0.20f) * (0.38f * slide),
+                lookAtBase.z * (1.0f - 0.38f * slide) +
+                    enemyChest.z * (0.38f * slide) + right.z * 0.10f};
+            const float pierceViewT = Clamp01((winActionTimer - 0.10f) / 0.24f);
+            const float pierceViewEase =
+                pierceViewT * pierceViewT * (3.0f - 2.0f * pierceViewT);
+            const XMFLOAT3 pierceCamera = {
+                cinematicPlayer.x + line.x * (3.25f + 0.58f * slide) +
+                    right.x * (2.42f + 0.36f * slide) +
+                    right.x * std::sinf(phase) * shake,
+                cinematicPlayer.y + 1.16f + 0.12f * slide +
+                    std::cosf(phase * 1.27f) * shake * 0.5f,
+                cinematicPlayer.z + line.y * (3.25f + 0.58f * slide) +
+                    right.z * (2.42f + 0.36f * slide) +
+                    right.z * std::sinf(phase) * shake};
+            const XMFLOAT3 pierceLookAt = {
+                cinematicPlayer.x - line.x * (2.18f + 2.25f * slide) +
+                    right.x * 0.08f,
+                cinematicPlayer.y + 1.02f,
+                cinematicPlayer.z - line.y * (2.18f + 2.25f * slide) +
+                    right.z * 0.08f};
+            cameraPos = Lerp(cameraPos, pierceCamera, pierceViewEase);
+            lookAt = Lerp(lookAt, Lerp(pierceLookAt, enemyChest, 0.42f),
+                          pierceViewEase);
+            if (bladeClashFinishTimer_ < Clash::kWinGuardBreakLead) {
+                const XMFLOAT3 playerPrepCamera = {
+                    bladeClashFinishPlayerStart_.x - line.x * 3.20f +
+                        right.x * 1.90f,
+                    bladeClashFinishPlayerStart_.y + 1.46f,
+                    bladeClashFinishPlayerStart_.z - line.y * 3.20f +
+                        right.z * 1.90f};
+                const XMFLOAT3 playerPrepLookAt = {
+                    bladeClashFinishEnemyStart_.x + line.x * 0.78f +
+                        right.x * 0.10f,
+                    bladeClashFinishEnemyStart_.y + 1.10f,
+                    bladeClashFinishEnemyStart_.z + line.y * 0.78f +
+                        right.z * 0.10f};
+                cameraPos = Lerp(guardBreakCamera, playerPrepCamera, cameraSnap);
+                lookAt = Lerp(guardBreakLookAt, playerPrepLookAt, cameraSnap);
+            }
+            cameraYaw_ = std::atan2f(line.x, line.y);
+            const float fovPunch =
+                std::sinf(Clamp01((winActionTimer - 0.10f) / 0.28f) * kPi);
+            targetFovDeg_ = 64.0f + 7.0f * fovPunch + 2.0f * slide;
+            currentFovDeg_ += (targetFovDeg_ - currentFovDeg_) *
+                              SaturatedAlpha(7.0f, ctx_->frame.deltaTime);
+            camera_.SetPerspectiveFovDeg(currentFovDeg_ +
+                                         combatFeedback_.GetFovKickDeg());
+            combatFeedback_.ApplyCameraImpulse(cameraPos, lookAt,
+                                               sceneLightTime_);
+            camera_.SetPosition(cameraPos);
+            AppLookAt(camera_, lookAt);
+            return;
+        }
+
+        const Clash::LossPose lossPose = Clash::EvaluateLossPose(
+            bladeClashFinishTimer_, bladeClashFinishPlayerStart_,
+            bladeClashDirection_);
+        XMFLOAT3 cinematicPlayer = lossPose.position;
+        const float catchPrep = Clamp01((bladeClashFinishTimer_ - 0.92f) / 0.28f);
+        const float catchLaunch =
+            Clamp01((bladeClashFinishTimer_ - 1.12f) / 0.34f);
+        const float catchPrepEase =
+            catchPrep * catchPrep * (3.0f - 2.0f * catchPrep);
+        const float catchLaunchEase =
+            1.0f - std::pow(1.0f - catchLaunch, 4.0f);
+        const float catchT = Clamp01(0.18f * catchPrepEase +
+                                     0.82f * catchLaunchEase);
+        const float crashT = Clamp01((bladeClashFinishTimer_ - 1.52f) / 0.18f);
+        const float crash = std::sinf(crashT * kPi);
+        const float shake =
+            (0.070f * strike + 0.018f * hold + 0.120f * crash) * 0.92f;
+        const float phase = sceneLightTime_ * 44.0f;
+        const XMFLOAT3 sideCamera = {
+            center.x + right.x * 5.35f - line.x * 1.15f,
+            center.y + 1.10f,
+            center.z + right.z * 5.35f - line.y * 1.15f};
+        const XMFLOAT3 frontCamera = {
+            cinematicPlayer.x - line.x * (5.10f + 1.20f * catchT) +
+                right.x * (0.78f - 0.38f * catchT),
+            cinematicPlayer.y + 1.35f + 0.46f * catchT,
+            cinematicPlayer.z - line.y * (5.10f + 1.20f * catchT) +
+                right.z * (0.78f - 0.38f * catchT)};
+        XMFLOAT3 cameraPos = Lerp(sideCamera, frontCamera, catchT);
+        cameraPos.x += right.x * std::sinf(phase) * shake;
+        cameraPos.y += std::cosf(phase * 1.27f) * shake * 0.5f;
+        cameraPos.z += right.z * std::sinf(phase) * shake;
+        const XMFLOAT3 sideLookAt = {center.x + line.x * 0.12f,
+                                     center.y + 0.04f,
+                                     center.z + line.y * 0.12f};
+        const XMFLOAT3 frontLookAt = {
+            cinematicPlayer.x + line.x * (0.74f - 0.30f * catchT),
+            cinematicPlayer.y + 1.02f + 0.12f * catchT,
+            cinematicPlayer.z + line.y * (0.74f - 0.30f * catchT)};
+        XMFLOAT3 lookAt = Lerp(sideLookAt, frontLookAt, catchT);
+        cameraYaw_ = std::atan2f(line.x, line.y);
+        targetFovDeg_ = 72.0f + 6.0f * catchT;
+        currentFovDeg_ += (targetFovDeg_ - currentFovDeg_) *
+                          SaturatedAlpha(7.0f, ctx_->frame.deltaTime);
+        camera_.SetPerspectiveFovDeg(currentFovDeg_ +
+                                     combatFeedback_.GetFovKickDeg());
+        combatFeedback_.ApplyCameraImpulse(cameraPos, lookAt, sceneLightTime_);
+        camera_.SetPosition(cameraPos);
+        AppLookAt(camera_, lookAt);
+        return;
+    }
 
     // 謨�E�陦悟虚迥�E�諷九ｒ蜿門�E�・
     const ActionKind enemyActionKind = enemy_.GetActionKind();
     const ActionStep enemyActionStep = enemy_.GetActionStep();
     const bool isEnemyMeleeAction = enemyActionKind == ActionKind::Smash ||
-                                    enemyActionKind == ActionKind::Sweep;
+                                    enemyActionKind == ActionKind::Sweep ||
+                                    enemyActionKind == ActionKind::BladeClash;
     const bool isEnemyPressureAction =
         isEnemyMeleeAction && (enemyActionStep == ActionStep::Charge ||
                                enemyActionStep == ActionStep::Active ||
@@ -337,6 +532,49 @@ void GameScene::UpdateBattleCamera() {
     currentFovDeg_ += (targetFovDeg_ - currentFovDeg_) * fovAlpha;
     camera_.SetPerspectiveFovDeg(currentFovDeg_ +
                                  combatFeedback_.GetFovKickDeg());
+
+    if (bladeClashActive_) {
+        const XMFLOAT2 line = NormalizeXZ(enemyPos.x - playerPos.x,
+                                          enemyPos.z - playerPos.z);
+        const XMFLOAT3 right = {line.y, 0.0f, -line.x};
+        const float gaugeProgress = Clamp01((bladeClashGauge_ + 1.0f) * 0.5f);
+        const XMFLOAT3 mid = {
+            bladeClashCenter_.x + line.x * (gaugeProgress - 0.5f) * 0.18f,
+            bladeClashCenter_.y + 0.06f,
+            bladeClashCenter_.z + line.y * (gaugeProgress - 0.5f) * 0.18f};
+        const float push = Clamp01(bladeClashCameraPush_);
+        const float pulse = push * push * (3.0f - 2.0f * push);
+        const float impact = Clamp01(bladeClashImpactPulse_);
+        const float tension = 0.35f + std::fabs(bladeClashGauge_) * 0.32f;
+        const float shakePhase = sceneLightTime_ * (34.0f + 18.0f * impact);
+        const float shake = (0.018f + 0.034f * impact) * tension;
+        const float enemyPressure = Clamp01(1.0f - gaugeProgress);
+        const XMFLOAT3 playerShoulder = {
+            playerPos.x + line.x * 0.48f + right.x * 0.22f,
+            playerPos.y + 0.92f,
+            playerPos.z + line.y * 0.48f + right.z * 0.22f};
+        XMFLOAT3 cameraPos = {
+            playerPos.x - line.x * (4.65f + 0.42f * enemyPressure) +
+                right.x * (2.15f + 0.16f * pulse) +
+                right.x * std::sinf(shakePhase) * shake,
+            playerPos.y + 0.72f + 0.10f * pulse +
+                std::cosf(shakePhase * 1.31f) * shake * 0.42f,
+            playerPos.z - line.y * (4.65f + 0.42f * enemyPressure) +
+                right.z * (2.15f + 0.16f * pulse) +
+                right.z * std::sinf(shakePhase) * shake};
+        XMFLOAT3 lookAt = {
+            playerShoulder.x * 0.34f + mid.x * 0.66f +
+                line.x * (0.20f + 0.34f * enemyPressure),
+            playerShoulder.y * 0.28f + mid.y * 0.72f + 0.14f +
+                0.05f * impact,
+            playerShoulder.z * 0.34f + mid.z * 0.66f +
+                line.y * (0.20f + 0.34f * enemyPressure)};
+        cameraYaw_ = std::atan2f(line.x, line.y);
+        combatFeedback_.ApplyCameraImpulse(cameraPos, lookAt, sceneLightTime_);
+        camera_.SetPosition(cameraPos);
+        AppLookAt(camera_, lookAt);
+        return;
+    }
 
     if (playerViewCamera_) {
         const DirectX::XMFLOAT3 playerEye = {

@@ -39,6 +39,13 @@ struct WarpContext {
     ActionStep followupStep = ActionStep::None;
     bool isCutIn = false;
     bool isFeint = false;
+    bool feintFollowup = false;
+    bool immediateFollowup = false;
+    bool farSlashFollowup = false;
+    bool phantomChain = false;
+    bool phantomFinal = false;
+    int phantomViewWarpsRemaining = 0;
+    bool faceLivePlayerOnEnd = false;
     bool collisionDisabled = false;
     bool hasValidTarget = false;
     bool hasDeparturePos = false;
@@ -111,6 +118,14 @@ struct EnemySweepConfig {
     float attackHeightOffset = 0.0f;
 };
 
+struct EnemyBladeClashConfig {
+    EnemyAttackProfile profile = {
+        {12.0f, 4.0f, {1.75f, 1.60f, 1.95f}},
+        {1.46f, 0.72f, 0.0f, 0.88f, 0.88f},
+        0.72f};
+    float advanceSpeed = 3.8f;
+};
+
 struct EnemyAttackSet {
     EnemySmashConfig smash = {{{{15.0f, 4.0f, {2.8f, 2.1f, 3.2f}},
                                 {1.20f, 0.86f, 0.05f, 0.22f, 0.38f}, 1.64f},
@@ -120,6 +135,7 @@ struct EnemyAttackSet {
                                 {1.12f, 0.78f, 0.05f, 0.20f, 0.36f}, 1.52f},
                                {0.38f, 0.78f}, 0.48f},
                               0.2f, 0.8f};
+    EnemyBladeClashConfig bladeClash{};
 };
 
 struct EnemyWarpConfig {
@@ -166,6 +182,14 @@ struct EnemyRuntimeState {
     float phaseTransitionTimer = 0.0f;
     bool holdConfigured = false;
     float currentHoldDuration = 0.0f;
+    bool quickSlashActive = false;
+    bool farSlashActive = false;
+    bool warpFeintFollowupLocked = false;
+    bool warpFeintImmediate = false;
+    bool warpFeintDecisionMade = false;
+    bool directionFeintDecisionMade = false;
+    float phantomWarpCooldown = 0.0f;
+    float phantomFinalLockTimer = 0.0f;
 
     bool tellActive = false;
     float tellDuration = 0.0f;
@@ -179,6 +203,12 @@ class Enemy {
     void Initialize(uint32_t modelId);
 
     void Update(const PlayerCombatObservation &playerObs, float deltaTime);
+    void UpdateTutorial(const PlayerCombatObservation &playerObs,
+                        float deltaTime);
+    void BeginTutorialAttack(ActionKind kind);
+    void BeginDebugBladeClash(const DirectX::XMFLOAT3 &targetPosition);
+    void ResetTutorialState();
+    void SetTutorialPosition(const DirectX::XMFLOAT3 &position);
 
     void Draw(ModelManager *modelManager, const Camera &camera,
               float visualScale = 1.0f);
@@ -187,10 +217,17 @@ class Enemy {
     void ResolveDeferredDamageTransitions();
     void ForcePunishRelease();
     bool NotifyCountered(float vulnerabilityDuration);
+    bool IsBladeClashAction() const;
+    bool IsBladeClashWindow() const;
+    void ResolveBladeClash(bool playerWon);
+    void NotifyBladeClashLanded();
     void FinishCounterRecoil();
     void ApplyVictoryDefeatPose(float ratio,
                                 const DirectX::XMFLOAT3 &startPosition,
                                 const DirectX::XMFLOAT3 &playerPosition);
+    void SetCinematicTransform(const DirectX::XMFLOAT3 &position, float yaw);
+    void SetCinematicTransform(const DirectX::XMFLOAT3 &position, float yaw,
+                               float pitch, float roll);
     void FaceTargetImmediately(const DirectX::XMFLOAT3 &targetPosition);
     const Transform &GetTransform() const { return tf_; }
     float GetHP() const { return runtime_.hp; }
@@ -252,6 +289,8 @@ class Enemy {
     float &counterRecoilTimer_ = runtime_.counterRecoilTimer;
     float counterRecoilDuration_ = 0.62f;
     float counterRecoilPitchRad_ = 0.14f;
+    float cinematicPitch_ = 0.0f;
+    float cinematicRoll_ = 0.0f;
     float &deathTimer_ = runtime_.deathTimer;
     float deathDuration_ = 0.75f;
     float deathSinkDistance_ = 2.2f;
@@ -280,6 +319,14 @@ class Enemy {
     float phaseTransitionDuration_ = 3.40f;
     bool &holdConfigured_ = runtime_.holdConfigured;
     float &currentHoldDuration_ = runtime_.currentHoldDuration;
+    bool &quickSlashActive_ = runtime_.quickSlashActive;
+    bool &farSlashActive_ = runtime_.farSlashActive;
+    bool &warpFeintFollowupLocked_ = runtime_.warpFeintFollowupLocked;
+    bool &warpFeintImmediate_ = runtime_.warpFeintImmediate;
+    bool &warpFeintDecisionMade_ = runtime_.warpFeintDecisionMade;
+    bool &directionFeintDecisionMade_ = runtime_.directionFeintDecisionMade;
+    float &phantomWarpCooldown_ = runtime_.phantomWarpCooldown;
+    float &phantomFinalLockTimer_ = runtime_.phantomFinalLockTimer;
 
     bool isPhaseChanging_ = false;
 
@@ -303,6 +350,19 @@ class Enemy {
     float recoveryTurnSpeed_ = 2.0f;
     float idleTurnSpeed_ = 8.0f;
     bool &hasTrackingLocked_ = runtime_.hasTrackingLocked;
+
+    float quickSlashChance_ = 0.34f;
+    float quickSmashChargeTime_ = 0.72f;
+    float quickSweepChargeTime_ = 0.66f;
+    float directionFeintChance_ = 0.32f;
+    float chargeWarpFeintChance_ = 0.34f;
+    float farWarpSlashChance_ = 0.74f;
+    float farWarpSlashDistance_ = 10.8f;
+    float farSlashLungeSpeed_ = 44.0f;
+    float phantomWarpChance_ = 0.24f;
+    float phantomWarpCooldownDuration_ = 5.8f;
+    float phantomFinalLockDuration_ = 0.26f;
+    float bladeClashChance_ = 0.26f;
 
     float stalkDurationMin_ = 0.45f;
     float stalkDurationMax_ = 1.10f;
@@ -335,6 +395,7 @@ class Enemy {
 
     void UpdateSmashByStep(float deltaTime);
     void UpdateSweepByStep(float deltaTime);
+    void UpdateBladeClashByStep(float deltaTime);
     void UpdateWarpByStep(float deltaTime);
     void UpdateIdle(float deltaTime);
 
@@ -342,6 +403,12 @@ class Enemy {
     void BeginActionFromTactic(TacticState tactic);
     ActionKind SelectNearPressureAction() const;
     bool TryBeginWarpAction(float chance);
+    bool TryBeginQuickSlash(float chance);
+    bool TryBeginFarWarpSlash(float chance);
+    bool TryBeginPhantomWarpSkill(float chance);
+    bool TryBeginBladeClash(float chance);
+    void BeginPhantomWarpStep(int viewWarpsRemaining, bool finalBehind,
+                              ActionKind followupKind);
     void BeginPressureAction();
     void BeginChaseAction();
 
@@ -354,6 +421,10 @@ class Enemy {
     void UpdateSweepHold(float deltaTime);
     void UpdateSweepAttack(float deltaTime);
     void UpdateSweepRecovery(float deltaTime);
+
+    void UpdateBladeClashCharge(float deltaTime);
+    void UpdateBladeClashActive(float deltaTime);
+    void UpdateBladeClashRecovery(float deltaTime);
 
     void UpdateFacingToPlayer();
     void LockCurrentFacing();
@@ -369,6 +440,10 @@ class Enemy {
     void ResetWarpTrails();
     bool PrepareWarpContext();
     bool DecideWarpTargetNearPlayer(DirectX::XMFLOAT3 &outTarget);
+    bool DecideWarpTargetFarSlash(DirectX::XMFLOAT3 &outTarget);
+    bool DecideWarpTargetInPlayerView(DirectX::XMFLOAT3 &outTarget);
+    bool DecideWarpTargetBehindPlayer(DirectX::XMFLOAT3 &outTarget);
+    bool RefreshLiveBehindWarpTarget();
     void FinalizeWarpTargetFacing(DirectX::XMFLOAT3 &target);
     void ResetWarpContext();
 
@@ -384,6 +459,7 @@ class Enemy {
     float GetVisualYaw() const;
     bool IsPunishableRecovery() const;
     float GetDistanceToPlayer() const;
+    bool IsPlayerInMeleeFront() const;
 
     const AttackTimingParam *GetCurrentAttackTiming() const;
     AttackParam *GetCurrentAttackParam();
@@ -403,6 +479,8 @@ class Enemy {
     bool ShouldEnterSmashHold() const;
     bool ShouldEnterSweepHold() const;
     void EnterHold(float duration);
+    bool TryBeginChargeWarpFeint(ActionKind kind);
+    bool TryApplyDirectionFeint(ActionKind kind);
 
     void EnterTell(ActionKind kind);
     bool IsTellFinished() const;

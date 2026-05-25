@@ -150,6 +150,7 @@ struct DrawEffectConstBufferData {
     XMFLOAT4 color{1.0f, 1.0f, 1.0f, 1.0f};
     XMFLOAT4 params0{};
     XMFLOAT4 params1{};
+    XMFLOAT4 params2{};
 };
 
 void ModelRenderer::CreateUploadBuffer() {
@@ -216,6 +217,12 @@ D3D12_GPU_VIRTUAL_ADDRESS ModelRenderer::WriteDrawEffectConstants() {
         currentEffect_.baseDim,
         currentEffect_.alphaBoost,
         currentEffect_.forceOpaqueMaterial ? 1.0f : 0.0f,
+    };
+    data.params2 = {
+        currentEffect_.surfaceTint,
+        0.0f,
+        0.0f,
+        0.0f,
     };
     return uploadBuffer_.Write(data).gpu;
 }

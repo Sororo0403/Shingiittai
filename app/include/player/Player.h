@@ -56,6 +56,9 @@ class Player {
         knockbackVelocity_ = {0.0f, 0.0f, 0.0f};
     }
     float GetYaw() const { return yaw_; }
+    void SetYaw(float yaw);
+    void SetCinematicBladeClashPose(const DirectX::XMFLOAT3 &position,
+                                    float yaw, float pushRatio);
 
     float GetHP() const { return hp_; }
 
@@ -63,6 +66,10 @@ class Player {
     const DirectX::XMFLOAT3 &GetVelocity() const { return velocity_; }
 
     void SetDefeatPoseRatio(float ratio) { defeatPoseRatio_ = ratio; }
+    void SetBladeClashPose(bool active, float pushRatio = 0.5f) {
+        bladeClashPoseActive_ = active;
+        bladeClashPosePushRatio_ = pushRatio;
+    }
     bool UsesGamepadCameraLook() const { return useGamepadCameraLook_; }
   private:
     Transform BuildSwordTransform(const SwordPose &pose, bool isLeft) const;
@@ -116,6 +123,8 @@ class Player {
     float rightSwordAttackDamage_ = 8.0f;
 
     float defeatPoseRatio_ = 0.0f;
+    bool bladeClashPoseActive_ = false;
+    float bladeClashPosePushRatio_ = 0.5f;
 
     float minTargetDistance_ = 2.7f;
 
