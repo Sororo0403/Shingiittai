@@ -1585,15 +1585,22 @@ void GameScene::Draw() {
 void GameScene::DispatchCombatFeedback(const CombatFeedbackEvent &event) {
     combatFeedback_.PushEvent(event);
     EmitCombatParticles(event);
-    if (event.type == CombatFeedbackEventType::PlayerSlashHit) {
+    if (event.type == CombatFeedbackEventType::PlayerSlashHit ||
+        event.type == CombatFeedbackEventType::CounterSuccess) {
         DirectX::XMFLOAT2 slashDirection{0.0f, 0.0f};
         const auto swords = player_.GetSwords();
         if (event.swordIndex < swords.size() && swords[event.swordIndex]) {
             slashDirection = swords[event.swordIndex]->GetSlashDirection();
         }
-        swordSlashArcRenderer_.EmitHitLine(event.position, event.direction,
-                                           camera_, event.power,
-                                           slashDirection);
+        if (event.type == CombatFeedbackEventType::CounterSuccess) {
+            swordSlashArcRenderer_.EmitParryLine(event.position, event.direction,
+                                                 camera_, event.power,
+                                                 slashDirection);
+        } else {
+            swordSlashArcRenderer_.EmitHitLine(event.position, event.direction,
+                                               camera_, event.power,
+                                               slashDirection);
+        }
     }
     if (!soundsLoaded_ || ctx_ == nullptr || ctx_->sound == nullptr) {
         return;
@@ -1691,6 +1698,29 @@ void GameScene::EmitCombatParticles(const CombatFeedbackEvent &event) {
                                   {0.48f, 0.36f, 0.28f, 1.0f}, direction, 0.78f);
         break;
     case CombatFeedbackEventType::CounterSuccess:
+        swordFlashParticles_.EmitBurst(
+            position, static_cast<uint32_t>(18.0f + power * 5.0f),
+            0.24f + power * 0.030f, GPUParticleSystem::BurstStyle::Flash,
+            {0.88f, 1.00f, 1.00f, 0.92f}, direction, 0.62f + power * 0.06f);
+        sparkParticles_.EmitBurst(position,
+                                  static_cast<uint32_t>(154.0f + power * 24.0f),
+                                  0.42f + power * 0.035f,
+                                  GPUParticleSystem::BurstStyle::Sparks,
+                                  {0.04f, 0.72f, 1.00f, 0.96f}, direction,
+                                  2.55f + power * 0.30f);
+        explosionParticles_.EmitBurst(
+            position, static_cast<uint32_t>(62.0f + power * 14.0f),
+            0.48f + power * 0.030f, GPUParticleSystem::BurstStyle::SlashLine,
+            {0.74f, 0.14f, 1.00f, 0.88f}, direction, 1.80f + power * 0.18f);
+        explosionParticles_.EmitBurst(
+            position, static_cast<uint32_t>(70.0f + power * 12.0f),
+            0.58f + power * 0.035f, GPUParticleSystem::BurstStyle::SpiritSparkle,
+            {0.28f, 0.92f, 1.00f, 0.76f}, direction, 1.62f + power * 0.20f);
+        smokeParticles_.EmitBurst(position, 12, 0.34f,
+                                  GPUParticleSystem::BurstStyle::Flash,
+                                  {0.52f, 0.22f, 1.00f, 0.24f}, direction,
+                                  0.48f);
+        break;
     case CombatFeedbackEventType::BladeClashGuardBreak:
         sparkParticles_.EmitBurst(position, 170, 0.34f,
                                   GPUParticleSystem::BurstStyle::Sparks,

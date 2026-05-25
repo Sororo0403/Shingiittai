@@ -23,6 +23,10 @@ class SwordSlashArcRenderer {
                      const DirectX::XMFLOAT3 &direction, const Camera &camera,
                      float power,
                      const DirectX::XMFLOAT2 &slashDirection = {0.0f, 0.0f});
+    void EmitParryLine(const DirectX::XMFLOAT3 &position,
+                       const DirectX::XMFLOAT3 &direction, const Camera &camera,
+                       float power,
+                       const DirectX::XMFLOAT2 &slashDirection = {0.0f, 0.0f});
     void Update(float deltaTime);
     void Draw(const Camera &camera);
 

@@ -34,6 +34,8 @@ cbuffer PostEffectConstants : register(b0)
     float3 grayscaleWeights;
     float3 sepiaTone;
     float sceneDimStrength;
+    float damageVignetteStrength;
+    float parryVignetteStrength;
 };
 
 #endif // POST_EFFECT_HLSLI

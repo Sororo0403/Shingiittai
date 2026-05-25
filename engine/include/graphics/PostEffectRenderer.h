@@ -222,6 +222,8 @@ class PostEffectRenderer {
     void SetRandomSeed(float seed);
 
     void SetSceneDimStrength(float strength);
+    void SetDamageVignetteStrength(float strength);
+    void SetParryVignetteStrength(float strength);
 
   private:
     struct EffectConstBuffer {
@@ -250,6 +252,8 @@ class PostEffectRenderer {
         float grayscaleWeights[3]{0.2125f, 0.7154f, 0.0721f};
         float sepiaTone[3]{1.20f, 1.00f, 0.80f};
         float sceneDimStrength = 0.0f;
+        float damageVignetteStrength = 0.0f;
+        float parryVignetteStrength = 0.0f;
     };
 
     void CreateRootSignature();
@@ -288,6 +292,8 @@ class PostEffectRenderer {
     float randomTime_ = 0.0f;
     float randomSeed_ = 0.0f;
     float sceneDimStrength_ = 0.0f;
+    float damageVignetteStrength_ = 0.0f;
+    float parryVignetteStrength_ = 0.0f;
     int width_ = 1;
     int height_ = 1;
 };

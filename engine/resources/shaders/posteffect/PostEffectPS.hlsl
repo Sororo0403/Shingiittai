@@ -37,6 +37,10 @@ float4 main(PostEffectVSOutput input) : SV_TARGET
                                   vignettingPower);
     }
     outputColor.rgb *= 1.0f - saturate(sceneDimStrength) * 0.62f;
+    outputColor.rgb = ApplyDamageVignetteEffect(
+        outputColor.rgb, input.uv, damageVignetteStrength);
+    outputColor.rgb = ApplyParryVignetteEffect(
+        outputColor.rgb, input.uv, parryVignetteStrength);
     outputColor.rgb = ApplyScreenGrade(outputColor.rgb);
 
     outputColor = ApplyEdgeEffect(outputColor, renderTexture, depthTexture,
