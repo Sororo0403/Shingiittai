@@ -123,6 +123,27 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     rightSwordVisible_ = true;
 }
 
+void Player::UpdateDemo(float deltaTime, const XMFLOAT3 &lookTarget) {
+    UpdateMovement(deltaTime, lookTarget);
+    KeepDistanceFromTarget(lookTarget);
+    LookAt(lookTarget);
+
+    SwordPose leftPose = MakeIdleSwordPose(true);
+    SwordPose rightPose = MakeIdleSwordPose(false);
+    leftPose.isSlashMode = false;
+    rightPose.isSlashMode = false;
+
+    leftSword_.Update(BuildSwordTransform(leftPose, true), leftPose,
+                      deltaTime);
+    rightSword_.Update(BuildSwordTransform(rightPose, false), rightPose,
+                       deltaTime);
+
+    leftSwordSlashMode_ = false;
+    rightSwordSlashMode_ = false;
+    leftSwordVisible_ = true;
+    rightSwordVisible_ = true;
+}
+
 void Player::UpdateJoyConCalibrationInput(Input *, float deltaTime) {
     if (leftJoyCon_.IsConnected() && leftJoyCon_.IsButtonTrigger(JSMASK_ZL)) {
         leftJoyCon_.SetBaseOrientation();

@@ -1,5 +1,6 @@
 #include "GameScene.h"
 #include "Input.h"
+#include "WinApp.h"
 #include <cmath>
 
 using namespace DirectX;
@@ -61,15 +62,17 @@ void GameScene::UpdateCamera(Input *input) {
     // ===== 騾壼�E��E�繧�E�繝｡繝ｩ =====
 
     // 繝ｭ繝�Eけ繧�E�繝ｳ蛻・�E�譖ｿ縺・
-    if (input->IsKeyTrigger(DIK_Q) ||
-        input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_RIGHT_SHOULDER)) {
+    if (input != nullptr &&
+        (input->IsKeyTrigger(DIK_Q) ||
+         input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_RIGHT_SHOULDER))) {
         isLockOn_ = !isLockOn_;
     }
 
     float yawInput = 0.0f;
     float pitchInput = 0.0f;
 
-    if (input->IsGamepadConnected() && player_.UsesGamepadCameraLook()) {
+    if (input != nullptr && input->IsGamepadConnected() &&
+        player_.UsesGamepadCameraLook()) {
         yawInput += input->GetGamepadRightStickX();
         pitchInput += input->GetGamepadRightStickY();
     }
@@ -82,6 +85,33 @@ void GameScene::UpdateCamera(Input *input) {
     UpdateBattleCamera();
 
     // 箝�E譛驥崎ｦ・�E�夊｡悟�E譖ｴ譁E��
+    camera_.UpdateMatrices();
+}
+
+void GameScene::UpdateBackgroundCamera(float deltaTime) {
+    (void)deltaTime;
+    const int width =
+        ctx_->systems.winApp != nullptr ? ctx_->systems.winApp->GetWidth() : 0;
+    const int height =
+        ctx_->systems.winApp != nullptr ? ctx_->systems.winApp->GetHeight() : 0;
+    if (width > 0 && height > 0) {
+        camera_.SetAspect(static_cast<float>(width) / static_cast<float>(height));
+    }
+
+    camera_.SetPerspectiveFovDeg(64.0f);
+    const float orbit = sceneLightTime_ * 0.045f;
+    const XMFLOAT3 cameraPos{
+        std::sinf(orbit) * 5.2f,
+        2.45f + std::sinf(sceneLightTime_ * 0.12f) * 0.08f,
+        -8.4f + std::cosf(orbit) * 1.6f,
+    };
+    const XMFLOAT3 lookAt{
+        0.0f,
+        0.58f,
+        3.2f,
+    };
+    camera_.SetPosition(cameraPos);
+    AppLookAt(camera_, lookAt);
     camera_.UpdateMatrices();
 }
 

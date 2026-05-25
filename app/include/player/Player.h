@@ -28,6 +28,7 @@ class Player {
                 const DirectX::XMFLOAT3 &lookTarget, float cameraYaw,
                 float controlDeltaTime = -1.0f,
                 bool suppressLookAt = false);
+    void UpdateDemo(float deltaTime, const DirectX::XMFLOAT3 &lookTarget);
     void UpdateJoyConCalibrationInput(Input *, float deltaTime);
 
     void Draw(ModelManager *modelManager, const Camera &camera,

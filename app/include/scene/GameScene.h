@@ -19,10 +19,19 @@
 
 class GameScene : public BaseScene {
   public:
+    enum class Mode {
+        Gameplay,
+        TitleDemo,
+        BackgroundOnly,
+    };
+
     explicit GameScene(const SwordInputCalibration &inputCalibration = {})
         : inputCalibration_(inputCalibration) {}
     explicit GameScene(bool titleDemoMode)
         : titleDemoMode_(titleDemoMode) {}
+    explicit GameScene(Mode mode)
+        : titleDemoMode_(mode == Mode::TitleDemo),
+          backgroundOnlyMode_(mode == Mode::BackgroundOnly) {}
     ~GameScene() override;
 
     void Initialize(const SceneContext &ctx) override;
@@ -33,6 +42,7 @@ class GameScene : public BaseScene {
   private:
     void UpdateCamera(Input *input);
     void UpdateBattleCamera();
+    void UpdateBackgroundCamera(float deltaTime);
     void UpdateSceneLighting();
     void DrawArena();
     void DrawDistantHazardBackdrop();
@@ -70,6 +80,7 @@ class GameScene : public BaseScene {
   private:
     SwordInputCalibration inputCalibration_{};
     bool titleDemoMode_ = false;
+    bool backgroundOnlyMode_ = false;
 
     Camera camera_;
 

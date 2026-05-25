@@ -1,14 +1,9 @@
 #pragma once
 #include "BaseScene.h"
-#include "Camera.h"
+#include "GameScene.h"
 #include "InputControlType.h"
 #include "JoyCon.h"
-#include "Sprite.h"
-#include "Transform.h"
-#include <DirectXMath.h>
-#include <array>
-#include <cstdint>
-#include <string>
+#include <memory>
 
 class Input;
 
@@ -20,69 +15,28 @@ class WeaponSelectScene : public BaseScene {
     void DrawTransparent() override {}
 
   private:
-    struct Image {
-        uint32_t textureId = 0;
-        float width = 0.0f;
-        float height = 0.0f;
-    };
-
-    struct ButtonRect {
-        float x = 0.0f;
-        float y = 0.0f;
-        float w = 0.0f;
-        float h = 0.0f;
-    };
-
     static constexpr int kWeaponCount = 3;
     static constexpr int kSelectableCount = kWeaponCount;
 
-    Image LoadTextureImage(const std::wstring &path);
     void UpdateSelection(Input *input);
     void UpdateDeviceAvailability();
     void BeginStart();
-    void Layout(float screenWidth, float screenHeight);
     InputControlType SelectedControlType() const;
     InputControlType ControlTypeForIndex(int index) const;
     bool IsHandTrackingReady() const;
     void RequestHandTrackingStartOnce();
     bool IsModeAvailable(int index) const;
     void ShowUnavailableMessage(int index);
-    void UpdateCamera();
-    void UpdateLighting();
-
-    void DrawBackground(float screenWidth, float screenHeight);
-    void DrawCards(float screenWidth, float screenHeight);
-    void DrawModelPreviews();
-    void DrawLabels(float screenWidth, float screenHeight);
-    void DrawStartTransition(float screenWidth, float screenHeight);
-    void DrawRect(float x, float y, float w, float h,
-                  const DirectX::XMFLOAT4 &color);
-    void DrawImage(const Image &image, float x, float y, float scale = 1.0f,
-                   float alpha = 1.0f);
-    Transform MakeSwordTransform(int weaponIndex, int swordIndex) const;
-    DirectX::XMFLOAT4 WeaponColor(int index, float alpha = 1.0f,
-                                  bool available = true) const;
 
     int selectedIndex_ = 0;
-    float sceneTime_ = 0.0f;
     float transitionTimer_ = 0.0f;
     bool startRequested_ = false;
     bool waitingForHandTrackingReady_ = false;
     bool handTrackingStartRequested_ = false;
 
-    uint32_t swordModelId_ = 0;
-    Camera camera_;
     JoyCon leftJoyCon_;
     JoyCon rightJoyCon_;
-    Image backgroundImage_{};
-    Image titleImage_{};
-    Image controlsImage_{};
-    Image readyImage_{};
-    std::array<Image, kWeaponCount> weaponNameImages_{};
-    std::array<Image, kWeaponCount> weaponDescImages_{};
-    std::array<Image, kWeaponCount> weaponBottomImages_{};
-    std::array<ButtonRect, kWeaponCount> cardRects_{};
-    std::array<float, kWeaponCount> pulseTimers_{};
+    std::unique_ptr<GameScene> backgroundScene_;
     bool joyConAvailable_ = false;
     bool cameraAvailable_ = false;
 };

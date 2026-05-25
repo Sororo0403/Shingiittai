@@ -279,13 +279,16 @@ void GameScene::Initialize(const SceneContext &ctx) {
     if (ctx_->rendering.postProcessSystem != nullptr) {
         ctx_->rendering.postProcessSystem->SetProfile(PostProcessProfile{});
     }
-    combatFeedback_.Initialize(titleDemoMode_ ? nullptr
-                                              : ctx_->rendering.postProcessSystem);
+    combatFeedback_.Initialize(
+        (titleDemoMode_ || backgroundOnlyMode_)
+            ? nullptr
+            : ctx_->rendering.postProcessSystem);
 
     float aspect = static_cast<float>(ctx_->systems.winApp->GetWidth()) /
                    static_cast<float>(ctx_->systems.winApp->GetHeight());
 
-    camera_.Initialize(aspect);    camera_.UpdateMatrices();
+    camera_.Initialize(aspect);
+    camera_.UpdateMatrices();
     camera_.SetPerspectiveFovDeg(currentFovDeg_);
 
     DirectXCommon *dx = ctx_->rendering.dxCommon;
@@ -528,11 +531,22 @@ void GameScene::Initialize(const SceneContext &ctx) {
     hud_.Initialize(*ctx_);
     enemy_.FaceTargetImmediately(player_.GetTransform().position);
     ApplyEnemyIntroDissolve(0.0f);
+    if (backgroundOnlyMode_) {
+        battleIntroActive_ = false;
+        UpdateBackgroundCamera(0.0f);
+        UpdateSceneLighting();
+    }
 }
 
 void GameScene::Update() {
-    Input *input = ctx_->systems.input;
+    Input *input = titleDemoMode_ ? nullptr : ctx_->systems.input;
     const float baseDeltaTime = ctx_->frame.deltaTime;
+    if (backgroundOnlyMode_) {
+        sceneLightTime_ += baseDeltaTime;
+        UpdateSceneLighting();
+        UpdateBackgroundCamera(baseDeltaTime);
+        return;
+    }
     if (battleIntroActive_) {
         UpdateBattleIntro(baseDeltaTime);
         return;
@@ -598,8 +612,12 @@ void GameScene::Update() {
     const DirectX::XMFLOAT3 playerPosBeforeMove = player_.GetTransform().position;
     const bool lockPlayerAtEnemyFrontBeforeMove =
         ShouldLockPlayerAtEnemyAttackFront(playerPosBeforeMove);
-    player_.Update(input, playerDeltaTime, enemy_.GetTransform().position,
-                   cameraYaw_, baseDeltaTime, false);
+    if (titleDemoMode_) {
+        player_.UpdateDemo(playerDeltaTime, enemy_.GetTransform().position);
+    } else {
+        player_.Update(input, playerDeltaTime, enemy_.GetTransform().position,
+                       cameraYaw_, baseDeltaTime, false);
+    }
     if (lockPlayerAtEnemyFrontBeforeMove) {
         player_.LockPosition(playerPosBeforeMove);
     } else if (ShouldLockPlayerAtEnemyAttackFront(
@@ -699,6 +717,13 @@ void GameScene::Update() {
 }
 
 void GameScene::Draw() {
+    if (backgroundOnlyMode_) {
+        ctx_->rendering.model->PreDraw();
+        DrawArena();
+        ctx_->rendering.model->PostDraw();
+        return;
+    }
+
     ctx_->rendering.model->PrepareSkinning({playerModelId_, enemyModelId_});
     GPUParticleSystem::DispatchPendingUpdates(
         {&smokeParticles_, &sparkParticles_, &explosionParticles_,
@@ -902,6 +927,9 @@ void GameScene::UpdateBattlePostProcessState(float deltaTime) {
 }
 
 void GameScene::DrawTransparent() {
+    if (backgroundOnlyMode_ || titleDemoMode_) {
+        return;
+    }
     if (battleIntroActive_) {
         return;
     }
