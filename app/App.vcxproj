@@ -207,10 +207,16 @@
     <None Include="resources\ui\result\no_clear_time.png" />
     <None Include="resources\ui\result\retry.png" />
     <None Include="resources\ui\tip\text\tip_body.png" />
+    <None Include="resources\ui\tip\text\tip_body_0.png" />
+    <None Include="resources\ui\tip\text\tip_body_1.png" />
+    <None Include="resources\ui\tip\text\tip_body_2.png" />
     <None Include="resources\ui\tip\text\tip_hand.png" />
     <None Include="resources\ui\tip\text\tip_joycon.png" />
     <None Include="resources\ui\tip\text\tip_kbm.png" />
     <None Include="resources\ui\tip\text\tip_title.png" />
+    <None Include="resources\ui\title\exit_confirm_message.png" />
+    <None Include="resources\ui\title\exit_confirm_no.png" />
+    <None Include="resources\ui\title\exit_confirm_yes.png" />
     <None Include="resources\ui\title\gamelogo.png" />
     <None Include="resources\ui\title\press_any_button.png" />
     <None Include="resources\ui\weapon_select\text\input_hand.png" />

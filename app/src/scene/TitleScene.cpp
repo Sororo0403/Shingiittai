@@ -17,7 +17,7 @@
 using namespace DirectX;
 
 namespace {
-constexpr float kFadeDuration = 0.35f;
+constexpr float kFadeDuration = 0.48f;
 constexpr float kFrameIntroDuration = 1.12f;
 constexpr float kPi = 3.14159265f;
 
@@ -40,6 +40,8 @@ void TitleScene::Initialize(const SceneContext &ctx) {
     frameIntroTimer_ = 0.0f;
     fadeTimer_ = 0.0f;
     startRequested_ = false;
+    exitConfirmVisible_ = false;
+    exitConfirmIndex_ = 1;
     titleBgmSoundId_ = 0;
     titleBgmVoice_ = SoundManager::kInvalidVoiceHandle;
 
@@ -50,6 +52,12 @@ void TitleScene::Initialize(const SceneContext &ctx) {
     logoImage_ = LoadTitleImage(L"app/resources/ui/title/gamelogo.png");
     pressAnyButtonImage_ =
         LoadTitleImage(L"app/resources/ui/title/press_any_button.png");
+    exitConfirmMessageImage_ =
+        LoadTitleImage(L"app/resources/ui/title/exit_confirm_message.png");
+    exitConfirmYesImage_ =
+        LoadTitleImage(L"app/resources/ui/title/exit_confirm_yes.png");
+    exitConfirmNoImage_ =
+        LoadTitleImage(L"app/resources/ui/title/exit_confirm_no.png");
     backgroundScene_ =
         std::make_unique<GameScene>(GameScene::Mode::TitleDemo);
     backgroundScene_->Initialize(ctx);
@@ -85,6 +93,18 @@ void TitleScene::Update() {
         return;
     }
 
+    if (exitConfirmVisible_) {
+        UpdateExitConfirm(*ctx_->systems.input);
+        UpdateTitleBgmVolume();
+        return;
+    }
+
+    if (ctx_->systems.input->IsKeyTrigger(DIK_ESCAPE)) {
+        exitConfirmVisible_ = true;
+        exitConfirmIndex_ = 1;
+        return;
+    }
+
     if (IsAnyButtonTriggered(*ctx_->systems.input)) {
         startRequested_ = true;
         fadeTimer_ = 0.0f;
@@ -104,6 +124,9 @@ void TitleScene::DrawTransparent() {
 
     ctx_->rendering.sprite->PreDraw();
     DrawTitleOverlay(w, h);
+    if (exitConfirmVisible_) {
+        DrawExitConfirmWindow(w, h);
+    }
     ctx_->rendering.sprite->PostDraw();
 }
 
@@ -115,6 +138,34 @@ TitleScene::Image TitleScene::LoadTitleImage(const std::wstring &path) {
     image.height =
         static_cast<float>(ctx_->rendering.texture->GetHeight(image.textureId));
     return image;
+}
+
+void TitleScene::UpdateExitConfirm(Input &input) {
+    if (input.IsKeyTrigger(DIK_A) || input.IsKeyTrigger(DIK_LEFT)) {
+        exitConfirmIndex_ = 0;
+    }
+    if (input.IsKeyTrigger(DIK_D) || input.IsKeyTrigger(DIK_RIGHT)) {
+        exitConfirmIndex_ = 1;
+    }
+
+    if (input.IsKeyTrigger(DIK_ESCAPE)) {
+        exitConfirmVisible_ = false;
+        exitConfirmIndex_ = 1;
+        return;
+    }
+
+    const bool confirm =
+        input.IsKeyTrigger(DIK_RETURN) || input.IsKeyTrigger(DIK_SPACE);
+    if (!confirm) {
+        return;
+    }
+
+    if (exitConfirmIndex_ == 0) {
+        StopTitleBgm();
+        ctx_->systems.winApp->RequestClose();
+    } else {
+        exitConfirmVisible_ = false;
+    }
 }
 
 void TitleScene::StopTitleBgm() {
@@ -139,22 +190,23 @@ void TitleScene::UpdateTitleBgmVolume() {
 void TitleScene::DrawTitleOverlay(float screenWidth, float screenHeight) {
     const float frameT =
         std::clamp(frameIntroTimer_ / kFrameIntroDuration, 0.0f, 1.0f);
+    const float backgroundReveal = Smooth01((frameT - 0.42f) / 0.38f);
     const float idle = Smooth01((frameT - 0.82f) / 0.18f);
     const float breath = idle * (0.5f + 0.5f * std::sinf(sceneTime_ * 0.9f));
+    const float settledDim = 0.42f + 0.03f * breath;
+    const float backgroundDim =
+        1.0f - (1.0f - settledDim) * backgroundReveal;
 
     DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
-             MakeColor(0.0f, 0.0f, 0.0f, 0.42f + 0.03f * breath));
+             MakeColor(0.0f, 0.0f, 0.0f, backgroundDim));
     DrawStartupFrame(screenWidth, screenHeight);
 
-    const float logoScale =
-        std::clamp(screenWidth * 0.50f / logoImage_.width, 0.58f, 1.0f);
+    constexpr float kLogoScale = 1.0f;
     const float logoX =
-        (screenWidth - logoImage_.width * logoScale) * 0.5f;
+        (screenWidth - logoImage_.width * kLogoScale) * 0.5f;
     const float logoY =
-        (screenHeight - logoImage_.height * logoScale) * 0.5f - 10.0f;
-    DrawImage(logoImage_, logoX, logoY, Smooth01(frameT),
-              logoScale *
-                  (1.0f + idle * std::sinf(sceneTime_ * 0.82f) * 0.004f));
+        (screenHeight - logoImage_.height * kLogoScale) * 0.5f - 10.0f;
+    DrawImage(logoImage_, logoX, logoY, backgroundReveal, kLogoScale);
 
     const float pressScale =
         std::clamp(screenWidth * 0.28f / pressAnyButtonImage_.width, 0.48f,
@@ -162,7 +214,7 @@ void TitleScene::DrawTitleOverlay(float screenWidth, float screenHeight) {
     const float pressX =
         (screenWidth - pressAnyButtonImage_.width * pressScale) * 0.5f;
     const float pressY =
-        logoY + logoImage_.height * logoScale + 26.0f +
+        logoY + logoImage_.height * kLogoScale + 26.0f +
         idle * std::sinf(sceneTime_ * 1.15f) * 1.4f;
     const float pressAlpha =
         idle * (0.48f + 0.18f * (0.5f + 0.5f * std::sinf(sceneTime_ * 3.0f)));
@@ -173,6 +225,78 @@ void TitleScene::DrawTitleOverlay(float screenWidth, float screenHeight) {
             std::clamp(fadeTimer_ / kFadeDuration, 0.0f, 1.0f);
         DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
                  MakeColor(0.0f, 0.0f, 0.0f, SmoothStep(fadeT)));
+    }
+}
+
+void TitleScene::DrawExitConfirmWindow(float screenWidth, float screenHeight) {
+    DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
+             MakeColor(0.0f, 0.0f, 0.0f, 0.54f));
+
+    const float panelW = std::clamp(screenWidth * 0.50f, 520.0f, 760.0f);
+    const float panelH = std::clamp(screenHeight * 0.30f, 240.0f, 320.0f);
+    const float panelX = (screenWidth - panelW) * 0.5f;
+    const float panelY = (screenHeight - panelH) * 0.5f;
+    const float edge = 3.0f;
+
+    DrawRect(panelX + 10.0f, panelY + 12.0f, panelW, panelH,
+             MakeColor(0.0f, 0.0f, 0.0f, 0.36f));
+    DrawRect(panelX, panelY, panelW, panelH,
+             MakeColor(0.018f, 0.020f, 0.026f, 0.96f));
+    DrawRect(panelX, panelY, panelW, edge,
+             MakeColor(0.92f, 0.68f, 0.28f, 0.88f));
+    DrawRect(panelX, panelY + panelH - edge, panelW, edge,
+             MakeColor(0.92f, 0.68f, 0.28f, 0.74f));
+    DrawRect(panelX, panelY, edge, panelH,
+             MakeColor(0.92f, 0.68f, 0.28f, 0.62f));
+    DrawRect(panelX + panelW - edge, panelY, edge, panelH,
+             MakeColor(0.92f, 0.68f, 0.28f, 0.62f));
+
+    const float messageScale =
+        (std::min)(1.0f, (panelW * 0.78f) /
+                             ((std::max)(exitConfirmMessageImage_.width, 1.0f)));
+    const float messageW = exitConfirmMessageImage_.width * messageScale;
+    const float messageH = exitConfirmMessageImage_.height * messageScale;
+    DrawImage(exitConfirmMessageImage_, panelX + (panelW - messageW) * 0.5f,
+              panelY + panelH * 0.26f - messageH * 0.5f, 1.0f,
+              messageScale);
+
+    const float buttonW = std::clamp(panelW * 0.24f, 130.0f, 176.0f);
+    const float buttonH = std::clamp(panelH * 0.23f, 58.0f, 76.0f);
+    const float buttonGap = panelW * 0.08f;
+    const float totalButtonW = buttonW * 2.0f + buttonGap;
+    const float buttonY = panelY + panelH * 0.61f;
+    const float firstButtonX = panelX + (panelW - totalButtonW) * 0.5f;
+    const Image *labels[2] = {&exitConfirmYesImage_, &exitConfirmNoImage_};
+
+    for (int i = 0; i < 2; ++i) {
+        const float x =
+            firstButtonX + static_cast<float>(i) * (buttonW + buttonGap);
+        const bool selected = i == exitConfirmIndex_;
+        const XMFLOAT4 body =
+            selected ? MakeColor(0.18f, 0.13f, 0.055f, 0.98f)
+                     : MakeColor(0.040f, 0.046f, 0.058f, 0.92f);
+        const XMFLOAT4 line =
+            selected ? MakeColor(1.0f, 0.78f, 0.34f, 0.96f)
+                     : MakeColor(0.62f, 0.66f, 0.72f, 0.38f);
+
+        DrawRect(x, buttonY, buttonW, buttonH, body);
+        DrawRect(x, buttonY, buttonW, 2.0f, line);
+        DrawRect(x, buttonY + buttonH - 2.0f, buttonW, 2.0f, line);
+        DrawRect(x, buttonY, 2.0f, buttonH, line);
+        DrawRect(x + buttonW - 2.0f, buttonY, 2.0f, buttonH, line);
+
+        const Image &label = *labels[i];
+        const float labelScale =
+            (std::min)({1.0f,
+                        (buttonH * 0.68f) /
+                            ((std::max)(label.height, 1.0f)),
+                        (buttonW * 0.86f) /
+                            ((std::max)(label.width, 1.0f))});
+        const float labelW = label.width * labelScale;
+        const float labelH = label.height * labelScale;
+        DrawImage(label, x + (buttonW - labelW) * 0.5f,
+                  buttonY + (buttonH - labelH) * 0.5f, selected ? 1.0f : 0.82f,
+                  labelScale);
     }
 }
 
@@ -314,6 +438,5 @@ bool TitleScene::IsAnyButtonTriggered(const Input &input) const {
         (input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_A) ||
          input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_START));
     return input.IsKeyTrigger(DIK_RETURN) || input.IsKeyTrigger(DIK_SPACE) ||
-           input.IsKeyTrigger(DIK_ESCAPE) || input.IsMouseTrigger(0) ||
-           gamepadTriggered;
+           input.IsMouseTrigger(0) || gamepadTriggered;
 }

@@ -29,12 +29,11 @@ class CombatFeedbackDirector {
     float GetGameplayTimeScale() const;
     float GetFovKickDeg() const;
     void ApplyCameraImpulse(DirectX::XMFLOAT3 &cameraPosition,
-                            DirectX::XMFLOAT3 &lookAt,
-                            float sceneTime) const;
+                            DirectX::XMFLOAT3 &lookAt, float sceneTime) const;
+    void AddCameraShake(float duration, float horizontal, float vertical);
 
   private:
     void AddHitStop(float duration, float timeScale);
-    void AddCameraShake(float duration, float horizontal, float vertical);
     void AddPostFlash(float duration, float blurStrength, float noiseStrength,
                       float vignetteBoost);
     float ShakeRatio() const;

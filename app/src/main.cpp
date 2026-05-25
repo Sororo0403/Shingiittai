@@ -385,6 +385,7 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
     // WinApp初期化
     WinApp winApp;
     winApp.Initialize(hInstance, nCmdShow, 1280, 720, L"3145_身技一体", true);
+    winApp.SetCursorVisible(false);
 
     // クライアント領域の幅と高さ
     int width = winApp.GetWidth();
@@ -497,9 +498,6 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
 
         // 入力更新
         input.Update(deltaTime);
-        if (input.IsKeyTrigger(DIK_ESCAPE)) {
-            break;
-        }
 
         const int currentWidth = winApp.GetWidth();
         const int currentHeight = winApp.GetHeight();
@@ -540,6 +538,7 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
         dxCommon.EndFrame();
     }
 
+    winApp.SetCursorVisible(true);
     return 0;
 }
 

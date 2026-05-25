@@ -187,83 +187,27 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
     }
 
     if (drawBody) {
-        if (!forceOpaque) {
-            Transform rimVisual = playerVisual;
-            rimVisual.scale.x *= 1.045f;
-            rimVisual.scale.y *= 1.035f;
-            rimVisual.scale.z *= 1.045f;
-
-            ModelDrawEffect rimEffect{};
-            rimEffect.enabled = true;
-            rimEffect.additiveBlend = true;
-            rimEffect.disableCulling = true;
-            rimEffect.color = {1.0f, 0.78f, 0.38f, 0.24f};
-            rimEffect.intensity = 0.28f;
-            rimEffect.fresnelPower = 0.82f;
-            modelManager->SetDrawEffect(rimEffect);
-            modelManager->Draw(modelId_, rimVisual, camera);
-            modelManager->ClearDrawEffect();
-        }
-        if (forceOpaque) {
-            Transform glowVisual = playerVisual;
-            glowVisual.scale.x *= 1.115f;
-            glowVisual.scale.y *= 1.095f;
-            glowVisual.scale.z *= 1.115f;
-
-            ModelDrawEffect glowEffect{};
-            glowEffect.enabled = true;
-            glowEffect.additiveBlend = true;
-            glowEffect.disableCulling = true;
-            glowEffect.forceOpaqueMaterial = true;
-            glowEffect.color = {1.0f, 0.98f, 0.86f, 0.88f};
-            glowEffect.intensity = 1.86f;
-            glowEffect.fresnelPower = 0.70f;
-            modelManager->SetDrawEffect(glowEffect);
-            modelManager->Draw(modelId_, glowVisual, camera);
-
-            Transform warmGlowVisual = playerVisual;
-            warmGlowVisual.scale.x *= 1.055f;
-            warmGlowVisual.scale.y *= 1.045f;
-            warmGlowVisual.scale.z *= 1.055f;
-            glowEffect.color = {1.0f, 0.82f, 0.28f, 0.58f};
-            glowEffect.intensity = 1.01f;
-            glowEffect.fresnelPower = 1.05f;
-            modelManager->SetDrawEffect(glowEffect);
-            modelManager->Draw(modelId_, warmGlowVisual, camera);
-        }
         if (forceOpaque) {
             ModelDrawEffect opaqueEffect{};
             opaqueEffect.enabled = true;
             opaqueEffect.forceOpaqueMaterial = true;
-            opaqueEffect.color = {1.0f, 0.96f, 0.84f, 0.18f};
-            opaqueEffect.intensity = 0.20f;
-            opaqueEffect.fresnelPower = 2.0f;
             modelManager->SetDrawEffect(opaqueEffect);
         }
         modelManager->Draw(modelId_, playerVisual, camera);
-    }
-    if (!forceOpaque) {
         modelManager->ClearDrawEffect();
     }
 
     auto drawSword = [&](Sword &sword) {
         if (forceOpaque) {
-            ModelDrawEffect bladeGlow{};
-            bladeGlow.enabled = true;
-            bladeGlow.additiveBlend = true;
-            bladeGlow.disableCulling = true;
-            bladeGlow.forceOpaqueMaterial = true;
-            bladeGlow.color = {1.0f, 0.88f, 0.30f, 0.78f};
-            bladeGlow.intensity = 1.45f;
-            bladeGlow.fresnelPower = 0.72f;
-            modelManager->SetDrawEffect(bladeGlow);
-            sword.Draw(modelManager, camera, visualScale * 1.12f);
-
             ModelDrawEffect opaqueEffect{};
+            opaqueEffect.enabled = true;
             opaqueEffect.forceOpaqueMaterial = true;
             modelManager->SetDrawEffect(opaqueEffect);
         }
         sword.Draw(modelManager, camera, visualScale);
+        if (forceOpaque) {
+            modelManager->ClearDrawEffect();
+        }
     };
 
     if (leftSwordVisible_) {

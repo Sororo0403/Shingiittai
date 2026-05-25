@@ -5,8 +5,12 @@
 #include "Sprite.h"
 #include "SwordInputCalibration.h"
 #include "SwordUdpController.h"
+#include <array>
 #include <cstdint>
+#include <memory>
 #include <string>
+
+class GameScene;
 
 class TipScene : public BaseScene {
   public:
@@ -30,22 +34,25 @@ class TipScene : public BaseScene {
     void RequestHandTrackingStartOnce();
     void UpdateCameraPreview(float deltaTime);
     void DrawCameraPreview();
+    Image CurrentTipBodyImage() const;
     void DrawRect(float x, float y, float w, float h,
                   const DirectX::XMFLOAT4 &color);
     void DrawImage(const Image &image, float x, float y, float scale = 1.0f,
                    float alpha = 1.0f);
 
     SwordInputCalibration inputCalibration_{};
+    std::unique_ptr<GameScene> backgroundScene_{};
     SwordUdpController handController_;
     JoyCon leftJoyCon_;
     JoyCon rightJoyCon_;
-    Image backgroundImage_{};
-    Image titleImage_{};
-    Image bodyImage_{};
+    std::array<Image, 3> bodyImages_{};
     Image promptImage_{};
     float sceneTime_ = 0.0f;
+    float transitionTimer_ = 0.0f;
     int handSwingCount_ = 0;
     bool handSwingArmed_ = true;
     bool handTrackingStartRequested_ = false;
+    bool returnToSelectRequested_ = false;
+    bool startGameRequested_ = false;
     CameraPreviewReceiver previewReceiver_{};
 };

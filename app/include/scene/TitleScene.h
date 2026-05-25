@@ -25,9 +25,11 @@ class TitleScene : public BaseScene {
     };
 
     Image LoadTitleImage(const std::wstring &path);
+    void UpdateExitConfirm(Input &input);
     void StopTitleBgm();
     void UpdateTitleBgmVolume();
     void DrawTitleOverlay(float screenWidth, float screenHeight);
+    void DrawExitConfirmWindow(float screenWidth, float screenHeight);
     void DrawStartupFrame(float screenWidth, float screenHeight);
     void DrawRect(float x, float y, float w, float h,
                   const DirectX::XMFLOAT4 &color);
@@ -37,11 +39,16 @@ class TitleScene : public BaseScene {
 
     Image logoImage_;
     Image pressAnyButtonImage_;
+    Image exitConfirmMessageImage_;
+    Image exitConfirmYesImage_;
+    Image exitConfirmNoImage_;
     std::unique_ptr<GameScene> backgroundScene_;
     float sceneTime_ = 0.0f;
     float frameIntroTimer_ = 0.0f;
     float fadeTimer_ = 0.0f;
     bool startRequested_ = false;
+    bool exitConfirmVisible_ = false;
+    int exitConfirmIndex_ = 1;
     uint32_t titleBgmSoundId_ = 0;
     uint32_t titleBgmVoice_ = UINT32_MAX;
 };

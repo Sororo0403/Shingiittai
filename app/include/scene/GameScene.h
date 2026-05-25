@@ -1,21 +1,21 @@
 #pragma once
 #include "BaseScene.h"
 #include "Camera.h"
-#include "CombatFeedbackDirector.h"
 #include "CollisionManager.h"
+#include "CombatFeedbackDirector.h"
 #include "Enemy.h"
 #include "GPUParticleSystem.h"
+#include "GameSceneHud.h"
 #include "Player.h"
 #include "SwordInputCalibration.h"
+#include "SwordSlashArcRenderer.h"
+#include "SwordTrailRenderer.h"
 #include "Transform.h"
 #include <DirectXMath.h>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <string>
-#include "GameSceneHud.h"
-#include "SwordSlashArcRenderer.h"
-#include "SwordTrailRenderer.h"
 
 class GameScene : public BaseScene {
   public:
@@ -23,15 +23,16 @@ class GameScene : public BaseScene {
         Gameplay,
         TitleDemo,
         BackgroundOnly,
+        ReadyPreview,
     };
 
     explicit GameScene(const SwordInputCalibration &inputCalibration = {})
         : inputCalibration_(inputCalibration) {}
-    explicit GameScene(bool titleDemoMode)
-        : titleDemoMode_(titleDemoMode) {}
+    explicit GameScene(bool titleDemoMode) : titleDemoMode_(titleDemoMode) {}
     explicit GameScene(Mode mode)
         : titleDemoMode_(mode == Mode::TitleDemo),
-          backgroundOnlyMode_(mode == Mode::BackgroundOnly) {}
+          backgroundOnlyMode_(mode == Mode::BackgroundOnly),
+          readyPreviewMode_(mode == Mode::ReadyPreview) {}
     ~GameScene() override;
 
     void Initialize(const SceneContext &ctx) override;
@@ -43,13 +44,27 @@ class GameScene : public BaseScene {
     void UpdateCamera(Input *input);
     void UpdateBattleCamera();
     void UpdateBackgroundCamera(float deltaTime);
+    void UpdateReadyPreviewCamera(float deltaTime);
     void UpdateSceneLighting();
     void DrawArena();
-    void DrawDistantHazardBackdrop();
+    void DrawDistantHazardBackdrop(float buildProgress);
+    float BackgroundBuildProgress(float delay, float duration) const;
+    float BattleIntroWorldRevealProgress() const;
     void DrawEnemySlashDirectionCue();
     void DrawVictoryFlash();
     void DrawDefeatFlash();
     void DrawBattleIntroFlash();
+    void OpenPauseMenu();
+    void ClosePauseMenu();
+    void UpdatePauseMenu(Input *input);
+    void ExecutePauseMenuSelection();
+    void DrawPauseMenu();
+    void DrawPauseRect(float x, float y, float w, float h,
+                       const DirectX::XMFLOAT4 &color);
+    void DrawPauseImage(uint32_t textureId, float textureWidth,
+                        float textureHeight, float x, float y, float scale,
+                        float alpha = 1.0f);
+    void LoadPauseMenuImages();
     void UpdateBattleIntro(float deltaTime);
     void ApplyEnemyIntroDissolve(float revealRatio);
     void UpdatePhaseTransitionCinematic(float deltaTime);
@@ -81,6 +96,7 @@ class GameScene : public BaseScene {
     SwordInputCalibration inputCalibration_{};
     bool titleDemoMode_ = false;
     bool backgroundOnlyMode_ = false;
+    bool readyPreviewMode_ = false;
 
     Camera camera_;
 
@@ -181,6 +197,7 @@ class GameScene : public BaseScene {
     float playerViewLockOnLookHeight_ = 1.48f;
 
     float sceneLightTime_ = 0.0f;
+    float backgroundBuildTimer_ = 0.0f;
     float battleElapsedTime_ = 0.0f;
     bool battleIntroActive_ = true;
     float battleIntroTimer_ = 0.0f;
@@ -190,6 +207,12 @@ class GameScene : public BaseScene {
     bool phaseTransitionReleaseEmitted_ = false;
     float phaseTransitionLoopTimer_ = 0.0f;
     bool battleResultRequested_ = false;
+    bool paused_ = false;
+    int pauseMenuIndex_ = 0;
+    bool pauseMenuImagesLoaded_ = false;
+    std::array<uint32_t, 4> pauseMenuTextureIds_{};
+    std::array<float, 4> pauseMenuTextureWidths_{};
+    std::array<float, 4> pauseMenuTextureHeights_{};
     bool victorySequenceActive_ = false;
     float victorySequenceTimer_ = 0.0f;
     float victorySequenceDuration_ = 5.45f;
@@ -210,5 +233,4 @@ class GameScene : public BaseScene {
     bool enemyRedPunishUncounterable_ = false;
     std::array<bool, Player::kSwordCount> previousCombatSlashStates_{};
     bool handTrackingStartRequested_ = false;
-
 };

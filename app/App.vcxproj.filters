@@ -369,6 +369,15 @@
     <None Include="resources\ui\tip\text\tip_body.png">
       <Filter>Resources\UI\tip\text</Filter>
     </None>
+    <None Include="resources\ui\tip\text\tip_body_0.png">
+      <Filter>Resources\UI\tip\text</Filter>
+    </None>
+    <None Include="resources\ui\tip\text\tip_body_1.png">
+      <Filter>Resources\UI\tip\text</Filter>
+    </None>
+    <None Include="resources\ui\tip\text\tip_body_2.png">
+      <Filter>Resources\UI\tip\text</Filter>
+    </None>
     <None Include="resources\ui\tip\text\tip_hand.png">
       <Filter>Resources\UI\tip\text</Filter>
     </None>
@@ -382,6 +391,15 @@
       <Filter>Resources\UI\tip\text</Filter>
     </None>
     <None Include="resources\ui\title\gamelogo.png">
+      <Filter>Resources\UI\title</Filter>
+    </None>
+    <None Include="resources\ui\title\exit_confirm_message.png">
+      <Filter>Resources\UI\title</Filter>
+    </None>
+    <None Include="resources\ui\title\exit_confirm_no.png">
+      <Filter>Resources\UI\title</Filter>
+    </None>
+    <None Include="resources\ui\title\exit_confirm_yes.png">
       <Filter>Resources\UI\title</Filter>
     </None>
     <None Include="resources\ui\title\press_any_button.png">

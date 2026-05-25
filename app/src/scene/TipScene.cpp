@@ -7,8 +7,10 @@
 #include "SceneManager.h"
 #include "SpriteManager.h"
 #include "TextureManager.h"
+#include "WeaponSelectScene.h"
 #include "WinApp.h"
 #include <algorithm>
+#include <cmath>
 #include <memory>
 
 using namespace DirectX;
@@ -19,9 +21,23 @@ constexpr float kHandSwingResetSpeed = 0.32f;
 constexpr int kRequiredHandSwings = 3;
 constexpr uint16_t kPreviewPort = 5006;
 constexpr float kPreviewStaleSeconds = 0.75f;
+constexpr float kTransitionDuration = 0.16f;
+constexpr float kStartTransitionDuration = 0.36f;
+constexpr float kTipRotateSeconds = 4.8f;
+constexpr float kIntroFrameDelay = 0.08f;
+constexpr float kIntroFrameDuration = 0.24f;
+constexpr float kIntroBackgroundDelay = 0.28f;
+constexpr float kIntroBackgroundDuration = 0.36f;
+constexpr float kIntroContentDelay = 0.48f;
+constexpr float kIntroContentDuration = 0.22f;
 
 XMFLOAT4 Color(float r, float g, float b, float a = 1.0f) {
     return {r, g, b, a};
+}
+
+float SmoothStep(float t) {
+    const float clamped = std::clamp(t, 0.0f, 1.0f);
+    return clamped * clamped * (3.0f - 2.0f * clamped);
 }
 
 bool IsHandControl(InputControlType controlType) {
@@ -37,9 +53,12 @@ TipScene::~TipScene() { previewReceiver_.Close(); }
 void TipScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
     sceneTime_ = 0.0f;
+    transitionTimer_ = 0.0f;
     handSwingCount_ = 0;
     handSwingArmed_ = true;
     handTrackingStartRequested_ = false;
+    returnToSelectRequested_ = false;
+    startGameRequested_ = false;
 
     if (inputCalibration_.controlType == InputControlType::JoyCon) {
         leftJoyCon_.Initialize(true);
@@ -51,10 +70,14 @@ void TipScene::Initialize(const SceneContext &ctx) {
         previewReceiver_.Initialize(ctx_->rendering.texture, kPreviewPort);
     }
 
-    backgroundImage_ =
-        LoadTextureImage(L"app/resources/ui/weapon_select/weapon_select_bg.png");
-    titleImage_ = LoadTextureImage(L"app/resources/ui/tip/text/tip_title.png");
-    bodyImage_ = LoadTextureImage(L"app/resources/ui/tip/text/tip_body.png");
+    backgroundScene_ = std::make_unique<GameScene>(GameScene::Mode::ReadyPreview);
+    backgroundScene_->Initialize(ctx);
+    bodyImages_[0] =
+        LoadTextureImage(L"app/resources/ui/tip/text/tip_body_0.png");
+    bodyImages_[1] =
+        LoadTextureImage(L"app/resources/ui/tip/text/tip_body_1.png");
+    bodyImages_[2] =
+        LoadTextureImage(L"app/resources/ui/tip/text/tip_body_2.png");
     switch (inputCalibration_.controlType) {
     case InputControlType::JoyCon:
         promptImage_ = LoadTextureImage(L"app/resources/ui/tip/text/tip_joycon.png");
@@ -76,6 +99,24 @@ void TipScene::Initialize(const SceneContext &ctx) {
 
 void TipScene::Update() {
     sceneTime_ += ctx_->frame.deltaTime;
+    if (backgroundScene_) {
+        backgroundScene_->Update();
+    }
+    if (returnToSelectRequested_) {
+        transitionTimer_ += ctx_->frame.deltaTime;
+        if (transitionTimer_ >= kTransitionDuration) {
+            sceneManager_->ChangeScene(std::make_unique<WeaponSelectScene>());
+        }
+        return;
+    }
+    if (startGameRequested_) {
+        transitionTimer_ += ctx_->frame.deltaTime;
+        if (transitionTimer_ >= kStartTransitionDuration) {
+            sceneManager_->ChangeScene(std::make_unique<GameScene>(inputCalibration_));
+        }
+        return;
+    }
+
     if (inputCalibration_.controlType == InputControlType::JoyCon) {
         leftJoyCon_.Update(ctx_->frame.deltaTime);
         rightJoyCon_.Update(ctx_->frame.deltaTime);
@@ -86,8 +127,16 @@ void TipScene::Update() {
         UpdateCameraPreview(ctx_->frame.deltaTime);
     }
 
+    if (ctx_->systems.input != nullptr &&
+        ctx_->systems.input->IsKeyTrigger(DIK_ESCAPE)) {
+        returnToSelectRequested_ = true;
+        transitionTimer_ = 0.0f;
+        return;
+    }
+
     if (ShouldStart()) {
-        sceneManager_->ChangeScene(std::make_unique<GameScene>(inputCalibration_));
+        startGameRequested_ = true;
+        transitionTimer_ = 0.0f;
     }
 }
 
@@ -95,36 +144,102 @@ void TipScene::Draw() {
     const float w = static_cast<float>(ctx_->systems.winApp->GetWidth());
     const float h = static_cast<float>(ctx_->systems.winApp->GetHeight());
 
+    if (backgroundScene_) {
+        backgroundScene_->Draw();
+    }
+
+    const float frameBuild =
+        SmoothStep((sceneTime_ - kIntroFrameDelay) / kIntroFrameDuration);
+    const float backgroundReveal =
+        SmoothStep((sceneTime_ - kIntroBackgroundDelay) /
+                   kIntroBackgroundDuration);
+    const float contentReveal =
+        SmoothStep((sceneTime_ - kIntroContentDelay) / kIntroContentDuration);
+    const float panelFill =
+        SmoothStep((sceneTime_ - (kIntroFrameDelay + 0.10f)) / 0.18f);
+
     ctx_->rendering.sprite->PreDraw();
-    DrawRect(0.0f, 0.0f, w, h, Color(0.018f, 0.020f, 0.024f, 1.0f));
-    DrawImage(backgroundImage_, 0.0f, 0.0f,
-              (std::max)(w / (std::max)(backgroundImage_.width, 1.0f),
-                         h / (std::max)(backgroundImage_.height, 1.0f)),
-              0.26f);
-    DrawRect(w * 0.10f, h * 0.18f, w * 0.80f, h * 0.56f,
-             Color(0.025f, 0.028f, 0.032f, 0.84f));
-    DrawRect(w * 0.10f, h * 0.18f, w * 0.80f, 6.0f,
-             Color(1.0f, 0.82f, 0.18f, 0.92f));
-    DrawImage(titleImage_, (w - titleImage_.width) * 0.5f, h * 0.23f, 1.0f);
-    DrawImage(bodyImage_, (w - bodyImage_.width) * 0.5f, h * 0.42f, 1.0f,
-              0.86f);
+    DrawRect(0.0f, 0.0f, w, h,
+             Color(0.0f, 0.0f, 0.0f, 1.0f - backgroundReveal * 0.64f));
+
+    const float panelW = std::clamp(w * 0.58f, 720.0f, 1040.0f);
+    const float panelH = std::clamp(h * 0.42f, 330.0f, 450.0f);
+    const float panelX = (w - panelW) * 0.5f;
+    const float panelY = (h - panelH) * 0.5f;
+    if (panelFill > 0.0f) {
+        DrawRect(panelX + 10.0f, panelY + 12.0f, panelW, panelH,
+                 Color(0.0f, 0.0f, 0.0f, 0.30f * panelFill));
+        DrawRect(panelX, panelY, panelW, panelH,
+                 Color(0.018f, 0.021f, 0.027f, 0.74f * panelFill));
+    }
+    if (frameBuild > 0.0f) {
+        const float topW = panelW * frameBuild;
+        const float sideH = panelH * frameBuild;
+        DrawRect(panelX, panelY, topW, 6.0f,
+                 Color(1.0f, 0.88f, 0.38f, 0.82f));
+        DrawRect(panelX + panelW - topW, panelY + panelH - 6.0f, topW, 6.0f,
+                 Color(1.0f, 0.76f, 0.22f, 0.36f + 0.20f * frameBuild));
+        DrawRect(panelX, panelY, 6.0f, sideH,
+                 Color(1.0f, 0.76f, 0.22f, 0.92f));
+        DrawRect(panelX + panelW - 6.0f, panelY + panelH - sideH, 6.0f,
+                 sideH, Color(1.0f, 0.76f, 0.22f, 0.42f));
+    }
+
+    const Image &bodyImage = CurrentTipBodyImage();
+    const float cycle = std::fmod(sceneTime_, kTipRotateSeconds);
+    const float fadeIn = SmoothStep(cycle / 0.28f);
+    const float fadeOut =
+        1.0f - SmoothStep((cycle - (kTipRotateSeconds - 0.32f)) / 0.32f);
+    const float bodyAlpha = 0.88f * (std::min)(fadeIn, fadeOut) * contentReveal;
+    const float bodyScale =
+        (std::min)(1.0f, (panelW - 132.0f) / (std::max)(bodyImage.width, 1.0f));
+    DrawImage(bodyImage,
+              panelX + (panelW - bodyImage.width * bodyScale) * 0.5f,
+              panelY + panelH * 0.40f - bodyImage.height * bodyScale * 0.5f,
+              bodyScale, bodyAlpha);
     const float pulse = 0.72f + 0.28f * std::sinf(sceneTime_ * 5.0f);
-    DrawImage(promptImage_, (w - promptImage_.width) * 0.5f, h * 0.62f, 1.0f,
-              pulse);
+    const float promptScale =
+        (std::min)(1.0f,
+                   (panelW - 150.0f) / (std::max)(promptImage_.width, 1.0f));
+    DrawImage(promptImage_,
+              panelX + (panelW - promptImage_.width * promptScale) * 0.5f,
+              panelY + panelH * 0.68f - promptImage_.height * promptScale * 0.5f,
+              promptScale, pulse * contentReveal);
     if (IsHandControl(inputCalibration_.controlType)) {
         const float unit = 48.0f;
-        const float startX = (w - unit * 3.0f - 18.0f * 2.0f) * 0.5f;
+        const float totalW = unit * 3.0f + 18.0f * 2.0f;
+        const float startX = panelX + (panelW - totalW) * 0.5f;
         for (int i = 0; i < 3; ++i) {
             DrawRect(startX + static_cast<float>(i) * (unit + 18.0f),
-                     h * 0.78f, unit, 10.0f,
-                     i < handSwingCount_ ? Color(0.10f, 0.74f, 0.36f, 1.0f)
-                                         : Color(0.20f, 0.24f, 0.28f, 1.0f));
+                     panelY + panelH * 0.88f, unit, 10.0f,
+                     i < handSwingCount_
+                         ? Color(0.10f, 0.74f, 0.36f, contentReveal)
+                         : Color(0.20f, 0.24f, 0.28f, contentReveal));
         }
+    }
+    const float outroBlack =
+        returnToSelectRequested_
+            ? SmoothStep(transitionTimer_ / kTransitionDuration)
+            : 0.0f;
+    const float startBlack =
+        startGameRequested_
+            ? SmoothStep(transitionTimer_ / kStartTransitionDuration)
+            : 0.0f;
+    const float fadeAlpha =
+        (std::max)(outroBlack, startBlack);
+    if (fadeAlpha > 0.0f) {
+        DrawRect(0.0f, 0.0f, w, h, Color(0.0f, 0.0f, 0.0f, fadeAlpha));
     }
     ctx_->rendering.sprite->PostDraw();
 }
 
 void TipScene::DrawTransparent() {
+    if (startGameRequested_ || returnToSelectRequested_) {
+        return;
+    }
+    if (sceneTime_ < kIntroContentDelay) {
+        return;
+    }
     if (IsHandControl(inputCalibration_.controlType)) {
         DrawCameraPreview();
     }
@@ -137,6 +252,13 @@ TipScene::Image TipScene::LoadTextureImage(const std::wstring &path) {
     image.height =
         static_cast<float>(ctx_->rendering.texture->GetHeight(image.textureId));
     return image;
+}
+
+TipScene::Image TipScene::CurrentTipBodyImage() const {
+    const size_t index =
+        static_cast<size_t>(sceneTime_ / kTipRotateSeconds) %
+        bodyImages_.size();
+    return bodyImages_[index];
 }
 
 bool TipScene::ShouldStart() {
