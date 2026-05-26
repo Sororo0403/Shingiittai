@@ -261,6 +261,9 @@
     <None Include="resources\audio\bgm\bgm_Battle.wav">
       <Filter>Resources\Audio\bgm</Filter>
     </None>
+    <None Include="resources\audio\bgm\bgm_MenuTheme.wav">
+      <Filter>Resources\Audio\bgm</Filter>
+    </None>
     <None Include="resources\audio\bgm\bgm_TitleTheme.wav">
       <Filter>Resources\Audio\bgm</Filter>
     </None>

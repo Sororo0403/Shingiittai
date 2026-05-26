@@ -170,6 +170,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="resources\audio\bgm\bgm_Battle.wav" />
+    <None Include="resources\audio\bgm\bgm_MenuTheme.wav" />
     <None Include="resources\audio\bgm\bgm_TitleTheme.wav" />
     <None Include="resources\audio\sfx\counter_burst.wav" />
     <None Include="resources\audio\sfx\damage_heavy.wav" />

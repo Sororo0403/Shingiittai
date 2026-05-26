@@ -12,6 +12,8 @@ class Input;
 
 class WeaponSelectScene : public BaseScene {
   public:
+    ~WeaponSelectScene() override;
+
     void Initialize(const SceneContext &ctx) override;
     void Update() override;
     void Draw() override;
@@ -52,6 +54,8 @@ class WeaponSelectScene : public BaseScene {
     bool RequestHandTrackingStartOnce();
     bool IsModeAvailable(int index) const;
     void ShowUnavailableMessage();
+    void StartMenuBgm();
+    void StopMenuBgm();
     void DrawOverlay(float screenWidth, float screenHeight);
     void DrawButtons();
     void DrawButtonIllustration(int index, const ButtonRect &rect, float lift,
@@ -86,5 +90,7 @@ class WeaponSelectScene : public BaseScene {
     Image handCameraConfirmNoImage_{};
     std::array<ButtonRect, kButtonCount> buttonRects_{};
     std::array<float, kButtonCount> pulseTimers_{};
+    uint32_t menuBgmSoundId_ = UINT32_MAX;
+    uint32_t menuBgmVoiceHandle_ = UINT32_MAX;
     bool cameraAvailable_ = false;
 };

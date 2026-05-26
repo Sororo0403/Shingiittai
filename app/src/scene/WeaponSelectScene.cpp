@@ -2,6 +2,7 @@
 #include "AppSceneServices.h"
 #include "Input.h"
 #include "SceneManager.h"
+#include "SoundManager.h"
 #include "Sprite.h"
 #include "SpriteManager.h"
 #include "TextureManager.h"
@@ -68,6 +69,8 @@ float SmoothStep(float t) { return t * t * (3.0f - 2.0f * t); }
 float Smooth01(float t) { return SmoothStep(std::clamp(t, 0.0f, 1.0f)); }
 } // namespace
 
+WeaponSelectScene::~WeaponSelectScene() { StopMenuBgm(); }
+
 void WeaponSelectScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
     AppSceneServices::RequestHandTrackingStop();
@@ -104,6 +107,8 @@ void WeaponSelectScene::Initialize(const SceneContext &ctx) {
         LoadTextureImage(L"app/resources/ui/title/exit_confirm_yes.png");
     handCameraConfirmNoImage_ =
         LoadTextureImage(L"app/resources/ui/title/exit_confirm_no.png");
+
+    StartMenuBgm();
 }
 
 void WeaponSelectScene::Update() {
@@ -396,6 +401,28 @@ void WeaponSelectScene::ShowUnavailableMessage() {
                 L"入力モード",
                 MB_OK | MB_ICONWARNING | MB_SETFOREGROUND | MB_TOPMOST);
     SetForegroundWindow(ctx_->systems.winApp->GetHwnd());
+}
+
+void WeaponSelectScene::StartMenuBgm() {
+    if (ctx_ == nullptr || ctx_->systems.sound == nullptr ||
+        menuBgmVoiceHandle_ != SoundManager::kInvalidVoiceHandle) {
+        return;
+    }
+
+    menuBgmSoundId_ = ctx_->systems.sound->LoadOrCreateSilent(
+        L"app/resources/audio/bgm/bgm_MenuTheme.wav");
+    menuBgmVoiceHandle_ = ctx_->systems.sound->Play(menuBgmSoundId_, 0.36f,
+                                                    true);
+}
+
+void WeaponSelectScene::StopMenuBgm() {
+    if (ctx_ == nullptr || ctx_->systems.sound == nullptr ||
+        menuBgmVoiceHandle_ == SoundManager::kInvalidVoiceHandle) {
+        return;
+    }
+
+    ctx_->systems.sound->Stop(menuBgmVoiceHandle_);
+    menuBgmVoiceHandle_ = SoundManager::kInvalidVoiceHandle;
 }
 
 void WeaponSelectScene::DrawOverlay(float screenWidth, float screenHeight) {
