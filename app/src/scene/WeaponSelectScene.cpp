@@ -69,7 +69,11 @@ float SmoothStep(float t) { return t * t * (3.0f - 2.0f * t); }
 float Smooth01(float t) { return SmoothStep(std::clamp(t, 0.0f, 1.0f)); }
 } // namespace
 
-WeaponSelectScene::~WeaponSelectScene() { StopMenuBgm(); }
+WeaponSelectScene::~WeaponSelectScene() {
+    if (!preserveMenuBgmOnExit_) {
+        StopMenuBgm();
+    }
+}
 
 void WeaponSelectScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
@@ -83,6 +87,7 @@ void WeaponSelectScene::Initialize(const SceneContext &ctx) {
     waitingForHandTrackingReady_ = false;
     handTrackingStartRequested_ = false;
     handCameraConfirmVisible_ = false;
+    preserveMenuBgmOnExit_ = false;
     handCameraConfirmIndex_ = 1;
     pulseTimers_.fill(0.0f);
     cameraAvailable_ = false;
@@ -141,6 +146,7 @@ void WeaponSelectScene::Update() {
         if (selectedIndex_ == kTutorialButtonIndex) {
             transitionTimer_ += ctx_->frame.deltaTime;
             if (transitionTimer_ >= kTransitionDuration) {
+                preserveMenuBgmOnExit_ = true;
                 sceneManager_->ChangeScene(
                     std::make_unique<TutorialSelectScene>());
             }
@@ -404,25 +410,14 @@ void WeaponSelectScene::ShowUnavailableMessage() {
 }
 
 void WeaponSelectScene::StartMenuBgm() {
-    if (ctx_ == nullptr || ctx_->systems.sound == nullptr ||
-        menuBgmVoiceHandle_ != SoundManager::kInvalidVoiceHandle) {
+    if (ctx_ == nullptr) {
         return;
     }
-
-    menuBgmSoundId_ = ctx_->systems.sound->LoadOrCreateSilent(
-        L"app/resources/audio/bgm/bgm_MenuTheme.wav");
-    menuBgmVoiceHandle_ = ctx_->systems.sound->Play(menuBgmSoundId_, 0.36f,
-                                                    true);
+    AppSceneServices::StartMenuBgm(*ctx_);
 }
 
 void WeaponSelectScene::StopMenuBgm() {
-    if (ctx_ == nullptr || ctx_->systems.sound == nullptr ||
-        menuBgmVoiceHandle_ == SoundManager::kInvalidVoiceHandle) {
-        return;
-    }
-
-    ctx_->systems.sound->Stop(menuBgmVoiceHandle_);
-    menuBgmVoiceHandle_ = SoundManager::kInvalidVoiceHandle;
+    AppSceneServices::StopMenuBgm(ctx_);
 }
 
 void WeaponSelectScene::DrawOverlay(float screenWidth, float screenHeight) {

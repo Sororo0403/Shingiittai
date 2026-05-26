@@ -265,6 +265,19 @@ class Enemy {
     bool IsAttackActive() const { return runtime_.isAttackActive; }
     OBB GetAttackOBB() const;
     bool IsWarpCollisionDisabled() const { return runtime_.warp.collisionDisabled; }
+    bool ShouldLockPlayerForFarWarpSlash() const {
+        const bool isFarWarpStartup =
+            runtime_.action.kind == ActionKind::Warp &&
+            runtime_.warp.farSlashFollowup;
+        const bool isFarSlashCommit =
+            runtime_.farSlashActive &&
+            (runtime_.action.kind == ActionKind::Smash ||
+             runtime_.action.kind == ActionKind::Sweep) &&
+            (runtime_.action.step == ActionStep::Charge ||
+             runtime_.action.step == ActionStep::Hold ||
+             runtime_.action.step == ActionStep::Active);
+        return isFarWarpStartup || isFarSlashCommit;
+    }
 
     float GetCurrentAttackDamage() const;
     float GetCurrentAttackKnockback() const;

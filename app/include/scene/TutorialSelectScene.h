@@ -12,6 +12,8 @@ class Input;
 
 class TutorialSelectScene : public BaseScene {
   public:
+    ~TutorialSelectScene() override;
+
     void Initialize(const SceneContext &ctx) override;
     void Update() override;
     void Draw() override;
@@ -71,6 +73,7 @@ class TutorialSelectScene : public BaseScene {
     bool waitingForHandTrackingReady_ = false;
     bool handTrackingStartRequested_ = false;
     bool handCameraConfirmVisible_ = false;
+    bool preserveMenuBgmOnExit_ = false;
     int handCameraConfirmIndex_ = 1;
 
     std::unique_ptr<GameScene> backgroundScene_;

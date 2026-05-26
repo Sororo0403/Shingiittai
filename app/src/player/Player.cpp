@@ -45,7 +45,7 @@ void Player::SetInputCalibration(const SwordInputCalibration &calibration) {
 
 void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
                     float cameraYaw, float controlDeltaTime,
-                    bool suppressLookAt) {
+                    bool suppressLookAt, bool suppressMovement) {
     const float inputDeltaTime =
         controlDeltaTime > 0.0f ? controlDeltaTime : deltaTime;
 
@@ -55,8 +55,13 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     }
 
     (void)cameraYaw;
-    UpdateMovement(deltaTime, lookTarget);
-    KeepDistanceFromTarget(lookTarget);
+    if (suppressMovement) {
+        velocity_ = {0.0f, 0.0f, 0.0f};
+        knockbackVelocity_ = {0.0f, 0.0f, 0.0f};
+    } else {
+        UpdateMovement(deltaTime, lookTarget);
+        KeepDistanceFromTarget(lookTarget);
+    }
     if (!suppressLookAt) {
         LookAt(lookTarget);
     }

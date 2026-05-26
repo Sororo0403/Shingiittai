@@ -267,6 +267,9 @@
     <None Include="resources\audio\bgm\bgm_TitleTheme.wav">
       <Filter>Resources\Audio\bgm</Filter>
     </None>
+    <None Include="resources\audio\bgm\bgm_TutorialTheme.wav">
+      <Filter>Resources\Audio\bgm</Filter>
+    </None>
     <None Include="resources\audio\sfx\counter_burst.wav">
       <Filter>Resources\Audio\sfx</Filter>
     </None>
@@ -295,9 +298,6 @@
       <Filter>Resources\Models\boss</Filter>
     </None>
     <None Include="resources\models\boss\boss.png">
-      <Filter>Resources\Models\boss</Filter>
-    </None>
-    <None Include="resources\models\boss\bossBody.png">
       <Filter>Resources\Models\boss</Filter>
     </None>
     <None Include="resources\models\player\player.glb">

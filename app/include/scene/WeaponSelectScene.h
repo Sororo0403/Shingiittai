@@ -79,6 +79,7 @@ class WeaponSelectScene : public BaseScene {
     bool waitingForHandTrackingReady_ = false;
     bool handTrackingStartRequested_ = false;
     bool handCameraConfirmVisible_ = false;
+    bool preserveMenuBgmOnExit_ = false;
     int handCameraConfirmIndex_ = 1;
 
     std::unique_ptr<GameScene> backgroundScene_;
@@ -90,7 +91,5 @@ class WeaponSelectScene : public BaseScene {
     Image handCameraConfirmNoImage_{};
     std::array<ButtonRect, kButtonCount> buttonRects_{};
     std::array<float, kButtonCount> pulseTimers_{};
-    uint32_t menuBgmSoundId_ = UINT32_MAX;
-    uint32_t menuBgmVoiceHandle_ = UINT32_MAX;
     bool cameraAvailable_ = false;
 };

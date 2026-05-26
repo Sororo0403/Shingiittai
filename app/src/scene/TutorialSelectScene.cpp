@@ -66,6 +66,12 @@ float SmoothStep(float t) { return t * t * (3.0f - 2.0f * t); }
 float Smooth01(float t) { return SmoothStep(std::clamp(t, 0.0f, 1.0f)); }
 } // namespace
 
+TutorialSelectScene::~TutorialSelectScene() {
+    if (!preserveMenuBgmOnExit_) {
+        AppSceneServices::StopMenuBgm(ctx_);
+    }
+}
+
 void TutorialSelectScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
     AppSceneServices::RequestHandTrackingStop();
@@ -76,6 +82,7 @@ void TutorialSelectScene::Initialize(const SceneContext &ctx) {
     waitingForHandTrackingReady_ = false;
     handTrackingStartRequested_ = false;
     handCameraConfirmVisible_ = false;
+    preserveMenuBgmOnExit_ = false;
     handCameraConfirmIndex_ = 1;
     pulseTimers_.fill(0.0f);
     cameraAvailable_ = false;
@@ -100,6 +107,8 @@ void TutorialSelectScene::Initialize(const SceneContext &ctx) {
         LoadTextureImage(L"app/resources/ui/title/exit_confirm_yes.png");
     handCameraConfirmNoImage_ =
         LoadTextureImage(L"app/resources/ui/title/exit_confirm_no.png");
+
+    AppSceneServices::StartMenuBgm(ctx);
 }
 
 void TutorialSelectScene::Update() {
@@ -123,6 +132,7 @@ void TutorialSelectScene::Update() {
         if (selectedIndex_ == kBackButtonIndex) {
             transitionTimer_ += ctx_->frame.deltaTime;
             if (transitionTimer_ >= kTransitionDuration) {
+                preserveMenuBgmOnExit_ = true;
                 sceneManager_->ChangeScene(std::make_unique<WeaponSelectScene>());
             }
             return;

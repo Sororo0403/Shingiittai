@@ -370,7 +370,6 @@ void ApplyRustedRobotMaterials(ModelManager *modelManager, uint32_t modelId,
         material.reflectionFresnelStrength = 0.012f;
         material.reflectionRoughness = 0.94f;
         material.enableDissolve = 0.0f;
-        material.customParams2 = {1.0f, 0.78f, 0.0f, 0.0f};
         material.dissolveEdgeColor = {0.68f, 0.24f, 0.08f, 0.46f};
         modelManager->SetMaterial(subMesh.materialId, material);
     }
@@ -391,8 +390,10 @@ void GameScene::StartBattleBgm() {
         return;
     }
 
-    battleBgmSoundId_ = ctx_->systems.sound->LoadOrCreateSilent(
-        L"app/resources/audio/bgm/bgm_Battle.wav");
+    const wchar_t *bgmPath = tutorialMode_
+                                 ? L"app/resources/audio/bgm/bgm_TutorialTheme.wav"
+                                 : L"app/resources/audio/bgm/bgm_Battle.wav";
+    battleBgmSoundId_ = ctx_->systems.sound->LoadOrCreateSilent(bgmPath);
     battleBgmVoiceHandle_ = ctx_->systems.sound->Play(battleBgmSoundId_, 0.36f,
                                                       true);
 }
@@ -878,8 +879,11 @@ void GameScene::Update() {
     if (titleDemoMode_) {
         player_.UpdateDemo(playerDeltaTime, enemy_.GetTransform().position);
     } else {
+        const bool lockPlayerForFarWarpSlash =
+            enemy_.ShouldLockPlayerForFarWarpSlash();
         player_.Update(input, playerDeltaTime, enemy_.GetTransform().position,
-                       cameraYaw_, baseDeltaTime, false);
+                       cameraYaw_, baseDeltaTime, false,
+                       lockPlayerForFarWarpSlash);
     }
     UpdateSwordVfx(baseDeltaTime);
     UpdateHandCameraPreview(baseDeltaTime);

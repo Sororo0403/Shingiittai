@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 
+class Input;
+
 class BattleResultScene : public BaseScene {
   public:
     enum class ResultKind {
@@ -34,6 +36,7 @@ class BattleResultScene : public BaseScene {
 
     Image LoadTextureImage(const std::wstring &path);
     void UpdateHandResultInput(float deltaTime);
+    void UpdateReturnTitleConfirm(Input &input);
     void InitializeWorld();
     void UpdateResultCamera(float screenWidth, float screenHeight);
     void DrawWorld(float screenWidth, float screenHeight);
@@ -43,6 +46,7 @@ class BattleResultScene : public BaseScene {
     void DrawGameOver(float screenWidth, float screenHeight);
     void DrawRankingPanel(float screenWidth, float screenHeight);
     void DrawHandInputStatus(float screenWidth, float screenHeight);
+    void DrawReturnTitleConfirmWindow(float screenWidth, float screenHeight);
     void DrawImage(const Image &image, float x, float y, float scale = 1.0f,
                    float alpha = 1.0f);
     void DrawRect(float x, float y, float w, float h,
@@ -69,8 +73,12 @@ class BattleResultScene : public BaseScene {
     float clearTime_ = 0.0f;
     float sceneTime_ = 0.0f;
     float handIdleTimer_ = 0.0f;
+    float returnTitleFadeTimer_ = 0.0f;
     int handSwingCount_ = 0;
     bool handSwingArmed_ = true;
+    bool returnTitleConfirmVisible_ = false;
+    bool returnTitleFadeActive_ = false;
+    int returnTitleConfirmIndex_ = 1;
 
     Image clearTitle_{};
     Image gameClearTitle_{};
@@ -79,6 +87,9 @@ class BattleResultScene : public BaseScene {
     Image noClearTimeLabel_{};
     Image retryLabel_{};
     Image menuLabel_{};
+    Image returnTitleConfirmMessageImage_{};
+    Image returnTitleConfirmYesImage_{};
+    Image returnTitleConfirmNoImage_{};
     Image rankingTitle_{};
     Image currentRecordLabel_{};
     std::array<Image, 2> rankingControlLabels_{};

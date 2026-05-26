@@ -29,6 +29,7 @@ constexpr float kHandSwingStartSpeed = 0.78f;
 constexpr float kHandSwingResetSpeed = 0.32f;
 constexpr int kRequiredHandSwings = 3;
 constexpr float kHandIdleMenuSeconds = 5.0f;
+constexpr float kReturnTitleFadeDuration = 0.42f;
 constexpr size_t kRankingControlCount = 2;
 constexpr size_t kMaxRankingEntries = 5;
 constexpr size_t kRankingDisplayEntries = 3;
@@ -37,6 +38,11 @@ const std::filesystem::path kRankingFilePath =
 
 XMFLOAT4 Color(float r, float g, float b, float a = 1.0f) {
     return {r, g, b, a};
+}
+
+float SmoothStep01(float t) {
+    t = std::clamp(t, 0.0f, 1.0f);
+    return t * t * (3.0f - 2.0f * t);
 }
 
 bool IsHandControl(InputControlType controlType) {
@@ -173,7 +179,6 @@ void ApplyResultEnemyMaterial(ModelManager *modelManager, uint32_t modelId,
         material.reflectionFresnelStrength = 0.012f;
         material.reflectionRoughness = 0.94f;
         material.enableDissolve = 0.0f;
-        material.customParams2 = {1.0f, 0.78f, 0.0f, 0.0f};
         material.dissolveEdgeColor = {0.68f, 0.24f, 0.08f, 0.46f};
         modelManager->SetMaterial(subMesh.materialId, material);
     }
@@ -209,8 +214,12 @@ void BattleResultScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
     sceneTime_ = 0.0f;
     handIdleTimer_ = 0.0f;
+    returnTitleFadeTimer_ = 0.0f;
     handSwingCount_ = 0;
     handSwingArmed_ = true;
+    returnTitleConfirmVisible_ = false;
+    returnTitleFadeActive_ = false;
+    returnTitleConfirmIndex_ = 1;
 
     if (IsHandControl(inputCalibration_.controlType)) {
         handController_.SetCalibration(inputCalibration_);
@@ -232,6 +241,12 @@ void BattleResultScene::Initialize(const SceneContext &ctx) {
         LoadTextureImage(L"app/resources/ui/result/no_clear_time.png");
     retryLabel_ = LoadTextureImage(L"app/resources/ui/result/retry.png");
     menuLabel_ = LoadTextureImage(L"app/resources/ui/result/menu.png");
+    returnTitleConfirmMessageImage_ = LoadTextureImage(
+        L"app/resources/ui/result/text/return_title_confirm_message.png");
+    returnTitleConfirmYesImage_ =
+        LoadTextureImage(L"app/resources/ui/title/exit_confirm_yes.png");
+    returnTitleConfirmNoImage_ =
+        LoadTextureImage(L"app/resources/ui/title/exit_confirm_no.png");
     rankingTitle_ =
         LoadTextureImage(L"app/resources/ui/result/text/ranking_title.png");
     currentRecordLabel_ =
@@ -260,13 +275,35 @@ void BattleResultScene::Update() {
     sceneTime_ += ctx_->frame.deltaTime;
     Input *input = ctx_->systems.input;
 
+    if (returnTitleFadeActive_) {
+        returnTitleFadeTimer_ =
+            (std::min)(returnTitleFadeTimer_ + ctx_->frame.deltaTime,
+                       kReturnTitleFadeDuration);
+        if (returnTitleFadeTimer_ >= kReturnTitleFadeDuration) {
+            sceneManager_->ChangeScene(std::make_unique<TitleScene>());
+        }
+        return;
+    }
+
+    if (returnTitleConfirmVisible_) {
+        UpdateReturnTitleConfirm(*input);
+        return;
+    }
+
     if (IsHandControl(inputCalibration_.controlType)) {
         UpdateHandResultInput(ctx_->frame.deltaTime);
         return;
     }
 
+    if (resultKind_ == ResultKind::Clear && input->IsKeyTrigger(DIK_SPACE)) {
+        returnTitleConfirmVisible_ = true;
+        returnTitleConfirmIndex_ = 1;
+        return;
+    }
+
     const bool retry =
-        input->IsKeyTrigger(DIK_RETURN) || input->IsKeyTrigger(DIK_SPACE) ||
+        input->IsKeyTrigger(DIK_RETURN) ||
+        (resultKind_ != ResultKind::Clear && input->IsKeyTrigger(DIK_SPACE)) ||
         input->IsMouseTrigger(0) ||
         (input->IsGamepadConnected() &&
          input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_A));
@@ -310,6 +347,35 @@ void BattleResultScene::UpdateHandResultInput(float deltaTime) {
 
     if (handIdleTimer_ >= kHandIdleMenuSeconds) {
         sceneManager_->ChangeScene(std::make_unique<TitleScene>());
+    }
+}
+
+void BattleResultScene::UpdateReturnTitleConfirm(Input &input) {
+    if (input.IsKeyTrigger(DIK_A) || input.IsKeyTrigger(DIK_LEFT)) {
+        returnTitleConfirmIndex_ = 0;
+    }
+    if (input.IsKeyTrigger(DIK_D) || input.IsKeyTrigger(DIK_RIGHT)) {
+        returnTitleConfirmIndex_ = 1;
+    }
+
+    if (input.IsKeyTrigger(DIK_ESCAPE)) {
+        returnTitleConfirmVisible_ = false;
+        returnTitleConfirmIndex_ = 1;
+        return;
+    }
+
+    const bool confirm =
+        input.IsKeyTrigger(DIK_RETURN) || input.IsKeyTrigger(DIK_SPACE);
+    if (!confirm) {
+        return;
+    }
+
+    if (returnTitleConfirmIndex_ == 0) {
+        returnTitleFadeActive_ = true;
+        returnTitleFadeTimer_ = 0.0f;
+    } else {
+        returnTitleConfirmVisible_ = false;
+        returnTitleConfirmIndex_ = 1;
     }
 }
 
@@ -452,6 +518,15 @@ void BattleResultScene::DrawResultOverlay(float screenWidth,
     }
     DrawRankingPanel(screenWidth, screenHeight);
     DrawHandInputStatus(screenWidth, screenHeight);
+    if (returnTitleConfirmVisible_) {
+        DrawReturnTitleConfirmWindow(screenWidth, screenHeight);
+    }
+    if (returnTitleFadeActive_) {
+        const float alpha =
+            SmoothStep01(returnTitleFadeTimer_ / kReturnTitleFadeDuration);
+        DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
+                 Color(0.0f, 0.0f, 0.0f, alpha));
+    }
 }
 
 void BattleResultScene::DrawClear(float screenWidth, float screenHeight) {
@@ -573,6 +648,70 @@ void BattleResultScene::DrawHandInputStatus(float screenWidth,
     DrawRect(barX, barY, barWidth, 8.0f, Color(0.16f, 0.18f, 0.20f, 0.90f));
     DrawRect(barX, barY, barWidth * progress, 8.0f,
              Color(0.95f, 0.72f, 0.18f, 0.95f));
+}
+
+void BattleResultScene::DrawReturnTitleConfirmWindow(float screenWidth,
+                                                     float screenHeight) {
+    DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
+             Color(0.0f, 0.0f, 0.0f, 0.54f));
+
+    const float panelW = std::clamp(screenWidth * 0.50f, 520.0f, 760.0f);
+    const float panelH = std::clamp(screenHeight * 0.30f, 240.0f, 320.0f);
+    const float panelX = (screenWidth - panelW) * 0.5f;
+    const float panelY = (screenHeight - panelH) * 0.5f;
+    const float edge = 3.0f;
+
+    DrawRect(panelX + 10.0f, panelY + 12.0f, panelW, panelH,
+             Color(0.0f, 0.0f, 0.0f, 0.36f));
+    DrawRect(panelX, panelY, panelW, panelH,
+             Color(0.018f, 0.020f, 0.026f, 0.96f));
+    DrawFrame(panelX, panelY, panelW, panelH, edge,
+              Color(0.92f, 0.68f, 0.28f, 0.74f));
+
+    const float messageScale =
+        (std::min)(1.0f, (panelW * 0.78f) /
+                             (std::max)(returnTitleConfirmMessageImage_.width,
+                                        1.0f));
+    const float messageW = returnTitleConfirmMessageImage_.width * messageScale;
+    const float messageH = returnTitleConfirmMessageImage_.height * messageScale;
+    DrawImage(returnTitleConfirmMessageImage_,
+              panelX + (panelW - messageW) * 0.5f,
+              panelY + panelH * 0.26f - messageH * 0.5f, messageScale);
+
+    const float buttonW = std::clamp(panelW * 0.24f, 130.0f, 176.0f);
+    const float buttonH = std::clamp(panelH * 0.23f, 58.0f, 76.0f);
+    const float buttonGap = panelW * 0.08f;
+    const float totalButtonW = buttonW * 2.0f + buttonGap;
+    const float buttonY = panelY + panelH * 0.61f;
+    const float firstButtonX = panelX + (panelW - totalButtonW) * 0.5f;
+    const Image *labels[2] = {&returnTitleConfirmYesImage_,
+                              &returnTitleConfirmNoImage_};
+
+    for (int i = 0; i < 2; ++i) {
+        const float x =
+            firstButtonX + static_cast<float>(i) * (buttonW + buttonGap);
+        const bool selected = i == returnTitleConfirmIndex_;
+        const XMFLOAT4 body =
+            selected ? Color(0.18f, 0.13f, 0.055f, 0.98f)
+                     : Color(0.040f, 0.046f, 0.058f, 0.92f);
+        const XMFLOAT4 line =
+            selected ? Color(1.0f, 0.78f, 0.34f, 0.96f)
+                     : Color(0.62f, 0.66f, 0.72f, 0.38f);
+
+        DrawRect(x, buttonY, buttonW, buttonH, body);
+        DrawFrame(x, buttonY, buttonW, buttonH, 2.0f, line);
+
+        const Image &label = *labels[i];
+        const float labelScale =
+            (std::min)({1.0f,
+                        (buttonH * 0.68f) / (std::max)(label.height, 1.0f),
+                        (buttonW * 0.86f) / (std::max)(label.width, 1.0f)});
+        const float labelW = label.width * labelScale;
+        const float labelH = label.height * labelScale;
+        DrawImage(label, x + (buttonW - labelW) * 0.5f,
+                  buttonY + (buttonH - labelH) * 0.5f, labelScale,
+                  selected ? 1.0f : 0.82f);
+    }
 }
 
 void BattleResultScene::DrawImage(const Image &image, float x, float y,

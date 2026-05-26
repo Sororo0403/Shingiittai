@@ -342,7 +342,7 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
             UpdateFacingToPlayer();
             LockCurrentFacing();
         }
-        if (!IsPlayerInMeleeFront()) {
+        if (!farSlashFollowup && !IsPlayerInMeleeFront()) {
             BeginChaseAction();
             return;
         }

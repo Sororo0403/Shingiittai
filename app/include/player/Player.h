@@ -25,7 +25,8 @@ class Player {
     void Update(Input *input, float deltaTime,
                 const DirectX::XMFLOAT3 &lookTarget, float cameraYaw,
                 float controlDeltaTime = -1.0f,
-                bool suppressLookAt = false);
+                bool suppressLookAt = false,
+                bool suppressMovement = false);
     void UpdateDemo(float deltaTime, const DirectX::XMFLOAT3 &lookTarget);
 
     void Draw(ModelManager *modelManager, const Camera &camera,

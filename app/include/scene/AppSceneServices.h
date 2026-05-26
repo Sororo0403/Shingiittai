@@ -1,4 +1,7 @@
 #pragma once
+#include "SceneContext.h"
+#include "SoundManager.h"
+#include <cstdint>
 #include <functional>
 
 namespace AppSceneServices {
@@ -6,10 +9,15 @@ using StartCallback = std::function<bool()>;
 using BoolCallback = std::function<bool()>;
 using VoidCallback = std::function<void()>;
 
+inline constexpr const wchar_t *kMenuBgmPath =
+    L"app/resources/audio/bgm/bgm_MenuTheme.wav";
+
 inline StartCallback requestHandTrackingStart;
 inline VoidCallback requestHandTrackingStop;
 inline BoolCallback isCameraDeviceAvailable;
 inline BoolCallback isHandTrackingReady;
+inline uint32_t menuBgmSoundId = SoundManager::kInvalidSoundId;
+inline uint32_t menuBgmVoiceHandle = SoundManager::kInvalidVoiceHandle;
 
 inline void ConfigureHandTracking(StartCallback start, VoidCallback stop,
                                   BoolCallback cameraAvailable,
@@ -55,5 +63,25 @@ inline bool HasHandTrackingReady() {
 
 inline bool IsHandTrackingReady() {
     return !isHandTrackingReady || isHandTrackingReady();
+}
+
+inline void StartMenuBgm(const SceneContext &ctx) {
+    if (ctx.systems.sound == nullptr ||
+        menuBgmVoiceHandle != SoundManager::kInvalidVoiceHandle) {
+        return;
+    }
+
+    menuBgmSoundId = ctx.systems.sound->LoadOrCreateSilent(kMenuBgmPath);
+    menuBgmVoiceHandle = ctx.systems.sound->Play(menuBgmSoundId, 0.36f, true);
+}
+
+inline void StopMenuBgm(const SceneContext *ctx) {
+    if (ctx == nullptr || ctx->systems.sound == nullptr ||
+        menuBgmVoiceHandle == SoundManager::kInvalidVoiceHandle) {
+        return;
+    }
+
+    ctx->systems.sound->Stop(menuBgmVoiceHandle);
+    menuBgmVoiceHandle = SoundManager::kInvalidVoiceHandle;
 }
 }
