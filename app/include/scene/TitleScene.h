@@ -10,6 +10,8 @@ class Input;
 
 class TitleScene : public BaseScene {
   public:
+    ~TitleScene() override;
+
     void Initialize(const SceneContext &ctx) override;
     void Update() override;
     void Draw() override;
@@ -32,6 +34,8 @@ class TitleScene : public BaseScene {
     void DrawImage(const Image &image, float x, float y, float alpha,
                    float scale);
     bool IsAnyButtonTriggered(const Input &input) const;
+    void StartTitleBgm();
+    void StopTitleBgm();
 
     Image logoImage_;
     Image pressAnyButtonImage_;
@@ -42,6 +46,8 @@ class TitleScene : public BaseScene {
     float sceneTime_ = 0.0f;
     float frameIntroTimer_ = 0.0f;
     float fadeTimer_ = 0.0f;
+    uint32_t titleBgmSoundId_ = UINT32_MAX;
+    uint32_t titleBgmVoiceHandle_ = UINT32_MAX;
     bool startRequested_ = false;
     bool exitConfirmVisible_ = false;
     int exitConfirmIndex_ = 1;

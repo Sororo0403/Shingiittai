@@ -96,7 +96,10 @@ Compile(const std::wstring &path, const std::string &entry,
     arguments.push_back(L"-Qembed_debug");
     arguments.push_back(L"-Od");
 #else
-    arguments.push_back(L"-O3");
+    const bool isPostProcessPixelShader =
+        std::filesystem::path(resolvedPath).filename() ==
+        L"PostProcessPS.hlsl";
+    arguments.push_back(isPostProcessPixelShader ? L"-Od" : L"-O3");
 #endif
 
     ComPtr<IDxcResult> result;

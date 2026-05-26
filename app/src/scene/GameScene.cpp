@@ -378,10 +378,33 @@ void ApplyRustedRobotMaterials(ModelManager *modelManager, uint32_t modelId,
 
 } // namespace
 
-GameScene::~GameScene() = default;
+GameScene::~GameScene() { StopBattleBgm(); }
 
 void GameScene::SetReadyPreviewHeat(float heat) {
     readyPreviewHeat_ = std::clamp(heat, 0.0f, 1.0f);
+}
+
+void GameScene::StartBattleBgm() {
+    if (ctx_ == nullptr || ctx_->systems.sound == nullptr ||
+        titleDemoMode_ || backgroundOnlyMode_ || readyPreviewMode_ ||
+        battleBgmVoiceHandle_ != SoundManager::kInvalidVoiceHandle) {
+        return;
+    }
+
+    battleBgmSoundId_ = ctx_->systems.sound->LoadOrCreateSilent(
+        L"app/resources/audio/bgm/bgm_Battle.wav");
+    battleBgmVoiceHandle_ = ctx_->systems.sound->Play(battleBgmSoundId_, 0.36f,
+                                                      true);
+}
+
+void GameScene::StopBattleBgm() {
+    if (ctx_ == nullptr || ctx_->systems.sound == nullptr ||
+        battleBgmVoiceHandle_ == SoundManager::kInvalidVoiceHandle) {
+        return;
+    }
+
+    ctx_->systems.sound->Stop(battleBgmVoiceHandle_);
+    battleBgmVoiceHandle_ = SoundManager::kInvalidVoiceHandle;
 }
 
 void GameScene::Initialize(const SceneContext &ctx) {
@@ -569,6 +592,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
             L"app/resources/audio/sfx/explosion_boss.wav");
         soundsLoaded_ = true;
     }
+    StartBattleBgm();
     cameraYaw_ = 0.0f;
     cameraPitch_ = 0.0f;
     isLockOn_ = true;

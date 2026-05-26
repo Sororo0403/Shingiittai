@@ -4,6 +4,7 @@
 #include "Input.h"
 #include "PostProcessSystem.h"
 #include "SceneManager.h"
+#include "SoundManager.h"
 #include "Sprite.h"
 #include "SpriteManager.h"
 #include "TextureManager.h"
@@ -32,6 +33,8 @@ float Smooth01(float t) {
 }
 } // namespace
 
+TitleScene::~TitleScene() { StopTitleBgm(); }
+
 void TitleScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
     AppSceneServices::RequestHandTrackingStop();
@@ -54,6 +57,7 @@ void TitleScene::Initialize(const SceneContext &ctx) {
     backgroundScene_ =
         std::make_unique<GameScene>(GameScene::Mode::TitleDemo);
     backgroundScene_->Initialize(ctx);
+    StartTitleBgm();
 }
 
 void TitleScene::Update() {
@@ -412,4 +416,26 @@ bool TitleScene::IsAnyButtonTriggered(const Input &input) const {
          input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_START));
     return input.IsKeyTrigger(DIK_RETURN) || input.IsKeyTrigger(DIK_SPACE) ||
            input.IsMouseTrigger(0) || gamepadTriggered;
+}
+
+void TitleScene::StartTitleBgm() {
+    if (ctx_ == nullptr || ctx_->systems.sound == nullptr ||
+        titleBgmVoiceHandle_ != SoundManager::kInvalidVoiceHandle) {
+        return;
+    }
+
+    titleBgmSoundId_ = ctx_->systems.sound->LoadOrCreateSilent(
+        L"app/resources/audio/bgm/bgm_TitleTheme.wav");
+    titleBgmVoiceHandle_ = ctx_->systems.sound->Play(titleBgmSoundId_, 0.36f,
+                                                     true);
+}
+
+void TitleScene::StopTitleBgm() {
+    if (ctx_ == nullptr || ctx_->systems.sound == nullptr ||
+        titleBgmVoiceHandle_ == SoundManager::kInvalidVoiceHandle) {
+        return;
+    }
+
+    ctx_->systems.sound->Stop(titleBgmVoiceHandle_);
+    titleBgmVoiceHandle_ = SoundManager::kInvalidVoiceHandle;
 }

@@ -138,6 +138,8 @@ class GameScene : public BaseScene {
     float ComputeGameplayTimeScale() const;
     void UpdateSwordVfx(float deltaTime);
     float ApplyEnemyDamage(float damage, bool deferTransitions = false);
+    void StartBattleBgm();
+    void StopBattleBgm();
 
   private:
     SwordInputCalibration inputCalibration_{};
@@ -190,6 +192,8 @@ class GameScene : public BaseScene {
     uint32_t counterSoundId_ = 0;
     uint32_t damageSoundId_ = 0;
     uint32_t explosionSoundId_ = 0;
+    uint32_t battleBgmSoundId_ = UINT32_MAX;
+    uint32_t battleBgmVoiceHandle_ = UINT32_MAX;
     bool soundsLoaded_ = false;
     std::array<bool, Player::kSwordCount> previousSwordSoundStates_{};
     float enemyCueParticleTimer_ = 0.0f;

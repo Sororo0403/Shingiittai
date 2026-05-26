@@ -426,9 +426,6 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
     // SoundManager
     SoundManager soundManager;
     soundManager.Initialize();
-    soundManager.Play(soundManager.LoadOrCreateSilent(
-                          L"app/resources/audio/bgm/bgm_Battle.wav"),
-                      0.36f, true);
 
     // TextureManager
     TextureManager textureManager;
