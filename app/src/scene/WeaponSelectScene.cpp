@@ -24,6 +24,8 @@ constexpr float kControlsPadding = 32.0f;
 constexpr float kControlsImageBottomTransparentPixels = 18.0f;
 constexpr float kButtonGroupYOffset = 24.0f;
 constexpr float kTitleBandVerticalPadding = 32.0f;
+constexpr float kNormalButtonNameMaxAspect = 495.0f / 53.0f;
+constexpr float kSmallButtonNameMaxAspect = 374.0f / 47.0f;
 
 struct ImageContentBounds {
     float left = 0.0f;
@@ -605,10 +607,14 @@ void WeaponSelectScene::DrawLabels(float screenWidth, float screenHeight) {
         const Image &name = modeNameImages_[i];
         const ImageContentBounds &bounds = kModeNameContentBounds[i];
         const bool tutorialButton = i == kTutorialButtonIndex;
-        const float targetLabelHeight =
-            rect.h * (tutorialButton ? 0.11f : 0.10f);
+        const float maxLabelAspect =
+            tutorialButton ? kSmallButtonNameMaxAspect
+                           : kNormalButtonNameMaxAspect;
+        const float targetLabelHeight = (std::min)(
+            rect.h * (tutorialButton ? 0.11f : 0.10f),
+            (rect.w * 0.82f) / maxLabelAspect);
         const float nameScale = (std::min)(
-            {tutorialButton ? 0.62f : 0.86f,
+            {tutorialButton ? 0.62f : 1.10f,
              targetLabelHeight / (std::max)(bounds.Height(), 1.0f),
              (rect.w * 0.82f) / (std::max)(bounds.Width(), 1.0f)});
         const float centerX = rect.x + rect.w * 0.5f;

@@ -291,6 +291,9 @@
     <None Include="resources\models\boss\boss.png">
       <Filter>Resources\Models\boss</Filter>
     </None>
+    <None Include="resources\models\boss\bossBody.png">
+      <Filter>Resources\Models\boss</Filter>
+    </None>
     <None Include="resources\models\player\player.glb">
       <Filter>Resources\Models\player</Filter>
     </None>

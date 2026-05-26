@@ -459,35 +459,43 @@ void GameScene::UpdateReadyPreviewEnemyAnimation() {
         return;
     }
 
-    const float heat = Clamp01(readyPreviewHeat_);
-    const bool hasTeleport = HasAnimation(enemyModel, kBossAnimTeleport);
-    const bool hasPhaseChange = HasAnimation(enemyModel, kBossAnimPhaseChange);
+    const float difficulty = Clamp01(readyPreviewHeat_) * 9.0f;
     std::string clip{};
     float clipRatio = 0.0f;
 
-    if (hasPhaseChange && heat >= 0.20f) {
-        clip = kBossAnimPhaseChange;
-        const float phase = Smooth01((heat - 0.20f) / 0.80f);
-        constexpr float kChargeStart = 0.10f;
-        constexpr float kChargeEnd = 0.34f;
-        constexpr float kReleaseStart = 0.38f;
-        constexpr float kReleaseMoment = 0.92f;
-        if (phase < 0.44f) {
-            const float charge = Smooth01(phase / 0.44f);
-            clipRatio = kChargeStart + (kChargeEnd - kChargeStart) * charge;
-        } else {
-            const float release = Smooth01((phase - 0.44f) / 0.56f);
-            clipRatio =
-                kReleaseStart + (kReleaseMoment - kReleaseStart) * release;
-        }
-    } else if (hasTeleport) {
+    if (difficulty <= 2.0f && HasAnimation(enemyModel, kBossAnimTeleport)) {
         clip = kBossAnimTeleport;
-        const float stance = Smooth01(heat / 0.20f);
-        clipRatio = kBladeClashGuardPoseClipRatio + 0.08f * stance;
+        const float reverse = Smooth01(difficulty / 2.0f);
+        clipRatio =
+            kBladeClashGuardPoseClipRatio +
+            (kBladeClashGuardOpenClipRatio - kBladeClashGuardPoseClipRatio) *
+                reverse;
+    } else if (HasAnimation(enemyModel, kBossAnimPhaseChange)) {
+        clip = kBossAnimPhaseChange;
+        constexpr float kPreviewChargeClipStart = 0.00f;
+        constexpr float kPreviewReleaseGateClipRatio = 0.15f;
+        constexpr float kPreviewReleaseMomentClipRatio = 0.36f;
+        if (difficulty < 7.0f) {
+            const float charge = Smooth01((difficulty - 2.0f) / 5.0f);
+            clipRatio =
+                kPreviewChargeClipStart +
+                (kPreviewReleaseGateClipRatio - kPreviewChargeClipStart) *
+                    charge;
+        } else if (difficulty < 9.0f) {
+            const float release = Smooth01((difficulty - 7.0f) / 2.0f);
+            clipRatio =
+                kPreviewReleaseGateClipRatio +
+                (kPreviewReleaseMomentClipRatio -
+                 kPreviewReleaseGateClipRatio) *
+                    release;
+        } else {
+            clipRatio = kPreviewReleaseMomentClipRatio;
+        }
+    } else if (HasAnimation(enemyModel, kBossAnimTeleport)) {
+        clip = kBossAnimTeleport;
+        clipRatio = kBladeClashGuardOpenClipRatio;
     } else {
-        clip = PickFirstAnimation(enemyModel, {kBossAnimPhaseChange,
-                                               kBossAnimIdle,
-                                               kBossAnimMove});
+        clip = PickFirstAnimation(enemyModel, {kBossAnimIdle, kBossAnimMove});
         clipRatio = 0.0f;
     }
 

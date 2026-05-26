@@ -19,6 +19,10 @@ using namespace DirectX;
 namespace {
 constexpr float kTransitionDuration = 0.22f;
 constexpr float kStartTransitionDuration = 0.42f;
+constexpr float kIntroBackgroundDuration = 0.86f;
+constexpr float kIntroGaugeDelay = 0.12f;
+constexpr float kIntroGaugeDuration = 0.62f;
+constexpr float kIntroInputDelay = 0.62f;
 constexpr float kHandSwingStartSpeed = 0.78f;
 constexpr float kHandSwingResetSpeed = 0.32f;
 constexpr int kDifficultyMinTenths = 0;
@@ -160,8 +164,14 @@ void DifficultyCauldronScene::Update() {
         (std::max)(0.0f, handSwingCooldown_ - ctx_->frame.deltaTime);
 
     if (backgroundScene_) {
-        backgroundScene_->SetReadyPreviewHeat(DifficultyRatio(SelectedDifficultyValue()));
+        const float introHeat =
+            SmoothStep(sceneTime_ / kIntroBackgroundDuration);
+        backgroundScene_->SetReadyPreviewHeat(
+            DifficultyRatio(SelectedDifficultyValue()) * introHeat);
         backgroundScene_->Update();
+    }
+    if (sceneTime_ <= kIntroBackgroundDuration + 0.08f) {
+        ApplyHeatPostProcess();
     }
 
     if (returnToSelectRequested_) {
@@ -187,7 +197,9 @@ void DifficultyCauldronScene::Update() {
         UpdateCameraPreview(ctx_->frame.deltaTime);
     }
 
-    UpdateSelection();
+    if (sceneTime_ >= kIntroInputDelay) {
+        UpdateSelection();
+    }
 }
 
 void DifficultyCauldronScene::Draw() {
@@ -199,10 +211,14 @@ void DifficultyCauldronScene::Draw() {
         backgroundScene_->Draw();
     }
 
-    const float intro = SmoothStep(sceneTime_ / 0.36f);
+    const float backgroundIntro = SmoothStep(sceneTime_ / kIntroBackgroundDuration);
+    const float overlayIntro = SmoothStep(sceneTime_ / 0.58f);
     ctx_->rendering.sprite->PreDraw();
     DrawRect(0.0f, 0.0f, w, h,
-             Color(0.0f, 0.0f, 0.0f, 0.26f - intro * 0.10f + t * 0.025f));
+             Color(0.0f, 0.0f, 0.0f,
+                   1.0f - backgroundIntro +
+                       (0.26f - overlayIntro * 0.10f + t * 0.025f) *
+                           backgroundIntro));
     DrawHeatEffects(w, h);
     DrawDifficultyGauge(w, h);
 
@@ -388,21 +404,24 @@ void DifficultyCauldronScene::ApplyHeatPostProcess() {
     }
 
     const float t = DifficultyRatio(SelectedDifficultyValue());
+    const float intro = SmoothStep(sceneTime_ / kIntroBackgroundDuration);
     const float danger = t * t * (3.0f - 2.0f * t);
     PostProcessProfile profile{};
     profile.vignette.enabled = true;
-    profile.vignette.strength = 0.08f + 0.09f * t + 0.10f * danger;
+    profile.vignette.strength = (0.08f + 0.09f * t + 0.10f * danger) * intro;
     profile.vignette.scale = 8.2f + 1.4f * t + 1.8f * danger;
     profile.vignette.power = 1.02f + 0.08f * danger;
     profile.radialBlur.sampleCount = 1;
     profile.radialBlur.strength = 0.0f;
-    profile.sceneDim.strength = 0.010f + 0.032f * t + 0.040f * danger;
+    profile.sceneDim.strength =
+        (0.010f + 0.032f * t + 0.040f * danger) * intro;
     ctx_->rendering.postProcessSystem->SetProfile(profile);
 }
 
 void DifficultyCauldronScene::DrawHeatEffects(float screenWidth,
                                               float screenHeight) {
     const float t = DifficultyRatio(SelectedDifficultyValue());
+    const float intro = SmoothStep(sceneTime_ / kIntroBackgroundDuration);
     const float danger = t * t * (3.0f - 2.0f * t);
     const float pulse =
         0.5f + 0.5f * std::sinf(sceneTime_ * (4.2f + 7.5f * danger));
@@ -410,10 +429,12 @@ void DifficultyCauldronScene::DrawHeatEffects(float screenWidth,
         danger * (0.72f + 0.28f * std::sinf(sceneTime_ * 17.0f));
     DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
              Color(0.12f * t + 0.22f * danger, 0.024f * t,
-                   0.020f * (1.0f - t), 0.018f + 0.035f * t + 0.050f * danger));
+                   0.020f * (1.0f - t),
+                   (0.018f + 0.035f * t + 0.050f * danger) * intro));
 
     if (t > 0.18f) {
-        const float bandAlpha = (0.055f + 0.20f * danger) * (0.55f + 0.45f * pulse);
+        const float bandAlpha = (0.055f + 0.20f * danger) *
+                                (0.55f + 0.45f * pulse) * intro;
         const float bandH = screenHeight * (0.050f + 0.085f * danger);
         DrawRect(0.0f, 0.0f, screenWidth, bandH,
                  Color(1.0f, 0.42f + 0.18f * t, 0.08f, bandAlpha));
@@ -423,7 +444,7 @@ void DifficultyCauldronScene::DrawHeatEffects(float screenWidth,
 
     if (t > 0.48f) {
         const float sideW = screenWidth * (0.012f + 0.070f * danger);
-        const float sideAlpha = 0.035f + 0.26f * panic;
+        const float sideAlpha = (0.035f + 0.26f * panic) * intro;
         DrawRect(0.0f, 0.0f, sideW, screenHeight,
                  Color(1.0f, 0.10f + 0.16f * t, 0.02f, sideAlpha));
         DrawRect(screenWidth - sideW, 0.0f, sideW, screenHeight,
@@ -435,9 +456,10 @@ void DifficultyCauldronScene::DrawHeatEffects(float screenWidth,
         const float streakY =
             screenHeight * (0.22f + 0.52f * (0.5f + 0.5f * std::sinf(sceneTime_ * 9.3f)));
         DrawRect(0.0f, streakY, screenWidth, 5.0f + 10.0f * danger,
-                 Color(1.0f, 0.52f, 0.10f, 0.090f * flashAlpha * pulse));
+                 Color(1.0f, 0.52f, 0.10f,
+                       0.090f * flashAlpha * pulse * intro));
         DrawRect(0.0f, streakY + 16.0f, screenWidth, 2.0f + 5.0f * danger,
-                 Color(1.0f, 0.10f, 0.04f, 0.060f * flashAlpha));
+                 Color(1.0f, 0.10f, 0.04f, 0.060f * flashAlpha * intro));
     }
 
     if (t > 0.34f) {
@@ -451,7 +473,8 @@ void DifficultyCauldronScene::DrawHeatEffects(float screenWidth,
                 screenHeight * (0.15f + 0.70f * lane + 0.035f * (wave - 0.5f));
             const float h = 2.0f + 8.0f * danger + 7.0f * wave * heatAlpha;
             const float alpha =
-                (0.018f + 0.065f * danger) * heatAlpha * (0.45f + 0.55f * wave);
+                (0.018f + 0.065f * danger) * heatAlpha *
+                (0.45f + 0.55f * wave) * intro;
             DrawRect(0.0f, y, screenWidth, h,
                      Color(1.0f, 0.36f + 0.28f * t, 0.06f, alpha));
         }
@@ -462,7 +485,8 @@ void DifficultyCauldronScene::DrawHeatEffects(float screenWidth,
         const float flash =
             0.5f + 0.5f * std::sinf(sceneTime_ * 23.0f);
         DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
-                 Color(1.0f, 0.30f, 0.08f, 0.022f * maxAlpha * flash));
+                 Color(1.0f, 0.30f, 0.08f,
+                       0.022f * maxAlpha * flash * intro));
     }
 }
 
@@ -474,66 +498,96 @@ void DifficultyCauldronScene::DrawDifficultyGauge(float screenWidth,
     const float gaugeH = std::clamp(screenHeight * 0.18f, 116.0f, 164.0f);
     const float x = (screenWidth - gaugeW) * 0.5f;
     const float y = screenHeight * 0.68f;
+    const float form =
+        SmoothStep((sceneTime_ - kIntroGaugeDelay) / kIntroGaugeDuration);
+    const float labelIntro =
+        SmoothStep((sceneTime_ - kIntroGaugeDelay - 0.20f) /
+                   (kIntroGaugeDuration - 0.08f));
+    if (form <= 0.001f) {
+        return;
+    }
+    const float formedW = gaugeW * form;
+    const float leftTrim = 3.0f;
     const XMFLOAT4 gold = Color(0.86f, 0.61f - 0.22f * t, 0.21f, 0.94f);
     const XMFLOAT4 brightGold =
         Color(1.0f, 0.86f - 0.32f * t, 0.38f, 0.92f);
-    const XMFLOAT4 darkGold = Color(0.35f, 0.20f, 0.08f, 0.94f);
 
-    DrawTextureRect(triangleMaskImage_.textureId, x - 30.0f, y - 24.0f,
-                    gaugeW + 60.0f, gaugeH + 48.0f,
-                    Color(0.0f, 0.0f, 0.0f, 0.48f), 1.0f,
-                    SpriteBlendMode::PremultipliedMask);
-    DrawTextureRect(triangleMaskImage_.textureId, x - 16.0f, y - 15.0f,
-                    gaugeW + 32.0f, gaugeH + 30.0f, darkGold, 1.0f,
-                    SpriteBlendMode::PremultipliedMask);
-    DrawTextureRect(triangleMaskImage_.textureId, x - 9.0f, y - 9.0f,
-                    gaugeW + 18.0f, gaugeH + 18.0f, gold, 1.0f,
-                    SpriteBlendMode::PremultipliedMask);
-    DrawTextureRect(triangleMaskImage_.textureId, x + 8.0f, y + 10.0f,
-                    gaugeW - 22.0f, gaugeH - 20.0f,
-                    Color(0.010f, 0.012f, 0.020f, 0.93f), 1.0f,
-                    SpriteBlendMode::PremultipliedMask);
-    DrawTextureRect(triangleMaskImage_.textureId, x + 13.0f, y + 15.0f,
-                    gaugeW - 34.0f, gaugeH - 30.0f,
-                    Color(0.025f, 0.026f, 0.034f, 0.82f), 1.0f,
-                    SpriteBlendMode::PremultipliedMask);
+    const float shadowW = formedW + 36.0f * form;
+    const float shadowTrim = (std::min)(leftTrim, shadowW);
+    const float shadowUvLeft = shadowW > 0.0f ? (shadowTrim / shadowW) * form : 0.0f;
+    DrawTextureRect(triangleMaskImage_.textureId, x - 18.0f + shadowTrim,
+                    y - 16.0f, shadowW - shadowTrim, gaugeH + 32.0f,
+                    Color(0.0f, 0.0f, 0.0f, 0.46f * form),
+                    form - shadowUvLeft, SpriteBlendMode::PremultipliedMask,
+                    shadowUvLeft);
+
+    const float outerW = formedW + 16.0f * form;
+    const float outerTrim = (std::min)(leftTrim, outerW);
+    const float outerUvLeft = outerW > 0.0f ? (outerTrim / outerW) * form : 0.0f;
+    DrawTextureRect(triangleMaskImage_.textureId, x - 8.0f + outerTrim,
+                    y - 8.0f, outerW - outerTrim, gaugeH + 16.0f,
+                    Color(gold.x, gold.y, gold.z, gold.w * form),
+                    form - outerUvLeft, SpriteBlendMode::PremultipliedMask,
+                    outerUvLeft);
+
+    const float backW = (gaugeW - 32.0f) * form;
+    const float backTrim = (std::min)(leftTrim, backW);
+    const float backUvLeft = backW > 0.0f ? (backTrim / backW) * form : 0.0f;
+    DrawTextureRect(triangleMaskImage_.textureId, x + 12.0f + backTrim,
+                    y + 14.0f, backW - backTrim, gaugeH - 30.0f,
+                    Color(0.010f, 0.012f, 0.020f, 0.94f * form),
+                    form - backUvLeft, SpriteBlendMode::PremultipliedMask,
+                    backUvLeft);
 
     const float innerW = gaugeW - 44.0f;
     const float innerH = gaugeH - 40.0f;
     const float innerX = x + 18.0f;
     const float innerY = y + 20.0f;
 
-    if (t > 0.001f) {
-        DrawTextureRect(triangleGradientImage_.textureId, innerX, innerY,
-                        innerW * t, innerH, Color(1.0f, 1.0f, 1.0f, 0.98f),
-                        t);
-        DrawTextureRect(
-            triangleMaskImage_.textureId, innerX, innerY, innerW * t, innerH,
-            Color(1.0f, 0.82f - 0.46f * t, 0.28f, 0.13f + 0.18f * t),
-            t, SpriteBlendMode::PremultipliedMask);
+    const float fillT = (std::min)(t, form);
+    if (fillT > 0.001f) {
+        const float fillW = innerW * fillT;
+        const float fillTrim = (std::min)(leftTrim, fillW);
+        const float fillUvLeft =
+            fillW > 0.0f ? (fillTrim / fillW) * fillT : 0.0f;
+        DrawTextureRect(triangleGradientImage_.textureId, innerX + fillTrim,
+                        innerY, fillW - fillTrim, innerH,
+                        Color(1.0f, 1.0f, 1.0f, 0.98f * form),
+                        fillT - fillUvLeft, SpriteBlendMode::Alpha,
+                        fillUvLeft);
     }
 
     for (int i = 0; i < 10; ++i) {
         const float markerT = DifficultyRatio(static_cast<float>(i));
+        if (markerT > form + 0.015f) {
+            continue;
+        }
         const float markerX = innerX + innerW * markerT;
         const float markerH = (std::max)(6.0f, innerH * markerT);
         const float markerY = innerY + innerH - markerH;
         const bool selected = selectedDifficultyTenths_ == i * 10;
-        DrawRect(markerX - 2.0f, markerY, 4.0f, markerH,
-                 selected ? brightGold : Color(0.70f, 0.76f, 0.88f, 0.20f));
-        DrawRect(markerX - 5.0f, markerY - 5.0f, 10.0f, 4.0f,
-                 selected ? brightGold : Color(0.52f, 0.45f, 0.32f, 0.42f));
-        DrawRect(markerX - 5.0f, innerY + innerH + 2.0f, 10.0f, 4.0f,
-                 selected ? brightGold : Color(0.52f, 0.45f, 0.32f, 0.42f));
+        const float markerAlpha =
+            labelIntro * std::clamp((form - markerT) * 8.0f, 0.0f, 1.0f);
+        const XMFLOAT4 markerColor =
+            selected ? Color(brightGold.x, brightGold.y, brightGold.z,
+                             brightGold.w * markerAlpha)
+                     : Color(0.70f, 0.76f, 0.88f, 0.20f * markerAlpha);
+        if (i != 0) {
+            DrawRect(markerX - 2.0f, markerY, 4.0f, markerH, markerColor);
+            DrawRect(markerX - 5.0f, markerY - 5.0f, 10.0f, 4.0f,
+                     selected
+                         ? markerColor
+                         : Color(0.52f, 0.45f, 0.32f, 0.42f * markerAlpha));
+        }
         DrawDigit(i, markerX, y + gaugeH + 18.0f, selected ? 0.62f : 0.46f,
-                  selected ? 0.95f : 0.54f);
+                  (selected ? 0.95f : 0.54f) * markerAlpha);
     }
 
     const float selectedX = innerX + innerW * t;
     const float digitScale = 1.56f + 0.20f * selectionPulse_;
     DrawDifficultyValue(difficulty, selectedX,
                         y - 86.0f - selectionPulse_ * 8.0f, digitScale,
-                        0.98f);
+                        0.98f * labelIntro);
 }
 
 void DifficultyCauldronScene::DrawDigit(int digit, float centerX, float y,
@@ -587,7 +641,8 @@ void DifficultyCauldronScene::DrawTextureRect(uint32_t textureId, float x,
                                               float y, float w, float h,
                                               const XMFLOAT4 &color,
                                               float uvWidth,
-                                              SpriteBlendMode blendMode) {
+                                              SpriteBlendMode blendMode,
+                                              float uvLeft) {
     if (textureId == 0 || w <= 0.0f || h <= 0.0f) {
         return;
     }
@@ -595,6 +650,7 @@ void DifficultyCauldronScene::DrawTextureRect(uint32_t textureId, float x,
     Sprite sprite{};
     sprite.position = {x, y};
     sprite.size = {w, h};
+    sprite.uvLeftTop = {std::clamp(uvLeft, 0.0f, 1.0f), 0.0f};
     sprite.uvSize = {std::clamp(uvWidth, 0.0f, 1.0f), 1.0f};
     sprite.color = color;
     sprite.textureId = textureId;

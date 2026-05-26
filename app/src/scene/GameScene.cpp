@@ -14,6 +14,7 @@
 #include "TextureManager.h"
 #include "TitleScene.h"
 #include "TutorialSelectScene.h"
+#include "WeaponSelectScene.h"
 #include "WinApp.h"
 #include <Xinput.h>
 #include "compat/ParticleCompat.h"
@@ -42,10 +43,18 @@ constexpr int kTutorialTextHorizontal = 4;
 constexpr int kTutorialTextRelease = 5;
 constexpr int kTutorialTextSuccess = 6;
 constexpr int kTutorialTextMiss = 7;
-constexpr int kTutorialTextExit = 8;
+constexpr int kTutorialTextComplete = 8;
+constexpr int kTutorialTextExcellent = 9;
 constexpr int kTutorialStepLeftRight = 0;
 constexpr int kTutorialStepRightSword = 1;
-constexpr int kTutorialStepCombat = 2;
+constexpr int kTutorialStepRedSmash = 2;
+constexpr int kTutorialStepGreenSmash = 3;
+constexpr int kTutorialStepRedSweep = 4;
+constexpr int kTutorialStepGreenSweep = 5;
+constexpr int kTutorialStepPractice = 6;
+constexpr float kTutorialEntryFadeDuration = 0.64f;
+constexpr float kTutorialEntryBlackHold = 0.14f;
+constexpr float kTutorialExitFadeDuration = 0.42f;
 constexpr int kDebugBladeClashKey = DIK_F6;
 constexpr uint16_t kHandCameraPreviewPort = 5006;
 constexpr float kHandCameraPreviewStaleSeconds = 0.75f;
@@ -599,13 +608,20 @@ void GameScene::Initialize(const SceneContext &ctx) {
     battleResultRequested_ = false;
     backgroundBuildTimer_ = 0.0f;
     tutorialTimer_ = 0.0f;
-    tutorialAttackDelay_ = 1.2f;
+    tutorialEntryFadeTimer_ = 0.0f;
+    tutorialExitFadeTimer_ = 0.0f;
+    tutorialAttackDelay_ = 1.8f;
     tutorialSuccessTimer_ = 0.0f;
     tutorialMissTimer_ = 0.0f;
+    tutorialExcellentTimer_ = 0.0f;
+    tutorialRedWaitTimer_ = 0.0f;
+    tutorialGreenCutTimer_ = 0.0f;
     tutorialStep_ = 0;
     tutorialAttackIndex_ = 0;
     tutorialAttackInProgress_ = false;
     tutorialCounterSuccess_ = false;
+    tutorialExitRequested_ = false;
+    tutorialExitToSelect_ = false;
     victorySequenceActive_ = false;
     victorySequenceTimer_ = 0.0f;
     victoryClearTime_ = 0.0f;
@@ -658,6 +674,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
     hud_.Initialize(*ctx_);
     if (tutorialMode_) {
         LoadTutorialImages();
+        tutorialEntryFadeTimer_ = -kTutorialEntryBlackHold;
         enemy_.SetTutorialPosition({0.0f, 0.0f, 3.10f});
         enemy_.FaceTargetImmediately(player_.GetTransform().position);
         enemy_.ResetTutorialState();
@@ -699,12 +716,12 @@ void GameScene::Update() {
         player_.LockPosition({0.0f, 0.0f, 0.0f});
         UpdateReadyPreviewEnemyAnimation();
         ApplyEnemyProceduralAnimation();
+        UpdateSceneLighting();
+        UpdateReadyPreviewCamera(baseDeltaTime);
         EmitReadyPreviewHeatParticles(baseDeltaTime);
         sparkParticles_.Update(baseDeltaTime);
         explosionParticles_.Update(baseDeltaTime);
         smokeParticles_.Update(baseDeltaTime);
-        UpdateSceneLighting();
-        UpdateReadyPreviewCamera(baseDeltaTime);
         return;
     }
     if (backgroundOnlyMode_) {
@@ -991,10 +1008,13 @@ bool GameScene::IsTutorialOperationStepComplete() const {
 
 void GameScene::AdvanceTutorialOperationStep() {
     ++tutorialStep_;
-    tutorialSuccessTimer_ = 0.75f;
+    tutorialSuccessTimer_ = 1.15f;
     tutorialMissTimer_ = 0.0f;
+    tutorialExcellentTimer_ = 0.0f;
+    tutorialRedWaitTimer_ = 0.0f;
+    tutorialGreenCutTimer_ = 0.0f;
     tutorialAttackDelay_ =
-        tutorialStep_ >= kTutorialStepCombat ? 1.35f : 0.0f;
+        tutorialStep_ >= kTutorialStepRedSmash ? 2.0f : 0.0f;
     tutorialAttackInProgress_ = false;
     tutorialCounterSuccess_ = false;
     enemy_.ResetTutorialState();
@@ -1004,12 +1024,42 @@ void GameScene::AdvanceTutorialOperationStep() {
 
 void GameScene::UpdateTutorial(float deltaTime) {
     Input *input = ctx_->systems.input;
-    if (input != nullptr && input->IsKeyTrigger(DIK_ESCAPE)) {
-        sceneManager_->ChangeScene(std::make_unique<TutorialSelectScene>());
+    if (tutorialExitRequested_) {
+        tutorialExitFadeTimer_ =
+            (std::min)(tutorialExitFadeTimer_ + deltaTime,
+                       kTutorialExitFadeDuration);
+        if (tutorialExitFadeTimer_ >= kTutorialExitFadeDuration) {
+            if (tutorialExitToSelect_) {
+                sceneManager_->ChangeScene(
+                    std::make_unique<TutorialSelectScene>());
+            } else {
+                sceneManager_->ChangeScene(
+                    std::make_unique<WeaponSelectScene>());
+            }
+        }
         return;
     }
 
+    if (input != nullptr) {
+        if (tutorialStep_ >= kTutorialStepPractice &&
+            input->IsKeyTrigger(DIK_SPACE)) {
+            tutorialExitRequested_ = true;
+            tutorialExitToSelect_ = false;
+            tutorialExitFadeTimer_ = 0.0f;
+            return;
+        }
+        if (input->IsKeyTrigger(DIK_ESCAPE)) {
+            tutorialExitRequested_ = true;
+            tutorialExitToSelect_ = true;
+            tutorialExitFadeTimer_ = 0.0f;
+            return;
+        }
+    }
+
     tutorialTimer_ += deltaTime;
+    tutorialEntryFadeTimer_ =
+        (std::min)(tutorialEntryFadeTimer_ + deltaTime,
+                   kTutorialEntryFadeDuration);
     sceneLightTime_ += deltaTime;
     backgroundBuildTimer_ = 1.2f;
     combatFeedback_.Update(deltaTime, sceneLightTime_);
@@ -1026,8 +1076,10 @@ void GameScene::UpdateTutorial(float deltaTime) {
     tutorialSuccessTimer_ =
         (std::max)(0.0f, tutorialSuccessTimer_ - deltaTime);
     tutorialMissTimer_ = (std::max)(0.0f, tutorialMissTimer_ - deltaTime);
+    tutorialExcellentTimer_ =
+        (std::max)(0.0f, tutorialExcellentTimer_ - deltaTime);
 
-    if (tutorialStep_ < kTutorialStepCombat) {
+    if (tutorialStep_ < kTutorialStepRedSmash) {
         if (tutorialSuccessTimer_ <= 0.0f &&
             IsTutorialOperationStepComplete()) {
             AdvanceTutorialOperationStep();
@@ -1049,30 +1101,123 @@ void GameScene::UpdateTutorial(float deltaTime) {
         return;
     }
 
-    if (!tutorialAttackInProgress_) {
+    auto tutorialAttackKind = [&]() {
+        if (tutorialStep_ == kTutorialStepRedSmash ||
+            tutorialStep_ == kTutorialStepGreenSmash) {
+            return ActionKind::Smash;
+        }
+        if (tutorialStep_ == kTutorialStepRedSweep ||
+            tutorialStep_ == kTutorialStepGreenSweep) {
+            return ActionKind::Sweep;
+        }
+        return (tutorialAttackIndex_ % 2 == 0) ? ActionKind::Smash
+                                               : ActionKind::Sweep;
+    };
+    auto isRedWaitStep = [&]() {
+        return tutorialStep_ == kTutorialStepRedSmash ||
+               tutorialStep_ == kTutorialStepRedSweep;
+    };
+    auto isGreenCutStep = [&]() {
+        return tutorialStep_ == kTutorialStepGreenSmash ||
+               tutorialStep_ == kTutorialStepGreenSweep;
+    };
+
+    if (!tutorialAttackInProgress_ && tutorialExcellentTimer_ <= 0.0f) {
         tutorialAttackDelay_ -= deltaTime;
         if (tutorialAttackDelay_ <= 0.0f) {
             enemy_.ResetTutorialState();
             enemy_.SetTutorialPosition({0.0f, 0.0f, 3.10f});
             enemy_.FaceTargetImmediately(player_.GetTransform().position);
-            const ActionKind attackKind =
-                (tutorialAttackIndex_ % 2 == 0) ? ActionKind::Smash
-                                                : ActionKind::Sweep;
+            const ActionKind attackKind = tutorialAttackKind();
             enemy_.BeginTutorialAttack(attackKind);
             EmitEnemyActionParticles(attackKind, ActionStep::Charge);
             tutorialAttackInProgress_ = true;
             tutorialCounterSuccess_ = false;
+            tutorialRedWaitTimer_ = isRedWaitStep() ? 3.0f : 0.0f;
+            tutorialGreenCutTimer_ = 0.0f;
             counterCinematicActive_ = false;
             counterCinematicTimer_ = 0.0f;
             SetEnemyAnimationFrozen(false);
         }
     }
 
+    const auto swordSlashStatesBeforeCombat = player_.GetSwordSlashStates();
+    bool tutorialSlashStarted = false;
+    for (size_t i = 0; i < swordSlashStatesBeforeCombat.size(); ++i) {
+        if (swordSlashStatesBeforeCombat[i] &&
+            !previousCombatSlashStates_[i]) {
+            tutorialSlashStarted = true;
+            break;
+        }
+    }
+
+    if (tutorialAttackInProgress_ && isRedWaitStep() &&
+        tutorialSlashStarted) {
+        tutorialMissTimer_ = 0.0f;
+        tutorialExcellentTimer_ = 0.0f;
+        tutorialRedWaitTimer_ = 0.0f;
+        tutorialGreenCutTimer_ = 0.0f;
+        tutorialAttackDelay_ = 1.15f;
+        tutorialAttackInProgress_ = false;
+        tutorialCounterSuccess_ = false;
+        enemyRedPunishUncounterable_ = false;
+        enemy_.ResetTutorialState();
+        enemy_.SetTutorialPosition({0.0f, 0.0f, 3.10f});
+        enemy_.FaceTargetImmediately(player_.GetTransform().position);
+        previousCombatSlashStates_ = swordSlashStatesBeforeCombat;
+    }
+
     const ActionKind previousEnemyActionKind = enemy_.GetActionKind();
     const ActionStep previousEnemyActionStep = enemy_.GetActionStep();
-    enemy_.UpdateTutorial(BuildPlayerCombatObservation(), deltaTime);
+    const bool holdRedCue =
+        isRedWaitStep() && tutorialRedWaitTimer_ > 0.0f &&
+        (enemy_.GetReleaseAnticipationRatio() > 0.0f ||
+         enemy_.GetActionStep() == ActionStep::Active);
+    const bool holdGreenCue =
+        isGreenCutStep() && tutorialGreenCutTimer_ > 0.0f &&
+        (enemy_.GetReleaseAnticipationRatio() > 0.0f ||
+         enemy_.GetActionStep() == ActionStep::Active);
+    const float enemyTutorialDeltaTime =
+        tutorialExcellentTimer_ > 0.0f
+            ? 0.0f
+            : holdGreenCue
+            ? 0.0f
+            : isRedWaitStep()
+            ? (holdRedCue ? 0.0f : deltaTime * 0.65f)
+            : deltaTime;
+    enemy_.UpdateTutorial(BuildPlayerCombatObservation(),
+                          enemyTutorialDeltaTime);
     const ActionKind currentEnemyActionKind = enemy_.GetActionKind();
     const ActionStep currentEnemyActionStep = enemy_.GetActionStep();
+    const bool greenCueVisible =
+        isGreenCutStep() && !enemyRedPunishUncounterable_ &&
+        (enemy_.GetReleaseAnticipationRatio() > 0.0f ||
+         currentEnemyActionStep == ActionStep::Active);
+    if (tutorialAttackInProgress_ && greenCueVisible &&
+        tutorialGreenCutTimer_ <= 0.0f) {
+        tutorialGreenCutTimer_ = 3.0f;
+    }
+    if (tutorialAttackInProgress_ && isRedWaitStep()) {
+        tutorialRedWaitTimer_ =
+            (std::max)(0.0f, tutorialRedWaitTimer_ - deltaTime);
+        if (tutorialRedWaitTimer_ <= 0.0f) {
+            tutorialExcellentTimer_ = 1.10f;
+            if (tutorialStep_ == kTutorialStepRedSmash) {
+                tutorialStep_ = kTutorialStepGreenSmash;
+            } else if (tutorialStep_ == kTutorialStepRedSweep) {
+                tutorialStep_ = kTutorialStepGreenSweep;
+            }
+            tutorialGreenCutTimer_ = 0.0f;
+            tutorialAttackDelay_ = 1.55f;
+            tutorialAttackInProgress_ = false;
+            tutorialCounterSuccess_ = false;
+            enemyRedPunishUncounterable_ = false;
+            enemy_.ResetTutorialState();
+            enemy_.SetTutorialPosition({0.0f, 0.0f, 3.10f});
+            enemy_.FaceTargetImmediately(player_.GetTransform().position);
+            previousCombatSlashStates_ = swordSlashStatesBeforeCombat;
+        }
+    }
     if (currentEnemyActionKind != previousEnemyActionKind ||
         currentEnemyActionStep != previousEnemyActionStep) {
         EmitEnemyActionParticles(currentEnemyActionKind, currentEnemyActionStep);
@@ -1113,13 +1258,48 @@ void GameScene::UpdateTutorial(float deltaTime) {
     camera_.UpdateMatrices();
 
     const bool wasCounterActive = counterCinematicActive_;
-    UpdateCombat(deltaTime);
+    if (isRedWaitStep() || tutorialExcellentTimer_ > 0.0f ||
+        (isGreenCutStep() && tutorialGreenCutTimer_ <= 0.0f)) {
+        previousCombatSlashStates_ = swordSlashStatesBeforeCombat;
+    } else {
+        UpdateCombat(deltaTime);
+    }
     if (!tutorialCounterSuccess_ && !wasCounterActive &&
         counterCinematicActive_) {
         tutorialCounterSuccess_ = true;
-        tutorialSuccessTimer_ = 1.2f;
+        tutorialExcellentTimer_ = isGreenCutStep() ? 1.25f : 0.0f;
+        tutorialSuccessTimer_ = isGreenCutStep() ? 0.0f : 1.45f;
         tutorialMissTimer_ = 0.0f;
+        tutorialGreenCutTimer_ = 0.0f;
         ++tutorialAttackIndex_;
+        if (tutorialStep_ == kTutorialStepGreenSmash) {
+            tutorialStep_ = kTutorialStepRedSweep;
+        } else if (tutorialStep_ == kTutorialStepGreenSweep) {
+            tutorialStep_ = kTutorialStepPractice;
+        }
+    }
+
+    if (tutorialAttackInProgress_ && isGreenCutStep() &&
+        !tutorialCounterSuccess_ && tutorialExcellentTimer_ <= 0.0f &&
+        tutorialGreenCutTimer_ > 0.0f) {
+        tutorialGreenCutTimer_ =
+            (std::max)(0.0f, tutorialGreenCutTimer_ - deltaTime);
+        if (tutorialGreenCutTimer_ <= 0.0f) {
+            tutorialMissTimer_ = 1.25f;
+            tutorialExcellentTimer_ = 0.0f;
+            tutorialAttackDelay_ = 1.40f;
+            tutorialAttackInProgress_ = false;
+            enemyRedPunishUncounterable_ = false;
+            enemy_.ResetTutorialState();
+            enemy_.SetTutorialPosition({0.0f, 0.0f, 3.10f});
+            enemy_.FaceTargetImmediately(player_.GetTransform().position);
+            previousCombatSlashStates_ = swordSlashStatesBeforeCombat;
+            if (tutorialStep_ == kTutorialStepGreenSmash) {
+                tutorialStep_ = kTutorialStepRedSmash;
+            } else if (tutorialStep_ == kTutorialStepGreenSweep) {
+                tutorialStep_ = kTutorialStepRedSweep;
+            }
+        }
     }
 
     if (tutorialAttackInProgress_ &&
@@ -1129,10 +1309,16 @@ void GameScene::UpdateTutorial(float deltaTime) {
         enemy_.SetTutorialPosition({0.0f, 0.0f, 3.10f});
         enemy_.FaceTargetImmediately(player_.GetTransform().position);
         if (tutorialCounterSuccess_) {
-            tutorialAttackDelay_ = 1.25f;
+            tutorialAttackDelay_ =
+                tutorialStep_ == kTutorialStepPractice ? 1.85f : 2.20f;
         } else {
-            tutorialMissTimer_ = 1.0f;
-            tutorialAttackDelay_ = 1.55f;
+            tutorialMissTimer_ = 1.25f;
+            tutorialAttackDelay_ = 2.15f;
+            if (tutorialStep_ == kTutorialStepGreenSmash) {
+                tutorialStep_ = kTutorialStepRedSmash;
+            } else if (tutorialStep_ == kTutorialStepGreenSweep) {
+                tutorialStep_ = kTutorialStepRedSweep;
+            }
         }
     }
 
@@ -1323,7 +1509,7 @@ void GameScene::LoadTutorialImages() {
 
     const bool handTutorial =
         inputCalibration_.controlType == InputControlType::Hand;
-    const std::array<std::wstring, 9> paths{
+    const std::array<std::wstring, 10> paths{
         handTutorial
             ? L"app/resources/ui/tutorial_dynamic/left_right_hand.png"
             : L"app/resources/ui/tutorial_dynamic/left_right_kbm.png",
@@ -1336,7 +1522,8 @@ void GameScene::LoadTutorialImages() {
         L"app/resources/ui/tutorial_dynamic/release.png",
         L"app/resources/ui/tutorial_dynamic/success.png",
         L"app/resources/ui/tutorial_dynamic/miss.png",
-        L"app/resources/ui/tutorial_dynamic/exit.png",
+        L"app/resources/ui/tutorial_dynamic/complete.png",
+        L"app/resources/ui/tutorial_dynamic/excellent.png",
     };
     for (size_t i = 0; i < paths.size(); ++i) {
         tutorialTextureIds_[i] = ctx_->rendering.texture->Load(paths[i]);
@@ -1568,6 +1755,15 @@ void GameScene::DrawTutorialOverlay() {
         messageIndex = kTutorialTextLeftRight;
     } else if (tutorialStep_ == kTutorialStepRightSword) {
         messageIndex = kTutorialTextRightSword;
+    } else if (tutorialStep_ == kTutorialStepRedSmash) {
+        messageIndex = kTutorialTextVertical;
+    } else if (tutorialStep_ == kTutorialStepRedSweep) {
+        messageIndex = kTutorialTextHorizontal;
+    } else if (tutorialStep_ == kTutorialStepGreenSmash ||
+               tutorialStep_ == kTutorialStepGreenSweep) {
+        messageIndex = kTutorialTextRelease;
+    } else if (tutorialStep_ >= kTutorialStepPractice) {
+        messageIndex = kTutorialTextComplete;
     } else if (releaseRatio > 0.0f || actionStep == ActionStep::Active) {
         messageIndex = kTutorialTextRelease;
     } else if (actionKind == ActionKind::Smash) {
@@ -1605,12 +1801,50 @@ void GameScene::DrawTutorialOverlay() {
                    panelX + (panelW - textW * scale) * 0.5f,
                    panelY + (panelH - textH * scale) * 0.5f, scale, 1.0f);
 
-    const float exitW = tutorialTextureWidths_[kTutorialTextExit];
-    const float exitH = tutorialTextureHeights_[kTutorialTextExit];
-    const float exitScale =
-        (std::min)(0.74f, (w * 0.24f) / (std::max)(exitW, 1.0f));
-    DrawPauseImage(tutorialTextureIds_[kTutorialTextExit], exitW, exitH,
-                   32.0f, 24.0f, exitScale, 0.72f);
+    if (tutorialExcellentTimer_ > 0.0f) {
+        const float excellentW =
+            tutorialTextureWidths_[kTutorialTextExcellent];
+        const float excellentH =
+            tutorialTextureHeights_[kTutorialTextExcellent];
+        const float excellentScale =
+            (std::min)(1.20f, (w * 0.48f) / (std::max)(excellentW, 1.0f));
+        const float excellentDrawW = excellentW * excellentScale;
+        const float excellentDrawH = excellentH * excellentScale;
+        const float excellentX = (w - excellentDrawW) * 0.5f;
+        const float excellentY = (h - excellentDrawH) * 0.5f;
+        DrawPauseRect(excellentX - 36.0f, excellentY - 20.0f,
+                      excellentDrawW + 72.0f, excellentDrawH + 40.0f,
+                      {0.0f, 0.0f, 0.0f, 0.42f});
+        DrawPauseImage(tutorialTextureIds_[kTutorialTextExcellent],
+                       excellentW, excellentH, excellentX, excellentY,
+                       excellentScale, 1.0f);
+    }
+    ctx_->rendering.sprite->PostDraw();
+}
+
+void GameScene::DrawTutorialEntryFade() {
+    if (!tutorialMode_ || ctx_ == nullptr || ctx_->rendering.sprite == nullptr ||
+        ctx_->systems.winApp == nullptr ||
+        (tutorialEntryFadeTimer_ >= kTutorialEntryFadeDuration &&
+         !tutorialExitRequested_)) {
+        return;
+    }
+
+    const float w = static_cast<float>(ctx_->systems.winApp->GetWidth());
+    const float h = static_cast<float>(ctx_->systems.winApp->GetHeight());
+    float alpha = 0.0f;
+    if (tutorialEntryFadeTimer_ < kTutorialEntryFadeDuration) {
+        const float t =
+            SmoothStep01(tutorialEntryFadeTimer_ / kTutorialEntryFadeDuration);
+        alpha = (std::max)(alpha, 1.0f - t);
+    }
+    if (tutorialExitRequested_) {
+        const float t =
+            SmoothStep01(tutorialExitFadeTimer_ / kTutorialExitFadeDuration);
+        alpha = (std::max)(alpha, t);
+    }
+    ctx_->rendering.sprite->PreDraw();
+    DrawPauseRect(0.0f, 0.0f, w, h, {0.0f, 0.0f, 0.0f, alpha});
     ctx_->rendering.sprite->PostDraw();
 }
 
@@ -1670,106 +1904,97 @@ void GameScene::EmitReadyPreviewHeatParticles(float deltaTime) {
 
     const float heat = readyPreviewHeat_;
     const float danger = heat * heat * (3.0f - 2.0f * heat);
-    readyPreviewParticleTimer_ = 0.078f - 0.070f * danger;
+    readyPreviewParticleTimer_ = 0.055f - 0.046f * danger;
     const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
-    const float wave = sceneLightTime_ * (2.2f + danger * 5.8f);
-    const float side = std::sinf(wave * 1.7f) * (0.75f + 2.1f * danger);
-    const float depth = std::cosf(wave * 1.1f) * (0.42f + 1.35f * danger);
-    const XMFLOAT3 origin{
-        enemyPos.x + side,
-        enemyPos.y + 0.18f + 0.58f * danger,
-        enemyPos.z - 0.92f + depth,
+    const float wave = sceneLightTime_ * (2.6f + danger * 7.4f);
+    const float ringRadius = 0.52f + 1.18f * danger;
+    const float side = std::sinf(wave * 1.7f) * ringRadius;
+    const float depth = std::cosf(wave * 1.1f) * (0.28f + 0.58f * danger);
+    const XMFLOAT3 core{
+        enemyPos.x + side * 0.32f,
+        enemyPos.y + 0.82f + 0.58f * danger,
+        enemyPos.z - 0.34f + depth * 0.24f,
     };
-    const XMFLOAT3 upward{
-        std::sinf(wave) * (0.16f + 0.28f * danger),
-        1.0f,
-        0.16f + std::cosf(wave * 0.8f) * (0.16f + 0.24f * danger),
-    };
+    const XMFLOAT3 upward{std::sinf(wave) * (0.12f + 0.24f * danger), 1.0f,
+                          std::cosf(wave * 0.8f) *
+                              (0.10f + 0.22f * danger)};
+    const XMFLOAT4 flameColor{1.0f, 0.30f + 0.48f * heat, 0.04f,
+                              0.88f + 0.12f * danger};
+    const XMFLOAT4 smokeColor{0.26f + 0.36f * danger, 0.18f + 0.10f * heat,
+                              0.12f, 0.60f + 0.28f * danger};
 
     EmitParticleBurst(
-        smokeParticles_, origin,
-        static_cast<uint32_t>(22.0f + 64.0f * heat + 230.0f * danger),
-        0.78f + 0.74f * heat + 1.70f * danger,
-        AppParticleBurstStyle::Smoke,
-        {0.24f + 0.46f * danger, 0.20f + 0.14f * heat, 0.14f,
-         0.62f + 0.30f * danger},
-        upward, 0.72f + 0.86f * heat + 2.10f * danger);
+        smokeParticles_, {core.x, core.y - 0.36f, core.z},
+        static_cast<uint32_t>(34.0f + 88.0f * heat + 250.0f * danger),
+        0.82f + 0.58f * heat + 1.24f * danger, AppParticleBurstStyle::Smoke,
+        smokeColor, upward, 0.85f + 1.18f * heat + 2.28f * danger);
     EmitParticleBurst(
-        sparkParticles_, {origin.x, origin.y + 0.24f, origin.z},
-        static_cast<uint32_t>(64.0f + 180.0f * heat + 620.0f * danger),
-        0.34f + 0.42f * heat + 0.98f * danger,
-        AppParticleBurstStyle::Sparks,
-        {1.0f, 0.38f + 0.50f * heat, 0.05f, 0.96f + 0.04f * danger}, upward,
-        2.00f + 3.45f * heat + 6.20f * danger);
+        sparkParticles_, {core.x, core.y + 0.12f, core.z},
+        static_cast<uint32_t>(96.0f + 220.0f * heat + 520.0f * danger),
+        0.30f + 0.34f * heat + 0.70f * danger, AppParticleBurstStyle::Sparks,
+        flameColor, upward, 2.60f + 3.90f * heat + 6.90f * danger);
 
-    const XMFLOAT3 secondOrigin{
-        enemyPos.x - side * 0.72f,
-        enemyPos.y + 0.16f + 0.38f * danger,
-        enemyPos.z - 1.25f - depth * 0.52f,
-    };
+    const XMFLOAT3 secondOrigin{enemyPos.x - side * 0.68f,
+                                enemyPos.y + 0.62f + 0.42f * danger,
+                                enemyPos.z - 0.42f - depth * 0.36f};
     EmitParticleBurst(
         sparkParticles_, secondOrigin,
-        static_cast<uint32_t>(42.0f + 128.0f * heat + 420.0f * danger),
-        0.28f + 0.34f * heat + 0.78f * danger,
-        AppParticleBurstStyle::Sparks,
-        {1.0f, 0.22f + 0.36f * heat, 0.04f, 0.88f + 0.10f * danger},
-        upward, 1.80f + 3.05f * heat + 5.20f * danger);
+        static_cast<uint32_t>(74.0f + 176.0f * heat + 410.0f * danger),
+        0.24f + 0.30f * heat + 0.64f * danger, AppParticleBurstStyle::Sparks,
+        {1.0f, 0.22f + 0.44f * heat, 0.03f, 0.86f + 0.12f * danger},
+        upward, 2.10f + 3.50f * heat + 6.20f * danger);
 
     if (heat > 0.24f) {
         EmitParticleBurst(
-            explosionParticles_, {origin.x, origin.y + 0.42f, origin.z},
-            static_cast<uint32_t>(42.0f + 130.0f * heat + 440.0f * danger),
-            0.26f + 0.38f * heat + 1.02f * danger,
-            AppParticleBurstStyle::Explosion,
-            {1.0f, 0.16f + 0.34f * heat, 0.03f, 0.82f + 0.14f * danger},
-            upward, 1.35f + 2.10f * heat + 4.35f * danger);
+            explosionParticles_, {core.x, core.y + 0.22f, core.z},
+            static_cast<uint32_t>(54.0f + 152.0f * heat + 350.0f * danger),
+            0.24f + 0.30f * heat + 0.76f * danger,
+            AppParticleBurstStyle::Explosion, flameColor, upward,
+            1.75f + 2.80f * heat + 5.20f * danger);
         EmitParticleBurst(
-            smokeParticles_, {origin.x - side * 0.26f, origin.y + 0.16f,
-                              origin.z - depth * 0.20f},
-            static_cast<uint32_t>(18.0f + 58.0f * heat + 210.0f * danger),
-            0.42f + 0.98f * danger, AppParticleBurstStyle::Flash,
-            {1.0f, 0.42f + 0.18f * heat, 0.08f, 0.34f + 0.42f * danger},
-            upward, 0.74f + 2.20f * danger);
+            smokeParticles_,
+            {core.x - side * 0.24f, core.y - 0.04f, core.z - depth * 0.18f},
+            static_cast<uint32_t>(18.0f + 58.0f * heat + 170.0f * danger),
+            0.38f + 0.78f * danger, AppParticleBurstStyle::Flash,
+            {1.0f, 0.44f + 0.18f * heat, 0.08f, 0.30f + 0.42f * danger},
+            upward, 0.86f + 2.55f * danger);
     }
 
     if (heat > 0.52f) {
-        const XMFLOAT3 ringOrigin{
-            enemyPos.x - side * 1.18f,
-            enemyPos.y + 0.48f + 0.40f * danger,
-            enemyPos.z - 1.04f + depth * 0.86f,
-        };
+        const XMFLOAT3 ringOrigin{enemyPos.x - side * 0.92f,
+                                  enemyPos.y + 0.98f + 0.36f * danger,
+                                  enemyPos.z - 0.36f + depth * 0.74f};
         EmitParticleBurst(
             explosionParticles_, ringOrigin,
-            static_cast<uint32_t>(84.0f + 320.0f * danger),
-            0.30f + 0.88f * danger, AppParticleBurstStyle::SlashLine,
-            {1.0f, 0.62f, 0.08f, 0.74f + 0.20f * danger}, upward,
-            1.60f + 4.20f * danger);
+            static_cast<uint32_t>(110.0f + 360.0f * danger),
+            0.38f + 0.78f * danger, AppParticleBurstStyle::SlashLine,
+            {1.0f, 0.64f, 0.08f, 0.76f + 0.22f * danger},
+            {std::cosf(wave), 0.18f + 0.32f * danger, std::sinf(wave)},
+            1.80f + 4.80f * danger);
         EmitParticleBurst(
             sparkParticles_, {ringOrigin.x, ringOrigin.y + 0.18f, ringOrigin.z},
-            static_cast<uint32_t>(120.0f + 420.0f * danger),
-            0.34f + 0.78f * danger, AppParticleBurstStyle::Sparks,
-            {1.0f, 0.74f, 0.18f, 0.96f}, upward, 2.20f + 5.30f * danger);
+            static_cast<uint32_t>(150.0f + 450.0f * danger),
+            0.30f + 0.70f * danger, AppParticleBurstStyle::Sparks,
+            {1.0f, 0.78f, 0.18f, 0.98f}, upward, 2.70f + 6.30f * danger);
     }
 
     if (heat > 0.72f) {
-        const float burstSide = std::cosf(wave * 2.3f) * (2.4f + 1.8f * danger);
-        const XMFLOAT3 panicOrigin{
-            enemyPos.x + burstSide,
-            enemyPos.y + 0.72f + 0.36f * danger,
-            enemyPos.z - 0.86f - depth,
-        };
+        const float burstSide = std::cosf(wave * 2.3f) * (1.05f + 0.72f * danger);
+        const XMFLOAT3 panicOrigin{enemyPos.x + burstSide,
+                                   enemyPos.y + 1.12f + 0.38f * danger,
+                                   enemyPos.z - 0.30f - depth * 0.46f};
         EmitParticleBurst(
             explosionParticles_, panicOrigin,
-            static_cast<uint32_t>(280.0f + 620.0f * danger),
-            0.48f + 1.12f * danger, AppParticleBurstStyle::Explosion,
-            {1.0f, 0.08f + 0.28f * heat, 0.02f, 0.92f}, upward,
-            2.40f + 6.20f * danger);
+            static_cast<uint32_t>(260.0f + 520.0f * danger),
+            0.42f + 0.96f * danger, AppParticleBurstStyle::Explosion,
+            {1.0f, 0.10f + 0.30f * heat, 0.02f, 0.94f}, upward,
+            3.10f + 7.40f * danger);
         EmitParticleBurst(
             smokeParticles_, {panicOrigin.x, panicOrigin.y - 0.16f, panicOrigin.z},
-            static_cast<uint32_t>(110.0f + 310.0f * danger),
-            0.90f + 1.92f * danger, AppParticleBurstStyle::Flash,
+            static_cast<uint32_t>(86.0f + 250.0f * danger),
+            0.78f + 1.54f * danger, AppParticleBurstStyle::Flash,
             {1.0f, 0.34f, 0.08f, 0.58f + 0.34f * danger}, upward,
-            1.20f + 3.55f * danger);
+            1.50f + 4.10f * danger);
     }
 }
 
@@ -1905,8 +2130,18 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
         actionStep == ActionStep::Active &&
         enemy_.GetActionTimerForPresentation() <=
             kReleaseCounterWindowDuration;
-    const bool releaseCounterCueVisible =
+    bool releaseCounterCueVisible =
         preReleaseCounterCueVisible || activeReleaseCounterCueVisible;
+    if (tutorialMode_) {
+        if (tutorialStep_ == kTutorialStepRedSmash ||
+            tutorialStep_ == kTutorialStepRedSweep) {
+            releaseCounterCueVisible = false;
+        } else if ((tutorialStep_ == kTutorialStepGreenSmash ||
+                    tutorialStep_ == kTutorialStepGreenSweep) &&
+                   !releaseCounterCueVisible) {
+            return;
+        }
+    }
 
     if (enemyCueParticleTimer_ > 0.0f) {
         return;
@@ -1985,6 +2220,7 @@ void GameScene::DrawTransparent() {
     if (tutorialMode_) {
         DrawTutorialOverlay();
         DrawHandCameraPreview();
+        DrawTutorialEntryFade();
         return;
     }
     if (backgroundOnlyMode_ || readyPreviewMode_ || titleDemoMode_) {

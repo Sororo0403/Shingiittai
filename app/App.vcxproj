@@ -180,6 +180,7 @@
     <None Include="resources\models\boss\boss.bin" />
     <None Include="resources\models\boss\boss.gltf" />
     <None Include="resources\models\boss\boss.png" />
+    <None Include="resources\models\boss\bossBody.png" />
     <None Include="resources\models\player\player.glb" />
     <None Include="resources\models\player\sword.glb" />
     <None Include="resources\shaders\sword_arc\SwordArcPS.hlsl" />

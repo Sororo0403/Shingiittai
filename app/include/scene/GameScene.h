@@ -90,6 +90,7 @@ class GameScene : public BaseScene {
     void ExecutePauseMenuSelection();
     void DrawPauseMenu();
     void DrawTutorialOverlay();
+    void DrawTutorialEntryFade();
     void UpdateHandCameraPreview(float deltaTime);
     void DrawHandCameraPreview();
     void DrawPauseRect(float x, float y, float w, float h,
@@ -319,15 +320,22 @@ class GameScene : public BaseScene {
     DirectX::XMFLOAT3 bladeClashFinishEnemyStart_ = {0.0f, 0.0f, 0.0f};
     bool handTrackingStartRequested_ = false;
     float tutorialTimer_ = 0.0f;
-    float tutorialAttackDelay_ = 1.2f;
+    float tutorialEntryFadeTimer_ = 0.0f;
+    float tutorialExitFadeTimer_ = 0.0f;
+    float tutorialAttackDelay_ = 1.8f;
     float tutorialSuccessTimer_ = 0.0f;
     float tutorialMissTimer_ = 0.0f;
+    float tutorialExcellentTimer_ = 0.0f;
+    float tutorialRedWaitTimer_ = 0.0f;
+    float tutorialGreenCutTimer_ = 0.0f;
     int tutorialStep_ = 0;
     int tutorialAttackIndex_ = 0;
     bool tutorialAttackInProgress_ = false;
     bool tutorialCounterSuccess_ = false;
+    bool tutorialExitRequested_ = false;
+    bool tutorialExitToSelect_ = false;
     bool tutorialImagesLoaded_ = false;
-    std::array<uint32_t, 9> tutorialTextureIds_{};
-    std::array<float, 9> tutorialTextureWidths_{};
-    std::array<float, 9> tutorialTextureHeights_{};
+    std::array<uint32_t, 10> tutorialTextureIds_{};
+    std::array<float, 10> tutorialTextureWidths_{};
+    std::array<float, 10> tutorialTextureHeights_{};
 };

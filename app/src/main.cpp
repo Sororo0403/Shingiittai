@@ -2,6 +2,7 @@
 #include "GameScene.h"
 #include "Input.h"
 #include "AppSceneServices.h"
+#include "core/AssetManager.h"
 #include "Lighting.h"
 #include "ModelManager.h"
 #include "RenderPassController.h"
@@ -387,7 +388,9 @@ void WriteCrashLog(const std::string &message) {
 }
 
 int RunApp(HINSTANCE hInstance, int nCmdShow) {
-    SetCurrentDirectoryW(ResolveExecutableDirectory().wstring().c_str());
+    const std::filesystem::path executableDirectory = ResolveExecutableDirectory();
+    SetCurrentDirectoryW(executableDirectory.wstring().c_str());
+    AssetManager::SetAssetRoot(executableDirectory);
 
     HandUdpSenderProcess handUdpSenderProcess;
     const bool handTrackingRuntimeAvailable =

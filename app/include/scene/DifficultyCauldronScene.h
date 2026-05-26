@@ -54,7 +54,8 @@ class DifficultyCauldronScene : public BaseScene {
     void DrawTextureRect(uint32_t textureId, float x, float y, float w,
                          float h, const DirectX::XMFLOAT4 &color,
                          float uvWidth = 1.0f,
-                         SpriteBlendMode blendMode = SpriteBlendMode::Alpha);
+                         SpriteBlendMode blendMode = SpriteBlendMode::Alpha,
+                         float uvLeft = 0.0f);
 
     SwordInputCalibration inputCalibration_{};
     std::unique_ptr<GameScene> backgroundScene_{};

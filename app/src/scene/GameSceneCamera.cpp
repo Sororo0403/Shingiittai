@@ -130,11 +130,11 @@ void GameScene::UpdateReadyPreviewCamera(float deltaTime) {
     camera_.SetPerspectiveFovDeg(50.0f);
     const XMFLOAT3 &enemyPos = enemy_.GetTransform().position;
     const float breath = std::sinf(sceneLightTime_ * 0.82f);
-    const float orbit = sceneLightTime_ * 0.030f + 3.05f;
-    const float radius = 14.2f;
+    const float orbit = std::sinf(sceneLightTime_ * 0.16f) * 0.16f;
+    const float radius = 14.8f;
     const XMFLOAT3 cameraPos{
         enemyPos.x + std::sinf(orbit) * radius,
-        enemyPos.y + 4.05f + breath * 0.10f,
+        enemyPos.y + 3.85f + breath * 0.08f,
         enemyPos.z - std::cosf(orbit) * radius,
     };
     const XMFLOAT3 lookAt{

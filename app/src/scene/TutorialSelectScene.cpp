@@ -22,6 +22,8 @@ constexpr float kControlsPadding = 32.0f;
 constexpr float kControlsImageBottomTransparentPixels = 18.0f;
 constexpr float kButtonGroupYOffset = 24.0f;
 constexpr float kTitleBandVerticalPadding = 32.0f;
+constexpr float kNormalButtonNameMaxAspect = 495.0f / 53.0f;
+constexpr float kSmallButtonNameMaxAspect = 374.0f / 47.0f;
 
 struct ImageContentBounds {
     float left = 0.0f;
@@ -79,7 +81,7 @@ void TutorialSelectScene::Initialize(const SceneContext &ctx) {
     cameraAvailable_ = false;
 
     backgroundScene_ =
-        std::make_unique<GameScene>(GameScene::Mode::TutorialBackgroundOnly);
+        std::make_unique<GameScene>(GameScene::Mode::BackgroundOnly);
     backgroundScene_->Initialize(ctx);
 
     sceneTitleImage_ = LoadTextureImage(
@@ -364,11 +366,11 @@ void TutorialSelectScene::ShowUnavailableMessage() {
 void TutorialSelectScene::DrawOverlay(float screenWidth, float screenHeight) {
     const float intro = Smooth01(introTimer_ / kIntroDuration);
     DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
-             MakeColor(0.0f, 0.0f, 0.0f, 0.60f + (1.0f - intro) * 0.18f));
+             MakeColor(0.0f, 0.0f, 0.0f, 0.68f + (1.0f - intro) * 0.18f));
     DrawRect(0.0f, 0.0f, screenWidth, screenHeight * 0.22f,
-             MakeColor(0.0f, 0.10f, 0.10f, 0.32f));
+             MakeColor(0.0f, 0.0f, 0.0f, 0.30f));
     DrawRect(0.0f, screenHeight * 0.78f, screenWidth, screenHeight * 0.22f,
-             MakeColor(0.0f, 0.09f, 0.09f, 0.36f));
+             MakeColor(0.0f, 0.0f, 0.0f, 0.34f));
 }
 
 void TutorialSelectScene::DrawButtons() {
@@ -380,7 +382,6 @@ void TutorialSelectScene::DrawButtons() {
         }
         const bool selected = i == selectedIndex_;
         const bool available = IsModeAvailable(i);
-        const bool backButton = i == kBackButtonIndex;
         const float build = ButtonIntroProgress(i, 0.06f);
         const float detail = ButtonIntroProgress(i, 0.13f);
         const float lift = (selected ? 6.0f : 0.0f) - (1.0f - intro) * 18.0f;
@@ -391,6 +392,7 @@ void TutorialSelectScene::DrawButtons() {
         const float panelH = rect.h * (0.08f + 0.92f * build);
         const float panelX = centerX - panelW * 0.5f;
         const float panelY = centerY - panelH * 0.5f;
+        const bool backButton = i == kBackButtonIndex;
         const XMFLOAT4 body =
             selected ? MakeColor(0.030f, 0.040f, 0.040f, 0.92f * alpha)
                      : MakeColor(0.014f, 0.023f, 0.024f, 0.76f * alpha);
@@ -404,7 +406,10 @@ void TutorialSelectScene::DrawButtons() {
                  MakeColor(0.0f, 0.0f, 0.0f,
                            (selected ? 0.38f : 0.24f) * intro));
         DrawRect(panelX, panelY, panelW, panelH, body);
-        DrawFrame(panelX, panelY, panelW, panelH, 2.0f, edge);
+        DrawRect(panelX, panelY, panelW, 2.0f, edge);
+        DrawRect(panelX, panelY + panelH - 2.0f, panelW, 2.0f, edge);
+        DrawRect(panelX, panelY, 2.0f, panelH, edge);
+        DrawRect(panelX + panelW - 2.0f, panelY, 2.0f, panelH, edge);
         DrawButtonIllustration(i, rect, lift, alpha, selected);
     }
 }
@@ -466,15 +471,20 @@ void TutorialSelectScene::DrawButtonIllustration(int index,
         const float kbdX = -148.0f;
         const float kbdY = 62.0f;
         const float keyboardBuild = part(0.17f);
-        rectAt(kbdX, kbdY, 156.0f * keyboardBuild, 72.0f,
-               ScaleAlpha(fill, keyboardBuild));
-        frameAt(kbdX, kbdY, 156.0f * keyboardBuild, 72.0f, 4.0f,
-                ScaleAlpha(line, keyboardBuild));
+        if (keyboardBuild > 0.0f) {
+            rectAt(kbdX, kbdY, 156.0f * keyboardBuild, 72.0f,
+                   ScaleAlpha(fill, keyboardBuild));
+            frameAt(kbdX, kbdY, 156.0f * keyboardBuild, 72.0f, 4.0f,
+                    ScaleAlpha(line, keyboardBuild));
+        }
         for (int row = 0; row < 3; ++row) {
             for (int col = 0; col < 6; ++col) {
                 const float keyBuild =
                     part(0.23f + static_cast<float>(row) * 0.025f +
                          static_cast<float>(col) * 0.008f);
+                if (keyBuild <= 0.0f) {
+                    continue;
+                }
                 rectAt(kbdX + 16.0f + static_cast<float>(col) * 21.5f,
                        kbdY + 15.0f + static_cast<float>(row) * 17.0f, 13.0f,
                        8.0f * keyBuild, ScaleAlpha(line, keyBuild));
@@ -484,36 +494,59 @@ void TutorialSelectScene::DrawButtonIllustration(int index,
         rectAt(kbdX + 42.0f, kbdY + 56.0f, 76.0f * spaceBuild, 6.0f,
                ScaleAlpha(line, spaceBuild));
 
+        const float mouseX = 62.0f;
+        const float mouseY = 42.0f;
         const float mouseBuild = part(0.20f);
-        rectAt(62.0f, 42.0f, 64.0f, 108.0f * mouseBuild,
-               ScaleAlpha(fill, mouseBuild));
-        frameAt(62.0f, 42.0f, 64.0f, 108.0f * mouseBuild, 4.0f,
-                ScaleAlpha(line, mouseBuild));
-        rectAt(92.0f, 54.0f, 4.0f, 34.0f * part(0.30f),
-               ScaleAlpha(line, part(0.30f)));
+        if (mouseBuild > 0.0f) {
+            rectAt(mouseX, mouseY + (1.0f - mouseBuild) * 18.0f, 64.0f,
+                   108.0f * mouseBuild, ScaleAlpha(fill, mouseBuild));
+            frameAt(mouseX, mouseY + (1.0f - mouseBuild) * 18.0f, 64.0f,
+                    108.0f * mouseBuild, 4.0f, ScaleAlpha(line, mouseBuild));
+        }
+        const float mouseDetail = part(0.30f);
+        rectAt(mouseX + 30.0f, mouseY + 12.0f, 4.0f, 34.0f * mouseDetail,
+               ScaleAlpha(line, mouseDetail));
+        rectAt(mouseX + 18.0f, mouseY + 50.0f, 30.0f * mouseDetail, 6.0f,
+               ScaleAlpha(line, mouseDetail));
         return;
     }
 
+    const float handX = -112.0f;
+    const float handY = 38.0f;
     const float palmBuild = part(0.17f);
-    rectAt(-64.0f, 73.0f, 72.0f, 64.0f * palmBuild,
+    rectAt(handX + 48.0f, handY + 35.0f, 72.0f, 64.0f * palmBuild,
            ScaleAlpha(fill, palmBuild));
-    frameAt(-64.0f, 73.0f, 72.0f, 64.0f * palmBuild, 4.0f,
+    frameAt(handX + 48.0f, handY + 35.0f, 72.0f, 64.0f * palmBuild, 4.0f,
             ScaleAlpha(line, palmBuild));
     for (int i = 0; i < 4; ++i) {
         const float fingerBuild = part(0.22f + static_cast<float>(i) * 0.025f);
-        rectAt(-68.0f + static_cast<float>(i) * 20.0f,
-               38.0f + static_cast<float>(i % 2) * 7.0f, 14.0f,
+        if (fingerBuild <= 0.0f) {
+            continue;
+        }
+        rectAt(handX + 44.0f + static_cast<float>(i) * 20.0f,
+               handY + static_cast<float>(i % 2) * 7.0f, 14.0f,
                52.0f * fingerBuild, ScaleAlpha(line, fingerBuild));
     }
-    rectAt(-92.0f, 96.0f, 36.0f * part(0.30f), 18.0f,
-           ScaleAlpha(line, part(0.30f)));
-    const float camBuild = part(0.20f);
-    rectAt(58.0f, 46.0f, 82.0f * camBuild, 64.0f,
-           ScaleAlpha(fill, camBuild));
-    frameAt(58.0f, 46.0f, 82.0f * camBuild, 64.0f, 4.0f,
-            ScaleAlpha(line, camBuild));
-    rectAt(87.0f, 66.0f, 24.0f * part(0.29f), 24.0f,
-           ScaleAlpha(line, part(0.29f)));
+    const float thumbBuild = part(0.30f);
+    rectAt(handX + 20.0f, handY + 58.0f, 36.0f * thumbBuild, 18.0f,
+           ScaleAlpha(line, thumbBuild));
+
+    const float camX = 58.0f;
+    const float camY = 46.0f;
+    const float cameraBuild = part(0.20f);
+    rectAt(camX, camY, 82.0f * cameraBuild, 64.0f,
+           ScaleAlpha(fill, cameraBuild));
+    frameAt(camX, camY, 82.0f * cameraBuild, 64.0f, 4.0f,
+            ScaleAlpha(line, cameraBuild));
+    const float lensBuild = part(0.29f);
+    rectAt(camX + 29.0f, camY + 20.0f, 24.0f * lensBuild, 24.0f,
+           ScaleAlpha(line, lensBuild));
+    rectAt(camX + 37.0f, camY + 28.0f, 8.0f * lensBuild, 8.0f,
+           ScaleAlpha(MakeColor(0.0f, 0.0f, 0.0f, 0.22f * alpha),
+                      lensBuild));
+    const float standBuild = part(0.33f);
+    rectAt(camX + 24.0f, camY + 76.0f, 34.0f * standBuild, 6.0f,
+           ScaleAlpha(line, standBuild));
 }
 
 void TutorialSelectScene::DrawLabels(float screenWidth, float screenHeight) {
@@ -528,9 +561,13 @@ void TutorialSelectScene::DrawLabels(float screenWidth, float screenHeight) {
         const Image &name = buttonNameImages_[i];
         const ImageContentBounds &bounds = kButtonNameContentBounds[i];
         const bool backButton = i == kBackButtonIndex;
-        const float targetLabelHeight = rect.h * (backButton ? 0.11f : 0.10f);
+        const float maxLabelAspect =
+            backButton ? kSmallButtonNameMaxAspect : kNormalButtonNameMaxAspect;
+        const float targetLabelHeight = (std::min)(
+            rect.h * (backButton ? 0.11f : 0.10f),
+            (rect.w * 0.82f) / maxLabelAspect);
         const float nameScale = (std::min)(
-            {backButton ? 0.62f : 0.86f,
+            {backButton ? 0.62f : 1.10f,
              targetLabelHeight / (std::max)(bounds.Height(), 1.0f),
              (rect.w * 0.82f) / (std::max)(bounds.Width(), 1.0f)});
         const float centerX = rect.x + rect.w * 0.5f;
