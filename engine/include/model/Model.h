@@ -1,5 +1,5 @@
 #pragma once
-#include "AnimationTypes.h"
+#include "animation/AnimationTypes.h"
 #include <DirectXMath.h>
 #include <array>
 #include <cstdint>
@@ -25,9 +25,6 @@ struct JointWeightData {
     std::vector<VertexWeightData> vertexWeights;
 };
 
-/// <summary>
-/// 1頂点に影響する最大ジョイント数
-/// </summary>
 constexpr uint32_t kNumMaxInfluence = 4;
 
 /// <summary>
@@ -70,6 +67,10 @@ struct SkinCluster {
     D3D12_GPU_DESCRIPTOR_HANDLE inputVertexSrvGpuHandle{};
     D3D12_CPU_DESCRIPTOR_HANDLE skinnedVertexUavCpuHandle{};
     D3D12_GPU_DESCRIPTOR_HANDLE skinnedVertexUavGpuHandle{};
+    mutable D3D12_RESOURCE_STATES skinnedVertexState =
+        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+    mutable uint64_t lastSkinningFrame = 0;
+    mutable bool skinningValid = false;
 };
 
 /// <summary>
@@ -89,6 +90,7 @@ struct BoneInfo {
 struct ModelSubMesh {
     uint32_t meshId = 0;
     uint32_t textureId = 0;
+    uint32_t normalTextureId = UINT32_MAX;
     uint32_t materialId = 0;
     uint32_t vertexCount = 0;
     std::vector<DirectX::XMFLOAT3> sourcePositions;
@@ -126,9 +128,6 @@ struct Model {
 
     bool hasRootAnimation = false;
     DirectX::XMFLOAT4X4 rootAnimationMatrix = {
-        1.0f, 0.0f, 0.0f, 0.0f, //
-        0.0f, 1.0f, 0.0f, 0.0f, //
-        0.0f, 0.0f, 1.0f, 0.0f, //
-        0.0f, 0.0f, 0.0f, 1.0f  //
-    };
+        1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f};
 };

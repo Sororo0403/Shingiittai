@@ -1,55 +1,20 @@
-#include "TextureManager.h"
-#include "DirectXCommon.h"
-#include "DxHelpers.h"
-#include "DxUtils.h"
-#include "SrvManager.h"
-#include "Texture.h"
+#include "texture/TextureManager.h"
+#include "core/AssetManager.h"
+#include "graphics/DirectXCommon.h"
+#include "graphics/DxHelpers.h"
+#include "graphics/DxUtils.h"
+#include "graphics/SrvManager.h"
+#include "texture/Texture.h"
 #include <algorithm>
-#include <array>
-#include <cctype>
+#include <chrono>
 #include <cwctype>
 #include <filesystem>
-#include <cmath>
+#include <future>
 #include <stdexcept>
-#include <system_error>
 #include <vector>
 
-static std::filesystem::path CanonicalizePath(const std::filesystem::path &path) {
-    std::error_code ec;
-    const std::filesystem::path canonical =
-        std::filesystem::weakly_canonical(path, ec);
-    if (!ec) {
-        return canonical;
-    }
-
-    return path.lexically_normal();
-}
-
 static std::filesystem::path ResolveTexturePath(const std::wstring &path) {
-    const std::filesystem::path input(path);
-    const std::filesystem::path normalized = input.lexically_normal();
-    if (normalized.is_absolute()) {
-        return CanonicalizePath(normalized);
-    }
-
-    const std::filesystem::path cwd = std::filesystem::current_path();
-    const std::filesystem::path direct = cwd / normalized;
-    if (std::filesystem::exists(direct)) {
-        return CanonicalizePath(direct);
-    }
-
-    for (std::filesystem::path dir = cwd; !dir.empty(); dir = dir.parent_path()) {
-        const std::filesystem::path candidate = dir / normalized;
-        if (std::filesystem::exists(candidate)) {
-            return CanonicalizePath(candidate);
-        }
-
-        if (dir == dir.root_path()) {
-            break;
-        }
-    }
-
-    return CanonicalizePath(direct);
+    return AssetManager::ResolvePath(std::filesystem::path(path));
 }
 
 static std::wstring NormalizePathKey(const std::filesystem::path &path) {
@@ -63,56 +28,48 @@ static std::wstring NormalizePathKey(const std::filesystem::path &path) {
     return key;
 }
 
-static float Fade(float t) { return t * t * (3.0f - 2.0f * t); }
+static TextureManager::DecodedTexture DecodeTextureFileForAsync(
+    const std::wstring &filePath) {
+    const std::filesystem::path resolvedPath = ResolveTexturePath(filePath);
+    if (!std::filesystem::exists(resolvedPath)) {
+        throw std::runtime_error("Texture file not found. requested=" +
+                                 std::filesystem::path(filePath).string() +
+                                 " resolved=" + resolvedPath.string());
+    }
 
-static float Lerp(float a, float b, float t) { return a + (b - a) * t; }
+    TextureManager::DecodedTexture decoded{};
+    decoded.pathKey = NormalizePathKey(resolvedPath);
+    const std::wstring ext = resolvedPath.extension().wstring();
 
-static float HashNoise(int32_t x, int32_t y, uint32_t seed) {
-    uint32_t h = static_cast<uint32_t>(x) * 374761393u +
-                 static_cast<uint32_t>(y) * 668265263u + seed * 2246822519u;
-    h = (h ^ (h >> 13u)) * 1274126177u;
-    h ^= h >> 16u;
-    return static_cast<float>(h & 0x00FFFFFFu) / static_cast<float>(0x00FFFFFFu);
-}
+    if (_wcsicmp(ext.c_str(), L".dds") == 0) {
+        const std::string message =
+            "LoadFromDDSFile failed: " + resolvedPath.string();
+        DxUtils::ThrowIfFailed(
+            DirectX::LoadFromDDSFile(resolvedPath.c_str(),
+                                      DirectX::DDS_FLAGS_NONE,
+                                      &decoded.metadata, decoded.scratch),
+            message.c_str());
+    } else {
+        const std::string message =
+            "LoadFromWICFile failed: " + resolvedPath.string();
+        DxUtils::ThrowIfFailed(
+            DirectX::LoadFromWICFile(resolvedPath.c_str(),
+                                      DirectX::WIC_FLAGS_IGNORE_SRGB,
+                                      &decoded.metadata, decoded.scratch),
+            message.c_str());
+    }
 
-static float ValueNoise(float x, float y, uint32_t seed) {
-    const int32_t x0 = static_cast<int32_t>(std::floor(x));
-    const int32_t y0 = static_cast<int32_t>(std::floor(y));
-    const float tx = Fade(x - static_cast<float>(x0));
-    const float ty = Fade(y - static_cast<float>(y0));
-
-    const float n00 = HashNoise(x0, y0, seed);
-    const float n10 = HashNoise(x0 + 1, y0, seed);
-    const float n01 = HashNoise(x0, y0 + 1, seed);
-    const float n11 = HashNoise(x0 + 1, y0 + 1, seed);
-
-    return Lerp(Lerp(n00, n10, tx), Lerp(n01, n11, tx), ty);
-}
-
-static uint32_t PackRgba(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255u) {
-    return (static_cast<uint32_t>(a) << 24u) |
-           (static_cast<uint32_t>(b) << 16u) |
-           (static_cast<uint32_t>(g) << 8u) | static_cast<uint32_t>(r);
-}
-
-static float Saturate(float value) {
-    return (std::clamp)(value, 0.0f, 1.0f);
-}
-
-static float Smoothstep(float edge0, float edge1, float value) {
-    const float t = Saturate((value - edge0) / (edge1 - edge0));
-    return t * t * (3.0f - 2.0f * t);
-}
-
-static std::wstring MakeGeneratedTextureKey(const wchar_t *prefix,
-                                            uint32_t width, uint32_t height) {
-    return std::wstring(prefix) + L":" + std::to_wstring(width) + L"x" +
-           std::to_wstring(height);
+    return decoded;
 }
 
 using namespace DirectX;
 using namespace DxUtils;
 using Microsoft::WRL::ComPtr;
+
+TextureManager &TextureManager::GetInstance() {
+    static TextureManager instance;
+    return instance;
+}
 
 void TextureManager::Initialize(DirectXCommon *dxCommon,
                                 SrvManager *srvManager) {
@@ -121,8 +78,11 @@ void TextureManager::Initialize(DirectXCommon *dxCommon,
 
     textures_.clear();
     uploadBuffers_.clear();
+    frameUploadBuffers_.clear();
+    frameUploadBuffers_.resize(dxCommon_->GetSwapChainBufferCount());
     filePathToTextureId_.clear();
-    generatedTextureToId_.clear();
+    asyncRequests_.clear();
+    nextAsyncRequestId_ = 1;
 
     uint32_t whitePixel = 0xFFFFFFFF;
     Image image{};
@@ -142,11 +102,21 @@ void TextureManager::Initialize(DirectXCommon *dxCommon,
     metadata.format = DXGI_FORMAT_R8G8B8A8_UNORM;
     metadata.dimension = TEX_DIMENSION_TEXTURE2D;
 
-    CreateTexture(&image, 1, metadata);
+    whiteTextureId_ = CreateTexture(&image, 1, metadata);
+
+    uint32_t flatNormalPixel = 0xFFFF8080;
+    image.pixels = reinterpret_cast<uint8_t *>(&flatNormalPixel);
+    defaultNormalTextureId_ = CreateTexture(&image, 1, metadata);
 }
 
 uint32_t TextureManager::Load(const std::wstring &filePath) {
     const std::filesystem::path resolvedPath = ResolveTexturePath(filePath);
+    if (!std::filesystem::exists(resolvedPath)) {
+        throw std::runtime_error("Texture file not found. requested=" +
+                                 std::filesystem::path(filePath).string() +
+                                 " resolved=" + resolvedPath.string());
+    }
+
     const std::wstring pathKey = NormalizePathKey(resolvedPath);
 
     auto it = filePathToTextureId_.find(pathKey);
@@ -162,17 +132,16 @@ uint32_t TextureManager::Load(const std::wstring &filePath) {
     if (_wcsicmp(ext.c_str(), L".dds") == 0) {
         const std::string message =
             "LoadFromDDSFile failed: " + resolvedPath.string();
-        ThrowIfFailed(
-            LoadFromDDSFile(resolvedPath.c_str(), DDS_FLAGS_NONE, &metadata,
-                            scratch),
-            message.c_str());
+        ThrowIfFailed(LoadFromDDSFile(resolvedPath.c_str(), DDS_FLAGS_NONE,
+                                      &metadata, scratch),
+                      message.c_str());
     } else {
         const std::string message =
             "LoadFromWICFile failed: " + resolvedPath.string();
-        ThrowIfFailed(
-            LoadFromWICFile(resolvedPath.c_str(), WIC_FLAGS_NONE, &metadata,
-                            scratch),
-            message.c_str());
+        ThrowIfFailed(LoadFromWICFile(resolvedPath.c_str(),
+                                      WIC_FLAGS_IGNORE_SRGB, &metadata,
+                                      scratch),
+                      message.c_str());
     }
 
     uint32_t id =
@@ -182,12 +151,23 @@ uint32_t TextureManager::Load(const std::wstring &filePath) {
     return id;
 }
 
+std::vector<uint32_t>
+TextureManager::LoadBatch(const std::vector<std::wstring> &filePaths) {
+    std::vector<uint32_t> textureIds;
+    textureIds.reserve(filePaths.size());
+    for (const std::wstring &filePath : filePaths) {
+        textureIds.push_back(Load(filePath));
+    }
+    return textureIds;
+}
+
 uint32_t TextureManager::LoadFromMemory(const uint8_t *data, size_t size) {
     ScratchImage scratch;
     TexMetadata metadata{};
 
     ThrowIfFailed(
-        LoadFromWICMemory(data, size, WIC_FLAGS_NONE, &metadata, scratch),
+        LoadFromWICMemory(data, size, WIC_FLAGS_IGNORE_SRGB, &metadata,
+                          scratch),
         "LoadFromWICMemory failed");
 
     uint32_t id =
@@ -196,575 +176,14 @@ uint32_t TextureManager::LoadFromMemory(const uint8_t *data, size_t size) {
     return id;
 }
 
-uint32_t TextureManager::CreateDynamicTexture(uint32_t width, uint32_t height) {
-    width = (std::max)(width, 1u);
-    height = (std::max)(height, 1u);
-
-    Texture texture;
-    auto texDesc = CD3DX12_RESOURCE_DESC::Tex2D(
-        DXGI_FORMAT_R8G8B8A8_UNORM, static_cast<UINT64>(width),
-        static_cast<UINT>(height), 1, 1);
-
-    CD3DX12_HEAP_PROPERTIES defaultHeap(D3D12_HEAP_TYPE_DEFAULT);
-    ThrowIfFailed(dxCommon_->GetDevice()->CreateCommittedResource(
-                      &defaultHeap, D3D12_HEAP_FLAG_NONE, &texDesc,
-                      D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr,
-                      IID_PPV_ARGS(&texture.resource)),
-                  "Create dynamic texture resource failed");
-
-    const UINT64 uploadSize =
-        GetRequiredIntermediateSize(texture.resource.Get(), 0, 1);
-    ComPtr<ID3D12Resource> uploadBuffer;
-    CD3DX12_HEAP_PROPERTIES uploadHeap(D3D12_HEAP_TYPE_UPLOAD);
-    auto uploadDesc = CD3DX12_RESOURCE_DESC::Buffer(uploadSize);
-    ThrowIfFailed(dxCommon_->GetDevice()->CreateCommittedResource(
-                      &uploadHeap, D3D12_HEAP_FLAG_NONE, &uploadDesc,
-                      D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-                      IID_PPV_ARGS(&uploadBuffer)),
-                  "Create dynamic texture upload buffer failed");
-
-    const uint32_t srvIndex = srvManager_->Allocate();
-    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
-    srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srvDesc.Texture2D.MostDetailedMip = 0;
-    srvDesc.Texture2D.MipLevels = 1;
-
-    dxCommon_->GetDevice()->CreateShaderResourceView(
-        texture.resource.Get(), &srvDesc, srvManager_->GetCpuHandle(srvIndex));
-
-    texture.width = static_cast<int>(width);
-    texture.height = static_cast<int>(height);
-    textures_.push_back(
-        {std::move(texture), srvIndex, std::move(uploadBuffer), true});
-    return static_cast<uint32_t>(textures_.size() - 1);
-}
-
-bool TextureManager::UpdateDynamicTexture(uint32_t textureId,
-                                          const uint8_t *rgbaPixels,
-                                          uint32_t width, uint32_t height) {
-    if (textureId >= textures_.size() || rgbaPixels == nullptr) {
-        return false;
-    }
-
-    Entry &entry = textures_[textureId];
-    if (!entry.dynamic || !entry.dynamicUploadBuffer ||
-        entry.texture.width != static_cast<int>(width) ||
-        entry.texture.height != static_cast<int>(height) ||
-        !dxCommon_->IsCommandListRecording()) {
-        return false;
-    }
-
-    D3D12_SUBRESOURCE_DATA subresource{};
-    subresource.pData = rgbaPixels;
-    subresource.RowPitch = static_cast<LONG_PTR>(width) * 4;
-    subresource.SlicePitch = subresource.RowPitch * height;
-
-    ID3D12GraphicsCommandList *cmdList = dxCommon_->GetCommandList();
-    auto toCopyDest = CD3DX12_RESOURCE_BARRIER::Transition(
-        entry.texture.resource.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-        D3D12_RESOURCE_STATE_COPY_DEST);
-    cmdList->ResourceBarrier(1, &toCopyDest);
-
-    UpdateSubresources(cmdList, entry.texture.resource.Get(),
-                       entry.dynamicUploadBuffer.Get(), 0, 0, 1,
-                       &subresource);
-
-    auto toShaderResource = CD3DX12_RESOURCE_BARRIER::Transition(
-        entry.texture.resource.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
-        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    cmdList->ResourceBarrier(1, &toShaderResource);
-    return true;
-}
-
-uint32_t TextureManager::CreateNoiseTexture(uint32_t width, uint32_t height) {
-    width = (std::max)(width, 1u);
-    height = (std::max)(height, 1u);
-    const std::wstring cacheKey = MakeGeneratedTextureKey(L"noise", width, height);
-    auto cached = generatedTextureToId_.find(cacheKey);
-    if (cached != generatedTextureToId_.end()) {
-        return cached->second;
-    }
-
-    std::vector<uint32_t> pixels(static_cast<size_t>(width) * height);
-    constexpr uint32_t seed = 0xC65D1A5Bu;
-
-    for (uint32_t y = 0; y < height; ++y) {
-        for (uint32_t x = 0; x < width; ++x) {
-            const float u = static_cast<float>(x) / static_cast<float>(width);
-            const float v = static_cast<float>(y) / static_cast<float>(height);
-
-            float amplitude = 0.55f;
-            float frequency = 4.0f;
-            float value = 0.0f;
-            float totalAmplitude = 0.0f;
-            for (uint32_t octave = 0; octave < 5; ++octave) {
-                value += ValueNoise(u * frequency, v * frequency,
-                                    seed + octave * 97u) *
-                         amplitude;
-                totalAmplitude += amplitude;
-                amplitude *= 0.5f;
-                frequency *= 2.0f;
-            }
-
-            value = (std::clamp)(value / totalAmplitude, 0.0f, 1.0f);
-            const uint8_t gray = static_cast<uint8_t>(value * 255.0f);
-            pixels[static_cast<size_t>(y) * width + x] =
-                0xFF000000u | (static_cast<uint32_t>(gray) << 16u) |
-                (static_cast<uint32_t>(gray) << 8u) |
-                static_cast<uint32_t>(gray);
-        }
-    }
-
-    Image image{};
-    image.width = width;
-    image.height = height;
-    image.format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    image.rowPitch = static_cast<size_t>(width) * sizeof(uint32_t);
-    image.slicePitch = image.rowPitch * height;
-    image.pixels = reinterpret_cast<uint8_t *>(pixels.data());
-
-    TexMetadata metadata{};
-    metadata.width = width;
-    metadata.height = height;
-    metadata.depth = 1;
-    metadata.arraySize = 1;
-    metadata.mipLevels = 1;
-    metadata.format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    metadata.dimension = TEX_DIMENSION_TEXTURE2D;
-
-    const uint32_t id = CreateTexture(&image, 1, metadata);
-    generatedTextureToId_[cacheKey] = id;
-    return id;
-}
-
-uint32_t TextureManager::CreateRustedMetalTexture(uint32_t width,
-                                                  uint32_t height) {
-    width = (std::max)(width, 1u);
-    height = (std::max)(height, 1u);
-    const std::wstring cacheKey =
-        MakeGeneratedTextureKey(L"rusted_metal", width, height);
-    auto cached = generatedTextureToId_.find(cacheKey);
-    if (cached != generatedTextureToId_.end()) {
-        return cached->second;
-    }
-
-    std::vector<uint32_t> pixels(static_cast<size_t>(width) * height);
-    constexpr uint32_t seed = 0x8E71C0DEu;
-
-    for (uint32_t y = 0; y < height; ++y) {
-        for (uint32_t x = 0; x < width; ++x) {
-            const float u = static_cast<float>(x) / static_cast<float>(width);
-            const float v = static_cast<float>(y) / static_cast<float>(height);
-
-            const float broadRust =
-                ValueNoise(u * 5.0f, v * 5.0f, seed + 13u);
-            const float fineRust =
-                ValueNoise(u * 38.0f, v * 38.0f, seed + 41u);
-            const float pitting =
-                ValueNoise(u * 96.0f, v * 96.0f, seed + 73u);
-            const float grime =
-                ValueNoise(u * 14.0f + 7.0f, v * 20.0f, seed + 109u);
-            const float scratchNoise =
-                ValueNoise(u * 180.0f, v * 28.0f, seed + 151u);
-
-            const float panelLineX =
-                1.0f - Smoothstep(0.010f, 0.024f, std::fabs(std::fmod(u * 5.0f, 1.0f) - 0.5f));
-            const float panelLineY =
-                1.0f - Smoothstep(0.010f, 0.024f, std::fabs(std::fmod(v * 4.0f, 1.0f) - 0.5f));
-            const float panelLine = Saturate((panelLineX + panelLineY) * 0.34f);
-
-            const float scratchBand =
-                std::pow(Saturate(1.0f - std::fabs(scratchNoise - 0.50f) * 28.0f),
-                         1.8f);
-            const float rustMask =
-                Saturate((broadRust - 0.38f) * 1.55f + fineRust * 0.26f +
-                         panelLine * 0.40f);
-            const float darkOxide =
-                Saturate((grime - 0.42f) * 1.3f + pitting * 0.28f);
-            const float exposedMetal =
-                Saturate((1.0f - rustMask) * 0.65f + scratchBand * 0.75f -
-                         darkOxide * 0.35f);
-
-            float r = 0.18f;
-            float g = 0.19f;
-            float b = 0.19f;
-
-            const float steel = exposedMetal;
-            r = Lerp(r, 0.56f, steel);
-            g = Lerp(g, 0.59f, steel);
-            b = Lerp(b, 0.58f, steel);
-
-            const float rust = rustMask;
-            r = Lerp(r, 0.70f, rust);
-            g = Lerp(g, 0.27f + fineRust * 0.10f, rust);
-            b = Lerp(b, 0.075f, rust);
-
-            const float soot = darkOxide;
-            r = Lerp(r, 0.065f, soot * 0.78f);
-            g = Lerp(g, 0.060f, soot * 0.78f);
-            b = Lerp(b, 0.055f, soot * 0.78f);
-
-            const float rivetGridX =
-                std::fabs(std::fmod(u * 5.0f, 1.0f) - 0.08f);
-            const float rivetGridY =
-                std::fabs(std::fmod(v * 4.0f, 1.0f) - 0.08f);
-            const float rivetGrid =
-                rivetGridX < rivetGridY ? rivetGridX : rivetGridY;
-            const float rivet =
-                1.0f - Smoothstep(0.018f, 0.036f, rivetGrid);
-            r = Lerp(r, 0.74f, rivet * 0.42f);
-            g = Lerp(g, 0.68f, rivet * 0.42f);
-            b = Lerp(b, 0.57f, rivet * 0.42f);
-
-            const float lineDarken = panelLine * 0.42f;
-            r *= 1.0f - lineDarken;
-            g *= 1.0f - lineDarken;
-            b *= 1.0f - lineDarken;
-
-            pixels[static_cast<size_t>(y) * width + x] = PackRgba(
-                static_cast<uint8_t>(Saturate(r) * 255.0f),
-                static_cast<uint8_t>(Saturate(g) * 255.0f),
-                static_cast<uint8_t>(Saturate(b) * 255.0f), 255u);
-        }
-    }
-
-    Image image{};
-    image.width = width;
-    image.height = height;
-    image.format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    image.rowPitch = static_cast<size_t>(width) * sizeof(uint32_t);
-    image.slicePitch = image.rowPitch * height;
-    image.pixels = reinterpret_cast<uint8_t *>(pixels.data());
-
-    TexMetadata metadata{};
-    metadata.width = width;
-    metadata.height = height;
-    metadata.depth = 1;
-    metadata.arraySize = 1;
-    metadata.mipLevels = 1;
-    metadata.format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    metadata.dimension = TEX_DIMENSION_TEXTURE2D;
-
-    const uint32_t id = CreateTexture(&image, 1, metadata);
-    generatedTextureToId_[cacheKey] = id;
-    return id;
-}
-
-uint32_t TextureManager::CreatePatinatedMetalTexture(uint32_t width,
-                                                     uint32_t height) {
-    width = (std::max)(width, 1u);
-    height = (std::max)(height, 1u);
-    const std::wstring cacheKey =
-        MakeGeneratedTextureKey(L"patinated_metal", width, height);
-    auto cached = generatedTextureToId_.find(cacheKey);
-    if (cached != generatedTextureToId_.end()) {
-        return cached->second;
-    }
-
-    std::vector<uint32_t> pixels(static_cast<size_t>(width) * height);
-    constexpr uint32_t seed = 0x6A9D42F1u;
-
-    for (uint32_t y = 0; y < height; ++y) {
-        for (uint32_t x = 0; x < width; ++x) {
-            const float u = static_cast<float>(x) / static_cast<float>(width);
-            const float v = static_cast<float>(y) / static_cast<float>(height);
-
-            const float broadWear =
-                ValueNoise(u * 5.5f, v * 5.5f, seed + 11u);
-            const float fineWear =
-                ValueNoise(u * 42.0f, v * 42.0f, seed + 31u);
-            const float pitting =
-                ValueNoise(u * 92.0f, v * 92.0f, seed + 67u);
-            const float grime =
-                ValueNoise(u * 13.0f + 3.0f, v * 19.0f, seed + 103u);
-            const float scratchNoise =
-                ValueNoise(u * 170.0f, v * 30.0f, seed + 149u);
-
-            const float panelLineX =
-                1.0f - Smoothstep(0.010f, 0.024f,
-                                   std::fabs(std::fmod(u * 5.0f, 1.0f) -
-                                             0.5f));
-            const float panelLineY =
-                1.0f - Smoothstep(0.010f, 0.024f,
-                                   std::fabs(std::fmod(v * 4.0f, 1.0f) -
-                                             0.5f));
-            const float panelLine = Saturate((panelLineX + panelLineY) * 0.32f);
-
-            const float scratchBand =
-                std::pow(Saturate(1.0f - std::fabs(scratchNoise - 0.50f) *
-                                              26.0f),
-                         1.7f);
-            const float tarnishMask =
-                Saturate((broadWear - 0.36f) * 1.35f + fineWear * 0.20f +
-                         panelLine * 0.30f);
-            const float darkOxide =
-                Saturate((grime - 0.44f) * 1.05f + pitting * 0.22f);
-            const float exposedMetal =
-                Saturate((1.0f - tarnishMask) * 0.70f + scratchBand * 0.70f -
-                         darkOxide * 0.26f);
-
-            float r = 0.20f;
-            float g = 0.22f;
-            float b = 0.22f;
-
-            const float steel = exposedMetal;
-            r = Lerp(r, 0.58f, steel);
-            g = Lerp(g, 0.63f, steel);
-            b = Lerp(b, 0.62f, steel);
-
-            const float tarnish = tarnishMask;
-            r = Lerp(r, 0.62f, tarnish);
-            g = Lerp(g, 0.56f + fineWear * 0.08f, tarnish);
-            b = Lerp(b, 0.32f, tarnish);
-
-            const float coolOxide = darkOxide;
-            r = Lerp(r, 0.11f, coolOxide * 0.64f);
-            g = Lerp(g, 0.18f, coolOxide * 0.64f);
-            b = Lerp(b, 0.20f, coolOxide * 0.64f);
-
-            const float rivetGridX =
-                std::fabs(std::fmod(u * 5.0f, 1.0f) - 0.08f);
-            const float rivetGridY =
-                std::fabs(std::fmod(v * 4.0f, 1.0f) - 0.08f);
-            const float rivetGrid =
-                rivetGridX < rivetGridY ? rivetGridX : rivetGridY;
-            const float rivet =
-                1.0f - Smoothstep(0.018f, 0.036f, rivetGrid);
-            r = Lerp(r, 0.72f, rivet * 0.36f);
-            g = Lerp(g, 0.68f, rivet * 0.36f);
-            b = Lerp(b, 0.54f, rivet * 0.36f);
-
-            const float lineDarken = panelLine * 0.32f;
-            r *= 1.0f - lineDarken;
-            g *= 1.0f - lineDarken;
-            b *= 1.0f - lineDarken;
-
-            pixels[static_cast<size_t>(y) * width + x] = PackRgba(
-                static_cast<uint8_t>(Saturate(r) * 255.0f),
-                static_cast<uint8_t>(Saturate(g) * 255.0f),
-                static_cast<uint8_t>(Saturate(b) * 255.0f), 255u);
-        }
-    }
-
-    Image image{};
-    image.width = width;
-    image.height = height;
-    image.format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    image.rowPitch = static_cast<size_t>(width) * sizeof(uint32_t);
-    image.slicePitch = image.rowPitch * height;
-    image.pixels = reinterpret_cast<uint8_t *>(pixels.data());
-
-    TexMetadata metadata{};
-    metadata.width = width;
-    metadata.height = height;
-    metadata.depth = 1;
-    metadata.arraySize = 1;
-    metadata.mipLevels = 1;
-    metadata.format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    metadata.dimension = TEX_DIMENSION_TEXTURE2D;
-
-    const uint32_t id = CreateTexture(&image, 1, metadata);
-    generatedTextureToId_[cacheKey] = id;
-    return id;
-}
-
-uint32_t TextureManager::CreateHeroMetalTexture(uint32_t width,
-                                                uint32_t height) {
-    width = (std::max)(width, 1u);
-    height = (std::max)(height, 1u);
-    const std::wstring cacheKey =
-        MakeGeneratedTextureKey(L"hero_metal", width, height);
-    auto cached = generatedTextureToId_.find(cacheKey);
-    if (cached != generatedTextureToId_.end()) {
-        return cached->second;
-    }
-
-    std::vector<uint32_t> pixels(static_cast<size_t>(width) * height);
-    constexpr uint32_t seed = 0x35B1C0A7u;
-
-    for (uint32_t y = 0; y < height; ++y) {
-        for (uint32_t x = 0; x < width; ++x) {
-            const float u = static_cast<float>(x) / static_cast<float>(width);
-            const float v = static_cast<float>(y) / static_cast<float>(height);
-
-            const float broadPolish =
-                ValueNoise(u * 4.0f, v * 4.0f, seed + 17u);
-            const float finePolish =
-                ValueNoise(u * 34.0f, v * 34.0f, seed + 43u);
-            const float scratchNoise =
-                ValueNoise(u * 210.0f, v * 24.0f, seed + 89u);
-            const float edgeShade =
-                ValueNoise(u * 9.0f + 5.0f, v * 11.0f, seed + 131u);
-
-            const float panelLineX =
-                1.0f - Smoothstep(0.011f, 0.025f,
-                                   std::fabs(std::fmod(u * 4.0f, 1.0f) -
-                                             0.5f));
-            const float panelLineY =
-                1.0f - Smoothstep(0.011f, 0.025f,
-                                   std::fabs(std::fmod(v * 4.0f, 1.0f) -
-                                             0.5f));
-            const float panelLine = Saturate((panelLineX + panelLineY) * 0.22f);
-
-            const float scratch =
-                std::pow(Saturate(1.0f - std::fabs(scratchNoise - 0.50f) *
-                                              30.0f),
-                         1.5f);
-            const float highlight =
-                Saturate((broadPolish - 0.36f) * 0.55f + scratch * 0.22f);
-            const float coolShade =
-                Saturate((edgeShade - 0.50f) * 0.55f + finePolish * 0.10f);
-
-            float r = 0.30f;
-            float g = 0.28f;
-            float b = 0.58f;
-
-            r = Lerp(r, 0.42f, highlight);
-            g = Lerp(g, 0.46f, highlight);
-            b = Lerp(b, 0.88f, highlight);
-
-            r = Lerp(r, 0.18f, coolShade * 0.42f);
-            g = Lerp(g, 0.18f, coolShade * 0.42f);
-            b = Lerp(b, 0.46f, coolShade * 0.42f);
-
-            const float lineDarken = panelLine * 0.24f;
-            r *= 1.0f - lineDarken;
-            g *= 1.0f - lineDarken;
-            b *= 1.0f - lineDarken;
-
-            pixels[static_cast<size_t>(y) * width + x] = PackRgba(
-                static_cast<uint8_t>(Saturate(r) * 255.0f),
-                static_cast<uint8_t>(Saturate(g) * 255.0f),
-                static_cast<uint8_t>(Saturate(b) * 255.0f), 255u);
-        }
-    }
-
-    Image image{};
-    image.width = width;
-    image.height = height;
-    image.format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    image.rowPitch = static_cast<size_t>(width) * sizeof(uint32_t);
-    image.slicePitch = image.rowPitch * height;
-    image.pixels = reinterpret_cast<uint8_t *>(pixels.data());
-
-    TexMetadata metadata{};
-    metadata.width = width;
-    metadata.height = height;
-    metadata.depth = 1;
-    metadata.arraySize = 1;
-    metadata.mipLevels = 1;
-    metadata.format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    metadata.dimension = TEX_DIMENSION_TEXTURE2D;
-
-    const uint32_t id = CreateTexture(&image, 1, metadata);
-    generatedTextureToId_[cacheKey] = id;
-    return id;
-}
-
-uint32_t TextureManager::CreateArenaStoneTexture(uint32_t width,
-                                                 uint32_t height) {
-    width = (std::max)(width, 1u);
-    height = (std::max)(height, 1u);
-    const std::wstring cacheKey =
-        MakeGeneratedTextureKey(L"arena_stone", width, height);
-    auto cached = generatedTextureToId_.find(cacheKey);
-    if (cached != generatedTextureToId_.end()) {
-        return cached->second;
-    }
-
-    std::vector<uint32_t> pixels(static_cast<size_t>(width) * height);
-    constexpr uint32_t seed = 0x51A7E0A1u;
-
-    for (uint32_t y = 0; y < height; ++y) {
-        for (uint32_t x = 0; x < width; ++x) {
-            const float u = static_cast<float>(x) / static_cast<float>(width);
-            const float v = static_cast<float>(y) / static_cast<float>(height);
-
-            const float largeGrain =
-                ValueNoise(u * 7.0f, v * 7.0f, seed + 11u);
-            const float fineGrain =
-                ValueNoise(u * 58.0f, v * 58.0f, seed + 29u);
-            const float cloud =
-                ValueNoise(u * 2.6f + 3.0f, v * 2.1f, seed + 47u);
-            const float wear =
-                ValueNoise(u * 18.0f, v * 18.0f + 5.0f, seed + 83u);
-
-            const float tileU = std::fmod(u * 7.0f, 1.0f);
-            const float tileV = std::fmod(v * 7.0f, 1.0f);
-            const float edgeU = (std::min)(tileU, 1.0f - tileU);
-            const float edgeV = (std::min)(tileV, 1.0f - tileV);
-            const float mortar =
-                1.0f - Smoothstep(0.010f, 0.030f, (std::min)(edgeU, edgeV));
-            const float tileCenter =
-                Smoothstep(0.05f, 0.36f, edgeU) * Smoothstep(0.05f, 0.36f, edgeV);
-
-            const float crackNoise =
-                ValueNoise(u * 23.0f + 7.0f, v * 23.0f, seed + 131u);
-            const float crack =
-                std::pow(Saturate(1.0f - std::fabs(crackNoise - 0.52f) * 24.0f),
-                         2.4f) *
-                Smoothstep(0.52f, 0.82f, wear);
-
-            float r = 0.60f;
-            float g = 0.58f;
-            float b = 0.52f;
-
-            const float stoneVariation =
-                (largeGrain - 0.5f) * 0.14f + (fineGrain - 0.5f) * 0.08f +
-                (cloud - 0.5f) * 0.10f;
-            r += stoneVariation;
-            g += stoneVariation * 0.92f;
-            b += stoneVariation * 0.78f;
-
-            const float sunWear = tileCenter * Smoothstep(0.38f, 0.76f, wear);
-            r = Lerp(r, 0.76f, sunWear * 0.28f);
-            g = Lerp(g, 0.72f, sunWear * 0.28f);
-            b = Lerp(b, 0.63f, sunWear * 0.22f);
-
-            const float coolVein =
-                Smoothstep(0.62f, 0.90f,
-                           ValueNoise(u * 11.0f - 4.0f, v * 15.0f, seed + 191u));
-            r = Lerp(r, 0.54f, coolVein * 0.12f);
-            g = Lerp(g, 0.62f, coolVein * 0.12f);
-            b = Lerp(b, 0.60f, coolVein * 0.10f);
-
-            r = Lerp(r, 0.36f, mortar * 0.32f + crack * 0.42f);
-            g = Lerp(g, 0.34f, mortar * 0.32f + crack * 0.42f);
-            b = Lerp(b, 0.31f, mortar * 0.30f + crack * 0.38f);
-
-            pixels[static_cast<size_t>(y) * width + x] = PackRgba(
-                static_cast<uint8_t>(Saturate(r) * 255.0f),
-                static_cast<uint8_t>(Saturate(g) * 255.0f),
-                static_cast<uint8_t>(Saturate(b) * 255.0f), 255u);
-        }
-    }
-
-    Image image{};
-    image.width = width;
-    image.height = height;
-    image.format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    image.rowPitch = static_cast<size_t>(width) * sizeof(uint32_t);
-    image.slicePitch = image.rowPitch * height;
-    image.pixels = reinterpret_cast<uint8_t *>(pixels.data());
-
-    TexMetadata metadata{};
-    metadata.width = width;
-    metadata.height = height;
-    metadata.depth = 1;
-    metadata.arraySize = 1;
-    metadata.mipLevels = 1;
-    metadata.format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    metadata.dimension = TEX_DIMENSION_TEXTURE2D;
-
-    const uint32_t id = CreateTexture(&image, 1, metadata);
-    generatedTextureToId_[cacheKey] = id;
-    return id;
-}
-
 uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
                                        const TexMetadata &metadata) {
+    const bool ownsUploadPass =
+        dxCommon_ != nullptr && !dxCommon_->IsCommandListRecording();
+    if (ownsUploadPass) {
+        dxCommon_->BeginUpload();
+    }
+
     Texture texture;
 
     auto texDesc = CD3DX12_RESOURCE_DESC::Tex2D(
@@ -804,8 +223,8 @@ uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
 
     ID3D12GraphicsCommandList *cmdList = dxCommon_->GetCommandList();
 
-    UpdateSubresources(cmdList, texture.resource.Get(), uploadBuffer.Get(), 0, 0,
-                       static_cast<UINT>(subresources.size()),
+    UpdateSubresources(cmdList, texture.resource.Get(), uploadBuffer.Get(), 0,
+                       0, static_cast<UINT>(subresources.size()),
                        subresources.data());
 
     auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
@@ -831,9 +250,11 @@ uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
                metadata.arraySize > 1) {
         srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
         srvDesc.Texture2DArray.MostDetailedMip = 0;
-        srvDesc.Texture2DArray.MipLevels = static_cast<UINT>(metadata.mipLevels);
+        srvDesc.Texture2DArray.MipLevels =
+            static_cast<UINT>(metadata.mipLevels);
         srvDesc.Texture2DArray.FirstArraySlice = 0;
-        srvDesc.Texture2DArray.ArraySize = static_cast<UINT>(metadata.arraySize);
+        srvDesc.Texture2DArray.ArraySize =
+            static_cast<UINT>(metadata.arraySize);
         srvDesc.Texture2DArray.PlaneSlice = 0;
         srvDesc.Texture2DArray.ResourceMinLODClamp = 0.0f;
     } else {
@@ -854,10 +275,20 @@ uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
 
     uint32_t textureId = static_cast<uint32_t>(textures_.size() - 1);
 
+    if (ownsUploadPass) {
+        dxCommon_->EndUpload();
+        ReleaseUploadBuffers();
+    }
+
     return textureId;
 }
 
-void TextureManager::ReleaseUploadBuffers() { uploadBuffers_.clear(); }
+void TextureManager::ReleaseUploadBuffers() {
+    if (dxCommon_ && dxCommon_->IsCommandListRecording()) {
+        return;
+    }
+    uploadBuffers_.clear();
+}
 
 D3D12_GPU_DESCRIPTOR_HANDLE
 TextureManager::GetGpuHandle(uint32_t textureId) const {

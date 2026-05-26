@@ -1,11 +1,12 @@
 #pragma once
-#include "Animator.h"
-#include "AssimpLoader.h"
-#include "MaterialManager.h"
-#include "MeshManager.h"
-#include "Model.h"
-#include "ModelRenderer.h"
+#include "animation/Animator.h"
+#include "model/AssimpLoader.h"
+#include "model/MaterialManager.h"
+#include "model/MeshManager.h"
+#include "model/Model.h"
+#include "model/ModelRenderer.h"
 #include <cstdint>
+#include <initializer_list>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -20,13 +21,23 @@ class TextureManager;
 class ModelManager {
   public:
     /// <summary>
-    /// ModelManagerの初期化
+    /// ModelManagerの共有インスタンスを取得する
+    /// </summary>
+    static ModelManager &GetInstance();
+
+    /// <summary>
+    /// モデル読み込み、マテリアル、メッシュ、描画器を初期化する
     /// </summary>
     /// <param name="dxCommon">DirectX共通管理クラス</param>
     /// <param name="srvManager">SRVヒープ管理クラス</param>
     /// <param name="textureManager">テクスチャ管理クラス</param>
     void Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
                     TextureManager *textureManager);
+
+    /// <summary>
+    /// 管理中のモデルリソースとキャッシュを明示的に解放する
+    /// </summary>
+    void Finalize();
 
     /// <summary>
     /// モデルを読み込む
@@ -36,7 +47,7 @@ class ModelManager {
     uint32_t Load(const std::wstring &path);
 
     /// <summary>
-    /// XY平面のPrimitiveを生成する
+    /// XY平面の基本形状を生成する
     /// </summary>
     /// <param name="textureId">貼り付けるテクスチャID</param>
     /// <param name="material">使用するマテリアル</param>
@@ -51,7 +62,7 @@ class ModelManager {
                        float depth = 1.0f);
 
     /// <summary>
-    /// XY平面のRing Primitiveを生成する
+    /// XY平面のリング形状を生成する
     /// </summary>
     /// <param name="textureId">貼り付けるテクスチャID</param>
     /// <param name="material">使用するマテリアル</param>
@@ -64,7 +75,7 @@ class ModelManager {
                         float innerRadius = 0.2f);
 
     /// <summary>
-    /// Y軸方向に伸びる筒状Cylinder Primitiveを生成する(上下キャップなし)
+    /// Y軸方向に伸びる筒形状を生成する
     /// </summary>
     /// <param name="textureId">貼り付けるテクスチャID</param>
     /// <param name="material">使用するマテリアル</param>
@@ -85,6 +96,20 @@ class ModelManager {
                                   float maxHeight = 6.0f,
                                   float flatRadius = 13.0f,
                                   uint32_t seed = 0x5A17u);
+
+    /// <summary>
+    /// 頂点配列とインデックス配列から汎用メッシュを作成する
+    /// </summary>
+    uint32_t CreateMesh(const void *vertexData, uint32_t vertexStride,
+                        uint32_t vertexCount, const uint32_t *indexData,
+                        uint32_t indexCount,
+                        D3D12_PRIMITIVE_TOPOLOGY primitiveTopology =
+                            D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    /// <summary>
+    /// 作成済みメッシュを取得する
+    /// </summary>
+    const Mesh &GetMesh(uint32_t meshId) const;
 
     /// <summary>
     /// モデルのアニメーションを更新する
@@ -115,6 +140,7 @@ class ModelManager {
     /// <param name="modelId">モデルID</param>
     /// <returns>Modelポインタ</returns>
     Model *GetModel(uint32_t modelId);
+
     /// <summary>
     /// モデルデータを読み取り専用で取得する
     /// </summary>
@@ -140,27 +166,68 @@ class ModelManager {
     /// モデルIDから描画する互換ヘルパー
     /// </summary>
     void Draw(uint32_t modelId, const Transform &transform,
-              const Camera &camera,
-              uint32_t environmentTextureId = UINT32_MAX);
+              const Camera &camera, uint32_t environmentTextureId = UINT32_MAX);
 
     /// <summary>
-    /// モデル描画前処理
+    /// 同一モデルを複数Transformでまとめて描画する
+    /// </summary>
+    void DrawInstanced(uint32_t modelId, const Transform *transforms,
+                       uint32_t instanceCount, const Camera &camera,
+                       uint32_t environmentTextureId = UINT32_MAX);
+
+    /// <summary>
+    /// 同一モデルを複数InstanceDataでまとめて描画する
+    /// </summary>
+    void DrawInstanced(uint32_t modelId, const InstanceData *instances,
+                       uint32_t instanceCount, const Camera &camera,
+                       uint32_t environmentTextureId = UINT32_MAX);
+
+    /// <summary>
+    /// モデルIDからShadowMapへ描画する
+    /// </summary>
+    void DrawShadow(uint32_t modelId, const Transform &transform,
+                    const DirectX::XMFLOAT4X4 &lightViewProjection);
+
+    /// <summary>
+    /// 同一モデルを複数TransformでShadowMapへまとめて描画する
+    /// </summary>
+    void DrawInstancedShadow(uint32_t modelId, const Transform *transforms,
+                             uint32_t instanceCount,
+                             const DirectX::XMFLOAT4X4 &lightViewProjection);
+
+    /// <summary>
+    /// 同一モデルを複数InstanceDataでShadowMapへまとめて描画する
+    /// </summary>
+    void DrawInstancedShadow(uint32_t modelId, const InstanceData *instances,
+                             uint32_t instanceCount,
+                             const DirectX::XMFLOAT4X4 &lightViewProjection);
+
+    /// <summary>
+    /// モデルIDから描画前のGPUスキニングだけを実行する
+    /// </summary>
+    void PrepareSkinning(uint32_t modelId);
+    void PrepareSkinning(std::initializer_list<uint32_t> modelIds);
+
+    /// <summary>
+    /// 毎フレーム変わる描画用Upload領域をリセットする
+    /// </summary>
+    void BeginFrame() { modelRenderer_.BeginFrame(); }
+
+    /// <summary>
+    /// モデル描画用パイプラインを描画前に設定する
     /// </summary>
     void PreDraw() { modelRenderer_.PreDraw(); }
+
     /// <summary>
-    /// モデル描画後処理
+    /// ShadowPass用パイプラインを描画前に設定する
+    /// </summary>
+    void PreDrawShadow() { modelRenderer_.PreDrawShadow(); }
+
+    /// <summary>
+    /// モデル描画後の状態を整理する
     /// </summary>
     void PostDraw() { modelRenderer_.PostDraw(); }
-    /// <summary>
-    /// 現在フレームの描画エフェクトを設定する
-    /// </summary>
-    void SetDrawEffect(const ModelDrawEffect &effect) {
-        modelRenderer_.SetDrawEffect(effect);
-    }
-    /// <summary>
-    /// 描画エフェクトを初期状態へ戻す
-    /// </summary>
-    void ClearDrawEffect() { modelRenderer_.ClearDrawEffect(); }
+
     /// <summary>
     /// シーンライティングを設定する
     /// </summary>
@@ -169,15 +236,36 @@ class ModelManager {
     }
 
     /// <summary>
+    /// 現在フレームの描画エフェクトを設定する
+    /// </summary>
+    void SetDrawEffect(const ModelDrawEffect &effect) {
+        modelRenderer_.SetDrawEffect(effect);
+    }
+
+    /// <summary>
+    /// 描画エフェクトを初期状態へ戻す
+    /// </summary>
+    void ClearDrawEffect() { modelRenderer_.ClearDrawEffect(); }
+
+    /// <summary>
+    /// シーンフォグを設定する
+    /// </summary>
+    void SetSceneFog(const SceneFog &fog) { modelRenderer_.SetSceneFog(fog); }
+
+    /// <summary>
     /// 描画に使用するModelRendererを取得する
     /// </summary>
     /// <returns>ModelRendererへのポインタ</returns>
     ModelRenderer *GetRenderer() { return &modelRenderer_; }
+
     /// <summary>
     /// 描画に使用するModelRendererを読み取り専用で取得する
     /// </summary>
     /// <returns>ModelRendererへのポインタ</returns>
     const ModelRenderer *GetRenderer() const { return &modelRenderer_; }
+
+    MeshManager *GetMeshManager() { return &meshManager_; }
+    const MeshManager *GetMeshManager() const { return &meshManager_; }
 
   private:
     DirectXCommon *dxCommon_ = nullptr;

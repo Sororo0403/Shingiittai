@@ -6,7 +6,26 @@
 using namespace DirectX;
 
 void GameScene::UpdateSceneLighting() {
-    if (ctx_ == nullptr || ctx_->model == nullptr) {
+    if (ctx_ == nullptr || ctx_->rendering.model == nullptr) {
+        return;
+    }
+
+    if (tutorialBackgroundMode_) {
+        const float pulse = 0.92f + 0.08f * std::sinf(sceneLightTime_ * 2.0f);
+        SceneLighting lighting{};
+        lighting.keyLightDirection = {-0.50f, -0.64f, 0.42f};
+        lighting.keyLightColor = {0.86f, 1.30f, 1.24f, 1.0f};
+        lighting.fillLightDirection = {0.72f, -0.22f, -0.58f};
+        lighting.fillLightColor = {0.34f, 0.88f, 0.92f, 0.62f};
+        lighting.ambientColor = {0.22f, 0.40f, 0.43f, 1.0f};
+        lighting.lightingParams = {52.0f, 0.28f, 1.34f, 0.18f};
+        lighting.pointLights[0].positionRange = {-2.2f, 1.65f, -1.8f, 6.0f};
+        lighting.pointLights[0].colorIntensity = {0.20f, 0.92f, 0.88f,
+                                                  0.92f * pulse};
+        lighting.pointLights[1].positionRange = {2.6f, 1.90f, 1.3f, 5.6f};
+        lighting.pointLights[1].colorIntensity = {0.38f, 1.0f, 0.92f,
+                                                  0.84f * pulse};
+        ctx_->rendering.model->SetSceneLighting(lighting);
         return;
     }
 
@@ -16,26 +35,15 @@ void GameScene::UpdateSceneLighting() {
     const ActionStep actionStep = enemy_.GetActionStep();
     const bool isAttackKind =
         actionKind == ActionKind::Smash || actionKind == ActionKind::Sweep ||
-        actionKind == ActionKind::BladeClash ||
-        actionKind == ActionKind::Wave || actionKind == ActionKind::Laser ||
-        actionKind == ActionKind::Cage;
+        actionKind == ActionKind::BladeClash;
     const bool effectFocus =
         (isAttackKind &&
          (actionStep == ActionStep::Charge || actionStep == ActionStep::Active)) ||
         enemy_.IsPhaseTransitionActive();
     XMFLOAT3 accentAnchor = enemy_.GetTransform().position;
-    if (actionKind == ActionKind::Warp) {
-        accentAnchor = enemy_.GetWarpTargetPos();
-    }
 
     const float pulse = 0.96f + 0.04f * std::sinf(sceneLightTime_ * 2.4f);
-    const float actionBoost =
-        actionKind == ActionKind::Warp ? 1.12f
-        : actionKind == ActionKind::Wave ? 1.08f
-        : actionKind == ActionKind::Laser ? 1.18f
-        : actionKind == ActionKind::Cage ? 1.10f
-        : actionKind == ActionKind::BladeClash ? 1.14f
-                                         : 1.0f;
+    const float actionBoost = 1.0f;
     const float enemyFocusBoost = effectFocus ? 1.18f : 1.0f;
     XMFLOAT4 actionColor = {0.86f, 0.44f, 0.18f, 1.0f};
     switch (actionKind) {
@@ -46,19 +54,7 @@ void GameScene::UpdateSceneLighting() {
         actionColor = {1.0f, 0.58f, 0.14f, 1.0f};
         break;
     case ActionKind::BladeClash:
-        actionColor = {0.42f, 1.0f, 0.66f, 1.0f};
-        break;
-    case ActionKind::Wave:
-        actionColor = {0.56f, 0.82f, 0.48f, 1.0f};
-        break;
-    case ActionKind::Laser:
-        actionColor = {0.36f, 0.92f, 1.0f, 1.0f};
-        break;
-    case ActionKind::Cage:
-        actionColor = {0.42f, 0.96f, 0.88f, 1.0f};
-        break;
-    case ActionKind::Warp:
-        actionColor = {0.46f, 0.78f, 0.66f, 1.0f};
+        actionColor = {1.0f, 0.72f, 0.20f, 1.0f};
         break;
     case ActionKind::Stalk:
         actionColor = {0.58f, 0.62f, 0.48f, 1.0f};
@@ -66,7 +62,7 @@ void GameScene::UpdateSceneLighting() {
     default:
         break;
     }
-    if (enemy_.IsPhaseTransitionActive() && !bladeClashFinishActive_) {
+    if (enemy_.IsPhaseTransitionActive()) {
         const float ratio = enemy_.GetPhaseTransitionRatio();
         const float release =
             std::clamp((ratio - 0.88f) / 0.05f, 0.0f, 1.0f);
@@ -127,45 +123,5 @@ void GameScene::UpdateSceneLighting() {
         0.94f * actionBoost * enemyFocusBoost,
     };
 
-    if (bladeClashFinishActive_ && bladeClashFinishPlayerWon_) {
-        const float ratio =
-            bladeClashFinishDuration_ > 0.0001f
-                ? std::clamp(bladeClashFinishTimer_ / bladeClashFinishDuration_,
-                             0.0f, 1.0f)
-                : 1.0f;
-        const float impact =
-            1.0f - std::clamp((ratio - 0.58f) / 0.42f, 0.0f, 1.0f);
-        lighting.keyLightDirection = {-0.40f, -0.54f, 0.62f};
-        lighting.keyLightColor = {1.48f, 1.42f, 1.26f, 1.0f};
-        lighting.fillLightDirection = {0.66f, -0.16f, -0.72f};
-        lighting.fillLightColor = {0.66f, 0.68f, 0.74f, 0.60f};
-        lighting.ambientColor = {0.36f, 0.37f, 0.40f, 1.0f};
-        lighting.lightingParams = {86.0f, 0.52f, 1.16f, 0.18f};
-        lighting.pointLights[0].positionRange = {
-            playerPos.x - bladeClashDirection_.x * 1.05f,
-            playerPos.y + 1.45f,
-            playerPos.z - bladeClashDirection_.z * 1.05f,
-            8.20f,
-        };
-        lighting.pointLights[0].colorIntensity = {
-            1.0f,
-            0.92f,
-            0.72f,
-            1.75f + 0.55f * impact,
-        };
-        lighting.pointLights[1].positionRange = {
-            enemyPos.x + bladeClashDirection_.z * 1.15f,
-            enemyPos.y + 1.75f,
-            enemyPos.z - bladeClashDirection_.x * 1.15f,
-            6.80f,
-        };
-        lighting.pointLights[1].colorIntensity = {
-            1.0f,
-            0.90f,
-            0.70f,
-            1.25f,
-        };
-    }
-
-    ctx_->model->SetSceneLighting(lighting);
+    ctx_->rendering.model->SetSceneLighting(lighting);
 }

@@ -85,7 +85,7 @@ void SwordSlashArcRenderer::Emit(const XMFLOAT3 &root, const XMFLOAT3 &tip,
     attackDir.y = 0.0f;
     attackDir = NormalizeSafe(attackDir, {0.0f, 0.0f, 1.0f});
     const XMFLOAT3 cameraForward =
-        NormalizeSafe(Sub(camera.GetTarget(), camera.GetPosition()),
+        NormalizeSafe(AppCameraForward(camera),
                       {0.0f, 0.0f, 1.0f});
     const XMFLOAT3 worldUp{0.0f, 1.0f, 0.0f};
     XMFLOAT3 cameraRight = NormalizeSafe(Cross(worldUp, cameraForward),
@@ -124,9 +124,10 @@ void SwordSlashArcRenderer::Emit(const XMFLOAT3 &root, const XMFLOAT3 &tip,
 void SwordSlashArcRenderer::EmitHitLine(const XMFLOAT3 &position,
                                         const XMFLOAT3 &direction,
                                         const Camera &camera, float power,
-                                        const XMFLOAT2 &slashDirection) {
+                                        const XMFLOAT2 &slashDirection,
+                                        bool isCounter) {
     const XMFLOAT3 cameraForward =
-        NormalizeSafe(Sub(camera.GetTarget(), camera.GetPosition()),
+        NormalizeSafe(AppCameraForward(camera),
                       {0.0f, 0.0f, 1.0f});
     const XMFLOAT3 worldUp{0.0f, 1.0f, 0.0f};
     const XMFLOAT3 cameraRight =
@@ -160,6 +161,29 @@ void SwordSlashArcRenderer::EmitHitLine(const XMFLOAT3 &position,
         NormalizeSafe(Cross(cameraForward, lineDir), cameraUp);
 
     const float clampedPower = std::clamp(power, 0.6f, 4.0f);
+    XMFLOAT3 visualPosition = position;
+    if (isCounter) {
+        visualPosition = Add(visualPosition, Scale(cameraForward, -1.05f));
+        visualPosition.y += 0.18f;
+    }
+    const XMFLOAT4 wideGlow =
+        isCounter ? XMFLOAT4{1.00f, 0.38f, 0.05f, 0.68f}
+                  : XMFLOAT4{0.82f, 0.82f, 1.00f, 0.42f};
+    const XMFLOAT4 hotCore =
+        isCounter ? XMFLOAT4{1.00f, 0.82f, 0.20f, 1.00f}
+                  : XMFLOAT4{1.00f, 0.98f, 1.00f, 1.00f};
+    const XMFLOAT4 offsetGlow =
+        isCounter ? XMFLOAT4{0.08f, 1.00f, 0.58f, 0.58f}
+                  : XMFLOAT4{0.96f, 0.84f, 1.00f, 0.50f};
+    const XMFLOAT4 shardA =
+        isCounter ? XMFLOAT4{1.00f, 0.66f, 0.12f, 0.88f}
+                  : XMFLOAT4{0.94f, 0.97f, 1.0f, 0.78f};
+    const XMFLOAT4 shardB =
+        isCounter ? XMFLOAT4{0.08f, 0.98f, 0.62f, 0.74f}
+                  : XMFLOAT4{0.86f, 0.92f, 1.0f, 0.62f};
+    const XMFLOAT4 shardC =
+        isCounter ? XMFLOAT4{1.00f, 0.36f, 0.08f, 0.68f}
+                  : XMFLOAT4{1.0f, 1.0f, 1.0f, 0.66f};
 
     auto emitStroke = [&](const XMFLOAT3 &axis, float alongOffset,
                           float normalOffset, float heightOffset,
@@ -170,7 +194,7 @@ void SwordSlashArcRenderer::EmitHitLine(const XMFLOAT3 &position,
 
         const XMFLOAT3 strokeNormal =
             NormalizeSafe(Cross(cameraForward, axis), lineNormal);
-        arc.center = Add(position, Scale(axis, alongOffset));
+        arc.center = Add(visualPosition, Scale(axis, alongOffset));
         arc.center = Add(arc.center, Scale(strokeNormal, normalOffset));
         arc.center.y += heightOffset;
         arc.axisA = axis;
@@ -189,15 +213,15 @@ void SwordSlashArcRenderer::EmitHitLine(const XMFLOAT3 &position,
     emitStroke(lineDir, -0.12f, 0.00f, 0.50f,
                3.88f + clampedPower * 0.70f,
                0.155f + clampedPower * 0.025f, 0.195f, 0.0f,
-               {0.82f, 0.82f, 1.00f, 0.42f});
+               wideGlow);
     emitStroke(lineDir, -0.10f, 0.00f, 0.52f,
                4.15f + clampedPower * 0.74f,
                0.060f + clampedPower * 0.010f, 0.138f, 0.0f,
-               {1.00f, 0.98f, 1.00f, 1.00f});
+               hotCore);
     emitStroke(lineDir, -0.34f, -0.055f, 0.47f,
                3.38f + clampedPower * 0.60f,
                0.090f + clampedPower * 0.012f, 0.172f, 0.018f,
-               {0.96f, 0.84f, 1.00f, 0.50f});
+               offsetGlow);
 
     const XMFLOAT3 shardUp =
         NormalizeSafe(Add(Scale(lineNormal, 0.78f), Scale(lineDir, 0.22f)),
@@ -210,20 +234,96 @@ void SwordSlashArcRenderer::EmitHitLine(const XMFLOAT3 &position,
                       cameraUp);
 
     emitStroke(shardUp, 0.22f, 0.02f, 0.52f, 1.05f + clampedPower * 0.12f,
-               0.018f, 0.108f, 0.0f, {0.94f, 0.97f, 1.0f, 0.78f});
+               0.018f, 0.108f, 0.0f, shardA);
     emitStroke(shardDown, 0.16f, -0.02f, 0.48f, 0.72f + clampedPower * 0.08f,
-               0.014f, 0.095f, 0.010f, {0.86f, 0.92f, 1.0f, 0.62f});
+               0.014f, 0.095f, 0.010f, shardB);
     emitStroke(shardBack, 0.10f, 0.00f, 0.58f, 0.78f + clampedPower * 0.08f,
-               0.012f, 0.088f, 0.016f, {1.0f, 1.0f, 1.0f, 0.66f});
+               0.012f, 0.088f, 0.016f, shardC);
+}
+
+void SwordSlashArcRenderer::EmitDirectionCueLine(
+    const XMFLOAT3 &position, const XMFLOAT2 &direction, const Camera &camera,
+    const XMFLOAT4 &color, bool releaseCounterCueVisible) {
+    const XMFLOAT3 cameraForward =
+        NormalizeSafe(AppCameraForward(camera), {0.0f, 0.0f, 1.0f});
+    const XMFLOAT3 worldUp{0.0f, 1.0f, 0.0f};
+    const XMFLOAT3 cameraRight =
+        NormalizeSafe(Cross(worldUp, cameraForward), {1.0f, 0.0f, 0.0f});
+    const XMFLOAT3 cameraUp =
+        NormalizeSafe(Cross(cameraForward, cameraRight), {0.0f, 1.0f, 0.0f});
+
+    const float dirLenSq =
+        direction.x * direction.x + direction.y * direction.y;
+    XMFLOAT2 lineDir2{1.0f, 0.0f};
+    if (dirLenSq > 0.0001f) {
+        const float invLen = 1.0f / std::sqrt(dirLenSq);
+        lineDir2 = {direction.x * invLen, direction.y * invLen};
+    }
+    const XMFLOAT3 lineDir =
+        NormalizeSafe(Add(Scale(cameraRight, lineDir2.x),
+                          Scale(cameraUp, lineDir2.y)),
+                      cameraRight);
+    const XMFLOAT3 lineNormal =
+        NormalizeSafe(Cross(cameraForward, lineDir), cameraUp);
+    XMFLOAT3 visualPosition = Add(position, Scale(cameraForward, -0.10f));
+    visualPosition.y += 0.03f;
+
+    auto emitStroke = [&](float halfLength, float thickness, float life,
+                          float delay, const XMFLOAT4 &strokeColor,
+                          float alongOffset, float normalOffset) {
+        ArcInstance &arc = arcs_[nextArc_];
+        nextArc_ = (nextArc_ + 1) % arcs_.size();
+        arc.center = Add(visualPosition, Scale(lineDir, alongOffset));
+        arc.center = Add(arc.center, Scale(lineNormal, normalOffset));
+        arc.axisA = lineDir;
+        arc.axisB = lineNormal;
+        arc.radius = halfLength;
+        arc.thickness = thickness;
+        arc.life = life;
+        arc.age = -delay;
+        arc.color = strokeColor;
+        arc.startAngle = 0.0f;
+        arc.endAngle = 0.0f;
+        arc.isLine = true;
+        arc.active = true;
+    };
+
+    XMFLOAT4 glow = color;
+    glow.w *= releaseCounterCueVisible ? 0.54f : 0.62f;
+    XMFLOAT4 core = color;
+    core.w *= releaseCounterCueVisible ? 0.94f : 1.0f;
+    XMFLOAT4 outer = color;
+    outer.w *= releaseCounterCueVisible ? 0.28f : 0.34f;
+    XMFLOAT4 hot = color;
+    hot.x = hot.x + 0.42f > 1.0f ? 1.0f : hot.x + 0.42f;
+    hot.y = hot.y + 0.32f > 1.0f ? 1.0f : hot.y + 0.32f;
+    hot.z = hot.z + 0.22f > 1.0f ? 1.0f : hot.z + 0.22f;
+    hot.w *= releaseCounterCueVisible ? 1.08f : 1.0f;
+
+    emitStroke(releaseCounterCueVisible ? 1.62f : 1.50f,
+               releaseCounterCueVisible ? 0.30f : 0.34f,
+               releaseCounterCueVisible ? 0.30f : 0.32f, 0.0f, outer, 0.0f,
+               0.0f);
+    emitStroke(releaseCounterCueVisible ? 1.44f : 1.32f,
+               releaseCounterCueVisible ? 0.18f : 0.21f,
+               releaseCounterCueVisible ? 0.26f : 0.28f, 0.0f, glow, -0.04f,
+               0.0f);
+    emitStroke(releaseCounterCueVisible ? 1.30f : 1.18f,
+               releaseCounterCueVisible ? 0.074f : 0.088f,
+               releaseCounterCueVisible ? 0.22f : 0.24f, 0.0f, core, 0.03f,
+               0.0f);
+    emitStroke(releaseCounterCueVisible ? 1.04f : 0.92f,
+               releaseCounterCueVisible ? 0.034f : 0.042f,
+               releaseCounterCueVisible ? 0.16f : 0.18f, 0.016f, hot, 0.10f,
+               0.0f);
 }
 
 void SwordSlashArcRenderer::EmitParryLine(const XMFLOAT3 &position,
                                           const XMFLOAT3 &direction,
                                           const Camera &camera, float power,
-                                          const XMFLOAT2 &slashDirection) {
+    const XMFLOAT2 &slashDirection) {
     const XMFLOAT3 cameraForward =
-        NormalizeSafe(Sub(camera.GetTarget(), camera.GetPosition()),
-                      {0.0f, 0.0f, 1.0f});
+        NormalizeSafe(AppCameraForward(camera), {0.0f, 0.0f, 1.0f});
     const XMFLOAT3 worldUp{0.0f, 1.0f, 0.0f};
     const XMFLOAT3 cameraRight =
         NormalizeSafe(Cross(worldUp, cameraForward), {1.0f, 0.0f, 0.0f});
@@ -463,11 +563,11 @@ void SwordSlashArcRenderer::CreatePipelineState() {
     auto *device = dxCommon_->GetDevice();
 
     auto vs = ShaderCompiler::Compile(
-        L"engine/resources/shaders/swordarc/SwordArcVS.hlsl", "main",
-        "vs_5_0");
+        L"app/resources/shaders/sword_arc/SwordArcVS.hlsl", "main",
+        "vs_6_6");
     auto ps = ShaderCompiler::Compile(
-        L"engine/resources/shaders/swordarc/SwordArcPS.hlsl", "main",
-        "ps_5_0");
+        L"app/resources/shaders/sword_arc/SwordArcPS.hlsl", "main",
+        "ps_6_6");
 
     D3D12_INPUT_ELEMENT_DESC layout[] = {
         {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
@@ -487,7 +587,7 @@ void SwordSlashArcRenderer::CreatePipelineState() {
     pso.InputLayout = {layout, _countof(layout)};
     pso.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     pso.NumRenderTargets = 1;
-    pso.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    pso.RTVFormats[0] = DirectXCommon::kSceneColorFormat;
     pso.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
     pso.SampleDesc.Count = 1;
     pso.SampleMask = UINT_MAX;

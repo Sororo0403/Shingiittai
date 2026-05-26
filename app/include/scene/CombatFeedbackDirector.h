@@ -1,16 +1,13 @@
 #pragma once
 #include "Camera.h"
+#include "PostProcessSystem.h"
 #include <DirectXMath.h>
 #include <cstddef>
 
-class PostEffectRenderer;
-
 enum class CombatFeedbackEventType {
     PlayerSlashHit,
-    PlayerGuard,
     PlayerDamaged,
     CounterSuccess,
-    ProjectileReflect,
     BladeClashGuardBreak,
     BladeClashPierce,
 };
@@ -25,7 +22,7 @@ struct CombatFeedbackEvent {
 
 class CombatFeedbackDirector {
   public:
-    void Initialize(PostEffectRenderer *postEffectRenderer);
+    void Initialize(PostProcessSystem *postProcessSystem);
     void Reset();
     void Update(float deltaTime, float sceneTime);
 
@@ -34,12 +31,11 @@ class CombatFeedbackDirector {
     float GetGameplayTimeScale() const;
     float GetFovKickDeg() const;
     void ApplyCameraImpulse(DirectX::XMFLOAT3 &cameraPosition,
-                            DirectX::XMFLOAT3 &lookAt,
-                            float sceneTime) const;
+                            DirectX::XMFLOAT3 &lookAt, float sceneTime) const;
+    void AddCameraShake(float duration, float horizontal, float vertical);
 
   private:
     void AddHitStop(float duration, float timeScale);
-    void AddCameraShake(float duration, float horizontal, float vertical);
     void AddPostFlash(float duration, float blurStrength, float noiseStrength,
                       float vignetteBoost,
                       float damageVignetteStrength = 0.0f,
@@ -47,7 +43,7 @@ class CombatFeedbackDirector {
     float ShakeRatio() const;
 
   private:
-    PostEffectRenderer *postEffectRenderer_ = nullptr;
+    PostProcessSystem *postProcessSystem_ = nullptr;
 
     float hitStopTimer_ = 0.0f;
     float hitStopDuration_ = 0.0f;
@@ -66,6 +62,4 @@ class CombatFeedbackDirector {
     float damageVignetteStrength_ = 0.0f;
     float parryVignetteStrength_ = 0.0f;
     float fovKickDeg_ = 0.0f;
-
-    float baseVignetteStrength_ = 0.20f;
 };

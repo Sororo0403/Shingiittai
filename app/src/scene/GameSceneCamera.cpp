@@ -1,5 +1,8 @@
 #include "GameScene.h"
+#include "BladeClashCinematic.h"
 #include "Input.h"
+#include "WinApp.h"
+#include <algorithm>
 #include <cmath>
 
 using namespace DirectX;
@@ -7,11 +10,7 @@ using namespace DirectX;
 static constexpr float kPi = 3.14159265f;
 static constexpr float kTwoPi = 6.28318530f;
 static constexpr float kMinVectorLength = 0.0001f;
-static constexpr float kBladeClashWinGuardBreakLead = 0.52f;
-static constexpr float kBladeClashWinGuardBreakImpactTime = 0.24f;
-static constexpr float kBladeClashWinGuardBreakCameraMoveStart = 0.42f;
-static constexpr float kBladeClashWinGuardBreakCameraMoveEnd = 0.52f;
-static constexpr float kBladeClashWinActionSlow = 0.95f;
+namespace Clash = BladeClashCinematic;
 
 static float Clamp(float value, float minValue, float maxValue) {
     if (value < minValue) {
@@ -23,9 +22,7 @@ static float Clamp(float value, float minValue, float maxValue) {
     return value;
 }
 
-static float Clamp01(float value) {
-    return Clamp(value, 0.0f, 1.0f);
-}
+static float Clamp01(float value) { return Clamp(value, 0.0f, 1.0f); }
 
 static float SaturatedAlpha(float speed, float deltaTime) {
     return Clamp01(speed * deltaTime);
@@ -57,8 +54,7 @@ static float DistanceXZ(const XMFLOAT3 &a, const XMFLOAT3 &b) {
 }
 
 static XMFLOAT3 Lerp(const XMFLOAT3 &from, const XMFLOAT3 &to, float alpha) {
-    return {from.x + (to.x - from.x) * alpha,
-            from.y + (to.y - from.y) * alpha,
+    return {from.x + (to.x - from.x) * alpha, from.y + (to.y - from.y) * alpha,
             from.z + (to.z - from.z) * alpha};
 }
 
@@ -66,15 +62,17 @@ void GameScene::UpdateCamera(Input *input) {
     // ===== 騾壼�E��E�繧�E�繝｡繝ｩ =====
 
     // 繝ｭ繝�Eけ繧�E�繝ｳ蛻・�E�譖ｿ縺・
-    if (input->IsKeyTrigger(DIK_Q) ||
-        input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_RIGHT_SHOULDER)) {
+    if (input != nullptr &&
+        (input->IsKeyTrigger(DIK_Q) ||
+         input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_RIGHT_SHOULDER))) {
         isLockOn_ = !isLockOn_;
     }
 
     float yawInput = 0.0f;
     float pitchInput = 0.0f;
 
-    if (input->IsGamepadConnected() && player_.UsesGamepadCameraLook()) {
+    if (input != nullptr && input->IsGamepadConnected() &&
+        player_.UsesGamepadCameraLook()) {
         yawInput += input->GetGamepadRightStickX();
         pitchInput += input->GetGamepadRightStickY();
     }
@@ -87,6 +85,65 @@ void GameScene::UpdateCamera(Input *input) {
     UpdateBattleCamera();
 
     // 箝�E譛驥崎ｦ・�E�夊｡悟�E譖ｴ譁E��
+    camera_.UpdateMatrices();
+}
+
+void GameScene::UpdateBackgroundCamera(float deltaTime) {
+    (void)deltaTime;
+    const int width =
+        ctx_->systems.winApp != nullptr ? ctx_->systems.winApp->GetWidth() : 0;
+    const int height =
+        ctx_->systems.winApp != nullptr ? ctx_->systems.winApp->GetHeight() : 0;
+    if (width > 0 && height > 0) {
+        camera_.SetAspect(static_cast<float>(width) /
+                          static_cast<float>(height));
+    }
+
+    camera_.SetPerspectiveFovDeg(64.0f);
+    const float orbit = sceneLightTime_ * 0.045f;
+    const XMFLOAT3 cameraPos{
+        std::sinf(orbit) * 5.2f,
+        2.45f + std::sinf(sceneLightTime_ * 0.12f) * 0.08f,
+        -8.4f + std::cosf(orbit) * 1.6f,
+    };
+    const XMFLOAT3 lookAt{
+        0.0f,
+        0.58f,
+        3.2f,
+    };
+    camera_.SetPosition(cameraPos);
+    AppLookAt(camera_, lookAt);
+    camera_.UpdateMatrices();
+}
+
+void GameScene::UpdateReadyPreviewCamera(float deltaTime) {
+    (void)deltaTime;
+    const int width =
+        ctx_->systems.winApp != nullptr ? ctx_->systems.winApp->GetWidth() : 0;
+    const int height =
+        ctx_->systems.winApp != nullptr ? ctx_->systems.winApp->GetHeight() : 0;
+    if (width > 0 && height > 0) {
+        camera_.SetAspect(static_cast<float>(width) /
+                          static_cast<float>(height));
+    }
+
+    camera_.SetPerspectiveFovDeg(50.0f);
+    const XMFLOAT3 &enemyPos = enemy_.GetTransform().position;
+    const float breath = std::sinf(sceneLightTime_ * 0.82f);
+    const float orbit = std::sinf(sceneLightTime_ * 0.16f) * 0.16f;
+    const float radius = 14.8f;
+    const XMFLOAT3 cameraPos{
+        enemyPos.x + std::sinf(orbit) * radius,
+        enemyPos.y + 3.85f + breath * 0.08f,
+        enemyPos.z - std::cosf(orbit) * radius,
+    };
+    const XMFLOAT3 lookAt{
+        enemyPos.x,
+        enemyPos.y + 1.32f,
+        enemyPos.z,
+    };
+    camera_.SetPosition(cameraPos);
+    AppLookAt(camera_, lookAt);
     camera_.UpdateMatrices();
 }
 
@@ -103,40 +160,35 @@ void GameScene::UpdateBattleCamera() {
         const XMFLOAT2 line = NormalizeXZ(toEnemyX, toEnemyZ);
         const float sideX = line.y;
         const float sideZ = -line.x;
-        const DirectX::XMFLOAT3 frontCameraPos = {
-            enemyPos.x - line.x * 8.2f,
-            enemyPos.y + 2.25f,
-            enemyPos.z - line.y * 8.2f};
-        const DirectX::XMFLOAT3 frontLookAt = {
-            enemyPos.x,
-            enemyPos.y + 1.45f,
-            enemyPos.z};
+        const DirectX::XMFLOAT3 frontCameraPos = {enemyPos.x - line.x * 8.2f,
+                                                  enemyPos.y + 2.25f,
+                                                  enemyPos.z - line.y * 8.2f};
+        const DirectX::XMFLOAT3 frontLookAt = {enemyPos.x, enemyPos.y + 1.45f,
+                                               enemyPos.z};
         const DirectX::XMFLOAT3 fallCameraPos = {
-            enemyPos.x - line.x * 7.6f + sideX * 4.2f,
-            enemyPos.y + 0.92f,
+            enemyPos.x - line.x * 7.6f + sideX * 4.2f, enemyPos.y + 0.92f,
             enemyPos.z - line.y * 7.6f + sideZ * 4.2f};
-        const DirectX::XMFLOAT3 fallLookAt = {
-            enemyPos.x + line.x * 0.55f,
-            enemyPos.y + 0.95f,
-            enemyPos.z + line.y * 0.55f};
+        const DirectX::XMFLOAT3 fallLookAt = {enemyPos.x + line.x * 0.55f,
+                                              enemyPos.y + 0.95f,
+                                              enemyPos.z + line.y * 0.55f};
         const float introMoveT = Clamp01(victorySequenceTimer_ / 0.72f);
         const float cutT = introMoveT * introMoveT * (3.0f - 2.0f * introMoveT);
         const DirectX::XMFLOAT3 desiredCameraPos =
             Lerp(frontCameraPos, fallCameraPos, cutT);
-        const DirectX::XMFLOAT3 desiredLookAt = Lerp(frontLookAt, fallLookAt, cutT);
-        const float alpha =
-            victorySequenceTimer_ < 0.82f ? 1.0f
-                                           : SaturatedAlpha(9.5f, ctx_->deltaTime);
+        const DirectX::XMFLOAT3 desiredLookAt =
+            Lerp(frontLookAt, fallLookAt, cutT);
+        const float alpha = victorySequenceTimer_ < 0.82f
+                                ? 1.0f
+                                : SaturatedAlpha(9.5f, ctx_->frame.deltaTime);
         lockOnOrbitCameraPos_ =
             Lerp(lockOnOrbitCameraPos_, desiredCameraPos, alpha);
         lockOnLookAt_ = Lerp(lockOnLookAt_, desiredLookAt, alpha);
         targetFovDeg_ = 52.0f + 4.0f * cutT;
-        currentFovDeg_ +=
-            (targetFovDeg_ - currentFovDeg_) *
-            SaturatedAlpha(5.8f, ctx_->deltaTime);
+        currentFovDeg_ += (targetFovDeg_ - currentFovDeg_) *
+                          SaturatedAlpha(5.8f, ctx_->frame.deltaTime);
         camera_.SetPerspectiveFovDeg(currentFovDeg_);
         camera_.SetPosition(lockOnOrbitCameraPos_);
-        camera_.LookAt(lockOnLookAt_);
+        AppLookAt(camera_, lockOnLookAt_);
         return;
     }
     if (battleIntroActive_) {
@@ -145,9 +197,8 @@ void GameScene::UpdateBattleCamera() {
         const XMFLOAT2 line = NormalizeXZ(toEnemyX, toEnemyZ);
         const float sideX = line.y;
         const float sideZ = -line.x;
-        const float settle =
-            Clamp01((battleIntroTimer_ - 2.86f) /
-                    (battleIntroDuration_ - 2.86f));
+        const float settle = Clamp01((battleIntroTimer_ - 2.86f) /
+                                     (battleIntroDuration_ - 2.86f));
         const float settleEase = settle * settle * (3.0f - 2.0f * settle);
         const float revealCharge = Clamp01(battleIntroTimer_ / 2.36f);
         const float revealEase =
@@ -159,25 +210,20 @@ void GameScene::UpdateBattleCamera() {
             (0.5f + 0.5f * std::sinf(sceneLightTime_ * 22.0f));
 
         const DirectX::XMFLOAT3 summonCameraPos = {
-            enemyPos.x - line.x * 10.8f + sideX * 1.65f,
-            enemyPos.y + 3.05f,
+            enemyPos.x - line.x * 10.8f + sideX * 1.65f, enemyPos.y + 3.05f,
             enemyPos.z - line.y * 10.8f + sideZ * 1.65f};
         const DirectX::XMFLOAT3 revealCameraPos = {
             enemyPos.x - line.x * 8.7f + sideX * 0.70f,
             enemyPos.y + 2.86f + flashKick * 0.10f,
             enemyPos.z - line.y * 8.7f + sideZ * 0.70f};
         const DirectX::XMFLOAT3 playCameraPos = {
-            playerPos.x - line.x * 6.0f + sideX * 1.15f,
-            playerPos.y + 2.35f,
+            playerPos.x - line.x * 6.0f + sideX * 1.15f, playerPos.y + 2.35f,
             playerPos.z - line.y * 6.0f + sideZ * 1.15f};
 
         const DirectX::XMFLOAT3 summonLookAt = {
-            enemyPos.x,
-            enemyPos.y + 1.45f + 0.22f * revealEase,
-            enemyPos.z};
+            enemyPos.x, enemyPos.y + 1.45f + 0.22f * revealEase, enemyPos.z};
         const DirectX::XMFLOAT3 revealLookAt = {
-            enemyPos.x + line.x * 0.12f,
-            enemyPos.y + 1.62f + flashKick * 0.08f,
+            enemyPos.x + line.x * 0.12f, enemyPos.y + 1.62f + flashKick * 0.08f,
             enemyPos.z + line.y * 0.12f};
         const DirectX::XMFLOAT3 playLookAt = {
             playerPos.x * 0.34f + enemyPos.x * 0.66f,
@@ -192,16 +238,20 @@ void GameScene::UpdateBattleCamera() {
             Lerp(heroCameraPos, playCameraPos, settleEase);
         DirectX::XMFLOAT3 desiredLookAt =
             Lerp(heroLookAt, playLookAt, settleEase);
-        desiredCameraPos.x += sideX * (flashKick * 0.14f + threatShake * 0.055f);
+        desiredCameraPos.x +=
+            sideX * (flashKick * 0.14f + threatShake * 0.055f);
         desiredCameraPos.y += flashKick * 0.05f + threatShake * 0.024f;
-        desiredCameraPos.z += sideZ * (flashKick * 0.14f + threatShake * 0.055f);
+        desiredCameraPos.z +=
+            sideZ * (flashKick * 0.14f + threatShake * 0.055f);
         lockOnOrbitCameraPos_ = desiredCameraPos;
         lockOnLookAt_ = desiredLookAt;
         const float heroFov = 58.0f - 4.0f * revealEase + 2.0f * flashKick;
         currentFovDeg_ = heroFov + (66.0f - heroFov) * settleEase;
         camera_.SetPerspectiveFovDeg(currentFovDeg_);
-        camera_.SetPosition(lockOnOrbitCameraPos_);
-        camera_.LookAt(lockOnLookAt_);
+        combatFeedback_.ApplyCameraImpulse(desiredCameraPos, desiredLookAt,
+                                           sceneLightTime_);
+        camera_.SetPosition(desiredCameraPos);
+        AppLookAt(camera_, desiredLookAt);
         return;
     }
     if (defeatSequenceActive_) {
@@ -212,196 +262,37 @@ void GameScene::UpdateBattleCamera() {
         const float sideZ = -line.x;
         const float ratio =
             Clamp01(defeatSequenceTimer_ / defeatSequenceDuration_);
-        const float fall =
-            Clamp01((defeatSequenceTimer_ - 0.34f) / 1.22f);
+        const float fall = Clamp01((defeatSequenceTimer_ - 0.34f) / 1.22f);
         const DirectX::XMFLOAT3 startCameraPos = {
-            playerPos.x - line.x * 5.0f + sideX * 1.85f,
-            playerPos.y + 1.85f,
+            playerPos.x - line.x * 5.0f + sideX * 1.85f, playerPos.y + 1.85f,
             playerPos.z - line.y * 5.0f + sideZ * 1.85f};
         const DirectX::XMFLOAT3 fallCameraPos = {
-            playerPos.x - line.x * 4.3f + sideX * 3.2f,
-            playerPos.y + 0.78f,
+            playerPos.x - line.x * 4.3f + sideX * 3.2f, playerPos.y + 0.78f,
             playerPos.z - line.y * 4.3f + sideZ * 3.2f};
-        const DirectX::XMFLOAT3 startLookAt = {
-            playerPos.x, playerPos.y + 1.05f, playerPos.z};
+        const DirectX::XMFLOAT3 startLookAt = {playerPos.x, playerPos.y + 1.05f,
+                                               playerPos.z};
         const DirectX::XMFLOAT3 fallLookAt = {
-            playerPos.x + line.x * 0.42f,
-            playerPos.y + 0.46f - 0.16f * fall,
+            playerPos.x + line.x * 0.42f, playerPos.y + 0.46f - 0.16f * fall,
             playerPos.z + line.y * 0.42f};
         const float cutT = fall * fall * (3.0f - 2.0f * fall);
         const DirectX::XMFLOAT3 desiredCameraPos =
             Lerp(startCameraPos, fallCameraPos, cutT);
-        const DirectX::XMFLOAT3 desiredLookAt = Lerp(startLookAt, fallLookAt, cutT);
+        const DirectX::XMFLOAT3 desiredLookAt =
+            Lerp(startLookAt, fallLookAt, cutT);
         const float alpha = defeatSequenceTimer_ < 0.12f
                                 ? 1.0f
-                                : SaturatedAlpha(8.2f, ctx_->deltaTime);
+                                : SaturatedAlpha(8.2f, ctx_->frame.deltaTime);
         lockOnOrbitCameraPos_ =
             Lerp(lockOnOrbitCameraPos_, desiredCameraPos, alpha);
         lockOnLookAt_ = Lerp(lockOnLookAt_, desiredLookAt, alpha);
         targetFovDeg_ = 58.0f + 8.0f * ratio;
-        currentFovDeg_ +=
-            (targetFovDeg_ - currentFovDeg_) *
-            SaturatedAlpha(5.8f, ctx_->deltaTime);
+        currentFovDeg_ += (targetFovDeg_ - currentFovDeg_) *
+                          SaturatedAlpha(5.8f, ctx_->frame.deltaTime);
         camera_.SetPerspectiveFovDeg(currentFovDeg_);
         camera_.SetPosition(lockOnOrbitCameraPos_);
-        camera_.LookAt(lockOnLookAt_);
+        AppLookAt(camera_, lockOnLookAt_);
         return;
     }
-
-    // 謨�E�陦悟虚迥�E�諷九ｒ蜿門�E�・
-    const ActionKind enemyActionKind = enemy_.GetActionKind();
-    const ActionStep enemyActionStep = enemy_.GetActionStep();
-
-    const bool isEnemyWarpStart = (enemyActionKind == ActionKind::Warp &&
-                                   enemyActionStep == ActionStep::Start);
-
-    const bool isEnemyWarpMove = (enemyActionKind == ActionKind::Warp &&
-                                  enemyActionStep == ActionStep::Move);
-
-    const bool isEnemyWarpEnd = (enemyActionKind == ActionKind::Warp &&
-                                 enemyActionStep == ActionStep::End);
-    const bool isEnemyMeleeAction =
-        enemyActionKind == ActionKind::Smash ||
-        enemyActionKind == ActionKind::Sweep;
-    const bool isEnemyPressureAction =
-        isEnemyMeleeAction &&
-        (enemyActionStep == ActionStep::Charge ||
-         enemyActionStep == ActionStep::Active ||
-         enemyActionStep == ActionStep::Recovery);
-    const bool isEnemyWideAction =
-        enemyActionKind == ActionKind::Wave ||
-        enemyActionKind == ActionKind::Laser ||
-        enemyActionKind == ActionKind::Cage;
-    const bool isEnemyPhaseTransition =
-        enemy_.IsPhaseTransitionActive() && !bladeClashFinishActive_;
-    const float enemyPhaseTransitionRatio = enemy_.GetPhaseTransitionRatio();
-    const float chargeFocus = Clamp01(chargeWeakPointFocusRatio_);
-
-    // =========================
-    // FOV繧�E�繝ｼ繧�E�繝�Eヨ豎ｺ螳・
-    // =========================
-    targetFovDeg_ = normalFovDeg_;
-
-    if (isLockOn_) {
-        targetFovDeg_ = lockOnFovDeg_;
-    }
-
-    if (isEnemyWarpStart || isEnemyWarpMove || isEnemyWarpEnd) {
-        targetFovDeg_ = warpFovDeg_;
-    }
-
-    if (isEnemyWideAction) {
-        targetFovDeg_ = 76.5f;
-    } else if (isEnemyPressureAction) {
-        targetFovDeg_ = 71.5f;
-    } else if (bladeClashActive_) {
-        const float clashAdvantage = Clamp(bladeClashGauge_, -1.0f, 1.0f);
-        targetFovDeg_ = 72.0f - Clamp01(clashAdvantage) * 4.0f +
-                        Clamp01(-clashAdvantage) * 5.0f;
-    } else if (enemyActionKind == ActionKind::BladeClash) {
-        targetFovDeg_ = 74.5f;
-    }
-
-    if (isEnemyPhaseTransition) {
-        targetFovDeg_ = phaseTransitionFovDeg_;
-    }
-    if (chargeFocus > 0.0f) {
-        targetFovDeg_ = targetFovDeg_ * (1.0f - chargeFocus) +
-                        58.0f * chargeFocus;
-    }
-    if (playerViewCamera_) {
-        targetFovDeg_ = isLockOn_ ? 82.0f : normalFovDeg_;
-        if (isEnemyWideAction) {
-            targetFovDeg_ = 86.0f;
-        } else if (isEnemyPressureAction) {
-            targetFovDeg_ = 80.0f;
-        } else if (bladeClashActive_) {
-            const float clashAdvantage = Clamp(bladeClashGauge_, -1.0f, 1.0f);
-            targetFovDeg_ = 74.0f - Clamp01(clashAdvantage) * 3.0f +
-                            Clamp01(-clashAdvantage) * 4.0f;
-        } else if (enemyActionKind == ActionKind::BladeClash) {
-            targetFovDeg_ = 84.0f;
-        }
-        if (isEnemyWarpStart || isEnemyWarpMove || isEnemyWarpEnd) {
-            targetFovDeg_ = warpFovDeg_;
-        }
-        if (isEnemyPhaseTransition) {
-            targetFovDeg_ = phaseTransitionFovDeg_;
-        }
-        if (chargeFocus > 0.0f) {
-            targetFovDeg_ = targetFovDeg_ * (1.0f - chargeFocus) +
-                            62.0f * chargeFocus;
-        }
-    }
-
-    float usedFovLerpSpeed = fovLerpSpeed_;
-    if (isEnemyPhaseTransition) {
-        usedFovLerpSpeed = phaseTransitionFovLerpSpeed_;
-    }
-    const float fovAlpha = SaturatedAlpha(usedFovLerpSpeed, ctx_->deltaTime);
-    currentFovDeg_ += (targetFovDeg_ - currentFovDeg_) * fovAlpha;
-    camera_.SetPerspectiveFovDeg(currentFovDeg_ + combatFeedback_.GetFovKickDeg());
-
-    if (bladeClashActive_) {
-        const DirectX::XMFLOAT3 playerPosNow = player_.GetTransform().position;
-        const DirectX::XMFLOAT3 enemyPosNow = enemy_.GetTransform().position;
-        const XMFLOAT2 line = NormalizeXZ(enemyPosNow.x - playerPosNow.x,
-                                          enemyPosNow.z - playerPosNow.z);
-        const XMFLOAT3 right = {line.y, 0.0f, -line.x};
-        const float advantage = Clamp(bladeClashGauge_, -1.0f, 1.0f);
-        const float playerPush = Clamp01(advantage);
-        const float enemyPush = Clamp01(-advantage);
-        const float pressureEase =
-            std::abs(advantage) * std::abs(advantage) *
-            (3.0f - 2.0f * std::abs(advantage));
-        const XMFLOAT3 mid = {
-            bladeClashCenter_.x + line.x * advantage * 0.38f,
-            bladeClashCenter_.y + 0.06f + playerPush * 0.05f - enemyPush * 0.03f,
-            bladeClashCenter_.z + line.y * advantage * 0.38f};
-        const float push = Clamp01(bladeClashCameraPush_);
-        const float pulse = push * push * (3.0f - 2.0f * push);
-        const float impact = Clamp01(bladeClashImpactPulse_);
-        const float tension = 0.35f + std::abs(bladeClashGauge_) * 0.40f;
-        const float shakePhase = sceneLightTime_ * (34.0f + 18.0f * impact);
-        const float shake =
-            (0.018f + 0.034f * impact + enemyPush * 0.018f) * tension;
-        const XMFLOAT3 playerShoulder = {
-            playerPosNow.x + line.x * 0.48f + right.x * 0.22f,
-            playerPosNow.y + 0.92f,
-            playerPosNow.z + line.y * 0.48f + right.z * 0.22f};
-        const float cameraBackDistance =
-            4.56f + enemyPush * 0.92f - playerPush * 0.82f;
-        const float cameraSideDistance =
-            2.10f + 0.16f * pulse + playerPush * 0.34f - enemyPush * 0.20f;
-        const float cameraHeight =
-            0.70f + 0.10f * pulse - playerPush * 0.08f + enemyPush * 0.24f;
-        const float pushIn = playerPush * (0.54f + 0.36f * pressureEase);
-        const float recoilBack = enemyPush * (0.30f + 0.44f * pressureEase);
-        DirectX::XMFLOAT3 cameraPos = {
-            playerPosNow.x - line.x * cameraBackDistance +
-                line.x * pushIn - line.x * recoilBack +
-                right.x * cameraSideDistance +
-                right.x * std::sinf(shakePhase) * shake,
-            playerPosNow.y + cameraHeight +
-                std::cosf(shakePhase * 1.31f) * shake * 0.42f,
-            playerPosNow.z - line.y * cameraBackDistance +
-                line.y * pushIn - line.y * recoilBack +
-                right.z * cameraSideDistance +
-                right.z * std::sinf(shakePhase) * shake};
-        DirectX::XMFLOAT3 lookAt = {
-            playerShoulder.x * 0.34f + mid.x * 0.66f +
-                line.x * (0.12f + 0.44f * playerPush - 0.22f * enemyPush),
-            playerShoulder.y * 0.28f + mid.y * 0.72f + 0.14f +
-                0.05f * impact + playerPush * 0.03f - enemyPush * 0.04f,
-            playerShoulder.z * 0.34f + mid.z * 0.66f +
-                line.y * (0.12f + 0.44f * playerPush - 0.22f * enemyPush)};
-        cameraYaw_ = std::atan2f(line.x, line.y);
-        combatFeedback_.ApplyCameraImpulse(cameraPos, lookAt, sceneLightTime_);
-        camera_.SetPosition(cameraPos);
-        camera_.LookAt(lookAt);
-        return;
-    }
-
     if (bladeClashFinishActive_) {
         const XMFLOAT2 line =
             bladeClashFinishPlayerWon_
@@ -421,26 +312,25 @@ void GameScene::UpdateBattleCamera() {
                 : XMFLOAT3{(playerPos.x + enemyPos.x) * 0.5f,
                            playerPos.y + 1.18f,
                            (playerPos.z + enemyPos.z) * 0.5f};
+
         if (bladeClashFinishPlayerWon_) {
             const float winActionTimer =
-                (std::max)(0.0f, bladeClashFinishTimer_ -
-                                      kBladeClashWinGuardBreakLead) /
-                kBladeClashWinActionSlow;
+                Clash::WinActionTimer(bladeClashFinishTimer_);
             const float winDuration =
                 (std::max)(0.001f, bladeClashFinishDuration_ -
-                                      kBladeClashWinGuardBreakLead) /
-                kBladeClashWinActionSlow;
+                                      Clash::kWinGuardBreakLead) /
+                Clash::kWinActionSlow;
             const float winRatio = Clamp01(winActionTimer / winDuration);
             const float cameraBlend = Clamp01(
                 (bladeClashFinishTimer_ -
-                 kBladeClashWinGuardBreakCameraMoveStart) /
-                (kBladeClashWinGuardBreakCameraMoveEnd -
-                 kBladeClashWinGuardBreakCameraMoveStart));
+                 Clash::kWinGuardBreakCameraMoveStart) /
+                (Clash::kWinGuardBreakCameraMoveEnd -
+                 Clash::kWinGuardBreakCameraMoveStart));
             const float cameraSnap =
                 1.0f - std::pow(1.0f - cameraBlend, 4.0f);
             const float guardBreakSnap =
                 std::sinf(Clamp01((bladeClashFinishTimer_ -
-                                   kBladeClashWinGuardBreakImpactTime) /
+                                   Clash::kWinGuardBreakImpactTime) /
                                   0.08f) *
                           kPi);
             const XMFLOAT3 guardBreakCamera = {
@@ -457,100 +347,18 @@ void GameScene::UpdateBattleCamera() {
                     0.05f * guardBreakSnap,
                 bladeClashFinishEnemyStart_.z + line.y * 0.10f +
                     right.z * 0.08f * guardBreakSnap};
-            const XMFLOAT3 guardBreakAfterLookAt = {
-                bladeClashFinishEnemyStart_.x + line.x * 0.78f +
-                    right.x * 0.10f,
-                bladeClashFinishEnemyStart_.y + 1.10f,
-                bladeClashFinishEnemyStart_.z + line.y * 0.78f +
-                    right.z * 0.10f};
-            if (bladeClashFinal_) {
-                const float launchT =
-                    Clamp01((winActionTimer - 0.36f) / 0.82f);
-                const float catchT =
-                    Clamp01((winActionTimer - 0.78f) / 0.62f);
-                const float crashT =
-                    Clamp01((winActionTimer - 2.14f) / 0.36f);
-                const float catchEase =
-                    catchT * catchT * (3.0f - 2.0f * catchT);
-                const XMFLOAT3 enemyChest = {
-                    enemyPos.x, enemyPos.y + 1.18f, enemyPos.z};
-                const XMFLOAT3 startFocus = {
-                    bladeClashFinishEnemyStart_.x + line.x * 0.45f,
-                    bladeClashFinishEnemyStart_.y + 1.22f,
-                    bladeClashFinishEnemyStart_.z + line.y * 0.45f};
-                const XMFLOAT3 chaseFocus = {
-                    enemyChest.x - line.x * 0.86f,
-                    enemyChest.y + 0.18f,
-                    enemyChest.z - line.y * 0.86f};
-                const float shake =
-                    (0.030f + 0.062f * launchT +
-                     0.120f * std::sinf(crashT * kPi));
-                const float phase = sceneLightTime_ * 49.0f;
-                const XMFLOAT3 startCamera = {
-                    bladeClashFinishPlayerStart_.x - line.x * 3.60f +
-                        right.x * 2.35f,
-                    bladeClashFinishPlayerStart_.y + 1.35f,
-                    bladeClashFinishPlayerStart_.z - line.y * 3.60f +
-                        right.z * 2.35f};
-                const XMFLOAT3 chaseCamera = {
-                    enemyPos.x - line.x * (5.95f + 0.70f * launchT) +
-                        right.x * 2.25f,
-                    enemyPos.y + 1.72f + 0.18f * launchT,
-                    enemyPos.z - line.y * (5.95f + 0.70f * launchT) +
-                        right.z * 2.25f};
-                XMFLOAT3 cameraPos = Lerp(startCamera, chaseCamera, catchEase);
-                cameraPos.x += right.x * std::sinf(phase) * shake;
-                cameraPos.y += std::cosf(phase * 1.27f) * shake * 0.45f;
-                cameraPos.z += right.z * std::sinf(phase) * shake;
-                XMFLOAT3 lookAt = Lerp(startFocus, chaseFocus, catchEase);
-                if (bladeClashFinishTimer_ < kBladeClashWinGuardBreakLead) {
-                    cameraPos = Lerp(guardBreakCamera, startCamera, cameraSnap);
-                    lookAt = Lerp(guardBreakLookAt, guardBreakAfterLookAt,
-                                  cameraSnap);
-                }
-                cameraYaw_ = std::atan2f(line.x, line.y);
-                targetFovDeg_ = 66.0f + 7.0f * catchEase +
-                                2.0f * std::sinf(crashT * kPi);
-                currentFovDeg_ += (targetFovDeg_ - currentFovDeg_) *
-                                  SaturatedAlpha(8.0f, ctx_->deltaTime);
-                camera_.SetPerspectiveFovDeg(currentFovDeg_ +
-                                             combatFeedback_.GetFovKickDeg());
-                combatFeedback_.ApplyCameraImpulse(cameraPos, lookAt,
-                                                   sceneLightTime_);
-                camera_.SetPosition(cameraPos);
-                camera_.LookAt(lookAt);
-                return;
-            }
-            const float cutT =
-                Clamp01(winActionTimer / 0.18f);
-            const float slideT =
-                Clamp01((winActionTimer - 0.11f) / 0.44f);
+            const float cutT = Clamp01(winActionTimer / 0.18f);
+            const float slideT = Clamp01((winActionTimer - 0.11f) / 0.44f);
             const float cutEase = 1.0f - std::pow(1.0f - cutT, 4.0f);
-            const float slideEase =
-                1.0f - std::pow(1.0f - slideT, 2.0f);
-            const float dashEase =
-                Clamp01(0.86f * cutEase + 0.24f * slideEase);
-            const float pierceViewT =
-                Clamp01((winActionTimer - 0.10f) / 0.24f);
-            const float pierceViewEase =
-                pierceViewT * pierceViewT * (3.0f - 2.0f * pierceViewT);
+            const float slideEase = 1.0f - std::pow(1.0f - slideT, 2.0f);
+            const float dashEase = Clamp01(0.86f * cutEase + 0.24f * slideEase);
             const float slide =
                 1.0f - std::pow(1.0f - Clamp01(winRatio / 0.42f), 2.0f);
-            const XMFLOAT3 cinematicPlayer = {
-                bladeClashFinishPlayerStart_.x +
-                    (bladeClashFinishPlayerEnd_.x -
-                     bladeClashFinishPlayerStart_.x) *
-                        dashEase,
-                bladeClashFinishPlayerStart_.y +
-                    (bladeClashFinishPlayerEnd_.y -
-                     bladeClashFinishPlayerStart_.y) *
-                        dashEase,
-                bladeClashFinishPlayerStart_.z +
-                    (bladeClashFinishPlayerEnd_.z -
-                     bladeClashFinishPlayerStart_.z) *
-                        dashEase};
-            const XMFLOAT3 enemyChest = {
-                enemyPos.x, enemyPos.y + 1.16f, enemyPos.z};
+            const XMFLOAT3 cinematicPlayer =
+                Lerp(bladeClashFinishPlayerStart_,
+                     bladeClashFinishPlayerEnd_, dashEase);
+            const XMFLOAT3 enemyChest = {enemyPos.x, enemyPos.y + 1.16f,
+                                         enemyPos.z};
             const XMFLOAT3 lookAtBase = {
                 cinematicPlayer.x + line.x * (2.70f + 4.20f * slide),
                 cinematicPlayer.y + 1.20f + 0.16f * slide,
@@ -573,6 +381,9 @@ void GameScene::UpdateBattleCamera() {
                     (enemyChest.y + 0.20f) * (0.38f * slide),
                 lookAtBase.z * (1.0f - 0.38f * slide) +
                     enemyChest.z * (0.38f * slide) + right.z * 0.10f};
+            const float pierceViewT = Clamp01((winActionTimer - 0.10f) / 0.24f);
+            const float pierceViewEase =
+                pierceViewT * pierceViewT * (3.0f - 2.0f * pierceViewT);
             const XMFLOAT3 pierceCamera = {
                 cinematicPlayer.x + line.x * (3.25f + 0.58f * slide) +
                     right.x * (2.42f + 0.36f * slide) +
@@ -591,7 +402,7 @@ void GameScene::UpdateBattleCamera() {
             cameraPos = Lerp(cameraPos, pierceCamera, pierceViewEase);
             lookAt = Lerp(lookAt, Lerp(pierceLookAt, enemyChest, 0.42f),
                           pierceViewEase);
-            if (bladeClashFinishTimer_ < kBladeClashWinGuardBreakLead) {
+            if (bladeClashFinishTimer_ < Clash::kWinGuardBreakLead) {
                 const XMFLOAT3 playerPrepCamera = {
                     bladeClashFinishPlayerStart_.x - line.x * 3.20f +
                         right.x * 1.90f,
@@ -610,49 +421,23 @@ void GameScene::UpdateBattleCamera() {
             cameraYaw_ = std::atan2f(line.x, line.y);
             const float fovPunch =
                 std::sinf(Clamp01((winActionTimer - 0.10f) / 0.28f) * kPi);
-            targetFovDeg_ = 64.0f + 7.0f * fovPunch +
-                            2.0f * slide;
+            targetFovDeg_ = 64.0f + 7.0f * fovPunch + 2.0f * slide;
             currentFovDeg_ += (targetFovDeg_ - currentFovDeg_) *
-                              SaturatedAlpha(7.0f, ctx_->deltaTime);
+                              SaturatedAlpha(7.0f, ctx_->frame.deltaTime);
             camera_.SetPerspectiveFovDeg(currentFovDeg_ +
                                          combatFeedback_.GetFovKickDeg());
             combatFeedback_.ApplyCameraImpulse(cameraPos, lookAt,
                                                sceneLightTime_);
             camera_.SetPosition(cameraPos);
-            camera_.LookAt(lookAt);
+            AppLookAt(camera_, lookAt);
             return;
         }
-        const float leanT = Clamp01(bladeClashFinishTimer_ / 0.78f);
-        const float recoilT =
-            Clamp01((bladeClashFinishTimer_ - 0.78f) / 0.36f);
-        const float slideT =
-            Clamp01((bladeClashFinishTimer_ - 1.12f) / 0.52f);
-        const float leanEase = leanT * leanT * (3.0f - 2.0f * leanT);
-        const float recoilEase = 1.0f - std::pow(1.0f - recoilT, 3.0f);
-        const float settleT = Clamp01((slideT - 0.74f) / 0.26f);
-        const float settleEase = settleT * settleT * (3.0f - 2.0f * settleT);
-        const float slideEase =
-            slideT < 0.18f
-                ? 0.06f * std::pow(Clamp01(slideT / 0.18f), 2.0f)
-                : slideT < 0.74f
-                      ? 0.06f +
-                            0.88f *
-                                (1.0f -
-                                 std::pow(1.0f -
-                                              Clamp01((slideT - 0.18f) / 0.56f),
-                                          5.0f))
-                      : 0.94f + 0.06f * settleEase;
-        const float retreat =
-            0.24f * leanEase + 0.56f * recoilEase +
-            (15.80f - 0.80f) * slideEase;
-        XMFLOAT3 cinematicPlayer = {
-            bladeClashFinishPlayerStart_.x - bladeClashDirection_.x * retreat,
-            bladeClashFinishPlayerStart_.y,
-            bladeClashFinishPlayerStart_.z - bladeClashDirection_.z * retreat};
-        cinematicPlayer.y += std::sinf(recoilT * kPi) * 0.10f;
-        cinematicPlayer.y += std::sinf(slideT * kPi) * 0.92f;
-        const float catchPrep =
-            Clamp01((bladeClashFinishTimer_ - 0.92f) / 0.28f);
+
+        const Clash::LossPose lossPose = Clash::EvaluateLossPose(
+            bladeClashFinishTimer_, bladeClashFinishPlayerStart_,
+            bladeClashDirection_);
+        XMFLOAT3 cinematicPlayer = lossPose.position;
+        const float catchPrep = Clamp01((bladeClashFinishTimer_ - 0.92f) / 0.28f);
         const float catchLaunch =
             Clamp01((bladeClashFinishTimer_ - 1.12f) / 0.34f);
         const float catchPrepEase =
@@ -680,10 +465,9 @@ void GameScene::UpdateBattleCamera() {
         cameraPos.x += right.x * std::sinf(phase) * shake;
         cameraPos.y += std::cosf(phase * 1.27f) * shake * 0.5f;
         cameraPos.z += right.z * std::sinf(phase) * shake;
-        const XMFLOAT3 sideLookAt = {
-            center.x + line.x * 0.12f,
-            center.y + 0.04f,
-            center.z + line.y * 0.12f};
+        const XMFLOAT3 sideLookAt = {center.x + line.x * 0.12f,
+                                     center.y + 0.04f,
+                                     center.z + line.y * 0.12f};
         const XMFLOAT3 frontLookAt = {
             cinematicPlayer.x + line.x * (0.74f - 0.30f * catchT),
             cinematicPlayer.y + 1.02f + 0.12f * catchT,
@@ -692,12 +476,103 @@ void GameScene::UpdateBattleCamera() {
         cameraYaw_ = std::atan2f(line.x, line.y);
         targetFovDeg_ = 72.0f + 6.0f * catchT;
         currentFovDeg_ += (targetFovDeg_ - currentFovDeg_) *
-                          SaturatedAlpha(7.0f, ctx_->deltaTime);
+                          SaturatedAlpha(7.0f, ctx_->frame.deltaTime);
         camera_.SetPerspectiveFovDeg(currentFovDeg_ +
                                      combatFeedback_.GetFovKickDeg());
         combatFeedback_.ApplyCameraImpulse(cameraPos, lookAt, sceneLightTime_);
         camera_.SetPosition(cameraPos);
-        camera_.LookAt(lookAt);
+        AppLookAt(camera_, lookAt);
+        return;
+    }
+
+    // 謨�E�陦悟虚迥�E�諷九ｒ蜿門�E�・
+    const ActionKind enemyActionKind = enemy_.GetActionKind();
+    const ActionStep enemyActionStep = enemy_.GetActionStep();
+    const bool isEnemyMeleeAction = enemyActionKind == ActionKind::Smash ||
+                                    enemyActionKind == ActionKind::Sweep ||
+                                    enemyActionKind == ActionKind::BladeClash;
+    const bool isEnemyPressureAction =
+        isEnemyMeleeAction && (enemyActionStep == ActionStep::Charge ||
+                               enemyActionStep == ActionStep::Active ||
+                               enemyActionStep == ActionStep::Recovery);
+    const bool isEnemyPhaseTransition = enemy_.IsPhaseTransitionActive();
+    const float enemyPhaseTransitionRatio = enemy_.GetPhaseTransitionRatio();
+    // =========================
+    // FOV繧�E�繝ｼ繧�E�繝�Eヨ豎ｺ螳・
+    // =========================
+    targetFovDeg_ = normalFovDeg_;
+
+    if (isLockOn_) {
+        targetFovDeg_ = lockOnFovDeg_;
+    }
+
+    if (isEnemyPressureAction) {
+        targetFovDeg_ = 71.5f;
+    }
+
+    if (isEnemyPhaseTransition) {
+        targetFovDeg_ = phaseTransitionFovDeg_;
+    }
+    if (playerViewCamera_) {
+        targetFovDeg_ = isLockOn_ ? 82.0f : normalFovDeg_;
+        if (isEnemyPressureAction) {
+            targetFovDeg_ = 80.0f;
+        }
+        if (isEnemyPhaseTransition) {
+            targetFovDeg_ = phaseTransitionFovDeg_;
+        }
+    }
+
+    float usedFovLerpSpeed = fovLerpSpeed_;
+    if (isEnemyPhaseTransition) {
+        usedFovLerpSpeed = phaseTransitionFovLerpSpeed_;
+    }
+    const float fovAlpha =
+        SaturatedAlpha(usedFovLerpSpeed, ctx_->frame.deltaTime);
+    currentFovDeg_ += (targetFovDeg_ - currentFovDeg_) * fovAlpha;
+    camera_.SetPerspectiveFovDeg(currentFovDeg_ +
+                                 combatFeedback_.GetFovKickDeg());
+
+    if (bladeClashActive_) {
+        const XMFLOAT2 line = NormalizeXZ(enemyPos.x - playerPos.x,
+                                          enemyPos.z - playerPos.z);
+        const XMFLOAT3 right = {line.y, 0.0f, -line.x};
+        const float gaugeProgress = Clamp01((bladeClashGauge_ + 1.0f) * 0.5f);
+        const XMFLOAT3 mid = {
+            bladeClashCenter_.x + line.x * (gaugeProgress - 0.5f) * 0.18f,
+            bladeClashCenter_.y + 0.06f,
+            bladeClashCenter_.z + line.y * (gaugeProgress - 0.5f) * 0.18f};
+        const float push = Clamp01(bladeClashCameraPush_);
+        const float pulse = push * push * (3.0f - 2.0f * push);
+        const float impact = Clamp01(bladeClashImpactPulse_);
+        const float tension = 0.35f + std::fabs(bladeClashGauge_) * 0.32f;
+        const float shakePhase = sceneLightTime_ * (34.0f + 18.0f * impact);
+        const float shake = (0.018f + 0.034f * impact) * tension;
+        const float enemyPressure = Clamp01(1.0f - gaugeProgress);
+        const XMFLOAT3 playerShoulder = {
+            playerPos.x + line.x * 0.48f + right.x * 0.22f,
+            playerPos.y + 0.92f,
+            playerPos.z + line.y * 0.48f + right.z * 0.22f};
+        XMFLOAT3 cameraPos = {
+            playerPos.x - line.x * (4.65f + 0.42f * enemyPressure) +
+                right.x * (2.15f + 0.16f * pulse) +
+                right.x * std::sinf(shakePhase) * shake,
+            playerPos.y + 0.72f + 0.10f * pulse +
+                std::cosf(shakePhase * 1.31f) * shake * 0.42f,
+            playerPos.z - line.y * (4.65f + 0.42f * enemyPressure) +
+                right.z * (2.15f + 0.16f * pulse) +
+                right.z * std::sinf(shakePhase) * shake};
+        XMFLOAT3 lookAt = {
+            playerShoulder.x * 0.34f + mid.x * 0.66f +
+                line.x * (0.20f + 0.34f * enemyPressure),
+            playerShoulder.y * 0.28f + mid.y * 0.72f + 0.14f +
+                0.05f * impact,
+            playerShoulder.z * 0.34f + mid.z * 0.66f +
+                line.y * (0.20f + 0.34f * enemyPressure)};
+        cameraYaw_ = std::atan2f(line.x, line.y);
+        combatFeedback_.ApplyCameraImpulse(cameraPos, lookAt, sceneLightTime_);
+        camera_.SetPosition(cameraPos);
+        AppLookAt(camera_, lookAt);
         return;
     }
 
@@ -712,24 +587,25 @@ void GameScene::UpdateBattleCamera() {
             float diff = WrapRadians(targetYaw - cameraYaw_);
 
             float inputMagnitude = 0.0f;
-            if (ctx_->input != nullptr && ctx_->input->IsGamepadConnected() &&
+            if (ctx_->systems.input != nullptr &&
+                ctx_->systems.input->IsGamepadConnected() &&
                 player_.UsesGamepadCameraLook()) {
                 inputMagnitude =
                     (std::max)(inputMagnitude,
-                               std::abs(ctx_->input->GetGamepadRightStickX()));
+                               std::abs(ctx_->systems.input
+                                            ->GetGamepadRightStickX()));
             }
 
             const float assistScale = inputMagnitude > 0.0f ? 0.42f : 1.0f;
-            const float applied =
-                Clamp(diff * 7.2f * assistScale * ctx_->deltaTime,
-                      -8.0f * ctx_->deltaTime, 8.0f * ctx_->deltaTime);
+            const float applied = Clamp(
+                diff * 7.2f * assistScale * ctx_->frame.deltaTime,
+                -8.0f * ctx_->frame.deltaTime, 8.0f * ctx_->frame.deltaTime);
             cameraYaw_ += applied;
         }
 
         const float viewCosPitch = std::cosf(cameraPitch_);
         const DirectX::XMFLOAT3 viewForward = {
-            std::sinf(cameraYaw_) * viewCosPitch,
-            std::sinf(cameraPitch_),
+            std::sinf(cameraYaw_) * viewCosPitch, std::sinf(cameraPitch_),
             std::cosf(cameraYaw_) * viewCosPitch};
         const DirectX::XMFLOAT3 viewRight = {std::cosf(cameraYaw_), 0.0f,
                                              -std::sinf(cameraYaw_)};
@@ -743,20 +619,18 @@ void GameScene::UpdateBattleCamera() {
 
         DirectX::XMFLOAT3 lookAt{};
         if (isLockOn_) {
-            const float enemyLookHeight =
-                isEnemyWideAction ? playerViewLockOnLookHeight_ + 0.22f
-                                  : playerViewLockOnLookHeight_;
             DirectX::XMFLOAT3 desiredLookAt = {
-                enemyPos.x, enemyPos.y + enemyLookHeight, enemyPos.z};
+                enemyPos.x, enemyPos.y + playerViewLockOnLookHeight_,
+                enemyPos.z};
 
-            const float lookAlpha = SaturatedAlpha(16.0f, ctx_->deltaTime);
+            const float lookAlpha =
+                SaturatedAlpha(16.0f, ctx_->frame.deltaTime);
             lockOnLookAt_ = Lerp(lockOnLookAt_, desiredLookAt, lookAlpha);
             lookAt = lockOnLookAt_;
         } else {
-            lookAt = {
-                cameraPos.x + viewForward.x * playerViewLookAhead_,
-                cameraPos.y + viewForward.y * playerViewLookAhead_,
-                cameraPos.z + viewForward.z * playerViewLookAhead_};
+            lookAt = {cameraPos.x + viewForward.x * playerViewLookAhead_,
+                      cameraPos.y + viewForward.y * playerViewLookAhead_,
+                      cameraPos.z + viewForward.z * playerViewLookAhead_};
             lockOnLookAt_ = lookAt;
         }
 
@@ -766,15 +640,9 @@ void GameScene::UpdateBattleCamera() {
                 enemyPos.z};
             lookAt = Lerp(lookAt, transitionLookAt, enemyPhaseTransitionRatio);
         }
-        if (chargeFocus > 0.0f) {
-            const DirectX::XMFLOAT3 focusLookAt = {
-                enemyPos.x, enemyPos.y + 1.70f, enemyPos.z};
-            lookAt = Lerp(lookAt, focusLookAt, chargeFocus);
-        }
-
         combatFeedback_.ApplyCameraImpulse(cameraPos, lookAt, sceneLightTime_);
         camera_.SetPosition(cameraPos);
-        camera_.LookAt(lookAt);
+        AppLookAt(camera_, lookAt);
         return;
     }
 
@@ -787,17 +655,7 @@ void GameScene::UpdateBattleCamera() {
         float assistStrength = lockOnAssistStrength_;
         float assistMaxStep = lockOnAssistMaxStep_;
 
-        if (isEnemyWarpStart) {
-            assistStrength = warpStartAssistStrength_;
-            assistMaxStep = warpStartAssistMaxStep_;
-        } else if (isEnemyWarpMove) {
-            // 繝ｯ繝ｼ繝礼�E��E�蜍穂ｸ�E�縺�E�辟｡送E�E↓謖ｯ繧雁屓縺輔�E縺・
-            assistStrength = 0.0f;
-            assistMaxStep = 0.0f;
-        } else if (isEnemyWarpEnd) {
-            assistStrength = warpEndAssistStrength_;
-            assistMaxStep = warpEndAssistMaxStep_;
-        } else if (isEnemyPhaseTransition) {
+        if (isEnemyPhaseTransition) {
             assistStrength = lockOnAssistStrength_ * 1.35f;
             assistMaxStep = lockOnAssistMaxStep_ * 1.35f;
         }
@@ -809,9 +667,11 @@ void GameScene::UpdateBattleCamera() {
         float diff = WrapRadians(targetYaw - cameraYaw_);
 
         float inputMagnitude = 0.0f;
-        if (ctx_->input != nullptr && ctx_->input->IsGamepadConnected() &&
+        if (ctx_->systems.input != nullptr &&
+            ctx_->systems.input->IsGamepadConnected() &&
             player_.UsesGamepadCameraLook()) {
-            const float stick = std::abs(ctx_->input->GetGamepadRightStickX());
+            const float stick =
+                std::abs(ctx_->systems.input->GetGamepadRightStickX());
             if (stick > inputMagnitude) {
                 inputMagnitude = stick;
             }
@@ -822,8 +682,9 @@ void GameScene::UpdateBattleCamera() {
             assistScale = lockOnInputReduce_;
         }
 
-        float maxStep = assistMaxStep * assistScale * ctx_->deltaTime;
-        float applied = diff * assistStrength * assistScale * ctx_->deltaTime;
+        float maxStep = assistMaxStep * assistScale * ctx_->frame.deltaTime;
+        float applied =
+            diff * assistStrength * assistScale * ctx_->frame.deltaTime;
 
         applied = Clamp(applied, -maxStep, maxStep);
 
@@ -851,7 +712,8 @@ void GameScene::UpdateBattleCamera() {
 
     if (isLockOn_) {
         // ---------------------------------
-        // 繝ｭ繝�Eけ繧�E�繝ｳ譎�E 謨�E�縺�E�縺�E�繝ｩ繧�E�繝ｳ蝓ｺ貁E��〒蜀・�E��E�霑ｽ蠕�E
+        // 繝ｭ繝�Eけ繧�E�繝ｳ譎�E
+        // 謨�E�縺�E�縺�E�繝ｩ繧�E�繝ｳ蝓ｺ貁E��〒蜀・�E��E�霑ｽ蠕�E
         // ---------------------------------
         float toEnemyX = enemyPos.x - playerPos.x;
         float toEnemyZ = enemyPos.z - playerPos.z;
@@ -874,18 +736,14 @@ void GameScene::UpdateBattleCamera() {
         float usedRadius = lockOnOrbitRadius_ + lockOnOrbitPullBackMax_ * pullT;
         if (isEnemyPressureAction) {
             usedRadius -= 0.45f;
-        } else if (isEnemyWideAction) {
-            usedRadius += 0.85f;
-        } else if (enemyActionKind == ActionKind::BladeClash) {
-            usedRadius += 0.35f;
         }
         if (isEnemyPhaseTransition) {
             usedRadius -= phaseTransitionPushIn_ * enemyPhaseTransitionRatio;
         }
-        usedRadius -= 1.20f * chargeFocus;
         usedRadius = Clamp(usedRadius, 3.35f, 7.4f);
 
-        // cameraYaw_ 縺�E�謨�E�譁E��蜷代Λ繧�E�繝ｳ縺�E�縺�E�蟾�E�縺�E�縲∝�E蠑ｧ荳翫・蟾�E�蜿�E�菴咲�E��E�繧呈ｱ�E�繧√ａE
+        // cameraYaw_
+        // 縺�E�謨�E�譁E��蜷代Λ繧�E�繝ｳ縺�E�縺�E�蟾�E�縺�E�縲∝�E蠑ｧ荳翫・蟾�E�蜿�E�菴咲�E��E�繧呈ｱ�E�繧√ａE
         float lineYaw = std::atan2f(lineX, lineZ);
         float yawDiff = WrapRadians(cameraYaw_ - lineYaw);
 
@@ -896,24 +754,18 @@ void GameScene::UpdateBattleCamera() {
         float sinA = std::sinf(yawDiff);
         float cosA = std::cosf(yawDiff);
 
-        const float sideBias =
-            lockOnOrbitSideBias_ * 0.55f + 0.16f * pullT +
-            (isEnemyPressureAction ? 0.10f : 0.0f);
-        const float cameraLift =
-            (isEnemyWideAction ? 0.16f : 0.0f) +
-            (isEnemyWarpEnd ? 0.12f : 0.0f);
+        const float sideBias = lockOnOrbitSideBias_ * 0.55f + 0.16f * pullT +
+                               (isEnemyPressureAction ? 0.10f : 0.0f);
 
         DirectX::XMFLOAT3 desiredCameraPos = {
             playerPos.x - lineX * usedRadius * cosA +
-                orbitRightX * usedRadius * sinA +
-                orbitRightX * sideBias,
-            playerPos.y + 1.42f + 0.16f * pullT + cameraLift,
+                orbitRightX * usedRadius * sinA + orbitRightX * sideBias,
+            playerPos.y + 1.42f + 0.16f * pullT,
             playerPos.z - lineZ * usedRadius * cosA +
-                orbitRightZ * usedRadius * sinA +
-                orbitRightZ * sideBias};
+                orbitRightZ * usedRadius * sinA + orbitRightZ * sideBias};
 
         const float posAlpha =
-            SaturatedAlpha(lockOnOrbitLerpSpeed_, ctx_->deltaTime);
+            SaturatedAlpha(lockOnOrbitLerpSpeed_, ctx_->frame.deltaTime);
         lockOnOrbitCameraPos_ =
             Lerp(lockOnOrbitCameraPos_, desiredCameraPos, posAlpha);
 
@@ -928,7 +780,6 @@ void GameScene::UpdateBattleCamera() {
             dynamicDistance +=
                 Clamp((enemyDistanceXZ - 5.0f) * 0.18f, 0.0f, 1.1f);
         }
-        dynamicDistance -= 1.85f * chargeFocus;
         dynamicDistance = Clamp(dynamicDistance, 3.25f, 7.0f);
 
         cameraPos = {cameraTargetBase.x - forward.x * dynamicDistance +
@@ -939,20 +790,12 @@ void GameScene::UpdateBattleCamera() {
                          right.z * cameraSideOffset_};
 
         if (isEnemyPhaseTransition) {
-            cameraPos.x += forward.x * phaseTransitionPushIn_ *
-                           enemyPhaseTransitionRatio;
+            cameraPos.x +=
+                forward.x * phaseTransitionPushIn_ * enemyPhaseTransitionRatio;
             cameraPos.y += 0.12f * enemyPhaseTransitionRatio;
-            cameraPos.z += forward.z * phaseTransitionPushIn_ *
-                           enemyPhaseTransitionRatio;
+            cameraPos.z +=
+                forward.z * phaseTransitionPushIn_ * enemyPhaseTransitionRatio;
         }
-        if (chargeFocus > 0.0f) {
-            const DirectX::XMFLOAT3 focusCameraPos = {
-                enemyPos.x - forward.x * 3.25f + right.x * 0.36f,
-                enemyPos.y + 2.05f,
-                enemyPos.z - forward.z * 3.25f + right.z * 0.36f};
-            cameraPos = Lerp(cameraPos, focusCameraPos, chargeFocus * 0.72f);
-        }
-
         // 髱槭Ο繝�Eけ譎ゅ・蜀・�E��E�逕ｨ迴�E�蝨�E�蛟､繧貞�E譛�E
         lockOnOrbitCameraPos_ = cameraPos;
     }
@@ -963,9 +806,9 @@ void GameScene::UpdateBattleCamera() {
     DirectX::XMFLOAT3 lookAt{};
 
     if (isLockOn_) {
-        const float enemyLookHeight = isEnemyWideAction ? 2.55f : 2.25f;
+        const float enemyLookHeight = 2.25f;
         const float playerLookHeight = 1.05f;
-        const float enemyLookWeight = isEnemyWideAction ? 0.74f : 0.68f;
+        const float enemyLookWeight = 0.68f;
         const float playerLookWeight = 1.0f - enemyLookWeight;
         DirectX::XMFLOAT3 desiredLookAt = {
             playerPos.x * lockOnLookPlayerWeight_ +
@@ -976,7 +819,7 @@ void GameScene::UpdateBattleCamera() {
                 enemyPos.z * lockOnLookEnemyWeight_};
 
         const float lookAlpha =
-            SaturatedAlpha(lockOnLookAtLerpSpeed_, ctx_->deltaTime);
+            SaturatedAlpha(lockOnLookAtLerpSpeed_, ctx_->frame.deltaTime);
         lockOnLookAt_ = Lerp(lockOnLookAt_, desiredLookAt, lookAlpha);
 
         lookAt = lockOnLookAt_;
@@ -1002,14 +845,8 @@ void GameScene::UpdateBattleCamera() {
         float blend = enemyPhaseTransitionRatio;
         lookAt = Lerp(lookAt, transitionLookAt, blend);
     }
-    if (chargeFocus > 0.0f) {
-        const DirectX::XMFLOAT3 focusLookAt = {
-            enemyPos.x, enemyPos.y + 1.70f, enemyPos.z};
-        lookAt = Lerp(lookAt, focusLookAt, chargeFocus);
-    }
-
     combatFeedback_.ApplyCameraImpulse(cameraPos, lookAt, sceneLightTime_);
 
     camera_.SetPosition(cameraPos);
-    camera_.LookAt(lookAt);
+    AppLookAt(camera_, lookAt);
 }

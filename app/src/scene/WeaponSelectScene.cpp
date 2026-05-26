@@ -1,145 +1,153 @@
 #include "WeaponSelectScene.h"
-#include "CalibrationScene.h"
-#include "DirectXCommon.h"
+#include "AppSceneServices.h"
 #include "Input.h"
-#include "ModelManager.h"
-#include "PostEffectRenderer.h"
 #include "SceneManager.h"
+#include "Sprite.h"
 #include "SpriteManager.h"
 #include "TextureManager.h"
-#include "TipScene.h"
+#include "TitleScene.h"
+#include "DifficultyCauldronScene.h"
+#include "TutorialSelectScene.h"
 #include "WinApp.h"
-#include <Xinput.h>
 #include <algorithm>
 #include <cmath>
-#include <filesystem>
-#include <fstream>
-#include <iomanip>
 #include <memory>
-#include <sstream>
 
 using namespace DirectX;
 
 namespace {
-constexpr float kTransitionDuration = 0.34f;
+constexpr float kTransitionDuration = 0.16f;
+constexpr float kIntroDuration = 0.46f;
+constexpr float kIntroButtonDelay = 0.075f;
+constexpr float kIntroInputDelay = 0.34f;
+constexpr float kControlsPadding = 32.0f;
+constexpr float kControlsImageBottomTransparentPixels = 18.0f;
+constexpr float kButtonGroupYOffset = 24.0f;
+constexpr float kTitleBandVerticalPadding = 32.0f;
+constexpr float kNormalButtonNameMaxAspect = 495.0f / 53.0f;
+constexpr float kSmallButtonNameMaxAspect = 374.0f / 47.0f;
+
+struct ImageContentBounds {
+    float left = 0.0f;
+    float top = 0.0f;
+    float right = 0.0f;
+    float bottom = 0.0f;
+
+    float Width() const { return right - left + 1.0f; }
+    float Height() const { return bottom - top + 1.0f; }
+    float CenterX() const { return (left + right + 1.0f) * 0.5f; }
+    float CenterY() const { return (top + bottom + 1.0f) * 0.5f; }
+};
+
+constexpr std::array<ImageContentBounds, 3> kModeNameContentBounds = {{
+    {74.0f, 9.0f, 447.0f, 51.0f},
+    {118.0f, 11.0f, 241.0f, 51.0f},
+    {94.0f, 18.0f, 467.0f, 64.0f},
+}};
+
+constexpr std::array<ImageContentBounds, 3> kButtonIllustrationBounds = {{
+    {-148.0f, 42.0f, 126.0f, 150.0f},
+    {-92.0f, 38.0f, 140.0f, 137.0f},
+    {-82.0f, 46.0f, 82.0f, 162.0f},
+}};
+
+constexpr ImageContentBounds kTitleContentBounds{
+    0.0f, 0.0f, 187.0f, 43.0f};
 
 XMFLOAT4 MakeColor(float r, float g, float b, float a = 1.0f) {
     return {r, g, b, a};
 }
 
+XMFLOAT4 ScaleAlpha(XMFLOAT4 color, float alpha) {
+    color.w *= alpha;
+    return color;
+}
+
 float SmoothStep(float t) { return t * t * (3.0f - 2.0f * t); }
 
-XMFLOAT4 MakeQuat(float pitch, float yaw, float roll) {
-    XMFLOAT4 q{};
-    XMStoreFloat4(&q, XMQuaternionRotationRollPitchYaw(pitch, yaw, roll));
-    return q;
-}
-
-std::filesystem::path RankingPathForControl(InputControlType controlType) {
-    const std::filesystem::path rankingDir = "app/resources/result";
-    switch (controlType) {
-    case InputControlType::JoyCon:
-        return rankingDir / "clear_ranking_joycon.txt";
-    case InputControlType::Hand:
-        return rankingDir / "clear_ranking_hand.txt";
-    case InputControlType::KeyboardMouse:
-    default:
-        return rankingDir / "clear_ranking_keyboard_mouse.txt";
-    }
-}
+float Smooth01(float t) { return SmoothStep(std::clamp(t, 0.0f, 1.0f)); }
 } // namespace
 
 void WeaponSelectScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
+    AppSceneServices::RequestHandTrackingStop();
     selectedIndex_ = 0;
     sceneTime_ = 0.0f;
+    introTimer_ = 0.0f;
     transitionTimer_ = 0.0f;
     startRequested_ = false;
+    titleReturnRequested_ = false;
     waitingForHandTrackingReady_ = false;
     handTrackingStartRequested_ = false;
-    rankingOpen_ = false;
+    handCameraConfirmVisible_ = false;
+    handCameraConfirmIndex_ = 1;
     pulseTimers_.fill(0.0f);
-    joyConAvailable_ = false;
     cameraAvailable_ = false;
 
-    leftJoyCon_.Initialize(true);
-    rightJoyCon_.Initialize(false);
+    backgroundScene_ =
+        std::make_unique<GameScene>(GameScene::Mode::BackgroundOnly);
+    backgroundScene_->Initialize(ctx);
 
-    const float aspect = static_cast<float>(ctx_->winApp->GetWidth()) /
-                         static_cast<float>(ctx_->winApp->GetHeight());
-    camera_.Initialize(aspect);
-    camera_.SetMode(CameraMode::LookAt);
-    camera_.SetPerspectiveFovDeg(39.0f);
-    UpdateCamera();
-
-    ctx_->dxCommon->BeginUpload();
-    backgroundImage_ =
-        LoadTextureImage(L"app/resources/select/weapon_select_bg.png");
-    titleImage_ = LoadTextureImage(L"app/resources/text/input_title.png");
-    controlsImage_ =
-        LoadTextureImage(L"app/resources/text/weapon_controls.png");
-    readyImage_ = LoadTextureImage(L"app/resources/text/weapon_ready.png");
-    rankingButtonImage_ =
-        LoadTextureImage(L"app/resources/text/ranking_button.png");
-    weaponNameImages_[0] =
-        LoadTextureImage(L"app/resources/text/input_kbm.png");
-    weaponNameImages_[1] =
-        LoadTextureImage(L"app/resources/text/input_joycon.png");
-    weaponNameImages_[2] =
-        LoadTextureImage(L"app/resources/text/input_hand.png");
-    weaponDescImages_[0] =
-        LoadTextureImage(L"app/resources/text/input_ready_kbm.png");
-    weaponDescImages_[1] =
-        LoadTextureImage(L"app/resources/text/input_ready_joycon.png");
-    weaponDescImages_[2] =
-        LoadTextureImage(L"app/resources/text/input_ready_hand.png");
-    weaponBottomImages_[0] =
-        LoadTextureImage(L"app/resources/text/input_ready_kbm.png");
-    weaponBottomImages_[1] =
-        LoadTextureImage(L"app/resources/text/input_ready_joycon.png");
-    weaponBottomImages_[2] =
-        LoadTextureImage(L"app/resources/text/input_ready_hand.png");
-    for (int i = 0; i < 10; ++i) {
-        digitImages_[static_cast<size_t>(i)] =
-            LoadTextureImage(L"app/resources/result/char_" +
-                             std::to_wstring(i) + L".png");
-    }
-    for (int i = 0; i < kMaxRanking; ++i) {
-        rankImages_[static_cast<size_t>(i)] =
-            LoadTextureImage(L"app/resources/result/rank_" +
-                             std::to_wstring(i + 1) + L".png");
-    }
-    colonImage_ = LoadTextureImage(L"app/resources/result/char_colon.png");
-    dotImage_ = LoadTextureImage(L"app/resources/result/char_dot.png");
-    dashImage_ = LoadTextureImage(L"app/resources/result/char_dash.png");
-    secondImage_ = LoadTextureImage(L"app/resources/result/char_s.png");
-    swordModelId_ = ctx_->model->Load(L"app/resources/models/player/sword.glb");
-    ctx_->dxCommon->EndUpload();
-    ctx_->texture->ReleaseUploadBuffers();
-    LoadRankings();
-
-    ctx_->postEffectRenderer->ResetEffects();
-    UpdateLighting();
+    sceneTitleImage_ = LoadTextureImage(
+        L"app/resources/ui/weapon_select/text/title_controls.png");
+    controlsImage_ = LoadTextureImage(
+        L"app/resources/ui/weapon_select/text/weapon_controls.png");
+    modeNameImages_[0] =
+        LoadTextureImage(L"app/resources/ui/weapon_select/text/input_kbm.png");
+    modeNameImages_[1] =
+        LoadTextureImage(L"app/resources/ui/weapon_select/text/input_hand.png");
+    modeNameImages_[kTutorialButtonIndex] = LoadTextureImage(
+        L"app/resources/ui/weapon_select/text/tutorial_button.png");
+    handCameraConfirmMessageImage_ = LoadTextureImage(
+        L"app/resources/ui/hand_camera_confirm/use_camera_message.png");
+    handCameraConfirmYesImage_ =
+        LoadTextureImage(L"app/resources/ui/title/exit_confirm_yes.png");
+    handCameraConfirmNoImage_ =
+        LoadTextureImage(L"app/resources/ui/title/exit_confirm_no.png");
 }
 
 void WeaponSelectScene::Update() {
-    sceneTime_ += ctx_->deltaTime;
+    sceneTime_ += ctx_->frame.deltaTime;
+    introTimer_ =
+        (std::min)(introTimer_ + ctx_->frame.deltaTime, kIntroDuration + 0.2f);
     UpdateDeviceAvailability();
+    if (backgroundScene_) {
+        backgroundScene_->Update();
+    }
     for (float &pulse : pulseTimers_) {
-        pulse = (std::max)(0.0f, pulse - ctx_->deltaTime * 3.0f);
+        pulse = (std::max)(0.0f, pulse - ctx_->frame.deltaTime * 3.0f);
     }
 
-    const float w = static_cast<float>(ctx_->winApp->GetWidth());
-    const float h = static_cast<float>(ctx_->winApp->GetHeight());
-    Layout(w, h);
+    const float screenWidth =
+        static_cast<float>(ctx_->systems.winApp->GetWidth());
+    const float screenHeight =
+        static_cast<float>(ctx_->systems.winApp->GetHeight());
+    Layout(screenWidth, screenHeight);
+
+    if (titleReturnRequested_) {
+        transitionTimer_ += ctx_->frame.deltaTime;
+        if (transitionTimer_ >= kTransitionDuration) {
+            sceneManager_->ChangeScene(std::make_unique<TitleScene>());
+        }
+        return;
+    }
 
     if (startRequested_) {
+        if (selectedIndex_ == kTutorialButtonIndex) {
+            transitionTimer_ += ctx_->frame.deltaTime;
+            if (transitionTimer_ >= kTransitionDuration) {
+                sceneManager_->ChangeScene(
+                    std::make_unique<TutorialSelectScene>());
+            }
+            return;
+        }
+
         const InputControlType selectedType = SelectedControlType();
         if (selectedType == InputControlType::Hand &&
             waitingForHandTrackingReady_) {
             if (!IsHandTrackingReady()) {
                 transitionTimer_ =
-                    (std::min)(transitionTimer_ + ctx_->deltaTime,
+                    (std::min)(transitionTimer_ + ctx_->frame.deltaTime,
                                kTransitionDuration * 0.72f);
                 return;
             }
@@ -148,200 +156,169 @@ void WeaponSelectScene::Update() {
             waitingForHandTrackingReady_ = false;
             transitionTimer_ = 0.0f;
         } else {
-            transitionTimer_ += ctx_->deltaTime;
+            transitionTimer_ += ctx_->frame.deltaTime;
         }
 
         if (transitionTimer_ >= kTransitionDuration) {
             SwordInputCalibration calibration{};
             calibration.controlType = selectedType;
-            if (selectedType == InputControlType::Hand) {
-                sceneManager_->ChangeScene(std::make_unique<TipScene>(calibration));
-            } else if (selectedType == InputControlType::JoyCon) {
-                sceneManager_->ChangeScene(
-                    std::make_unique<CalibrationScene>(selectedType));
-            } else {
-                sceneManager_->ChangeScene(
-                    std::make_unique<TipScene>(calibration));
-            }
+            sceneManager_->ChangeScene(
+                std::make_unique<DifficultyCauldronScene>(calibration));
         }
         return;
     }
 
-    UpdateSelection(ctx_->input);
-    UpdateCamera();
-    UpdateLighting();
+    if (introTimer_ >= kIntroInputDelay) {
+        UpdateSelection(ctx_->systems.input);
+    }
 }
 
 void WeaponSelectScene::Draw() {
-    const float w = static_cast<float>(ctx_->winApp->GetWidth());
-    const float h = static_cast<float>(ctx_->winApp->GetHeight());
+    const float screenWidth =
+        static_cast<float>(ctx_->systems.winApp->GetWidth());
+    const float screenHeight =
+        static_cast<float>(ctx_->systems.winApp->GetHeight());
 
-    ctx_->sprite->PreDraw();
-    DrawBackground(w, h);
-    DrawCards(w, h);
-    ctx_->sprite->PostDraw();
+    if (backgroundScene_) {
+        backgroundScene_->Draw();
+    }
 
-    DrawModelPreviews();
-
-    ctx_->sprite->PreDraw();
-    DrawLabels(w, h);
-    DrawRankingButton(w, h);
-    DrawRankingPanel(w, h);
-    DrawStartTransition(w, h);
-    ctx_->sprite->PostDraw();
+    ctx_->rendering.sprite->PreDraw();
+    const float backgroundReveal = Smooth01(introTimer_ / 0.16f);
+    DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
+             MakeColor(0.0f, 0.0f, 0.0f, 1.0f - backgroundReveal));
+    DrawOverlay(screenWidth, screenHeight);
+    DrawButtons();
+    DrawLabels(screenWidth, screenHeight);
+    DrawHandCameraConfirmWindow(screenWidth, screenHeight);
+    DrawStartTransition(screenWidth, screenHeight);
+    ctx_->rendering.sprite->PostDraw();
 }
 
 WeaponSelectScene::Image
 WeaponSelectScene::LoadTextureImage(const std::wstring &path) {
     Image image{};
-    image.textureId = ctx_->texture->Load(path);
-    image.width = static_cast<float>(ctx_->texture->GetWidth(image.textureId));
+    image.textureId = ctx_->rendering.texture->Load(path);
+    image.width =
+        static_cast<float>(ctx_->rendering.texture->GetWidth(image.textureId));
     image.height =
-        static_cast<float>(ctx_->texture->GetHeight(image.textureId));
+        static_cast<float>(ctx_->rendering.texture->GetHeight(image.textureId));
     return image;
 }
 
-void WeaponSelectScene::LoadRankings() {
-    for (int i = 0; i < kWeaponCount; ++i) {
-        rankings_[static_cast<size_t>(i)] =
-            LoadRankingForControl(ControlTypeForIndex(i));
-    }
-}
-
-std::vector<float>
-WeaponSelectScene::LoadRankingForControl(InputControlType controlType) const {
-    std::vector<float> ranking;
-    std::ifstream file(RankingPathForControl(controlType));
-    float value = 0.0f;
-    while (file >> value) {
-        if (value > 0.0f) {
-            ranking.push_back(value);
-        }
-    }
-    std::sort(ranking.begin(), ranking.end());
-    if (ranking.size() > static_cast<size_t>(kMaxRanking)) {
-        ranking.resize(kMaxRanking);
-    }
-    return ranking;
-}
-
 void WeaponSelectScene::UpdateSelection(Input *input) {
-    if (rankingOpen_) {
-        if (input->IsKeyTrigger(DIK_TAB) ||
-            input->IsKeyTrigger(DIK_BACK) ||
-            (input->IsGamepadConnected() &&
-             input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_B))) {
-            rankingOpen_ = false;
-        }
+    if (handCameraConfirmVisible_) {
+        UpdateHandCameraConfirm(input);
+        return;
+    }
+
+    if (input->IsKeyTrigger(DIK_ESCAPE)) {
+        BeginReturnToTitle();
         return;
     }
 
     int nextIndex = selectedIndex_;
 
-    if (input->IsKeyTrigger(DIK_LEFT) || input->IsKeyTrigger(DIK_A)) {
-        nextIndex = (selectedIndex_ + kSelectableCount - 1) % kSelectableCount;
+    if (input->IsKeyTrigger(DIK_A) && selectedIndex_ > 0) {
+        nextIndex = selectedIndex_ - 1;
     }
-    if (input->IsKeyTrigger(DIK_RIGHT) || input->IsKeyTrigger(DIK_D)) {
-        nextIndex = (selectedIndex_ + 1) % kSelectableCount;
-    }
-    if (input->IsKeyTrigger(DIK_1)) {
-        nextIndex = 0;
-    }
-    if (input->IsKeyTrigger(DIK_2)) {
-        nextIndex = 1;
-    }
-    if (input->IsKeyTrigger(DIK_3)) {
-        nextIndex = 2;
-    }
-
-    if (input->IsGamepadConnected()) {
-        if (input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_LEFT)) {
-            nextIndex =
-                (selectedIndex_ + kSelectableCount - 1) % kSelectableCount;
-        }
-        if (input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_RIGHT)) {
-            nextIndex = (selectedIndex_ + 1) % kSelectableCount;
-        }
+    if (input->IsKeyTrigger(DIK_D) &&
+        selectedIndex_ < kSelectableCount - 1) {
+        nextIndex = selectedIndex_ + 1;
     }
 
     if (nextIndex != selectedIndex_) {
         selectedIndex_ = nextIndex;
-        if (selectedIndex_ < kWeaponCount) {
-            pulseTimers_[selectedIndex_] = 1.0f;
-        }
+        pulseTimers_[selectedIndex_] = 1.0f;
     }
 
-    const bool confirm =
-        input->IsKeyTrigger(DIK_RETURN) || input->IsKeyTrigger(DIK_SPACE) ||
-        (input->IsGamepadConnected() &&
-         input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_A));
+    const bool confirm = input->IsKeyTrigger(DIK_SPACE);
     if (confirm) {
-        if (selectedIndex_ == kRankingButtonIndex) {
-            rankingOpen_ = true;
-            LoadRankings();
-            return;
-        }
         BeginStart();
     }
 }
 
 void WeaponSelectScene::UpdateDeviceAvailability() {
-    leftJoyCon_.Update(ctx_->deltaTime);
-    rightJoyCon_.Update(ctx_->deltaTime);
-
-    joyConAvailable_ =
-        leftJoyCon_.IsConnected() || rightJoyCon_.IsConnected();
-    cameraAvailable_ = !ctx_->isCameraDeviceAvailable ||
-                       ctx_->isCameraDeviceAvailable();
+    cameraAvailable_ = !AppSceneServices::HasCameraDeviceAvailable() ||
+                       AppSceneServices::IsCameraDeviceAvailable();
 }
 
 void WeaponSelectScene::BeginStart() {
-    if (selectedIndex_ == kRankingButtonIndex) {
-        rankingOpen_ = true;
-        LoadRankings();
+    if (selectedIndex_ == kTutorialButtonIndex) {
+        startRequested_ = true;
+        transitionTimer_ = 0.0f;
         return;
     }
 
     if (!IsModeAvailable(selectedIndex_)) {
-        pulseTimers_[selectedIndex_] = 1.0f;
-        ShowUnavailableMessage(selectedIndex_);
+        ShowUnavailableMessage();
         return;
     }
 
     const InputControlType selectedType = SelectedControlType();
     if (selectedType == InputControlType::Hand) {
-        if (IsHandTrackingReady()) {
-            RequestHandTrackingStartOnce();
-        } else {
-            waitingForHandTrackingReady_ = true;
-        }
+        BeginHandCameraConfirm();
+        return;
     }
 
     startRequested_ = true;
     transitionTimer_ = 0.0f;
 }
 
+void WeaponSelectScene::BeginHandCameraConfirm() {
+    if (handTrackingStartRequested_) {
+        ContinueHandStart();
+        return;
+    }
+
+    handCameraConfirmVisible_ = true;
+    handCameraConfirmIndex_ = 1;
+}
+
+void WeaponSelectScene::ContinueHandStart() {
+    if (!RequestHandTrackingStartOnce()) {
+        return;
+    }
+    waitingForHandTrackingReady_ = !IsHandTrackingReady();
+    startRequested_ = true;
+    transitionTimer_ = 0.0f;
+}
+
+void WeaponSelectScene::BeginReturnToTitle() {
+    titleReturnRequested_ = true;
+    startRequested_ = false;
+    waitingForHandTrackingReady_ = false;
+    transitionTimer_ = 0.0f;
+}
+
 void WeaponSelectScene::Layout(float screenWidth, float screenHeight) {
-    const float cardW = (std::min)(330.0f, screenWidth * 0.25f);
-    const float cardH = (std::min)(390.0f, screenHeight * 0.55f);
-    const float gap = (std::max)(34.0f, screenWidth * 0.035f);
-    const float totalW = cardW * static_cast<float>(kWeaponCount) +
-                         gap * static_cast<float>(kWeaponCount - 1);
+    const float availableWidth =
+        (std::max)(screenWidth - kControlsPadding * 2.0f, 1.0f);
+    const float availableHeight =
+        (std::max)(screenHeight - kControlsPadding * 2.0f, 1.0f);
+    const float gap = (std::max)(36.0f, screenWidth * 0.035f);
+    const float buttonSize =
+        (std::min)({520.0f, availableHeight,
+                    (availableWidth - gap * 2.0f) /
+                        (static_cast<float>(kWeaponCount) + 0.5f)});
+    const float tutorialSize = buttonSize * 0.5f;
+    const float totalW = buttonSize * static_cast<float>(kWeaponCount) +
+                         tutorialSize + gap * 2.0f;
     const float startX = (screenWidth - totalW) * 0.5f;
-    const float y = screenHeight * 0.19f;
+    const float y = (screenHeight - buttonSize) * 0.5f + kButtonGroupYOffset;
 
     for (int i = 0; i < kWeaponCount; ++i) {
-        cardRects_[i] = {startX + i * (cardW + gap), y, cardW, cardH};
+        buttonRects_[i] = {startX + static_cast<float>(i) * (buttonSize + gap),
+                           y, buttonSize, buttonSize};
     }
+    buttonRects_[kTutorialButtonIndex] = {
+        startX + buttonSize * static_cast<float>(kWeaponCount) + gap * 2.0f,
+        y + (buttonSize - tutorialSize) * 0.5f, tutorialSize, tutorialSize};
+}
 
-    const float buttonW = (std::min)(122.0f, screenWidth * 0.10f);
-    const float buttonH = 34.0f;
-    const ButtonRect &cameraCard = cardRects_[2];
-    float buttonX = cameraCard.x + cameraCard.w + 16.0f;
-    if (buttonX + buttonW > screenWidth - 24.0f) {
-        buttonX = cameraCard.x + cameraCard.w - buttonW - 14.0f;
-    }
-    rankingButtonRect_ = {buttonX, cameraCard.y + 16.0f, buttonW, buttonH};
+float WeaponSelectScene::ButtonIntroProgress(int index, float offset) const {
+    const float delay = static_cast<float>(index) * kIntroButtonDelay + offset;
+    return Smooth01((introTimer_ - delay) / kIntroDuration);
 }
 
 InputControlType WeaponSelectScene::SelectedControlType() const {
@@ -350,316 +327,418 @@ InputControlType WeaponSelectScene::SelectedControlType() const {
 
 InputControlType WeaponSelectScene::ControlTypeForIndex(int index) const {
     switch (index) {
-    case 2:
-        return InputControlType::Hand;
     case 1:
-        return InputControlType::JoyCon;
+        return InputControlType::Hand;
     default:
         return InputControlType::KeyboardMouse;
     }
 }
 
 bool WeaponSelectScene::IsHandTrackingReady() const {
-    return !ctx_->isHandTrackingReady || ctx_->isHandTrackingReady();
+    return !AppSceneServices::HasHandTrackingReady() ||
+           AppSceneServices::IsHandTrackingReady();
 }
 
-void WeaponSelectScene::RequestHandTrackingStartOnce() {
-    if (handTrackingStartRequested_ || !ctx_->requestHandTrackingStart) {
+bool WeaponSelectScene::RequestHandTrackingStartOnce() {
+    if (handTrackingStartRequested_ ||
+        !AppSceneServices::HasHandTrackingStart()) {
+        return handTrackingStartRequested_;
+    }
+    handTrackingStartRequested_ = AppSceneServices::RequestHandTrackingStart();
+    return handTrackingStartRequested_;
+}
+
+void WeaponSelectScene::UpdateHandCameraConfirm(Input *input) {
+    if (input == nullptr) {
         return;
     }
-    ctx_->requestHandTrackingStart();
-    handTrackingStartRequested_ = true;
+
+    if (input->IsKeyTrigger(DIK_A) || input->IsKeyTrigger(DIK_LEFT)) {
+        handCameraConfirmIndex_ = 0;
+    }
+    if (input->IsKeyTrigger(DIK_D) || input->IsKeyTrigger(DIK_RIGHT)) {
+        handCameraConfirmIndex_ = 1;
+    }
+    if (input->IsKeyTrigger(DIK_ESCAPE)) {
+        handCameraConfirmVisible_ = false;
+        handCameraConfirmIndex_ = 1;
+        return;
+    }
+
+    const bool confirm =
+        input->IsKeyTrigger(DIK_RETURN) || input->IsKeyTrigger(DIK_SPACE);
+    if (!confirm) {
+        return;
+    }
+    if (handCameraConfirmIndex_ != 0) {
+        handCameraConfirmVisible_ = false;
+        return;
+    }
+
+    handCameraConfirmVisible_ = false;
+    ContinueHandStart();
 }
 
 bool WeaponSelectScene::IsModeAvailable(int index) const {
     switch (index) {
     case 1:
-        return joyConAvailable_;
-    case 2:
         return cameraAvailable_;
+    case kTutorialButtonIndex:
+        return true;
     case 0:
     default:
         return true;
     }
 }
 
-void WeaponSelectScene::ShowUnavailableMessage(int index) {
-    const wchar_t *message =
-        index == 1 ? L"Joy-Conがありません" : L"ウェブカメラがありません";
-    MessageBoxW(ctx_->winApp->GetHwnd(), message, L"入力モード",
+void WeaponSelectScene::ShowUnavailableMessage() {
+    MessageBoxW(ctx_->systems.winApp->GetHwnd(), L"ウェブカメラがありません",
+                L"入力モード",
                 MB_OK | MB_ICONWARNING | MB_SETFOREGROUND | MB_TOPMOST);
-    ctx_->winApp->BringToFront();
+    SetForegroundWindow(ctx_->systems.winApp->GetHwnd());
 }
 
-void WeaponSelectScene::UpdateCamera() {
-    camera_.SetPosition({0.0f, 2.5f, -8.2f});
-    camera_.LookAt({0.0f, 1.05f, 0.0f});
-    camera_.UpdateMatrices();
-}
-
-void WeaponSelectScene::UpdateLighting() {
-    SceneLighting lighting{};
-    lighting.keyLightDirection = {-0.20f, -1.0f, 0.26f};
-    lighting.keyLightColor = {1.32f, 1.18f, 0.92f, 1.0f};
-    lighting.fillLightDirection = {0.75f, -0.30f, -0.58f};
-    lighting.fillLightColor = {0.18f, 0.46f, 0.78f, 0.70f};
-    lighting.ambientColor = {0.18f, 0.18f, 0.20f, 1.0f};
-    lighting.lightingParams = {78.0f, 0.60f, 4.8f, 0.24f};
-    lighting.pointLights[0].positionRange = {0.0f, 2.5f, -1.4f, 8.2f};
-    lighting.pointLights[0].colorIntensity = {1.0f, 0.38f, 0.14f, 1.65f};
-    lighting.pointLights[1].positionRange = {0.0f, 1.7f, 1.8f, 8.0f};
-    lighting.pointLights[1].colorIntensity = {0.12f, 0.50f, 1.0f, 1.05f};
-    ctx_->model->SetSceneLighting(lighting);
-}
-
-void WeaponSelectScene::DrawBackground(float screenWidth, float screenHeight) {
+void WeaponSelectScene::DrawOverlay(float screenWidth, float screenHeight) {
+    const float intro = Smooth01(introTimer_ / kIntroDuration);
     DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
-             MakeColor(0.96f, 0.97f, 0.98f, 1.0f));
-    DrawImage(backgroundImage_, 0.0f, 0.0f,
-              (std::max)(screenWidth / (std::max)(backgroundImage_.width, 1.0f),
-                         screenHeight /
-                             (std::max)(backgroundImage_.height, 1.0f)),
-              0.78f);
-    DrawRect(0.0f, 0.0f, screenWidth, 96.0f,
-             MakeColor(0.03f, 0.03f, 0.035f, 0.86f));
-    DrawRect(0.0f, 88.0f, screenWidth, 6.0f,
-             MakeColor(1.0f, 0.82f, 0.02f, 0.98f));
-    DrawRect(0.0f, screenHeight - 126.0f, screenWidth, 126.0f,
-             MakeColor(0.02f, 0.02f, 0.025f, 0.88f));
+             MakeColor(0.0f, 0.0f, 0.0f, 0.68f + (1.0f - intro) * 0.18f));
+    DrawRect(0.0f, 0.0f, screenWidth, screenHeight * 0.22f,
+             MakeColor(0.0f, 0.0f, 0.0f, 0.30f));
+    DrawRect(0.0f, screenHeight * 0.78f, screenWidth, screenHeight * 0.22f,
+             MakeColor(0.0f, 0.0f, 0.0f, 0.34f));
 }
 
-void WeaponSelectScene::DrawCards(float, float) {
-    for (int i = 0; i < kWeaponCount; ++i) {
-        const ButtonRect &rect = cardRects_[i];
+void WeaponSelectScene::DrawButtons() {
+    for (int i = 0; i < kButtonCount; ++i) {
+        const ButtonRect &rect = buttonRects_[i];
+        const float intro = ButtonIntroProgress(i);
+        if (intro <= 0.0f) {
+            continue;
+        }
         const bool selected = i == selectedIndex_;
         const bool available = IsModeAvailable(i);
-        const float pulse = pulseTimers_[i];
-        const float lift = selected ? 10.0f : 0.0f;
+        const bool tutorialButton = i == kTutorialButtonIndex;
+        const float build = ButtonIntroProgress(i, 0.06f);
+        const float detail = ButtonIntroProgress(i, 0.13f);
+        const float lift = (selected ? 6.0f : 0.0f) - (1.0f - intro) * 18.0f;
+        const float alpha = (available ? 1.0f : 0.50f) * detail;
+        const float centerX = rect.x + rect.w * 0.5f;
+        const float centerY = rect.y + rect.h * 0.5f - lift;
+        const float panelW = rect.w * (0.22f + 0.78f * intro);
+        const float panelH = rect.h * (0.08f + 0.92f * build);
+        const float panelX = centerX - panelW * 0.5f;
+        const float panelY = centerY - panelH * 0.5f;
         const XMFLOAT4 body =
-            available ? (selected ? MakeColor(0.98f, 0.985f, 0.99f, 0.92f)
-                                  : MakeColor(0.88f, 0.90f, 0.93f, 0.64f))
-                      : (selected ? MakeColor(0.38f, 0.39f, 0.41f, 0.82f)
-                                  : MakeColor(0.27f, 0.28f, 0.30f, 0.58f));
-        DrawRect(rect.x, rect.y - lift, rect.w, rect.h, body);
-        DrawRect(rect.x, rect.y + rect.h - lift - 8.0f, rect.w, 8.0f,
-                 available
-                     ? MakeColor(0.02f, 0.02f, 0.025f,
-                                 selected ? 0.90f : 0.45f)
-                     : MakeColor(0.10f, 0.105f, 0.12f,
-                                 selected ? 0.86f : 0.54f));
-        DrawRect(rect.x, rect.y - lift, rect.w, 8.0f,
-                 WeaponColor(i, selected ? 0.95f : 0.42f, available));
+            selected ? MakeColor(0.030f, 0.034f, 0.040f, 0.92f * alpha)
+                     : MakeColor(0.016f, 0.019f, 0.024f, 0.76f * alpha);
+        const XMFLOAT4 edge =
+            selected ? (tutorialButton
+                            ? MakeColor(0.00f, 0.86f, 0.78f, 0.90f * intro)
+                            : MakeColor(0.95f, 0.70f, 0.32f, 0.88f * intro))
+                     : MakeColor(0.60f, 0.64f, 0.70f, 0.22f * alpha);
 
-        if (selected) {
-            const float frame = 6.0f + pulse * 4.0f;
-            const XMFLOAT4 color =
-                available ? MakeColor(1.0f, 0.82f, 0.02f, 1.0f)
-                          : MakeColor(0.56f, 0.57f, 0.60f, 1.0f);
-            DrawRect(rect.x - frame, rect.y - lift - frame,
-                     rect.w + frame * 2.0f, frame, color);
-            DrawRect(rect.x - frame, rect.y + rect.h - lift,
-                     rect.w + frame * 2.0f, frame, color);
-            DrawRect(rect.x - frame, rect.y - lift - frame, frame,
-                     rect.h + frame * 2.0f, color);
-            DrawRect(rect.x + rect.w, rect.y - lift - frame, frame,
-                     rect.h + frame * 2.0f, color);
-        }
+        DrawRect(panelX + 8.0f, panelY + 10.0f, panelW, panelH,
+                 MakeColor(0.0f, 0.0f, 0.0f,
+                           (selected ? 0.38f : 0.24f) * intro));
+        DrawRect(panelX, panelY, panelW, panelH, body);
+        DrawRect(panelX, panelY, panelW, 2.0f, edge);
+        DrawRect(panelX, panelY + panelH - 2.0f, panelW, 2.0f, edge);
+        DrawRect(panelX, panelY, 2.0f, panelH, edge);
+        DrawRect(panelX + panelW - 2.0f, panelY, 2.0f, panelH, edge);
+
+        DrawButtonIllustration(i, rect, lift, alpha, selected);
+
     }
 }
 
-void WeaponSelectScene::DrawModelPreviews() {
-    ctx_->model->PreDraw();
-    for (int i = 0; i < kWeaponCount; ++i) {
-        const bool available = IsModeAvailable(i);
-        const bool selected = i == selectedIndex_;
-        ModelDrawEffect effect{};
-        effect.enabled = true;
-        effect.disableCulling = true;
-        effect.additiveBlend = selected && available;
-        effect.color =
-            WeaponColor(i, selected ? 0.72f : 0.42f, available);
-        effect.intensity =
-            available ? (selected ? 0.62f : 0.18f) : (selected ? 0.16f : 0.08f);
-        effect.fresnelPower = 1.6f;
-        ctx_->model->SetDrawEffect(effect);
-
-        const int swordCount = 2;
-        for (int swordIndex = 0; swordIndex < swordCount; ++swordIndex) {
-            ctx_->model->Draw(swordModelId_, MakeSwordTransform(i, swordIndex),
-                              camera_);
-        }
-    }
-    ctx_->model->ClearDrawEffect();
-    ctx_->model->PostDraw();
-}
-
-void WeaponSelectScene::DrawLabels(float screenWidth, float screenHeight) {
-    const float titleScale =
-        (std::min)(1.0f, (screenWidth * 0.38f) /
-                             (std::max)(titleImage_.width, 1.0f));
-    DrawImage(titleImage_, (screenWidth - titleImage_.width * titleScale) * 0.5f,
-              13.0f, titleScale, 1.0f);
-
-    for (int i = 0; i < kWeaponCount; ++i) {
-        const ButtonRect &rect = cardRects_[i];
-        const bool selected = i == selectedIndex_;
-        const bool available = IsModeAvailable(i);
-        const float lift = selected ? 10.0f : 0.0f;
-        const Image &name = weaponNameImages_[i];
-        const Image &desc = weaponDescImages_[i];
-        const float disabledAlpha = available ? 1.0f : 0.42f;
-        const float nameScale =
-            (std::min)(1.0f, (rect.w * 0.70f) / (std::max)(name.width, 1.0f));
-        const float descScale =
-            (std::min)(1.0f, (rect.w * 0.82f) / (std::max)(desc.width, 1.0f));
-        DrawImage(name, rect.x + (rect.w - name.width * nameScale) * 0.5f,
-                  rect.y + rect.h - lift - 102.0f, nameScale,
-                  disabledAlpha * (selected ? 1.0f : 0.70f));
-        DrawImage(desc, rect.x + (rect.w - desc.width * descScale) * 0.5f,
-                  rect.y + rect.h - lift - 43.0f, descScale,
-                  disabledAlpha * (selected ? 1.0f : 0.62f));
-    }
-
-    const int bottomIndex =
-        selectedIndex_ < kWeaponCount ? selectedIndex_ : kWeaponCount - 1;
-    const Image &bottom = weaponBottomImages_[bottomIndex];
-    const float bottomScale =
-        (std::min)(1.0f, (screenWidth * 0.56f) /
-                             (std::max)(bottom.width, 1.0f));
-    DrawImage(bottom, 58.0f, screenHeight - 88.0f, bottomScale,
-              selectedIndex_ == kRankingButtonIndex ||
-                      IsModeAvailable(selectedIndex_)
-                  ? 1.0f
-                  : 0.42f);
-
-    const float controlsScale =
-        (std::min)(1.0f, (screenWidth * 0.32f) /
-                             (std::max)(controlsImage_.width, 1.0f));
-    DrawImage(controlsImage_,
-              screenWidth - controlsImage_.width * controlsScale - 52.0f,
-              screenHeight - 78.0f, controlsScale, 0.82f);
-}
-
-void WeaponSelectScene::DrawRankingButton(float, float) {
-    const bool selected = selectedIndex_ == kRankingButtonIndex;
-    const XMFLOAT4 body =
-        rankingOpen_ || selected
-            ? MakeColor(1.0f, 0.78f, 0.08f, 0.96f)
-            : MakeColor(0.12f, 0.13f, 0.15f, 0.86f);
-    if (selected) {
-        const float frame = 4.0f;
-        DrawRect(rankingButtonRect_.x - frame, rankingButtonRect_.y - frame,
-                 rankingButtonRect_.w + frame * 2.0f, frame,
-                 MakeColor(1.0f, 0.82f, 0.02f, 1.0f));
-        DrawRect(rankingButtonRect_.x - frame,
-                 rankingButtonRect_.y + rankingButtonRect_.h,
-                 rankingButtonRect_.w + frame * 2.0f, frame,
-                 MakeColor(1.0f, 0.82f, 0.02f, 1.0f));
-        DrawRect(rankingButtonRect_.x - frame, rankingButtonRect_.y - frame,
-                 frame, rankingButtonRect_.h + frame * 2.0f,
-                 MakeColor(1.0f, 0.82f, 0.02f, 1.0f));
-        DrawRect(rankingButtonRect_.x + rankingButtonRect_.w,
-                 rankingButtonRect_.y - frame, frame,
-                 rankingButtonRect_.h + frame * 2.0f,
-                 MakeColor(1.0f, 0.82f, 0.02f, 1.0f));
-    }
-    DrawRect(rankingButtonRect_.x, rankingButtonRect_.y, rankingButtonRect_.w,
-             rankingButtonRect_.h, body);
-    DrawRect(rankingButtonRect_.x, rankingButtonRect_.y,
-             rankingButtonRect_.w, 4.0f,
-             MakeColor(1.0f, 0.82f, 0.02f, rankingOpen_ ? 1.0f : 0.78f));
-    DrawRect(rankingButtonRect_.x, rankingButtonRect_.y +
-                                       rankingButtonRect_.h - 4.0f,
-             rankingButtonRect_.w, 4.0f,
-             MakeColor(0.0f, 0.0f, 0.0f, 0.54f));
-
+void WeaponSelectScene::DrawButtonIllustration(int index,
+                                               const ButtonRect &rect,
+                                               float lift, float alpha,
+                                               bool selected) {
+    const float centerX = rect.x + rect.w * 0.5f;
+    const bool tutorialButton = index == kTutorialButtonIndex;
+    const ImageContentBounds &bounds = kButtonIllustrationBounds[index];
+    const float iconAreaW = rect.w * (tutorialButton ? 0.70f : 0.76f);
+    const float iconAreaH = rect.h * (tutorialButton ? 0.42f : 0.48f);
+    const float iconCenterY =
+        rect.y + rect.h * (tutorialButton ? 0.40f : 0.42f) - lift;
     const float scale =
-        (std::min)(0.46f, (rankingButtonRect_.w * 0.82f) /
-                               (std::max)(rankingButtonImage_.width, 1.0f));
-    DrawImage(rankingButtonImage_,
-              rankingButtonRect_.x +
-                  (rankingButtonRect_.w - rankingButtonImage_.width * scale) *
-                      0.5f,
-              rankingButtonRect_.y +
-                  (rankingButtonRect_.h - rankingButtonImage_.height * scale) *
-                      0.5f,
-              scale, rankingOpen_ || selected ? 1.0f : 0.92f);
-}
+        (std::min)(iconAreaW / (std::max)(bounds.Width(), 1.0f),
+                   iconAreaH / (std::max)(bounds.Height(), 1.0f));
+    const XMFLOAT4 selectedLine =
+        tutorialButton ? MakeColor(0.06f, 0.95f, 0.86f, 1.0f * alpha)
+                       : MakeColor(1.0f, 0.80f, 0.36f, 1.0f * alpha);
+    const XMFLOAT4 line = selected
+                              ? selectedLine
+                              : MakeColor(0.82f, 0.86f, 0.92f, 0.66f * alpha);
+    const XMFLOAT4 fill = selected
+                              ? MakeColor(0.16f, 0.12f, 0.070f, 0.54f * alpha)
+                              : MakeColor(0.10f, 0.11f, 0.13f, 0.44f * alpha);
+    const XMFLOAT4 dim = MakeColor(0.0f, 0.0f, 0.0f, 0.22f * alpha);
+    auto sx = [&](float value) {
+        return centerX + (value - bounds.CenterX()) * scale;
+    };
+    auto sy = [&](float value) {
+        return iconCenterY + (value - bounds.CenterY()) * scale;
+    };
+    auto sw = [&](float value) { return value * scale; };
+    auto rectAt = [&](float x, float y, float w, float h,
+                      const XMFLOAT4 &color) {
+        DrawRect(sx(x), sy(y), sw(w), sw(h), color);
+    };
+    auto frameAt = [&](float x, float y, float w, float h, float thickness,
+                       const XMFLOAT4 &color) {
+        DrawFrame(sx(x), sy(y), sw(w), sw(h), sw(thickness), color);
+    };
+    auto part = [&](float offset) { return ButtonIntroProgress(index, offset); };
 
-void WeaponSelectScene::DrawRankingPanel(float screenWidth,
-                                         float screenHeight) {
-    if (!rankingOpen_) {
+    if (tutorialButton) {
+        const float bookBuild = part(0.17f);
+        rectAt(-82.0f, 46.0f, 164.0f, 116.0f * bookBuild,
+               ScaleAlpha(fill, bookBuild));
+        frameAt(-82.0f, 46.0f, 164.0f, 116.0f * bookBuild, 5.0f,
+                ScaleAlpha(line, bookBuild));
+        rectAt(-2.5f, 46.0f, 5.0f, 116.0f * bookBuild,
+               ScaleAlpha(line, bookBuild));
+
+        const float lineBuild = part(0.26f);
+        rectAt(-60.0f, 76.0f, 42.0f * lineBuild, 6.0f,
+               ScaleAlpha(line, lineBuild));
+        rectAt(-60.0f, 102.0f, 42.0f * lineBuild, 6.0f,
+               ScaleAlpha(line, lineBuild));
+        rectAt(22.0f, 76.0f, 42.0f * lineBuild, 6.0f,
+               ScaleAlpha(line, lineBuild));
+        rectAt(22.0f, 102.0f, 42.0f * lineBuild, 6.0f,
+               ScaleAlpha(line, lineBuild));
         return;
     }
 
-    const float panelW = (std::min)(980.0f, screenWidth * 0.82f);
-    const float panelH = (std::min)(430.0f, screenHeight * 0.58f);
-    const float panelX = (screenWidth - panelW) * 0.5f;
-    const float panelY = screenHeight * 0.20f;
-    DrawRect(0.0f, 96.0f, screenWidth, screenHeight - 96.0f,
-             MakeColor(0.0f, 0.0f, 0.0f, 0.48f));
-    DrawRect(panelX, panelY, panelW, panelH,
-             MakeColor(0.018f, 0.020f, 0.024f, 0.96f));
-    DrawRect(panelX, panelY, panelW, 6.0f,
-             MakeColor(1.0f, 0.82f, 0.02f, 0.96f));
-
-    const float columnGap = 18.0f;
-    const float columnW =
-        (panelW - 56.0f - columnGap * static_cast<float>(kWeaponCount - 1)) /
-        static_cast<float>(kWeaponCount);
-    const float columnY = panelY + 42.0f;
-    const float rowY = columnY + 88.0f;
-    for (int i = 0; i < kWeaponCount; ++i) {
-        const float x = panelX + 28.0f +
-                        static_cast<float>(i) * (columnW + columnGap);
-        const bool available = IsModeAvailable(i);
-        DrawRect(x, columnY, columnW, panelH - 68.0f,
-                 MakeColor(0.065f, 0.070f, 0.080f, available ? 0.82f : 0.52f));
-        DrawRect(x, columnY, columnW, 5.0f,
-                 WeaponColor(i, available ? 0.92f : 0.48f, available));
-
-        const Image &header = weaponNameImages_[static_cast<size_t>(i)];
-        const float headerScale =
-            (std::min)(0.82f, (columnW * 0.72f) /
-                                   (std::max)(header.width, 1.0f));
-        DrawImage(header, x + (columnW - header.width * headerScale) * 0.5f,
-                  columnY + 28.0f, headerScale, available ? 0.96f : 0.45f);
-
-        const std::vector<float> &ranking = rankings_[static_cast<size_t>(i)];
-        for (int rank = 0; rank < kMaxRanking; ++rank) {
-            const float y = rowY + static_cast<float>(rank) * 43.0f;
-            DrawImage(rankImages_[static_cast<size_t>(rank)], x + 30.0f, y,
-                      0.55f, available ? 0.86f : 0.35f);
-            if (rank < static_cast<int>(ranking.size())) {
-                DrawTextLine(FormatTime(ranking[static_cast<size_t>(rank)]),
-                             x + columnW * 0.62f, y - 2.0f, 0.55f,
-                             available ? 0.94f : 0.38f);
-            } else {
-                DrawTextLine("--:--.--s", x + columnW * 0.62f, y - 2.0f,
-                             0.55f, 0.34f);
+    if (index == 0) {
+        const float kbdX = -148.0f;
+        const float kbdY = 62.0f;
+        const float keyboardBuild = part(0.17f);
+        if (keyboardBuild > 0.0f) {
+            rectAt(kbdX, kbdY, 156.0f * keyboardBuild, 72.0f,
+                   ScaleAlpha(fill, keyboardBuild));
+            frameAt(kbdX, kbdY, 156.0f * keyboardBuild, 72.0f, 4.0f,
+                    ScaleAlpha(line, keyboardBuild));
+        }
+        for (int row = 0; row < 3; ++row) {
+            for (int col = 0; col < 6; ++col) {
+                const float keyBuild =
+                    part(0.23f + static_cast<float>(row) * 0.025f +
+                         static_cast<float>(col) * 0.008f);
+                if (keyBuild <= 0.0f) {
+                    continue;
+                }
+                rectAt(kbdX + 16.0f + static_cast<float>(col) * 21.5f,
+                       kbdY + 15.0f + static_cast<float>(row) * 17.0f, 13.0f,
+                       8.0f * keyBuild, ScaleAlpha(line, keyBuild));
             }
         }
+        const float spaceBuild = part(0.31f);
+        rectAt(kbdX + 42.0f, kbdY + 56.0f, 76.0f * spaceBuild, 6.0f,
+               ScaleAlpha(line, spaceBuild));
+
+        const float mouseX = 62.0f;
+        const float mouseY = 42.0f;
+        const float mouseBuild = part(0.20f);
+        if (mouseBuild > 0.0f) {
+            rectAt(mouseX, mouseY + (1.0f - mouseBuild) * 18.0f, 64.0f,
+                   108.0f * mouseBuild, ScaleAlpha(fill, mouseBuild));
+            frameAt(mouseX, mouseY + (1.0f - mouseBuild) * 18.0f, 64.0f,
+                    108.0f * mouseBuild, 4.0f, ScaleAlpha(line, mouseBuild));
+        }
+        const float mouseDetail = part(0.30f);
+        rectAt(mouseX + 30.0f, mouseY + 12.0f, 4.0f, 34.0f * mouseDetail,
+               ScaleAlpha(line, mouseDetail));
+        rectAt(mouseX + 18.0f, mouseY + 50.0f, 30.0f * mouseDetail, 6.0f,
+               ScaleAlpha(line, mouseDetail));
+        return;
+    }
+
+    const float handX = -112.0f;
+    const float handY = 38.0f;
+    const float palmBuild = part(0.17f);
+    rectAt(handX + 48.0f, handY + 35.0f, 72.0f, 64.0f * palmBuild,
+           ScaleAlpha(fill, palmBuild));
+    frameAt(handX + 48.0f, handY + 35.0f, 72.0f, 64.0f * palmBuild, 4.0f,
+            ScaleAlpha(line, palmBuild));
+    for (int i = 0; i < 4; ++i) {
+        const float fingerBuild =
+            part(0.22f + static_cast<float>(i) * 0.025f);
+        if (fingerBuild <= 0.0f) {
+            continue;
+        }
+        rectAt(handX + 44.0f + static_cast<float>(i) * 20.0f,
+               handY + static_cast<float>(i % 2) * 7.0f, 14.0f,
+               52.0f * fingerBuild, ScaleAlpha(line, fingerBuild));
+    }
+    const float thumbBuild = part(0.30f);
+    rectAt(handX + 20.0f, handY + 58.0f, 36.0f * thumbBuild, 18.0f,
+           ScaleAlpha(line, thumbBuild));
+
+    const float camX = 58.0f;
+    const float camY = 46.0f;
+    const float cameraBuild = part(0.20f);
+    rectAt(camX, camY, 82.0f * cameraBuild, 64.0f,
+           ScaleAlpha(fill, cameraBuild));
+    frameAt(camX, camY, 82.0f * cameraBuild, 64.0f, 4.0f,
+            ScaleAlpha(line, cameraBuild));
+    const float lensBuild = part(0.29f);
+    rectAt(camX + 29.0f, camY + 20.0f, 24.0f * lensBuild, 24.0f,
+           ScaleAlpha(line, lensBuild));
+    rectAt(camX + 37.0f, camY + 28.0f, 8.0f * lensBuild, 8.0f,
+           ScaleAlpha(dim, lensBuild));
+    const float standBuild = part(0.33f);
+    rectAt(camX + 24.0f, camY + 76.0f, 34.0f * standBuild, 6.0f,
+           ScaleAlpha(line, standBuild));
+}
+
+void WeaponSelectScene::DrawLabels(float screenWidth, float screenHeight) {
+    for (int i = 0; i < kButtonCount; ++i) {
+        const ButtonRect &rect = buttonRects_[i];
+        const float intro = ButtonIntroProgress(i, 0.18f);
+        const bool selected = i == selectedIndex_;
+        const bool available = IsModeAvailable(i);
+        const float lift = selected ? 6.0f : 0.0f;
+        const float alpha =
+            (available ? (selected ? 1.0f : 0.76f) : 0.38f) * intro;
+        const Image &name = modeNameImages_[i];
+        const ImageContentBounds &bounds = kModeNameContentBounds[i];
+        const bool tutorialButton = i == kTutorialButtonIndex;
+        const float maxLabelAspect =
+            tutorialButton ? kSmallButtonNameMaxAspect
+                           : kNormalButtonNameMaxAspect;
+        const float targetLabelHeight = (std::min)(
+            rect.h * (tutorialButton ? 0.11f : 0.10f),
+            (rect.w * 0.82f) / maxLabelAspect);
+        const float nameScale = (std::min)(
+            {tutorialButton ? 0.62f : 1.10f,
+             targetLabelHeight / (std::max)(bounds.Height(), 1.0f),
+             (rect.w * 0.82f) / (std::max)(bounds.Width(), 1.0f)});
+        const float centerX = rect.x + rect.w * 0.5f;
+        const float centerY =
+            rect.y + rect.h * (tutorialButton ? 0.80f : 0.78f) - lift +
+            (1.0f - intro) * 8.0f;
+        DrawImage(name, centerX - bounds.CenterX() * nameScale,
+                  centerY - bounds.CenterY() * nameScale,
+                  nameScale, alpha);
+    }
+
+    const float titleIntro = Smooth01((introTimer_ - 0.10f) / 0.24f);
+    const float titleBandY = kControlsPadding - kTitleBandVerticalPadding;
+    const float titleBandH =
+        kTitleContentBounds.Height() + kTitleBandVerticalPadding * 2.0f;
+    const float titleCenterX = screenWidth * 0.5f;
+    const float titleCenterY = titleBandY + titleBandH * 0.5f;
+    DrawRect(0.0f, titleBandY, screenWidth, titleBandH,
+             MakeColor(0.0f, 0.0f, 0.0f, 0.42f * titleIntro));
+    DrawRect(0.0f, titleBandY + titleBandH - 2.0f, screenWidth, 2.0f,
+             MakeColor(1.0f, 0.80f, 0.36f, 0.30f * titleIntro));
+    DrawImage(sceneTitleImage_,
+              titleCenterX - kTitleContentBounds.CenterX(),
+              titleCenterY - kTitleContentBounds.CenterY(), 1.0f,
+              0.92f * titleIntro);
+
+    const float controlsIntro = Smooth01((introTimer_ - 0.24f) / 0.28f);
+    const float controlsScale =
+        (std::min)(0.80f, (screenWidth * 0.31f) /
+                              (std::max)(controlsImage_.width, 1.0f));
+    DrawImage(controlsImage_, kControlsPadding,
+              screenHeight -
+                  (controlsImage_.height -
+                   kControlsImageBottomTransparentPixels) *
+                      controlsScale -
+                  kControlsPadding,
+              controlsScale, 0.58f * controlsIntro);
+}
+
+void WeaponSelectScene::DrawHandCameraConfirmWindow(float screenWidth,
+                                                    float screenHeight) {
+    if (!handCameraConfirmVisible_) {
+        return;
+    }
+
+    DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
+             MakeColor(0.0f, 0.0f, 0.0f, 0.54f));
+
+    const float panelW = std::clamp(screenWidth * 0.50f, 520.0f, 760.0f);
+    const float panelH = std::clamp(screenHeight * 0.30f, 240.0f, 320.0f);
+    const float panelX = (screenWidth - panelW) * 0.5f;
+    const float panelY = (screenHeight - panelH) * 0.5f;
+    const float edge = 3.0f;
+
+    DrawRect(panelX + 10.0f, panelY + 12.0f, panelW, panelH,
+             MakeColor(0.0f, 0.0f, 0.0f, 0.36f));
+    DrawRect(panelX, panelY, panelW, panelH,
+             MakeColor(0.018f, 0.020f, 0.026f, 0.96f));
+    DrawRect(panelX, panelY, panelW, edge,
+             MakeColor(0.92f, 0.68f, 0.28f, 0.88f));
+    DrawRect(panelX, panelY + panelH - edge, panelW, edge,
+             MakeColor(0.92f, 0.68f, 0.28f, 0.74f));
+    DrawRect(panelX, panelY, edge, panelH,
+             MakeColor(0.92f, 0.68f, 0.28f, 0.62f));
+    DrawRect(panelX + panelW - edge, panelY, edge, panelH,
+             MakeColor(0.92f, 0.68f, 0.28f, 0.62f));
+
+    const Image &message = handCameraConfirmMessageImage_;
+    const float messageScale =
+        (std::min)(1.0f, (panelW * 0.86f) /
+                             ((std::max)(message.width, 1.0f)));
+    const float messageW = message.width * messageScale;
+    const float messageH = message.height * messageScale;
+    DrawImage(message, panelX + (panelW - messageW) * 0.5f,
+              panelY + panelH * 0.26f - messageH * 0.5f, messageScale);
+
+    const float buttonW = std::clamp(panelW * 0.24f, 130.0f, 176.0f);
+    const float buttonH = std::clamp(panelH * 0.23f, 58.0f, 76.0f);
+    const float buttonGap = panelW * 0.08f;
+    const float totalButtonW = buttonW * 2.0f + buttonGap;
+    const float buttonY = panelY + panelH * 0.61f;
+    const float firstButtonX = panelX + (panelW - totalButtonW) * 0.5f;
+    const Image *labels[2] = {&handCameraConfirmYesImage_,
+                              &handCameraConfirmNoImage_};
+
+    for (int i = 0; i < 2; ++i) {
+        const float x =
+            firstButtonX + static_cast<float>(i) * (buttonW + buttonGap);
+        const bool selected = i == handCameraConfirmIndex_;
+        const XMFLOAT4 body =
+            selected ? MakeColor(0.18f, 0.13f, 0.055f, 0.98f)
+                     : MakeColor(0.040f, 0.046f, 0.058f, 0.92f);
+        const XMFLOAT4 line =
+            selected ? MakeColor(1.0f, 0.78f, 0.34f, 0.96f)
+                     : MakeColor(0.62f, 0.66f, 0.72f, 0.38f);
+
+        DrawRect(x, buttonY, buttonW, buttonH, body);
+        DrawFrame(x, buttonY, buttonW, buttonH, 2.0f, line);
+
+        const Image &label = *labels[i];
+        const float labelScale =
+            (std::min)({1.0f,
+                        (buttonH * 0.68f) /
+                            ((std::max)(label.height, 1.0f)),
+                        (buttonW * 0.86f) /
+                            ((std::max)(label.width, 1.0f))});
+        const float labelW = label.width * labelScale;
+        const float labelH = label.height * labelScale;
+        DrawImage(label, x + (buttonW - labelW) * 0.5f,
+                  buttonY + (buttonH - labelH) * 0.5f, labelScale,
+                  selected ? 1.0f : 0.82f);
     }
 }
 
 void WeaponSelectScene::DrawStartTransition(float screenWidth,
                                             float screenHeight) {
-    if (!startRequested_) {
+    if (!startRequested_ && !titleReturnRequested_) {
         return;
     }
-
     const float t =
         std::clamp(transitionTimer_ / kTransitionDuration, 0.0f, 1.0f);
-    const float eased = SmoothStep(t);
-    const float bandY = screenHeight * 0.43f - 52.0f;
-    DrawRect(0.0f, bandY, screenWidth, 104.0f,
-             MakeColor(1.0f, 0.82f, 0.02f, 0.96f));
-    DrawRect(0.0f, bandY + 78.0f, screenWidth, 16.0f,
-             MakeColor(0.88f, 0.02f, 0.02f, 0.98f));
-    DrawImage(readyImage_, (screenWidth - readyImage_.width) * 0.5f,
-              bandY + 15.0f, 1.0f, 1.0f);
+    const float alpha = SmoothStep(t);
     DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
-             MakeColor(0.0f, 0.0f, 0.0f, eased * 0.36f));
+             MakeColor(0.0f, 0.0f, 0.0f, alpha));
 }
 
 void WeaponSelectScene::DrawRect(float x, float y, float w, float h,
@@ -669,7 +748,15 @@ void WeaponSelectScene::DrawRect(float x, float y, float w, float h,
     sprite.size = {w, h};
     sprite.color = color;
     sprite.textureId = 0;
-    ctx_->sprite->DrawSprite(sprite);
+    ctx_->rendering.sprite->DrawSprite(sprite);
+}
+
+void WeaponSelectScene::DrawFrame(float x, float y, float w, float h,
+                                  float thickness, const XMFLOAT4 &color) {
+    DrawRect(x, y, w, thickness, color);
+    DrawRect(x, y + h - thickness, w, thickness, color);
+    DrawRect(x, y, thickness, h, color);
+    DrawRect(x + w - thickness, y, thickness, h, color);
 }
 
 void WeaponSelectScene::DrawImage(const Image &image, float x, float y,
@@ -683,113 +770,5 @@ void WeaponSelectScene::DrawImage(const Image &image, float x, float y,
     sprite.size = {image.width * scale, image.height * scale};
     sprite.color = {1.0f, 1.0f, 1.0f, alpha};
     sprite.textureId = image.textureId;
-    ctx_->sprite->DrawSprite(sprite);
-}
-
-void WeaponSelectScene::DrawTextLine(const std::string &text, float centerX,
-                                     float y, float scale, float alpha) {
-    float x = centerX - MeasureTextLine(text, scale) * 0.5f;
-    for (char c : text) {
-        if (c == ' ') {
-            x += 18.0f * scale;
-            continue;
-        }
-        const Image *image = FindCharImage(c);
-        if (image == nullptr) {
-            continue;
-        }
-        DrawImage(*image, x, y, scale, alpha);
-        x += image->width * scale - 4.0f * scale;
-    }
-}
-
-float WeaponSelectScene::MeasureTextLine(const std::string &text,
-                                         float scale) const {
-    float width = 0.0f;
-    for (char c : text) {
-        if (c == ' ') {
-            width += 18.0f * scale;
-            continue;
-        }
-        const Image *image = FindCharImage(c);
-        if (image != nullptr) {
-            width += image->width * scale - 4.0f * scale;
-        }
-    }
-    return (std::max)(0.0f, width);
-}
-
-const WeaponSelectScene::Image *
-WeaponSelectScene::FindCharImage(char c) const {
-    if (c >= '0' && c <= '9') {
-        return &digitImages_[static_cast<size_t>(c - '0')];
-    }
-    if (c == ':') {
-        return &colonImage_;
-    }
-    if (c == '.') {
-        return &dotImage_;
-    }
-    if (c == '-') {
-        return &dashImage_;
-    }
-    if (c == 's' || c == 'S') {
-        return &secondImage_;
-    }
-    return nullptr;
-}
-
-std::string WeaponSelectScene::FormatTime(float seconds) const {
-    const int centiseconds =
-        static_cast<int>(std::round((std::max)(0.0f, seconds) * 100.0f));
-    const int minutes = centiseconds / 6000;
-    const int sec = (centiseconds / 100) % 60;
-    const int centi = centiseconds % 100;
-    std::ostringstream oss;
-    oss << std::setfill('0') << std::setw(2) << minutes << ':'
-        << std::setw(2) << sec << '.' << std::setw(2) << centi << 's';
-    return oss.str();
-}
-
-Transform WeaponSelectScene::MakeSwordTransform(int weaponIndex,
-                                                int swordIndex) const {
-    Transform transform{};
-    const float centerOffset =
-        static_cast<float>(weaponIndex) -
-        (static_cast<float>(kWeaponCount - 1) * 0.5f);
-    const float baseX = centerOffset * 2.2f;
-    const bool selected = weaponIndex == selectedIndex_;
-    const float sway =
-        selected ? std::sinf(sceneTime_ * 2.6f + weaponIndex) * 0.05f : 0.0f;
-    transform.position = {baseX, 1.08f + (selected ? 0.07f : 0.0f) + sway,
-                          1.12f};
-
-    float scale = selected ? 2.95f : 2.35f;
-    transform.scale = {scale, scale, scale};
-
-    float roll = 0.0f;
-    if (weaponIndex == 1) {
-        roll = swordIndex == 0 ? -0.58f : 0.58f;
-        transform.position.x += swordIndex == 0 ? -0.34f : 0.34f;
-    }
-
-    transform.rotation = MakeQuat(0.72f, 0.0f, roll);
-    return transform;
-}
-
-XMFLOAT4 WeaponSelectScene::WeaponColor(int index, float alpha,
-                                        bool available) const {
-    if (!available) {
-        return MakeColor(0.45f, 0.46f, 0.49f, alpha);
-    }
-
-    switch (index) {
-    case 2:
-        return MakeColor(0.24f, 0.84f, 0.58f, alpha);
-    case 1:
-        return MakeColor(0.10f, 0.52f, 1.0f, alpha);
-    case 0:
-    default:
-        return MakeColor(0.92f, 0.02f, 0.05f, alpha);
-    }
+    ctx_->rendering.sprite->DrawSprite(sprite);
 }

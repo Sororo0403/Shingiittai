@@ -16,35 +16,62 @@
     <Filter Include="Resources">
       <UniqueIdentifier>{2e940d40-3d77-3dc8-a487-6f21e4b33cda}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Resources\Model">
+    <Filter Include="Resources\Models">
       <UniqueIdentifier>{153629fd-363a-7f58-06de-530fd9db1da7}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Resources\Model\boss">
+    <Filter Include="Resources\Models\boss">
       <UniqueIdentifier>{1abdc1c9-c80c-eca4-b2ae-bfa8d792511f}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Resources\Model\bullet">
-      <UniqueIdentifier>{12156a62-6047-2f1f-f10d-64b6aaea3650}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Resources\Model\enemy">
-      <UniqueIdentifier>{7d5a4983-9ca7-5ac1-b285-9b2770c6f339}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Resources\Model\player">
+    <Filter Include="Resources\Models\player">
       <UniqueIdentifier>{d91cfcf7-f3c4-3b80-5314-202646ae4f3c}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Resources\Tuning">
-      <UniqueIdentifier>{fea49a77-7765-acdf-93f8-af892e0ffed2}</UniqueIdentifier>
+    <Filter Include="Resources\Audio">
+      <UniqueIdentifier>{7d5a4983-9ca7-5ac1-b285-9b2770c6f339}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Resources\Select">
+    <Filter Include="Resources\Audio\sfx">
       <UniqueIdentifier>{75cd1bbf-105d-4073-bb6d-ea37b8d7e644}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Resources\Text">
+    <Filter Include="Resources\Audio\bgm">
+      <UniqueIdentifier>{a354bf52-f80e-4a4f-8f11-c96723e605af}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\Effects">
+      <UniqueIdentifier>{fea49a77-7765-acdf-93f8-af892e0ffed2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\Effects\particles">
       <UniqueIdentifier>{b9e4f8ac-0f67-4e8d-a727-42d51b920f0c}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Resources\Title">
+    <Filter Include="Resources\Shaders">
       <UniqueIdentifier>{68685a10-6401-4a43-986b-85723dbe8c62}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Resources\Menu">
+    <Filter Include="Resources\Shaders\sword_arc">
       <UniqueIdentifier>{8ebd6c86-64d5-411e-84a4-6c4ed0039b28}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\Shaders\sword_trail">
+      <UniqueIdentifier>{0f6cc620-1696-45ee-a64a-2a27fe4b1786}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\UI">
+      <UniqueIdentifier>{be18388a-c7d7-463b-a082-6451e4a7e26b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\UI\result">
+      <UniqueIdentifier>{ed6094e0-6c2f-4926-8b45-4d80b6db5540}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\UI\result\glyphs">
+      <UniqueIdentifier>{926b25af-5751-4e43-bd05-86cc3271b882}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\UI\tip">
+      <UniqueIdentifier>{bb9ad012-f356-4583-a407-37f1f8f0941f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\UI\tip\text">
+      <UniqueIdentifier>{92411db9-62e0-4e80-b324-0273de7bd803}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\UI\title">
+      <UniqueIdentifier>{8020483a-1e1a-4a79-aa16-00b02627f518}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\UI\weapon_select">
+      <UniqueIdentifier>{90b565c7-e349-45d9-8b03-d0581d2805a5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\UI\weapon_select\text">
+      <UniqueIdentifier>{3ff0dd92-e36b-4897-9ef7-b7d5c9d01dfb}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source Files">
       <UniqueIdentifier>{29388da4-e2a8-2891-25b7-64a4dd6bcc45}</UniqueIdentifier>
@@ -60,19 +87,19 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\scene\CameraPreviewReceiver.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
     <ClCompile Include="src\scene\BattleResultScene.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
     <ClCompile Include="src\scene\CalibrationScene.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
+    <ClCompile Include="src\scene\DifficultyCauldronScene.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
     <ClCompile Include="src\enemy\EnemyMelee.cpp">
-      <Filter>Source Files\enemy</Filter>
-    </ClCompile>
-    <ClCompile Include="src\enemy\EnemyRanged.cpp">
-      <Filter>Source Files\enemy</Filter>
-    </ClCompile>
-    <ClCompile Include="src\enemy\EnemyWarp.cpp">
       <Filter>Source Files\enemy</Filter>
     </ClCompile>
     <ClCompile Include="src\enemy\EnemyCombat.cpp">
@@ -91,6 +118,9 @@
       <Filter>Source Files\enemy</Filter>
     </ClCompile>
     <ClCompile Include="src\enemy\EnemyTuning.cpp">
+      <Filter>Source Files\enemy</Filter>
+    </ClCompile>
+    <ClCompile Include="src\enemy\EnemyWarp.cpp">
       <Filter>Source Files\enemy</Filter>
     </ClCompile>
     <ClCompile Include="src\player\Player.cpp">
@@ -114,16 +144,13 @@
     <ClCompile Include="src\scene\GameSceneLighting.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
-    <ClCompile Include="src\scene\ModeSelectScene.cpp">
-      <Filter>Source Files\scene</Filter>
-    </ClCompile>
-    <ClCompile Include="src\scene\SettingsScene.cpp">
-      <Filter>Source Files\scene</Filter>
-    </ClCompile>
     <ClCompile Include="src\scene\TitleScene.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
-    <ClCompile Include="src\scene\TipScene.cpp">
+    <ClCompile Include="src\scene\TutorialScene.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\scene\TutorialSelectScene.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
     <ClCompile Include="src\scene\WeaponSelectScene.cpp">
@@ -135,9 +162,6 @@
     <ClCompile Include="src\player\Sword.cpp">
       <Filter>Source Files\player</Filter>
     </ClCompile>
-    <ClCompile Include="src\player\SwordJoyConController.cpp">
-      <Filter>Source Files\player</Filter>
-    </ClCompile>
     <ClCompile Include="src\player\SwordMouseController.cpp">
       <Filter>Source Files\player</Filter>
     </ClCompile>
@@ -147,19 +171,22 @@
     <ClCompile Include="src\scene\GameSceneHud.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
-    <ClCompile Include="src\scene\HandTrackingTestScene.cpp">
-      <Filter>Source Files\scene</Filter>
-    </ClCompile>
     <ClCompile Include="src\player\SwordSlashArcRenderer.cpp">
       <Filter>Source Files\player</Filter>
     </ClCompile>
     <ClCompile Include="src\player\SwordTrailRenderer.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\scene\CameraPreviewReceiver.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
     <ClInclude Include="include\scene\BattleResultScene.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\CalibrationScene.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="include\scene\DifficultyCauldronScene.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
     <ClInclude Include="include\enemy\EnemyActionData.h">
@@ -177,16 +204,13 @@
     <ClInclude Include="include\enemy\Enemy.h">
       <Filter>Header Files\enemy</Filter>
     </ClInclude>
+    <ClInclude Include="include\scene\BladeClashCinematic.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
     <ClInclude Include="include\scene\CombatFeedbackDirector.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\GameScene.h">
-      <Filter>Header Files\scene</Filter>
-    </ClInclude>
-    <ClInclude Include="include\scene\ModeSelectScene.h">
-      <Filter>Header Files\scene</Filter>
-    </ClInclude>
-    <ClInclude Include="include\scene\SettingsScene.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\TitleScene.h">
@@ -199,9 +223,6 @@
       <Filter>Header Files\player</Filter>
     </ClInclude>
     <ClInclude Include="include\player\Sword.h">
-      <Filter>Header Files\player</Filter>
-    </ClInclude>
-    <ClInclude Include="include\player\SwordJoyConController.h">
       <Filter>Header Files\player</Filter>
     </ClInclude>
     <ClInclude Include="include\player\SwordMouseController.h">
@@ -220,118 +241,196 @@
     <ClInclude Include="include\player\InputControlType.h">
       <Filter>Header Files\player</Filter>
     </ClInclude>
-    <ClInclude Include="include\scene\TipScene.h">
+    <ClInclude Include="include\compat\EngineCompat.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\compat\ParticleCompat.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\scene\AppSceneServices.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
-    <ClInclude Include="include\scene\HandTrackingTestScene.h">
+    <ClInclude Include="include\scene\TutorialScene.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="include\scene\TutorialSelectScene.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
+    <None Include="resources\audio\bgm\bgm_Battle.wav">
+      <Filter>Resources\Audio\bgm</Filter>
+    </None>
+    <None Include="resources\audio\sfx\counter_burst.wav">
+      <Filter>Resources\Audio\sfx</Filter>
+    </None>
+    <None Include="resources\audio\sfx\damage_heavy.wav">
+      <Filter>Resources\Audio\sfx</Filter>
+    </None>
+    <None Include="resources\audio\sfx\enemy_release_snap.wav">
+      <Filter>Resources\Audio\sfx</Filter>
+    </None>
+    <None Include="resources\audio\sfx\explosion_boss.wav">
+      <Filter>Resources\Audio\sfx</Filter>
+    </None>
+    <None Include="resources\audio\sfx\hit_impact.wav">
+      <Filter>Resources\Audio\sfx</Filter>
+    </None>
+    <None Include="resources\audio\sfx\slash_hero.wav">
+      <Filter>Resources\Audio\sfx</Filter>
+    </None>
+    <None Include="resources\effects\particles\smoke.png">
+      <Filter>Resources\Effects\particles</Filter>
+    </None>
     <None Include="resources\models\boss\boss.bin">
-      <Filter>Resources\Model\boss</Filter>
+      <Filter>Resources\Models\boss</Filter>
     </None>
     <None Include="resources\models\boss\boss.gltf">
-      <Filter>Resources\Model\boss</Filter>
+      <Filter>Resources\Models\boss</Filter>
     </None>
     <None Include="resources\models\boss\boss.png">
-      <Filter>Resources\Model\boss</Filter>
+      <Filter>Resources\Models\boss</Filter>
     </None>
-    <None Include="resources\models\bullet\bullet.mtl">
-      <Filter>Resources\Model\bullet</Filter>
-    </None>
-    <None Include="resources\models\bullet\bullet.obj">
-      <Filter>Resources\Model\bullet</Filter>
-    </None>
-    <None Include="resources\models\bullet\bullet.png">
-      <Filter>Resources\Model\bullet</Filter>
+    <None Include="resources\models\boss\bossBody.png">
+      <Filter>Resources\Models\boss</Filter>
     </None>
     <None Include="resources\models\player\player.glb">
-      <Filter>Resources\Model\player</Filter>
+      <Filter>Resources\Models\player</Filter>
     </None>
     <None Include="resources\models\player\sword.glb">
-      <Filter>Resources\Model\player</Filter>
+      <Filter>Resources\Models\player</Filter>
     </None>
-    <None Include="resources\select\weapon_select_bg.png">
-      <Filter>Resources\Select</Filter>
+    <None Include="resources\shaders\sword_arc\SwordArcPS.hlsl">
+      <Filter>Resources\Shaders\sword_arc</Filter>
     </None>
-    <None Include="resources\title\press_any_button.png">
-      <Filter>Resources\Title</Filter>
+    <None Include="resources\shaders\sword_arc\SwordArcVS.hlsl">
+      <Filter>Resources\Shaders\sword_arc</Filter>
     </None>
-    <None Include="resources\title\title_logo.png">
-      <Filter>Resources\Title</Filter>
+    <None Include="resources\shaders\sword_trail\SwordTrailPS.hlsl">
+      <Filter>Resources\Shaders\sword_trail</Filter>
     </None>
-    <None Include="resources\menu\back.png">
-      <Filter>Resources\Menu</Filter>
+    <None Include="resources\shaders\sword_trail\SwordTrailVS.hlsl">
+      <Filter>Resources\Shaders\sword_trail</Filter>
     </None>
-    <None Include="resources\menu\game_start.png">
-      <Filter>Resources\Menu</Filter>
+    <None Include="resources\ui\result\clear_time.png">
+      <Filter>Resources\UI\result</Filter>
     </None>
-    <None Include="resources\menu\game_start_help.png">
-      <Filter>Resources\Menu</Filter>
+    <None Include="resources\ui\result\clear_title.png">
+      <Filter>Resources\UI\result</Filter>
     </None>
-    <None Include="resources\menu\menu_controls.png">
-      <Filter>Resources\Menu</Filter>
+    <None Include="resources\ui\result\game_over_title.png">
+      <Filter>Resources\UI\result</Filter>
     </None>
-    <None Include="resources\menu\mode_select_title.png">
-      <Filter>Resources\Menu</Filter>
+    <None Include="resources\ui\result\glyphs\char_0.png">
+      <Filter>Resources\UI\result\glyphs</Filter>
     </None>
-    <None Include="resources\menu\settings.png">
-      <Filter>Resources\Menu</Filter>
+    <None Include="resources\ui\result\glyphs\char_1.png">
+      <Filter>Resources\UI\result\glyphs</Filter>
     </None>
-    <None Include="resources\menu\settings_controls.png">
-      <Filter>Resources\Menu</Filter>
+    <None Include="resources\ui\result\glyphs\char_2.png">
+      <Filter>Resources\UI\result\glyphs</Filter>
     </None>
-    <None Include="resources\menu\settings_help.png">
-      <Filter>Resources\Menu</Filter>
+    <None Include="resources\ui\result\glyphs\char_3.png">
+      <Filter>Resources\UI\result\glyphs</Filter>
     </None>
-    <None Include="resources\menu\settings_title.png">
-      <Filter>Resources\Menu</Filter>
+    <None Include="resources\ui\result\glyphs\char_4.png">
+      <Filter>Resources\UI\result\glyphs</Filter>
     </None>
-    <None Include="resources\menu\volume.png">
-      <Filter>Resources\Menu</Filter>
+    <None Include="resources\ui\result\glyphs\char_5.png">
+      <Filter>Resources\UI\result\glyphs</Filter>
     </None>
-    <None Include="resources\text\input_hand.png">
-      <Filter>Resources\Text</Filter>
+    <None Include="resources\ui\result\glyphs\char_6.png">
+      <Filter>Resources\UI\result\glyphs</Filter>
     </None>
-    <None Include="resources\text\input_joycon.png">
-      <Filter>Resources\Text</Filter>
+    <None Include="resources\ui\result\glyphs\char_7.png">
+      <Filter>Resources\UI\result\glyphs</Filter>
     </None>
-    <None Include="resources\text\input_kbm.png">
-      <Filter>Resources\Text</Filter>
+    <None Include="resources\ui\result\glyphs\char_8.png">
+      <Filter>Resources\UI\result\glyphs</Filter>
     </None>
-    <None Include="resources\text\input_ready_hand.png">
-      <Filter>Resources\Text</Filter>
+    <None Include="resources\ui\result\glyphs\char_9.png">
+      <Filter>Resources\UI\result\glyphs</Filter>
     </None>
-    <None Include="resources\text\input_ready_joycon.png">
-      <Filter>Resources\Text</Filter>
+    <None Include="resources\ui\result\glyphs\char_colon.png">
+      <Filter>Resources\UI\result\glyphs</Filter>
     </None>
-    <None Include="resources\text\input_ready_kbm.png">
-      <Filter>Resources\Text</Filter>
+    <None Include="resources\ui\result\glyphs\char_dash.png">
+      <Filter>Resources\UI\result\glyphs</Filter>
     </None>
-    <None Include="resources\text\input_title.png">
-      <Filter>Resources\Text</Filter>
+    <None Include="resources\ui\result\glyphs\char_dot.png">
+      <Filter>Resources\UI\result\glyphs</Filter>
     </None>
-    <None Include="resources\text\tip_body.png">
-      <Filter>Resources\Text</Filter>
+    <None Include="resources\ui\result\glyphs\char_s.png">
+      <Filter>Resources\UI\result\glyphs</Filter>
     </None>
-    <None Include="resources\text\tip_hand.png">
-      <Filter>Resources\Text</Filter>
+    <None Include="resources\ui\result\menu.png">
+      <Filter>Resources\UI\result</Filter>
     </None>
-    <None Include="resources\text\tip_joycon.png">
-      <Filter>Resources\Text</Filter>
+    <None Include="resources\ui\result\no_clear_time.png">
+      <Filter>Resources\UI\result</Filter>
     </None>
-    <None Include="resources\text\tip_kbm.png">
-      <Filter>Resources\Text</Filter>
+    <None Include="resources\ui\result\retry.png">
+      <Filter>Resources\UI\result</Filter>
     </None>
-    <None Include="resources\text\tip_title.png">
-      <Filter>Resources\Text</Filter>
+    <None Include="resources\ui\tip\text\tip_body.png">
+      <Filter>Resources\UI\tip\text</Filter>
     </None>
-    <None Include="resources\text\weapon_controls.png">
-      <Filter>Resources\Text</Filter>
+    <None Include="resources\ui\tip\text\tip_body_0.png">
+      <Filter>Resources\UI\tip\text</Filter>
     </None>
-    <None Include="resources\text\weapon_ready.png">
-      <Filter>Resources\Text</Filter>
+    <None Include="resources\ui\tip\text\tip_body_1.png">
+      <Filter>Resources\UI\tip\text</Filter>
+    </None>
+    <None Include="resources\ui\tip\text\tip_body_2.png">
+      <Filter>Resources\UI\tip\text</Filter>
+    </None>
+    <None Include="resources\ui\tip\text\tip_hand.png">
+      <Filter>Resources\UI\tip\text</Filter>
+    </None>
+    <None Include="resources\ui\tip\text\tip_kbm.png">
+      <Filter>Resources\UI\tip\text</Filter>
+    </None>
+    <None Include="resources\ui\tip\text\tip_title.png">
+      <Filter>Resources\UI\tip\text</Filter>
+    </None>
+    <None Include="resources\ui\title\gamelogo.png">
+      <Filter>Resources\UI\title</Filter>
+    </None>
+    <None Include="resources\ui\title\exit_confirm_message.png">
+      <Filter>Resources\UI\title</Filter>
+    </None>
+    <None Include="resources\ui\title\exit_confirm_no.png">
+      <Filter>Resources\UI\title</Filter>
+    </None>
+    <None Include="resources\ui\title\exit_confirm_yes.png">
+      <Filter>Resources\UI\title</Filter>
+    </None>
+    <None Include="resources\ui\title\press_any_button.png">
+      <Filter>Resources\UI\title</Filter>
+    </None>
+    <None Include="resources\ui\weapon_select\text\input_hand.png">
+      <Filter>Resources\UI\weapon_select\text</Filter>
+    </None>
+    <None Include="resources\ui\weapon_select\text\input_kbm.png">
+      <Filter>Resources\UI\weapon_select\text</Filter>
+    </None>
+    <None Include="resources\ui\weapon_select\text\input_ready_hand.png">
+      <Filter>Resources\UI\weapon_select\text</Filter>
+    </None>
+    <None Include="resources\ui\weapon_select\text\input_ready_kbm.png">
+      <Filter>Resources\UI\weapon_select\text</Filter>
+    </None>
+    <None Include="resources\ui\weapon_select\text\input_title.png">
+      <Filter>Resources\UI\weapon_select\text</Filter>
+    </None>
+    <None Include="resources\ui\weapon_select\text\weapon_controls.png">
+      <Filter>Resources\UI\weapon_select\text</Filter>
+    </None>
+    <None Include="resources\ui\weapon_select\text\weapon_ready.png">
+      <Filter>Resources\UI\weapon_select\text</Filter>
+    </None>
+    <None Include="resources\ui\weapon_select\weapon_select_bg.png">
+      <Filter>Resources\UI\weapon_select</Filter>
     </None>
   </ItemGroup>
 </Project>

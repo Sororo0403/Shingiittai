@@ -1,6 +1,6 @@
-#include "Animator.h"
-#include "AnimationSampler.h"
-#include "SkeletonPoseBuilder.h"
+#include "animation/Animator.h"
+#include "animation/AnimationSampler.h"
+#include "animation/SkeletonPoseBuilder.h"
 #include <DirectXMath.h>
 
 using namespace DirectX;
@@ -105,10 +105,10 @@ void Animator::Update(Model &model, float deltaTime) {
                                : AnimationSampler::SampleQuat(
                                      rootAnim.rotate, model.animationTime);
 
-            XMMATRIX local =
-                XMMatrixScaling(scl.x, scl.y, scl.z) *
-                XMMatrixRotationQuaternion(XMQuaternionNormalize(XMLoadFloat4(&rot))) *
-                XMMatrixTranslation(pos.x, pos.y, pos.z);
+            XMMATRIX local = XMMatrixScaling(scl.x, scl.y, scl.z) *
+                             XMMatrixRotationQuaternion(
+                                 XMQuaternionNormalize(XMLoadFloat4(&rot))) *
+                             XMMatrixTranslation(pos.x, pos.y, pos.z);
             XMStoreFloat4x4(&model.rootAnimationMatrix, local);
             model.hasRootAnimation = true;
         }
@@ -129,4 +129,3 @@ void Animator::Update(Model &model, float deltaTime) {
                                              localMatrices);
     SkeletonPoseBuilder::UpdateSkeleton(model, localMatrices);
 }
-

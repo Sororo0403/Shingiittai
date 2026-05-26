@@ -1,0 +1,86 @@
+#pragma once
+#include "BaseScene.h"
+#include "GameScene.h"
+#include "InputControlType.h"
+#include <DirectXMath.h>
+#include <array>
+#include <cstdint>
+#include <memory>
+#include <string>
+
+class Input;
+
+class TutorialSelectScene : public BaseScene {
+  public:
+    void Initialize(const SceneContext &ctx) override;
+    void Update() override;
+    void Draw() override;
+    void DrawTransparent() override {}
+
+  private:
+    struct Image {
+        uint32_t textureId = 0;
+        float width = 0.0f;
+        float height = 0.0f;
+    };
+
+    struct ButtonRect {
+        float x = 0.0f;
+        float y = 0.0f;
+        float w = 0.0f;
+        float h = 0.0f;
+    };
+
+    static constexpr int kModeCount = 2;
+    static constexpr int kButtonCount = 3;
+    static constexpr int kBackButtonIndex = 2;
+
+    Image LoadTextureImage(const std::wstring &path);
+    void UpdateSelection(Input *input);
+    void UpdateDeviceAvailability();
+    void BeginStart();
+    void BeginHandCameraConfirm();
+    void ContinueHandStart();
+    void UpdateHandCameraConfirm(Input *input);
+    void Layout(float screenWidth, float screenHeight);
+    float ButtonIntroProgress(int index, float offset = 0.0f) const;
+    InputControlType SelectedControlType() const;
+    InputControlType ControlTypeForIndex(int index) const;
+    bool IsHandTrackingReady() const;
+    bool RequestHandTrackingStartOnce();
+    bool IsModeAvailable(int index) const;
+    void ShowUnavailableMessage();
+    void DrawOverlay(float screenWidth, float screenHeight);
+    void DrawButtons();
+    void DrawButtonIllustration(int index, const ButtonRect &rect, float lift,
+                                float alpha, bool selected);
+    void DrawLabels(float screenWidth, float screenHeight);
+    void DrawHandCameraConfirmWindow(float screenWidth, float screenHeight);
+    void DrawStartTransition(float screenWidth, float screenHeight);
+    void DrawRect(float x, float y, float w, float h,
+                  const DirectX::XMFLOAT4 &color);
+    void DrawFrame(float x, float y, float w, float h, float thickness,
+                   const DirectX::XMFLOAT4 &color);
+    void DrawImage(const Image &image, float x, float y, float scale = 1.0f,
+                   float alpha = 1.0f);
+
+    int selectedIndex_ = 0;
+    float introTimer_ = 0.0f;
+    float transitionTimer_ = 0.0f;
+    bool startRequested_ = false;
+    bool waitingForHandTrackingReady_ = false;
+    bool handTrackingStartRequested_ = false;
+    bool handCameraConfirmVisible_ = false;
+    int handCameraConfirmIndex_ = 1;
+
+    std::unique_ptr<GameScene> backgroundScene_;
+    Image sceneTitleImage_{};
+    Image controlsImage_{};
+    std::array<Image, kButtonCount> buttonNameImages_{};
+    Image handCameraConfirmMessageImage_{};
+    Image handCameraConfirmYesImage_{};
+    Image handCameraConfirmNoImage_{};
+    std::array<ButtonRect, kButtonCount> buttonRects_{};
+    std::array<float, kButtonCount> pulseTimers_{};
+    bool cameraAvailable_ = false;
+};

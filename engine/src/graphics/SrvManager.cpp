@@ -1,7 +1,7 @@
-#include "SrvManager.h"
-#include "DirectXCommon.h"
-#include "DxHelpers.h"
-#include "DxUtils.h"
+#include "graphics/SrvManager.h"
+#include "graphics/DirectXCommon.h"
+#include "graphics/DxHelpers.h"
+#include "graphics/DxUtils.h"
 #include <stdexcept>
 
 using namespace DxUtils;
@@ -36,6 +36,19 @@ UINT SrvManager::Allocate() {
     }
 
     return currentIndex_++;
+}
+
+UINT SrvManager::AllocateRange(UINT count) {
+    if (count == 0) {
+        return UINT_MAX;
+    }
+    if (currentIndex_ + count > maxSrvCount_) {
+        throw std::runtime_error("SRV descriptor heap exhausted");
+    }
+
+    const UINT startIndex = currentIndex_;
+    currentIndex_ += count;
+    return startIndex;
 }
 
 void SrvManager::Free(UINT index) {

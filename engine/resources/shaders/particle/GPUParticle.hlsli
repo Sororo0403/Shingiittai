@@ -11,7 +11,8 @@ struct Particle
     float2 scale;
     float seed;
     uint isActive;
-    float3 padding;
+    float4 params0;
+    float4 params1;
 };
 
 struct ParticleVSOutput
@@ -20,6 +21,7 @@ struct ParticleVSOutput
     float2 uv : TEXCOORD0;
     float4 color : COLOR0;
     float2 params : TEXCOORD1;
+    float2 localUv : TEXCOORD2;
 };
 
 #endif // GPU_PARTICLE_HLSLI

@@ -41,14 +41,6 @@ void Sword::Initialize(uint32_t modelId) {
     tf_.scale = {1, 1, 1};
     tf_.rotation = {0, 0, 0, 1};
 
-    prevIsCounter_ = false;
-    isCounterStance_ = false;
-    justCountered_ = false;
-    justCounterFailed_ = false;
-    justCounterEarly_ = false;
-    justCounterLate_ = false;
-    counterStateTimer_ = 0.0f;
-    counterAxis_ = SwordCounterAxis::None;
     slashFollowThroughTimer_ = 0.0f;
     slashFollowThroughStarted_ = false;
     slashFollowThroughDir_ = {};
@@ -61,18 +53,9 @@ void Sword::Update(const Transform &transform, const SwordPose &pose,
                    float deltaTime) {
     tf_ = transform;
     isSlashMode_ = pose.isSlashMode;
-    isGuard_ = pose.isGuard;
-    isCounter_ = pose.isCounter;
-    isMouse = pose.isMouse;
-    isJoyCon = pose.isJoyCon;
     slashDir_ = pose.slashDir;
     orientation_ = pose.orientation;
     UpdateSlashFollowThrough(deltaTime);
-    UpdateCounterObservation(deltaTime);
-}
-
-void Sword::SetRecoveryReaction(float reaction) {
-    recoveryReaction_ = std::clamp(reaction, 0.0f, 1.0f);
 }
 
 OBB Sword::GetOBB() const {
@@ -97,69 +80,6 @@ OBB Sword::GetOBB() const {
     return box;
 }
 
-OBB Sword::GetCounterOBB() const {
-    OBB box;
-
-    XMVECTOR pos = XMLoadFloat3(&tf_.position);
-    XMVECTOR rot = XMLoadFloat4(&tf_.rotation);
-
-    XMVECTOR forward = XMVector3Rotate(XMVectorSet(0, 0, 1, 0), rot);
-    XMVECTOR center = pos + forward * 0.9f;
-
-    XMStoreFloat3(&box.center, center);
-
-    box.size = counterSize_;
-    box.rotation = tf_.rotation;
-
-    return box;
-}
-
-DirectX::XMFLOAT3 Sword::GetBladeRootWorld() const {
-    DirectX::XMVECTOR pos = DirectX::XMLoadFloat3(&tf_.position);
-    DirectX::XMVECTOR rot = DirectX::XMLoadFloat4(&tf_.rotation);
-    rot = DirectX::XMQuaternionNormalize(rot);
-
-    DirectX::XMVECTOR forward =
-        DirectX::XMVector3Rotate(DirectX::XMVectorSet(0, 0, 1, 0), rot);
-
-    // 根元をそのまま使うと扇形が大きくなりすぎるため、
-    // 少し剣先側に寄せる
-    DirectX::XMVECTOR root = pos + forward * 0.25f;
-
-    DirectX::XMFLOAT3 result{};
-    DirectX::XMStoreFloat3(&result, root);
-    return result;
-}
-
-DirectX::XMFLOAT3 Sword::GetBladeTipWorld() const {
-    DirectX::XMVECTOR pos = DirectX::XMLoadFloat3(&tf_.position);
-    DirectX::XMVECTOR rot = DirectX::XMLoadFloat4(&tf_.rotation);
-    rot = DirectX::XMQuaternionNormalize(rot);
-
-    DirectX::XMVECTOR forward =
-        DirectX::XMVector3Rotate(DirectX::XMVectorSet(0, 0, 1, 0), rot);
-
-    // 以前の 1.75f は長すぎる可能性が高い。
-    // まずは見た目確認用に短めへ。
-    DirectX::XMVECTOR tip = pos + forward * 1.05f;
-
-    DirectX::XMFLOAT3 result{};
-    DirectX::XMStoreFloat3(&result, tip);
-    return result;
-}
-
-DirectX::XMFLOAT3 Sword::GetBladeCenterWorld() const {
-    const XMFLOAT3 rootPos = GetBladeRootWorld();
-    const XMFLOAT3 tipPos = GetBladeTipWorld();
-
-    XMVECTOR root = XMLoadFloat3(&rootPos);
-    XMVECTOR tip = XMLoadFloat3(&tipPos);
-
-    XMFLOAT3 result{};
-    XMStoreFloat3(&result, (root + tip) * 0.5f);
-    return result;
-}
-
 DirectX::XMFLOAT3 Sword::GetVisualBladeRootWorld() const {
     return GetBladePointWorld(BuildVisualTransform(), 0.25f);
 }
@@ -173,14 +93,6 @@ Transform Sword::BuildVisualTransform() const {
     drawTransform.scale.x *= kSwordVisualScaleMultiplier;
     drawTransform.scale.y *= kSwordVisualScaleMultiplier;
     drawTransform.scale.z *= kSwordVisualScaleMultiplier;
-    if (recoveryReaction_ > 0.0f) {
-        const float phase = (1.0f - recoveryReaction_) * 36.0f;
-        const float pulse = std::sinf(phase);
-        const float scaleBoost = 1.0f + 0.08f * recoveryReaction_ * pulse;
-        drawTransform.scale.x *= scaleBoost;
-        drawTransform.scale.y *= scaleBoost;
-        drawTransform.scale.z *= 1.0f + 0.12f * recoveryReaction_;
-    }
     ApplySlashFollowThrough(drawTransform);
     return drawTransform;
 }
@@ -315,51 +227,6 @@ void Sword::ApplySlashFollowThrough(Transform &drawTransform) const {
     XMStoreFloat3(&drawTransform.position, finalPos);
 }
 
-void Sword::UpdateCounterObservation(float deltaTime) {
-    justCountered_ = false;
-    justCounterFailed_ = false;
-    justCounterEarly_ = false;
-    justCounterLate_ = false;
-
-    isCounterStance_ = isCounter_;
-
-    if (isCounterStance_) {
-        if (std::fabs(slashDir_.y) >= std::fabs(slashDir_.x)) {
-            counterAxis_ = std::fabs(slashDir_.y) > 0.1f
-                               ? SwordCounterAxis::Vertical
-                               : SwordCounterAxis::None;
-        } else {
-            counterAxis_ = std::fabs(slashDir_.x) > 0.1f
-                               ? SwordCounterAxis::Horizontal
-                               : SwordCounterAxis::None;
-        }
-    } else {
-        counterAxis_ = SwordCounterAxis::None;
-    }
-
-    if (isCounterStance_) {
-        if (!prevIsCounter_) {
-            counterStateTimer_ = 0.0f;
-        } else {
-            counterStateTimer_ += deltaTime;
-        }
-    } else {
-        if (prevIsCounter_) {
-            justCounterFailed_ = true;
-
-            if (counterStateTimer_ < counterEarlyThreshold_) {
-                justCounterEarly_ = true;
-            } else if (counterStateTimer_ > counterLateThreshold_) {
-                justCounterLate_ = true;
-            }
-        }
-
-        counterStateTimer_ = 0.0f;
-    }
-
-    prevIsCounter_ = isCounterStance_;
-}
-
 SwordCounterAxis Sword::ComputeSlashAxis() const {
     if (std::fabs(slashDir_.y) >= std::fabs(slashDir_.x)) {
         return std::fabs(slashDir_.y) > 0.1f ? SwordCounterAxis::Vertical
@@ -370,25 +237,10 @@ SwordCounterAxis Sword::ComputeSlashAxis() const {
                                          : SwordCounterAxis::None;
 }
 
-SwordCounterAxis Sword::GetSlashCounterAxis() const {
-    return GetSlashAxis();
-}
-
 SwordCounterAxis Sword::GetSlashAxis() const {
     if (!CanSlashCounter()) {
         return SwordCounterAxis::None;
     }
 
     return ComputeSlashAxis();
-}
-
-void Sword::NotifyCounterSuccess() {
-    justCountered_ = true;
-    justCounterFailed_ = false;
-    justCounterEarly_ = false;
-    justCounterLate_ = false;
-    isCounterStance_ = false;
-    prevIsCounter_ = false;
-    counterStateTimer_ = 0.0f;
-    counterAxis_ = SwordCounterAxis::None;
 }

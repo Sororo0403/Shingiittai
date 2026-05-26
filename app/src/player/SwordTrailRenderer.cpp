@@ -300,11 +300,11 @@ void SwordTrailRenderer::CreatePipelineState() {
     auto *device = dxCommon_->GetDevice();
 
     auto vs = ShaderCompiler::Compile(
-        L"engine/resources/shaders/swordtrail/SwordTrailVS.hlsl", "main",
-        "vs_5_0");
+        L"app/resources/shaders/sword_trail/SwordTrailVS.hlsl", "main",
+        "vs_6_6");
     auto ps = ShaderCompiler::Compile(
-        L"engine/resources/shaders/swordtrail/SwordTrailPS.hlsl", "main",
-        "ps_5_0");
+        L"app/resources/shaders/sword_trail/SwordTrailPS.hlsl", "main",
+        "ps_6_6");
 
     D3D12_INPUT_ELEMENT_DESC layout[] = {
         {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
@@ -324,7 +324,7 @@ void SwordTrailRenderer::CreatePipelineState() {
     pso.InputLayout = {layout, _countof(layout)};
     pso.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     pso.NumRenderTargets = 1;
-    pso.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    pso.RTVFormats[0] = DirectXCommon::kSceneColorFormat;
     pso.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
     pso.SampleDesc.Count = 1;
     pso.SampleMask = UINT_MAX;

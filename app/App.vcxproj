@@ -16,7 +16,7 @@
     <ProjectGuid>{7f7e8d20-0e95-4e5a-b1a9-5df7d0d1f4e2}</ProjectGuid>
     <RootNamespace>App</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>App</ProjectName>
+    <ProjectName>Shingiittai</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
@@ -45,14 +45,14 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <OutDir>$(SolutionDir)..\generated\outputs\$(Configuration)\$(ProjectName)\</OutDir>
-    <IntDir>$(SolutionDir)..\generated\intermediate\$(Configuration)\$(ProjectName)\</IntDir>
+    <OutDir>$(SolutionDir)generated\outputs\$(Platform)\$(Configuration)\$(ProjectName)\</OutDir>
+    <IntDir>$(SolutionDir)generated\intermediate\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
     <IncludePath>$(IncludePath)</IncludePath>
     <LibraryPath>$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <OutDir>$(SolutionDir)..\generated\outputs\$(Configuration)\$(ProjectName)\</OutDir>
-    <IntDir>$(SolutionDir)..\generated\intermediate\$(Configuration)\$(ProjectName)\</IntDir>
+    <OutDir>$(SolutionDir)generated\outputs\$(Platform)\$(Configuration)\$(ProjectName)\</OutDir>
+    <IntDir>$(SolutionDir)generated\intermediate\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
     <IncludePath>$(IncludePath)</IncludePath>
     <LibraryPath>$(LibraryPath)</LibraryPath>
   </PropertyGroup>
@@ -64,8 +64,8 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>$(ProjectDir)include\enemy;$(ProjectDir)include\player;$(ProjectDir)include\scene;$(ProjectDir)..\engine\include\particle;$(ProjectDir)..\engine\include\collision;$(ProjectDir)..\engine\include\scene;$(ProjectDir)..\engine\include\input;$(ProjectDir)..\engine\include\camera;$(ProjectDir)..\engine\include\core;$(ProjectDir)..\engine\include\graphics;$(ProjectDir)..\engine\include\model;$(ProjectDir)..\engine\include\animation;$(ProjectDir)..\engine\include\sound;$(ProjectDir)..\engine\include\sprite;$(ProjectDir)..\engine\include\texture;$(ProjectDir)..\engine\externals;$(ProjectDir)..\engine\externals\assimp\include;$(ProjectDir)..\engine\externals\assimp\include\assimp;$(ProjectDir)..\engine\externals\DirectX-Headers;$(ProjectDir)..\engine\externals\DirectXTex;$(ProjectDir)..\engine\externals\JoyShockLibrary\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;$(ProjectDir)include\enemy;$(ProjectDir)include\player;$(ProjectDir)include\scene;$(ProjectDir)..\engine\include;$(ProjectDir)..\engine\include\particle;$(ProjectDir)..\engine\include\collision;$(ProjectDir)..\engine\include\scene;$(ProjectDir)..\engine\include\input;$(ProjectDir)..\engine\include\camera;$(ProjectDir)..\engine\include\core;$(ProjectDir)..\engine\include\graphics;$(ProjectDir)..\engine\include\model;$(ProjectDir)..\engine\include\animation;$(ProjectDir)..\engine\include\sound;$(ProjectDir)..\engine\include\sprite;$(ProjectDir)..\engine\include\texture;$(ProjectDir)..\engine\externals;$(ProjectDir)..\engine\externals\assimp\include;$(ProjectDir)..\engine\externals\assimp\include\assimp;$(ProjectDir)..\engine\externals\DirectX-Headers;$(ProjectDir)..\engine\externals\DirectXTex;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>/utf-8 /FI"$(ProjectDir)include\compat\EngineCompat.h" %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
@@ -73,8 +73,8 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
-      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;dinput8.lib;dxguid.lib;xinput.lib;ws2_32.lib;JoyShockLibrary.lib;assimp-vc145-mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(ProjectDir)..\engine\externals\assimp\lib\;$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;dxcompiler.lib;dinput8.lib;dxguid.lib;xinput.lib;ws2_32.lib;mfplat.lib;mfreadwrite.lib;mfuuid.lib;assimp-vc145-mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ProjectDir)..\engine\externals\assimp\lib\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -87,8 +87,8 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <AdditionalIncludeDirectories>$(ProjectDir)include\enemy;$(ProjectDir)include\player;$(ProjectDir)include\scene;$(ProjectDir)..\engine\include\particle;$(ProjectDir)..\engine\include\collision;$(ProjectDir)..\engine\include\scene;$(ProjectDir)..\engine\include\input;$(ProjectDir)..\engine\include\camera;$(ProjectDir)..\engine\include\core;$(ProjectDir)..\engine\include\graphics;$(ProjectDir)..\engine\include\model;$(ProjectDir)..\engine\include\animation;$(ProjectDir)..\engine\include\sound;$(ProjectDir)..\engine\include\sprite;$(ProjectDir)..\engine\include\texture;$(ProjectDir)..\engine\externals;$(ProjectDir)..\engine\externals\assimp\include;$(ProjectDir)..\engine\externals\assimp\include\assimp;$(ProjectDir)..\engine\externals\DirectX-Headers;$(ProjectDir)..\engine\externals\DirectXTex;$(ProjectDir)..\engine\externals\JoyShockLibrary\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;$(ProjectDir)include\enemy;$(ProjectDir)include\player;$(ProjectDir)include\scene;$(ProjectDir)..\engine\include;$(ProjectDir)..\engine\include\particle;$(ProjectDir)..\engine\include\collision;$(ProjectDir)..\engine\include\scene;$(ProjectDir)..\engine\include\input;$(ProjectDir)..\engine\include\camera;$(ProjectDir)..\engine\include\core;$(ProjectDir)..\engine\include\graphics;$(ProjectDir)..\engine\include\model;$(ProjectDir)..\engine\include\animation;$(ProjectDir)..\engine\include\sound;$(ProjectDir)..\engine\include\sprite;$(ProjectDir)..\engine\include\texture;$(ProjectDir)..\engine\externals;$(ProjectDir)..\engine\externals\assimp\include;$(ProjectDir)..\engine\externals\assimp\include\assimp;$(ProjectDir)..\engine\externals\DirectX-Headers;$(ProjectDir)..\engine\externals\DirectXTex;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>/utf-8 /FI"$(ProjectDir)include\compat\EngineCompat.h" %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
@@ -96,25 +96,26 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
-      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;dinput8.lib;dxguid.lib;xinput.lib;ws2_32.lib;JoyShockLibrary.lib;assimp-vc145-mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(ProjectDir)..\engine\externals\assimp\lib\;$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;dxcompiler.lib;dinput8.lib;dxguid.lib;xinput.lib;ws2_32.lib;mfplat.lib;mfreadwrite.lib;mfuuid.lib;assimp-vc145-mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ProjectDir)..\engine\externals\assimp\lib\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\scene\CameraPreviewReceiver.cpp" />
     <ClCompile Include="src\player\SwordSlashArcRenderer.cpp" />
     <ClCompile Include="src\player\SwordTrailRenderer.cpp" />
     <ClCompile Include="src\scene\BattleResultScene.cpp" />
     <ClCompile Include="src\scene\CalibrationScene.cpp" />
+    <ClCompile Include="src\scene\DifficultyCauldronScene.cpp" />
     <ClCompile Include="src\scene\GameSceneHud.cpp" />
     <ClCompile Include="src\enemy\EnemyMelee.cpp" />
-    <ClCompile Include="src\enemy\EnemyRanged.cpp" />
-    <ClCompile Include="src\enemy\EnemyWarp.cpp" />
     <ClCompile Include="src\enemy\EnemyCombat.cpp" />
     <ClCompile Include="src\enemy\EnemyCore.cpp" />
     <ClCompile Include="src\enemy\EnemyDecision.cpp" />
     <ClCompile Include="src\enemy\EnemyMovement.cpp" />
     <ClCompile Include="src\enemy\EnemyPresentation.cpp" />
     <ClCompile Include="src\enemy\EnemyTuning.cpp" />
+    <ClCompile Include="src\enemy\EnemyWarp.cpp" />
     <ClCompile Include="src\player\Player.cpp" />
     <ClCompile Include="src\scene\CombatFeedbackDirector.cpp" />
     <ClCompile Include="src\scene\GameScene.cpp" />
@@ -122,41 +123,41 @@
     <ClCompile Include="src\scene\GameSceneCamera.cpp" />
     <ClCompile Include="src\scene\GameSceneCombat.cpp" />
     <ClCompile Include="src\scene\GameSceneLighting.cpp" />
-    <ClCompile Include="src\scene\HandTrackingTestScene.cpp" />
-    <ClCompile Include="src\scene\ModeSelectScene.cpp" />
-    <ClCompile Include="src\scene\SettingsScene.cpp" />
     <ClCompile Include="src\scene\TitleScene.cpp" />
-    <ClCompile Include="src\scene\TipScene.cpp" />
+    <ClCompile Include="src\scene\TutorialScene.cpp" />
+    <ClCompile Include="src\scene\TutorialSelectScene.cpp" />
     <ClCompile Include="src\scene\WeaponSelectScene.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\player\Sword.cpp" />
-    <ClCompile Include="src\player\SwordJoyConController.cpp" />
     <ClCompile Include="src\player\SwordMouseController.cpp" />
     <ClCompile Include="src\player\SwordUdpController.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\scene\CameraPreviewReceiver.h" />
     <ClInclude Include="include\player\SwordSlashArcRenderer.h" />
     <ClInclude Include="include\player\SwordTrailRenderer.h" />
     <ClInclude Include="include\player\InputControlType.h" />
+    <ClInclude Include="include\compat\EngineCompat.h" />
+    <ClInclude Include="include\compat\ParticleCompat.h" />
+    <ClInclude Include="include\scene\AppSceneServices.h" />
     <ClInclude Include="include\scene\BattleResultScene.h" />
     <ClInclude Include="include\scene\CalibrationScene.h" />
+    <ClInclude Include="include\scene\DifficultyCauldronScene.h" />
     <ClInclude Include="include\scene\GameSceneHud.h" />
     <ClInclude Include="include\enemy\EnemyActionData.h" />
     <ClInclude Include="include\player\SwordControllerState.h" />
     <ClInclude Include="include\player\SwordInputCalibration.h" />
     <ClInclude Include="include\player\SwordPose.h" />
     <ClInclude Include="include\enemy\Enemy.h" />
+    <ClInclude Include="include\scene\BladeClashCinematic.h" />
     <ClInclude Include="include\scene\CombatFeedbackDirector.h" />
     <ClInclude Include="include\scene\GameScene.h" />
-    <ClInclude Include="include\scene\HandTrackingTestScene.h" />
-    <ClInclude Include="include\scene\ModeSelectScene.h" />
-    <ClInclude Include="include\scene\SettingsScene.h" />
     <ClInclude Include="include\scene\TitleScene.h" />
-    <ClInclude Include="include\scene\TipScene.h" />
+    <ClInclude Include="include\scene\TutorialScene.h" />
+    <ClInclude Include="include\scene\TutorialSelectScene.h" />
     <ClInclude Include="include\scene\WeaponSelectScene.h" />
     <ClInclude Include="include\player\Player.h" />
     <ClInclude Include="include\player\Sword.h" />
-    <ClInclude Include="include\player\SwordJoyConController.h" />
     <ClInclude Include="include\player\SwordMouseController.h" />
     <ClInclude Include="include\player\SwordUdpController.h" />
   </ItemGroup>
@@ -164,73 +165,89 @@
     <ProjectReference Include="..\engine\Engine.vcxproj">
       <Project>{8d69c2b4-4f39-47f0-9a40-4cb78ec442a1}</Project>
     </ProjectReference>
-    <ProjectReference Include="..\engine\externals\DirectXTex\DirectXTex_Desktop_2022.vcxproj">
-      <Project>{371b9fa9-4c90-4ac6-a123-aced756d6c77}</Project>
-    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
   </ItemGroup>
   <ItemGroup>
+    <None Include="resources\audio\bgm\bgm_Battle.wav" />
+    <None Include="resources\audio\sfx\counter_burst.wav" />
+    <None Include="resources\audio\sfx\damage_heavy.wav" />
+    <None Include="resources\audio\sfx\enemy_release_snap.wav" />
+    <None Include="resources\audio\sfx\explosion_boss.wav" />
+    <None Include="resources\audio\sfx\hit_impact.wav" />
+    <None Include="resources\audio\sfx\slash_hero.wav" />
+    <None Include="resources\effects\particles\smoke.png" />
     <None Include="resources\models\boss\boss.bin" />
     <None Include="resources\models\boss\boss.gltf" />
     <None Include="resources\models\boss\boss.png" />
-    <None Include="resources\models\bullet\bullet.mtl" />
-    <None Include="resources\models\bullet\bullet.obj" />
-    <None Include="resources\models\bullet\bullet.png" />
+    <None Include="resources\models\boss\bossBody.png" />
     <None Include="resources\models\player\player.glb" />
     <None Include="resources\models\player\sword.glb" />
-    <None Include="resources\select\weapon_select_bg.png" />
-    <None Include="resources\title\press_any_button.png" />
-    <None Include="resources\title\title_logo.png" />
-    <None Include="resources\menu\back.png" />
-    <None Include="resources\menu\game_start.png" />
-    <None Include="resources\menu\game_start_help.png" />
-    <None Include="resources\menu\menu_controls.png" />
-    <None Include="resources\menu\mode_select_title.png" />
-    <None Include="resources\menu\settings.png" />
-    <None Include="resources\menu\settings_controls.png" />
-    <None Include="resources\menu\settings_help.png" />
-    <None Include="resources\menu\settings_title.png" />
-    <None Include="resources\menu\volume.png" />
-    <None Include="resources\text\input_hand.png" />
-    <None Include="resources\text\input_joycon.png" />
-    <None Include="resources\text\input_kbm.png" />
-    <None Include="resources\text\input_ready_hand.png" />
-    <None Include="resources\text\input_ready_joycon.png" />
-    <None Include="resources\text\input_ready_kbm.png" />
-    <None Include="resources\text\input_title.png" />
-    <None Include="resources\text\tip_body.png" />
-    <None Include="resources\text\tip_hand.png" />
-    <None Include="resources\text\tip_joycon.png" />
-    <None Include="resources\text\tip_kbm.png" />
-    <None Include="resources\text\tip_title.png" />
-    <None Include="resources\text\weapon_controls.png" />
-    <None Include="resources\text\weapon_ready.png" />
+    <None Include="resources\shaders\sword_arc\SwordArcPS.hlsl" />
+    <None Include="resources\shaders\sword_arc\SwordArcVS.hlsl" />
+    <None Include="resources\shaders\sword_trail\SwordTrailPS.hlsl" />
+    <None Include="resources\shaders\sword_trail\SwordTrailVS.hlsl" />
+    <None Include="resources\ui\result\clear_time.png" />
+    <None Include="resources\ui\result\clear_title.png" />
+    <None Include="resources\ui\result\game_over_title.png" />
+    <None Include="resources\ui\result\glyphs\char_0.png" />
+    <None Include="resources\ui\result\glyphs\char_1.png" />
+    <None Include="resources\ui\result\glyphs\char_2.png" />
+    <None Include="resources\ui\result\glyphs\char_3.png" />
+    <None Include="resources\ui\result\glyphs\char_4.png" />
+    <None Include="resources\ui\result\glyphs\char_5.png" />
+    <None Include="resources\ui\result\glyphs\char_6.png" />
+    <None Include="resources\ui\result\glyphs\char_7.png" />
+    <None Include="resources\ui\result\glyphs\char_8.png" />
+    <None Include="resources\ui\result\glyphs\char_9.png" />
+    <None Include="resources\ui\result\glyphs\char_colon.png" />
+    <None Include="resources\ui\result\glyphs\char_dash.png" />
+    <None Include="resources\ui\result\glyphs\char_dot.png" />
+    <None Include="resources\ui\result\glyphs\char_s.png" />
+    <None Include="resources\ui\result\menu.png" />
+    <None Include="resources\ui\result\no_clear_time.png" />
+    <None Include="resources\ui\result\retry.png" />
+    <None Include="resources\ui\tip\text\tip_body.png" />
+    <None Include="resources\ui\tip\text\tip_body_0.png" />
+    <None Include="resources\ui\tip\text\tip_body_1.png" />
+    <None Include="resources\ui\tip\text\tip_body_2.png" />
+    <None Include="resources\ui\tip\text\tip_hand.png" />
+    <None Include="resources\ui\tip\text\tip_kbm.png" />
+    <None Include="resources\ui\tip\text\tip_title.png" />
+    <None Include="resources\ui\title\exit_confirm_message.png" />
+    <None Include="resources\ui\title\exit_confirm_no.png" />
+    <None Include="resources\ui\title\exit_confirm_yes.png" />
+    <None Include="resources\ui\title\gamelogo.png" />
+    <None Include="resources\ui\title\press_any_button.png" />
+    <None Include="resources\ui\weapon_select\text\input_hand.png" />
+    <None Include="resources\ui\weapon_select\text\input_kbm.png" />
+    <None Include="resources\ui\weapon_select\text\input_ready_hand.png" />
+    <None Include="resources\ui\weapon_select\text\input_ready_kbm.png" />
+    <None Include="resources\ui\weapon_select\text\input_title.png" />
+    <None Include="resources\ui\weapon_select\text\weapon_controls.png" />
+    <None Include="resources\ui\weapon_select\text\weapon_ready.png" />
+    <None Include="resources\ui\weapon_select\weapon_select_bg.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <Target Name="BuildHandTrackingHelper"
-          BeforeTargets="CopyRuntimeDlls"
-          Condition="'$(Configuration)' == 'Release'"
-          Inputs="$(SolutionDir)tools\hand_tracking\build-hand-udp-exe.ps1;$(SolutionDir)tools\hand_tracking\hand_udp_sender.py;$(SolutionDir)tools\hand_tracking\requirements-hand-udp.txt;$(SolutionDir)tools\hand_tracking\models\hand_landmarker.task;$(SolutionDir)tools\hand_tracking\models\pose_landmarker_lite.task"
-          Outputs="$(SolutionDir)tools\hand_tracking\dist\hand_udp_sender\hand_udp_sender.exe">
+  <Target Name="BuildHandTrackingHelper" BeforeTargets="CopyRuntimeDlls" Condition="'$(Configuration)' == 'Release'" Inputs="$(SolutionDir)tools\hand_tracking\build-hand-udp-exe.ps1;$(SolutionDir)tools\hand_tracking\hand_udp_sender.py;$(SolutionDir)tools\hand_tracking\requirements-hand-udp.txt;$(SolutionDir)tools\hand_tracking\models\hand_landmarker.task;$(SolutionDir)tools\hand_tracking\models\pose_landmarker_full.task" Outputs="$(SolutionDir)tools\hand_tracking\dist\hand_udp_sender\hand_udp_sender.exe">
     <Message Text="Building hand tracking helper for Release output." Importance="High" />
     <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(SolutionDir)tools\hand_tracking\build-hand-udp-exe.ps1&quot;" />
   </Target>
   <Target Name="CopyRuntimeDlls" AfterTargets="Build">
     <ItemGroup>
-      <RuntimeDll Include="$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\JoyShockLibrary.dll" Condition="Exists('$(ProjectDir)..\engine\externals\JoyShockLibrary\lib\JoyShockLibrary.dll')" />
       <RuntimeDll Include="$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll" Condition="Exists('$(ProjectDir)..\engine\externals\assimp\bin\assimp-vc145-mt.dll')" />
+      <RuntimeDll Include="$(WindowsSdkDir)Redist\D3D\x64\dxcompiler.dll" Condition="Exists('$(WindowsSdkDir)Redist\D3D\x64\dxcompiler.dll')" />
+      <RuntimeDll Include="$(WindowsSdkDir)Redist\D3D\x64\dxil.dll" Condition="Exists('$(WindowsSdkDir)Redist\D3D\x64\dxil.dll')" />
       <AppResource Include="$(ProjectDir)resources\**\*" />
       <EngineResource Include="$(ProjectDir)..\engine\resources\**\*" />
       <HandTrackingScript Include="$(SolutionDir)tools\hand_tracking\hand_udp_sender.py" />
-      <HandTrackingScript Include="$(SolutionDir)tools\hand_tracking\start-hand-sim.ps1" />
       <HandTrackingScript Include="$(SolutionDir)tools\hand_tracking\build-hand-udp-exe.ps1" />
       <HandTrackingScript Include="$(SolutionDir)tools\hand_tracking\requirements-hand-udp.txt" />
       <HandTrackingScript Include="$(SolutionDir)tools\hand_tracking\setup-hand-udp.ps1" />
       <HandTrackingModel Include="$(SolutionDir)tools\hand_tracking\models\**\*" />
-      <HandTrackingExe Include="$(SolutionDir)tools\hand_tracking\dist\hand_udp_sender\**\*" />
       <StaleRuntimeDir Include="$(TargetDir)resources\app" Condition="Exists('$(TargetDir)resources\app')" />
       <StaleRuntimeDir Include="$(TargetDir)resources\engine" Condition="Exists('$(TargetDir)resources\engine')" />
+      <StaleRuntimeDir Include="$(TargetDir)tools\hand_tracking\hand_udp_sender" Condition="Exists('$(TargetDir)tools\hand_tracking\hand_udp_sender')" />
     </ItemGroup>
     <RemoveDir Directories="@(StaleRuntimeDir)" Condition="'@(StaleRuntimeDir)' != ''" />
     <Copy SourceFiles="@(RuntimeDll)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" Condition="'@(RuntimeDll)' != ''" />
@@ -238,7 +255,6 @@
     <Copy SourceFiles="@(EngineResource)" DestinationFiles="@(EngineResource->'$(TargetDir)engine\resources\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" Condition="'@(EngineResource)' != ''" />
     <Copy SourceFiles="@(HandTrackingScript)" DestinationFolder="$(TargetDir)tools\hand_tracking\" SkipUnchangedFiles="true" Condition="'@(HandTrackingScript)' != ''" />
     <Copy SourceFiles="@(HandTrackingModel)" DestinationFiles="@(HandTrackingModel->'$(TargetDir)tools\hand_tracking\models\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" Condition="'@(HandTrackingModel)' != ''" />
-    <Copy SourceFiles="@(HandTrackingExe)" DestinationFiles="@(HandTrackingExe->'$(TargetDir)tools\hand_tracking\hand_udp_sender\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" Condition="'@(HandTrackingExe)' != ''" />
   </Target>
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

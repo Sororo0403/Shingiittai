@@ -2,6 +2,5 @@
 
 enum class InputControlType {
     KeyboardMouse,
-    JoyCon,
     Hand,
 };

@@ -1,39 +1,25 @@
 #include "TitleScene.h"
-#include <WinSock2.h>
-#include <WS2tcpip.h>
-#include "DirectXCommon.h"
-#include "GameScene.h"
-#include "HandTrackingTestScene.h"
+#include "AppSceneServices.h"
+#include "BattleResultScene.h"
 #include "Input.h"
-#include "PostEffectRenderer.h"
+#include "PostProcessSystem.h"
 #include "SceneManager.h"
+#include "Sprite.h"
 #include "SpriteManager.h"
-#include "TipScene.h"
 #include "TextureManager.h"
-#include "WinApp.h"
 #include "WeaponSelectScene.h"
-#include <DirectXTex.h>
+#include "WinApp.h"
 #include <Xinput.h>
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 #include <memory>
-#include <sstream>
-#include <string>
 
 using namespace DirectX;
 
 namespace {
-constexpr float kFadeDuration = 0.35f;
-constexpr uint16_t kPreviewPort = 5006;
-constexpr float kPreviewStaleSeconds = 0.75f;
-constexpr float kReadyHoldSeconds = 0.18f;
-constexpr float kWaveStartSpeed = 0.78f;
-constexpr float kWaveResetSpeed = 0.32f;
-constexpr float kReadyMinX = 0.18f;
-constexpr float kReadyMaxX = 0.82f;
-constexpr float kReadyMinY = 0.18f;
-constexpr float kReadyMaxY = 0.84f;
+constexpr float kFadeDuration = 0.48f;
+constexpr float kFrameIntroDuration = 1.12f;
+constexpr float kPi = 3.14159265f;
 
 XMFLOAT4 MakeColor(float r, float g, float b, float a = 1.0f) {
     return {r, g, b, a};
@@ -41,158 +27,358 @@ XMFLOAT4 MakeColor(float r, float g, float b, float a = 1.0f) {
 
 float SmoothStep(float t) { return t * t * (3.0f - 2.0f * t); }
 
-SOCKET ToSocket(uintptr_t value) {
-    return static_cast<SOCKET>(value);
+float Smooth01(float t) {
+    return SmoothStep(std::clamp(t, 0.0f, 1.0f));
 }
 } // namespace
 
-TitleScene::~TitleScene() { ClosePreviewSocket(); }
-
 void TitleScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
+    AppSceneServices::RequestHandTrackingStop();
     sceneTime_ = 0.0f;
+    frameIntroTimer_ = 0.0f;
     fadeTimer_ = 0.0f;
     startRequested_ = false;
-    cameraStartRequested_ = false;
-    waitingForCameraReady_ = false;
-    handTrackingStartRequested_ = false;
-    cameraRequestTimer_ = 999.0f;
-    handsReadyTimer_ = 0.0f;
-    waveArmed_ = true;
-    previewFrame_ = {};
-    previewFrame_.textureId = ctx.texture->CreateDynamicTexture(
-        previewFrame_.width, previewFrame_.height);
-    previewFrame_.rgbaPixels.resize(
-        static_cast<size_t>(previewFrame_.width) * previewFrame_.height * 4u);
-    previewJpegBuffer_.clear();
-    previewChunkReceived_.clear();
-    previewFrameId_ = 0;
-    previewReceivedChunks_ = 0;
-    for (HandReadyState &hand : handReadyStates_) {
-        hand = {};
-    }
+    exitConfirmVisible_ = false;
+    exitConfirmIndex_ = 1;
 
-    ctx_->dxCommon->BeginUpload();
-    logoImage_ = LoadTitleImage(L"app/resources/title/gamelogo.png");
+    logoImage_ = LoadTitleImage(L"app/resources/ui/title/gamelogo.png");
     pressAnyButtonImage_ =
-        LoadTitleImage(L"app/resources/title/press_any_button.png");
-    ctx_->dxCommon->EndUpload();
-    ctx_->texture->ReleaseUploadBuffers();
-
-    demoScene_ = std::make_unique<GameScene>(GameScene::RunMode::TitleDemo);
-    demoScene_->SetSceneManager(sceneManager_);
-    demoScene_->Initialize(ctx);
+        LoadTitleImage(L"app/resources/ui/title/press_any_button.png");
+    exitConfirmMessageImage_ =
+        LoadTitleImage(L"app/resources/ui/title/exit_confirm_message.png");
+    exitConfirmYesImage_ =
+        LoadTitleImage(L"app/resources/ui/title/exit_confirm_yes.png");
+    exitConfirmNoImage_ =
+        LoadTitleImage(L"app/resources/ui/title/exit_confirm_no.png");
+    backgroundScene_ =
+        std::make_unique<GameScene>(GameScene::Mode::TitleDemo);
+    backgroundScene_->Initialize(ctx);
 }
 
 void TitleScene::Update() {
-    sceneTime_ += ctx_->deltaTime;
-
-    if (demoScene_) {
-        demoScene_->Update();
-    }
-
-    handWarmupController_.Update(ctx_->deltaTime);
-    if (cameraStartRequested_) {
-        UpdateCameraPreparation();
-    }
-
-    if (waitingForCameraReady_ && HasHandsInReadyZone() && HasWaveGesture()) {
-        startRequested_ = true;
-        waitingForCameraReady_ = false;
-        fadeTimer_ = 0.0f;
+    sceneTime_ += ctx_->frame.deltaTime;
+    frameIntroTimer_ =
+        (std::min)(frameIntroTimer_ + ctx_->frame.deltaTime,
+                   kFrameIntroDuration);
+    if (backgroundScene_) {
+        backgroundScene_->Update();
     }
 
     if (startRequested_) {
-        fadeTimer_ += ctx_->deltaTime;
+        fadeTimer_ += ctx_->frame.deltaTime;
         if (fadeTimer_ >= kFadeDuration) {
-            if (cameraStartRequested_) {
-                SwordInputCalibration calibration{};
-                calibration.controlType = InputControlType::Hand;
-                sceneManager_->ChangeScene(std::make_unique<TipScene>(calibration));
-            } else {
-                sceneManager_->ChangeScene(
-                    std::make_unique<WeaponSelectScene>());
+            if (ctx_->rendering.postProcessSystem != nullptr) {
+                ctx_->rendering.postProcessSystem->SetProfile(
+                    PostProcessProfile{});
             }
+            sceneManager_->ChangeScene(std::make_unique<WeaponSelectScene>());
         }
         return;
     }
 
-    if (IsHandTestShortcutTriggered(*ctx_->input)) {
-        sceneManager_->ChangeScene(std::make_unique<HandTrackingTestScene>());
+    if (exitConfirmVisible_) {
+        UpdateExitConfirm(*ctx_->systems.input);
         return;
     }
 
-    if (IsCameraShortcutTriggered(*ctx_->input)) {
-        BeginCameraMode();
+    if (ctx_->systems.input->IsKeyTrigger(DIK_ESCAPE)) {
+        exitConfirmVisible_ = true;
+        exitConfirmIndex_ = 1;
         return;
     }
 
-    if (cameraStartRequested_) {
-        waitingForCameraReady_ = true;
+    if (ctx_->systems.input->IsKeyTrigger(DIK_F7)) {
+        sceneManager_->ChangeScene(std::make_unique<BattleResultScene>(
+            BattleResultScene::ResultKind::Clear, 92.34f));
+        return;
+    }
+    if (ctx_->systems.input->IsKeyTrigger(DIK_F8)) {
+        sceneManager_->ChangeScene(std::make_unique<BattleResultScene>(
+            BattleResultScene::ResultKind::GameOver, 0.0f));
         return;
     }
 
-    if (IsAnyButtonTriggered(*ctx_->input)) {
+    if (IsAnyButtonTriggered(*ctx_->systems.input)) {
         startRequested_ = true;
         fadeTimer_ = 0.0f;
     }
 }
 
 void TitleScene::Draw() {
-    if (demoScene_) {
-        demoScene_->Draw();
+    if (backgroundScene_) {
+        backgroundScene_->Draw();
     }
 }
 
-void TitleScene::DrawOverlay() {
-    const float w = static_cast<float>(ctx_->winApp->GetWidth());
-    const float h = static_cast<float>(ctx_->winApp->GetHeight());
+void TitleScene::DrawTransparent() {
+    const float w = static_cast<float>(ctx_->systems.winApp->GetWidth());
+    const float h = static_cast<float>(ctx_->systems.winApp->GetHeight());
 
-    ctx_->sprite->PreDraw();
-
-    DrawRect(0.0f, 0.0f, w, h, MakeColor(0.0f, 0.0f, 0.0f, 0.42f));
-
-    UploadPreviewTextureIfNeeded();
-    if (cameraStartRequested_) {
-        DrawCameraPreparation(w, h);
-    } else {
-        const float logoScale = std::clamp(w * 0.50f / logoImage_.width,
-                                           0.58f, 1.0f);
-        const float logoX = (w - logoImage_.width * logoScale) * 0.5f;
-        const float logoY = (h - logoImage_.height * logoScale) * 0.5f;
-        DrawImage(logoImage_, logoX, logoY, 1.0f, logoScale);
-
-        const float pressScale =
-            std::clamp(w * 0.28f / pressAnyButtonImage_.width, 0.48f, 0.82f);
-        const float pressX =
-            (w - pressAnyButtonImage_.width * pressScale) * 0.5f;
-        const float pressY =
-            logoY + logoImage_.height * logoScale + 18.0f;
-        const float pressAlpha =
-            0.58f + 0.32f * (0.5f + 0.5f * std::sinf(sceneTime_ * 4.2f));
-        DrawImage(pressAnyButtonImage_, pressX, pressY, pressAlpha,
-                  pressScale);
+    ctx_->rendering.sprite->PreDraw();
+    DrawTitleOverlay(w, h);
+    if (exitConfirmVisible_) {
+        DrawExitConfirmWindow(w, h);
     }
-
-    DrawCameraModeBadge(w, h);
-
-    if (startRequested_) {
-        const float fadeT =
-            std::clamp(fadeTimer_ / kFadeDuration, 0.0f, 1.0f);
-        DrawRect(0.0f, 0.0f, w, h,
-                 MakeColor(0.0f, 0.0f, 0.0f, SmoothStep(fadeT)));
-    }
-
-    ctx_->sprite->PostDraw();
+    ctx_->rendering.sprite->PostDraw();
 }
 
 TitleScene::Image TitleScene::LoadTitleImage(const std::wstring &path) {
     Image image{};
-    image.textureId = ctx_->texture->Load(path);
-    image.width = static_cast<float>(ctx_->texture->GetWidth(image.textureId));
+    image.textureId = ctx_->rendering.texture->Load(path);
+    image.width =
+        static_cast<float>(ctx_->rendering.texture->GetWidth(image.textureId));
     image.height =
-        static_cast<float>(ctx_->texture->GetHeight(image.textureId));
+        static_cast<float>(ctx_->rendering.texture->GetHeight(image.textureId));
     return image;
+}
+
+void TitleScene::UpdateExitConfirm(Input &input) {
+    if (input.IsKeyTrigger(DIK_A) || input.IsKeyTrigger(DIK_LEFT)) {
+        exitConfirmIndex_ = 0;
+    }
+    if (input.IsKeyTrigger(DIK_D) || input.IsKeyTrigger(DIK_RIGHT)) {
+        exitConfirmIndex_ = 1;
+    }
+
+    if (input.IsKeyTrigger(DIK_ESCAPE)) {
+        exitConfirmVisible_ = false;
+        exitConfirmIndex_ = 1;
+        return;
+    }
+
+    const bool confirm =
+        input.IsKeyTrigger(DIK_RETURN) || input.IsKeyTrigger(DIK_SPACE);
+    if (!confirm) {
+        return;
+    }
+
+    if (exitConfirmIndex_ == 0) {
+        ctx_->systems.winApp->RequestClose();
+    } else {
+        exitConfirmVisible_ = false;
+    }
+}
+
+void TitleScene::DrawTitleOverlay(float screenWidth, float screenHeight) {
+    const float frameT =
+        std::clamp(frameIntroTimer_ / kFrameIntroDuration, 0.0f, 1.0f);
+    const float backgroundReveal = Smooth01((frameT - 0.42f) / 0.38f);
+    const float idle = Smooth01((frameT - 0.82f) / 0.18f);
+    const float breath = idle * (0.5f + 0.5f * std::sinf(sceneTime_ * 0.9f));
+    const float settledDim = 0.42f + 0.03f * breath;
+    const float backgroundDim =
+        1.0f - (1.0f - settledDim) * backgroundReveal;
+
+    DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
+             MakeColor(0.0f, 0.0f, 0.0f, backgroundDim));
+    DrawStartupFrame(screenWidth, screenHeight);
+
+    constexpr float kLogoScale = 1.0f;
+    const float logoX =
+        (screenWidth - logoImage_.width * kLogoScale) * 0.5f;
+    const float logoY =
+        (screenHeight - logoImage_.height * kLogoScale) * 0.5f - 10.0f;
+    DrawImage(logoImage_, logoX, logoY, backgroundReveal, kLogoScale);
+
+    const float pressScale =
+        std::clamp(screenWidth * 0.28f / pressAnyButtonImage_.width, 0.48f,
+                   0.82f);
+    const float pressX =
+        (screenWidth - pressAnyButtonImage_.width * pressScale) * 0.5f;
+    const float pressY =
+        logoY + logoImage_.height * kLogoScale + 26.0f +
+        idle * std::sinf(sceneTime_ * 1.15f) * 1.4f;
+    const float pressAlpha =
+        idle * (0.48f + 0.18f * (0.5f + 0.5f * std::sinf(sceneTime_ * 3.0f)));
+    DrawImage(pressAnyButtonImage_, pressX, pressY, pressAlpha, pressScale);
+
+    if (startRequested_) {
+        const float fadeT =
+            std::clamp(fadeTimer_ / kFadeDuration, 0.0f, 1.0f);
+        DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
+                 MakeColor(0.0f, 0.0f, 0.0f, SmoothStep(fadeT)));
+    }
+}
+
+void TitleScene::DrawExitConfirmWindow(float screenWidth, float screenHeight) {
+    DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
+             MakeColor(0.0f, 0.0f, 0.0f, 0.54f));
+
+    const float panelW = std::clamp(screenWidth * 0.50f, 520.0f, 760.0f);
+    const float panelH = std::clamp(screenHeight * 0.30f, 240.0f, 320.0f);
+    const float panelX = (screenWidth - panelW) * 0.5f;
+    const float panelY = (screenHeight - panelH) * 0.5f;
+    const float edge = 3.0f;
+
+    DrawRect(panelX + 10.0f, panelY + 12.0f, panelW, panelH,
+             MakeColor(0.0f, 0.0f, 0.0f, 0.36f));
+    DrawRect(panelX, panelY, panelW, panelH,
+             MakeColor(0.018f, 0.020f, 0.026f, 0.96f));
+    DrawRect(panelX, panelY, panelW, edge,
+             MakeColor(0.92f, 0.68f, 0.28f, 0.88f));
+    DrawRect(panelX, panelY + panelH - edge, panelW, edge,
+             MakeColor(0.92f, 0.68f, 0.28f, 0.74f));
+    DrawRect(panelX, panelY, edge, panelH,
+             MakeColor(0.92f, 0.68f, 0.28f, 0.62f));
+    DrawRect(panelX + panelW - edge, panelY, edge, panelH,
+             MakeColor(0.92f, 0.68f, 0.28f, 0.62f));
+
+    const float messageScale =
+        (std::min)(1.0f, (panelW * 0.78f) /
+                             ((std::max)(exitConfirmMessageImage_.width, 1.0f)));
+    const float messageW = exitConfirmMessageImage_.width * messageScale;
+    const float messageH = exitConfirmMessageImage_.height * messageScale;
+    DrawImage(exitConfirmMessageImage_, panelX + (panelW - messageW) * 0.5f,
+              panelY + panelH * 0.26f - messageH * 0.5f, 1.0f,
+              messageScale);
+
+    const float buttonW = std::clamp(panelW * 0.24f, 130.0f, 176.0f);
+    const float buttonH = std::clamp(panelH * 0.23f, 58.0f, 76.0f);
+    const float buttonGap = panelW * 0.08f;
+    const float totalButtonW = buttonW * 2.0f + buttonGap;
+    const float buttonY = panelY + panelH * 0.61f;
+    const float firstButtonX = panelX + (panelW - totalButtonW) * 0.5f;
+    const Image *labels[2] = {&exitConfirmYesImage_, &exitConfirmNoImage_};
+
+    for (int i = 0; i < 2; ++i) {
+        const float x =
+            firstButtonX + static_cast<float>(i) * (buttonW + buttonGap);
+        const bool selected = i == exitConfirmIndex_;
+        const XMFLOAT4 body =
+            selected ? MakeColor(0.18f, 0.13f, 0.055f, 0.98f)
+                     : MakeColor(0.040f, 0.046f, 0.058f, 0.92f);
+        const XMFLOAT4 line =
+            selected ? MakeColor(1.0f, 0.78f, 0.34f, 0.96f)
+                     : MakeColor(0.62f, 0.66f, 0.72f, 0.38f);
+
+        DrawRect(x, buttonY, buttonW, buttonH, body);
+        DrawRect(x, buttonY, buttonW, 2.0f, line);
+        DrawRect(x, buttonY + buttonH - 2.0f, buttonW, 2.0f, line);
+        DrawRect(x, buttonY, 2.0f, buttonH, line);
+        DrawRect(x + buttonW - 2.0f, buttonY, 2.0f, buttonH, line);
+
+        const Image &label = *labels[i];
+        const float labelScale =
+            (std::min)({1.0f,
+                        (buttonH * 0.68f) /
+                            ((std::max)(label.height, 1.0f)),
+                        (buttonW * 0.86f) /
+                            ((std::max)(label.width, 1.0f))});
+        const float labelW = label.width * labelScale;
+        const float labelH = label.height * labelScale;
+        DrawImage(label, x + (buttonW - labelW) * 0.5f,
+                  buttonY + (buttonH - labelH) * 0.5f, selected ? 1.0f : 0.82f,
+                  labelScale);
+    }
+}
+
+void TitleScene::DrawStartupFrame(float screenWidth, float screenHeight) {
+    const float t = Smooth01(frameIntroTimer_ / kFrameIntroDuration);
+    const float rawT =
+        std::clamp(frameIntroTimer_ / kFrameIntroDuration, 0.0f, 1.0f);
+    const float overshoot = std::sinf(std::clamp(t, 0.0f, 1.0f) * kPi) * 0.045f;
+    const float barHeight = screenHeight * (0.124f + overshoot);
+    const float topY = -barHeight * (1.0f - t);
+    const float bottomY = screenHeight - barHeight * t;
+
+    DrawRect(0.0f, topY, screenWidth, barHeight,
+             MakeColor(0.0f, 0.0f, 0.0f, 0.96f));
+    DrawRect(0.0f, bottomY, screenWidth, barHeight,
+             MakeColor(0.0f, 0.0f, 0.0f, 0.96f));
+    DrawRect(0.0f, topY + barHeight * 0.62f, screenWidth, barHeight * 0.38f,
+             MakeColor(0.020f, 0.016f, 0.012f, 0.44f));
+    DrawRect(0.0f, bottomY, screenWidth, barHeight * 0.38f,
+             MakeColor(0.020f, 0.016f, 0.012f, 0.44f));
+
+    const float idle = Smooth01((rawT - 0.86f) / 0.14f);
+    if (idle > 0.0f) {
+        const float sheenWidth = screenWidth * 0.30f;
+        const float sheenTravel = std::fmod(sceneTime_ * 0.105f, 1.0f);
+        const float sheenX =
+            -sheenWidth + (screenWidth + sheenWidth * 2.0f) * sheenTravel;
+        const float sheenAlpha =
+            idle * (0.038f + 0.012f * std::sinf(sceneTime_ * 1.1f));
+        DrawRect(sheenX, topY + barHeight * 0.18f, sheenWidth,
+                 barHeight * 0.22f,
+                 MakeColor(0.095f, 0.080f, 0.055f, sheenAlpha));
+        DrawRect(screenWidth - sheenX - sheenWidth,
+                 bottomY + barHeight * 0.60f, sheenWidth, barHeight * 0.22f,
+                 MakeColor(0.095f, 0.080f, 0.055f, sheenAlpha));
+
+        const float undertoneWidth = screenWidth * 0.42f;
+        const float undertoneTravel =
+            std::fmod(sceneTime_ * 0.062f + 0.31f, 1.0f);
+        const float undertoneX =
+            -undertoneWidth +
+            (screenWidth + undertoneWidth * 2.0f) * undertoneTravel;
+        DrawRect(undertoneX, topY + barHeight * 0.69f, undertoneWidth,
+                 barHeight * 0.12f,
+                 MakeColor(0.0f, 0.0f, 0.0f, idle * 0.12f));
+        DrawRect(screenWidth - undertoneX - undertoneWidth,
+                 bottomY + barHeight * 0.19f, undertoneWidth,
+                 barHeight * 0.12f,
+                 MakeColor(0.0f, 0.0f, 0.0f, idle * 0.12f));
+    }
+
+    const float edgeAlpha =
+        std::clamp((1.0f - std::fabs(t - 0.62f) / 0.38f), 0.22f, 1.0f);
+    const float lineBreath = 0.88f + 0.12f * std::sinf(sceneTime_ * 1.35f);
+    const float lineYTop = topY + barHeight - 3.0f;
+    const float lineYBottom = bottomY;
+    DrawRect(0.0f, lineYTop, screenWidth, 2.0f,
+             MakeColor(0.92f, 0.68f, 0.28f,
+                       0.56f * edgeAlpha * lineBreath));
+    DrawRect(0.0f, lineYBottom, screenWidth, 2.0f,
+             MakeColor(0.92f, 0.68f, 0.28f,
+                       0.56f * edgeAlpha * lineBreath));
+    DrawRect(0.0f, lineYTop + 4.0f, screenWidth, 1.0f,
+             MakeColor(1.0f, 0.92f, 0.60f,
+                       0.24f * edgeAlpha * lineBreath));
+    DrawRect(0.0f, lineYBottom - 4.0f, screenWidth, 1.0f,
+             MakeColor(1.0f, 0.92f, 0.60f,
+                       0.24f * edgeAlpha * lineBreath));
+    if (idle > 0.0f) {
+        const float innerLineAlpha =
+            idle * edgeAlpha *
+            (0.060f + 0.014f * std::sinf(sceneTime_ * 1.6f));
+        DrawRect(0.0f, lineYTop - 7.0f, screenWidth, 1.0f,
+                 MakeColor(0.88f, 0.62f, 0.24f, innerLineAlpha));
+        DrawRect(0.0f, lineYBottom + 8.0f, screenWidth, 1.0f,
+                 MakeColor(0.88f, 0.62f, 0.24f, innerLineAlpha));
+    }
+
+    if (t < 1.0f) {
+        const float sweepWidth = screenWidth * 0.34f;
+        const float sweepX =
+            -sweepWidth + (screenWidth + sweepWidth * 2.0f) * t;
+        const float sweepAlpha = std::sinf(t * kPi) * 0.84f;
+        DrawRect(sweepX, lineYTop - 1.0f, sweepWidth, 4.0f,
+                 MakeColor(1.0f, 0.86f, 0.42f, sweepAlpha));
+        DrawRect(screenWidth - sweepX - sweepWidth, lineYBottom - 1.0f,
+                 sweepWidth, 4.0f,
+                 MakeColor(1.0f, 0.86f, 0.42f, sweepAlpha));
+        DrawRect(sweepX - sweepWidth * 0.38f, lineYTop + 5.0f,
+                 sweepWidth * 0.62f, 1.0f,
+                 MakeColor(1.0f, 0.96f, 0.72f, sweepAlpha * 0.54f));
+        DrawRect(screenWidth - sweepX - sweepWidth * 0.24f,
+                 lineYBottom - 6.0f, sweepWidth * 0.62f, 1.0f,
+                 MakeColor(1.0f, 0.96f, 0.72f, sweepAlpha * 0.54f));
+    }
+
+    if (idle > 0.0f) {
+        const float glintWidth = screenWidth * 0.18f;
+        const float glintTravel = std::fmod(sceneTime_ * 0.18f, 1.0f);
+        const float glintX =
+            -glintWidth + (screenWidth + glintWidth * 2.0f) * glintTravel;
+        const float glintAlpha =
+            idle * edgeAlpha *
+            (0.10f + 0.025f * std::sinf(sceneTime_ * 1.9f));
+        DrawRect(glintX, lineYTop - 1.0f, glintWidth, 3.0f,
+                 MakeColor(1.0f, 0.92f, 0.62f, glintAlpha));
+        DrawRect(screenWidth - glintX - glintWidth, lineYBottom, glintWidth,
+                 3.0f, MakeColor(1.0f, 0.92f, 0.62f, glintAlpha));
+    }
 }
 
 void TitleScene::DrawRect(float x, float y, float w, float h,
@@ -202,11 +388,7 @@ void TitleScene::DrawRect(float x, float y, float w, float h,
     sprite.size = {w, h};
     sprite.color = color;
     sprite.textureId = 0;
-    ctx_->sprite->DrawSprite(sprite);
-}
-
-void TitleScene::DrawImage(const Image &image, float x, float y, float alpha) {
-    DrawImage(image, x, y, alpha, 1.0f);
+    ctx_->rendering.sprite->DrawSprite(sprite);
 }
 
 void TitleScene::DrawImage(const Image &image, float x, float y, float alpha,
@@ -220,463 +402,14 @@ void TitleScene::DrawImage(const Image &image, float x, float y, float alpha,
     sprite.size = {image.width * scale, image.height * scale};
     sprite.color = {1.0f, 1.0f, 1.0f, alpha};
     sprite.textureId = image.textureId;
-    ctx_->sprite->DrawSprite(sprite);
-}
-
-void TitleScene::DrawCameraModeBadge(float, float) {
-    if (!cameraStartRequested_) {
-        return;
-    }
-
-    const bool ready = IsCameraReady();
-    const float x = 18.0f;
-    const float y = 18.0f;
-    const float pulse = 0.55f + 0.45f * std::sinf(sceneTime_ * 5.4f);
-    DrawRect(x, y, 94.0f, 42.0f, MakeColor(0.02f, 0.025f, 0.035f, 0.78f));
-    DrawRect(x, y + 39.0f, 78.0f, 3.0f,
-             MakeColor(0.10f, 0.58f, 1.0f, 0.92f));
-    DrawRect(x + 15.0f, y + 15.0f, 31.0f, 19.0f,
-             MakeColor(0.86f, 0.92f, 1.0f, 0.92f));
-    DrawRect(x + 21.0f, y + 9.0f, 14.0f, 7.0f,
-             MakeColor(0.86f, 0.92f, 1.0f, 0.92f));
-    DrawRect(x + 24.0f, y + 19.0f, 13.0f, 10.0f,
-             MakeColor(0.08f, 0.12f, 0.18f, 0.92f));
-    DrawRect(x + 49.0f, y + 19.0f, 13.0f, 10.0f,
-             MakeColor(0.86f, 0.92f, 1.0f, 0.92f));
-    DrawRect(x + 66.0f, y + 10.0f, 8.0f, 8.0f,
-             ready ? MakeColor(0.20f, 1.0f, 0.42f, 0.92f)
-                   : MakeColor(1.0f, 0.12f, 0.08f, 0.55f + pulse * 0.45f));
-    DrawRect(x + 66.0f, y + 26.0f, ready ? 18.0f : 8.0f + pulse * 10.0f,
-             4.0f,
-             ready ? MakeColor(0.20f, 1.0f, 0.42f, 0.88f)
-                   : MakeColor(0.10f, 0.58f, 1.0f, 0.60f));
-    if (waitingForCameraReady_) {
-        DrawRect(x, y + 46.0f, 94.0f, 4.0f,
-                 MakeColor(0.08f, 0.10f, 0.13f, 0.84f));
-        DrawRect(x, y + 46.0f, 28.0f + pulse * 46.0f, 4.0f,
-                 MakeColor(1.0f, 0.82f, 0.18f, 0.92f));
-    }
+    ctx_->rendering.sprite->DrawSprite(sprite);
 }
 
 bool TitleScene::IsAnyButtonTriggered(const Input &input) const {
-    for (int dik = 0; dik < 256; ++dik) {
-        if (dik == DIK_F1 || dik == DIK_F2 || dik == DIK_C || dik == DIK_R) {
-            continue;
-        }
-        if (input.IsKeyTrigger(dik)) {
-            return true;
-        }
-    }
-
-    if (!input.IsGamepadConnected()) {
-        return false;
-    }
-
-    constexpr WORD kButtons[] = {
-        XINPUT_GAMEPAD_DPAD_UP,        XINPUT_GAMEPAD_DPAD_DOWN,
-        XINPUT_GAMEPAD_DPAD_LEFT,      XINPUT_GAMEPAD_DPAD_RIGHT,
-        XINPUT_GAMEPAD_START,          XINPUT_GAMEPAD_BACK,
-        XINPUT_GAMEPAD_LEFT_THUMB,     XINPUT_GAMEPAD_RIGHT_THUMB,
-        XINPUT_GAMEPAD_LEFT_SHOULDER,  XINPUT_GAMEPAD_RIGHT_SHOULDER,
-        XINPUT_GAMEPAD_A,              XINPUT_GAMEPAD_B,
-        XINPUT_GAMEPAD_X,              XINPUT_GAMEPAD_Y,
-    };
-
-    for (WORD button : kButtons) {
-        if (input.IsGamepadButtonTrigger(button)) {
-            return true;
-        }
-    }
-
-    return input.IsGamepadLeftTriggerTrigger() ||
-           input.IsGamepadRightTriggerTrigger();
-}
-
-bool TitleScene::IsCameraShortcutTriggered(const Input &input) const {
-    return input.IsKeyTrigger(DIK_F1);
-}
-
-void TitleScene::DrawCameraPreparation(float screenWidth, float screenHeight) {
-    const float fieldW = screenWidth * 0.68f;
-    const float fieldH = screenHeight * 0.66f;
-    const float fieldX = (screenWidth - fieldW) * 0.5f;
-    const float fieldY = screenHeight * 0.12f;
-    DrawRect(fieldX - 12.0f, fieldY - 12.0f, fieldW + 24.0f,
-             fieldH + 24.0f, MakeColor(0.01f, 0.012f, 0.016f, 0.86f));
-    DrawCameraPreview(fieldX, fieldY, fieldW, fieldH);
-    DrawReadyGuide(fieldX, fieldY, fieldW, fieldH);
-    for (size_t i = 0; i < handReadyStates_.size(); ++i) {
-        DrawHandMarker(handReadyStates_[i], i, fieldX, fieldY, fieldW, fieldH);
-    }
-
-    const bool hasPreview = HasFreshPreview();
-    const bool hasPacket = handWarmupController_.HasRecentPacket();
-    const bool handsReady = HasHandsInReadyZone();
-    const float panelY = fieldY + fieldH + 24.0f;
-    const float panelW = fieldW;
-    DrawRect(fieldX, panelY, panelW, 46.0f,
-             MakeColor(0.02f, 0.025f, 0.032f, 0.86f));
-
-    const float segmentW = (panelW - 40.0f) / 3.0f;
-    const XMFLOAT4 ok = MakeColor(0.18f, 0.86f, 0.38f, 0.92f);
-    const XMFLOAT4 wait = MakeColor(1.0f, 0.76f, 0.16f, 0.72f);
-    const XMFLOAT4 off = MakeColor(0.26f, 0.29f, 0.34f, 0.72f);
-    const bool checks[] = {hasPreview, hasPacket, handsReady};
-    for (int i = 0; i < 3; ++i) {
-        const float x = fieldX + 14.0f + static_cast<float>(i) *
-                                      (segmentW + 6.0f);
-        DrawRect(x, panelY + 14.0f, segmentW, 18.0f,
-                 checks[i] ? ok : (i == 2 && hasPacket ? wait : off));
-    }
-
-    const float waveT =
-        std::clamp((std::max)(handReadyStates_[0].rawSpeed,
-                              handReadyStates_[1].rawSpeed) /
-                       kWaveStartSpeed,
-                   0.0f, 1.0f);
-    DrawRect(fieldX, panelY + 58.0f, panelW, 9.0f,
-             MakeColor(0.12f, 0.14f, 0.16f, 0.84f));
-    DrawRect(fieldX, panelY + 58.0f, panelW * waveT, 9.0f,
-             handsReady ? MakeColor(0.10f, 0.60f, 1.0f, 0.92f)
-                        : MakeColor(0.32f, 0.36f, 0.40f, 0.68f));
-}
-
-void TitleScene::DrawCameraPreview(float fieldX, float fieldY, float fieldW,
-                                   float fieldH) {
-    DrawRect(fieldX, fieldY, fieldW, fieldH,
-             MakeColor(0.01f, 0.012f, 0.014f, 1.0f));
-
-    if (previewFrame_.valid) {
-        const float previewAspect =
-            static_cast<float>(previewFrame_.width) /
-            static_cast<float>((std::max)(previewFrame_.height, 1u));
-        float drawW = fieldW;
-        float drawH = drawW / previewAspect;
-        if (drawH > fieldH) {
-            drawH = fieldH;
-            drawW = drawH * previewAspect;
-        }
-        const float drawX = fieldX + (fieldW - drawW) * 0.5f;
-        const float drawY = fieldY + (fieldH - drawH) * 0.5f;
-
-        Sprite sprite{};
-        sprite.position = {drawX, drawY};
-        sprite.size = {drawW, drawH};
-        sprite.color = {1.0f, 1.0f, 1.0f, HasFreshPreview() ? 1.0f : 0.38f};
-        sprite.textureId = previewFrame_.textureId;
-        ctx_->sprite->DrawSprite(sprite);
-    } else {
-        const float pulse = 0.45f + 0.35f * std::sinf(sceneTime_ * 4.2f);
-        DrawRect(fieldX + fieldW * 0.34f, fieldY + fieldH * 0.50f,
-                 fieldW * 0.32f, 7.0f, MakeColor(0.18f, 0.24f, 0.30f, 0.90f));
-        DrawRect(fieldX + fieldW * 0.34f, fieldY + fieldH * 0.50f,
-                 fieldW * (0.08f + pulse * 0.24f), 7.0f,
-                 MakeColor(0.10f, 0.60f, 1.0f, 0.82f));
-    }
-
-    DrawRect(fieldX, fieldY, fieldW, fieldH,
-             MakeColor(0.0f, 0.0f, 0.0f, 0.14f));
-}
-
-void TitleScene::DrawReadyGuide(float fieldX, float fieldY, float fieldW,
-                                float fieldH) {
-    const float x0 = fieldX + fieldW * kReadyMinX;
-    const float x1 = fieldX + fieldW * kReadyMaxX;
-    const float y0 = fieldY + fieldH * kReadyMinY;
-    const float y1 = fieldY + fieldH * kReadyMaxY;
-    const XMFLOAT4 guide =
-        HasHandsInReadyZone() ? MakeColor(0.18f, 0.86f, 0.38f, 0.92f)
-                              : MakeColor(1.0f, 0.78f, 0.16f, 0.72f);
-    DrawRect(x0, y0, x1 - x0, 4.0f, guide);
-    DrawRect(x0, y1 - 4.0f, x1 - x0, 4.0f, guide);
-    DrawRect(x0, y0, 4.0f, y1 - y0, guide);
-    DrawRect(x1 - 4.0f, y0, 4.0f, y1 - y0, guide);
-}
-
-void TitleScene::DrawHandMarker(const HandReadyState &hand, size_t handIndex,
-                                float fieldX, float fieldY, float fieldW,
-                                float fieldH) {
-    if (!hand.hasCenter) {
-        return;
-    }
-    const float x = fieldX + std::clamp(hand.x, 0.0f, 1.0f) * fieldW;
-    const float y = fieldY + std::clamp(hand.y, 0.0f, 1.0f) * fieldH;
-    const float size = hand.insideReadyZone ? 24.0f : 16.0f;
-    const XMFLOAT4 color = HandColor(handIndex, hand.active ? 0.88f : 0.32f);
-    DrawRect(x - size, y - 2.0f, size * 2.0f, 4.0f, color);
-    DrawRect(x - 2.0f, y - size, 4.0f, size * 2.0f, color);
-    DrawRect(x - 9.0f, y - 9.0f, 18.0f, 18.0f,
-             HandColor(handIndex, hand.insideReadyZone ? 0.74f : 0.36f));
-}
-
-bool TitleScene::IsHandTestShortcutTriggered(const Input &input) const {
-    return input.IsKeyTrigger(DIK_F2);
-}
-
-bool TitleScene::IsCameraReady() const {
-    return handWarmupController_.HasRecentPacket();
-}
-
-bool TitleScene::HasFreshPreview() const {
-    return previewFrame_.valid && previewFrame_.staleTimer <= kPreviewStaleSeconds;
-}
-
-bool TitleScene::HasHandsInReadyZone() const {
-    return handsReadyTimer_ >= kReadyHoldSeconds;
-}
-
-bool TitleScene::HasWaveGesture() const {
-    const float speed =
-        (std::max)(handReadyStates_[0].rawSpeed, handReadyStates_[1].rawSpeed);
-    return waveArmed_ && speed >= kWaveStartSpeed;
-}
-
-void TitleScene::BeginCameraMode() {
-    cameraStartRequested_ = true;
-    waitingForCameraReady_ = true;
-    fadeTimer_ = 0.0f;
-    handsReadyTimer_ = 0.0f;
-    waveArmed_ = true;
-    RequestHandTrackingStartOnce();
-}
-
-void TitleScene::RequestHandTrackingStartOnce() {
-    if (handTrackingStartRequested_ || !ctx_->requestHandTrackingStart) {
-        return;
-    }
-    ctx_->requestHandTrackingStart();
-    handTrackingStartRequested_ = true;
-    cameraRequestTimer_ = 0.0f;
-}
-
-void TitleScene::UpdateCameraPreparation() {
-    cameraRequestTimer_ += ctx_->deltaTime;
-    previewFrame_.staleTimer += ctx_->deltaTime;
-    ReceivePreviewPackets();
-
-    for (size_t i = 0; i < handReadyStates_.size(); ++i) {
-        UpdateHandReadyState(i);
-    }
-
-    const bool bothHandsReady =
-        HasFreshPreview() && handReadyStates_[0].insideReadyZone &&
-        handReadyStates_[1].insideReadyZone;
-    if (bothHandsReady) {
-        handsReadyTimer_ += ctx_->deltaTime;
-    } else {
-        handsReadyTimer_ = 0.0f;
-    }
-
-    const float speed =
-        (std::max)(handReadyStates_[0].rawSpeed, handReadyStates_[1].rawSpeed);
-    if (speed <= kWaveResetSpeed) {
-        waveArmed_ = true;
-    }
-
-    const bool hasAnyData =
-        HasFreshPreview() || handWarmupController_.HasRecentPacket();
-    if (!hasAnyData && cameraRequestTimer_ >= 1.0f) {
-        handTrackingStartRequested_ = false;
-        RequestHandTrackingStartOnce();
-    }
-}
-
-void TitleScene::UpdateHandReadyState(size_t handIndex) {
-    HandReadyState &hand = handReadyStates_[handIndex];
-    hand.active = handWarmupController_.IsActive(handIndex);
-    hand.hasCenter =
-        handWarmupController_.GetHandCenter(handIndex, hand.x, hand.y);
-    hand.rawSpeed = handWarmupController_.GetRawMotionSpeed(handIndex);
-    hand.insideReadyZone =
-        hand.active && hand.hasCenter && hand.x >= kReadyMinX &&
-        hand.x <= kReadyMaxX && hand.y >= kReadyMinY && hand.y <= kReadyMaxY;
-    if (hand.insideReadyZone) {
-        hand.pulse = 1.0f;
-    } else {
-        hand.pulse = (std::max)(0.0f, hand.pulse - ctx_->deltaTime * 3.4f);
-    }
-}
-
-bool TitleScene::EnsurePreviewSocket() {
-    if (previewSocketReady_) {
-        return true;
-    }
-
-    WSADATA wsaData{};
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        return false;
-    }
-
-    SOCKET udpSocket = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (udpSocket == INVALID_SOCKET) {
-        WSACleanup();
-        return false;
-    }
-
-    sockaddr_in address{};
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = htonl(INADDR_ANY);
-    address.sin_port = htons(kPreviewPort);
-    if (bind(udpSocket, reinterpret_cast<sockaddr *>(&address),
-             sizeof(address)) == SOCKET_ERROR) {
-        closesocket(udpSocket);
-        WSACleanup();
-        return false;
-    }
-
-    u_long nonBlocking = 1;
-    if (ioctlsocket(udpSocket, FIONBIO, &nonBlocking) == SOCKET_ERROR) {
-        closesocket(udpSocket);
-        WSACleanup();
-        return false;
-    }
-
-    previewSocket_ = static_cast<uintptr_t>(udpSocket);
-    previewSocketReady_ = true;
-    return true;
-}
-
-void TitleScene::ClosePreviewSocket() {
-    if (previewSocketReady_) {
-        closesocket(ToSocket(previewSocket_));
-        WSACleanup();
-    }
-    previewSocket_ = UINTPTR_MAX;
-    previewSocketReady_ = false;
-}
-
-void TitleScene::ReceivePreviewPackets() {
-    if (!EnsurePreviewSocket()) {
-        return;
-    }
-
-    std::array<uint8_t, 1600> buffer{};
-    for (;;) {
-        sockaddr_in from{};
-        int fromLength = sizeof(from);
-        const int bytes = recvfrom(ToSocket(previewSocket_),
-                                   reinterpret_cast<char *>(buffer.data()),
-                                   static_cast<int>(buffer.size()), 0,
-                                   reinterpret_cast<sockaddr *>(&from),
-                                   &fromLength);
-        if (bytes == SOCKET_ERROR) {
-            return;
-        }
-        HandlePreviewPacket(buffer.data(), bytes);
-    }
-}
-
-void TitleScene::HandlePreviewPacket(const uint8_t *data, int bytes) {
-    const uint8_t *newline = static_cast<const uint8_t *>(
-        std::memchr(data, '\n', static_cast<size_t>(bytes)));
-    if (newline == nullptr) {
-        return;
-    }
-
-    const std::string header(reinterpret_cast<const char *>(data),
-                             reinterpret_cast<const char *>(newline));
-    std::istringstream stream(header);
-    std::string magic;
-    uint32_t frameId = 0;
-    size_t chunkIndex = 0;
-    size_t chunkCount = 0;
-    size_t totalSize = 0;
-    if (!(stream >> magic >> frameId >> chunkIndex >> chunkCount >> totalSize) ||
-        magic != "SGCAM" || chunkCount == 0 || chunkIndex >= chunkCount ||
-        totalSize == 0 || totalSize > 1024u * 1024u) {
-        return;
-    }
-
-    const uint8_t *payload = newline + 1;
-    const size_t payloadSize = static_cast<size_t>(data + bytes - payload);
-    const size_t offset = chunkIndex * 1150u;
-    if (offset >= totalSize || payloadSize > totalSize - offset) {
-        return;
-    }
-
-    if (frameId != previewFrameId_ ||
-        previewChunkReceived_.size() != chunkCount ||
-        previewJpegBuffer_.size() != totalSize) {
-        previewFrameId_ = frameId;
-        previewJpegBuffer_.assign(totalSize, 0u);
-        previewChunkReceived_.assign(chunkCount, false);
-        previewReceivedChunks_ = 0;
-    }
-
-    if (!previewChunkReceived_[chunkIndex]) {
-        std::memcpy(previewJpegBuffer_.data() + offset, payload, payloadSize);
-        previewChunkReceived_[chunkIndex] = true;
-        ++previewReceivedChunks_;
-    }
-
-    if (previewReceivedChunks_ == previewChunkReceived_.size()) {
-        DecodePreviewJpeg(previewJpegBuffer_);
-    }
-}
-
-void TitleScene::DecodePreviewJpeg(const std::vector<uint8_t> &jpegData) {
-    if (jpegData.empty()) {
-        return;
-    }
-
-    DirectX::ScratchImage scratch;
-    DirectX::TexMetadata metadata{};
-    HRESULT hr = DirectX::LoadFromWICMemory(
-        jpegData.data(), jpegData.size(), DirectX::WIC_FLAGS_FORCE_RGB,
-        &metadata, scratch);
-    if (FAILED(hr)) {
-        return;
-    }
-
-    DirectX::ScratchImage converted;
-    const DirectX::Image *image = scratch.GetImage(0, 0, 0);
-    if (image != nullptr && image->format != DXGI_FORMAT_R8G8B8A8_UNORM) {
-        hr = DirectX::Convert(*image, DXGI_FORMAT_R8G8B8A8_UNORM,
-                              DirectX::TEX_FILTER_DEFAULT, 0.0f, converted);
-        if (FAILED(hr)) {
-            return;
-        }
-        image = converted.GetImage(0, 0, 0);
-    }
-
-    if (image == nullptr || image->pixels == nullptr || image->width == 0 ||
-        image->height == 0 || image->width != previewFrame_.width ||
-        image->height != previewFrame_.height) {
-        return;
-    }
-
-    const size_t rowBytes = static_cast<size_t>(previewFrame_.width) * 4u;
-    const size_t imageBytes =
-        rowBytes * static_cast<size_t>(previewFrame_.height);
-    if (previewFrame_.rgbaPixels.size() != imageBytes) {
-        previewFrame_.rgbaPixels.resize(imageBytes);
-    }
-
-    for (uint32_t y = 0; y < previewFrame_.height; ++y) {
-        std::memcpy(previewFrame_.rgbaPixels.data() + rowBytes * y,
-                    image->pixels + image->rowPitch * y, rowBytes);
-    }
-    previewFrame_.valid = true;
-    previewFrame_.dirty = true;
-    previewFrame_.staleTimer = 0.0f;
-}
-
-void TitleScene::UploadPreviewTextureIfNeeded() {
-    if (!previewFrame_.dirty || !previewFrame_.valid ||
-        previewFrame_.rgbaPixels.empty()) {
-        return;
-    }
-
-    if (ctx_->texture->UpdateDynamicTexture(
-            previewFrame_.textureId, previewFrame_.rgbaPixels.data(),
-            previewFrame_.width, previewFrame_.height)) {
-        previewFrame_.dirty = false;
-    }
-}
-
-XMFLOAT4 TitleScene::HandColor(size_t handIndex, float alpha) const {
-    if (handIndex == 0) {
-        return MakeColor(0.10f, 0.72f, 1.0f, alpha);
-    }
-    return MakeColor(0.22f, 1.0f, 0.48f, alpha);
+    const bool gamepadTriggered =
+        input.IsGamepadConnected() &&
+        (input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_A) ||
+         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_START));
+    return input.IsKeyTrigger(DIK_RETURN) || input.IsKeyTrigger(DIK_SPACE) ||
+           input.IsMouseTrigger(0) || gamepadTriggered;
 }

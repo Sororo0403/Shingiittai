@@ -22,11 +22,17 @@ class SwordSlashArcRenderer {
     void EmitHitLine(const DirectX::XMFLOAT3 &position,
                      const DirectX::XMFLOAT3 &direction, const Camera &camera,
                      float power,
-                     const DirectX::XMFLOAT2 &slashDirection = {0.0f, 0.0f});
+                     const DirectX::XMFLOAT2 &slashDirection = {0.0f, 0.0f},
+                     bool isCounter = false);
     void EmitParryLine(const DirectX::XMFLOAT3 &position,
                        const DirectX::XMFLOAT3 &direction, const Camera &camera,
                        float power,
                        const DirectX::XMFLOAT2 &slashDirection = {0.0f, 0.0f});
+    void EmitDirectionCueLine(const DirectX::XMFLOAT3 &position,
+                              const DirectX::XMFLOAT2 &direction,
+                              const Camera &camera,
+                              const DirectX::XMFLOAT4 &color,
+                              bool releaseCounterCueVisible);
     void Update(float deltaTime);
     void Draw(const Camera &camera);
 

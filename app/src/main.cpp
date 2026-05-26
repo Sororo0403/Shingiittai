@@ -1,9 +1,12 @@
 #include "DirectXCommon.h"
 #include "GameScene.h"
 #include "Input.h"
+#include "AppSceneServices.h"
+#include "core/AssetManager.h"
+#include "Lighting.h"
 #include "ModelManager.h"
-#include "ModeSelectScene.h"
-#include "PostEffectRenderer.h"
+#include "RenderPassController.h"
+#include "PostProcessSystem.h"
 #include "SceneContext.h"
 #include "SceneManager.h"
 #include "SoundManager.h"
@@ -11,11 +14,13 @@
 #include "SrvManager.h"
 #include "TextureManager.h"
 #include "TitleScene.h"
-#include "WeaponSelectScene.h"
 #include "WinApp.h"
 #include <Windows.h>
+#include <exception>
 #include <filesystem>
+#include <fstream>
 #include <memory>
+#include <sstream>
 #include <string>
 
 namespace {
@@ -32,20 +37,21 @@ std::filesystem::path ResolveExecutableDirectory() {
     return std::filesystem::path(path).parent_path();
 }
 
+std::filesystem::path ResolveHandTrackingLogPath() {
+    std::wstring tempPath(MAX_PATH, L'\0');
+    const DWORD length =
+        GetTempPathW(static_cast<DWORD>(tempPath.size()), tempPath.data());
+    if (length > 0 && length < tempPath.size()) {
+        tempPath.resize(length);
+        return std::filesystem::path(tempPath) /
+               L"shingiittai_hand_udp_sender.log";
+    }
+    return ResolveExecutableDirectory() / L"shingiittai_hand_udp_sender.log";
+}
+
 class HandUdpSenderProcess {
   public:
     ~HandUdpSenderProcess() { Stop(); }
-
-    bool Prepare() { return Start(true); }
-
-    bool IsPreparationReady() {
-        RefreshProcessState();
-        if (!isRunning_) {
-            return true;
-        }
-        PollStatus();
-        return preparationReady_;
-    }
 
     static bool IsRuntimeAvailable() {
         if (IsDisabled()) {
@@ -66,43 +72,35 @@ class HandUdpSenderProcess {
                 std::filesystem::exists(scriptPath));
     }
 
-    void ActivateCamera() {
+    bool ActivateCamera() {
+        shouldKeepRunning_ = true;
         RefreshProcessState();
         if (!isRunning_) {
-            Start(false);
-            cameraActivationRequested_ = false;
-            return;
+            return Start();
         }
-        cameraActivationRequested_ = true;
-        cameraActivationStartTick_ = GetTickCount();
-        lastCameraStartCommandTick_ = 0;
-        SendCameraStartCommand();
+        return true;
+    }
+
+    void DeactivateCamera() {
+        shouldKeepRunning_ = false;
+        Stop();
     }
 
     void Update() {
         RefreshProcessState();
-        PollStatus();
-        if (!cameraActivationRequested_) {
-            return;
+        if (shouldKeepRunning_ && !isRunning_ && !IsDisabled()) {
+            const DWORD now = GetTickCount();
+            if (now - lastStartAttemptTick_ >= 1500) {
+                Start();
+            }
         }
-
-        const DWORD now = GetTickCount();
-        if (now - cameraActivationStartTick_ > 5000) {
-            cameraActivationRequested_ = false;
-            return;
-        }
-        if (now - lastCameraStartCommandTick_ < 150) {
-            return;
-        }
-
-        SendCameraStartCommand();
-        lastCameraStartCommandTick_ = now;
     }
 
-    bool Start(bool startPaused) {
+    bool Start() {
         if (isRunning_) {
             return true;
         }
+        lastStartAttemptTick_ = GetTickCount();
         if (IsDisabled()) {
             return false;
         }
@@ -112,8 +110,7 @@ class HandUdpSenderProcess {
             runtimeRoot / L"tools" / L"hand_tracking" / L"models" /
             L"hand_landmarker.task";
         const std::filesystem::path poseModelPath =
-            runtimeRoot / L"tools" / L"hand_tracking" / L"models" /
-            L"pose_landmarker_lite.task";
+            ResolvePoseModelPath(runtimeRoot);
 
         if (!std::filesystem::exists(modelPath)) {
             return false;
@@ -132,6 +129,27 @@ class HandUdpSenderProcess {
                 command += L" --pose-model \"" + poseModelPath.wstring() + L"\"";
             }
         };
+        const auto appendCameraArg = [](std::wstring& command,
+                                        const wchar_t* envName,
+                                        const wchar_t* argName) {
+            wchar_t cameraSource[1024]{};
+            constexpr DWORD kCameraSourceCapacity =
+                static_cast<DWORD>(sizeof(cameraSource) /
+                                   sizeof(cameraSource[0]));
+            const DWORD length =
+                GetEnvironmentVariableW(envName, cameraSource,
+                                        kCameraSourceCapacity);
+            if (!command.empty() && length > 0 &&
+                length < kCameraSourceCapacity) {
+                command += L" ";
+                command += argName;
+                command += L" \"";
+                command += std::wstring(cameraSource, length);
+                command += L"\"";
+                return true;
+            }
+            return false;
+        };
 
         std::wstring scriptCommand;
         if (std::filesystem::exists(scriptPath) &&
@@ -144,36 +162,23 @@ class HandUdpSenderProcess {
                             L"\" --model \"" + modelPath.wstring() + L"\"";
         }
         appendPoseModel(scriptCommand);
-        if (!scriptCommand.empty() && startPaused) {
-            scriptCommand += L" --start-paused --status-port 5008";
-        }
-
+        appendCameraArg(scriptCommand, L"SHINGIITTAI_MAIN_CAMERA", L"--camera");
         std::wstring packagedCommand;
         if (std::filesystem::exists(packagedExe)) {
             packagedCommand = L"\"" + packagedExe.wstring() + L"\" --model \"" +
                               modelPath.wstring() + L"\"";
         }
         appendPoseModel(packagedCommand);
-        if (!packagedCommand.empty() && startPaused) {
-            packagedCommand += L" --start-paused --status-port 5008";
-        }
+        appendCameraArg(packagedCommand, L"SHINGIITTAI_MAIN_CAMERA", L"--camera");
 
         std::wstring command;
-        if (startPaused && !scriptCommand.empty()) {
+        if (!scriptCommand.empty()) {
             command = scriptCommand;
         } else {
-            if (!packagedCommand.empty()) {
-                command = packagedCommand;
-            } else {
-                command = scriptCommand;
-            }
+            command = packagedCommand;
         }
 
         if (command.empty()) {
-            return false;
-        }
-
-        if (startPaused && !OpenStatusSocket()) {
             return false;
         }
 
@@ -192,11 +197,30 @@ class HandUdpSenderProcess {
 
         STARTUPINFOW startupInfo{};
         startupInfo.cb = sizeof(startupInfo);
-        startupInfo.dwFlags = STARTF_USESHOWWINDOW;
+        startupInfo.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
         startupInfo.wShowWindow = SW_HIDE;
+        const std::filesystem::path logPath = ResolveHandTrackingLogPath();
+        SECURITY_ATTRIBUTES securityAttributes{};
+        securityAttributes.nLength = sizeof(securityAttributes);
+        securityAttributes.bInheritHandle = TRUE;
+        HANDLE logHandle = CreateFileW(
+            logPath.wstring().c_str(), FILE_APPEND_DATA,
+            FILE_SHARE_READ | FILE_SHARE_WRITE, &securityAttributes, OPEN_ALWAYS,
+            FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (logHandle != INVALID_HANDLE_VALUE) {
+            startupInfo.hStdOutput = logHandle;
+            startupInfo.hStdError = logHandle;
+            startupInfo.hStdInput = nullptr;
+            std::ofstream log(logPath, std::ios::app);
+            log << "\n=== hand_udp_sender start ===\n";
+        } else {
+            startupInfo.dwFlags = STARTF_USESHOWWINDOW;
+        }
+        const BOOL inheritHandles =
+            logHandle != INVALID_HANDLE_VALUE ? TRUE : FALSE;
         PROCESS_INFORMATION processInfo{};
         const BOOL started = CreateProcessW(
-            nullptr, command.data(), nullptr, nullptr, FALSE,
+            nullptr, command.data(), nullptr, nullptr, inheritHandles,
             CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr,
             runtimeRoot.wstring().c_str(),
             &startupInfo, &processInfo);
@@ -204,8 +228,13 @@ class HandUdpSenderProcess {
             if (jobHandle != nullptr) {
                 CloseHandle(jobHandle);
             }
-            CloseStatusSocket();
+            if (logHandle != INVALID_HANDLE_VALUE) {
+                CloseHandle(logHandle);
+            }
             return false;
+        }
+        if (logHandle != INVALID_HANDLE_VALUE) {
+            CloseHandle(logHandle);
         }
 
         if (jobHandle != nullptr &&
@@ -219,8 +248,12 @@ class HandUdpSenderProcess {
         processInfo_ = processInfo;
         jobHandle_ = jobHandle;
         isRunning_ = true;
-        preparationReady_ = !startPaused;
         return true;
+    }
+
+    bool IsRunning() {
+        RefreshProcessState();
+        return isRunning_;
     }
 
   private:
@@ -235,7 +268,6 @@ class HandUdpSenderProcess {
             return;
         }
 
-        CloseStatusSocket();
         if (jobHandle_ != nullptr) {
             CloseHandle(jobHandle_);
             jobHandle_ = nullptr;
@@ -248,101 +280,6 @@ class HandUdpSenderProcess {
         }
         processInfo_ = {};
         isRunning_ = false;
-        preparationReady_ = false;
-        cameraActivationRequested_ = false;
-    }
-
-    bool OpenStatusSocket() {
-        CloseStatusSocket();
-
-        WSADATA wsaData{};
-        if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-            return false;
-        }
-
-        statusSocket_ = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-        if (statusSocket_ == INVALID_SOCKET) {
-            statusSocket_ = INVALID_SOCKET;
-            WSACleanup();
-            return false;
-        }
-
-        sockaddr_in address{};
-        address.sin_family = AF_INET;
-        address.sin_port = htons(5008);
-        address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-
-        if (bind(statusSocket_, reinterpret_cast<sockaddr *>(&address),
-                 sizeof(address)) == SOCKET_ERROR) {
-            CloseStatusSocket();
-            return false;
-        }
-
-        u_long nonBlocking = 1;
-        if (ioctlsocket(statusSocket_, FIONBIO, &nonBlocking) == SOCKET_ERROR) {
-            CloseStatusSocket();
-            return false;
-        }
-
-        return true;
-    }
-
-    void CloseStatusSocket() {
-        if (statusSocket_ != INVALID_SOCKET) {
-            closesocket(statusSocket_);
-            statusSocket_ = INVALID_SOCKET;
-            WSACleanup();
-        }
-    }
-
-    void PollStatus() {
-        if (statusSocket_ == INVALID_SOCKET || preparationReady_) {
-            return;
-        }
-
-        char buffer[128]{};
-        for (;;) {
-            sockaddr_in from{};
-            int fromLength = sizeof(from);
-            const int bytes =
-                recvfrom(statusSocket_, buffer,
-                         static_cast<int>(sizeof(buffer) - 1), 0,
-                         reinterpret_cast<sockaddr *>(&from), &fromLength);
-            if (bytes == SOCKET_ERROR) {
-                return;
-            }
-
-            buffer[bytes] = '\0';
-            if (std::string(buffer) == "SGCAMERA_READY") {
-                preparationReady_ = true;
-                CloseStatusSocket();
-                return;
-            }
-        }
-    }
-
-    static void SendCameraStartCommand() {
-        WSADATA wsaData{};
-        if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-            return;
-        }
-
-        SOCKET udpSocket = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-        if (udpSocket == INVALID_SOCKET) {
-            WSACleanup();
-            return;
-        }
-
-        sockaddr_in address{};
-        address.sin_family = AF_INET;
-        address.sin_port = htons(5007);
-        address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-
-        constexpr char kCommand[] = "SGCAMERA_START";
-        sendto(udpSocket, kCommand, static_cast<int>(sizeof(kCommand) - 1), 0,
-               reinterpret_cast<sockaddr *>(&address), sizeof(address));
-        closesocket(udpSocket);
-        WSACleanup();
     }
 
     static bool IsDisabled() {
@@ -351,6 +288,13 @@ class HandUdpSenderProcess {
             L"SHINGIITTAI_DISABLE_HAND_CAMERA", value,
             static_cast<DWORD>(std::size(value)));
         return length > 0 && value[0] == L'1';
+    }
+
+    static std::filesystem::path
+    ResolvePoseModelPath(const std::filesystem::path &runtimeRoot) {
+        const std::filesystem::path modelDir =
+            runtimeRoot / L"tools" / L"hand_tracking" / L"models";
+        return modelDir / L"pose_landmarker_full.task";
     }
 
     static std::filesystem::path ResolveRepoRoot() {
@@ -364,16 +308,48 @@ class HandUdpSenderProcess {
 
     static std::filesystem::path ResolveRuntimeRoot() {
         const std::filesystem::path executableDir = ResolveExecutableDirectory();
-        if (std::filesystem::exists(executableDir / L"tools" /
-                                    L"hand_tracking" /
-                                    L"hand_udp_sender.py")) {
+        const std::filesystem::path repoRoot = ResolveRepoRoot();
+        const auto hasSender = [](const std::filesystem::path &root) {
+            return std::filesystem::exists(root / L"tools" / L"hand_tracking" /
+                                           L"hand_udp_sender.py") &&
+                   std::filesystem::exists(root / L"tools" / L"hand_tracking" /
+                                           L"models" /
+                                           L"hand_landmarker.task");
+        };
+        const auto hasVenv = [](const std::filesystem::path &root) {
+            return std::filesystem::exists(root / L"tools" / L"hand_tracking" /
+                                           L".venv" / L"Scripts" /
+                                           L"python.exe");
+        };
+        const std::filesystem::path siblingRepo =
+            executableDir.parent_path()
+                .parent_path()
+                .parent_path()
+                .parent_path() /
+            L"Shingiittai";
+
+        if (hasSender(repoRoot) && hasVenv(repoRoot)) {
+            return repoRoot;
+        }
+        if (hasSender(siblingRepo) && hasVenv(siblingRepo)) {
+            return siblingRepo;
+        }
+        if (hasSender(executableDir) && hasVenv(executableDir)) {
             return executableDir;
         }
-        return ResolveRepoRoot();
+        if (hasSender(repoRoot)) {
+            return repoRoot;
+        }
+        if (hasSender(siblingRepo)) {
+            return siblingRepo;
+        }
+        if (hasSender(executableDir)) {
+            return executableDir;
+        }
+        return repoRoot;
     }
 
     void Stop() {
-        CloseStatusSocket();
         if (!isRunning_) {
             return;
         }
@@ -399,17 +375,22 @@ class HandUdpSenderProcess {
 
     PROCESS_INFORMATION processInfo_{};
     HANDLE jobHandle_ = nullptr;
-    SOCKET statusSocket_ = INVALID_SOCKET;
     bool isRunning_ = false;
-    bool preparationReady_ = false;
-    bool cameraActivationRequested_ = false;
-    DWORD cameraActivationStartTick_ = 0;
-    DWORD lastCameraStartCommandTick_ = 0;
+    bool shouldKeepRunning_ = false;
+    DWORD lastStartAttemptTick_ = 0;
 };
+
+void WriteCrashLog(const std::string &message) {
+    std::ofstream log(ResolveExecutableDirectory() / L"shingiittai_crash.log",
+                      std::ios::app);
+    log << message << '\n';
+}
 }
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
-    SetCurrentDirectoryW(ResolveExecutableDirectory().wstring().c_str());
+int RunApp(HINSTANCE hInstance, int nCmdShow) {
+    const std::filesystem::path executableDirectory = ResolveExecutableDirectory();
+    SetCurrentDirectoryW(executableDirectory.wstring().c_str());
+    AssetManager::SetAssetRoot(executableDirectory);
 
     HandUdpSenderProcess handUdpSenderProcess;
     const bool handTrackingRuntimeAvailable =
@@ -418,6 +399,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     // WinApp初期化
     WinApp winApp;
     winApp.Initialize(hInstance, nCmdShow, 1280, 720, L"3145_身技一体", true);
+    winApp.SetCursorVisible(false);
 
     // クライアント領域の幅と高さ
     int width = winApp.GetWidth();
@@ -433,9 +415,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     dxCommon.RegisterSceneColorSRV(&srvManager);
     dxCommon.CreateDepthStencilSrv(&srvManager);
 
-    PostEffectRenderer postEffectRenderer;
-    postEffectRenderer.Initialize(&dxCommon, &srvManager, width, height);
-    postEffectRenderer.SetVignettingEnabled(false);
+    PostProcessSystem postProcessSystem;
+    postProcessSystem.Initialize(&dxCommon, &srvManager, width, height);
+    postProcessSystem.SetProfile(PostProcessProfile{});
 
     // Input
     Input input;
@@ -444,44 +426,69 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     // SoundManager
     SoundManager soundManager;
     soundManager.Initialize();
+    soundManager.Play(soundManager.LoadOrCreateSilent(
+                          L"app/resources/audio/bgm/bgm_Battle.wav"),
+                      0.36f, true);
 
     // TextureManager
     TextureManager textureManager;
-    dxCommon.BeginUpload();
     textureManager.Initialize(&dxCommon, &srvManager);
-    dxCommon.EndUpload();
-    textureManager.ReleaseUploadBuffers();
+    const float dummyShadowDepth = 1.0f;
+    const uint32_t dummyShadowTextureId = textureManager.CreateTexture2D(
+        1, 1, DXGI_FORMAT_R32_FLOAT,
+        reinterpret_cast<const uint8_t *>(&dummyShadowDepth),
+        sizeof(dummyShadowDepth));
 
     // ModelManager
     ModelManager modelManager;
     modelManager.Initialize(&dxCommon, &srvManager, &textureManager);
+    DirectX::XMFLOAT4X4 identityLightViewProjection{
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f};
+    SceneShadowSettings noShadow{};
+    noShadow.strength = 0.0f;
+    modelManager.GetRenderer()->SetShadowMap(
+        textureManager.GetGpuHandle(dummyShadowTextureId),
+        identityLightViewProjection, noShadow);
+    modelManager.GetRenderer()->SetEnvironmentTexture(
+        textureManager.GetWhiteTextureId());
 
     // SpriteManager
-    SpriteManager spriteManager;
+    SpriteManager &spriteManager = SpriteManager::GetInstance();
     spriteManager.Initialize(&dxCommon, &textureManager, &srvManager, width,
                              height);
 
     SceneContext sceneCtx{};
-    sceneCtx.input = &input;
-    sceneCtx.winApp = &winApp;
-    sceneCtx.sound = &soundManager;
-    sceneCtx.model = &modelManager;
-    sceneCtx.sprite = &spriteManager;
-    sceneCtx.srv = &srvManager;
-    sceneCtx.texture = &textureManager;
-    sceneCtx.dxCommon = &dxCommon;
-    sceneCtx.postEffectRenderer = &postEffectRenderer;
-    sceneCtx.requestHandTrackingStart = [&handUdpSenderProcess, &winApp]() {
-        handUdpSenderProcess.ActivateCamera();
-        winApp.BringToFront();
-    };
-    sceneCtx.isCameraDeviceAvailable = [handTrackingRuntimeAvailable]() {
-        return handTrackingRuntimeAvailable;
-    };
-    sceneCtx.isHandTrackingReady = [&handUdpSenderProcess]() {
-        return handUdpSenderProcess.IsPreparationReady();
-    };
-    sceneCtx.deltaTime = 0.0f;
+    sceneCtx.systems.input = &input;
+    sceneCtx.systems.winApp = &winApp;
+    sceneCtx.systems.sound = &soundManager;
+    sceneCtx.systems.texture = &textureManager;
+    sceneCtx.rendering.model = &modelManager;
+    sceneCtx.rendering.sprite = &spriteManager;
+    sceneCtx.rendering.srv = &srvManager;
+    sceneCtx.rendering.texture = &textureManager;
+    sceneCtx.rendering.dxCommon = &dxCommon;
+    sceneCtx.rendering.postProcessSystem = &postProcessSystem;
+    sceneCtx.frame.deltaTime = 0.0f;
+    AppSceneServices::ConfigureHandTracking(
+        [&handUdpSenderProcess, &winApp]() {
+            if (handUdpSenderProcess.IsRunning()) {
+                return true;
+            }
+
+            HWND hwnd = winApp.GetHwnd();
+            SetForegroundWindow(hwnd);
+            const bool started = handUdpSenderProcess.ActivateCamera();
+            SetForegroundWindow(hwnd);
+            return started;
+        },
+        [&handUdpSenderProcess]() { handUdpSenderProcess.DeactivateCamera(); },
+        [handTrackingRuntimeAvailable]() { return handTrackingRuntimeAvailable; },
+        [&handUdpSenderProcess]() {
+            return handUdpSenderProcess.IsRunning();
+        });
 
     // SceneManager
     SceneManager sceneManager;
@@ -495,8 +502,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     LARGE_INTEGER prevTime;
     QueryPerformanceCounter(&prevTime);
 
-    bool handTrackingPrewarmPending = handTrackingRuntimeAvailable;
-
     // メインループ
     while (winApp.ProcessMessage()) {
         // deltaTime計算
@@ -509,17 +514,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
 
         prevTime = currentTime;
 
-        sceneCtx.deltaTime = deltaTime;
+        sceneCtx.frame.deltaTime = deltaTime;
         handUdpSenderProcess.Update();
 
         // 入力更新
         input.Update(deltaTime);
-        if (input.IsKeyTrigger(DIK_ESCAPE)) {
-            break;
-        }
-        if (input.IsKeyTrigger(DIK_F11)) {
-            winApp.ToggleFullscreen();
-        }
 
         const int currentWidth = winApp.GetWidth();
         const int currentHeight = winApp.GetHeight();
@@ -528,7 +527,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
             width = currentWidth;
             height = currentHeight;
             dxCommon.Resize(width, height);
-            postEffectRenderer.Resize(width, height);
+            postProcessSystem.Resize(width, height);
             spriteManager.Resize(width, height);
         }
 
@@ -537,27 +536,43 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
 
         // 描画
         dxCommon.BeginFrame();
+        modelManager.BeginFrame();
         spriteManager.BeginFrame();
 
-        dxCommon.BeginScenePass();
-        sceneManager.Draw();
-        dxCommon.EndScenePass();
+        if (postProcessSystem.RequiresPostProcess()) {
+            dxCommon.BeginScenePass();
+            sceneManager.Draw();
+            sceneManager.DrawTransparent();
+            dxCommon.EndScenePass();
 
-        dxCommon.BeginBackBufferPass();
-        dxCommon.TransitionDepthToShaderResource();
-        postEffectRenderer.Draw(dxCommon.GetSceneSrvGpuHandle(&srvManager),
-                                dxCommon.GetDepthStencilGpuHandle());
-        dxCommon.TransitionDepthToWrite();
-
-        sceneManager.DrawOverlay();
+            dxCommon.BeginBackBufferPass(false);
+            dxCommon.TransitionDepthToShaderResource();
+            postProcessSystem.Draw(dxCommon.GetSceneSrvGpuHandle(&srvManager),
+                                   dxCommon.GetDepthStencilGpuHandle());
+            dxCommon.TransitionDepthToWrite();
+        } else {
+            dxCommon.BeginBackBufferPass(true);
+            sceneManager.Draw();
+            sceneManager.DrawTransparent();
+        }
 
         dxCommon.EndFrame();
-
-        if (handTrackingPrewarmPending) {
-            handTrackingPrewarmPending = false;
-            handUdpSenderProcess.Prepare();
-        }
     }
 
+    winApp.SetCursorVisible(true);
     return 0;
+}
+
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
+    try {
+        return RunApp(hInstance, nCmdShow);
+    } catch (const std::exception &e) {
+        WriteCrashLog(std::string("Unhandled exception: ") + e.what());
+        MessageBoxA(nullptr, e.what(), "Shingiittai runtime error", MB_OK | MB_ICONERROR);
+    } catch (...) {
+        WriteCrashLog("Unhandled unknown exception");
+        MessageBoxA(nullptr, "Unknown error", "Shingiittai runtime error",
+                    MB_OK | MB_ICONERROR);
+    }
+    return 1;
 }

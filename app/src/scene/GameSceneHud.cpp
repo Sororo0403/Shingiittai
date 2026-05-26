@@ -21,9 +21,9 @@ void GameSceneHud::Update(const SceneContext &ctx, float playerHp,
 
 void GameSceneHud::Draw(const SceneContext &ctx) {
     const float screenWidth =
-        ctx.winApp ? static_cast<float>(ctx.winApp->GetWidth()) : 1280.0f;
+        ctx.systems.winApp ? static_cast<float>(ctx.systems.winApp->GetWidth()) : 1280.0f;
     const float screenHeight =
-        ctx.winApp ? static_cast<float>(ctx.winApp->GetHeight()) : 720.0f;
+        ctx.systems.winApp ? static_cast<float>(ctx.systems.winApp->GetHeight()) : 720.0f;
 
     const float bossW = (std::min)(kBossHpBarMaxWidth, screenWidth * 0.62f);
     const float bossX = (screenWidth - bossW) * 0.5f;
@@ -33,14 +33,14 @@ void GameSceneHud::Draw(const SceneContext &ctx) {
     const float playerX = screenWidth - playerW - 36.0f;
     const float playerY = screenHeight - 58.0f;
 
-    ctx.sprite->PreDraw();
+    ctx.rendering.sprite->PreDraw();
 
     DrawBar(ctx, bossX, bossY, bossW, 18.0f, bossHpRate_,
             {0.95f, 0.12f, 0.08f, 0.96f}, {1.0f, 0.58f, 0.22f, 0.92f});
     DrawBar(ctx, playerX, playerY, playerW, 16.0f, playerHpRate_,
             {0.12f, 0.88f, 0.42f, 0.96f}, {0.74f, 1.0f, 0.72f, 0.88f});
 
-    ctx.sprite->PostDraw();
+    ctx.rendering.sprite->PostDraw();
 }
 
 void GameSceneHud::DrawRect(const SceneContext &ctx, float x, float y, float w,
@@ -50,7 +50,7 @@ void GameSceneHud::DrawRect(const SceneContext &ctx, float x, float y, float w,
     sprite.position = {x, y};
     sprite.size = {w, h};
     sprite.color = color;
-    ctx.sprite->DrawSprite(sprite);
+    ctx.rendering.sprite->DrawSprite(sprite);
 }
 
 void GameSceneHud::DrawBar(const SceneContext &ctx, float x, float y, float w,
