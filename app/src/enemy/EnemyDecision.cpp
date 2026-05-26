@@ -31,21 +31,44 @@ int PickWeightedIndex(std::initializer_list<int> weights) {
 }
 } // namespace
 
+float Enemy::TechniqueUnlock(BossPhase requiredPhase) const {
+    if (difficulty_ >= 7.0f) {
+        return 1.0f;
+    }
+    if (difficulty_ < 2.0f) {
+        return 0.0f;
+    }
+
+    const int currentPhase = static_cast<int>(phase_);
+    const int required = static_cast<int>(requiredPhase);
+    return currentPhase >= required ? 1.0f : 0.0f;
+}
+
 bool Enemy::ShouldEnterSmashHold() const {
+    const float unlock = TechniqueUnlock(BossPhase::Phase2);
+    if (unlock <= 0.0f) {
+        return false;
+    }
     float chance = config_.attacks.smash.melee.feintChance;
     if (playerObs_.isAttacking) {
         chance += 0.20f;
     }
+    chance *= unlock;
     chance = (std::clamp)(chance, 0.0f, 0.88f);
     float r = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
     return r < chance;
 }
 
 bool Enemy::ShouldEnterSweepHold() const {
+    const float unlock = TechniqueUnlock(BossPhase::Phase2);
+    if (unlock <= 0.0f) {
+        return false;
+    }
     float chance = config_.attacks.sweep.melee.feintChance;
     if (playerObs_.isAttacking) {
         chance += 0.20f;
     }
+    chance *= unlock;
     chance = (std::clamp)(chance, 0.0f, 0.88f);
     float r = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
     return r < chance;
@@ -75,6 +98,10 @@ bool Enemy::TryBeginChargeWarpFeint(ActionKind kind) {
     }
 
     warpFeintDecisionMade_ = true;
+    const float unlock = TechniqueUnlock(BossPhase::Phase3);
+    if (unlock <= 0.0f) {
+        return false;
+    }
     float chance = chargeWarpFeintChance_;
     if (phase_ == BossPhase::Phase1) {
         chance *= 0.55f;
@@ -84,6 +111,7 @@ bool Enemy::TryBeginChargeWarpFeint(ActionKind kind) {
     if (playerObs_.isAttacking) {
         chance += 0.12f;
     }
+    chance *= unlock;
     chance = std::clamp(chance, 0.0f, 0.76f);
 
     const float roll =
@@ -126,6 +154,10 @@ bool Enemy::TryApplyDirectionFeint(ActionKind kind) {
     }
 
     directionFeintDecisionMade_ = true;
+    const float unlock = TechniqueUnlock(BossPhase::Phase3);
+    if (unlock <= 0.0f) {
+        return false;
+    }
     float chance = directionFeintChance_;
     if (phase_ == BossPhase::Phase1) {
         chance *= 0.50f;
@@ -135,6 +167,7 @@ bool Enemy::TryApplyDirectionFeint(ActionKind kind) {
     if (playerObs_.isAttacking) {
         chance += 0.10f;
     }
+    chance *= unlock;
     chance = std::clamp(chance, 0.0f, 0.64f);
 
     const float roll =
@@ -285,6 +318,7 @@ ActionKind Enemy::SelectNearPressureAction() const {
 }
 
 bool Enemy::TryBeginWarpAction(float chance) {
+    chance *= TechniqueUnlock(BossPhase::Phase2);
     if (lastActionKind_ == ActionKind::Warp) {
         chance *= 0.35f;
     }
@@ -300,6 +334,10 @@ bool Enemy::TryBeginWarpAction(float chance) {
 }
 
 bool Enemy::TryBeginQuickSlash(float chance) {
+    const float unlock = TechniqueUnlock(BossPhase::Phase2);
+    if (unlock <= 0.0f) {
+        return false;
+    }
     if (!IsPlayerInMeleeFront()) {
         return false;
     }
@@ -314,6 +352,7 @@ bool Enemy::TryBeginQuickSlash(float chance) {
     if (phase_ != BossPhase::Phase1) {
         chance += 0.08f;
     }
+    chance *= unlock;
     chance = std::clamp(chance, 0.0f, 0.78f);
 
     const float roll =
@@ -330,6 +369,10 @@ bool Enemy::TryBeginQuickSlash(float chance) {
 }
 
 bool Enemy::TryBeginFarWarpSlash(float chance) {
+    const float unlock = TechniqueUnlock(BossPhase::Phase3);
+    if (unlock <= 0.0f) {
+        return false;
+    }
     if (lastActionKind_ == ActionKind::Warp) {
         chance *= 0.58f;
     }
@@ -339,6 +382,7 @@ bool Enemy::TryBeginFarWarpSlash(float chance) {
     if (phase_ == BossPhase::Phase3) {
         chance += 0.08f;
     }
+    chance *= unlock;
     chance = std::clamp(chance, 0.0f, 0.86f);
 
     const float roll =
@@ -365,6 +409,10 @@ bool Enemy::TryBeginFarWarpSlash(float chance) {
 }
 
 bool Enemy::TryBeginPhantomWarpSkill(float chance) {
+    const float unlock = TechniqueUnlock(BossPhase::Phase3);
+    if (unlock <= 0.0f) {
+        return false;
+    }
     if (phantomWarpCooldown_ > 0.0f || deathFinished_ || isDying_ ||
         phaseTransitionActive_) {
         return false;
@@ -386,6 +434,7 @@ bool Enemy::TryBeginPhantomWarpSkill(float chance) {
     } else if (phase_ == BossPhase::Phase2) {
         chance += 0.06f;
     }
+    chance *= unlock;
     chance = std::clamp(chance, 0.0f, 0.72f);
 
     const float roll =
@@ -394,12 +443,16 @@ bool Enemy::TryBeginPhantomWarpSkill(float chance) {
         return false;
     }
 
-    BeginPhantomWarpStep(3, false, ActionKind::None);
+    BeginPhantomWarpStep(2, false, ActionKind::None);
     phantomWarpCooldown_ = phantomWarpCooldownDuration_;
     return true;
 }
 
 bool Enemy::TryBeginBladeClash(float chance) {
+    const float unlock = TechniqueUnlock(BossPhase::Phase2);
+    if (unlock <= 0.0f) {
+        return false;
+    }
     if (!IsPlayerInMeleeFront() || lastActionKind_ == ActionKind::BladeClash) {
         return false;
     }
@@ -412,6 +465,7 @@ bool Enemy::TryBeginBladeClash(float chance) {
     } else if (phase_ == BossPhase::Phase3) {
         chance += 0.10f;
     }
+    chance *= unlock;
     chance = std::clamp(chance, 0.0f, 0.62f);
 
     const float roll =

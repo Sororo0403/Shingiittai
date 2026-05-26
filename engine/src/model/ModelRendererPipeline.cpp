@@ -317,6 +317,12 @@ void ModelRenderer::CreatePipelineState() {
         {"TANGENT", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
          D3D12_APPEND_ALIGNED_ELEMENT,
          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"CUSTOM", 0, DXGI_FORMAT_R32_FLOAT, 0,
+         D3D12_APPEND_ALIGNED_ELEMENT,
+         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"BINDPOS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
+         D3D12_APPEND_ALIGNED_ELEMENT,
+         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
     };
 
     D3D12_INPUT_ELEMENT_DESC instancedLayout[] = {
@@ -325,6 +331,8 @@ void ModelRenderer::CreatePipelineState() {
         baseLayout[2],
         baseLayout[3],
         baseLayout[4],
+        baseLayout[5],
+        baseLayout[6],
         {"WORLD", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 0,
          D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
         {"WORLD", 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 1,
@@ -442,6 +450,12 @@ void ModelRenderer::CreateShadowPipelineState() {
         {"TANGENT", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
          D3D12_APPEND_ALIGNED_ELEMENT,
          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"CUSTOM", 0, DXGI_FORMAT_R32_FLOAT, 0,
+         D3D12_APPEND_ALIGNED_ELEMENT,
+         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"BINDPOS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
+         D3D12_APPEND_ALIGNED_ELEMENT,
+         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
     };
 
     D3D12_INPUT_ELEMENT_DESC instancedLayout[] = {
@@ -450,6 +464,8 @@ void ModelRenderer::CreateShadowPipelineState() {
         baseLayout[2],
         baseLayout[3],
         baseLayout[4],
+        baseLayout[5],
+        baseLayout[6],
         {"WORLD", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 0,
          D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
         {"WORLD", 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 1,

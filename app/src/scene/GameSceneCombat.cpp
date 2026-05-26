@@ -202,6 +202,8 @@ void GameScene::BeginBladeClash(size_t swordIndex) {
                          enemyPos.z - toEnemy.y * 1.42f};
     bladeClashGauge_ = 0.0f;
     bladeClashTimer_ = bladeClashDuration_;
+    const float difficultyRatio = std::clamp(combatDifficulty_ / 9.0f, 0.0f, 1.0f);
+    bladeClashEnemyPushSpeed_ = 0.18f + 0.23f * difficultyRatio;
     bladeClashCameraPush_ = 0.0f;
     bladeClashImpactPulse_ = 0.18f;
     bladeClashEnemySurgeTimer_ = 0.0f;

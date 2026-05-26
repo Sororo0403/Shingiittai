@@ -448,6 +448,57 @@ void GameScene::UpdateBattleIntroEnemyAnimation(float) {
     }
 }
 
+void GameScene::UpdateReadyPreviewEnemyAnimation() {
+    if (ctx_ == nullptr || ctx_->rendering.model == nullptr) {
+        return;
+    }
+
+    ModelManager *modelManager = ctx_->rendering.model;
+    Model *enemyModel = modelManager->GetModel(enemyModelId_);
+    if (enemyModel == nullptr || enemyModel->animations.empty()) {
+        return;
+    }
+
+    const float heat = Clamp01(readyPreviewHeat_);
+    const bool hasTeleport = HasAnimation(enemyModel, kBossAnimTeleport);
+    const bool hasPhaseChange = HasAnimation(enemyModel, kBossAnimPhaseChange);
+    std::string clip{};
+    float clipRatio = 0.0f;
+
+    if (hasPhaseChange && heat >= 0.20f) {
+        clip = kBossAnimPhaseChange;
+        const float phase = Smooth01((heat - 0.20f) / 0.80f);
+        constexpr float kChargeStart = 0.10f;
+        constexpr float kChargeEnd = 0.34f;
+        constexpr float kReleaseStart = 0.38f;
+        constexpr float kReleaseMoment = 0.92f;
+        if (phase < 0.44f) {
+            const float charge = Smooth01(phase / 0.44f);
+            clipRatio = kChargeStart + (kChargeEnd - kChargeStart) * charge;
+        } else {
+            const float release = Smooth01((phase - 0.44f) / 0.56f);
+            clipRatio =
+                kReleaseStart + (kReleaseMoment - kReleaseStart) * release;
+        }
+    } else if (hasTeleport) {
+        clip = kBossAnimTeleport;
+        const float stance = Smooth01(heat / 0.20f);
+        clipRatio = kBladeClashGuardPoseClipRatio + 0.08f * stance;
+    } else {
+        clip = PickFirstAnimation(enemyModel, {kBossAnimPhaseChange,
+                                               kBossAnimIdle,
+                                               kBossAnimMove});
+        clipRatio = 0.0f;
+    }
+
+    if (!ScrubAnimationClip(modelManager, enemyModelId_, enemyModel, clip,
+                            clipRatio, false, enemyAnimationName_,
+                            enemyAnimationLoop_)) {
+        modelManager->UpdateAnimation(enemyModelId_, 0.0f);
+    }
+    enemyAnimationFrozen_ = false;
+}
+
 void GameScene::UpdatePhaseTransitionEnemyAnimation(float deltaTime) {
     if (ctx_ == nullptr || ctx_->rendering.model == nullptr) {
         return;

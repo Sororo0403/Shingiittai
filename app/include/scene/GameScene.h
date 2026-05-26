@@ -29,8 +29,10 @@ class GameScene : public BaseScene {
         Tutorial,
     };
 
-    explicit GameScene(const SwordInputCalibration &inputCalibration = {})
-        : inputCalibration_(inputCalibration) {}
+    explicit GameScene(const SwordInputCalibration &inputCalibration = {},
+                       float combatDifficulty = 5.0f)
+        : inputCalibration_(inputCalibration),
+          combatDifficulty_(combatDifficulty) {}
     explicit GameScene(bool titleDemoMode) : titleDemoMode_(titleDemoMode) {}
     explicit GameScene(Mode mode)
         : titleDemoMode_(mode == Mode::TitleDemo),
@@ -46,20 +48,34 @@ class GameScene : public BaseScene {
           readyPreviewMode_(mode == Mode::ReadyPreview),
           tutorialBackgroundMode_(mode == Mode::TutorialBackgroundOnly),
           tutorialMode_(mode == Mode::Tutorial) {}
+    GameScene(const SwordInputCalibration &inputCalibration,
+              float combatDifficulty, Mode mode)
+        : inputCalibration_(inputCalibration),
+          combatDifficulty_(combatDifficulty),
+          titleDemoMode_(mode == Mode::TitleDemo),
+          backgroundOnlyMode_(mode == Mode::BackgroundOnly ||
+                              mode == Mode::TutorialBackgroundOnly),
+          readyPreviewMode_(mode == Mode::ReadyPreview),
+          tutorialBackgroundMode_(mode == Mode::TutorialBackgroundOnly),
+          tutorialMode_(mode == Mode::Tutorial) {}
     ~GameScene() override;
 
     void Initialize(const SceneContext &ctx) override;
     void Update() override;
     void Draw() override;
     void DrawTransparent() override;
+    void SetReadyPreviewHeat(float heat);
 
   private:
     void UpdateCamera(Input *input);
     void UpdateBattleCamera();
     void UpdateTutorial(float deltaTime);
+    bool IsTutorialOperationStepComplete() const;
+    void AdvanceTutorialOperationStep();
     void UpdateBackgroundCamera(float deltaTime);
     void UpdateReadyPreviewCamera(float deltaTime);
     void UpdateSceneLighting();
+    void EmitReadyPreviewHeatParticles(float deltaTime);
     void DrawArena();
     void DrawDistantHazardBackdrop(float buildProgress);
     void DrawBladeClashFinishBackdrop();
@@ -97,6 +113,7 @@ class GameScene : public BaseScene {
     void SyncEnemyAnimation();
     void UpdateBladeClashEnemyAnimation(float deltaTime);
     void UpdateBattleIntroEnemyAnimation(float deltaTime);
+    void UpdateReadyPreviewEnemyAnimation();
     void UpdatePhaseTransitionEnemyAnimation(float deltaTime);
     void ApplyEnemyProceduralAnimation();
     void SetEnemyAnimationFrozen(bool frozen);
@@ -123,6 +140,7 @@ class GameScene : public BaseScene {
 
   private:
     SwordInputCalibration inputCalibration_{};
+    float combatDifficulty_ = 5.0f;
     bool titleDemoMode_ = false;
     bool backgroundOnlyMode_ = false;
     bool readyPreviewMode_ = false;
@@ -231,6 +249,8 @@ class GameScene : public BaseScene {
 
     float sceneLightTime_ = 0.0f;
     float backgroundBuildTimer_ = 0.0f;
+    float readyPreviewHeat_ = 0.0f;
+    float readyPreviewParticleTimer_ = 0.0f;
     float battleElapsedTime_ = 0.0f;
     bool battleIntroActive_ = true;
     float battleIntroTimer_ = 0.0f;
@@ -302,11 +322,12 @@ class GameScene : public BaseScene {
     float tutorialAttackDelay_ = 1.2f;
     float tutorialSuccessTimer_ = 0.0f;
     float tutorialMissTimer_ = 0.0f;
+    int tutorialStep_ = 0;
     int tutorialAttackIndex_ = 0;
     bool tutorialAttackInProgress_ = false;
     bool tutorialCounterSuccess_ = false;
     bool tutorialImagesLoaded_ = false;
-    std::array<uint32_t, 7> tutorialTextureIds_{};
-    std::array<float, 7> tutorialTextureWidths_{};
-    std::array<float, 7> tutorialTextureHeights_{};
+    std::array<uint32_t, 9> tutorialTextureIds_{};
+    std::array<float, 9> tutorialTextureWidths_{};
+    std::array<float, 9> tutorialTextureHeights_{};
 };

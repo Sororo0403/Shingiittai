@@ -1,10 +1,8 @@
 #pragma once
 #include "Camera.h"
-#include "JoyCon.h"
 #include "Sword.h"
 #include "SwordControllerState.h"
 #include "SwordInputCalibration.h"
-#include "SwordJoyConController.h"
 #include "SwordMouseController.h"
 #include "SwordUdpController.h"
 #include "Transform.h"
@@ -29,7 +27,6 @@ class Player {
                 float controlDeltaTime = -1.0f,
                 bool suppressLookAt = false);
     void UpdateDemo(float deltaTime, const DirectX::XMFLOAT3 &lookTarget);
-    void UpdateJoyConCalibrationInput(Input *, float deltaTime);
 
     void Draw(ModelManager *modelManager, const Camera &camera,
               bool drawBody = true, bool forceOpaque = false,
@@ -81,10 +78,8 @@ class Player {
     void KeepDistanceFromTarget(const DirectX::XMFLOAT3 &target);
     void LookAt(const DirectX::XMFLOAT3 &target);
     void UpdateWeaponRules(Input *input, SwordPose &leftPose,
-                           SwordPose &rightPose, bool hasLeftJoyCon,
-                           bool hasRightJoyCon,
-                           bool useDualUdpControls, float deltaTime);
-    float ComputeJoyConSwingDamageMultiplier(float angularVelocity) const;
+                           SwordPose &rightPose, bool useDualControls,
+                           float deltaTime);
 
   private:
     static constexpr float kHandHeight = 1.0f;
@@ -97,14 +92,9 @@ class Player {
 
     Sword leftSword_;
     Sword rightSword_;
-    JoyCon leftJoyCon_;
-    JoyCon rightJoyCon_;
-    SwordJoyConController leftSwordJoyConController_;
-    SwordJoyConController rightSwordJoyConController_;
     SwordMouseController swordMouseController_;
     SwordUdpController swordUdpController_;
     SwordInputCalibration inputCalibration_{};
-    bool applyJoyConBaseOnNextUpdate_ = false;
     bool suppressCameraSwordSlash_ = false;
     SwordControllerState keyboardLeftSwordState_{};
     bool useGamepadCameraLook_ = true;
@@ -114,11 +104,11 @@ class Player {
     bool rightSwordVisible_ = false;
     float autoMoveOrbitDir_ = 1.0f;
     float autoMoveOrbitTimer_ = 0.0f;
-    static constexpr float kJoyConAutoMoveIdealDistance = 2.45f;
-    static constexpr float kJoyConAutoMoveNearDistance = 1.75f;
-    static constexpr float kJoyConAutoMoveFarDistance = 3.05f;
-    static constexpr float kJoyConAutoMoveOrbitSpeed = 0.85f;
-    static constexpr float kJoyConAutoMoveDistanceSpeed = 4.20f;
+    static constexpr float kAutoMoveIdealDistance = 2.45f;
+    static constexpr float kAutoMoveNearDistance = 1.75f;
+    static constexpr float kAutoMoveFarDistance = 3.05f;
+    static constexpr float kAutoMoveOrbitSpeed = 0.85f;
+    static constexpr float kAutoMoveDistanceSpeed = 4.20f;
     float leftSwordAttackDamage_ = 8.0f;
     float rightSwordAttackDamage_ = 8.0f;
 

@@ -97,7 +97,7 @@ float4 main(ModelVSOutput input) : SV_TARGET
         if (customParams2.x > 0.5f)
         {
             float rustScale = max(customParams2.y, 0.001f);
-            float3 p = input.localPos * rustScale;
+            float3 p = input.bindPos * rustScale;
             float3 n = abs(normalize(input.worldNormal));
             n = pow(n, 4.0f);
             n /= max(n.x + n.y + n.z, 0.0001f);

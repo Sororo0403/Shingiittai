@@ -6,6 +6,7 @@ struct Vertex
     float4 color;
     float4 tangent;
     float custom0;
+    float3 bindPos;
 };
 
 struct VertexInfluence

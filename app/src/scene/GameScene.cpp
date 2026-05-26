@@ -34,13 +34,18 @@ constexpr float kHitSoundVolume = 0.46f;
 constexpr float kCounterSoundVolume = 0.44f;
 constexpr float kDamageSoundVolume = 0.46f;
 constexpr float kExplosionSoundVolume = 0.40f;
-constexpr int kTutorialTextWait = 0;
-constexpr int kTutorialTextVertical = 1;
-constexpr int kTutorialTextHorizontal = 2;
-constexpr int kTutorialTextRelease = 3;
-constexpr int kTutorialTextSuccess = 4;
-constexpr int kTutorialTextMiss = 5;
-constexpr int kTutorialTextExit = 6;
+constexpr int kTutorialTextLeftRight = 0;
+constexpr int kTutorialTextRightSword = 1;
+constexpr int kTutorialTextWait = 2;
+constexpr int kTutorialTextVertical = 3;
+constexpr int kTutorialTextHorizontal = 4;
+constexpr int kTutorialTextRelease = 5;
+constexpr int kTutorialTextSuccess = 6;
+constexpr int kTutorialTextMiss = 7;
+constexpr int kTutorialTextExit = 8;
+constexpr int kTutorialStepLeftRight = 0;
+constexpr int kTutorialStepRightSword = 1;
+constexpr int kTutorialStepCombat = 2;
 constexpr int kDebugBladeClashKey = DIK_F6;
 constexpr uint16_t kHandCameraPreviewPort = 5006;
 constexpr float kHandCameraPreviewStaleSeconds = 0.75f;
@@ -157,18 +162,34 @@ uint32_t Hash2D(uint32_t x, uint32_t y, uint32_t seed) {
 uint32_t CreateProceduralTexture(TextureManager *texture, uint32_t width,
                                  uint32_t height, const XMFLOAT3 &baseColor,
                                  const XMFLOAT3 &accentColor, uint32_t seed,
-                                 float grainStrength) {
+                                  float grainStrength,
+                                  bool isotropicPattern = false) {
     std::vector<uint8_t> pixels(static_cast<size_t>(width) * height * 4u);
     for (uint32_t y = 0; y < height; ++y) {
         for (uint32_t x = 0; x < width; ++x) {
             const uint32_t h = Hash2D(x / 3u, y / 3u, seed);
             const float noise = static_cast<float>(h & 255u) / 255.0f;
-            const float streak =
-                static_cast<float>(Hash2D(x / 19u, y / 7u, seed + 17u) & 255u) /
-                255.0f;
-            const float t = std::clamp(noise * grainStrength +
-                                           streak * (1.0f - grainStrength),
-                                       0.0f, 1.0f);
+            float pattern = 0.0f;
+            if (isotropicPattern) {
+                const float broad =
+                    static_cast<float>(Hash2D(x / 13u, y / 13u, seed + 17u) &
+                                       255u) /
+                    255.0f;
+                const float mid =
+                    static_cast<float>(Hash2D(x / 7u, y / 7u, seed + 23u) &
+                                       255u) /
+                    255.0f;
+                const float remaining =
+                    (std::max)(1.0f - grainStrength, 0.0f);
+                pattern = broad * remaining * 0.58f + mid * remaining * 0.42f;
+            } else {
+                pattern =
+                    static_cast<float>(
+                        Hash2D(x / 19u, y / 7u, seed + 17u) & 255u) /
+                    255.0f * (1.0f - grainStrength);
+            }
+            const float t =
+                std::clamp(noise * grainStrength + pattern, 0.0f, 1.0f);
             const float fine =
                 static_cast<float>(Hash2D(x, y, seed + 31u) & 63u) / 255.0f;
             XMFLOAT3 color{
@@ -196,7 +217,7 @@ uint32_t AppCreateRustedMetalTexture(TextureManager *texture, uint32_t width,
                                      uint32_t height) {
     return CreateProceduralTexture(texture, width, height,
                                    {0.23f, 0.22f, 0.20f}, {0.70f, 0.30f, 0.12f},
-                                   0x914Au, 0.62f);
+                                   0x914Au, 0.62f, true);
 }
 
 uint32_t AppCreateArenaStoneTexture(TextureManager *texture, uint32_t width,
@@ -349,6 +370,10 @@ void ApplyRustedRobotMaterials(ModelManager *modelManager, uint32_t modelId,
 } // namespace
 
 GameScene::~GameScene() = default;
+
+void GameScene::SetReadyPreviewHeat(float heat) {
+    readyPreviewHeat_ = std::clamp(heat, 0.0f, 1.0f);
+}
 
 void GameScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
@@ -517,6 +542,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
     player_.SetInputCalibration(inputCalibration_);
     playerModelId_ = playerModel;
     swordModelId_ = swordModel;
+    enemy_.SetDifficulty(combatDifficulty_);
     enemy_.Initialize(enemyModel);
     enemyModelId_ = enemyModel;
     if (ctx_->systems.sound != nullptr) {
@@ -576,6 +602,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
     tutorialAttackDelay_ = 1.2f;
     tutorialSuccessTimer_ = 0.0f;
     tutorialMissTimer_ = 0.0f;
+    tutorialStep_ = 0;
     tutorialAttackIndex_ = 0;
     tutorialAttackInProgress_ = false;
     tutorialCounterSuccess_ = false;
@@ -651,6 +678,9 @@ void GameScene::Initialize(const SceneContext &ctx) {
         if (readyPreviewMode_) {
             player_.UpdateDemo(0.0f, {0.0f, 0.0f, 4.0f});
             player_.LockPosition({0.0f, 0.0f, 0.0f});
+            ApplyEnemyIntroDissolve(1.0f);
+            UpdateReadyPreviewEnemyAnimation();
+            ApplyEnemyProceduralAnimation();
             UpdateReadyPreviewCamera(0.0f);
         } else {
             UpdateBackgroundCamera(0.0f);
@@ -667,8 +697,12 @@ void GameScene::Update() {
         backgroundBuildTimer_ = 1.2f;
         player_.UpdateDemo(0.0f, {0.0f, 0.0f, 4.0f});
         player_.LockPosition({0.0f, 0.0f, 0.0f});
-        ctx_->rendering.model->UpdateAnimation(playerModelId_,
-                                               baseDeltaTime * 0.16f);
+        UpdateReadyPreviewEnemyAnimation();
+        ApplyEnemyProceduralAnimation();
+        EmitReadyPreviewHeatParticles(baseDeltaTime);
+        sparkParticles_.Update(baseDeltaTime);
+        explosionParticles_.Update(baseDeltaTime);
+        smokeParticles_.Update(baseDeltaTime);
         UpdateSceneLighting();
         UpdateReadyPreviewCamera(baseDeltaTime);
         return;
@@ -928,6 +962,46 @@ void GameScene::TriggerDebugBladeClash() {
     BeginBladeClash(0);
 }
 
+bool GameScene::IsTutorialOperationStepComplete() const {
+    const auto swords = player_.GetSwords();
+    const auto slashStates = player_.GetSwordSlashStates();
+    auto hasSlash = [&](size_t index) {
+        return index < slashStates.size() && slashStates[index] &&
+               index < swords.size() && swords[index] != nullptr;
+    };
+
+    if (tutorialStep_ == kTutorialStepLeftRight) {
+        if (!hasSlash(0)) {
+            return false;
+        }
+        const XMFLOAT2 &dir = swords[0]->GetSlashDirection();
+        return dir.x > 0.45f;
+    }
+
+    if (tutorialStep_ == kTutorialStepRightSword) {
+        if (!hasSlash(1)) {
+            return false;
+        }
+        const XMFLOAT2 &dir = swords[1]->GetSlashDirection();
+        return dir.x * dir.x + dir.y * dir.y > 0.20f;
+    }
+
+    return false;
+}
+
+void GameScene::AdvanceTutorialOperationStep() {
+    ++tutorialStep_;
+    tutorialSuccessTimer_ = 0.75f;
+    tutorialMissTimer_ = 0.0f;
+    tutorialAttackDelay_ =
+        tutorialStep_ >= kTutorialStepCombat ? 1.35f : 0.0f;
+    tutorialAttackInProgress_ = false;
+    tutorialCounterSuccess_ = false;
+    enemy_.ResetTutorialState();
+    enemy_.SetTutorialPosition({0.0f, 0.0f, 3.10f});
+    enemy_.FaceTargetImmediately(player_.GetTransform().position);
+}
+
 void GameScene::UpdateTutorial(float deltaTime) {
     Input *input = ctx_->systems.input;
     if (input != nullptr && input->IsKeyTrigger(DIK_ESCAPE)) {
@@ -952,6 +1026,28 @@ void GameScene::UpdateTutorial(float deltaTime) {
     tutorialSuccessTimer_ =
         (std::max)(0.0f, tutorialSuccessTimer_ - deltaTime);
     tutorialMissTimer_ = (std::max)(0.0f, tutorialMissTimer_ - deltaTime);
+
+    if (tutorialStep_ < kTutorialStepCombat) {
+        if (tutorialSuccessTimer_ <= 0.0f &&
+            IsTutorialOperationStepComplete()) {
+            AdvanceTutorialOperationStep();
+        }
+
+        enemy_.ResetTutorialState();
+        enemy_.SetTutorialPosition({0.0f, 0.0f, 3.10f});
+        enemy_.FaceTargetImmediately(player_.GetTransform().position);
+        ctx_->rendering.model->UpdateAnimation(playerModelId_, deltaTime);
+        ctx_->rendering.model->UpdateAnimation(enemyModelId_, deltaTime);
+        ApplyEnemyProceduralAnimation();
+        UpdateSceneLighting();
+        UpdateBattleCamera();
+        camera_.UpdateMatrices();
+        sparkParticles_.Update(deltaTime);
+        explosionParticles_.Update(deltaTime);
+        smokeParticles_.Update(deltaTime);
+        swordFlashParticles_.Update(deltaTime);
+        return;
+    }
 
     if (!tutorialAttackInProgress_) {
         tutorialAttackDelay_ -= deltaTime;
@@ -990,6 +1086,8 @@ void GameScene::UpdateTutorial(float deltaTime) {
     }
 
     ctx_->rendering.model->UpdateAnimation(playerModelId_, deltaTime);
+    SyncEnemyAnimation();
+    SetEnemyAnimationFrozen(counterCinematicActive_);
     if (!enemyAnimationFrozen_) {
         float enemyAnimationDeltaTime = deltaTime;
         const ActionKind enemyActionKind = enemy_.GetActionKind();
@@ -1063,11 +1161,16 @@ void GameScene::Draw() {
         return;
     }
     if (readyPreviewMode_) {
-        ctx_->rendering.model->PrepareSkinning({playerModelId_});
+        ctx_->rendering.model->PrepareSkinning({enemyModelId_});
+        GPUParticleSystem::DispatchPendingUpdates(
+            {&smokeParticles_, &sparkParticles_, &explosionParticles_});
         ctx_->rendering.model->PreDraw();
         DrawArena();
-        player_.Draw(ctx_->rendering.model, camera_, true, true, 1.0f);
+        enemy_.Draw(ctx_->rendering.model, camera_, 1.28f);
         ctx_->rendering.model->PostDraw();
+        GPUParticleSystem::DrawBatch(
+            {&smokeParticles_, &sparkParticles_, &explosionParticles_},
+            camera_);
         return;
     }
 
@@ -1149,11 +1252,12 @@ void GameScene::UpdatePauseMenu(Input *input) {
         input->IsKeyTrigger(DIK_DOWN) || input->IsKeyTrigger(DIK_S) ||
         (gamepad && input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_DOWN));
     constexpr int kPauseMenuItemCount = 3;
-    if (moveUp && !moveDown) {
-        pauseMenuIndex_ =
-            (pauseMenuIndex_ + kPauseMenuItemCount - 1) % kPauseMenuItemCount;
+    if (moveUp && !moveDown && pauseMenuIndex_ > 0) {
+        --pauseMenuIndex_;
     } else if (moveDown && !moveUp) {
-        pauseMenuIndex_ = (pauseMenuIndex_ + 1) % kPauseMenuItemCount;
+        if (pauseMenuIndex_ < kPauseMenuItemCount - 1) {
+            ++pauseMenuIndex_;
+        }
     }
 
     const bool cancel =
@@ -1178,7 +1282,8 @@ void GameScene::ExecutePauseMenuSelection() {
         ClosePauseMenu();
         break;
     case 1:
-        sceneManager_->ChangeScene(std::make_unique<GameScene>(inputCalibration_));
+        sceneManager_->ChangeScene(
+            std::make_unique<GameScene>(inputCalibration_, combatDifficulty_));
         break;
     case 2:
         sceneManager_->ChangeScene(std::make_unique<TitleScene>());
@@ -1216,7 +1321,15 @@ void GameScene::LoadTutorialImages() {
         return;
     }
 
-    const std::array<std::wstring, 7> paths{
+    const bool handTutorial =
+        inputCalibration_.controlType == InputControlType::Hand;
+    const std::array<std::wstring, 9> paths{
+        handTutorial
+            ? L"app/resources/ui/tutorial_dynamic/left_right_hand.png"
+            : L"app/resources/ui/tutorial_dynamic/left_right_kbm.png",
+        handTutorial
+            ? L"app/resources/ui/tutorial_dynamic/right_sword_hand.png"
+            : L"app/resources/ui/tutorial_dynamic/right_sword_kbm.png",
         L"app/resources/ui/tutorial_dynamic/wait.png",
         L"app/resources/ui/tutorial_dynamic/vertical.png",
         L"app/resources/ui/tutorial_dynamic/horizontal.png",
@@ -1451,6 +1564,10 @@ void GameScene::DrawTutorialOverlay() {
         messageIndex = kTutorialTextSuccess;
     } else if (tutorialMissTimer_ > 0.0f) {
         messageIndex = kTutorialTextMiss;
+    } else if (tutorialStep_ == kTutorialStepLeftRight) {
+        messageIndex = kTutorialTextLeftRight;
+    } else if (tutorialStep_ == kTutorialStepRightSword) {
+        messageIndex = kTutorialTextRightSword;
     } else if (releaseRatio > 0.0f || actionStep == ActionStep::Active) {
         messageIndex = kTutorialTextRelease;
     } else if (actionKind == ActionKind::Smash) {
@@ -1539,6 +1656,121 @@ void GameScene::DispatchCombatFeedback(const CombatFeedbackEvent &event) {
 void GameScene::UpdateSwordVfx(float deltaTime) {
     swordTrailRenderer_.Update(player_, deltaTime);
     swordSlashArcRenderer_.Update(deltaTime);
+}
+
+void GameScene::EmitReadyPreviewHeatParticles(float deltaTime) {
+    if (!readyPreviewMode_ || readyPreviewHeat_ <= 0.015f) {
+        return;
+    }
+
+    readyPreviewParticleTimer_ -= deltaTime;
+    if (readyPreviewParticleTimer_ > 0.0f) {
+        return;
+    }
+
+    const float heat = readyPreviewHeat_;
+    const float danger = heat * heat * (3.0f - 2.0f * heat);
+    readyPreviewParticleTimer_ = 0.078f - 0.070f * danger;
+    const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
+    const float wave = sceneLightTime_ * (2.2f + danger * 5.8f);
+    const float side = std::sinf(wave * 1.7f) * (0.75f + 2.1f * danger);
+    const float depth = std::cosf(wave * 1.1f) * (0.42f + 1.35f * danger);
+    const XMFLOAT3 origin{
+        enemyPos.x + side,
+        enemyPos.y + 0.18f + 0.58f * danger,
+        enemyPos.z - 0.92f + depth,
+    };
+    const XMFLOAT3 upward{
+        std::sinf(wave) * (0.16f + 0.28f * danger),
+        1.0f,
+        0.16f + std::cosf(wave * 0.8f) * (0.16f + 0.24f * danger),
+    };
+
+    EmitParticleBurst(
+        smokeParticles_, origin,
+        static_cast<uint32_t>(22.0f + 64.0f * heat + 230.0f * danger),
+        0.78f + 0.74f * heat + 1.70f * danger,
+        AppParticleBurstStyle::Smoke,
+        {0.24f + 0.46f * danger, 0.20f + 0.14f * heat, 0.14f,
+         0.62f + 0.30f * danger},
+        upward, 0.72f + 0.86f * heat + 2.10f * danger);
+    EmitParticleBurst(
+        sparkParticles_, {origin.x, origin.y + 0.24f, origin.z},
+        static_cast<uint32_t>(64.0f + 180.0f * heat + 620.0f * danger),
+        0.34f + 0.42f * heat + 0.98f * danger,
+        AppParticleBurstStyle::Sparks,
+        {1.0f, 0.38f + 0.50f * heat, 0.05f, 0.96f + 0.04f * danger}, upward,
+        2.00f + 3.45f * heat + 6.20f * danger);
+
+    const XMFLOAT3 secondOrigin{
+        enemyPos.x - side * 0.72f,
+        enemyPos.y + 0.16f + 0.38f * danger,
+        enemyPos.z - 1.25f - depth * 0.52f,
+    };
+    EmitParticleBurst(
+        sparkParticles_, secondOrigin,
+        static_cast<uint32_t>(42.0f + 128.0f * heat + 420.0f * danger),
+        0.28f + 0.34f * heat + 0.78f * danger,
+        AppParticleBurstStyle::Sparks,
+        {1.0f, 0.22f + 0.36f * heat, 0.04f, 0.88f + 0.10f * danger},
+        upward, 1.80f + 3.05f * heat + 5.20f * danger);
+
+    if (heat > 0.24f) {
+        EmitParticleBurst(
+            explosionParticles_, {origin.x, origin.y + 0.42f, origin.z},
+            static_cast<uint32_t>(42.0f + 130.0f * heat + 440.0f * danger),
+            0.26f + 0.38f * heat + 1.02f * danger,
+            AppParticleBurstStyle::Explosion,
+            {1.0f, 0.16f + 0.34f * heat, 0.03f, 0.82f + 0.14f * danger},
+            upward, 1.35f + 2.10f * heat + 4.35f * danger);
+        EmitParticleBurst(
+            smokeParticles_, {origin.x - side * 0.26f, origin.y + 0.16f,
+                              origin.z - depth * 0.20f},
+            static_cast<uint32_t>(18.0f + 58.0f * heat + 210.0f * danger),
+            0.42f + 0.98f * danger, AppParticleBurstStyle::Flash,
+            {1.0f, 0.42f + 0.18f * heat, 0.08f, 0.34f + 0.42f * danger},
+            upward, 0.74f + 2.20f * danger);
+    }
+
+    if (heat > 0.52f) {
+        const XMFLOAT3 ringOrigin{
+            enemyPos.x - side * 1.18f,
+            enemyPos.y + 0.48f + 0.40f * danger,
+            enemyPos.z - 1.04f + depth * 0.86f,
+        };
+        EmitParticleBurst(
+            explosionParticles_, ringOrigin,
+            static_cast<uint32_t>(84.0f + 320.0f * danger),
+            0.30f + 0.88f * danger, AppParticleBurstStyle::SlashLine,
+            {1.0f, 0.62f, 0.08f, 0.74f + 0.20f * danger}, upward,
+            1.60f + 4.20f * danger);
+        EmitParticleBurst(
+            sparkParticles_, {ringOrigin.x, ringOrigin.y + 0.18f, ringOrigin.z},
+            static_cast<uint32_t>(120.0f + 420.0f * danger),
+            0.34f + 0.78f * danger, AppParticleBurstStyle::Sparks,
+            {1.0f, 0.74f, 0.18f, 0.96f}, upward, 2.20f + 5.30f * danger);
+    }
+
+    if (heat > 0.72f) {
+        const float burstSide = std::cosf(wave * 2.3f) * (2.4f + 1.8f * danger);
+        const XMFLOAT3 panicOrigin{
+            enemyPos.x + burstSide,
+            enemyPos.y + 0.72f + 0.36f * danger,
+            enemyPos.z - 0.86f - depth,
+        };
+        EmitParticleBurst(
+            explosionParticles_, panicOrigin,
+            static_cast<uint32_t>(280.0f + 620.0f * danger),
+            0.48f + 1.12f * danger, AppParticleBurstStyle::Explosion,
+            {1.0f, 0.08f + 0.28f * heat, 0.02f, 0.92f}, upward,
+            2.40f + 6.20f * danger);
+        EmitParticleBurst(
+            smokeParticles_, {panicOrigin.x, panicOrigin.y - 0.16f, panicOrigin.z},
+            static_cast<uint32_t>(110.0f + 310.0f * danger),
+            0.90f + 1.92f * danger, AppParticleBurstStyle::Flash,
+            {1.0f, 0.34f, 0.08f, 0.58f + 0.34f * danger}, upward,
+            1.20f + 3.55f * danger);
+    }
 }
 
 void GameScene::EmitCombatParticles(const CombatFeedbackEvent &event) {
@@ -2508,6 +2740,7 @@ void GameScene::UpdateDefeatSequence(float deltaTime) {
             battleIntroRevealEmitted_ = false;
             player_.Initialize(playerModelId_, swordModelId_);
             player_.SetInputCalibration(inputCalibration_);
+            enemy_.SetDifficulty(combatDifficulty_);
             enemy_.Initialize(enemyModelId_);
             enemy_.FaceTargetImmediately(player_.GetTransform().position);
             ApplyEnemyIntroDissolve(0.0f);
@@ -2515,7 +2748,7 @@ void GameScene::UpdateDefeatSequence(float deltaTime) {
         }
         sceneManager_->ChangeScene(std::make_unique<BattleResultScene>(
             BattleResultScene::ResultKind::GameOver, battleElapsedTime_,
-            inputCalibration_));
+            inputCalibration_, combatDifficulty_));
     }
 }
 
@@ -2563,6 +2796,7 @@ void GameScene::UpdateVictorySequence(float deltaTime) {
             battleIntroRevealEmitted_ = false;
             player_.Initialize(playerModelId_, swordModelId_);
             player_.SetInputCalibration(inputCalibration_);
+            enemy_.SetDifficulty(combatDifficulty_);
             enemy_.Initialize(enemyModelId_);
             enemy_.FaceTargetImmediately(player_.GetTransform().position);
             ApplyEnemyIntroDissolve(0.0f);
@@ -2570,7 +2804,7 @@ void GameScene::UpdateVictorySequence(float deltaTime) {
         }
         sceneManager_->ChangeScene(std::make_unique<BattleResultScene>(
             BattleResultScene::ResultKind::Clear, victoryClearTime_,
-            inputCalibration_));
+            inputCalibration_, combatDifficulty_));
     }
 }
 

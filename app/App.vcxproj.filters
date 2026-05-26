@@ -96,6 +96,9 @@
     <ClCompile Include="src\scene\CalibrationScene.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
+    <ClCompile Include="src\scene\DifficultyCauldronScene.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
     <ClCompile Include="src\enemy\EnemyMelee.cpp">
       <Filter>Source Files\enemy</Filter>
     </ClCompile>
@@ -123,12 +126,6 @@
     <ClCompile Include="src\player\Player.cpp">
       <Filter>Source Files\player</Filter>
     </ClCompile>
-    <ClCompile Include="src\player\JoyCon.cpp">
-      <Filter>Source Files\player</Filter>
-    </ClCompile>
-    <ClCompile Include="src\player\MahonyFilter.cpp">
-      <Filter>Source Files\player</Filter>
-    </ClCompile>
     <ClCompile Include="src\scene\CombatFeedbackDirector.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
@@ -150,9 +147,6 @@
     <ClCompile Include="src\scene\TitleScene.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
-    <ClCompile Include="src\scene\TipScene.cpp">
-      <Filter>Source Files\scene</Filter>
-    </ClCompile>
     <ClCompile Include="src\scene\TutorialScene.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
@@ -166,9 +160,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\player\Sword.cpp">
-      <Filter>Source Files\player</Filter>
-    </ClCompile>
-    <ClCompile Include="src\player\SwordJoyConController.cpp">
       <Filter>Source Files\player</Filter>
     </ClCompile>
     <ClCompile Include="src\player\SwordMouseController.cpp">
@@ -193,6 +184,9 @@
       <Filter>Header Files\scene</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\CalibrationScene.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="include\scene\DifficultyCauldronScene.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
     <ClInclude Include="include\enemy\EnemyActionData.h">
@@ -231,9 +225,6 @@
     <ClInclude Include="include\player\Sword.h">
       <Filter>Header Files\player</Filter>
     </ClInclude>
-    <ClInclude Include="include\player\SwordJoyConController.h">
-      <Filter>Header Files\player</Filter>
-    </ClInclude>
     <ClInclude Include="include\player\SwordMouseController.h">
       <Filter>Header Files\player</Filter>
     </ClInclude>
@@ -256,16 +247,7 @@
     <ClInclude Include="include\compat\ParticleCompat.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="include\player\JoyCon.h">
-      <Filter>Header Files\player</Filter>
-    </ClInclude>
-    <ClInclude Include="include\player\MahonyFilter.h">
-      <Filter>Header Files\player</Filter>
-    </ClInclude>
     <ClInclude Include="include\scene\AppSceneServices.h">
-      <Filter>Header Files\scene</Filter>
-    </ClInclude>
-    <ClInclude Include="include\scene\TipScene.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\TutorialScene.h">
@@ -402,9 +384,6 @@
     <None Include="resources\ui\tip\text\tip_hand.png">
       <Filter>Resources\UI\tip\text</Filter>
     </None>
-    <None Include="resources\ui\tip\text\tip_joycon.png">
-      <Filter>Resources\UI\tip\text</Filter>
-    </None>
     <None Include="resources\ui\tip\text\tip_kbm.png">
       <Filter>Resources\UI\tip\text</Filter>
     </None>
@@ -429,16 +408,10 @@
     <None Include="resources\ui\weapon_select\text\input_hand.png">
       <Filter>Resources\UI\weapon_select\text</Filter>
     </None>
-    <None Include="resources\ui\weapon_select\text\input_joycon.png">
-      <Filter>Resources\UI\weapon_select\text</Filter>
-    </None>
     <None Include="resources\ui\weapon_select\text\input_kbm.png">
       <Filter>Resources\UI\weapon_select\text</Filter>
     </None>
     <None Include="resources\ui\weapon_select\text\input_ready_hand.png">
-      <Filter>Resources\UI\weapon_select\text</Filter>
-    </None>
-    <None Include="resources\ui\weapon_select\text\input_ready_joycon.png">
       <Filter>Resources\UI\weapon_select\text</Filter>
     </None>
     <None Include="resources\ui\weapon_select\text\input_ready_kbm.png">

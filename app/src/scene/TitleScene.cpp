@@ -1,5 +1,6 @@
 #include "TitleScene.h"
 #include "AppSceneServices.h"
+#include "BattleResultScene.h"
 #include "Input.h"
 #include "PostProcessSystem.h"
 #include "SceneManager.h"
@@ -84,6 +85,17 @@ void TitleScene::Update() {
     if (ctx_->systems.input->IsKeyTrigger(DIK_ESCAPE)) {
         exitConfirmVisible_ = true;
         exitConfirmIndex_ = 1;
+        return;
+    }
+
+    if (ctx_->systems.input->IsKeyTrigger(DIK_F7)) {
+        sceneManager_->ChangeScene(std::make_unique<BattleResultScene>(
+            BattleResultScene::ResultKind::Clear, 92.34f));
+        return;
+    }
+    if (ctx_->systems.input->IsKeyTrigger(DIK_F8)) {
+        sceneManager_->ChangeScene(std::make_unique<BattleResultScene>(
+            BattleResultScene::ResultKind::GameOver, 0.0f));
         return;
     }
 

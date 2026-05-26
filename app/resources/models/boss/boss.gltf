@@ -6112,7 +6112,7 @@
 	"images":[
 		{
 			"mimeType":"image/png",
-			"name":"bossBody",
+			"name":"boss",
 			"uri":"boss.png"
 		}
 	],

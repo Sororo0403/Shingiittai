@@ -311,6 +311,16 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
     const int phantomRemaining = warp_.phantomViewWarpsRemaining;
     EndAttack();
     if (phantomChain && !phantomFinal) {
+        const float earlyStrikeChance =
+            0.18f + 0.42f * TechniqueUnlock(BossPhase::Phase3);
+        const bool canCutInEarly = phantomRemaining > 1;
+        if (canCutInEarly && Random01() < earlyStrikeChance) {
+            const ActionKind finisher =
+                (std::rand() % 2 == 0) ? ActionKind::Smash
+                                       : ActionKind::Sweep;
+            BeginPhantomWarpStep(0, true, finisher);
+            return;
+        }
         if (phantomRemaining > 1) {
             BeginPhantomWarpStep(phantomRemaining - 1, false,
                                  ActionKind::None);

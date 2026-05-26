@@ -201,6 +201,8 @@ struct EnemyRuntimeState {
 class Enemy {
   public:
     void Initialize(uint32_t modelId);
+    void SetDifficulty(float difficulty);
+    float GetDifficulty() const { return difficulty_; }
 
     void Update(const PlayerCombatObservation &playerObs, float deltaTime);
     void UpdateTutorial(const PlayerCombatObservation &playerObs,
@@ -314,6 +316,7 @@ class Enemy {
     TacticState &tactic_ = runtime_.tactic;
     BossPhase &phase_ = runtime_.phase;
     EnemyConfig config_{};
+    float difficulty_ = 5.0f;
     bool &phaseTransitionActive_ = runtime_.phaseTransitionActive;
     float &phaseTransitionTimer_ = runtime_.phaseTransitionTimer;
     float phaseTransitionDuration_ = 3.40f;
@@ -481,6 +484,7 @@ class Enemy {
     void EnterHold(float duration);
     bool TryBeginChargeWarpFeint(ActionKind kind);
     bool TryApplyDirectionFeint(ActionKind kind);
+    float TechniqueUnlock(BossPhase requiredPhase) const;
 
     void EnterTell(ActionKind kind);
     bool IsTellFinished() const;

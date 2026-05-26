@@ -128,19 +128,19 @@ void GameScene::UpdateReadyPreviewCamera(float deltaTime) {
     }
 
     camera_.SetPerspectiveFovDeg(50.0f);
-    const XMFLOAT3 &playerPos = player_.GetTransform().position;
+    const XMFLOAT3 &enemyPos = enemy_.GetTransform().position;
     const float breath = std::sinf(sceneLightTime_ * 0.82f);
-    const float orbit = sceneLightTime_ * 0.085f + 0.36f;
-    const float radius = 4.35f;
+    const float orbit = sceneLightTime_ * 0.030f + 3.05f;
+    const float radius = 14.2f;
     const XMFLOAT3 cameraPos{
-        playerPos.x + std::sinf(orbit) * radius,
-        playerPos.y + 1.78f + breath * 0.045f,
-        playerPos.z - std::cosf(orbit) * radius,
+        enemyPos.x + std::sinf(orbit) * radius,
+        enemyPos.y + 4.05f + breath * 0.10f,
+        enemyPos.z - std::cosf(orbit) * radius,
     };
     const XMFLOAT3 lookAt{
-        playerPos.x + 0.04f,
-        playerPos.y + 1.05f,
-        playerPos.z + 0.24f,
+        enemyPos.x,
+        enemyPos.y + 1.32f,
+        enemyPos.z,
     };
     camera_.SetPosition(cameraPos);
     AppLookAt(camera_, lookAt);

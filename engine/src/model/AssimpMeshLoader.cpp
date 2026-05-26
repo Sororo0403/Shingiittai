@@ -63,6 +63,7 @@ void AssimpMeshLoader::LoadMeshes(const aiScene *scene, const std::string &path,
 
             v.position = {mesh->mVertices[i].x, mesh->mVertices[i].y,
                           mesh->mVertices[i].z};
+            v.bindPosition = v.position;
             if (mesh->HasNormals()) {
                 v.normal = {mesh->mNormals[i].x, mesh->mNormals[i].y,
                             mesh->mNormals[i].z};

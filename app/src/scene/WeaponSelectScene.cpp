@@ -6,7 +6,7 @@
 #include "SpriteManager.h"
 #include "TextureManager.h"
 #include "TitleScene.h"
-#include "TipScene.h"
+#include "DifficultyCauldronScene.h"
 #include "TutorialSelectScene.h"
 #include "WinApp.h"
 #include <algorithm>
@@ -20,6 +20,37 @@ constexpr float kTransitionDuration = 0.16f;
 constexpr float kIntroDuration = 0.46f;
 constexpr float kIntroButtonDelay = 0.075f;
 constexpr float kIntroInputDelay = 0.34f;
+constexpr float kControlsPadding = 32.0f;
+constexpr float kControlsImageBottomTransparentPixels = 18.0f;
+constexpr float kButtonGroupYOffset = 24.0f;
+constexpr float kTitleBandVerticalPadding = 32.0f;
+
+struct ImageContentBounds {
+    float left = 0.0f;
+    float top = 0.0f;
+    float right = 0.0f;
+    float bottom = 0.0f;
+
+    float Width() const { return right - left + 1.0f; }
+    float Height() const { return bottom - top + 1.0f; }
+    float CenterX() const { return (left + right + 1.0f) * 0.5f; }
+    float CenterY() const { return (top + bottom + 1.0f) * 0.5f; }
+};
+
+constexpr std::array<ImageContentBounds, 3> kModeNameContentBounds = {{
+    {74.0f, 9.0f, 447.0f, 51.0f},
+    {118.0f, 11.0f, 241.0f, 51.0f},
+    {94.0f, 18.0f, 467.0f, 64.0f},
+}};
+
+constexpr std::array<ImageContentBounds, 3> kButtonIllustrationBounds = {{
+    {-148.0f, 42.0f, 126.0f, 150.0f},
+    {-92.0f, 38.0f, 140.0f, 137.0f},
+    {-82.0f, 46.0f, 82.0f, 162.0f},
+}};
+
+constexpr ImageContentBounds kTitleContentBounds{
+    0.0f, 0.0f, 187.0f, 43.0f};
 
 XMFLOAT4 MakeColor(float r, float g, float b, float a = 1.0f) {
     return {r, g, b, a};
@@ -55,6 +86,8 @@ void WeaponSelectScene::Initialize(const SceneContext &ctx) {
         std::make_unique<GameScene>(GameScene::Mode::BackgroundOnly);
     backgroundScene_->Initialize(ctx);
 
+    sceneTitleImage_ = LoadTextureImage(
+        L"app/resources/ui/weapon_select/text/title_controls.png");
     controlsImage_ = LoadTextureImage(
         L"app/resources/ui/weapon_select/text/weapon_controls.png");
     modeNameImages_[0] =
@@ -127,7 +160,8 @@ void WeaponSelectScene::Update() {
         if (transitionTimer_ >= kTransitionDuration) {
             SwordInputCalibration calibration{};
             calibration.controlType = selectedType;
-            sceneManager_->ChangeScene(std::make_unique<TipScene>(calibration));
+            sceneManager_->ChangeScene(
+                std::make_unique<DifficultyCauldronScene>(calibration));
         }
         return;
     }
@@ -256,14 +290,20 @@ void WeaponSelectScene::BeginReturnToTitle() {
 }
 
 void WeaponSelectScene::Layout(float screenWidth, float screenHeight) {
-    const float buttonSize = (std::min)({520.0f, screenWidth * 0.32f,
-                                         screenHeight * 0.56f});
-    const float tutorialSize = buttonSize * 0.5f;
+    const float availableWidth =
+        (std::max)(screenWidth - kControlsPadding * 2.0f, 1.0f);
+    const float availableHeight =
+        (std::max)(screenHeight - kControlsPadding * 2.0f, 1.0f);
     const float gap = (std::max)(36.0f, screenWidth * 0.035f);
+    const float buttonSize =
+        (std::min)({520.0f, availableHeight,
+                    (availableWidth - gap * 2.0f) /
+                        (static_cast<float>(kWeaponCount) + 0.5f)});
+    const float tutorialSize = buttonSize * 0.5f;
     const float totalW = buttonSize * static_cast<float>(kWeaponCount) +
                          tutorialSize + gap * 2.0f;
     const float startX = (screenWidth - totalW) * 0.5f;
-    const float y = (screenHeight - buttonSize) * 0.5f + screenHeight * 0.04f;
+    const float y = (screenHeight - buttonSize) * 0.5f + kButtonGroupYOffset;
 
     for (int i = 0; i < kWeaponCount; ++i) {
         buttonRects_[i] = {startX + static_cast<float>(i) * (buttonSize + gap),
@@ -414,9 +454,15 @@ void WeaponSelectScene::DrawButtonIllustration(int index,
                                                float lift, float alpha,
                                                bool selected) {
     const float centerX = rect.x + rect.w * 0.5f;
-    const float top = rect.y + 82.0f - lift;
-    const float scale = (std::min)(rect.w / 392.0f, rect.h / 308.0f);
     const bool tutorialButton = index == kTutorialButtonIndex;
+    const ImageContentBounds &bounds = kButtonIllustrationBounds[index];
+    const float iconAreaW = rect.w * (tutorialButton ? 0.70f : 0.76f);
+    const float iconAreaH = rect.h * (tutorialButton ? 0.42f : 0.48f);
+    const float iconCenterY =
+        rect.y + rect.h * (tutorialButton ? 0.40f : 0.42f) - lift;
+    const float scale =
+        (std::min)(iconAreaW / (std::max)(bounds.Width(), 1.0f),
+                   iconAreaH / (std::max)(bounds.Height(), 1.0f));
     const XMFLOAT4 selectedLine =
         tutorialButton ? MakeColor(0.06f, 0.95f, 0.86f, 1.0f * alpha)
                        : MakeColor(1.0f, 0.80f, 0.36f, 1.0f * alpha);
@@ -427,8 +473,12 @@ void WeaponSelectScene::DrawButtonIllustration(int index,
                               ? MakeColor(0.16f, 0.12f, 0.070f, 0.54f * alpha)
                               : MakeColor(0.10f, 0.11f, 0.13f, 0.44f * alpha);
     const XMFLOAT4 dim = MakeColor(0.0f, 0.0f, 0.0f, 0.22f * alpha);
-    auto sx = [&](float value) { return centerX + value * scale; };
-    auto sy = [&](float value) { return top + value * scale; };
+    auto sx = [&](float value) {
+        return centerX + (value - bounds.CenterX()) * scale;
+    };
+    auto sy = [&](float value) {
+        return iconCenterY + (value - bounds.CenterY()) * scale;
+    };
     auto sw = [&](float value) { return value * scale; };
     auto rectAt = [&](float x, float y, float w, float h,
                       const XMFLOAT4 &color) {
@@ -553,25 +603,48 @@ void WeaponSelectScene::DrawLabels(float screenWidth, float screenHeight) {
         const float alpha =
             (available ? (selected ? 1.0f : 0.76f) : 0.38f) * intro;
         const Image &name = modeNameImages_[i];
+        const ImageContentBounds &bounds = kModeNameContentBounds[i];
+        const bool tutorialButton = i == kTutorialButtonIndex;
+        const float targetLabelHeight =
+            rect.h * (tutorialButton ? 0.11f : 0.10f);
         const float nameScale = (std::min)(
-            {i == kTutorialButtonIndex ? 0.58f : 0.80f,
-             49.0f / (std::max)(name.height, 1.0f),
-             (rect.w * 0.82f) / (std::max)(name.width, 1.0f)});
-
-        const float labelBottomOffset =
-            i == kTutorialButtonIndex ? rect.h * 0.20f : 124.0f;
-        DrawImage(name, rect.x + (rect.w - name.width * nameScale) * 0.5f,
-                  rect.y + rect.h - labelBottomOffset - lift +
-                      (1.0f - intro) * 8.0f,
+            {tutorialButton ? 0.62f : 0.86f,
+             targetLabelHeight / (std::max)(bounds.Height(), 1.0f),
+             (rect.w * 0.82f) / (std::max)(bounds.Width(), 1.0f)});
+        const float centerX = rect.x + rect.w * 0.5f;
+        const float centerY =
+            rect.y + rect.h * (tutorialButton ? 0.80f : 0.78f) - lift +
+            (1.0f - intro) * 8.0f;
+        DrawImage(name, centerX - bounds.CenterX() * nameScale,
+                  centerY - bounds.CenterY() * nameScale,
                   nameScale, alpha);
     }
+
+    const float titleIntro = Smooth01((introTimer_ - 0.10f) / 0.24f);
+    const float titleBandY = kControlsPadding - kTitleBandVerticalPadding;
+    const float titleBandH =
+        kTitleContentBounds.Height() + kTitleBandVerticalPadding * 2.0f;
+    const float titleCenterX = screenWidth * 0.5f;
+    const float titleCenterY = titleBandY + titleBandH * 0.5f;
+    DrawRect(0.0f, titleBandY, screenWidth, titleBandH,
+             MakeColor(0.0f, 0.0f, 0.0f, 0.42f * titleIntro));
+    DrawRect(0.0f, titleBandY + titleBandH - 2.0f, screenWidth, 2.0f,
+             MakeColor(1.0f, 0.80f, 0.36f, 0.30f * titleIntro));
+    DrawImage(sceneTitleImage_,
+              titleCenterX - kTitleContentBounds.CenterX(),
+              titleCenterY - kTitleContentBounds.CenterY(), 1.0f,
+              0.92f * titleIntro);
 
     const float controlsIntro = Smooth01((introTimer_ - 0.24f) / 0.28f);
     const float controlsScale =
         (std::min)(0.80f, (screenWidth * 0.31f) /
                               (std::max)(controlsImage_.width, 1.0f));
-    DrawImage(controlsImage_, 42.0f,
-              screenHeight - controlsImage_.height * controlsScale - 34.0f,
+    DrawImage(controlsImage_, kControlsPadding,
+              screenHeight -
+                  (controlsImage_.height -
+                   kControlsImageBottomTransparentPixels) *
+                      controlsScale -
+                  kControlsPadding,
               controlsScale, 0.58f * controlsIntro);
 }
 

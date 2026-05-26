@@ -74,6 +74,7 @@ class TutorialSelectScene : public BaseScene {
     int handCameraConfirmIndex_ = 1;
 
     std::unique_ptr<GameScene> backgroundScene_;
+    Image sceneTitleImage_{};
     Image controlsImage_{};
     std::array<Image, kButtonCount> buttonNameImages_{};
     Image handCameraConfirmMessageImage_{};

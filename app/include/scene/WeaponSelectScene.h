@@ -78,6 +78,7 @@ class WeaponSelectScene : public BaseScene {
     int handCameraConfirmIndex_ = 1;
 
     std::unique_ptr<GameScene> backgroundScene_;
+    Image sceneTitleImage_{};
     Image controlsImage_{};
     std::array<Image, kButtonCount> modeNameImages_{};
     Image handCameraConfirmMessageImage_{};

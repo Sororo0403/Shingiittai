@@ -19,9 +19,6 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
     tf_.scale = {1, 1, 1};
     tf_.rotation = {0, 0, 0, 1};
 
-    leftJoyCon_.Initialize(true);
-    rightJoyCon_.Initialize(false);
-
     leftSword_.Initialize(swordModelId);
     rightSword_.Initialize(swordModelId);
     hp_ = 100.0f;
@@ -44,7 +41,6 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
 void Player::SetInputCalibration(const SwordInputCalibration &calibration) {
     inputCalibration_ = calibration;
     swordUdpController_.SetCalibration(inputCalibration_);
-    applyJoyConBaseOnNextUpdate_ = inputCalibration_.resetJoyConBaseOnStart;
 }
 
 void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
@@ -52,8 +48,6 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
                     bool suppressLookAt) {
     const float inputDeltaTime =
         controlDeltaTime > 0.0f ? controlDeltaTime : deltaTime;
-
-    UpdateJoyConCalibrationInput(input, inputDeltaTime);
 
     if (input->IsGamepadConnected() &&
         input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_START)) {
@@ -70,32 +64,21 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     const InputControlType controlType = inputCalibration_.controlType;
     const bool useKeyboardMouse =
         controlType == InputControlType::KeyboardMouse;
-    const bool useJoyCon = controlType == InputControlType::JoyCon;
     const bool useUdpSword = controlType == InputControlType::Hand;
-    const bool hasLeftJoyCon = useJoyCon && leftJoyCon_.IsConnected();
-    const bool hasRightJoyCon = useJoyCon && rightJoyCon_.IsConnected();
     const bool useMouseRightSword = useKeyboardMouse;
     if (useUdpSword) {
         swordUdpController_.Update(inputDeltaTime);
     }
 
     SwordPose leftPose = MakeIdleSwordPose(true);
-    if (hasLeftJoyCon) {
-        leftSwordJoyConController_.Update(&leftJoyCon_, inputDeltaTime,
-                                          leftSword_.GetTransform());
-        leftPose = leftSwordJoyConController_.GetPose();
-    } else if (useUdpSword && swordUdpController_.IsActive(1)) {
+    if (useUdpSword && swordUdpController_.IsActive(1)) {
         leftPose = swordUdpController_.GetPose(1);
     } else if (useKeyboardMouse) {
         leftPose = UpdateKeyboardLeftSword(input, inputDeltaTime);
     }
 
     SwordPose rightPose = MakeIdleSwordPose(false);
-    if (hasRightJoyCon) {
-        rightSwordJoyConController_.Update(&rightJoyCon_, inputDeltaTime,
-                                           rightSword_.GetTransform());
-        rightPose = rightSwordJoyConController_.GetPose();
-    } else if (useUdpSword) {
+    if (useUdpSword) {
         if (swordUdpController_.IsActive(0)) {
             rightPose = swordUdpController_.GetPose(0);
         }
@@ -105,9 +88,8 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
         rightPose = swordMouseController_.GetPose();
     }
 
-    UpdateWeaponRules(input, leftPose, rightPose, hasLeftJoyCon,
-                      hasRightJoyCon, useUdpSword || useKeyboardMouse,
-                      deltaTime);
+    UpdateWeaponRules(input, leftPose, rightPose,
+                      useUdpSword || useKeyboardMouse, deltaTime);
 
     if (bladeClashPoseActive_) {
         const float push = std::clamp(bladeClashPosePushRatio_, 0.0f, 1.0f);
@@ -167,28 +149,6 @@ void Player::UpdateDemo(float deltaTime, const XMFLOAT3 &lookTarget) {
     rightSwordSlashMode_ = false;
     leftSwordVisible_ = true;
     rightSwordVisible_ = true;
-}
-
-void Player::UpdateJoyConCalibrationInput(Input *, float deltaTime) {
-    if (leftJoyCon_.IsConnected() && leftJoyCon_.IsButtonTrigger(JSMASK_ZL)) {
-        leftJoyCon_.SetBaseOrientation();
-        leftSwordJoyConController_.ResetTracking(&leftJoyCon_);
-    }
-    if (rightJoyCon_.IsConnected() && rightJoyCon_.IsButtonTrigger(JSMASK_ZR)) {
-        rightJoyCon_.SetBaseOrientation();
-        rightSwordJoyConController_.ResetTracking(&rightJoyCon_);
-    }
-
-    leftJoyCon_.Update(deltaTime);
-    rightJoyCon_.Update(deltaTime);
-
-    if (applyJoyConBaseOnNextUpdate_) {
-        leftJoyCon_.SetBaseOrientation();
-        rightJoyCon_.SetBaseOrientation();
-        leftSwordJoyConController_.ResetTracking(&leftJoyCon_);
-        rightSwordJoyConController_.ResetTracking(&rightJoyCon_);
-        applyJoyConBaseOnNextUpdate_ = false;
-    }
 }
 
 void Player::Draw(ModelManager *modelManager, const Camera &camera,
@@ -364,20 +324,20 @@ void Player::UpdateMovement(float deltaTime, const XMFLOAT3 &lookTarget) {
     const float towardZ = toTargetZ * invDist;
     const float rightX = towardZ;
     const float rightZ = -towardX;
-    const float distanceError = distance - kJoyConAutoMoveIdealDistance;
+    const float distanceError = distance - kAutoMoveIdealDistance;
     const float distancePush = std::clamp(distanceError * 1.15f, -1.0f, 1.0f);
     const float orbitScale =
-        distance < kJoyConAutoMoveNearDistance ||
-                distance > kJoyConAutoMoveFarDistance
+        distance < kAutoMoveNearDistance ||
+                distance > kAutoMoveFarDistance
             ? 0.35f
             : 1.0f;
 
     const float worldMoveX =
-        rightX * autoMoveOrbitDir_ * kJoyConAutoMoveOrbitSpeed * orbitScale +
-        towardX * distancePush * kJoyConAutoMoveDistanceSpeed;
+        rightX * autoMoveOrbitDir_ * kAutoMoveOrbitSpeed * orbitScale +
+        towardX * distancePush * kAutoMoveDistanceSpeed;
     const float worldMoveZ =
-        rightZ * autoMoveOrbitDir_ * kJoyConAutoMoveOrbitSpeed * orbitScale +
-        towardZ * distancePush * kJoyConAutoMoveDistanceSpeed;
+        rightZ * autoMoveOrbitDir_ * kAutoMoveOrbitSpeed * orbitScale +
+        towardZ * distancePush * kAutoMoveDistanceSpeed;
 
     velocity_.x = worldMoveX;
     velocity_.y = 0.0f;
@@ -403,12 +363,6 @@ void Player::UpdateMovement(float deltaTime, const XMFLOAT3 &lookTarget) {
         knockbackVelocity_.y = 0.0f;
     if (std::fabs(knockbackVelocity_.z) < 0.01f)
         knockbackVelocity_.z = 0.0f;
-}
-
-float Player::ComputeJoyConSwingDamageMultiplier(float angularVelocity) const {
-    const float swingRatio =
-        std::clamp((angularVelocity - 520.0f) / 1280.0f, 0.0f, 1.0f);
-    return 1.0f + 0.55f * swingRatio;
 }
 
 void Player::AddKnockback(const DirectX::XMFLOAT3 &velocity) {
@@ -500,32 +454,19 @@ SwordPose Player::UpdateKeyboardLeftSword(Input *input, float deltaTime) {
 }
 
 void Player::UpdateWeaponRules(Input *input, SwordPose &leftPose,
-                               SwordPose &rightPose, bool hasLeftJoyCon,
-                               bool hasRightJoyCon, bool useDualUdpControls,
+                               SwordPose &rightPose, bool useDualControls,
                                float deltaTime) {
     (void)input;
     leftSwordAttackDamage_ = kBaseSwordAttackDamage;
     rightSwordAttackDamage_ = kBaseSwordAttackDamage;
-    auto applyJoyConSwingDamage = [&]() {
-        if (hasLeftJoyCon && leftPose.isSlashMode) {
-            leftSwordAttackDamage_ *= ComputeJoyConSwingDamageMultiplier(
-                leftSwordJoyConController_.GetAngularVelocity());
-        }
-        if (hasRightJoyCon && rightPose.isSlashMode) {
-            rightSwordAttackDamage_ *= ComputeJoyConSwingDamageMultiplier(
-                rightSwordJoyConController_.GetAngularVelocity());
-        }
-    };
 
-    const bool singlePointerControl =
-        !hasLeftJoyCon && !hasRightJoyCon && !useDualUdpControls;
+    const bool singlePointerControl = !useDualControls;
     if (singlePointerControl && rightPose.isSlashMode) {
         leftPose = MakeMirroredSwordPose(rightPose);
         rightPose.isSlashMode = false;
     }
 
     (void)deltaTime;
-    applyJoyConSwingDamage();
 }
 
 void Player::ToggleGamepadControlMode() {
