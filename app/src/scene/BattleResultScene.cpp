@@ -1,4 +1,5 @@
 #include "BattleResultScene.h"
+#include "AssetManager.h"
 #include "DirectXCommon.h"
 #include "GameScene.h"
 #include "Input.h"
@@ -30,14 +31,15 @@ constexpr float kHandSwingResetSpeed = 0.32f;
 constexpr int kRequiredHandSwings = 3;
 constexpr float kHandIdleMenuSeconds = 5.0f;
 constexpr float kReturnTitleFadeDuration = 0.42f;
-constexpr size_t kRankingControlCount = 2;
-constexpr size_t kMaxRankingEntries = 5;
-constexpr size_t kRankingDisplayEntries = 3;
-const std::filesystem::path kRankingFilePath =
-    std::filesystem::path(L"save") / L"battle_result_rankings.txt";
+constexpr size_t kRankingKeepCount = 10;
+constexpr size_t kRankingDrawCount = 5;
 
 XMFLOAT4 Color(float r, float g, float b, float a = 1.0f) {
     return {r, g, b, a};
+}
+
+std::filesystem::path RankingPath() {
+    return AssetManager::GetAssetRoot() / L"save" / L"ranking.tsv";
 }
 
 float SmoothStep01(float t) {
@@ -47,36 +49,6 @@ float SmoothStep01(float t) {
 
 bool IsHandControl(InputControlType controlType) {
     return controlType == InputControlType::Hand;
-}
-
-size_t RankingIndex(InputControlType controlType) {
-    switch (controlType) {
-    case InputControlType::Hand:
-        return 1;
-    case InputControlType::KeyboardMouse:
-    default:
-        return 0;
-    }
-}
-
-const char *RankingKey(InputControlType controlType) {
-    switch (controlType) {
-    case InputControlType::Hand:
-        return "hand";
-    case InputControlType::KeyboardMouse:
-    default:
-        return "keyboard_mouse";
-    }
-}
-
-int RankingIndexFromKey(const std::string &key) {
-    if (key == "keyboard_mouse") {
-        return 0;
-    }
-    if (key == "hand") {
-        return 1;
-    }
-    return -1;
 }
 
 XMFLOAT4 MakeQuat(float pitch, float yaw, float roll) {
@@ -230,42 +202,44 @@ void BattleResultScene::Initialize(const SceneContext &ctx) {
         ctx_->rendering.postProcessSystem->SetProfile(PostProcessProfile{});
     }
 
-    clearTitle_ = LoadTextureImage(L"app/resources/ui/result/clear_title.png");
-    gameClearTitle_ =
-        LoadTextureImage(L"app/resources/ui/result/text/game_clear_title.png");
+    missionCompleteLabel_ =
+        LoadTextureImage(L"app/resources/ui/result/mplus/mission_complete.png");
+    clearTimeLabel_ =
+        LoadTextureImage(L"app/resources/ui/result/mplus/clear_time.png");
+    currentRecordLabel_ =
+        LoadTextureImage(L"app/resources/ui/result/text/current_record.png");
+    rankingTitleLabel_ =
+        LoadTextureImage(L"app/resources/ui/result/text/ranking_title.png");
+    controlsKbmClearImage_ =
+        LoadTextureImage(L"app/resources/ui/result/mplus/controls_kbm_clear.png");
+    controlsKbmGameOverImage_ = LoadTextureImage(
+        L"app/resources/ui/result/mplus/controls_kbm_gameover.png");
+    controlsHandImage_ =
+        LoadTextureImage(L"app/resources/ui/result/mplus/controls_hand.png");
     gameOverTitle_ =
         LoadTextureImage(L"app/resources/ui/result/game_over_title.png");
-    clearTimeLabel_ =
-        LoadTextureImage(L"app/resources/ui/result/clear_time.png");
     noClearTimeLabel_ =
         LoadTextureImage(L"app/resources/ui/result/no_clear_time.png");
-    retryLabel_ = LoadTextureImage(L"app/resources/ui/result/retry.png");
-    menuLabel_ = LoadTextureImage(L"app/resources/ui/result/menu.png");
     returnTitleConfirmMessageImage_ = LoadTextureImage(
         L"app/resources/ui/result/text/return_title_confirm_message.png");
     returnTitleConfirmYesImage_ =
         LoadTextureImage(L"app/resources/ui/title/exit_confirm_yes.png");
     returnTitleConfirmNoImage_ =
         LoadTextureImage(L"app/resources/ui/title/exit_confirm_no.png");
-    rankingTitle_ =
-        LoadTextureImage(L"app/resources/ui/result/text/ranking_title.png");
-    currentRecordLabel_ =
-        LoadTextureImage(L"app/resources/ui/result/text/current_record.png");
-    rankingControlLabels_[0] =
-        LoadTextureImage(L"app/resources/ui/result/text/ranking_kbm.png");
-    rankingControlLabels_[1] =
-        LoadTextureImage(L"app/resources/ui/result/text/ranking_hand.png");
     for (int i = 0; i < 10; ++i) {
         digitImages_[static_cast<size_t>(i)] =
-            LoadTextureImage(L"app/resources/ui/result/glyphs/char_" +
+            LoadTextureImage(L"app/resources/ui/result/mplus/glyphs/char_" +
                              std::to_wstring(i) + L".png");
     }
-    colonImage_ = LoadTextureImage(L"app/resources/ui/result/glyphs/char_colon.png");
-    dotImage_ = LoadTextureImage(L"app/resources/ui/result/glyphs/char_dot.png");
-    dashImage_ = LoadTextureImage(L"app/resources/ui/result/glyphs/char_dash.png");
-    secondImage_ = LoadTextureImage(L"app/resources/ui/result/glyphs/char_s.png");
+    colonImage_ =
+        LoadTextureImage(L"app/resources/ui/result/mplus/glyphs/char_colon.png");
+    dotImage_ =
+        LoadTextureImage(L"app/resources/ui/result/mplus/glyphs/char_dot.png");
+    dashImage_ =
+        LoadTextureImage(L"app/resources/ui/result/mplus/glyphs/char_dash.png");
+    secondImage_ =
+        LoadTextureImage(L"app/resources/ui/result/mplus/glyphs/char_s.png");
 
-    LoadRankings();
     if (resultKind_ == ResultKind::Clear) {
         RegisterClearRanking();
     }
@@ -290,35 +264,22 @@ void BattleResultScene::Update() {
         return;
     }
 
-    if (IsHandControl(inputCalibration_.controlType)) {
-        UpdateHandResultInput(ctx_->frame.deltaTime);
-        return;
-    }
-
-    if (resultKind_ == ResultKind::Clear && input->IsKeyTrigger(DIK_SPACE)) {
-        returnTitleConfirmVisible_ = true;
-        returnTitleConfirmIndex_ = 1;
-        return;
-    }
-
-    const bool retry =
-        input->IsKeyTrigger(DIK_RETURN) ||
-        (resultKind_ != ResultKind::Clear && input->IsKeyTrigger(DIK_SPACE)) ||
-        input->IsMouseTrigger(0) ||
+    if (input->IsKeyTrigger(DIK_TAB) ||
         (input->IsGamepadConnected() &&
-         input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_A));
-    if (retry) {
+         input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_A))) {
         sceneManager_->ChangeScene(
             std::make_unique<GameScene>(inputCalibration_, combatDifficulty_));
         return;
     }
 
-    const bool menu =
-        input->IsKeyTrigger(DIK_TAB) ||
+    const bool title =
+        input->IsKeyTrigger(DIK_SPACE) ||
         (input->IsGamepadConnected() &&
          input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_B));
-    if (menu) {
-        sceneManager_->ChangeScene(std::make_unique<TitleScene>());
+    if (title) {
+        returnTitleConfirmVisible_ = true;
+        returnTitleConfirmIndex_ = 1;
+        return;
     }
 }
 
@@ -401,6 +362,93 @@ BattleResultScene::LoadTextureImage(const std::wstring &path) {
     image.height =
         static_cast<float>(ctx_->rendering.texture->GetHeight(image.textureId));
     return image;
+}
+
+void BattleResultScene::RegisterClearRanking() {
+    currentScore_ = ComputeScore(clearTime_, combatDifficulty_);
+    currentRank_ = -1;
+    LoadRanking();
+
+    rankingEntries_.push_back(
+        {currentScore_, combatDifficulty_, clearTime_, true});
+    std::stable_sort(rankingEntries_.begin(), rankingEntries_.end(),
+                     [](const RankingEntry &a, const RankingEntry &b) {
+                         if (a.score != b.score) {
+                             return a.score > b.score;
+                         }
+                         if (std::fabs(a.clearTime - b.clearTime) > 0.001f) {
+                             return a.clearTime < b.clearTime;
+                         }
+                         return a.difficulty > b.difficulty;
+                     });
+
+    if (rankingEntries_.size() > kRankingKeepCount) {
+        rankingEntries_.resize(kRankingKeepCount);
+    }
+
+    for (size_t i = 0; i < rankingEntries_.size(); ++i) {
+        if (rankingEntries_[i].isCurrent) {
+            currentRank_ = static_cast<int>(i) + 1;
+            break;
+        }
+    }
+    SaveRanking();
+}
+
+int BattleResultScene::ComputeScore(float clearTime, float difficulty) const {
+    const float d = std::clamp(difficulty, 0.0f, 9.0f);
+    const float t = (std::max)(clearTime, 1.0f);
+    const float difficultyMultiplier = 1.0f + d * 0.32f + d * d * 0.018f;
+    const float timeComponent = 110000.0f * difficultyMultiplier / (t + 40.0f);
+    const float difficultyFloor = d * 250.0f;
+    return (std::max)(1, static_cast<int>(std::round(timeComponent +
+                                                     difficultyFloor)));
+}
+
+void BattleResultScene::LoadRanking() {
+    rankingEntries_.clear();
+
+    std::ifstream file(RankingPath(), std::ios::binary);
+    if (!file) {
+        return;
+    }
+
+    std::string line;
+    while (std::getline(file, line)) {
+        if (line.empty() || line[0] == '#') {
+            continue;
+        }
+
+        std::istringstream iss(line);
+        RankingEntry entry{};
+        if (iss >> entry.score >> entry.difficulty >> entry.clearTime) {
+            entry.score = (std::max)(0, entry.score);
+            entry.difficulty = std::clamp(entry.difficulty, 0.0f, 9.0f);
+            entry.clearTime = (std::max)(0.0f, entry.clearTime);
+            rankingEntries_.push_back(entry);
+        }
+    }
+}
+
+void BattleResultScene::SaveRanking() const {
+    const std::filesystem::path path = RankingPath();
+    std::error_code ec;
+    std::filesystem::create_directories(path.parent_path(), ec);
+    if (ec) {
+        return;
+    }
+
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    if (!file) {
+        return;
+    }
+
+    file << "# score difficulty clear_time\n";
+    for (const RankingEntry &entry : rankingEntries_) {
+        file << entry.score << '\t' << std::fixed << std::setprecision(1)
+             << entry.difficulty << '\t' << std::setprecision(2)
+             << entry.clearTime << '\n';
+    }
 }
 
 void BattleResultScene::InitializeWorld() {
@@ -515,9 +563,9 @@ void BattleResultScene::DrawResultOverlay(float screenWidth,
         DrawClear(screenWidth, screenHeight);
     } else {
         DrawGameOver(screenWidth, screenHeight);
+        DrawHandInputStatus(screenWidth, screenHeight);
     }
-    DrawRankingPanel(screenWidth, screenHeight);
-    DrawHandInputStatus(screenWidth, screenHeight);
+    DrawControlsHint(screenWidth, screenHeight);
     if (returnTitleConfirmVisible_) {
         DrawReturnTitleConfirmWindow(screenWidth, screenHeight);
     }
@@ -530,27 +578,70 @@ void BattleResultScene::DrawResultOverlay(float screenWidth,
 }
 
 void BattleResultScene::DrawClear(float screenWidth, float screenHeight) {
-    const Image &title =
-        gameClearTitle_.textureId != 0 ? gameClearTitle_ : clearTitle_;
     const float titleScale =
-        std::clamp(screenWidth * 0.34f / (std::max)(title.width, 1.0f), 0.54f,
-                   1.0f);
-    DrawImage(title, screenWidth * 0.050f, screenHeight * 0.026f, titleScale);
+        std::clamp(screenWidth * 0.64f /
+                       (std::max)(missionCompleteLabel_.width, 1.0f),
+                   0.58f, 1.0f);
+    const float titleW = missionCompleteLabel_.width * titleScale;
+    const float titleY = screenHeight * 0.046f;
+    DrawImage(missionCompleteLabel_, (screenWidth - titleW) * 0.5f, titleY,
+              titleScale, 0.98f);
+
+    const float lineAlpha = 0.42f + 0.18f * std::sin(sceneTime_ * 2.6f);
+    DrawRect(screenWidth * 0.16f, screenHeight * 0.148f, screenWidth * 0.68f,
+             2.0f, Color(0.95f, 0.72f, 0.28f, lineAlpha));
+    DrawRect(screenWidth * 0.22f, screenHeight * 0.158f, screenWidth * 0.56f,
+             1.0f, Color(0.95f, 0.90f, 0.68f, lineAlpha * 0.52f));
+
+    const float panelH = std::clamp(screenHeight * 0.32f, 220.0f, 286.0f);
+    const float scorePanelW =
+        std::clamp(screenWidth * 0.39f, 460.0f, 610.0f);
+    const float rankingPanelW =
+        std::clamp(screenWidth * 0.32f, 360.0f, 500.0f);
+    const float panelGap = std::clamp(screenWidth * 0.032f, 28.0f, 46.0f);
+    const float totalW = scorePanelW + panelGap + rankingPanelW;
+    const float panelX = (screenWidth - totalW) * 0.5f;
+    const float panelY = screenHeight * 0.360f;
+    DrawRect(panelX + 10.0f, panelY + 12.0f, scorePanelW, panelH,
+             Color(0.0f, 0.0f, 0.0f, 0.30f));
+    DrawRect(panelX, panelY, scorePanelW, panelH,
+             Color(0.018f, 0.022f, 0.026f, 0.76f));
+    DrawFrame(panelX, panelY, scorePanelW, panelH, 2.0f,
+              Color(0.95f, 0.72f, 0.28f, 0.70f));
 
     const float labelScale =
-        std::clamp(screenWidth * 0.16f / clearTimeLabel_.width, 0.48f, 0.72f);
-    DrawImage(clearTimeLabel_, screenWidth * 0.076f, screenHeight * 0.876f,
-              labelScale);
-    const float recordScale = std::clamp(
-        screenWidth * 0.10f / (std::max)(currentRecordLabel_.width, 1.0f),
-        0.42f, 0.62f);
-    DrawImage(currentRecordLabel_, screenWidth * 0.078f,
-              screenHeight * 0.824f, recordScale, 0.92f);
-    DrawTextLine(FormatTime(clearTime_), screenWidth * 0.285f,
-                 screenHeight * 0.886f, 0.82f);
+        std::clamp((scorePanelW * 0.30f) /
+                       (std::max)(clearTimeLabel_.width, 1.0f),
+                   0.42f, 0.72f);
+    const float labelW = clearTimeLabel_.width * labelScale;
+    DrawImage(clearTimeLabel_, panelX + (scorePanelW - labelW) * 0.5f,
+              panelY + panelH * 0.11f, labelScale, 0.86f);
 
-    DrawImage(retryLabel_, screenWidth * 0.63f, screenHeight * 0.894f, 0.66f);
-    DrawImage(menuLabel_, screenWidth * 0.79f, screenHeight * 0.894f, 0.66f);
+    const std::string time = FormatTime(clearTime_);
+    const float timeScale =
+        std::clamp((scorePanelW * 0.68f) / MeasureTextLine(time, 1.0f), 1.02f,
+                   1.72f);
+    DrawTextLine(time, panelX + scorePanelW * 0.5f, panelY + panelH * 0.31f,
+                 timeScale, 1.0f);
+
+    const float scoreLabelScale =
+        std::clamp((scorePanelW * 0.36f) /
+                       (std::max)(currentRecordLabel_.width, 1.0f),
+                   0.46f, 0.76f);
+    const float scoreLabelW = currentRecordLabel_.width * scoreLabelScale;
+    DrawImage(currentRecordLabel_,
+              panelX + (scorePanelW - scoreLabelW) * 0.5f,
+              panelY + panelH * 0.58f, scoreLabelScale, 0.86f);
+
+    const std::string score = FormatScore(currentScore_);
+    const float scoreScale =
+        std::clamp((scorePanelW * 0.58f) / MeasureTextLine(score, 1.0f),
+                   1.18f, 1.86f);
+    DrawTextLine(score, panelX + scorePanelW * 0.5f,
+                 panelY + panelH * 0.735f, scoreScale, 1.0f);
+
+    DrawRanking(panelX + scorePanelW + panelGap, panelY, rankingPanelW,
+                panelH);
 }
 
 void BattleResultScene::DrawGameOver(float screenWidth, float screenHeight) {
@@ -560,66 +651,71 @@ void BattleResultScene::DrawGameOver(float screenWidth, float screenHeight) {
               titleScale);
     DrawImage(noClearTimeLabel_, screenWidth * 0.070f, screenHeight * 0.872f,
               0.70f);
-    DrawImage(retryLabel_, screenWidth * 0.63f, screenHeight * 0.894f, 0.66f);
-    DrawImage(menuLabel_, screenWidth * 0.79f, screenHeight * 0.894f, 0.66f);
 }
 
-void BattleResultScene::DrawRankingPanel(float screenWidth,
-                                         float screenHeight) {
-    const float panelW = std::clamp(screenWidth * 0.34f, 390.0f, 560.0f);
-    const float panelH = std::clamp(screenHeight * 0.58f, 420.0f, 540.0f);
-    const float panelX = screenWidth - panelW - screenWidth * 0.050f;
-    const float panelY = screenHeight * 0.185f;
-    const float edge = resultKind_ == ResultKind::Clear ? 0.86f : 0.62f;
+void BattleResultScene::DrawRanking(float x, float y, float w, float h) {
+    DrawRect(x + 10.0f, y + 12.0f, w, h, Color(0.0f, 0.0f, 0.0f, 0.30f));
+    DrawRect(x, y, w, h, Color(0.016f, 0.019f, 0.023f, 0.78f));
+    DrawFrame(x, y, w, h, 2.0f, Color(0.95f, 0.72f, 0.28f, 0.62f));
 
-    DrawRect(panelX + 10.0f, panelY + 12.0f, panelW, panelH,
-             Color(0.0f, 0.0f, 0.0f, 0.34f));
-    DrawRect(panelX, panelY, panelW, panelH,
-             Color(0.018f, 0.021f, 0.027f, 0.86f));
-    DrawFrame(panelX, panelY, panelW, panelH, 2.0f,
-              resultKind_ == ResultKind::Clear
-                  ? Color(0.95f, 0.72f, 0.28f, edge)
-                  : Color(0.76f, 0.16f, 0.14f, edge));
+    const float titleScale =
+        std::clamp((w * 0.54f) / (std::max)(rankingTitleLabel_.width, 1.0f),
+                   0.42f, 0.72f);
+    const float titleW = rankingTitleLabel_.width * titleScale;
+    DrawImage(rankingTitleLabel_, x + (w - titleW) * 0.5f, y + h * 0.10f,
+              titleScale, 0.92f);
 
-    const float titleScale = std::clamp(
-        panelW * 0.38f / (std::max)(rankingTitle_.width, 1.0f), 0.56f, 0.82f);
-    DrawImage(rankingTitle_, panelX + 24.0f, panelY + 20.0f, titleScale,
-              0.96f);
-
-    const float sectionTop = panelY + 82.0f;
-    const float sectionH =
-        (panelH - 108.0f) / static_cast<float>(kRankingControlCount);
-    const size_t currentIndex = RankingIndex(inputCalibration_.controlType);
-    for (size_t control = 0; control < kRankingControlCount; ++control) {
-        const float y = sectionTop + sectionH * static_cast<float>(control);
-        const bool current = control == currentIndex;
-        const XMFLOAT4 sectionColor =
-            current ? Color(0.16f, 0.115f, 0.040f, 0.68f)
-                    : Color(0.04f, 0.046f, 0.056f, 0.52f);
-        DrawRect(panelX + 18.0f, y, panelW - 36.0f, sectionH - 10.0f,
-                 sectionColor);
-        DrawRect(panelX + 18.0f, y, 3.0f, sectionH - 10.0f,
-                 current ? Color(1.0f, 0.78f, 0.30f, 0.90f)
-                         : Color(0.55f, 0.62f, 0.70f, 0.24f));
-
-        const Image &label = rankingControlLabels_[control];
-        const float labelScale =
-            std::clamp((panelW * 0.32f) / (std::max)(label.width, 1.0f),
-                       0.42f, 0.66f);
-        DrawImage(label, panelX + 34.0f, y + 12.0f, labelScale,
-                  current ? 1.0f : 0.78f);
-
-        const std::vector<float> &board = rankings_[control];
-        for (size_t rank = 0; rank < kRankingDisplayEntries; ++rank) {
-            const float rowX = panelX + panelW * 0.48f;
-            const float rowY = y + 10.0f + static_cast<float>(rank) * 30.0f;
-            std::string line = std::to_string(rank + 1) + " ";
-            line += rank < board.size() ? FormatTime(board[rank])
-                                        : "--:--.--s";
-            DrawTextLineLeft(line, rowX, rowY, 0.46f,
-                             current ? 0.98f : 0.74f);
+    const float rowScale = std::clamp(w * 0.30f / 180.0f, 0.56f, 0.82f);
+    const float rowStartY = y + h * 0.33f;
+    const float rowGap = h * 0.115f;
+    const size_t rows = (std::min)(rankingEntries_.size(), kRankingDrawCount);
+    for (size_t i = 0; i < rows; ++i) {
+        const RankingEntry &entry = rankingEntries_[i];
+        const float rowY = rowStartY + static_cast<float>(i) * rowGap;
+        const bool highlight = entry.isCurrent;
+        if (highlight) {
+            DrawRect(x + w * 0.10f, rowY - 4.0f, w * 0.80f, rowGap * 0.78f,
+                     Color(0.95f, 0.72f, 0.28f, 0.16f));
+            DrawFrame(x + w * 0.10f, rowY - 4.0f, w * 0.80f,
+                      rowGap * 0.78f, 1.0f,
+                      Color(0.95f, 0.72f, 0.28f, 0.36f));
         }
+
+        std::ostringstream row;
+        row << (i + 1) << ": " << FormatScore(entry.score);
+        DrawTextLineLeft(row.str(), x + w * 0.16f, rowY, rowScale,
+                         highlight ? 1.0f : 0.78f);
     }
+}
+
+void BattleResultScene::DrawControlsHint(float screenWidth,
+                                         float screenHeight) {
+    const Image *hint = resultKind_ == ResultKind::Clear
+                            ? &controlsKbmClearImage_
+                            : &controlsKbmGameOverImage_;
+    if (resultKind_ != ResultKind::Clear &&
+        IsHandControl(inputCalibration_.controlType)) {
+        hint = &controlsHandImage_;
+    }
+
+    constexpr float kControlsPadding = 32.0f;
+    float leftTransparentPixels = 0.0f;
+    float bottomTransparentPixels = 0.0f;
+    if (hint == &controlsKbmClearImage_ || hint == &controlsKbmGameOverImage_) {
+        leftTransparentPixels = 5.0f;
+        bottomTransparentPixels = 18.0f;
+    } else if (hint == &controlsHandImage_) {
+        leftTransparentPixels = 18.0f;
+        bottomTransparentPixels = 29.0f;
+    }
+    const float controlsScale =
+        std::min(0.80f,
+                 (screenWidth * 0.31f) / (std::max)(hint->width, 1.0f));
+    DrawImage(*hint, kControlsPadding - leftTransparentPixels * controlsScale,
+              screenHeight -
+                  (hint->height - bottomTransparentPixels) * controlsScale -
+                  kControlsPadding,
+              controlsScale, 0.70f);
 }
 
 void BattleResultScene::DrawHandInputStatus(float screenWidth,
@@ -815,63 +911,6 @@ std::string BattleResultScene::FormatTime(float seconds) const {
     return oss.str();
 }
 
-void BattleResultScene::LoadRankings() {
-    for (std::vector<float> &board : rankings_) {
-        board.clear();
-    }
-
-    std::ifstream file(kRankingFilePath);
-    if (!file) {
-        return;
-    }
-
-    std::string key;
-    float seconds = 0.0f;
-    while (file >> key >> seconds) {
-        const int index = RankingIndexFromKey(key);
-        if (index < 0 || !std::isfinite(seconds) || seconds < 0.0f) {
-            continue;
-        }
-        rankings_[static_cast<size_t>(index)].push_back(seconds);
-    }
-
-    for (std::vector<float> &board : rankings_) {
-        std::sort(board.begin(), board.end());
-        if (board.size() > kMaxRankingEntries) {
-            board.resize(kMaxRankingEntries);
-        }
-    }
-}
-
-void BattleResultScene::SaveRankings() const {
-    const std::filesystem::path directory = kRankingFilePath.parent_path();
-    if (!directory.empty()) {
-        std::error_code error;
-        std::filesystem::create_directories(directory, error);
-    }
-
-    std::ofstream file(kRankingFilePath, std::ios::trunc);
-    if (!file) {
-        return;
-    }
-
-    file << std::fixed << std::setprecision(2);
-    const std::array<InputControlType, kRankingControlCount> controlTypes = {
-        InputControlType::KeyboardMouse, InputControlType::Hand};
-    for (size_t index = 0; index < controlTypes.size(); ++index) {
-        for (float seconds : rankings_[index]) {
-            file << RankingKey(controlTypes[index]) << ' ' << seconds << '\n';
-        }
-    }
-}
-
-void BattleResultScene::RegisterClearRanking() {
-    std::vector<float> &board =
-        rankings_[RankingIndex(inputCalibration_.controlType)];
-    board.push_back(clearTime_);
-    std::sort(board.begin(), board.end());
-    if (board.size() > kMaxRankingEntries) {
-        board.resize(kMaxRankingEntries);
-    }
-    SaveRankings();
+std::string BattleResultScene::FormatScore(int score) const {
+    return std::to_string((std::max)(0, score));
 }

@@ -95,6 +95,7 @@ void UploadRingBuffer::CreateFrameResource(FrameResource &frame) {
                       D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
                       IID_PPV_ARGS(&frame.resource)),
                   "CreateCommittedResource(UploadRingBuffer) failed");
+    frame.resource->SetName(L"UploadRingBuffer.FrameResource");
     ThrowIfFailed(frame.resource->Map(
                       0, nullptr, reinterpret_cast<void **>(&frame.mapped)),
                   "Map(UploadRingBuffer) failed");

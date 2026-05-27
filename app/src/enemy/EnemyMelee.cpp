@@ -66,6 +66,23 @@ void Enemy::UpdateBladeClashByStep(float deltaTime) {
     }
 }
 
+void Enemy::UpdateArcaneLaserByStep(float deltaTime) {
+    switch (action_.step) {
+    case ActionStep::Charge:
+        UpdateArcaneLaserCharge(deltaTime);
+        break;
+    case ActionStep::Active:
+        UpdateArcaneLaserActive(deltaTime);
+        break;
+    case ActionStep::Recovery:
+        UpdateArcaneLaserRecovery(deltaTime);
+        break;
+    default:
+        EndAttack();
+        break;
+    }
+}
+
 void Enemy::UpdateSmashCharge(float deltaTime) {
     float currentChargeTime = GetCurrentSmashChargeTime();
     float trackingEnd = config_.attacks.smash.melee.base.timing.trackingEndTime;
@@ -90,10 +107,12 @@ void Enemy::UpdateSmashCharge(float deltaTime) {
         stateTimer_ = 0.0f;
     }
 
-    if (!quickSlashActive_ && TryApplyDirectionFeint(ActionKind::Smash)) {
+    if (!quickSlashActive_ && !farSlashActive_ &&
+        TryApplyDirectionFeint(ActionKind::Smash)) {
         return;
     }
-    if (!quickSlashActive_ && TryBeginChargeWarpFeint(ActionKind::Smash)) {
+    if (!quickSlashActive_ && !farSlashActive_ &&
+        TryBeginChargeWarpFeint(ActionKind::Smash)) {
         return;
     }
 
@@ -107,6 +126,8 @@ void Enemy::UpdateSmashCharge(float deltaTime) {
         LockCurrentFacing();
         hasTrackingLocked_ = true;
     }
+
+    IssueReleaseCueIfReady();
 
     if (stateTimer_ >= currentChargeTime) {
         if (!hasTrackingLocked_) {
@@ -125,6 +146,8 @@ void Enemy::UpdateSmashCharge(float deltaTime) {
 
 void Enemy::UpdateSmashHold(float deltaTime) {
     (void)deltaTime;
+
+    IssueReleaseCueIfReady();
 
     if (ShouldSnapReleaseFromRead() || stateTimer_ >= currentHoldDuration_) {
         ChangeActionStep(ActionStep::Active);
@@ -196,10 +219,12 @@ void Enemy::UpdateSweepCharge(float deltaTime) {
         stateTimer_ = 0.0f;
     }
 
-    if (!quickSlashActive_ && TryApplyDirectionFeint(ActionKind::Sweep)) {
+    if (!quickSlashActive_ && !farSlashActive_ &&
+        TryApplyDirectionFeint(ActionKind::Sweep)) {
         return;
     }
-    if (!quickSlashActive_ && TryBeginChargeWarpFeint(ActionKind::Sweep)) {
+    if (!quickSlashActive_ && !farSlashActive_ &&
+        TryBeginChargeWarpFeint(ActionKind::Sweep)) {
         return;
     }
 
@@ -213,6 +238,8 @@ void Enemy::UpdateSweepCharge(float deltaTime) {
         LockCurrentFacing();
         hasTrackingLocked_ = true;
     }
+
+    IssueReleaseCueIfReady();
 
     if (stateTimer_ >= currentChargeTime) {
         if (!hasTrackingLocked_) {
@@ -231,6 +258,8 @@ void Enemy::UpdateSweepCharge(float deltaTime) {
 
 void Enemy::UpdateSweepHold(float deltaTime) {
     (void)deltaTime;
+
+    IssueReleaseCueIfReady();
 
     if (ShouldSnapReleaseFromRead() || stateTimer_ >= currentHoldDuration_) {
         ChangeActionStep(ActionStep::Active);
@@ -278,40 +307,15 @@ void Enemy::UpdateSweepRecovery(float deltaTime) {
     }
 }
 
-void Enemy::UpdateBladeClashCharge(float deltaTime) {
+void Enemy::UpdateBladeClashCharge(float) {
     const auto &profile = config_.attacks.bladeClash.profile;
-    float trackingEnd = profile.timing.trackingEndTime;
-    if (trackingEnd < 0.0f) {
-        trackingEnd = 0.0f;
-    }
-    if (trackingEnd > profile.chargeTime) {
-        trackingEnd = profile.chargeTime;
-    }
 
-    if (stateTimer_ < trackingEnd) {
-        UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_ * 0.85f);
-        const float toPlayerX = playerPos_.x - tf_.position.x;
-        const float toPlayerZ = playerPos_.z - tf_.position.z;
-        const float distSq = toPlayerX * toPlayerX + toPlayerZ * toPlayerZ;
-        if (distSq > 2.20f * 2.20f) {
-            const float dist = std::sqrt(distSq);
-            tf_.position.x +=
-                (toPlayerX / dist) * config_.attacks.bladeClash.advanceSpeed *
-                deltaTime;
-            tf_.position.z +=
-                (toPlayerZ / dist) * config_.attacks.bladeClash.advanceSpeed *
-                deltaTime;
-        }
-    } else if (!hasTrackingLocked_) {
+    if (!hasTrackingLocked_) {
         LockCurrentFacing();
         hasTrackingLocked_ = true;
     }
 
     if (stateTimer_ >= profile.chargeTime) {
-        if (!hasTrackingLocked_) {
-            LockCurrentFacing();
-            hasTrackingLocked_ = true;
-        }
         ChangeActionStep(ActionStep::Active);
     }
 }
@@ -336,6 +340,48 @@ void Enemy::UpdateBladeClashRecovery(float deltaTime) {
     recoveryDuration += 0.20f;
 
     if (stateTimer_ >= recoveryDuration) {
+        EndAttack();
+    }
+}
+
+void Enemy::UpdateArcaneLaserCharge(float deltaTime) {
+    const auto &profile = config_.attacks.arcaneLaser.profile;
+    const float trackingEnd =
+        std::clamp(profile.timing.trackingEndTime, 0.0f, profile.chargeTime);
+
+    if (stateTimer_ < trackingEnd) {
+        UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_ * 0.44f);
+    } else if (!hasTrackingLocked_) {
+        LockCurrentFacing();
+        hasTrackingLocked_ = true;
+        arcaneLaserDirection_ = {std::sin(lockedAttackYaw_), 0.0f,
+                                 std::cos(lockedAttackYaw_)};
+    }
+
+    if (stateTimer_ >= profile.chargeTime) {
+        if (!hasTrackingLocked_) {
+            LockCurrentFacing();
+            hasTrackingLocked_ = true;
+        }
+        arcaneLaserDirection_ = {std::sin(lockedAttackYaw_), 0.0f,
+                                 std::cos(lockedAttackYaw_)};
+        ChangeActionStep(ActionStep::Active);
+    }
+}
+
+void Enemy::UpdateArcaneLaserActive(float) {
+    const auto &timing = config_.attacks.arcaneLaser.profile.timing;
+    isAttackActive_ = stateTimer_ >= timing.activeStartTime &&
+                      stateTimer_ <= timing.activeEndTime;
+    if (stateTimer_ >= timing.activeEndTime) {
+        ChangeActionStep(ActionStep::Recovery);
+    }
+}
+
+void Enemy::UpdateArcaneLaserRecovery(float deltaTime) {
+    UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_ * 0.20f);
+
+    if (stateTimer_ >= config_.attacks.arcaneLaser.recoveryDuration) {
         EndAttack();
     }
 }

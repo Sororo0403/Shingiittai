@@ -36,7 +36,8 @@ void Enemy::UpdateParts() {
     const float rightZ = -std::sin(usedYaw);
     const bool suppressAttackBodyMotion =
         action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
-        action_.kind == ActionKind::BladeClash;
+        action_.kind == ActionKind::BladeClash ||
+        action_.kind == ActionKind::ArcaneLaser;
 
     bodyTf_ = tf_;
     bodyTf_.position = tf_.position;
@@ -103,6 +104,32 @@ void Enemy::UpdateParts() {
         visualTf_.position.y += 0.055f * chargePulse;
         visualTf_.scale.x += 0.050f * chargePulse;
         visualTf_.scale.z += 0.050f * chargePulse;
+    }
+
+    if (!suppressActionPresentation && farSlashActive_ && isTelegraphCharge) {
+        const float chargeTime =
+            action_.kind == ActionKind::Smash ? GetCurrentSmashChargeTime()
+                                              : GetCurrentSweepChargeTime();
+        const float chargeT =
+            chargeTime > 0.0001f ? Saturate(runtime_.stateTimer / chargeTime)
+                                  : 1.0f;
+        const float coil = 0.35f + 0.65f * chargeT;
+        const float shiver =
+            coil * (0.5f + 0.5f * std::sin(runtime_.stateTimer * 42.0f));
+        bodyTf_.position.y -= 0.10f * coil;
+        bodyTf_.scale.x -= 0.16f * coil;
+        bodyTf_.scale.y += 0.18f * coil;
+        bodyTf_.scale.z -= 0.16f * coil;
+        rightHandTf_.position.y += 0.34f * coil;
+        rightHandTf_.scale.x += 0.16f * coil;
+        rightHandTf_.scale.y += 0.16f * coil;
+        rightHandTf_.scale.z += 0.16f * coil;
+        visualTf_.position.y -= 0.055f * coil;
+        visualTf_.scale.x -= 0.045f * coil;
+        visualTf_.scale.y += 0.075f * coil;
+        visualTf_.scale.z -= 0.045f * coil;
+        visualTf_.position.x += rightX * (shiver - 0.5f) * 0.020f;
+        visualTf_.position.z += rightZ * (shiver - 0.5f) * 0.020f;
     }
 
     if (phase_ != BossPhase::Phase1) {
@@ -307,6 +334,41 @@ void Enemy::UpdateParts() {
             bodyTf_.position.z += (-forwardZ) * 0.08f;
             visualPitch += 0.08f;
         }
+    } else if (!suppressActionPresentation &&
+               action_.kind == ActionKind::ArcaneLaser) {
+        const float charge = GetArcaneLaserChargeRatio();
+        if (action_.step == ActionStep::Charge) {
+            bodyTf_.position.y -= 0.10f + 0.08f * charge;
+            bodyTf_.position.x += (-forwardX) * (0.18f + 0.20f * charge);
+            bodyTf_.position.z += (-forwardZ) * (0.18f + 0.20f * charge);
+            bodyTf_.scale.x += 0.10f + 0.12f * charge;
+            bodyTf_.scale.z += 0.12f + 0.16f * charge;
+            rightHandTf_.position.x += forwardX * (1.65f + 0.34f * charge);
+            rightHandTf_.position.z += forwardZ * (1.65f + 0.34f * charge);
+            rightHandTf_.position.y += 0.62f + 0.24f * pulse;
+            rightHandTf_.scale.x += 0.24f + 0.20f * charge;
+            rightHandTf_.scale.y += 0.24f + 0.20f * charge;
+            rightHandTf_.scale.z += 0.24f + 0.20f * charge;
+            leftHandTf_.position.x += (-rightX) * 0.28f + forwardX * 0.26f;
+            leftHandTf_.position.z += (-rightZ) * 0.28f + forwardZ * 0.26f;
+            leftHandTf_.position.y += 0.18f;
+            visualPitch -= 0.12f + 0.08f * charge;
+        } else if (action_.step == ActionStep::Active) {
+            bodyTf_.position.x += (-forwardX) * 0.12f;
+            bodyTf_.position.z += (-forwardZ) * 0.12f;
+            rightHandTf_.position.x += forwardX * 2.20f;
+            rightHandTf_.position.z += forwardZ * 2.20f;
+            rightHandTf_.position.y += 0.62f;
+            rightHandTf_.scale.x += 0.48f;
+            rightHandTf_.scale.y += 0.48f;
+            rightHandTf_.scale.z += 0.48f;
+            visualPitch -= 0.06f;
+        } else if (action_.step == ActionStep::Recovery) {
+            rightHandTf_.position.x += forwardX * 0.58f;
+            rightHandTf_.position.z += forwardZ * 0.58f;
+            rightHandTf_.position.y += 0.22f;
+            visualPitch += 0.05f;
+        }
     } else if (!suppressActionPresentation && action_.kind == ActionKind::Stalk) {
         rightHandTf_.position.y += 0.35f;
         leftHandTf_.position.y += 0.20f;
@@ -357,7 +419,7 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
         0.5f + 0.5f * std::sin(runtime_.stateTimer * 12.0f);
     const DirectX::XMFLOAT4 phaseTint =
         phase_ == BossPhase::Phase3
-            ? DirectX::XMFLOAT4{0.42f, 0.86f, 0.62f, 0.22f}
+            ? DirectX::XMFLOAT4{0.96f, 0.78f, 0.32f, 0.22f}
             : phase_ == BossPhase::Phase2
                   ? DirectX::XMFLOAT4{0.78f, 0.58f, 0.42f, 0.18f}
                   : DirectX::XMFLOAT4{0.72f, 0.76f, 0.72f, 0.12f};
@@ -391,6 +453,11 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
         actionIntensity = 0.030f + 0.010f * actionPulse;
         actionNoise = 0.06f;
         break;
+    case ActionKind::ArcaneLaser:
+        actionTint = {0.26f, 0.96f, 0.78f, 0.30f};
+        actionIntensity = 0.084f + 0.038f * actionPulse;
+        actionNoise = 0.18f;
+        break;
     default:
         break;
     }
@@ -416,8 +483,11 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
 
     if (phaseTransitionActive_) {
         const float phaseRatio = GetPhaseTransitionRatio();
-        actionTint = LerpColor(actionTint, {0.86f, 0.58f, 0.32f, 0.28f},
-                               phaseRatio);
+        const DirectX::XMFLOAT4 transitionTint =
+            phase_ == BossPhase::Phase3
+                ? DirectX::XMFLOAT4{0.96f, 0.78f, 0.30f, 0.28f}
+                : DirectX::XMFLOAT4{0.86f, 0.58f, 0.32f, 0.28f};
+        actionTint = LerpColor(actionTint, transitionTint, phaseRatio);
         actionIntensity += 0.12f * phaseRatio;
         actionNoise += 0.06f * phaseRatio;
     }

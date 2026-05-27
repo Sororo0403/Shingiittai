@@ -10,25 +10,6 @@ void GameScene::UpdateSceneLighting() {
         return;
     }
 
-    if (tutorialBackgroundMode_) {
-        const float pulse = 0.92f + 0.08f * std::sinf(sceneLightTime_ * 2.0f);
-        SceneLighting lighting{};
-        lighting.keyLightDirection = {-0.50f, -0.64f, 0.42f};
-        lighting.keyLightColor = {0.86f, 1.30f, 1.24f, 1.0f};
-        lighting.fillLightDirection = {0.72f, -0.22f, -0.58f};
-        lighting.fillLightColor = {0.34f, 0.88f, 0.92f, 0.62f};
-        lighting.ambientColor = {0.22f, 0.40f, 0.43f, 1.0f};
-        lighting.lightingParams = {52.0f, 0.28f, 1.34f, 0.18f};
-        lighting.pointLights[0].positionRange = {-2.2f, 1.65f, -1.8f, 6.0f};
-        lighting.pointLights[0].colorIntensity = {0.20f, 0.92f, 0.88f,
-                                                  0.92f * pulse};
-        lighting.pointLights[1].positionRange = {2.6f, 1.90f, 1.3f, 5.6f};
-        lighting.pointLights[1].colorIntensity = {0.38f, 1.0f, 0.92f,
-                                                  0.84f * pulse};
-        ctx_->rendering.model->SetSceneLighting(lighting);
-        return;
-    }
-
     const XMFLOAT3 &playerPos = player_.GetTransform().position;
     const XMFLOAT3 &enemyPos = enemy_.GetTransform().position;
     const ActionKind actionKind = enemy_.GetActionKind();

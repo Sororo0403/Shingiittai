@@ -81,7 +81,7 @@ void SpriteRenderer::Draw(const Sprite &sprite) {
 }
 
 void SpriteRenderer::BeginFrame() {
-    uploadBuffer_.BeginFrame();
+    uploadBuffer_.BeginFrame(dxCommon_->GetBackBufferIndex());
     drawCursor_ = 0;
     queuedDraws_.clear();
     batchVertices_.clear();

@@ -8,6 +8,7 @@ enum class ActionKind {
     BladeClash,
     Warp,
     Stalk,
+    ArcaneLaser,
 };
 
 struct AttackParam {

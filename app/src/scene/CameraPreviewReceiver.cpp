@@ -16,7 +16,7 @@
 namespace {
 constexpr size_t kChunkPayloadStride = 1150u;
 constexpr size_t kMaxJpegSize = 1024u * 1024u;
-constexpr size_t kReceiveBufferSize = 1600u;
+constexpr size_t kReceiveBufferSize = 16u * 1024u;
 constexpr float kPreviewMargin = 16.0f;
 constexpr float kPreviewWidth = 192.0f;
 

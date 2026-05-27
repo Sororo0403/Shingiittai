@@ -284,9 +284,17 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         if (freeListIndex <= 0)
         {
             InterlockedAdd(gFreeListIndex[0], 1);
+        } else if (freeListIndex > (int) particleCount)
+        {
+            InterlockedAdd(gFreeListIndex[0], 1);
         } else
         {
             uint particleIndex = gFreeList[freeListIndex - 1];
+            if (particleIndex >= particleCount)
+            {
+                InterlockedAdd(gFreeListIndex[0], 1);
+                return;
+            }
             Particle respawnParticle = gParticles[particleIndex];
             Respawn(particleIndex, respawnParticle);
             gParticles[particleIndex] = respawnParticle;

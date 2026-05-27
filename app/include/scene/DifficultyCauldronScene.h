@@ -44,6 +44,9 @@ class DifficultyCauldronScene : public BaseScene {
                    float alpha = 1.0f);
     void DrawDifficultyValue(float value, float centerX, float y, float scale,
                              float alpha = 1.0f);
+    void DrawDifficultyDescription(float difficulty, float x, float y,
+                                   float maxWidth,
+                                   float alpha = 1.0f);
     void DrawCameraPreview();
     void DrawRect(float x, float y, float w, float h,
                   const DirectX::XMFLOAT4 &color);
@@ -62,6 +65,7 @@ class DifficultyCauldronScene : public BaseScene {
     SwordUdpController handController_;
     CameraPreviewReceiver previewReceiver_{};
     std::array<Image, 10> digitImages_{};
+    std::array<Image, 5> difficultyDescriptionImages_{};
     Image triangleMaskImage_{};
     Image triangleGradientImage_{};
     float sceneTime_ = 0.0f;

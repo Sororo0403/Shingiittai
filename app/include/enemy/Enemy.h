@@ -30,6 +30,22 @@ struct ActionState {
     ActionStep step = ActionStep::None;
 };
 
+enum class EnemyAttackCueType {
+    None,
+    Cancel,
+    Telegraph,
+    Feint,
+    Release,
+};
+
+struct EnemyAttackCueEvent {
+    EnemyAttackCueType type = EnemyAttackCueType::None;
+    ActionKind kind = ActionKind::None;
+    float yaw = 0.0f;
+    float duration = 0.0f;
+    uint32_t sequence = 0;
+};
+
 struct WarpContext {
     WarpApproachSlot approachSlot = WarpApproachSlot::None;
     DirectX::XMFLOAT3 targetPos = {0.0f, 0.0f, 0.0f};
@@ -126,6 +142,18 @@ struct EnemyBladeClashConfig {
     float advanceSpeed = 3.8f;
 };
 
+struct EnemyArcaneLaserConfig {
+    EnemyAttackProfile profile = {
+        {18.0f, 5.2f, {2.35f, 2.25f, 15.5f}},
+        {2.70f, 1.28f, 0.0f, 0.72f, 0.72f},
+        1.28f};
+    float range = 15.5f;
+    float radius = 1.72f;
+    float muzzleForwardOffset = 1.55f;
+    float muzzleHeightOffset = 1.42f;
+    float recoveryDuration = 0.64f;
+};
+
 struct EnemyAttackSet {
     EnemySmashConfig smash = {{{{15.0f, 4.0f, {2.8f, 2.1f, 3.2f}},
                                 {1.20f, 0.86f, 0.05f, 0.22f, 0.38f}, 1.64f},
@@ -136,6 +164,7 @@ struct EnemyAttackSet {
                                {0.38f, 0.78f}, 0.48f},
                               0.2f, 0.8f};
     EnemyBladeClashConfig bladeClash{};
+    EnemyArcaneLaserConfig arcaneLaser{};
 };
 
 struct EnemyWarpConfig {
@@ -180,6 +209,7 @@ struct EnemyRuntimeState {
     BossPhase phase = BossPhase::Phase1;
     bool phaseTransitionActive = false;
     float phaseTransitionTimer = 0.0f;
+    bool phase2BladeClashPending = false;
     bool holdConfigured = false;
     float currentHoldDuration = 0.0f;
     bool quickSlashActive = false;
@@ -188,11 +218,16 @@ struct EnemyRuntimeState {
     bool warpFeintImmediate = false;
     bool warpFeintDecisionMade = false;
     bool directionFeintDecisionMade = false;
+    bool attackReleaseCueIssued = false;
     float phantomWarpCooldown = 0.0f;
     float phantomFinalLockTimer = 0.0f;
+    float arcaneLaserCooldown = 0.0f;
+    DirectX::XMFLOAT3 arcaneLaserDirection = {0.0f, 0.0f, 1.0f};
 
     bool tellActive = false;
     float tellDuration = 0.0f;
+    EnemyAttackCueEvent pendingAttackCue{};
+    uint32_t attackCueSequence = 0;
 
     bool hasTrackingLocked = false;
 
@@ -241,6 +276,7 @@ class Enemy {
 
     ActionKind GetActionKind() const { return runtime_.action.kind; }
     ActionStep GetActionStep() const { return runtime_.action.step; }
+    bool ConsumeAttackCueEvent(EnemyAttackCueEvent &event);
     float GetActionTimerForPresentation() const { return runtime_.stateTimer; }
     float GetReleaseAnticipationRatio() const;
     float GetTelegraphYaw() const;
@@ -264,6 +300,7 @@ class Enemy {
 
     bool IsAttackActive() const { return runtime_.isAttackActive; }
     OBB GetAttackOBB() const;
+    bool IsFarWarpSlashActive() const { return runtime_.farSlashActive; }
     bool IsWarpCollisionDisabled() const { return runtime_.warp.collisionDisabled; }
     bool ShouldLockPlayerForFarWarpSlash() const {
         const bool isFarWarpStartup =
@@ -281,6 +318,14 @@ class Enemy {
 
     float GetCurrentAttackDamage() const;
     float GetCurrentAttackKnockback() const;
+    DirectX::XMFLOAT3 GetArcaneLaserMuzzlePosition() const;
+    DirectX::XMFLOAT3 GetArcaneLaserDirection() const {
+        return runtime_.arcaneLaserDirection;
+    }
+    float GetArcaneLaserRange() const { return config_.attacks.arcaneLaser.range; }
+    float GetArcaneLaserRadius() const { return config_.attacks.arcaneLaser.radius; }
+    float GetArcaneLaserChargeRatio() const;
+    bool IsArcaneLaserCounterWindow() const;
 
   private:
     Transform tf_{};
@@ -341,8 +386,12 @@ class Enemy {
     bool &warpFeintImmediate_ = runtime_.warpFeintImmediate;
     bool &warpFeintDecisionMade_ = runtime_.warpFeintDecisionMade;
     bool &directionFeintDecisionMade_ = runtime_.directionFeintDecisionMade;
+    bool &attackReleaseCueIssued_ = runtime_.attackReleaseCueIssued;
     float &phantomWarpCooldown_ = runtime_.phantomWarpCooldown;
     float &phantomFinalLockTimer_ = runtime_.phantomFinalLockTimer;
+    float &arcaneLaserCooldown_ = runtime_.arcaneLaserCooldown;
+    DirectX::XMFLOAT3 &arcaneLaserDirection_ =
+        runtime_.arcaneLaserDirection;
 
     bool isPhaseChanging_ = false;
 
@@ -352,6 +401,8 @@ class Enemy {
     bool &tellActive_ = runtime_.tellActive;
 
     float &tellDuration_ = runtime_.tellDuration;
+    EnemyAttackCueEvent &pendingAttackCue_ = runtime_.pendingAttackCue;
+    uint32_t &attackCueSequence_ = runtime_.attackCueSequence;
 
     float smashTellTime_ = 0.18f;
     float sweepTellTime_ = 0.16f;
@@ -375,10 +426,15 @@ class Enemy {
     float farWarpSlashChance_ = 0.74f;
     float farWarpSlashDistance_ = 10.8f;
     float farSlashLungeSpeed_ = 44.0f;
+    float farSlashSmashChargeTime_ = 0.36f;
+    float farSlashSweepChargeTime_ = 0.32f;
     float phantomWarpChance_ = 0.24f;
     float phantomWarpCooldownDuration_ = 5.8f;
     float phantomFinalLockDuration_ = 0.26f;
     float bladeClashChance_ = 0.26f;
+    float arcaneLaserChance_ = 0.32f;
+    float arcaneLaserCooldownDuration_ = 7.4f;
+    float arcaneLaserMinDistance_ = 4.4f;
 
     float stalkDurationMin_ = 0.45f;
     float stalkDurationMax_ = 1.10f;
@@ -414,6 +470,7 @@ class Enemy {
     void UpdateBladeClashByStep(float deltaTime);
     void UpdateWarpByStep(float deltaTime);
     void UpdateIdle(float deltaTime);
+    void UpdateArcaneLaserByStep(float deltaTime);
 
     TacticState DecideTactic() const;
     void BeginActionFromTactic(TacticState tactic);
@@ -423,6 +480,7 @@ class Enemy {
     bool TryBeginFarWarpSlash(float chance);
     bool TryBeginPhantomWarpSkill(float chance);
     bool TryBeginBladeClash(float chance);
+    bool TryBeginArcaneLaser(float chance);
     void BeginPhantomWarpStep(int viewWarpsRemaining, bool finalBehind,
                               ActionKind followupKind);
     void BeginPressureAction();
@@ -441,6 +499,9 @@ class Enemy {
     void UpdateBladeClashCharge(float deltaTime);
     void UpdateBladeClashActive(float deltaTime);
     void UpdateBladeClashRecovery(float deltaTime);
+    void UpdateArcaneLaserCharge(float deltaTime);
+    void UpdateArcaneLaserActive(float deltaTime);
+    void UpdateArcaneLaserRecovery(float deltaTime);
 
     void UpdateFacingToPlayer();
     void LockCurrentFacing();
@@ -472,6 +533,7 @@ class Enemy {
 
     OBB GetSmashAttackOBB() const;
     OBB GetSweepAttackOBB() const;
+    OBB GetArcaneLaserAttackOBB() const;
     float GetVisualYaw() const;
     bool IsPunishableRecovery() const;
     float GetDistanceToPlayer() const;
@@ -491,6 +553,9 @@ class Enemy {
     void ValidateTiming(AttackTimingParam &timing, float chargeTime);
     void ValidateAllTimings();
     void UpdateBossPhase();
+    void IssueAttackCue(EnemyAttackCueType type, ActionKind kind,
+                        float duration);
+    void IssueReleaseCueIfReady();
 
     bool ShouldEnterSmashHold() const;
     bool ShouldEnterSweepHold() const;

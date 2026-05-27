@@ -2,17 +2,31 @@
 #include <DirectXMath.h>
 #include <WinSock2.h>
 #include <WS2tcpip.h>
+#include <nlohmann/json.hpp>
 #include <algorithm>
 #include <cmath>
-#include <sstream>
+#include <cstring>
 #include <string>
-#include <vector>
 
 using namespace DirectX;
 
 namespace {
+constexpr char kRawMagic[] = "HAND_RAW ";
+
 SOCKET ToSocket(uintptr_t value) {
     return static_cast<SOCKET>(value);
+}
+
+bool ReadPoint01(const nlohmann::json &object, const char *key,
+                 DirectX::XMFLOAT2 &out) {
+    const auto it = object.find(key);
+    if (it == object.end() || !it->is_array() || it->size() < 2) {
+        return false;
+    }
+
+    out.x = std::clamp((*it)[0].get<float>(), 0.0f, 1.0f);
+    out.y = std::clamp((*it)[1].get<float>(), 0.0f, 1.0f);
+    return true;
 }
 }
 
@@ -21,33 +35,40 @@ SwordUdpController::~SwordUdpController() {
 }
 
 bool SwordUdpController::IsActive(size_t handIndex) const {
-    if (handIndex >= actionSwordStates_.size() || !HasFreshActionInput()) {
+    if (handIndex >= rawInput_.active.size() || !HasFreshRawInput()) {
         return false;
     }
-    return handIndex == 0 ||
-           actionInput_.slashConfidence[handIndex] > 0.0f ||
-           actionSwordStates_[handIndex].isSlashMode;
+    return rawInput_.active[handIndex];
 }
 
 SwordPose SwordUdpController::GetPose(size_t handIndex) const {
-    if (handIndex < actionSwordStates_.size() && HasFreshActionInput()) {
-        return actionSwordStates_[handIndex].ToPose();
+    if (handIndex < swordStates_.size() && HasFreshRawInput() &&
+        rawInput_.active[handIndex]) {
+        return swordStates_[handIndex].ToPose();
     }
     return SwordPose{};
 }
 
 float SwordUdpController::GetMotionSpeed(size_t handIndex) const {
-    return handIndex < actionInput_.slashSpeed.size() && HasFreshActionInput()
-               ? actionInput_.slashSpeed[handIndex]
-               : 0.0f;
+    if (handIndex >= motionSpeed_.size() || !HasFreshRawInput() ||
+        !rawInput_.active[handIndex]) {
+        return 0.0f;
+    }
+    return motionSpeed_[handIndex];
 }
 
 void SwordUdpController::SetCalibration(
     const SwordInputCalibration &calibration) {
-    (void)calibration;
-    actionInput_ = {};
-    actionInput_.staleTimer = kStaleSeconds;
-    actionSwordStates_ = {};
+    calibration_ = calibration;
+    rawInput_ = {};
+    rawInput_.staleTimer = kStaleSeconds;
+    swordStates_ = {};
+    calibratedPalm_ = {DirectX::XMFLOAT2{0.5f, 0.5f},
+                       DirectX::XMFLOAT2{0.5f, 0.5f}};
+    previousCalibratedPalm_ = {DirectX::XMFLOAT2{0.5f, 0.5f},
+                               DirectX::XMFLOAT2{0.5f, 0.5f}};
+    hasPreviousCalibratedPalm_ = {false, false};
+    motionSpeed_ = {0.0f, 0.0f};
 }
 
 void SwordUdpController::Update(float dt) {
@@ -56,14 +77,39 @@ void SwordUdpController::Update(float dt) {
     }
 
     ReceivePackets();
-    actionInput_.staleTimer += dt;
-    if (HasFreshActionInput()) {
-        ApplyActionInput(dt);
+    rawInput_.staleTimer += dt;
+    if (HasFreshRawInput()) {
+        ApplyRawInput(dt);
     } else {
-        for (SwordControllerState &state : actionSwordStates_) {
-            state.UpdateSlash(0.0f, dt);
-        }
+        rawInput_.active = {false, false};
+        swordStates_ = {};
+        hasPreviousCalibratedPalm_ = {false, false};
+        motionSpeed_ = {0.0f, 0.0f};
     }
+}
+
+bool SwordUdpController::HasFreshInput() const { return HasFreshRawInput(); }
+
+SwordUdpController::DebugHandState
+SwordUdpController::GetDebugHandState(size_t handIndex) const {
+    DebugHandState debug{};
+    debug.fresh = HasFreshRawInput();
+    debug.staleTimer = rawInput_.staleTimer;
+    if (handIndex >= rawInput_.active.size()) {
+        return debug;
+    }
+
+    debug.active = debug.fresh && rawInput_.active[handIndex];
+    debug.rawPalm = rawInput_.palm[handIndex];
+    debug.neutral = calibration_.hasHandNeutral
+                        ? calibration_.handNeutral[handIndex]
+                        : DirectX::XMFLOAT2{0.5f, 0.5f};
+    debug.calibratedPalm = calibratedPalm_[handIndex];
+    debug.slashDir = swordStates_[handIndex].slashDir;
+    debug.orientation = swordStates_[handIndex].orientation;
+    debug.isSlashMode = debug.active && swordStates_[handIndex].isSlashMode;
+    debug.motionSpeed = debug.active ? motionSpeed_[handIndex] : 0.0f;
+    return debug;
 }
 
 bool SwordUdpController::EnsureSocket() {
@@ -106,12 +152,12 @@ bool SwordUdpController::EnsureSocket() {
     return true;
 }
 
-bool SwordUdpController::HasFreshActionInput() const {
-    return actionInput_.hasPacket && actionInput_.staleTimer < kStaleSeconds;
+bool SwordUdpController::HasFreshRawInput() const {
+    return rawInput_.hasPacket && rawInput_.staleTimer < kStaleSeconds;
 }
 
 void SwordUdpController::ReceivePackets() {
-    char buffer[512]{};
+    char buffer[16384]{};
     for (;;) {
         sockaddr_in from{};
         int fromLength = sizeof(from);
@@ -128,63 +174,78 @@ void SwordUdpController::ReceivePackets() {
         }
 
         buffer[bytes] = '\0';
-
-        std::string tag;
-        std::istringstream stream(buffer);
-        stream >> tag;
-        if (tag != "PLAYER_INPUT") {
+        const size_t rawMagicSize = std::strlen(kRawMagic);
+        if (static_cast<size_t>(bytes) < rawMagicSize ||
+            std::strncmp(buffer, kRawMagic, rawMagicSize) != 0) {
             continue;
         }
 
-        std::vector<double> values;
-        double value = 0.0;
-        while (stream >> value) {
-            values.push_back(value);
-        }
-        if (values.size() >= 9) {
-            const double timestamp = values[0];
-            (void)timestamp;
-            std::array<float, 2> slashSpeed = {0.0f, 0.0f};
-            std::array<float, 2> slashDirX = {1.0f, -1.0f};
-            std::array<float, 2> slashDirY = {0.0f, 0.0f};
-            std::array<float, 2> slashConfidence = {0.0f, 0.0f};
-            slashSpeed[0] = static_cast<float>(values[1]);
-            slashDirX[0] = static_cast<float>(values[2]);
-            slashDirY[0] = static_cast<float>(values[3]);
-            slashConfidence[0] = static_cast<float>(values[4]);
-            slashSpeed[1] = static_cast<float>(values[5]);
-            slashDirX[1] = static_cast<float>(values[6]);
-            slashDirY[1] = static_cast<float>(values[7]);
-            slashConfidence[1] = static_cast<float>(values[8]);
-            actionInput_.hasPacket = true;
-            actionInput_.staleTimer = 0.0f;
-            for (size_t i = 0; i < actionInput_.slashSpeed.size(); ++i) {
-                actionInput_.slashSpeed[i] = (std::max)(0.0f, slashSpeed[i]);
-                actionInput_.slashDirX[i] = slashDirX[i];
-                actionInput_.slashDirY[i] = slashDirY[i];
-                actionInput_.slashConfidence[i] =
-                    std::clamp(slashConfidence[i], 0.0f, 1.0f);
+        try {
+            const nlohmann::json packet =
+                nlohmann::json::parse(buffer + rawMagicSize);
+            const auto handsIt = packet.find("hands");
+            if (handsIt == packet.end() || !handsIt->is_array()) {
+                continue;
             }
+
+            rawInput_.active = {false, false};
+            for (size_t i = 0; i < handsIt->size() && i < rawInput_.palm.size();
+                 ++i) {
+                DirectX::XMFLOAT2 palm{};
+                if (ReadPoint01((*handsIt)[i], "mirroredPalm01", palm) ||
+                    ReadPoint01((*handsIt)[i], "palm01", palm)) {
+                    rawInput_.palm[i] = palm;
+                    rawInput_.active[i] = true;
+                }
+            }
+            rawInput_.hasPacket = true;
+            rawInput_.staleTimer = 0.0f;
+        } catch (...) {
+            continue;
         }
     }
 }
 
-void SwordUdpController::ApplyActionInput(float dt) {
-    for (size_t i = 0; i < actionSwordStates_.size(); ++i) {
-        const float dirLen =
-            std::sqrt(actionInput_.slashDirX[i] * actionInput_.slashDirX[i] +
-                      actionInput_.slashDirY[i] * actionInput_.slashDirY[i]);
-        float dirX = i == 0 ? 1.0f : -1.0f;
-        float dirY = 0.0f;
-        if (dirLen > 0.001f) {
-            dirX = actionInput_.slashDirX[i] / dirLen;
-            dirY = actionInput_.slashDirY[i] / dirLen;
+void SwordUdpController::ApplyRawInput(float dt) {
+    for (size_t i = 0; i < swordStates_.size(); ++i) {
+        SwordControllerState &state = swordStates_[i];
+        if (!rawInput_.active[i]) {
+            state = {};
+            hasPreviousCalibratedPalm_[i] = false;
+            motionSpeed_[i] = 0.0f;
+            continue;
         }
 
-        SwordControllerState &state = actionSwordStates_[i];
+        const DirectX::XMFLOAT2 &palm = rawInput_.palm[i];
+        const DirectX::XMFLOAT2 neutral =
+            calibration_.hasHandNeutral ? calibration_.handNeutral[i]
+                                        : DirectX::XMFLOAT2{0.5f, 0.5f};
+        DirectX::XMFLOAT2 corrected{
+            std::clamp(palm.x - neutral.x + 0.5f, 0.0f, 1.0f),
+            std::clamp(palm.y - neutral.y + 0.5f, 0.0f, 1.0f)};
+        calibratedPalm_[i] = corrected;
+
+        if (hasPreviousCalibratedPalm_[i] && dt > 0.0001f) {
+            const float dx = corrected.x - previousCalibratedPalm_[i].x;
+            const float dy = corrected.y - previousCalibratedPalm_[i].y;
+            motionSpeed_[i] = std::sqrt(dx * dx + dy * dy) / dt;
+        } else {
+            motionSpeed_[i] = 0.0f;
+        }
+        previousCalibratedPalm_[i] = corrected;
+        hasPreviousCalibratedPalm_[i] = true;
+
+        const float dirX =
+            std::clamp((corrected.x - 0.5f) * 2.0f, -1.0f, 1.0f);
+        const float dirY =
+            std::clamp((0.5f - corrected.y) * 2.0f, -1.0f, 1.0f);
+
         state.slashDir = {dirX, dirY};
-        const float yaw = dirX * 0.52f;
-        const float pitch = -dirY * 0.46f;
+        state.isSlashMode = true;
+        state.slashTimer = 0.0f;
+
+        const float yaw = dirX * 0.82f;
+        const float pitch = -dirY * 0.72f;
         XMVECTOR qYaw =
             XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), yaw);
         XMVECTOR qPitch =
@@ -192,14 +253,6 @@ void SwordUdpController::ApplyActionInput(float dt) {
         XMStoreFloat4(
             &state.orientation,
             XMQuaternionNormalize(XMQuaternionMultiply(qPitch, qYaw)));
-
-        const float confidence =
-            std::clamp(actionInput_.slashConfidence[i], 0.0f, 1.0f);
-        const float confidenceGate = confidence >= 0.22f ? 1.0f : 0.0f;
-        const float confidenceScaledSpeed =
-            actionInput_.slashSpeed[i] * (0.78f + confidence * 0.22f) *
-            confidenceGate;
-        state.UpdateSlash(confidenceScaledSpeed, dt);
     }
 }
 

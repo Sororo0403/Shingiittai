@@ -4,7 +4,6 @@
 #include <DirectXMath.h>
 #include <cstdint>
 #include <d3d12.h>
-#include <initializer_list>
 #include <string>
 #include <vector>
 #include <wrl.h>
@@ -46,15 +45,11 @@ class GPUParticleSystem {
     /// カメラに向いたビルボードとして生存中のパーティクルを描画する
     /// </summary>
     void Draw(const Camera &camera);
-    static void DrawBatch(std::initializer_list<GPUParticleSystem *> systems,
-                          const Camera &camera);
 
     /// <summary>
     /// 保留中のGPU更新を描画とは別に実行する
     /// </summary>
     void DispatchPendingUpdate();
-    static void DispatchPendingUpdates(
-        std::initializer_list<GPUParticleSystem *> systems);
 
     /// <summary>
     /// パーティクル発生設定を差し替える

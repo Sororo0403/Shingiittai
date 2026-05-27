@@ -7,16 +7,16 @@
 namespace BladeClashCinematic {
 
 constexpr float kPi = 3.14159265f;
-constexpr float kWinGuardBreakLead = 0.52f;
-constexpr float kWinGuardBreakImpactTime = 0.24f;
-constexpr float kWinActionSlow = 0.95f;
+constexpr float kWinGuardBreakLead = 0.58f;
+constexpr float kWinGuardBreakImpactTime = 0.28f;
+constexpr float kWinActionSlow = 0.64f;
 constexpr float kGuardBreakSlowStart = 0.21f;
 constexpr float kGuardBreakSlowEnd = 0.36f;
 constexpr float kGuardBreakSlowScale = 0.18f;
-constexpr float kGuardBreakRecoilDistance = 0.72f;
-constexpr float kGuardBreakDrop = 0.16f;
-constexpr float kGuardBreakLift = 0.32f;
-constexpr float kGuardBreakPose = 0.48f;
+constexpr float kGuardBreakRecoilDistance = 0.30f;
+constexpr float kGuardBreakDrop = 0.26f;
+constexpr float kGuardBreakLift = 0.16f;
+constexpr float kGuardBreakPose = 0.74f;
 constexpr float kWinGuardBreakCameraMoveStart = 0.42f;
 constexpr float kWinGuardBreakCameraMoveEnd = 0.52f;
 constexpr float kLossHitTime = 0.78f;

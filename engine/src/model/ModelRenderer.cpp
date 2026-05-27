@@ -190,7 +190,7 @@ void ModelRenderer::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
 }
 
 void ModelRenderer::BeginFrame() {
-    uploadBuffer_.BeginFrame();
+    uploadBuffer_.BeginFrame(dxCommon_->GetBackBufferIndex());
     drawIndex_ = 0;
     ++skinningFrameId_;
     if (skinningFrameId_ == 0) {

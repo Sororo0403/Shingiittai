@@ -7,7 +7,7 @@
 #include "graphics/SrvManager.h"
 #include "texture/TextureManager.h"
 #include <algorithm>
-#include <cstring>
+#include <cmath>
 #include <map>
 #include <random>
 #include <stdexcept>
@@ -21,36 +21,6 @@ namespace {
 constexpr uint32_t kParticleThreadCount = 256u;
 constexpr uint32_t kMaxParticleArgsJobs = 16u;
 constexpr uint32_t kParticleArgsDescriptorFrameCount = 3u;
-constexpr uint32_t kMaxParticleBatchJobs = 16u;
-constexpr uint32_t kMaxParticleBatchItems = 16384u;
-constexpr uint32_t kParticleBatchDescriptorFrameCount = 3u;
-
-struct ParticleBatchEmitterForGPU {
-    XMFLOAT4 position{};
-    XMFLOAT4 spawnOffsetScale{};
-    XMFLOAT4 spawnShapeParams{};
-    XMFLOAT4 basisRight{};
-    XMFLOAT4 basisUp{};
-    XMFLOAT4 basisForward{};
-    XMFLOAT4 directionAndDirectionalVelocity{};
-    XMFLOAT4 velocityBiasAndRadialVelocity{};
-    XMFLOAT4 lifeAndFade{};
-    XMFLOAT4 scale{};
-    XMFLOAT4 accelerationAndTurbulence{};
-    XMFLOAT4 motion{};
-    XMFLOAT4 atlasAndRotation{};
-    XMFLOAT4 tintColor{};
-    XMUINT4 config{};
-};
-
-struct ParticleBatchJobForGPU {
-    ParticleBatchEmitterForGPU emitter{};
-    XMFLOAT4 time{};
-    uint32_t particleCount = 0;
-    uint32_t updateStart = 0;
-    uint32_t emitStart = 0;
-    uint32_t emitCount = 0;
-};
 
 ID3D12Device *gCachedParticleDrawDevice = nullptr;
 ComPtr<ID3D12RootSignature> gCachedParticleDrawRootSignature;
@@ -61,44 +31,6 @@ SrvManager *gCachedParticleArgsSrvManager = nullptr;
 uint32_t gParticleArgsCountUavBase[kParticleArgsDescriptorFrameCount] = {};
 uint32_t gParticleArgsDrawUavBase[kParticleArgsDescriptorFrameCount] = {};
 bool gParticleArgsDescriptorsInitialized = false;
-ID3D12Device *gCachedParticleBatchDevice = nullptr;
-SrvManager *gCachedParticleBatchSrvManager = nullptr;
-ComPtr<ID3D12RootSignature> gParticleBatchUpdateRootSignature;
-ComPtr<ID3D12PipelineState> gParticleBatchUpdatePSO;
-ComPtr<ID3D12RootSignature> gParticleBatchDrawRootSignature;
-std::map<std::wstring, ComPtr<ID3D12PipelineState>> gParticleBatchDrawPsoCache;
-ComPtr<ID3D12Resource> gParticleBatchJobsResource[kParticleBatchDescriptorFrameCount];
-ParticleBatchJobForGPU
-    *gMappedParticleBatchJobs[kParticleBatchDescriptorFrameCount] = {};
-UINT gParticleBatchJobSrvIndex[kParticleBatchDescriptorFrameCount] = {};
-UINT gParticleBatchParticleSrvBase[kParticleBatchDescriptorFrameCount] = {};
-UINT gParticleBatchParticleUavBase[kParticleBatchDescriptorFrameCount] = {};
-UINT gParticleBatchFreeListUavBase[kParticleBatchDescriptorFrameCount] = {};
-UINT gParticleBatchFreeListIndexUavBase[kParticleBatchDescriptorFrameCount] =
-    {};
-ComPtr<ID3D12Resource> gParticleBatchActiveItemsResource;
-D3D12_CPU_DESCRIPTOR_HANDLE gParticleBatchActiveItemsSrvCpuHandle{};
-D3D12_GPU_DESCRIPTOR_HANDLE gParticleBatchActiveItemsSrvGpuHandle{};
-UINT gParticleBatchActiveItemsSrvIndex = UINT_MAX;
-D3D12_CPU_DESCRIPTOR_HANDLE gParticleBatchActiveItemsUavCpuHandle{};
-D3D12_GPU_DESCRIPTOR_HANDLE gParticleBatchActiveItemsUavGpuHandle{};
-UINT gParticleBatchActiveItemsUavIndex = UINT_MAX;
-D3D12_RESOURCE_STATES gParticleBatchActiveItemsState =
-    D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-ComPtr<ID3D12Resource> gParticleBatchActiveCountResource;
-D3D12_CPU_DESCRIPTOR_HANDLE gParticleBatchActiveCountUavCpuHandle{};
-D3D12_GPU_DESCRIPTOR_HANDLE gParticleBatchActiveCountUavGpuHandle{};
-UINT gParticleBatchActiveCountUavIndex = UINT_MAX;
-ComPtr<ID3D12Resource> gParticleBatchDrawArgsResource;
-D3D12_CPU_DESCRIPTOR_HANDLE gParticleBatchDrawArgsUavCpuHandle{};
-D3D12_GPU_DESCRIPTOR_HANDLE gParticleBatchDrawArgsUavGpuHandle{};
-UINT gParticleBatchDrawArgsUavIndex = UINT_MAX;
-D3D12_RESOURCE_STATES gParticleBatchDrawArgsState =
-    D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-bool gParticleBatchInitialized = false;
-bool gParticleBatchReadyToDraw = false;
-uint64_t gParticleBatchDrawFrameId = UINT64_MAX;
-std::vector<GPUParticleSystem *> gParticleBatchLastJobs;
 
 float EstimateParticleActiveDuration(const ParticleEmitterSettings &settings) {
     return (std::max)(0.0f, settings.baseLifeTime + settings.lifeTimeRandom +
@@ -110,11 +42,61 @@ bool IsContinuousEmitter(const ParticleEmitterSettings &settings) {
            settings.emitRate > 0.0f;
 }
 
+float SanitizeFinite(float value, float fallback) {
+    return std::isfinite(value) ? value : fallback;
+}
+
+XMFLOAT3 SanitizeFinite(XMFLOAT3 value, XMFLOAT3 fallback) {
+    value.x = SanitizeFinite(value.x, fallback.x);
+    value.y = SanitizeFinite(value.y, fallback.y);
+    value.z = SanitizeFinite(value.z, fallback.z);
+    return value;
+}
+
+XMFLOAT4 SanitizeFinite(XMFLOAT4 value, XMFLOAT4 fallback) {
+    value.x = SanitizeFinite(value.x, fallback.x);
+    value.y = SanitizeFinite(value.y, fallback.y);
+    value.z = SanitizeFinite(value.z, fallback.z);
+    value.w = SanitizeFinite(value.w, fallback.w);
+    return value;
+}
+
 ParticleEmitterSettings
 NormalizeParticleEmitterSettings(ParticleEmitterSettings settings) {
     settings.maxParticles = (std::max)(1u, settings.maxParticles);
     settings.emitRate = (std::max)(0.0f, settings.emitRate);
     settings.burstCount = (std::max)(1u, settings.burstCount);
+    settings.position = SanitizeFinite(settings.position, {0.0f, 0.0f, 0.0f});
+    settings.spawnOffsetScale =
+        SanitizeFinite(settings.spawnOffsetScale, {0.0f, 0.0f, 0.0f});
+    settings.spawnShapeParams =
+        SanitizeFinite(settings.spawnShapeParams, {0.0f, 0.0f, 0.0f, 0.0f});
+    settings.tintColor =
+        SanitizeFinite(settings.tintColor, {1.0f, 1.0f, 1.0f, 1.0f});
+    settings.direction = SanitizeFinite(settings.direction, {0.0f, 1.0f, 0.0f});
+    settings.basisRight =
+        SanitizeFinite(settings.basisRight, {1.0f, 0.0f, 0.0f});
+    settings.basisUp = SanitizeFinite(settings.basisUp, {0.0f, 1.0f, 0.0f});
+    settings.basisForward =
+        SanitizeFinite(settings.basisForward, {0.0f, 0.0f, 1.0f});
+    settings.velocityBias =
+        SanitizeFinite(settings.velocityBias, {0.0f, 0.0f, 0.0f});
+    settings.emitRate = SanitizeFinite(settings.emitRate, 0.0f);
+    settings.radialVelocity = SanitizeFinite(settings.radialVelocity, 0.0f);
+    settings.directionalVelocity =
+        SanitizeFinite(settings.directionalVelocity, 0.0f);
+    settings.baseLifeTime = SanitizeFinite(settings.baseLifeTime, 0.01f);
+    settings.lifeTimeRandom = SanitizeFinite(settings.lifeTimeRandom, 0.0f);
+    settings.startScale = SanitizeFinite(settings.startScale, 0.001f);
+    settings.endScale = SanitizeFinite(settings.endScale, 0.0f);
+    settings.scaleRandom = SanitizeFinite(settings.scaleRandom, 0.0f);
+    settings.stretch = SanitizeFinite(settings.stretch, 0.0f);
+    settings.turbulence = SanitizeFinite(settings.turbulence, 0.0f);
+    settings.damping = SanitizeFinite(settings.damping, 1.0f);
+    settings.fadeInTime = SanitizeFinite(settings.fadeInTime, 0.0f);
+    settings.fadeOutTime = SanitizeFinite(settings.fadeOutTime, 0.0f);
+    settings.fadeOutPower = SanitizeFinite(settings.fadeOutPower, 1.0f);
+    settings.rotationSpeed = SanitizeFinite(settings.rotationSpeed, 0.0f);
     settings.spawnOffsetScale.x = (std::max)(0.0f, settings.spawnOffsetScale.x);
     settings.spawnOffsetScale.y = (std::max)(0.0f, settings.spawnOffsetScale.y);
     settings.spawnOffsetScale.z = (std::max)(0.0f, settings.spawnOffsetScale.z);
@@ -130,6 +112,10 @@ NormalizeParticleEmitterSettings(ParticleEmitterSettings settings) {
     settings.stretch = (std::max)(0.0f, settings.stretch);
     settings.atlasColumns = (std::max)(1u, settings.atlasColumns);
     settings.atlasRows = (std::max)(1u, settings.atlasRows);
+    if (settings.atlasColumns > UINT32_MAX / settings.atlasRows) {
+        settings.atlasColumns = 1u;
+        settings.atlasRows = 1u;
+    }
     const uint32_t atlasFrameCapacity =
         settings.atlasColumns * settings.atlasRows;
     settings.atlasFrameStart =
@@ -300,299 +286,6 @@ void EnsureParticleArgsDescriptorRanges(ID3D12Device *device,
     gParticleArgsDescriptorsInitialized = true;
 }
 
-void EnsureParticleBatchResources(ID3D12Device *device,
-                                  SrvManager *srvManager) {
-    if (gParticleBatchInitialized && gCachedParticleBatchDevice == device &&
-        gCachedParticleBatchSrvManager == srvManager) {
-        return;
-    }
-
-    gCachedParticleBatchDevice = device;
-    gCachedParticleBatchSrvManager = srvManager;
-    gParticleBatchDrawPsoCache.clear();
-    {
-        CD3DX12_ROOT_PARAMETER params[7];
-        params[0].InitAsConstants(6, 0);
-
-        CD3DX12_DESCRIPTOR_RANGE jobRange;
-        jobRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
-        params[1].InitAsDescriptorTable(1, &jobRange);
-
-        CD3DX12_DESCRIPTOR_RANGE particleRange;
-        particleRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
-                           kMaxParticleBatchJobs, 0);
-        params[2].InitAsDescriptorTable(1, &particleRange);
-
-        CD3DX12_DESCRIPTOR_RANGE freeListRange;
-        freeListRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
-                           kMaxParticleBatchJobs, 32);
-        params[3].InitAsDescriptorTable(1, &freeListRange);
-
-        CD3DX12_DESCRIPTOR_RANGE freeListIndexRange;
-        freeListIndexRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
-                                kMaxParticleBatchJobs, 64);
-        params[4].InitAsDescriptorTable(1, &freeListIndexRange);
-
-        CD3DX12_DESCRIPTOR_RANGE activeCountRange;
-        activeCountRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 96);
-        params[5].InitAsDescriptorTable(1, &activeCountRange);
-
-        CD3DX12_DESCRIPTOR_RANGE activeItemsRange;
-        activeItemsRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 97);
-        params[6].InitAsDescriptorTable(1, &activeItemsRange);
-
-        CD3DX12_ROOT_SIGNATURE_DESC desc;
-        desc.Init(_countof(params), params, 0, nullptr);
-
-        ComPtr<ID3DBlob> blob, error;
-        ThrowIfFailed(D3D12SerializeRootSignature(
-                          &desc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error),
-                      "D3D12SerializeRootSignature(GPUParticleBatchUpdate) "
-                      "failed");
-        ThrowIfFailed(device->CreateRootSignature(
-                          0, blob->GetBufferPointer(), blob->GetBufferSize(),
-                          IID_PPV_ARGS(&gParticleBatchUpdateRootSignature)),
-                      "CreateRootSignature(GPUParticleBatchUpdate) failed");
-    }
-
-    {
-        CD3DX12_ROOT_PARAMETER params[5];
-        params[0].InitAsConstantBufferView(0);
-
-        CD3DX12_DESCRIPTOR_RANGE particleRange;
-        particleRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
-                           kMaxParticleBatchJobs, 0);
-        params[1].InitAsDescriptorTable(1, &particleRange);
-
-        CD3DX12_DESCRIPTOR_RANGE textureRange;
-        textureRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 16);
-        params[2].InitAsDescriptorTable(1, &textureRange);
-
-        CD3DX12_DESCRIPTOR_RANGE noiseTextureRange;
-        noiseTextureRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 17);
-        params[3].InitAsDescriptorTable(1, &noiseTextureRange);
-
-        CD3DX12_DESCRIPTOR_RANGE activeItemsRange;
-        activeItemsRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 32);
-        params[4].InitAsDescriptorTable(1, &activeItemsRange);
-
-        CD3DX12_STATIC_SAMPLER_DESC sampler(0,
-                                            D3D12_FILTER_MIN_MAG_MIP_LINEAR);
-        sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-        sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-        sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-
-        CD3DX12_ROOT_SIGNATURE_DESC desc;
-        desc.Init(_countof(params), params, 1, &sampler,
-                  D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
-
-        ComPtr<ID3DBlob> blob, error;
-        ThrowIfFailed(D3D12SerializeRootSignature(
-                          &desc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error),
-                      "D3D12SerializeRootSignature(GPUParticleBatchDraw) "
-                      "failed");
-        ThrowIfFailed(device->CreateRootSignature(
-                          0, blob->GetBufferPointer(), blob->GetBufferSize(),
-                          IID_PPV_ARGS(&gParticleBatchDrawRootSignature)),
-                      "CreateRootSignature(GPUParticleBatchDraw) failed");
-    }
-
-    auto updateCs = ShaderCompiler::Compile(
-        ShaderPaths::ParticleBatchUpdateCS, "main", "cs_6_6");
-    D3D12_COMPUTE_PIPELINE_STATE_DESC updatePso{};
-    updatePso.pRootSignature = gParticleBatchUpdateRootSignature.Get();
-    updatePso.CS = {updateCs->GetBufferPointer(), updateCs->GetBufferSize()};
-    ThrowIfFailed(device->CreateComputePipelineState(
-                      &updatePso, IID_PPV_ARGS(&gParticleBatchUpdatePSO)),
-                  "CreateComputePipelineState(GPUParticleBatchUpdate) failed");
-
-    CD3DX12_HEAP_PROPERTIES uploadHeap(D3D12_HEAP_TYPE_UPLOAD);
-    const UINT jobBufferSize =
-        static_cast<UINT>(sizeof(ParticleBatchJobForGPU) *
-                          kMaxParticleBatchJobs);
-    for (uint32_t frameIndex = 0;
-         frameIndex < kParticleBatchDescriptorFrameCount; ++frameIndex) {
-        gParticleBatchJobSrvIndex[frameIndex] = srvManager->Allocate();
-        gParticleBatchParticleSrvBase[frameIndex] =
-            srvManager->AllocateRange(kMaxParticleBatchJobs);
-        gParticleBatchParticleUavBase[frameIndex] =
-            srvManager->AllocateRange(kMaxParticleBatchJobs);
-        gParticleBatchFreeListUavBase[frameIndex] =
-            srvManager->AllocateRange(kMaxParticleBatchJobs);
-        gParticleBatchFreeListIndexUavBase[frameIndex] =
-            srvManager->AllocateRange(kMaxParticleBatchJobs);
-
-        auto jobDesc = CD3DX12_RESOURCE_DESC::Buffer(jobBufferSize);
-        ThrowIfFailed(device->CreateCommittedResource(
-                          &uploadHeap, D3D12_HEAP_FLAG_NONE, &jobDesc,
-                          D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-                          IID_PPV_ARGS(&gParticleBatchJobsResource[frameIndex])),
-                      "CreateCommittedResource(GPUParticleBatchJobs) failed");
-        ThrowIfFailed(gParticleBatchJobsResource[frameIndex]->Map(
-                          0, nullptr,
-                          reinterpret_cast<void **>(
-                              &gMappedParticleBatchJobs[frameIndex])),
-                      "Map GPUParticleBatchJobs failed");
-
-        D3D12_SHADER_RESOURCE_VIEW_DESC jobSrvDesc{};
-        jobSrvDesc.Format = DXGI_FORMAT_UNKNOWN;
-        jobSrvDesc.Shader4ComponentMapping =
-            D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        jobSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-        jobSrvDesc.Buffer.NumElements = kMaxParticleBatchJobs;
-        jobSrvDesc.Buffer.StructureByteStride =
-            sizeof(ParticleBatchJobForGPU);
-        device->CreateShaderResourceView(
-            gParticleBatchJobsResource[frameIndex].Get(), &jobSrvDesc,
-            srvManager->GetCpuHandle(gParticleBatchJobSrvIndex[frameIndex]));
-    }
-
-    CD3DX12_HEAP_PROPERTIES defaultHeap(D3D12_HEAP_TYPE_DEFAULT);
-    const UINT activeItemsBufferSize =
-        static_cast<UINT>(sizeof(uint32_t) * 2u * kMaxParticleBatchItems);
-    auto activeItemsDesc = CD3DX12_RESOURCE_DESC::Buffer(
-        activeItemsBufferSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-    ThrowIfFailed(device->CreateCommittedResource(
-                      &defaultHeap, D3D12_HEAP_FLAG_NONE, &activeItemsDesc,
-                      D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr,
-                      IID_PPV_ARGS(&gParticleBatchActiveItemsResource)),
-                  "CreateCommittedResource(GPUParticleBatchActiveItems) "
-                  "failed");
-    gParticleBatchActiveItemsState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-
-    gParticleBatchActiveItemsSrvIndex = srvManager->Allocate();
-    gParticleBatchActiveItemsSrvCpuHandle =
-        srvManager->GetCpuHandle(gParticleBatchActiveItemsSrvIndex);
-    gParticleBatchActiveItemsSrvGpuHandle =
-        srvManager->GetGpuHandle(gParticleBatchActiveItemsSrvIndex);
-    D3D12_SHADER_RESOURCE_VIEW_DESC activeItemsSrvDesc{};
-    activeItemsSrvDesc.Format = DXGI_FORMAT_UNKNOWN;
-    activeItemsSrvDesc.Shader4ComponentMapping =
-        D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    activeItemsSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-    activeItemsSrvDesc.Buffer.NumElements = kMaxParticleBatchItems;
-    activeItemsSrvDesc.Buffer.StructureByteStride = sizeof(uint32_t) * 2u;
-    device->CreateShaderResourceView(gParticleBatchActiveItemsResource.Get(),
-                                     &activeItemsSrvDesc,
-                                     gParticleBatchActiveItemsSrvCpuHandle);
-
-    gParticleBatchActiveItemsUavIndex = srvManager->Allocate();
-    gParticleBatchActiveItemsUavCpuHandle =
-        srvManager->GetCpuHandle(gParticleBatchActiveItemsUavIndex);
-    gParticleBatchActiveItemsUavGpuHandle =
-        srvManager->GetGpuHandle(gParticleBatchActiveItemsUavIndex);
-    D3D12_UNORDERED_ACCESS_VIEW_DESC activeItemsUavDesc{};
-    activeItemsUavDesc.Format = DXGI_FORMAT_UNKNOWN;
-    activeItemsUavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
-    activeItemsUavDesc.Buffer.NumElements = kMaxParticleBatchItems;
-    activeItemsUavDesc.Buffer.StructureByteStride = sizeof(uint32_t) * 2u;
-    device->CreateUnorderedAccessView(gParticleBatchActiveItemsResource.Get(),
-                                      nullptr, &activeItemsUavDesc,
-                                      gParticleBatchActiveItemsUavCpuHandle);
-
-    constexpr UINT counterBufferSize = 16;
-    auto counterDesc = CD3DX12_RESOURCE_DESC::Buffer(
-        counterBufferSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-    ThrowIfFailed(device->CreateCommittedResource(
-                      &defaultHeap, D3D12_HEAP_FLAG_NONE, &counterDesc,
-                      D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr,
-                      IID_PPV_ARGS(&gParticleBatchActiveCountResource)),
-                  "CreateCommittedResource(GPUParticleBatchActiveCount) "
-                  "failed");
-    gParticleBatchActiveCountUavIndex = srvManager->Allocate();
-    gParticleBatchActiveCountUavCpuHandle =
-        srvManager->GetCpuHandle(gParticleBatchActiveCountUavIndex);
-    gParticleBatchActiveCountUavGpuHandle =
-        srvManager->GetGpuHandle(gParticleBatchActiveCountUavIndex);
-
-    D3D12_UNORDERED_ACCESS_VIEW_DESC rawUavDesc{};
-    rawUavDesc.Format = DXGI_FORMAT_R32_TYPELESS;
-    rawUavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
-    rawUavDesc.Buffer.NumElements = counterBufferSize / sizeof(uint32_t);
-    rawUavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
-    device->CreateUnorderedAccessView(gParticleBatchActiveCountResource.Get(),
-                                      nullptr, &rawUavDesc,
-                                      gParticleBatchActiveCountUavCpuHandle);
-
-    const UINT drawArgsBufferSize = sizeof(D3D12_DRAW_ARGUMENTS);
-    auto drawArgsDesc = CD3DX12_RESOURCE_DESC::Buffer(
-        drawArgsBufferSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-    ThrowIfFailed(device->CreateCommittedResource(
-                      &defaultHeap, D3D12_HEAP_FLAG_NONE, &drawArgsDesc,
-                      D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr,
-                      IID_PPV_ARGS(&gParticleBatchDrawArgsResource)),
-                  "CreateCommittedResource(GPUParticleBatchDrawArgs) failed");
-    gParticleBatchDrawArgsState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-    gParticleBatchDrawArgsUavIndex = srvManager->Allocate();
-    gParticleBatchDrawArgsUavCpuHandle =
-        srvManager->GetCpuHandle(gParticleBatchDrawArgsUavIndex);
-    gParticleBatchDrawArgsUavGpuHandle =
-        srvManager->GetGpuHandle(gParticleBatchDrawArgsUavIndex);
-    rawUavDesc.Buffer.NumElements = drawArgsBufferSize / sizeof(uint32_t);
-    device->CreateUnorderedAccessView(gParticleBatchDrawArgsResource.Get(),
-                                      nullptr, &rawUavDesc,
-                                      gParticleBatchDrawArgsUavCpuHandle);
-
-    gParticleBatchInitialized = true;
-}
-
-ID3D12PipelineState *GetOrCreateParticleBatchDrawPso(
-    ID3D12Device *device, const std::wstring &pixelShaderPath) {
-    auto found = gParticleBatchDrawPsoCache.find(pixelShaderPath);
-    if (found != gParticleBatchDrawPsoCache.end()) {
-        return found->second.Get();
-    }
-
-    auto vs = ShaderCompiler::Compile(ShaderPaths::ParticleBatchVS, "main",
-                                      "vs_6_6");
-    auto ps = ShaderCompiler::Compile(pixelShaderPath, "main", "ps_6_6");
-
-    D3D12_GRAPHICS_PIPELINE_STATE_DESC drawPso{};
-    drawPso.pRootSignature = gParticleBatchDrawRootSignature.Get();
-    drawPso.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
-    drawPso.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
-    drawPso.InputLayout = {nullptr, 0};
-    drawPso.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    drawPso.NumRenderTargets = 1;
-    drawPso.RTVFormats[0] = DirectXCommon::kSceneColorFormat;
-    drawPso.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-    drawPso.SampleDesc.Count = 1;
-    drawPso.SampleMask = UINT_MAX;
-
-    D3D12_RASTERIZER_DESC rasterizer =
-        CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-    rasterizer.CullMode = D3D12_CULL_MODE_NONE;
-    drawPso.RasterizerState = rasterizer;
-
-    D3D12_BLEND_DESC blend = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-    blend.RenderTarget[0].BlendEnable = TRUE;
-    blend.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
-    blend.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-    blend.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-    blend.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-    blend.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ONE;
-    blend.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
-    blend.RenderTarget[0].RenderTargetWriteMask =
-        D3D12_COLOR_WRITE_ENABLE_ALL;
-    drawPso.BlendState = blend;
-
-    D3D12_DEPTH_STENCIL_DESC depth =
-        CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
-    depth.DepthEnable = TRUE;
-    depth.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-    depth.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-    drawPso.DepthStencilState = depth;
-
-    ComPtr<ID3D12PipelineState> pso;
-    ThrowIfFailed(device->CreateGraphicsPipelineState(
-                      &drawPso, IID_PPV_ARGS(&pso)),
-                  "CreateGraphicsPipelineState(GPUParticleBatchDraw) failed");
-
-    ID3D12PipelineState *result = pso.Get();
-    gParticleBatchDrawPsoCache[pixelShaderPath] = std::move(pso);
-    return result;
-}
-
 }
 
 GPUParticleSystem::~GPUParticleSystem() { ReleaseResources(); }
@@ -668,6 +361,7 @@ void GPUParticleSystem::EmitOnce(const ParticleEmitterSettings &settings) {
 }
 
 void GPUParticleSystem::Update(float deltaTime) {
+    deltaTime = std::clamp(SanitizeFinite(deltaTime, 0.0f), 0.0f, 0.1f);
     totalTime_ += deltaTime;
 
     if (!mappedUpdateCB_ || !mappedEmitterCB_) {
@@ -773,384 +467,10 @@ void GPUParticleSystem::Draw(const Camera &camera) {
                          0, nullptr, 0);
 }
 
-void GPUParticleSystem::DrawBatch(
-    std::initializer_list<GPUParticleSystem *> systems, const Camera &camera) {
-    std::vector<GPUParticleSystem *> jobs;
-    jobs.reserve(systems.size());
-    for (GPUParticleSystem *system : systems) {
-        if (!system || !system->dxCommon_ || !system->srvManager_ ||
-            !system->textureManager_ || !system->particleResource_) {
-            continue;
-        }
-        if (!system->updatePending_ && system->activeTimeRemaining_ <= 0.0f &&
-            !system->emitOncePending_) {
-            continue;
-        }
-        jobs.push_back(system);
-    }
-
-    if (jobs.empty()) {
-        return;
-    }
-
-    for (GPUParticleSystem *system : jobs) {
-        if (system->updatePending_) {
-            DispatchPendingUpdates(systems);
-            break;
-        }
-    }
-
-    auto canBatchWithFirst = [&](const GPUParticleSystem *system) {
-        const GPUParticleSystem *first = jobs.front();
-        return system->dxCommon_ == first->dxCommon_ &&
-               system->srvManager_ == first->srvManager_ &&
-               system->textureManager_ == first->textureManager_ &&
-               system->textureId_ == first->textureId_ &&
-               system->materialSettings_.pixelShaderPath ==
-                   first->materialSettings_.pixelShaderPath &&
-               system->materialSettings_.noiseTextureId ==
-                   first->materialSettings_.noiseTextureId &&
-               std::memcmp(&system->materialSettings_.params0,
-                           &first->materialSettings_.params0,
-                           sizeof(XMFLOAT4)) == 0 &&
-               std::memcmp(&system->materialSettings_.params1,
-                           &first->materialSettings_.params1,
-                           sizeof(XMFLOAT4)) == 0;
-    };
-
-    if (jobs.size() > kMaxParticleBatchJobs || !gParticleBatchReadyToDraw ||
-        gParticleBatchLastJobs.size() != jobs.size() ||
-        !std::equal(jobs.begin(), jobs.end(), gParticleBatchLastJobs.begin()) ||
-        !std::all_of(jobs.begin(), jobs.end(), canBatchWithFirst)) {
-        for (GPUParticleSystem *system : jobs) {
-            system->Draw(camera);
-        }
-        return;
-    }
-
-    GPUParticleSystem *first = jobs.front();
-    EnsureParticleBatchResources(first->dxCommon_->GetDevice(),
-                                 first->srvManager_);
-
-    auto *cmd = first->dxCommon_->GetCommandList();
-    ID3D12DescriptorHeap *heaps[] = {first->srvManager_->GetHeap()};
-    cmd->SetDescriptorHeaps(1, heaps);
-
-    XMMATRIX viewProjection = camera.GetView() * camera.GetProj();
-    XMStoreFloat4x4(&first->mappedDrawCB_->viewProjection,
-                    XMMatrixTranspose(viewProjection));
-
-    XMMATRIX billboard = camera.GetView();
-    billboard.r[3] = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
-    billboard = XMMatrixInverse(nullptr, billboard);
-
-    XMFLOAT3 right{};
-    XMFLOAT3 up{};
-    XMStoreFloat3(&right, billboard.r[0]);
-    XMStoreFloat3(&up, billboard.r[1]);
-    first->mappedDrawCB_->cameraRight = {right.x, right.y, right.z, 0.0f};
-    first->mappedDrawCB_->cameraUp = {up.x, up.y, up.z, 0.0f};
-    first->mappedDrawCB_->tintColor = {1.0f, 1.0f, 1.0f, 1.0f};
-    first->mappedDrawCB_->atlasInfo = {
-        static_cast<float>((std::max)(1u, first->emitterSettings_.atlasColumns)),
-        static_cast<float>((std::max)(1u, first->emitterSettings_.atlasRows)),
-        0.0f,
-        0.0f};
-    first->mappedDrawCB_->materialParams0 = first->materialSettings_.params0;
-    first->mappedDrawCB_->materialParams1 = first->materialSettings_.params1;
-
-    const std::wstring pixelShaderPath =
-        first->materialSettings_.pixelShaderPath.empty()
-            ? std::wstring(ShaderPaths::ParticlePS)
-            : first->materialSettings_.pixelShaderPath;
-    cmd->SetGraphicsRootSignature(gParticleBatchDrawRootSignature.Get());
-    cmd->SetPipelineState(GetOrCreateParticleBatchDrawPso(
-        first->dxCommon_->GetDevice(), pixelShaderPath));
-    cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    cmd->SetGraphicsRootConstantBufferView(
-        0, first->drawConstantBuffer_->GetGPUVirtualAddress());
-
-    const uint32_t descriptorFrame =
-        first->dxCommon_->GetBackBufferIndex() % kParticleBatchDescriptorFrameCount;
-    cmd->SetGraphicsRootDescriptorTable(
-        1, first->srvManager_->GetGpuHandle(
-               gParticleBatchParticleSrvBase[descriptorFrame]));
-    cmd->SetGraphicsRootDescriptorTable(
-        2, first->textureManager_->GetGpuHandle(first->textureId_));
-    const uint32_t noiseTextureId =
-        first->materialSettings_.noiseTextureId == UINT32_MAX
-            ? first->textureId_
-            : first->materialSettings_.noiseTextureId;
-    cmd->SetGraphicsRootDescriptorTable(
-        3, first->textureManager_->GetGpuHandle(noiseTextureId));
-    cmd->SetGraphicsRootDescriptorTable(4,
-                                        gParticleBatchActiveItemsSrvGpuHandle);
-    cmd->ExecuteIndirect(first->drawCommandSignature_.Get(), 1,
-                         gParticleBatchDrawArgsResource.Get(), 0, nullptr, 0);
-}
-
 void GPUParticleSystem::DispatchPendingUpdate() {
     if (updatePending_ && dxCommon_ && dxCommon_->IsCommandListRecording()) {
         DispatchUpdate();
     }
-}
-
-void GPUParticleSystem::DispatchPendingUpdates(
-    std::initializer_list<GPUParticleSystem *> systems) {
-    std::vector<GPUParticleSystem *> jobs;
-    jobs.reserve(systems.size());
-    for (GPUParticleSystem *system : systems) {
-        if (!system || !system->updatePending_ || !system->dxCommon_ ||
-            !system->srvManager_ || !system->particleResource_ ||
-            !system->freeListResource_ || !system->freeListIndexResource_ ||
-            !system->updateConstantBuffer_ || !system->emitterConstantBuffer_) {
-            continue;
-        }
-        jobs.push_back(system);
-    }
-
-    if (jobs.empty()) {
-        return;
-    }
-    if (jobs.size() == 1u || jobs.size() > kMaxParticleBatchJobs) {
-        for (GPUParticleSystem *system : jobs) {
-            system->DispatchPendingUpdate();
-        }
-        return;
-    }
-
-    GPUParticleSystem *first = jobs.front();
-    if (!first->dxCommon_->IsCommandListRecording()) {
-        return;
-    }
-    const bool compatible =
-        std::all_of(jobs.begin(), jobs.end(), [&](const GPUParticleSystem *job) {
-            return job->dxCommon_ == first->dxCommon_ &&
-                   job->srvManager_ == first->srvManager_;
-        });
-    if (!compatible) {
-        for (GPUParticleSystem *system : jobs) {
-            system->DispatchPendingUpdate();
-        }
-        return;
-    }
-
-    EnsureParticleBatchResources(first->dxCommon_->GetDevice(),
-                                 first->srvManager_);
-
-    auto *cmd = first->dxCommon_->GetCommandList();
-    ID3D12DescriptorHeap *heaps[] = {first->srvManager_->GetHeap()};
-    cmd->SetDescriptorHeaps(1, heaps);
-
-    const uint32_t descriptorFrame =
-        first->dxCommon_->GetBackBufferIndex() % kParticleBatchDescriptorFrameCount;
-    const uint32_t particleSrvBase =
-        gParticleBatchParticleSrvBase[descriptorFrame];
-    const uint32_t particleUavBase =
-        gParticleBatchParticleUavBase[descriptorFrame];
-    const uint32_t freeListUavBase =
-        gParticleBatchFreeListUavBase[descriptorFrame];
-    const uint32_t freeListIndexUavBase =
-        gParticleBatchFreeListIndexUavBase[descriptorFrame];
-
-    auto copyDescriptor = [&](UINT destinationIndex,
-                              D3D12_CPU_DESCRIPTOR_HANDLE source) {
-        first->dxCommon_->GetDevice()->CopyDescriptorsSimple(
-            1, first->srvManager_->GetCpuHandle(destinationIndex), source,
-            D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    };
-
-    uint32_t totalUpdateThreadCount = 0;
-    uint32_t totalEmitThreadCount = 0;
-    std::memset(gMappedParticleBatchJobs[descriptorFrame], 0,
-                sizeof(ParticleBatchJobForGPU) * kMaxParticleBatchJobs);
-    for (size_t index = 0; index < jobs.size(); ++index) {
-        GPUParticleSystem *job = jobs[index];
-        const uint32_t emitCount =
-            job->mappedEmitterCB_ ? job->mappedEmitterCB_->config.w : 0u;
-        ParticleBatchJobForGPU &gpuJob =
-            gMappedParticleBatchJobs[descriptorFrame][index];
-        const EmitterForGPU emitter = job->BuildEmitterForGPU(emitCount);
-        gpuJob.emitter.position = emitter.position;
-        gpuJob.emitter.spawnOffsetScale = emitter.spawnOffsetScale;
-        gpuJob.emitter.spawnShapeParams = emitter.spawnShapeParams;
-        gpuJob.emitter.basisRight = emitter.basisRight;
-        gpuJob.emitter.basisUp = emitter.basisUp;
-        gpuJob.emitter.basisForward = emitter.basisForward;
-        gpuJob.emitter.directionAndDirectionalVelocity =
-            emitter.directionAndDirectionalVelocity;
-        gpuJob.emitter.velocityBiasAndRadialVelocity =
-            emitter.velocityBiasAndRadialVelocity;
-        gpuJob.emitter.lifeAndFade = emitter.lifeAndFade;
-        gpuJob.emitter.scale = emitter.scale;
-        gpuJob.emitter.accelerationAndTurbulence =
-            emitter.accelerationAndTurbulence;
-        gpuJob.emitter.motion = emitter.motion;
-        gpuJob.emitter.atlasAndRotation = emitter.atlasAndRotation;
-        gpuJob.emitter.tintColor = emitter.tintColor;
-        gpuJob.emitter.config = emitter.config;
-        gpuJob.time = job->mappedUpdateCB_ ? job->mappedUpdateCB_->time
-                                           : XMFLOAT4{};
-        gpuJob.particleCount = job->maxParticles_;
-        gpuJob.updateStart = totalUpdateThreadCount;
-        gpuJob.emitStart = totalEmitThreadCount;
-        gpuJob.emitCount = emitCount;
-        totalUpdateThreadCount += job->maxParticles_;
-        totalEmitThreadCount += emitCount;
-
-        copyDescriptor(particleSrvBase + static_cast<UINT>(index),
-                       job->particleSrvCpuHandle_);
-        copyDescriptor(particleUavBase + static_cast<UINT>(index),
-                       job->particleUavCpuHandle_);
-        copyDescriptor(freeListUavBase + static_cast<UINT>(index),
-                       job->freeListUavCpuHandle_);
-        copyDescriptor(freeListIndexUavBase + static_cast<UINT>(index),
-                       job->freeListIndexUavCpuHandle_);
-    }
-
-    std::vector<D3D12_RESOURCE_BARRIER> barriers;
-    barriers.reserve(jobs.size() + 3u);
-    for (GPUParticleSystem *job : jobs) {
-        barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(
-            job->particleResource_.Get(),
-            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
-    }
-    if (gParticleBatchActiveItemsState != D3D12_RESOURCE_STATE_UNORDERED_ACCESS) {
-        barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(
-            gParticleBatchActiveItemsResource.Get(), gParticleBatchActiveItemsState,
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
-        gParticleBatchActiveItemsState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-    }
-    if (gParticleBatchDrawArgsState != D3D12_RESOURCE_STATE_UNORDERED_ACCESS) {
-        barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(
-            gParticleBatchDrawArgsResource.Get(), gParticleBatchDrawArgsState,
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
-        gParticleBatchDrawArgsState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-    }
-    cmd->ResourceBarrier(static_cast<UINT>(barriers.size()), barriers.data());
-
-    const UINT clearValues[4] = {};
-    cmd->ClearUnorderedAccessViewUint(gParticleBatchActiveCountUavGpuHandle,
-                                      gParticleBatchActiveCountUavCpuHandle,
-                                      gParticleBatchActiveCountResource.Get(),
-                                      clearValues, 0, nullptr);
-    auto clearBarrier =
-        CD3DX12_RESOURCE_BARRIER::UAV(gParticleBatchActiveCountResource.Get());
-    cmd->ResourceBarrier(1, &clearBarrier);
-
-    auto recordBatchDispatch = [&](uint32_t phase, uint32_t jobIndex,
-                                   uint32_t totalThreadCount) {
-        if (totalThreadCount == 0u) {
-            return;
-        }
-        const uint32_t constants[6] = {
-            static_cast<uint32_t>(jobs.size()), totalUpdateThreadCount,
-            totalThreadCount, kMaxParticleBatchItems, phase, jobIndex};
-        cmd->SetComputeRootSignature(gParticleBatchUpdateRootSignature.Get());
-        cmd->SetPipelineState(gParticleBatchUpdatePSO.Get());
-        cmd->SetComputeRoot32BitConstants(0, _countof(constants), constants, 0);
-        cmd->SetComputeRootDescriptorTable(
-            1, first->srvManager_->GetGpuHandle(
-                   gParticleBatchJobSrvIndex[descriptorFrame]));
-        cmd->SetComputeRootDescriptorTable(
-            2, first->srvManager_->GetGpuHandle(particleUavBase));
-        cmd->SetComputeRootDescriptorTable(
-            3, first->srvManager_->GetGpuHandle(freeListUavBase));
-        cmd->SetComputeRootDescriptorTable(
-            4, first->srvManager_->GetGpuHandle(freeListIndexUavBase));
-        cmd->SetComputeRootDescriptorTable(
-            5, gParticleBatchActiveCountUavGpuHandle);
-        cmd->SetComputeRootDescriptorTable(
-            6, gParticleBatchActiveItemsUavGpuHandle);
-        cmd->Dispatch((totalThreadCount + kParticleThreadCount - 1u) /
-                          kParticleThreadCount,
-                      1, 1);
-    };
-
-    for (uint32_t index = 0; index < jobs.size(); ++index) {
-        recordBatchDispatch(0u, index, jobs[index]->maxParticles_);
-    }
-
-    std::vector<D3D12_RESOURCE_BARRIER> uavBarriers;
-    uavBarriers.reserve(jobs.size() * 3u + 2u);
-    for (GPUParticleSystem *job : jobs) {
-        uavBarriers.push_back(
-            CD3DX12_RESOURCE_BARRIER::UAV(job->particleResource_.Get()));
-        uavBarriers.push_back(
-            CD3DX12_RESOURCE_BARRIER::UAV(job->freeListResource_.Get()));
-        uavBarriers.push_back(
-            CD3DX12_RESOURCE_BARRIER::UAV(job->freeListIndexResource_.Get()));
-    }
-    uavBarriers.push_back(
-        CD3DX12_RESOURCE_BARRIER::UAV(gParticleBatchActiveItemsResource.Get()));
-    uavBarriers.push_back(
-        CD3DX12_RESOURCE_BARRIER::UAV(gParticleBatchActiveCountResource.Get()));
-    cmd->ResourceBarrier(static_cast<UINT>(uavBarriers.size()),
-                         uavBarriers.data());
-
-    if (totalEmitThreadCount != 0u) {
-        for (uint32_t index = 0; index < jobs.size(); ++index) {
-            const uint32_t emitCount =
-                gMappedParticleBatchJobs[descriptorFrame][index].emitCount;
-            recordBatchDispatch(1u, index, emitCount);
-        }
-        cmd->ResourceBarrier(static_cast<UINT>(uavBarriers.size()),
-                             uavBarriers.data());
-    }
-
-    EnsureParticleArgsDescriptorRanges(first->dxCommon_->GetDevice(),
-                                       first->srvManager_);
-    const uint32_t argsDescriptorFrame =
-        first->dxCommon_->GetBackBufferIndex() %
-        kParticleArgsDescriptorFrameCount;
-    const uint32_t countUavBase = gParticleArgsCountUavBase[argsDescriptorFrame];
-    const uint32_t drawUavBase = gParticleArgsDrawUavBase[argsDescriptorFrame];
-    copyDescriptor(countUavBase, gParticleBatchActiveCountUavCpuHandle);
-    copyDescriptor(drawUavBase, gParticleBatchDrawArgsUavCpuHandle);
-
-    const uint32_t argsConstants[1u + kMaxParticleArgsJobs] = {
-        1u, kMaxParticleBatchItems};
-    cmd->SetComputeRootSignature(first->argsRootSignature_.Get());
-    cmd->SetPipelineState(first->argsPSO_.Get());
-    cmd->SetComputeRoot32BitConstants(
-        0, static_cast<UINT>(_countof(argsConstants)), argsConstants, 0);
-    cmd->SetComputeRootDescriptorTable(
-        1, first->srvManager_->GetGpuHandle(countUavBase));
-    cmd->SetComputeRootDescriptorTable(
-        2, first->srvManager_->GetGpuHandle(drawUavBase));
-    cmd->Dispatch(1, 1, 1);
-
-    auto argsUavBarrier =
-        CD3DX12_RESOURCE_BARRIER::UAV(gParticleBatchDrawArgsResource.Get());
-    cmd->ResourceBarrier(1, &argsUavBarrier);
-
-    std::vector<D3D12_RESOURCE_BARRIER> finalBarriers;
-    finalBarriers.reserve(jobs.size() + 2u);
-    for (GPUParticleSystem *job : jobs) {
-        finalBarriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(
-            job->particleResource_.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
-    }
-    finalBarriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(
-        gParticleBatchActiveItemsResource.Get(),
-        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
-    finalBarriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(
-        gParticleBatchDrawArgsResource.Get(),
-        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-        D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT));
-    cmd->ResourceBarrier(static_cast<UINT>(finalBarriers.size()),
-                         finalBarriers.data());
-    gParticleBatchActiveItemsState =
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-    gParticleBatchDrawArgsState = D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
-
-    for (GPUParticleSystem *job : jobs) {
-        job->updatePending_ = false;
-    }
-    gParticleBatchLastJobs = jobs;
-    gParticleBatchReadyToDraw = true;
 }
 
 void GPUParticleSystem::DispatchUpdate() {
@@ -1468,6 +788,7 @@ void GPUParticleSystem::CreateParticleBuffer(
                       D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
                       IID_PPV_ARGS(&particleResource_)),
                   "CreateCommittedResource(GPUParticleBuffer) failed");
+    particleResource_->SetName(L"GPUParticleSystem.Particles");
 
     CD3DX12_HEAP_PROPERTIES uploadHeap(D3D12_HEAP_TYPE_UPLOAD);
     auto uploadDesc = CD3DX12_RESOURCE_DESC::Buffer(bufferSize);
@@ -1476,6 +797,7 @@ void GPUParticleSystem::CreateParticleBuffer(
                       D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
                       IID_PPV_ARGS(&particleUploadResource_)),
                   "CreateCommittedResource(GPUParticleUpload) failed");
+    particleUploadResource_->SetName(L"GPUParticleSystem.ParticlesUpload");
 
     uint8_t *mapped = nullptr;
     ThrowIfFailed(particleUploadResource_->Map(
@@ -1534,6 +856,7 @@ void GPUParticleSystem::CreateFreeListBuffers() {
                       D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
                       IID_PPV_ARGS(&freeListResource_)),
                   "CreateCommittedResource(GPUParticleFreeList) failed");
+    freeListResource_->SetName(L"GPUParticleSystem.FreeList");
 
     CD3DX12_HEAP_PROPERTIES uploadHeap(D3D12_HEAP_TYPE_UPLOAD);
     auto freeListUploadDesc = CD3DX12_RESOURCE_DESC::Buffer(freeListBufferSize);
@@ -1542,6 +865,7 @@ void GPUParticleSystem::CreateFreeListBuffers() {
                       D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
                       IID_PPV_ARGS(&freeListUploadResource_)),
                   "CreateCommittedResource(GPUParticleFreeListUpload) failed");
+    freeListUploadResource_->SetName(L"GPUParticleSystem.FreeListUpload");
 
     std::vector<uint32_t> freeList(maxParticles_);
     for (uint32_t index = 0; index < maxParticles_; ++index) {
@@ -1585,6 +909,7 @@ void GPUParticleSystem::CreateFreeListBuffers() {
                       D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
                       IID_PPV_ARGS(&freeListIndexResource_)),
                   "CreateCommittedResource(GPUParticleFreeListIndex) failed");
+    freeListIndexResource_->SetName(L"GPUParticleSystem.FreeListIndex");
 
     auto freeListIndexUploadDesc =
         CD3DX12_RESOURCE_DESC::Buffer(freeListIndexBufferSize);
@@ -1594,6 +919,8 @@ void GPUParticleSystem::CreateFreeListBuffers() {
             D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
             IID_PPV_ARGS(&freeListIndexUploadResource_)),
         "CreateCommittedResource(GPUParticleFreeListIndexUpload) failed");
+    freeListIndexUploadResource_->SetName(
+        L"GPUParticleSystem.FreeListIndexUpload");
 
     int32_t *mappedFreeListIndex = nullptr;
     ThrowIfFailed(
@@ -1641,6 +968,7 @@ void GPUParticleSystem::CreateActiveDrawBuffers() {
                       D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr,
                       IID_PPV_ARGS(&activeIndexResource_)),
                   "CreateCommittedResource(GPUParticleActiveIndex) failed");
+    activeIndexResource_->SetName(L"GPUParticleSystem.ActiveIndex");
     activeIndexState_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 
     activeIndexSrvIndex_ = srvManager_->Allocate();
@@ -1683,6 +1011,7 @@ void GPUParticleSystem::CreateActiveDrawBuffers() {
                       D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr,
                       IID_PPV_ARGS(&activeCountResource_)),
                   "CreateCommittedResource(GPUParticleActiveCount) failed");
+    activeCountResource_->SetName(L"GPUParticleSystem.ActiveCount");
 
     activeCountUavIndex_ = srvManager_->Allocate();
     activeCountUavCpuHandle_ = srvManager_->GetCpuHandle(activeCountUavIndex_);
@@ -1705,6 +1034,7 @@ void GPUParticleSystem::CreateActiveDrawBuffers() {
                       D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr,
                       IID_PPV_ARGS(&drawArgsResource_)),
                   "CreateCommittedResource(GPUParticleDrawArgs) failed");
+    drawArgsResource_->SetName(L"GPUParticleSystem.DrawArgs");
     drawArgsState_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 
     drawArgsUavIndex_ = srvManager_->Allocate();
@@ -1755,6 +1085,18 @@ void GPUParticleSystem::CreateConstantBuffers() {
 }
 
 void GPUParticleSystem::ReleaseResources() {
+
+    const bool hasGpuResources =
+        updateConstantBuffer_ || emitterConstantBuffer_ || drawConstantBuffer_ ||
+        particleResource_ || particleUploadResource_ || freeListResource_ ||
+        freeListUploadResource_ || freeListIndexResource_ ||
+        freeListIndexUploadResource_ || activeIndexResource_ ||
+        activeCountResource_ || drawArgsResource_;
+    if (hasGpuResources && dxCommon_ && !dxCommon_->IsDeviceRemoved() &&
+        !dxCommon_->IsCommandListRecording()) {
+        dxCommon_->WaitForGpu();
+    }
+
     if (srvManager_) {
         if (particleSrvIndex_ != UINT32_MAX) {
             srvManager_->Free(particleSrvIndex_);

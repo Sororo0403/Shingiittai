@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 class GameScene : public BaseScene {
   public:
@@ -39,14 +40,16 @@ class GameScene : public BaseScene {
           backgroundOnlyMode_(mode == Mode::BackgroundOnly ||
                               mode == Mode::TutorialBackgroundOnly),
           readyPreviewMode_(mode == Mode::ReadyPreview),
-          tutorialBackgroundMode_(mode == Mode::TutorialBackgroundOnly) {}
+          tutorialBackgroundMode_(mode == Mode::TutorialBackgroundOnly ||
+                                  mode == Mode::Tutorial) {}
     GameScene(const SwordInputCalibration &inputCalibration, Mode mode)
         : inputCalibration_(inputCalibration),
           titleDemoMode_(mode == Mode::TitleDemo),
           backgroundOnlyMode_(mode == Mode::BackgroundOnly ||
                               mode == Mode::TutorialBackgroundOnly),
           readyPreviewMode_(mode == Mode::ReadyPreview),
-          tutorialBackgroundMode_(mode == Mode::TutorialBackgroundOnly),
+          tutorialBackgroundMode_(mode == Mode::TutorialBackgroundOnly ||
+                                  mode == Mode::Tutorial),
           tutorialMode_(mode == Mode::Tutorial) {}
     GameScene(const SwordInputCalibration &inputCalibration,
               float combatDifficulty, Mode mode)
@@ -56,7 +59,8 @@ class GameScene : public BaseScene {
           backgroundOnlyMode_(mode == Mode::BackgroundOnly ||
                               mode == Mode::TutorialBackgroundOnly),
           readyPreviewMode_(mode == Mode::ReadyPreview),
-          tutorialBackgroundMode_(mode == Mode::TutorialBackgroundOnly),
+          tutorialBackgroundMode_(mode == Mode::TutorialBackgroundOnly ||
+                                  mode == Mode::Tutorial),
           tutorialMode_(mode == Mode::Tutorial) {}
     ~GameScene() override;
 
@@ -103,6 +107,7 @@ class GameScene : public BaseScene {
     void UpdateBattleIntro(float deltaTime);
     void FinishBattleIntro();
     void ApplyEnemyIntroDissolve(float revealRatio);
+    void ApplyEnemyPhaseMaterials();
     void UpdatePhaseTransitionCinematic(float deltaTime);
     void EmitPhaseTransitionStartEffects();
     void EmitPhaseTransitionLoopEffects(float deltaTime);
@@ -132,11 +137,13 @@ class GameScene : public BaseScene {
     void DispatchCombatFeedback(const CombatFeedbackEvent &event);
     void EmitCombatParticles(const CombatFeedbackEvent &event);
     void EmitEnemyActionParticles(ActionKind kind, ActionStep step);
+    void EmitArcaneLaserParticles(float deltaTime);
     void EmitEnemyCueParticles(float deltaTime);
     void UpdateBattlePostProcessState(float deltaTime);
     PlayerCombatObservation BuildPlayerCombatObservation() const;
     float ComputeGameplayTimeScale() const;
     void UpdateSwordVfx(float deltaTime);
+    float GetReleaseCounterWindowDuration() const;
     float ApplyEnemyDamage(float damage, bool deferTransitions = false);
     void StartBattleBgm();
     void StopBattleBgm();
@@ -168,6 +175,14 @@ class GameScene : public BaseScene {
     uint32_t playerModelId_ = 0;
     uint32_t swordModelId_ = 0;
     uint32_t enemyModelId_ = 0;
+    uint32_t enemyRustTextureId_ = 0;
+    uint32_t enemyCleanMetalTextureId_ = 0;
+    uint32_t enemyGoldMetalTextureId_ = 0;
+    uint32_t enemyPhaseBlendTextureId_ = 0;
+    std::vector<uint8_t> enemyRustMetalPixels_{};
+    std::vector<uint8_t> enemyCleanMetalPixels_{};
+    std::vector<uint8_t> enemyGoldMetalPixels_{};
+    std::vector<uint8_t> enemyPhaseBlendPixels_{};
     uint32_t arenaFloorModelId_ = 0;
     uint32_t arenaLowPolyTerrainModelId_ = 0;
     uint32_t arenaDistantTerrainModelId_ = 0;
@@ -179,6 +194,7 @@ class GameScene : public BaseScene {
     uint32_t arenaGiantHeadModelId_ = 0;
     uint32_t arenaCenterDiskModelId_ = 0;
     uint32_t arenaSpokeModelId_ = 0;
+    uint32_t arenaTutorialSpokeModelId_ = 0;
     uint32_t arenaInnerRingModelId_ = 0;
     uint32_t arenaOuterRingModelId_ = 0;
     uint32_t arenaColumnModelId_ = 0;
@@ -197,6 +213,9 @@ class GameScene : public BaseScene {
     bool soundsLoaded_ = false;
     std::array<bool, Player::kSwordCount> previousSwordSoundStates_{};
     float enemyCueParticleTimer_ = 0.0f;
+    EnemyAttackCueEvent enemyCueVisual_{};
+    float enemyCueVisualTimer_ = 0.0f;
+    float arcaneLaserParticleTimer_ = 0.0f;
     uint32_t arenaNoiseTextureId_ = 0;
     std::string enemyAnimationName_{};
     bool enemyAnimationLoop_ = true;
@@ -269,6 +288,9 @@ class GameScene : public BaseScene {
     bool pausePostProcessSaved_ = false;
     PostProcessProfile pauseSavedPostProcess_{};
     int pauseMenuIndex_ = 0;
+    bool pauseExitFadeActive_ = false;
+    float pauseExitFadeTimer_ = 0.0f;
+    int pauseExitTarget_ = 0;
     bool pauseMenuImagesLoaded_ = false;
     std::array<uint32_t, 4> pauseMenuTextureIds_{};
     std::array<float, 4> pauseMenuTextureWidths_{};

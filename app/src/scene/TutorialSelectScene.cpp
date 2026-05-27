@@ -88,7 +88,7 @@ void TutorialSelectScene::Initialize(const SceneContext &ctx) {
     cameraAvailable_ = false;
 
     backgroundScene_ =
-        std::make_unique<GameScene>(GameScene::Mode::BackgroundOnly);
+        std::make_unique<GameScene>(GameScene::Mode::TutorialBackgroundOnly);
     backgroundScene_->Initialize(ctx);
 
     sceneTitleImage_ = LoadTextureImage(

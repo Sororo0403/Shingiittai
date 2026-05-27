@@ -23,6 +23,19 @@ void ScaleAttackProfile(EnemyAttackProfile &profile, float damageScale,
     profile.timing.activeEndTime *= timingScale;
     profile.timing.recoveryStartTime *= timingScale;
 }
+
+void SetActiveWindowDuration(EnemyAttackProfile &profile, float duration) {
+    const float currentDuration =
+        profile.timing.activeEndTime - profile.timing.activeStartTime;
+    const float extension = duration - currentDuration;
+    if (extension <= 0.0f) {
+        return;
+    }
+
+    profile.timing.activeEndTime += extension;
+    profile.timing.recoveryStartTime += extension;
+    profile.timing.totalTime += extension;
+}
 } // namespace
 
 void Enemy::SetDifficulty(float difficulty) {
@@ -45,6 +58,20 @@ void Enemy::SetDifficulty(float difficulty) {
                        knockbackScale, hitBoxScale, timingScale);
     ScaleAttackProfile(config_.attacks.bladeClash.profile, damageScale,
                        knockbackScale, hitBoxScale, timingScale);
+    ScaleAttackProfile(config_.attacks.arcaneLaser.profile, damageScale * 1.08f,
+                       knockbackScale * 1.06f, hitBoxScale, timingScale);
+
+    constexpr float kEasyActiveWindowDuration = 2.0f;
+    auto widenActiveWindow = [&](EnemyAttackProfile &profile) {
+        const float currentDuration =
+            profile.timing.activeEndTime - profile.timing.activeStartTime;
+        const float targetDuration =
+            currentDuration +
+            (kEasyActiveWindowDuration - currentDuration) * (1.0f - t);
+        SetActiveWindowDuration(profile, targetDuration);
+    };
+    widenActiveWindow(config_.attacks.smash.melee.base);
+    widenActiveWindow(config_.attacks.sweep.melee.base);
 
     config_.attacks.smash.melee.holdTime.min = 0.18f + 0.28f * (1.0f - t);
     config_.attacks.smash.melee.holdTime.max = 0.36f + 0.54f * (1.0f - t);
@@ -77,12 +104,19 @@ void Enemy::SetDifficulty(float difficulty) {
     directionFeintChance_ = 0.36f;
     chargeWarpFeintChance_ = 0.38f;
     farWarpSlashChance_ = 0.62f;
-    farWarpSlashDistance_ = 12.2f - 2.4f * t;
-    farSlashLungeSpeed_ = 32.0f + 20.0f * t;
+    farWarpSlashDistance_ = 9.8f - 1.1f * t;
+    farSlashLungeSpeed_ = 54.0f + 28.0f * t;
+    farSlashSmashChargeTime_ = 0.42f - 0.10f * t;
+    farSlashSweepChargeTime_ = 0.38f - 0.09f * t;
     phantomWarpChance_ = 0.28f;
     phantomWarpCooldownDuration_ = 8.2f - 4.4f * t;
     phantomFinalLockDuration_ = 0.38f - 0.16f * t;
     bladeClashChance_ = 0.30f;
+    arcaneLaserChance_ = 0.26f + 0.16f * t;
+    arcaneLaserCooldownDuration_ = 8.6f - 3.0f * t;
+    arcaneLaserMinDistance_ = 4.8f - 0.8f * t;
+    config_.attacks.arcaneLaser.range = 13.5f + 4.0f * t;
+    config_.attacks.arcaneLaser.radius = 1.52f + 0.44f * t;
 
     stalkDurationMin_ = 0.70f - 0.36f * t;
     stalkDurationMax_ = 1.48f - 0.74f * t;
@@ -108,7 +142,10 @@ void Enemy::SetDifficulty(float difficulty) {
 }
 
 float Enemy::GetCurrentSmashChargeTime() const {
-    if (quickSlashActive_ || farSlashActive_) {
+    if (farSlashActive_) {
+        return farSlashSmashChargeTime_;
+    }
+    if (quickSlashActive_) {
         return quickSmashChargeTime_;
     }
     if (warpFeintImmediate_) {
@@ -122,7 +159,10 @@ float Enemy::GetCurrentSmashChargeTime() const {
 }
 
 float Enemy::GetCurrentSweepChargeTime() const {
-    if (quickSlashActive_ || farSlashActive_) {
+    if (farSlashActive_) {
+        return farSlashSweepChargeTime_;
+    }
+    if (quickSlashActive_) {
         return quickSweepChargeTime_;
     }
     if (warpFeintImmediate_) {
@@ -202,5 +242,7 @@ void Enemy::ValidateAllTimings() {
                    config_.attacks.sweep.melee.base.chargeTime);
     ValidateTiming(config_.attacks.bladeClash.profile.timing,
                    config_.attacks.bladeClash.profile.chargeTime);
+    ValidateTiming(config_.attacks.arcaneLaser.profile.timing,
+                   config_.attacks.arcaneLaser.profile.chargeTime);
 }
 

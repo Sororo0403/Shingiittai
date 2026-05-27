@@ -144,7 +144,7 @@ void MeshRenderer::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
 }
 
 void MeshRenderer::BeginFrame() {
-    uploadBuffer_.BeginFrame();
+    uploadBuffer_.BeginFrame(dxCommon_->GetBackBufferIndex());
 }
 
 void MeshRenderer::PreDraw() {

@@ -2,9 +2,193 @@
 #include "graphics/DxHelpers.h"
 #include "graphics/DxUtils.h"
 #include "graphics/SrvManager.h"
+#include <algorithm>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
 #include <stdexcept>
+#include <sstream>
+#include <string>
 
 using namespace DxUtils;
+
+namespace {
+std::filesystem::path GetDeviceRemovedLogPath() {
+    wchar_t modulePath[MAX_PATH]{};
+    const DWORD length =
+        GetModuleFileNameW(nullptr, modulePath, static_cast<DWORD>(_countof(modulePath)));
+    if (length == 0 || length >= _countof(modulePath)) {
+        return std::filesystem::path(L"shingiittai_d3d12_device_removed.log");
+    }
+
+    std::filesystem::path path(modulePath);
+    return path.parent_path() / L"shingiittai_d3d12_device_removed.log";
+}
+
+std::string HrToString(HRESULT hr) {
+    std::ostringstream stream;
+    stream << "0x" << std::uppercase << std::hex << std::setw(8)
+           << std::setfill('0') << static_cast<uint32_t>(hr);
+    return stream.str();
+}
+
+std::string WideToUtf8(const wchar_t *text) {
+    if (!text) {
+        return {};
+    }
+
+    const int size =
+        WideCharToMultiByte(CP_UTF8, 0, text, -1, nullptr, 0, nullptr, nullptr);
+    if (size <= 1) {
+        return {};
+    }
+
+    std::string result(static_cast<size_t>(size - 1), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, text, -1, result.data(), size, nullptr,
+                        nullptr);
+    return result;
+}
+
+std::string PickDebugName(const char *nameA, const wchar_t *nameW) {
+    if (nameA && nameA[0] != '\0') {
+        return nameA;
+    }
+    return WideToUtf8(nameW);
+}
+
+void WriteDredAllocationList(std::ofstream &log, const char *label,
+                             const D3D12_DRED_ALLOCATION_NODE *node) {
+    log << label << ":\n";
+    if (!node) {
+        log << "  (none)\n";
+        return;
+    }
+
+    uint32_t count = 0;
+    while (node && count < 32) {
+        const std::string name = PickDebugName(node->ObjectNameA, node->ObjectNameW);
+        log << "  [" << count << "] type="
+            << static_cast<uint32_t>(node->AllocationType) << " name="
+            << (name.empty() ? "(unnamed)" : name) << "\n";
+        node = node->pNext;
+        ++count;
+    }
+    if (node) {
+        log << "  ... truncated ...\n";
+    }
+}
+
+void WriteDredData(std::ofstream &log, ID3D12Device *device) {
+    if (!device) {
+        log << "DRED: device is null\n";
+        return;
+    }
+
+    Microsoft::WRL::ComPtr<ID3D12DeviceRemovedExtendedData> dred;
+    if (FAILED(device->QueryInterface(IID_PPV_ARGS(&dred)))) {
+        log << "DRED: ID3D12DeviceRemovedExtendedData unavailable\n";
+        return;
+    }
+
+    D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT breadcrumbs{};
+    if (SUCCEEDED(dred->GetAutoBreadcrumbsOutput(&breadcrumbs))) {
+        log << "DRED breadcrumbs:\n";
+        const D3D12_AUTO_BREADCRUMB_NODE *node =
+            breadcrumbs.pHeadAutoBreadcrumbNode;
+        uint32_t nodeIndex = 0;
+        while (node && nodeIndex < 32) {
+            const std::string listName = PickDebugName(
+                node->pCommandListDebugNameA, node->pCommandListDebugNameW);
+            const std::string queueName = PickDebugName(
+                node->pCommandQueueDebugNameA, node->pCommandQueueDebugNameW);
+            const UINT32 last =
+                node->pLastBreadcrumbValue ? *node->pLastBreadcrumbValue : 0;
+
+            log << "  node[" << nodeIndex << "] list="
+                << (listName.empty() ? "(unnamed)" : listName)
+                << " queue=" << (queueName.empty() ? "(unnamed)" : queueName)
+                << " count=" << node->BreadcrumbCount
+                << " lastCompleted=" << last << "\n";
+
+            if (node->pCommandHistory && node->BreadcrumbCount > 0) {
+                UINT32 start = 0;
+                if (last > 12) {
+                    start = last - 12;
+                    if (start > node->BreadcrumbCount) {
+                        start = node->BreadcrumbCount;
+                    }
+                }
+                UINT32 end = last + 4;
+                if (end < start) {
+                    end = start;
+                }
+                if (end > node->BreadcrumbCount) {
+                    end = node->BreadcrumbCount;
+                }
+                for (UINT32 i = start; i < end; ++i) {
+                    log << "    op[" << i << "]="
+                        << static_cast<uint32_t>(node->pCommandHistory[i]);
+                    if (i == last) {
+                        log << " <- last completed";
+                    }
+                    log << "\n";
+                }
+            }
+
+            node = node->pNext;
+            ++nodeIndex;
+        }
+        if (node) {
+            log << "  ... breadcrumb nodes truncated ...\n";
+        }
+    } else {
+        log << "DRED breadcrumbs: unavailable\n";
+    }
+
+    D3D12_DRED_PAGE_FAULT_OUTPUT pageFault{};
+    if (SUCCEEDED(dred->GetPageFaultAllocationOutput(&pageFault))) {
+        log << "DRED page fault VA=0x" << std::uppercase << std::hex
+            << pageFault.PageFaultVA << std::dec << "\n";
+        WriteDredAllocationList(log, "DRED existing allocations",
+                                pageFault.pHeadExistingAllocationNode);
+        WriteDredAllocationList(log, "DRED recently freed allocations",
+                                pageFault.pHeadRecentFreedAllocationNode);
+    } else {
+        log << "DRED page fault: unavailable\n";
+    }
+}
+
+Microsoft::WRL::ComPtr<IDXGIAdapter1>
+PickHighPerformanceAdapter(IDXGIFactory7 *factory) {
+    Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
+    if (!factory) {
+        return adapter;
+    }
+
+    for (UINT index = 0;; ++index) {
+        Microsoft::WRL::ComPtr<IDXGIAdapter1> candidate;
+        if (FAILED(factory->EnumAdapterByGpuPreference(
+                index, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,
+                IID_PPV_ARGS(&candidate)))) {
+            break;
+        }
+
+        DXGI_ADAPTER_DESC1 desc{};
+        candidate->GetDesc1(&desc);
+        if ((desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0) {
+            continue;
+        }
+        if (SUCCEEDED(D3D12CreateDevice(candidate.Get(),
+                                        D3D_FEATURE_LEVEL_11_0, __uuidof(ID3D12Device),
+                                        nullptr))) {
+            adapter = candidate;
+            break;
+        }
+    }
+
+    return adapter;
+}
+} // namespace
 
 DirectXCommon::~DirectXCommon() {
     if (fenceEvent_) {
@@ -29,6 +213,8 @@ void DirectXCommon::Initialize(HWND hwnd, int width, int height) {
 }
 
 void DirectXCommon::BeginFrame() {
+    ++diagnosticFrameId_;
+    TrackGpuPhase("BeginFrame");
     WaitForFrame(backBufferIndex_);
     ID3D12CommandAllocator* commandAllocator =
         commandAllocators_[backBufferIndex_].Get();
@@ -39,9 +225,11 @@ void DirectXCommon::BeginFrame() {
     isCommandListRecording_ = true;
 
     ApplySceneViewportAndScissor();
+    TrackGpuPhase("BeginFrame.ResetComplete");
 }
 
 void DirectXCommon::BeginScenePass() {
+    TrackGpuPhase("BeginScenePass");
     TransitionSceneColor(D3D12_RESOURCE_STATE_RENDER_TARGET);
 
     auto sceneRtv = GetSceneRtvHandle();
@@ -55,6 +243,7 @@ void DirectXCommon::BeginScenePass() {
 }
 
 void DirectXCommon::RestoreSceneRenderState(bool clearDepth) {
+    TrackGpuPhase("RestoreSceneRenderState");
     TransitionSceneColor(D3D12_RESOURCE_STATE_RENDER_TARGET);
 
     auto sceneRtv = GetSceneRtvHandle();
@@ -69,10 +258,12 @@ void DirectXCommon::RestoreSceneRenderState(bool clearDepth) {
 }
 
 void DirectXCommon::EndScenePass() {
+    TrackGpuPhase("EndScenePass");
     TransitionSceneColor(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 }
 
 void DirectXCommon::BeginBackBufferPass(bool bindDepth) {
+    TrackGpuPhase("BeginBackBufferPass");
     TransitionBackBuffer(backBufferIndex_,
                          D3D12_RESOURCE_STATE_RENDER_TARGET);
 
@@ -80,17 +271,22 @@ void DirectXCommon::BeginBackBufferPass(bool bindDepth) {
 }
 
 void DirectXCommon::EndFrame() {
+    TrackGpuPhase("EndFrame.Begin");
     TransitionBackBuffer(backBufferIndex_, D3D12_RESOURCE_STATE_PRESENT);
 
+    TrackGpuPhase("EndFrame.CloseCommandList");
     ThrowIfFailed(commandList_->Close(), "commandList_->Close failed");
     isCommandListRecording_ = false;
 
     ID3D12CommandList *lists[] = {commandList_.Get()};
+    TrackGpuPhase("EndFrame.ExecuteCommandLists");
     commandQueue_->ExecuteCommandLists(1, lists);
 
+    TrackGpuPhase("EndFrame.Present");
     HRESULT presentResult = swapChain_->Present(1, 0);
     if (FAILED(presentResult)) {
         HRESULT removedReason = device_->GetDeviceRemovedReason();
+        WriteDeviceRemovedLog(presentResult, removedReason);
         if (FAILED(removedReason)) {
             ThrowIfFailed(removedReason, "D3D12 device removed");
         }
@@ -99,6 +295,7 @@ void DirectXCommon::EndFrame() {
 
     const UINT presentedBufferIndex = backBufferIndex_;
     fenceValue_++;
+    TrackGpuPhase("EndFrame.SignalFence");
     ThrowIfFailed(commandQueue_->Signal(fence_.Get(), fenceValue_),
                   "commandQueue_->Signal failed");
     frameFenceValues_[presentedBufferIndex] = fenceValue_;
@@ -107,6 +304,7 @@ void DirectXCommon::EndFrame() {
 }
 
 void DirectXCommon::Resize(int width, int height) {
+    TrackGpuPhase("Resize");
     if (!swapChain_ || width <= 0 || height <= 0) {
         return;
     }
@@ -136,6 +334,7 @@ void DirectXCommon::Resize(int width, int height) {
 }
 
 void DirectXCommon::BeginUpload() {
+    TrackGpuPhase("BeginUpload");
     if (isCommandListRecording_) {
         if (uploadPassActive_) {
             ++uploadPassDepth_;
@@ -157,6 +356,7 @@ void DirectXCommon::BeginUpload() {
 }
 
 void DirectXCommon::EndUpload() {
+    TrackGpuPhase("EndUpload");
     if (!uploadPassActive_) {
         return;
     }
@@ -171,12 +371,14 @@ void DirectXCommon::EndUpload() {
     uploadPassDepth_ = 0;
 
     ID3D12CommandList *lists[] = {commandList_.Get()};
+    TrackGpuPhase("EndUpload.ExecuteCommandLists");
     commandQueue_->ExecuteCommandLists(1, lists);
 
     WaitForGpu();
 }
 
 void DirectXCommon::WaitForGpu() {
+    TrackGpuPhase("WaitForGpu");
     fenceValue_++;
     ThrowIfFailed(commandQueue_->Signal(fence_.Get(), fenceValue_),
                   "commandQueue_->Signal failed");
@@ -223,6 +425,7 @@ void DirectXCommon::TransitionSceneColor(D3D12_RESOURCE_STATES afterState) {
 
     auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
         sceneColorBuffer_.Get(), sceneColorState_, afterState);
+    TrackGpuPhase("TransitionSceneColor");
     commandList_->ResourceBarrier(1, &barrier);
     sceneColorState_ = afterState;
 }
@@ -236,6 +439,7 @@ void DirectXCommon::TransitionBackBuffer(
 
     auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
         backBuffers_[index].Get(), backBufferStates_[index], afterState);
+    TrackGpuPhase("TransitionBackBuffer");
     commandList_->ResourceBarrier(1, &barrier);
     backBufferStates_[index] = afterState;
 }
@@ -268,6 +472,7 @@ void DirectXCommon::TransitionDepthToShaderResource() {
     auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
         depthBuffer_.Get(), depthState_,
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    TrackGpuPhase("TransitionDepthToShaderResource");
     commandList_->ResourceBarrier(1, &barrier);
     depthState_ = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 }
@@ -279,6 +484,7 @@ void DirectXCommon::TransitionDepthToWrite() {
 
     auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
         depthBuffer_.Get(), depthState_, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    TrackGpuPhase("TransitionDepthToWrite");
     commandList_->ResourceBarrier(1, &barrier);
     depthState_ = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 }
@@ -301,15 +507,41 @@ void DirectXCommon::ResetClearColor() {
     clearColor_[3] = kClearColor[3];
 }
 
+bool DirectXCommon::IsDeviceRemoved() const {
+    return device_ && FAILED(device_->GetDeviceRemovedReason());
+}
+
 void DirectXCommon::CreateFactory() {
     ThrowIfFailed(CreateDXGIFactory(IID_PPV_ARGS(&factory_)),
                   "CreateDXGIFactory failed");
 }
 
 void DirectXCommon::CreateDevice() {
-    ThrowIfFailed(D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0,
+    Microsoft::WRL::ComPtr<ID3D12DeviceRemovedExtendedDataSettings>
+        dredSettings;
+    if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&dredSettings)))) {
+        dredSettings->SetAutoBreadcrumbsEnablement(
+            D3D12_DRED_ENABLEMENT_FORCED_ON);
+        dredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+        dredSettings->SetWatsonDumpEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+    }
+
+    Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter =
+        PickHighPerformanceAdapter(factory_.Get());
+    IUnknown *deviceAdapter = adapter ? adapter.Get() : nullptr;
+    ThrowIfFailed(D3D12CreateDevice(deviceAdapter, D3D_FEATURE_LEVEL_11_0,
                                     IID_PPV_ARGS(&device_)),
                   "D3D12CreateDevice failed");
+    Microsoft::WRL::ComPtr<IDXGIDevice> dxgiDevice;
+    Microsoft::WRL::ComPtr<IDXGIAdapter> actualAdapter;
+    if (SUCCEEDED(device_.As(&dxgiDevice)) &&
+        SUCCEEDED(dxgiDevice->GetAdapter(&actualAdapter))) {
+        Microsoft::WRL::ComPtr<IDXGIAdapter1> actualAdapter1;
+        if (SUCCEEDED(actualAdapter.As(&actualAdapter1))) {
+            actualAdapter1->GetDesc1(&adapterDesc_);
+        }
+    }
+    device_->SetName(L"DirectXCommon.Device");
 }
 
 void DirectXCommon::CreateCommandQueue() {
@@ -317,6 +549,7 @@ void DirectXCommon::CreateCommandQueue() {
     ThrowIfFailed(
         device_->CreateCommandQueue(&desc, IID_PPV_ARGS(&commandQueue_)),
         "CreateCommandQueue failed");
+    commandQueue_->SetName(L"DirectXCommon.CommandQueue");
 }
 
 void DirectXCommon::CreateCommandAllocator() {
@@ -325,6 +558,9 @@ void DirectXCommon::CreateCommandAllocator() {
             device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
                                             IID_PPV_ARGS(&commandAllocators_[i])),
             "CreateCommandAllocator failed");
+        wchar_t name[64]{};
+        swprintf_s(name, L"DirectXCommon.CommandAllocator[%u]", i);
+        commandAllocators_[i]->SetName(name);
     }
 }
 
@@ -334,6 +570,7 @@ void DirectXCommon::CreateCommandList() {
                                              nullptr,
                                              IID_PPV_ARGS(&commandList_)),
                   "CreateCommandList failed");
+    commandList_->SetName(L"DirectXCommon.CommandList");
 
     ThrowIfFailed(commandList_->Close(), "commandList_->Close failed");
 }
@@ -367,6 +604,7 @@ void DirectXCommon::CreateRTV() {
     ThrowIfFailed(
         device_->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&rtvHeap_)),
         "CreateDescriptorHeap(RTV) failed");
+    rtvHeap_->SetName(L"DirectXCommon.RtvHeap");
 
     rtvDescriptorSize_ = device_->GetDescriptorHandleIncrementSize(
         D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
@@ -377,6 +615,9 @@ void DirectXCommon::CreateRTV() {
     for (UINT i = 0; i < kSwapChainBufferCount; i++) {
         ThrowIfFailed(swapChain_->GetBuffer(i, IID_PPV_ARGS(&backBuffers_[i])),
                       "swapChain_->GetBuffer failed");
+        wchar_t name[64]{};
+        swprintf_s(name, L"DirectXCommon.BackBuffer[%u]", i);
+        backBuffers_[i]->SetName(name);
 
         D3D12_RENDER_TARGET_VIEW_DESC rtvDesc{};
         rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
@@ -416,6 +657,7 @@ void DirectXCommon::CreateSceneRenderTarget(int width, int height) {
                       D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, &clearValue,
                       IID_PPV_ARGS(&sceneColorBuffer_)),
                   "CreateCommittedResource(SceneRenderTarget) failed");
+    sceneColorBuffer_->SetName(L"DirectXCommon.SceneColorBuffer");
     sceneColorState_ = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 
     D3D12_RENDER_TARGET_VIEW_DESC rtvDesc{};
@@ -450,6 +692,7 @@ void DirectXCommon::CreateDepthStencil(int width, int height) {
     ThrowIfFailed(
         device_->CreateDescriptorHeap(&dsvDesc, IID_PPV_ARGS(&dsvHeap_)),
         "CreateDescriptorHeap(DSV) failed");
+    dsvHeap_->SetName(L"DirectXCommon.DsvHeap");
 
     D3D12_RESOURCE_DESC resDesc{};
     resDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
@@ -473,6 +716,7 @@ void DirectXCommon::CreateDepthStencil(int width, int height) {
                       D3D12_RESOURCE_STATE_DEPTH_WRITE, &clearValue,
                       IID_PPV_ARGS(&depthBuffer_)),
                   "CreateCommittedResource(DepthStencil) failed");
+    depthBuffer_->SetName(L"DirectXCommon.DepthBuffer");
 
     D3D12_DEPTH_STENCIL_VIEW_DESC dsvDescView{};
     dsvDescView.Format = kDepthStencilFormat;
@@ -538,6 +782,7 @@ void DirectXCommon::CreateFence() {
     ThrowIfFailed(
         device_->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence_)),
         "CreateFence failed");
+    fence_->SetName(L"DirectXCommon.FrameFence");
 
     fenceEvent_ = CreateEvent(nullptr, FALSE, FALSE, nullptr);
     if (!fenceEvent_) {
@@ -558,4 +803,65 @@ void DirectXCommon::WaitForFrame(UINT frameIndex) {
     ThrowIfFailed(fence_->SetEventOnCompletion(fenceValue, fenceEvent_),
                   "fence_->SetEventOnCompletion failed");
     WaitForSingleObject(fenceEvent_, INFINITE);
+}
+
+void DirectXCommon::TrackGpuPhase(const char *phase) {
+    recentGpuPhases_[recentGpuPhaseCursor_] = phase;
+    recentGpuPhaseCursor_ =
+        (recentGpuPhaseCursor_ + 1) % kRecentGpuPhaseCount;
+    if (recentGpuPhaseSize_ < kRecentGpuPhaseCount) {
+        ++recentGpuPhaseSize_;
+    }
+}
+
+void DirectXCommon::WriteDeviceRemovedLog(HRESULT presentResult,
+                                          HRESULT removedReason) const {
+    std::ofstream log(GetDeviceRemovedLogPath(), std::ios::app);
+    if (!log) {
+        return;
+    }
+
+    SYSTEMTIME now{};
+    GetLocalTime(&now);
+    log << "============================================================\n";
+    log << "D3D12 device removed at " << now.wYear << "-"
+        << std::setw(2) << std::setfill('0') << now.wMonth << "-"
+        << std::setw(2) << std::setfill('0') << now.wDay << " "
+        << std::setw(2) << std::setfill('0') << now.wHour << ":"
+        << std::setw(2) << std::setfill('0') << now.wMinute << ":"
+        << std::setw(2) << std::setfill('0') << now.wSecond << "."
+        << std::setw(3) << std::setfill('0') << now.wMilliseconds
+        << std::setfill(' ') << "\n";
+    log << "presentResult=" << HrToString(presentResult)
+        << " removedReason=" << HrToString(removedReason) << "\n";
+    log << "diagnosticFrameId=" << diagnosticFrameId_
+        << " backBufferIndex=" << backBufferIndex_
+        << " fenceValue=" << fenceValue_
+        << " completedFence="
+        << (fence_ ? fence_->GetCompletedValue() : 0)
+        << " recording=" << (isCommandListRecording_ ? "true" : "false")
+        << " uploadActive=" << (uploadPassActive_ ? "true" : "false")
+        << " uploadDepth=" << uploadPassDepth_ << "\n";
+
+    for (UINT i = 0; i < kSwapChainBufferCount; ++i) {
+        log << "frameFenceValues[" << i << "]=" << frameFenceValues_[i]
+            << " backBufferState[" << i << "]="
+            << static_cast<uint32_t>(backBufferStates_[i]) << "\n";
+    }
+    log << "sceneColorState=" << static_cast<uint32_t>(sceneColorState_)
+        << " depthState=" << static_cast<uint32_t>(depthState_) << "\n";
+
+    log << "recent gpu phases (oldest -> newest):\n";
+    const uint32_t start =
+        (recentGpuPhaseCursor_ + kRecentGpuPhaseCount - recentGpuPhaseSize_) %
+        kRecentGpuPhaseCount;
+    for (uint32_t i = 0; i < recentGpuPhaseSize_; ++i) {
+        const uint32_t index = (start + i) % kRecentGpuPhaseCount;
+        log << "  [" << i << "] "
+            << (recentGpuPhases_[index] ? recentGpuPhases_[index] : "(null)")
+            << "\n";
+    }
+
+    WriteDredData(log, device_.Get());
+    log << "\n";
 }

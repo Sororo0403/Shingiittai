@@ -162,6 +162,18 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
     playerVisual.scale.x *= kPlayerVisualScaleMultiplier * visualScale;
     playerVisual.scale.y *= kPlayerVisualScaleMultiplier * visualScale;
     playerVisual.scale.z *= kPlayerVisualScaleMultiplier * visualScale;
+    if (bladeClashPoseActive_) {
+        const float push = std::clamp(bladeClashPosePushRatio_, 0.0f, 1.0f);
+        const float lean = 0.12f + 0.34f * push;
+        XMVECTOR baseRot = XMLoadFloat4(&playerVisual.rotation);
+        XMVECTOR qLean =
+            XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), lean);
+        XMStoreFloat4(&playerVisual.rotation,
+                      XMQuaternionNormalize(XMQuaternionMultiply(qLean, baseRot)));
+        playerVisual.position.y -= 0.10f * push;
+        playerVisual.position.z += std::cosf(yaw_) * 0.10f * push;
+        playerVisual.position.x += std::sinf(yaw_) * 0.10f * push;
+    }
     if (defeatPoseRatio_ > 0.0f) {
         const float fall = std::clamp(defeatPoseRatio_, 0.0f, 1.0f);
         const float eased = fall * fall * (3.0f - 2.0f * fall);
@@ -249,10 +261,17 @@ void Player::SetCinematicBladeClashPose(const XMFLOAT3 &position, float yaw,
     auto makeFinishPose = [&](bool isLeft) {
         SwordPose pose = MakeIdleSwordPose(isLeft);
         const float side = isLeft ? -1.0f : 1.0f;
+        const float finish = std::clamp((push - 0.52f) / 0.48f, 0.0f, 1.0f);
         const float swingOut = 0.72f + 0.28f * push;
-        const float yawOut = side * (1.92f + 0.38f * swingOut);
-        const float pitchDown = 0.22f + 0.20f * swingOut;
-        const float rollThrough = side * (0.78f + 0.38f * swingOut);
+        const float yawOut =
+            side * (1.92f + 0.38f * swingOut) * (1.0f - finish) +
+            (3.14159265f - side * (0.26f + 0.16f * push)) * finish;
+        const float pitchDown =
+            (0.22f + 0.20f * swingOut) * (1.0f - finish) +
+            (-0.36f - 0.18f * push) * finish;
+        const float rollThrough =
+            side * ((0.78f + 0.38f * swingOut) * (1.0f - finish) +
+                    (1.14f + 0.28f * push) * finish);
         XMVECTOR qPitch =
             XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), pitchDown);
         XMVECTOR qYaw =

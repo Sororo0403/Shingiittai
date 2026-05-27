@@ -1,8 +1,11 @@
 #pragma once
 #include <Windows.h>
 #include <DirectXMath.h>
+#include <array>
+#include <cstdint>
 #include <d3d12.h>
 #include <dxgi1_6.h>
+#include <string>
 #include <wrl.h>
 
 class SrvManager;
@@ -203,6 +206,28 @@ class DirectXCommon {
     D3D12_GPU_DESCRIPTOR_HANDLE
     GetSceneSrvGpuHandle(const SrvManager *srvManager) const;
 
+    /// <summary>
+    /// 現在のD3D12デバイスがすでに取り外し状態かを取得する
+    /// </summary>
+    bool IsDeviceRemoved() const;
+
+    /// <summary>
+    /// 選択されたGPUアダプタのベンダIDを取得する
+    /// </summary>
+    UINT GetAdapterVendorId() const { return adapterDesc_.VendorId; }
+
+    /// <summary>
+    /// Intel GPU上で動作しているかを取得する
+    /// </summary>
+    bool IsIntelAdapter() const { return adapterDesc_.VendorId == 0x8086; }
+
+    /// <summary>
+    /// 選択されたGPUアダプタ名を取得する
+    /// </summary>
+    std::wstring GetAdapterDescription() const {
+        return adapterDesc_.Description;
+    }
+
   private:
     /// <summary>
     /// DXGIファクトリを生成する
@@ -307,8 +332,13 @@ class DirectXCommon {
     /// </summary>
     void WaitForFrame(UINT frameIndex);
 
+    void TrackGpuPhase(const char *phase);
+    void WriteDeviceRemovedLog(HRESULT presentResult,
+                               HRESULT removedReason) const;
+
   private:
     static constexpr UINT kSwapChainBufferCount = 2;
+    static constexpr uint32_t kRecentGpuPhaseCount = 64;
     static constexpr UINT kSceneRtvIndex = kSwapChainBufferCount;
     static constexpr float kClearColor[4] = {0.030f, 0.026f, 0.055f, 1.0f};
     float clearColor_[4] = {kClearColor[0], kClearColor[1], kClearColor[2],
@@ -317,6 +347,7 @@ class DirectXCommon {
     Microsoft::WRL::ComPtr<IDXGIFactory7> factory_;
     Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain_;
     Microsoft::WRL::ComPtr<ID3D12Device> device_;
+    DXGI_ADAPTER_DESC1 adapterDesc_{};
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue_;
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator>
         commandAllocators_[kSwapChainBufferCount];
@@ -339,6 +370,10 @@ class DirectXCommon {
     UINT64 fenceValue_ = 0;
     UINT64 frameFenceValues_[kSwapChainBufferCount]{};
     HANDLE fenceEvent_ = nullptr;
+    uint64_t diagnosticFrameId_ = 0;
+    std::array<const char *, kRecentGpuPhaseCount> recentGpuPhases_{};
+    uint32_t recentGpuPhaseCursor_ = 0;
+    uint32_t recentGpuPhaseSize_ = 0;
 
     D3D12_VIEWPORT sceneViewport_{};
     D3D12_RECT sceneScissorRect_{};

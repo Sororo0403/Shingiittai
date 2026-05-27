@@ -16,6 +16,8 @@ static const std::string kBossAnimSmash =
     "\xE7\xB8\xA6\xE6\x8C\xAF\xE3\x82\x8A\xE4\xB8\x8B\xE3\x82\x8D\xE3\x81\x97";
 static const std::string kBossAnimTeleport =
     "\xE3\x83\x86\xE3\x83\xAC\xE3\x83\x9D\xE3\x83\xBC\xE3\x83\x88";
+static const std::string kBossAnimBulletShot =
+    "\xE5\xBC\xBE\xE7\x99\xBA\xE5\xB0\x84";
 static const std::string kBossAnimPhaseChange =
     "\xE7\xAC\xAC\xE4\xBA\x8C\xE5\xBD\xA2\xE6\x85\x8B\xE7\xA7\xBB\xE8\xA1\x8C";
 static const std::string kBossBoneBase =
@@ -44,6 +46,8 @@ static float GetChargeStanceSettleTime(ActionKind kind) {
         return 0.46f;
     case ActionKind::Sweep:
         return 0.42f;
+    case ActionKind::ArcaneLaser:
+        return 0.72f;
     default:
         return 0.42f;
     }
@@ -191,6 +195,9 @@ static std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
 
     case ActionKind::BladeClash:
         outLoop = false;
+        if (HasAnimation(model, kBossAnimTeleport)) {
+            return kBossAnimTeleport;
+        }
         if (HasAnimation(model, kBossAnimSmash)) {
             return kBossAnimSmash;
         }
@@ -202,6 +209,16 @@ static std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
     case ActionKind::Stalk:
         if (HasAnimation(model, kBossAnimMove)) {
             return kBossAnimMove;
+        }
+        break;
+
+    case ActionKind::ArcaneLaser:
+        outLoop = false;
+        if (HasAnimation(model, kBossAnimBulletShot)) {
+            return kBossAnimBulletShot;
+        }
+        if (HasAnimation(model, kBossAnimTeleport)) {
+            return kBossAnimTeleport;
         }
         break;
 
@@ -698,6 +715,29 @@ void GameScene::ApplyEnemyProceduralAnimation() {
         } else if (step == ActionStep::Recovery) {
             PoseBoneTree(*enemyModel, chest, 0.08f, 0.0f, -0.03f);
             poseArms(0.16f, 0.0f, -0.06f);
+        }
+        break;
+
+    case ActionKind::ArcaneLaser:
+        if (step == ActionStep::Charge) {
+            const float aim = Smooth01(actionTimer / 0.72f);
+            PoseBoneTree(*enemyModel, root, -0.04f * phaseScale * aim, 0.0f,
+                         0.0f);
+            PoseBoneTree(*enemyModel, chest, -0.10f * phaseScale * aim,
+                         0.0f, 0.035f * pulse * aim);
+            poseArms(-0.18f * phaseScale * aim, 0.0f,
+                     -0.22f * phaseScale * aim);
+        } else if (step == ActionStep::Active) {
+            const float recoil = 0.84f + 0.16f * pulse;
+            PoseBoneTree(*enemyModel, root, -0.06f * phaseScale, 0.0f,
+                         0.0f);
+            PoseBoneTree(*enemyModel, chest, -0.16f * phaseScale * recoil,
+                         0.0f, 0.05f * pulse);
+            poseArms(-0.34f * phaseScale * recoil, 0.0f,
+                     -0.30f * phaseScale);
+        } else if (step == ActionStep::Recovery) {
+            PoseBoneTree(*enemyModel, chest, 0.06f, 0.0f, 0.02f);
+            poseArms(0.10f, 0.0f, -0.08f);
         }
         break;
 

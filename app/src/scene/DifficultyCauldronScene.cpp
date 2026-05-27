@@ -70,6 +70,22 @@ XMFLOAT4 GaugeHeatColor(float t, float alpha) {
     return LerpColor(yellow, red, (t - 0.62f) / 0.38f);
 }
 
+int DifficultyDescriptionIndex(float difficulty) {
+    if (difficulty < 2.0f) {
+        return 0;
+    }
+    if (difficulty < 5.0f) {
+        return 1;
+    }
+    if (difficulty < 7.0f) {
+        return 2;
+    }
+    if (difficulty < 9.0f) {
+        return 3;
+    }
+    return 4;
+}
+
 uint32_t CreateTriangleTexture(TextureManager *texture, bool gradient) {
     constexpr uint32_t kWidth = 512;
     constexpr uint32_t kHeight = 128;
@@ -144,6 +160,16 @@ void DifficultyCauldronScene::Initialize(const SceneContext &ctx) {
     }
     dotImage_ =
         LoadTextureImage(L"app/resources/ui/result/glyphs/char_dot.png");
+    difficultyDescriptionImages_[0] = LoadTextureImage(
+        L"app/resources/ui/difficulty/description_easy.png");
+    difficultyDescriptionImages_[1] = LoadTextureImage(
+        L"app/resources/ui/difficulty/description_normal.png");
+    difficultyDescriptionImages_[2] = LoadTextureImage(
+        L"app/resources/ui/difficulty/description_experienced.png");
+    difficultyDescriptionImages_[3] = LoadTextureImage(
+        L"app/resources/ui/difficulty/description_hard.png");
+    difficultyDescriptionImages_[4] = LoadTextureImage(
+        L"app/resources/ui/difficulty/description_extreme.png");
     triangleMaskImage_.textureId =
         CreateTriangleTexture(ctx_->rendering.texture, false);
     triangleMaskImage_.width = 512.0f;
@@ -585,6 +611,8 @@ void DifficultyCauldronScene::DrawDifficultyGauge(float screenWidth,
 
     const float selectedX = innerX + innerW * t;
     const float digitScale = 1.56f + 0.20f * selectionPulse_;
+    DrawDifficultyDescription(difficulty, innerX + 26.0f, innerY + 12.0f,
+                              innerW - 68.0f, 0.96f * labelIntro);
     DrawDifficultyValue(difficulty, selectedX,
                         y - 86.0f - selectionPulse_ * 8.0f, digitScale,
                         0.98f * labelIntro);
@@ -616,6 +644,20 @@ void DifficultyCauldronScene::DrawDifficultyValue(float value, float centerX,
     DrawImage(dotImage_, x, y, scale, alpha);
     x += dotImage_.width * scale + spacing;
     DrawImage(decimalImage, x, y, scale, alpha);
+}
+
+void DifficultyCauldronScene::DrawDifficultyDescription(float difficulty,
+                                                        float x, float y,
+                                                        float maxWidth,
+                                                        float alpha) {
+    const Image &image = difficultyDescriptionImages_[static_cast<size_t>(
+        DifficultyDescriptionIndex(difficulty))];
+    if (image.width <= 0.0f || image.height <= 0.0f || maxWidth <= 0.0f) {
+        return;
+    }
+
+    const float scale = (std::min)(maxWidth / image.width, 1.0f);
+    DrawImage(image, x, y, scale, alpha);
 }
 
 void DifficultyCauldronScene::DrawCameraPreview() {

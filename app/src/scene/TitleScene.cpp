@@ -1,6 +1,7 @@
 #include "TitleScene.h"
 #include "AppSceneServices.h"
 #include "BattleResultScene.h"
+#include "CameraAccuracyDebugScene.h"
 #include "Input.h"
 #include "PostProcessSystem.h"
 #include "SceneManager.h"
@@ -97,6 +98,11 @@ void TitleScene::Update() {
             BattleResultScene::ResultKind::Clear, 92.34f));
         return;
     }
+    if (ctx_->systems.input->IsKeyTrigger(DIK_F5)) {
+        sceneManager_->ChangeScene(
+            std::make_unique<CameraAccuracyDebugScene>());
+        return;
+    }
     if (ctx_->systems.input->IsKeyTrigger(DIK_F8)) {
         sceneManager_->ChangeScene(std::make_unique<BattleResultScene>(
             BattleResultScene::ResultKind::GameOver, 0.0f));
@@ -106,7 +112,9 @@ void TitleScene::Update() {
     if (IsAnyButtonTriggered(*ctx_->systems.input)) {
         startRequested_ = true;
         fadeTimer_ = 0.0f;
+        return;
     }
+
 }
 
 void TitleScene::Draw() {
@@ -410,12 +418,34 @@ void TitleScene::DrawImage(const Image &image, float x, float y, float alpha,
 }
 
 bool TitleScene::IsAnyButtonTriggered(const Input &input) const {
+    for (int key = 0; key < 256; ++key) {
+        if (key == DIK_ESCAPE) {
+            continue;
+        }
+        if (input.IsKeyTrigger(key)) {
+            return true;
+        }
+    }
+
     const bool gamepadTriggered =
         input.IsGamepadConnected() &&
-        (input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_A) ||
-         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_START));
-    return input.IsKeyTrigger(DIK_RETURN) || input.IsKeyTrigger(DIK_SPACE) ||
-           input.IsMouseTrigger(0) || gamepadTriggered;
+        (input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_UP) ||
+         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_DOWN) ||
+         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_LEFT) ||
+         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_RIGHT) ||
+         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_START) ||
+         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_BACK) ||
+         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_LEFT_THUMB) ||
+         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_RIGHT_THUMB) ||
+         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_LEFT_SHOULDER) ||
+         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_RIGHT_SHOULDER) ||
+         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_A) ||
+         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_B) ||
+         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_X) ||
+         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_Y) ||
+         input.IsGamepadLeftTriggerTrigger() ||
+         input.IsGamepadRightTriggerTrigger());
+    return gamepadTriggered;
 }
 
 void TitleScene::StartTitleBgm() {

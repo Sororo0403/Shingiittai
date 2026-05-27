@@ -40,9 +40,6 @@ void Enemy::UpdateStalkMove(float deltaTime) {
         if (phase_ != BossPhase::Phase1) {
             chance += 0.18f;
         }
-        if (playerObs_.isAttacking) {
-            chance += 0.10f;
-        }
 
         const float roll =
             static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);

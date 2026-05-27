@@ -33,8 +33,18 @@ class BattleResultScene : public BaseScene {
         float width = 0.0f;
         float height = 0.0f;
     };
+    struct RankingEntry {
+        int score = 0;
+        float difficulty = 0.0f;
+        float clearTime = 0.0f;
+        bool isCurrent = false;
+    };
 
     Image LoadTextureImage(const std::wstring &path);
+    void RegisterClearRanking();
+    int ComputeScore(float clearTime, float difficulty) const;
+    void LoadRanking();
+    void SaveRanking() const;
     void UpdateHandResultInput(float deltaTime);
     void UpdateReturnTitleConfirm(Input &input);
     void InitializeWorld();
@@ -44,7 +54,8 @@ class BattleResultScene : public BaseScene {
     void DrawResultOverlay(float screenWidth, float screenHeight);
     void DrawClear(float screenWidth, float screenHeight);
     void DrawGameOver(float screenWidth, float screenHeight);
-    void DrawRankingPanel(float screenWidth, float screenHeight);
+    void DrawRanking(float x, float y, float w, float h);
+    void DrawControlsHint(float screenWidth, float screenHeight);
     void DrawHandInputStatus(float screenWidth, float screenHeight);
     void DrawReturnTitleConfirmWindow(float screenWidth, float screenHeight);
     void DrawImage(const Image &image, float x, float y, float scale = 1.0f,
@@ -60,9 +71,7 @@ class BattleResultScene : public BaseScene {
     float MeasureTextLine(const std::string &text, float scale) const;
     const Image *FindCharImage(char c) const;
     std::string FormatTime(float seconds) const;
-    void LoadRankings();
-    void SaveRankings() const;
-    void RegisterClearRanking();
+    std::string FormatScore(int score) const;
 
   private:
     ResultKind resultKind_ = ResultKind::GameOver;
@@ -71,6 +80,8 @@ class BattleResultScene : public BaseScene {
     SwordUdpController handController_;
     Camera camera_;
     float clearTime_ = 0.0f;
+    int currentScore_ = 0;
+    int currentRank_ = -1;
     float sceneTime_ = 0.0f;
     float handIdleTimer_ = 0.0f;
     float returnTitleFadeTimer_ = 0.0f;
@@ -80,25 +91,24 @@ class BattleResultScene : public BaseScene {
     bool returnTitleFadeActive_ = false;
     int returnTitleConfirmIndex_ = 1;
 
-    Image clearTitle_{};
-    Image gameClearTitle_{};
-    Image gameOverTitle_{};
+    Image missionCompleteLabel_{};
     Image clearTimeLabel_{};
+    Image currentRecordLabel_{};
+    Image rankingTitleLabel_{};
+    Image controlsKbmClearImage_{};
+    Image controlsKbmGameOverImage_{};
+    Image controlsHandImage_{};
+    Image gameOverTitle_{};
     Image noClearTimeLabel_{};
-    Image retryLabel_{};
-    Image menuLabel_{};
     Image returnTitleConfirmMessageImage_{};
     Image returnTitleConfirmYesImage_{};
     Image returnTitleConfirmNoImage_{};
-    Image rankingTitle_{};
-    Image currentRecordLabel_{};
-    std::array<Image, 2> rankingControlLabels_{};
     std::array<Image, 10> digitImages_{};
     Image colonImage_{};
     Image dotImage_{};
     Image dashImage_{};
     Image secondImage_{};
-    std::array<std::vector<float>, 2> rankings_{};
+    std::vector<RankingEntry> rankingEntries_{};
 
     uint32_t playerModelId_ = 0;
     uint32_t swordModelId_ = 0;

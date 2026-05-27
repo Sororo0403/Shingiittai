@@ -40,6 +40,9 @@
     <Filter Include="Resources\Effects\particles">
       <UniqueIdentifier>{b9e4f8ac-0f67-4e8d-a727-42d51b920f0c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Resources\Fonts">
+      <UniqueIdentifier>{c3d893b7-1762-4f77-8cab-6e57296c608e}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Resources\Shaders">
       <UniqueIdentifier>{68685a10-6401-4a43-986b-85723dbe8c62}</UniqueIdentifier>
     </Filter>
@@ -57,6 +60,15 @@
     </Filter>
     <Filter Include="Resources\UI\result\glyphs">
       <UniqueIdentifier>{926b25af-5751-4e43-bd05-86cc3271b882}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\UI\result\mplus">
+      <UniqueIdentifier>{7d0e0340-0702-4d38-a487-4084bcc83e4b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\UI\result\mplus\glyphs">
+      <UniqueIdentifier>{d36b3df7-170a-48ce-b079-6409438ecdea}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\UI\difficulty">
+      <UniqueIdentifier>{5dfc2270-7225-45a9-9083-8e9d11e978ea}</UniqueIdentifier>
     </Filter>
     <Filter Include="Resources\UI\tip">
       <UniqueIdentifier>{bb9ad012-f356-4583-a407-37f1f8f0941f}</UniqueIdentifier>
@@ -88,6 +100,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\scene\CameraPreviewReceiver.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\scene\CameraAccuracyDebugScene.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
     <ClCompile Include="src\scene\BattleResultScene.cpp">
@@ -178,6 +193,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\scene\CameraPreviewReceiver.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="include\scene\CameraAccuracyDebugScene.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\BattleResultScene.h">
@@ -291,6 +309,24 @@
     <None Include="resources\effects\particles\smoke.png">
       <Filter>Resources\Effects\particles</Filter>
     </None>
+    <None Include="resources\fonts\MPLUS1p-ExtraBold.ttf">
+      <Filter>Resources\Fonts</Filter>
+    </None>
+    <None Include="resources\ui\difficulty\description_easy.png">
+      <Filter>Resources\UI\difficulty</Filter>
+    </None>
+    <None Include="resources\ui\difficulty\description_experienced.png">
+      <Filter>Resources\UI\difficulty</Filter>
+    </None>
+    <None Include="resources\ui\difficulty\description_extreme.png">
+      <Filter>Resources\UI\difficulty</Filter>
+    </None>
+    <None Include="resources\ui\difficulty\description_hard.png">
+      <Filter>Resources\UI\difficulty</Filter>
+    </None>
+    <None Include="resources\ui\difficulty\description_normal.png">
+      <Filter>Resources\UI\difficulty</Filter>
+    </None>
     <None Include="resources\models\boss\boss.bin">
       <Filter>Resources\Models\boss</Filter>
     </None>
@@ -371,6 +407,63 @@
     </None>
     <None Include="resources\ui\result\menu.png">
       <Filter>Resources\UI\result</Filter>
+    </None>
+    <None Include="resources\ui\result\mplus\clear_time.png">
+      <Filter>Resources\UI\result\mplus</Filter>
+    </None>
+    <None Include="resources\ui\result\mplus\controls_hand.png">
+      <Filter>Resources\UI\result\mplus</Filter>
+    </None>
+    <None Include="resources\ui\result\mplus\controls_kbm_clear.png">
+      <Filter>Resources\UI\result\mplus</Filter>
+    </None>
+    <None Include="resources\ui\result\mplus\controls_kbm_gameover.png">
+      <Filter>Resources\UI\result\mplus</Filter>
+    </None>
+    <None Include="resources\ui\result\mplus\glyphs\char_0.png">
+      <Filter>Resources\UI\result\mplus\glyphs</Filter>
+    </None>
+    <None Include="resources\ui\result\mplus\glyphs\char_1.png">
+      <Filter>Resources\UI\result\mplus\glyphs</Filter>
+    </None>
+    <None Include="resources\ui\result\mplus\glyphs\char_2.png">
+      <Filter>Resources\UI\result\mplus\glyphs</Filter>
+    </None>
+    <None Include="resources\ui\result\mplus\glyphs\char_3.png">
+      <Filter>Resources\UI\result\mplus\glyphs</Filter>
+    </None>
+    <None Include="resources\ui\result\mplus\glyphs\char_4.png">
+      <Filter>Resources\UI\result\mplus\glyphs</Filter>
+    </None>
+    <None Include="resources\ui\result\mplus\glyphs\char_5.png">
+      <Filter>Resources\UI\result\mplus\glyphs</Filter>
+    </None>
+    <None Include="resources\ui\result\mplus\glyphs\char_6.png">
+      <Filter>Resources\UI\result\mplus\glyphs</Filter>
+    </None>
+    <None Include="resources\ui\result\mplus\glyphs\char_7.png">
+      <Filter>Resources\UI\result\mplus\glyphs</Filter>
+    </None>
+    <None Include="resources\ui\result\mplus\glyphs\char_8.png">
+      <Filter>Resources\UI\result\mplus\glyphs</Filter>
+    </None>
+    <None Include="resources\ui\result\mplus\glyphs\char_9.png">
+      <Filter>Resources\UI\result\mplus\glyphs</Filter>
+    </None>
+    <None Include="resources\ui\result\mplus\glyphs\char_colon.png">
+      <Filter>Resources\UI\result\mplus\glyphs</Filter>
+    </None>
+    <None Include="resources\ui\result\mplus\glyphs\char_dash.png">
+      <Filter>Resources\UI\result\mplus\glyphs</Filter>
+    </None>
+    <None Include="resources\ui\result\mplus\glyphs\char_dot.png">
+      <Filter>Resources\UI\result\mplus\glyphs</Filter>
+    </None>
+    <None Include="resources\ui\result\mplus\glyphs\char_s.png">
+      <Filter>Resources\UI\result\mplus\glyphs</Filter>
+    </None>
+    <None Include="resources\ui\result\mplus\mission_complete.png">
+      <Filter>Resources\UI\result\mplus</Filter>
     </None>
     <None Include="resources\ui\result\no_clear_time.png">
       <Filter>Resources\UI\result</Filter>

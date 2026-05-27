@@ -175,9 +175,6 @@ bool Enemy::PrepareWarpContext() {
     warp_.hasValidTarget = true;
 
     float feintChance = warpFeintChance_;
-    if (playerObs_.isAttacking) {
-        feintChance += 0.12f;
-    }
     if (warp_.isCutIn) {
         feintChance *= 0.35f;
     }
@@ -208,7 +205,7 @@ void Enemy::UpdateWarpStart(float deltaTime) {
     } else if (warp_.feintFollowup) {
         startTime *= 0.55f;
     } else if (warp_.farSlashFollowup) {
-        startTime *= 0.72f;
+        startTime *= 0.44f;
     }
 
     if (stateTimer_ >= startTime) {
@@ -230,8 +227,10 @@ void Enemy::UpdateWarpMove(float deltaTime) {
 
     float t = 1.0f;
     const float moveTime =
-        warp_.phantomChain ? PhantomWarpMoveTime(warp_.phantomFinal)
-                           : config_.warp.moveTime;
+        warp_.phantomChain
+            ? PhantomWarpMoveTime(warp_.phantomFinal)
+            : warp_.farSlashFollowup ? config_.warp.moveTime * 0.72f
+                                      : config_.warp.moveTime;
     if (moveTime > 0.0001f) {
         t = stateTimer_ / moveTime;
     }
@@ -294,7 +293,7 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
             ? PhantomWarpEndTime(warp_.phantomFinal)
             : warp_.isFeint ? config_.warp.endTime * warpFeintEndTimeScale_
                              : warp_.farSlashFollowup
-                                   ? config_.warp.endTime * 0.62f
+                                   ? config_.warp.endTime * 0.38f
                                    : config_.warp.endTime;
     if (stateTimer_ < endTime) {
         return;
@@ -349,6 +348,16 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
         BeginAction(followupKind, followupStep);
         quickSlashActive_ = immediateFollowup || (phantomChain && phantomFinal);
         farSlashActive_ = farSlashFollowup;
+        if (farSlashActive_) {
+            const float chargeTime =
+                followupKind == ActionKind::Smash ? GetCurrentSmashChargeTime()
+                                                  : GetCurrentSweepChargeTime();
+            const float tellTime = followupKind == ActionKind::Smash
+                                       ? smashTellTime_
+                                       : sweepTellTime_;
+            IssueAttackCue(EnemyAttackCueType::Telegraph, followupKind,
+                           chargeTime + tellTime);
+        }
         warpFeintFollowupLocked_ = feintFollowup;
         warpFeintImmediate_ = feintFollowup && immediateFollowup;
         if (phantomChain && phantomFinal) {
