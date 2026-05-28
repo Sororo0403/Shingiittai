@@ -1,5 +1,6 @@
 #include "TitleScene.h"
 #include "AppSceneServices.h"
+#include "GameOverScene.h"
 #include "Input.h"
 #include "PostProcessSystem.h"
 #include "SceneManager.h"
@@ -36,6 +37,7 @@ TitleScene::~TitleScene() { StopTitleBgm(); }
 
 void TitleScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
+    GameOverScene::ResetDefeatCounts();
     AppSceneServices::RequestHandTrackingStop();
     sceneTime_ = 0.0f;
     frameIntroTimer_ = 0.0f;

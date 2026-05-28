@@ -123,6 +123,7 @@
     <ClCompile Include="src\player\Player.cpp" />
     <ClCompile Include="src\scene\CombatFeedbackDirector.cpp" />
     <ClCompile Include="src\scene\GameOverScene.cpp" />
+    <ClCompile Include="src\scene\GameVictoryScene.cpp" />
     <ClCompile Include="src\scene\GameScene.cpp" />
     <ClCompile Include="src\scene\GameSceneAnimation.cpp" />
     <ClCompile Include="src\scene\GameSceneCamera.cpp" />
@@ -161,6 +162,7 @@
     <ClInclude Include="include\scene\BladeClashCinematic.h" />
     <ClInclude Include="include\scene\CombatFeedbackDirector.h" />
     <ClInclude Include="include\scene\GameOverScene.h" />
+    <ClInclude Include="include\scene\GameVictoryScene.h" />
     <ClInclude Include="include\scene\GameScene.h" />
     <ClInclude Include="include\scene\TitleScene.h" />
     <ClInclude Include="include\scene\TutorialScene.h" />
@@ -245,7 +247,10 @@
     <None Include="resources\ui\title\tab_credit.png" />
     <None Include="resources\ui\credits\credits_controls.png" />
     <None Include="resources\ui\credits\credits_title.png" />
+    <None Include="resources\ui\credits\name_AotoMori.png" />
     <None Include="resources\ui\credits\thank_you_for_playing.png" />
+    <None Include="resources\ui\credits\lines\aotomori_name.png" />
+    <None Include="resources\ui\credits\lines\aotomori_role.png" />
     <None Include="resources\ui\credits\lines\art_sound_direction.png" />
     <None Include="resources\ui\credits\lines\game_design_programming.png" />
     <None Include="resources\ui\credits\lines\special_thanks.png" />

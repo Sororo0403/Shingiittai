@@ -49,10 +49,12 @@ class CreditScene : public BaseScene {
     std::unique_ptr<GameScene> backgroundScene_;
     Image logoImage_{};
     Image thankYouImage_{};
-    Image signatureImage_{};
+    Image taroSignatureImage_{};
+    Image aotoMoriSignatureImage_{};
     struct CreditLine {
         Image image{};
         float centerY = 0.0f;
+        float scale = 1.0f;
     };
     std::vector<CreditLine> creditLines_{};
     float sceneTime_ = 0.0f;

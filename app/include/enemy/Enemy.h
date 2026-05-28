@@ -214,8 +214,6 @@ struct EnemyRuntimeState {
     float currentHoldDuration = 0.0f;
     bool quickSlashActive = false;
     bool farSlashActive = false;
-    float counterGuardQuickSlashTimer = 0.0f;
-    ActionKind counterGuardQuickSlashFollowupKind = ActionKind::None;
     bool warpFeintFollowupLocked = false;
     bool warpFeintImmediate = false;
     bool warpFeintDecisionMade = false;
@@ -253,11 +251,12 @@ class Enemy {
     void Draw(ModelManager *modelManager, const Camera &camera,
               float visualScale = 1.0f);
     float TakeDamage(float damage);
+    float TakeDamageNoReaction(float damage);
     float TakeDamageDeferTransitions(float damage);
+    float TakeDamageDeferTransitionsNoReaction(float damage);
     void ResolveDeferredDamageTransitions();
     void ForcePunishRelease();
     bool NotifyCountered(float vulnerabilityDuration);
-    bool TryCounterGuardQuickSlash(float chance);
     bool IsBladeClashAction() const;
     bool IsBladeClashWindow() const;
     void ResolveBladeClash(bool playerWon);
@@ -305,9 +304,6 @@ class Enemy {
     bool IsAttackActive() const { return runtime_.isAttackActive; }
     OBB GetAttackOBB() const;
     bool IsFarWarpSlashActive() const { return runtime_.farSlashActive; }
-    bool IsCounterGuardQuickSlashPending() const {
-        return runtime_.counterGuardQuickSlashTimer > 0.0f;
-    }
     bool ShouldSuppressRedAttackCue() const {
         return runtime_.quickSlashActive || runtime_.farSlashActive ||
                runtime_.warpFeintImmediate;
@@ -398,10 +394,6 @@ class Enemy {
     float &currentHoldDuration_ = runtime_.currentHoldDuration;
     bool &quickSlashActive_ = runtime_.quickSlashActive;
     bool &farSlashActive_ = runtime_.farSlashActive;
-    float &counterGuardQuickSlashTimer_ =
-        runtime_.counterGuardQuickSlashTimer;
-    ActionKind &counterGuardQuickSlashFollowupKind_ =
-        runtime_.counterGuardQuickSlashFollowupKind;
     bool &warpFeintFollowupLocked_ = runtime_.warpFeintFollowupLocked;
     bool &warpFeintImmediate_ = runtime_.warpFeintImmediate;
     bool &warpFeintDecisionMade_ = runtime_.warpFeintDecisionMade;
@@ -500,7 +492,6 @@ class Enemy {
     ActionKind SelectNearPressureAction() const;
     bool TryBeginWarpAction(float chance);
     bool TryBeginQuickSlash(float chance);
-    void BeginCounterGuardQuickSlashFollowup();
     bool TryBeginFarWarpSlash(float chance);
     bool TryBeginPhantomWarpSkill(float chance);
     bool TryBeginBladeClash(float chance);

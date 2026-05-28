@@ -26,6 +26,7 @@ constexpr float kCreditRollSpeed = 42.0f;
 constexpr float kCreditRollFastSpeed = 360.0f;
 constexpr float kCreditVirtualWidth = 760.0f;
 constexpr float kTaroLineCenterY = 374.0f;
+constexpr float kAotoMoriLineCenterY = 650.0f;
 constexpr float kLogoStartAfterTextPadding = 80.0f;
 constexpr float kLogoStartBelowScreenPadding = 150.0f;
 constexpr float kSignatureColumnCenterRatio = 0.78f;
@@ -34,12 +35,15 @@ constexpr float kSignatureMaxScale = 0.84f;
 struct CreditLineSpec {
     const wchar_t *path;
     float centerY;
+    float scale;
 };
 
-constexpr std::array<CreditLineSpec, 3> kCreditLineSpecs{{
-    {L"app/resources/ui/credits/lines/title.png", 78.0f},
-    {L"app/resources/ui/credits/lines/taro_name.png", 374.0f},
-    {L"app/resources/ui/credits/lines/taro_role.png", 405.0f},
+constexpr std::array<CreditLineSpec, 5> kCreditLineSpecs{{
+    {L"app/resources/ui/credits/lines/title.png", 78.0f, 1.0f},
+    {L"app/resources/ui/credits/lines/taro_name.png", 374.0f, 1.0f},
+    {L"app/resources/ui/credits/lines/taro_role.png", 426.0f, 1.0f},
+    {L"app/resources/ui/credits/lines/aotomori_name.png", 650.0f, 1.0f},
+    {L"app/resources/ui/credits/lines/aotomori_role.png", 702.0f, 1.0f},
 }};
 
 XMFLOAT4 MakeColor(float r, float g, float b, float a = 1.0f) {
@@ -76,8 +80,10 @@ void CreditScene::Initialize(const SceneContext &ctx) {
     logoImage_ = LoadTextureImage(L"app/resources/ui/title/gamelogo.png");
     thankYouImage_ =
         LoadTextureImage(L"app/resources/ui/credits/thank_you_for_playing.png");
-    signatureImage_ =
+    taroSignatureImage_ =
         LoadTextureImage(L"app/resources/ui/credits/taro_signature.png");
+    aotoMoriSignatureImage_ =
+        LoadTextureImage(L"app/resources/ui/credits/name_AotoMori.png");
 
     StartCreditBgm();
 }
@@ -144,7 +150,8 @@ void CreditScene::LoadCreditLineImages() {
     creditLines_.clear();
     creditLines_.reserve(kCreditLineSpecs.size());
     for (const CreditLineSpec &spec : kCreditLineSpecs) {
-        creditLines_.push_back({LoadTextureImage(spec.path), spec.centerY});
+        creditLines_.push_back(
+            {LoadTextureImage(spec.path), spec.centerY, spec.scale});
     }
 }
 
@@ -174,36 +181,43 @@ void CreditScene::DrawCredits(float screenWidth, float screenHeight) {
     const float rollY = rollStartY - creditRollDistance_;
     float lastTextBottom = 0.0f;
     for (const CreditLine &line : creditLines_) {
+        const float lineScale = bodyScale * line.scale;
         lastTextBottom =
             (std::max)(lastTextBottom,
-                       (line.centerY + line.image.height * 0.5f) * bodyScale);
+                       (line.centerY + line.image.height * line.scale * 0.5f) *
+                           bodyScale);
         const float lineX =
-            textCenterX - line.image.width * bodyScale * 0.5f;
+            textCenterX - line.image.width * lineScale * 0.5f;
         const float lineY =
             rollY + line.centerY * bodyScale -
-            line.image.height * bodyScale * 0.5f;
-        DrawImage(line.image, lineX, lineY, bodyScale, intro);
+            line.image.height * lineScale * 0.5f;
+        DrawImage(line.image, lineX, lineY, lineScale, intro);
     }
 
     const float bodyRight = (screenWidth + bodyW) * 0.5f;
     const float rightMarginW = screenWidth - bodyRight;
-    if (signatureImage_.width > 0.0f && rightMarginW > 140.0f) {
+    const auto drawSignature = [&](const Image &image, float centerY,
+                                   float minScale, float maxScale) {
+        if (image.width <= 0.0f || rightMarginW <= 140.0f) {
+            return;
+        }
         const float signatureScale =
-            std::clamp(rightMarginW * 0.56f /
-                           (std::max)(signatureImage_.width, 1.0f),
-                       0.38f, kSignatureMaxScale);
-        const float signatureW = signatureImage_.width * signatureScale;
-        const float signatureH = signatureImage_.height * signatureScale;
+            std::clamp(rightMarginW * 0.56f / (std::max)(image.width, 1.0f),
+                       minScale, maxScale);
+        const float signatureW = image.width * signatureScale;
+        const float signatureH = image.height * signatureScale;
         const float signatureCenterX = std::clamp(
             screenWidth * kSignatureColumnCenterRatio,
             bodyRight + rightMarginW * 0.22f,
             screenWidth - rightMarginW * 0.18f);
         const float signatureX = signatureCenterX - signatureW * 0.5f;
         const float signatureY =
-            rollY + kTaroLineCenterY * bodyScale - signatureH * 0.5f;
-        DrawImage(signatureImage_, signatureX, signatureY, signatureScale,
-                  intro);
-    }
+            rollY + centerY * bodyScale - signatureH * 0.5f;
+        DrawImage(image, signatureX, signatureY, signatureScale, intro);
+    };
+    drawSignature(taroSignatureImage_, kTaroLineCenterY, 0.38f,
+                  kSignatureMaxScale);
+    drawSignature(aotoMoriSignatureImage_, kAotoMoriLineCenterY, 0.16f, 0.42f);
 
     if (logoImage_.width > 0.0f && logoImage_.height > 0.0f) {
         const float logoScale =

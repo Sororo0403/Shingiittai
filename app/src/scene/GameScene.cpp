@@ -4,6 +4,7 @@
 #include "BladeClashCinematic.h"
 #include "DirectXCommon.h"
 #include "GameOverScene.h"
+#include "GameVictoryScene.h"
 #include "Input.h"
 #include "Material.h"
 #include "Model.h"
@@ -69,6 +70,9 @@ constexpr float kTutorialControlsImageBottomTransparentPixels = 18.0f;
 constexpr float kPauseExitFadeDuration = 0.42f;
 constexpr uint16_t kHandCameraPreviewPort = 5006;
 constexpr float kHandCameraPreviewStaleSeconds = 0.75f;
+#ifdef _DEBUG
+constexpr int kDebugClearSceneKey = DIK_F9;
+#endif
 
 PostProcessProfile GetPostProcessProfile(const SceneContext *ctx) {
     if (ctx == nullptr || ctx->rendering.postProcessSystem == nullptr) {
@@ -1023,6 +1027,14 @@ void GameScene::Update() {
         UpdateTutorial(baseDeltaTime);
         return;
     }
+#ifdef _DEBUG
+    if (input != nullptr && input->IsKeyTrigger(kDebugClearSceneKey)) {
+        sceneManager_->ChangeScene(std::make_unique<BattleResultScene>(
+            BattleResultScene::ResultKind::Clear, battleElapsedTime_,
+            inputCalibration_, combatDifficulty_));
+        return;
+    }
+#endif
     if (paused_) {
         UpdatePauseMenu(input);
         return;
@@ -1205,7 +1217,6 @@ void GameScene::Update() {
         const ActionKind enemyActionKind = enemy_.GetActionKind();
         const ActionStep enemyActionStep = enemy_.GetActionStep();
         const bool bladeClashGuardWaiting =
-            enemy_.IsCounterGuardQuickSlashPending() ||
             (enemyActionKind == ActionKind::BladeClash &&
              (enemyActionStep == ActionStep::Charge ||
               enemyActionStep == ActionStep::Active));
@@ -1552,10 +1563,7 @@ void GameScene::UpdateTutorial(float deltaTime) {
         float enemyAnimationDeltaTime = deltaTime;
         const ActionKind enemyActionKind = enemy_.GetActionKind();
         const ActionStep enemyActionStep = enemy_.GetActionStep();
-        if (enemy_.IsCounterGuardQuickSlashPending()) {
-            UpdateBladeClashEnemyAnimation(deltaTime);
-            enemyAnimationDeltaTime = 0.0f;
-        } else if (enemyActionKind == ActionKind::Smash ||
+        if (enemyActionKind == ActionKind::Smash ||
             enemyActionKind == ActionKind::Sweep ||
             enemyActionKind == ActionKind::BladeClash) {
             const float enemyActionTimer = enemy_.GetActionTimerForPresentation();
@@ -3039,7 +3047,9 @@ void GameScene::DrawTransparent() {
     if (battleIntroActive_) {
         return;
     }
-    hud_.Draw(*ctx_);
+    const float hudAlpha =
+        defeatSequenceActive_ ? 1.0f - GetDefeatFadeToBlackRatio() : 1.0f;
+    hud_.Draw(*ctx_, hudAlpha);
     DrawBladeClashOverlay();
     DrawPauseMenu();
     DrawHandCameraPreview();
@@ -3794,9 +3804,16 @@ void GameScene::CompleteBladeClashFinish() {
 
 void GameScene::BeginVictorySequence() {
     battleResultRequested_ = true;
+    victoryClearTime_ = battleElapsedTime_;
+    if (!titleDemoMode_) {
+        ClearBattlePostProcess(ctx_);
+        sceneManager_->ChangeScene(std::make_unique<GameVictoryScene>(
+            victoryClearTime_, inputCalibration_, combatDifficulty_));
+        return;
+    }
+
     victorySequenceActive_ = true;
     victorySequenceTimer_ = 0.0f;
-    victoryClearTime_ = battleElapsedTime_;
     victoryFinalExplosionEmitted_ = false;
     victoryEnemyStartPos_ = enemy_.GetTransform().position;
     counterCinematicActive_ = false;
@@ -4012,9 +4029,7 @@ void GameScene::DrawDefeatFlash() {
     };
     const float red =
         (std::max)(pulse(0.08f, 0.22f, 0.72f), pulse(1.58f, 0.30f, 0.36f));
-    const float black = std::clamp((defeatSequenceTimer_ - 1.55f) /
-                                       (defeatSequenceDuration_ - 1.55f),
-                                   0.0f, 0.72f);
+    const float black = GetDefeatFadeToBlackRatio();
     const float w = static_cast<float>(ctx_->systems.winApp->GetWidth());
     const float h = static_cast<float>(ctx_->systems.winApp->GetHeight());
 
@@ -4036,6 +4051,13 @@ void GameScene::DrawDefeatFlash() {
         ctx_->rendering.sprite->DrawSprite(fade);
     }
     ctx_->rendering.sprite->PostDraw();
+}
+
+float GameScene::GetDefeatFadeToBlackRatio() const {
+    constexpr float kFadeToBlackStart = 1.55f;
+    constexpr float kFadeToBlackDuration = 0.90f;
+    return SmoothStep01((defeatSequenceTimer_ - kFadeToBlackStart) /
+                        kFadeToBlackDuration);
 }
 
 void GameScene::DrawBattleIntroFlash() {

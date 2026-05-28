@@ -128,6 +128,12 @@ struct SceneConstBufferData {
         XMFLOAT4 positionRange;
         XMFLOAT4 colorIntensity;
     };
+    struct SpotLightData {
+        XMFLOAT4 positionRange;
+        XMFLOAT4 direction;
+        XMFLOAT4 colorIntensity;
+        XMFLOAT4 angleParams;
+    };
 
     XMFLOAT4 cameraPos;
     XMFLOAT4 keyLightDirection;
@@ -144,6 +150,7 @@ struct SceneConstBufferData {
     XMFLOAT4X4 lightViewProjection;
     XMFLOAT4 shadowParams;
     XMFLOAT4 shadowFilterParams;
+    SpotLightData spotLight;
 };
 
 struct DrawEffectConstBufferData {
@@ -200,6 +207,10 @@ ModelRenderer::WriteSceneConstants(const Camera &camera) {
         XMMatrixTranspose(XMLoadFloat4x4(&shadowLightViewProjection_)));
     data.shadowParams = shadowParams_;
     data.shadowFilterParams = shadowFilterParams_;
+    data.spotLight.positionRange = currentLighting_.spotLight.positionRange;
+    data.spotLight.direction = currentLighting_.spotLight.direction;
+    data.spotLight.colorIntensity = currentLighting_.spotLight.colorIntensity;
+    data.spotLight.angleParams = currentLighting_.spotLight.angleParams;
     return uploadBuffer_.Write(data).gpu;
 }
 

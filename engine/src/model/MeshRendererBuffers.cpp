@@ -29,6 +29,12 @@ struct SceneConstBufferData {
         XMFLOAT4 positionRange;
         XMFLOAT4 colorIntensity;
     };
+    struct SpotLightData {
+        XMFLOAT4 positionRange;
+        XMFLOAT4 direction;
+        XMFLOAT4 colorIntensity;
+        XMFLOAT4 angleParams;
+    };
 
     XMFLOAT4 cameraPos;
     XMFLOAT4 keyLightDirection;
@@ -46,6 +52,7 @@ struct SceneConstBufferData {
     XMFLOAT4 shadowFilterParams;
     XMFLOAT4 customSceneParams0;
     XMFLOAT4 customSceneParams1;
+    SpotLightData spotLight;
 };
 
 XMMATRIX MakeWorldMatrix(const Transform &transform) {
@@ -180,6 +187,10 @@ MeshRenderer::WriteSceneConstants(const Camera &camera) {
     sceneDst->shadowFilterParams = shadowFilterParams_;
     sceneDst->customSceneParams0 = customSceneParams0_;
     sceneDst->customSceneParams1 = customSceneParams1_;
+    sceneDst->spotLight.positionRange = currentLighting_.spotLight.positionRange;
+    sceneDst->spotLight.direction = currentLighting_.spotLight.direction;
+    sceneDst->spotLight.colorIntensity = currentLighting_.spotLight.colorIntensity;
+    sceneDst->spotLight.angleParams = currentLighting_.spotLight.angleParams;
     return uploadBuffer_.Write(data).gpu;
 }
 

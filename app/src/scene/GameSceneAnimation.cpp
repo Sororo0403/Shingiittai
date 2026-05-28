@@ -178,19 +178,6 @@ static std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
         return {};
     }
 
-    if (enemy.IsCounterGuardQuickSlashPending()) {
-        outLoop = false;
-        if (HasAnimation(model, kBossAnimTeleport)) {
-            return kBossAnimTeleport;
-        }
-        if (HasAnimation(model, kBossAnimSmash)) {
-            return kBossAnimSmash;
-        }
-        if (HasAnimation(model, kBossAnimSweep)) {
-            return kBossAnimSweep;
-        }
-    }
-
     switch (enemy.GetActionKind()) {
     case ActionKind::Smash:
         outLoop = false;
@@ -362,24 +349,11 @@ void GameScene::UpdateBladeClashEnemyAnimation(float deltaTime) {
     float clipRatio =
         hasTeleport ? kBladeClashActivePoseClipRatio : hasSweep ? 0.62f : 0.42f;
 
-    const bool counterGuardQuickSlashPose =
-        enemy_.IsCounterGuardQuickSlashPending();
     const bool bladeClashStartupAnim =
         !bladeClashActive_ && !bladeClashFinishActive_ &&
         enemy_.GetActionKind() == ActionKind::BladeClash &&
         enemy_.GetActionStep() == ActionStep::Charge;
-    if (counterGuardQuickSlashPose) {
-        if (hasTeleport) {
-            clip = kBossAnimTeleport;
-            clipRatio = kBladeClashGuardPoseClipRatio;
-        } else if (hasSweep) {
-            clip = kBossAnimSweep;
-            clipRatio = 0.58f;
-        } else {
-            clip = kBossAnimSmash;
-            clipRatio = 0.34f;
-        }
-    } else if (bladeClashStartupAnim) {
+    if (bladeClashStartupAnim) {
         const float startupT =
             Smooth01(enemy_.GetActionTimerForPresentation() /
                      kBladeClashStartupPoseTime);
@@ -674,16 +648,6 @@ void GameScene::ApplyEnemyProceduralAnimation() {
                  0.020f * pulse * idleMotion, 0.0f);
     PoseBoneTree(*enemyModel, headTip, 0.020f * slowPulse * idleMotion, 0.0f,
                  0.0f);
-
-    if (enemy_.IsCounterGuardQuickSlashPending()) {
-        const float clash = 0.90f + 0.10f * pulse;
-        PoseBoneTree(*enemyModel, root, 0.04f * phaseScale, 0.0f,
-                     0.015f * slowPulse);
-        PoseBoneTree(*enemyModel, chest, 0.16f * phaseScale * clash,
-                     0.0f, 0.04f * pulse);
-        poseArms(0.34f * phaseScale * clash, 0.0f, -0.20f * phaseScale);
-        return;
-    }
 
     switch (action) {
     case ActionKind::Smash:

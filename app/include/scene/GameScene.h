@@ -87,6 +87,7 @@ class GameScene : public BaseScene {
     float BattleIntroWorldRevealProgress() const;
     void DrawVictoryFlash();
     void DrawDefeatFlash();
+    float GetDefeatFadeToBlackRatio() const;
     void DrawBattleIntroFlash();
     void OpenPauseMenu();
     void ClosePauseMenu();
@@ -162,7 +163,8 @@ class GameScene : public BaseScene {
     float GetCounterVulnerabilityDuration() const;
     float GetCounterPlayerHitCooldown(float baseCooldown) const;
     float GetEnemyNormalHitCooldown() const;
-    float ApplyEnemyDamage(float damage, bool deferTransitions = false);
+    float ApplyEnemyDamage(float damage, bool deferTransitions = false,
+                           bool triggerHitReaction = true);
     float ApplyPlayerDamage(float enemyAttackDamage);
     void StartBattleBgm();
     void StopBattleBgm();

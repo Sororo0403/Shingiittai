@@ -48,4 +48,12 @@ struct PointLight
     float4 colorIntensity;
 };
 
+struct SpotLight
+{
+    float4 positionRange;
+    float4 direction;
+    float4 colorIntensity;
+    float4 angleParams;
+};
+
 #endif // MODEL_HLSLI

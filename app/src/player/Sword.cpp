@@ -19,6 +19,8 @@ constexpr float kSlashFollowThroughMaxSurge = 0.26f;
 constexpr float kSlashFollowThroughMaxStretch = 0.14f;
 constexpr float kSlashFollowThroughMinDirLengthSq = 0.01f;
 constexpr float kSlashFollowThroughMinAngle = 0.001f;
+constexpr float kCounterAxisMinComponent = 0.24f;
+constexpr float kCounterAxisDominanceRatio = 1.8f;
 
 XMFLOAT3 GetBladePointWorld(const Transform &tf, float forwardDistance) {
     XMVECTOR pos = XMLoadFloat3(&tf.position);
@@ -264,13 +266,20 @@ void Sword::ApplySlashFollowThrough(Transform &drawTransform) const {
 }
 
 SwordCounterAxis Sword::ComputeSlashAxis() const {
-    if (std::fabs(slashDir_.y) >= std::fabs(slashDir_.x)) {
-        return std::fabs(slashDir_.y) > 0.1f ? SwordCounterAxis::Vertical
-                                             : SwordCounterAxis::None;
+    const float absX = std::fabs(slashDir_.x);
+    const float absY = std::fabs(slashDir_.y);
+
+    if (absY >= kCounterAxisMinComponent &&
+        absY >= absX * kCounterAxisDominanceRatio) {
+        return SwordCounterAxis::Vertical;
     }
 
-    return std::fabs(slashDir_.x) > 0.1f ? SwordCounterAxis::Horizontal
-                                         : SwordCounterAxis::None;
+    if (absX >= kCounterAxisMinComponent &&
+        absX >= absY * kCounterAxisDominanceRatio) {
+        return SwordCounterAxis::Horizontal;
+    }
+
+    return SwordCounterAxis::None;
 }
 
 SwordCounterAxis Sword::GetSlashAxis() const {

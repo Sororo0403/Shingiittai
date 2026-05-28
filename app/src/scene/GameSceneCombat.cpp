@@ -192,14 +192,22 @@ PlayerCombatObservation GameScene::BuildPlayerCombatObservation() const {
     return observation;
 }
 
-float GameScene::ApplyEnemyDamage(float damage, bool deferTransitions) {
+float GameScene::ApplyEnemyDamage(float damage, bool deferTransitions,
+                                  bool triggerHitReaction) {
     if (damage <= 0.0f || enemy_.GetHP() <= 0.0f) {
         return 0.0f;
     }
 
-    const float actualDamage =
-        deferTransitions ? enemy_.TakeDamageDeferTransitions(damage)
-                         : enemy_.TakeDamage(damage);
+    const float actualDamage = triggerHitReaction
+                                   ? (deferTransitions
+                                          ? enemy_.TakeDamageDeferTransitions(
+                                                damage)
+                                          : enemy_.TakeDamage(damage))
+                                   : (deferTransitions
+                                          ? enemy_
+                                                .TakeDamageDeferTransitionsNoReaction(
+                                                    damage)
+                                          : enemy_.TakeDamageNoReaction(damage));
     return actualDamage;
 }
 
@@ -612,8 +620,8 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     const bool isReleaseCounterWindow =
         !enemyRedPunishUncounterable_ && isPreReleaseCounterWindow;
     const bool suppressNormalSlashHitDuringEnemyMelee =
-        enemy_.IsCounterGuardQuickSlashPending() ||
-        (isEnemyMeleePreparationOrRelease && !enemyRedPunishUncounterable_) ||
+        (isEnemyMeleePreparationOrRelease && !enemyRedPunishUncounterable_ &&
+         !isReleaseCounterWindow) ||
         isEnemyBladeClashCommitted;
 
     const float enemyAttackDamage = enemy_.GetCurrentAttackDamage();
@@ -644,6 +652,10 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     if (isBadSlashPunishWindow && playerHitCooldown_ <= 0.0f) {
         for (size_t i = 0; i < swordSlashStates.size(); ++i) {
             if (!swordSlashStates[i] || previousCombatSlashStates_[i]) {
+                continue;
+            }
+            const Sword *sword = swords[i];
+            if (sword == nullptr || !sword->CanSlashCounter()) {
                 continue;
             }
 
@@ -721,22 +733,6 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         }
 
         if (canSlashCounter) {
-            if (enemy_.TryCounterGuardQuickSlash(0.36f)) {
-                CombatFeedbackEvent feedback{};
-                feedback.type = CombatFeedbackEventType::CounterSuccess;
-                feedback.position = enemy_.GetTransform().position;
-                feedback.position.y += 1.0f;
-                feedback.direction =
-                    DirectionFromTo(player_.GetTransform().position,
-                                    enemy_.GetTransform().position);
-                feedback.power = 6.0f;
-                feedback.swordIndex = i;
-                DispatchCombatFeedback(feedback);
-                playerHitCooldown_ = 0.12f;
-                forceSyncEnemyAnimationThisFrame = true;
-                counterTriggeredThisFrame = true;
-                break;
-            }
             triggerSuccessfulCounter(i, enemyAttackDamage, 0.2f);
             counterTriggeredThisFrame = true;
             break;
@@ -760,7 +756,8 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             !suppressNormalSlashHitDuringEnemyMelee) {
             if (hitBody) {
                 const float swordDamage = swordAttackDamages[i];
-                const float appliedDamage = ApplyEnemyDamage(swordDamage);
+                const float appliedDamage =
+                    ApplyEnemyDamage(swordDamage, false, false);
                 if (appliedDamage <= 0.0f) {
                     break;
                 }

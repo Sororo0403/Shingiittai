@@ -183,6 +183,9 @@ void SpriteRenderer::CreateRootSignature() {
 
     CD3DX12_STATIC_SAMPLER_DESC sampler{};
     sampler.Init(0);
+    sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
 
     CD3DX12_ROOT_SIGNATURE_DESC desc{};
     desc.Init(_countof(params), params, 1, &sampler,

@@ -15,8 +15,6 @@ void Enemy::Initialize(uint32_t modelId) {
     runtime_.attackCueSequence = 0;
     runtime_.arcaneLaserCooldown = 0.0f;
     runtime_.arcaneLaserDirection = {0.0f, 0.0f, 1.0f};
-    runtime_.counterGuardQuickSlashTimer = 0.0f;
-    runtime_.counterGuardQuickSlashFollowupKind = ActionKind::None;
     tf_.position = {0.0f, 0.0f, 10.0f};
     tf_.scale = {1.0f, 1.0f, 1.0f};
     tf_.rotation = {0.0f, 0.0f, 0.0f, 1.0f};
@@ -109,18 +107,6 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
 
     if (action_.kind == ActionKind::None) {
         UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_);
-    }
-
-    if (counterGuardQuickSlashTimer_ > 0.0f) {
-        counterGuardQuickSlashTimer_ -= deltaTime;
-        isAttackActive_ = false;
-        UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_ * 0.30f);
-        if (counterGuardQuickSlashTimer_ <= 0.0f) {
-            counterGuardQuickSlashTimer_ = 0.0f;
-            BeginCounterGuardQuickSlashFollowup();
-        }
-        UpdateParts();
-        return;
     }
 
     stateTimer_ += deltaTime;
@@ -226,8 +212,6 @@ void Enemy::ResetTutorialState() {
     runtime_.phase2BladeClashPending = false;
     runtime_.arcaneLaserCooldown = 0.0f;
     runtime_.arcaneLaserDirection = {0.0f, 0.0f, 1.0f};
-    runtime_.counterGuardQuickSlashTimer = 0.0f;
-    runtime_.counterGuardQuickSlashFollowupKind = ActionKind::None;
     runtime_.hitReactionTimer = 0.0f;
     runtime_.counterRecoilTimer = 0.0f;
     runtime_.isDying = false;
@@ -309,8 +293,6 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     currentHoldDuration_ = 0.0f;
     quickSlashActive_ = false;
     farSlashActive_ = false;
-    counterGuardQuickSlashTimer_ = 0.0f;
-    counterGuardQuickSlashFollowupKind_ = ActionKind::None;
     warpFeintFollowupLocked_ = false;
     warpFeintImmediate_ = false;
     warpFeintDecisionMade_ = false;
@@ -397,8 +379,6 @@ void Enemy::EndAttack() {
     currentHoldDuration_ = 0.0f;
     quickSlashActive_ = false;
     farSlashActive_ = false;
-    counterGuardQuickSlashTimer_ = 0.0f;
-    counterGuardQuickSlashFollowupKind_ = ActionKind::None;
     warpFeintFollowupLocked_ = false;
     warpFeintImmediate_ = false;
     warpFeintDecisionMade_ = false;

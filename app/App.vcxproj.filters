@@ -159,6 +159,9 @@
     <ClCompile Include="src\scene\GameOverScene.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
+    <ClCompile Include="src\scene\GameVictoryScene.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
     <ClCompile Include="src\scene\GameScene.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
@@ -253,6 +256,9 @@
       <Filter>Header Files\scene</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\GameOverScene.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="include\scene\GameVictoryScene.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\GameScene.h">
@@ -501,7 +507,16 @@
     <None Include="resources\ui\credits\credits_controls.png">
       <Filter>Resources\UI\credits</Filter>
     </None>
+    <None Include="resources\ui\credits\name_AotoMori.png">
+      <Filter>Resources\UI\credits</Filter>
+    </None>
     <None Include="resources\ui\credits\thank_you_for_playing.png">
+      <Filter>Resources\UI\credits</Filter>
+    </None>
+    <None Include="resources\ui\credits\lines\aotomori_name.png">
+      <Filter>Resources\UI\credits</Filter>
+    </None>
+    <None Include="resources\ui\credits\lines\aotomori_role.png">
       <Filter>Resources\UI\credits</Filter>
     </None>
     <None Include="resources\ui\credits\lines\art_sound_direction.png">

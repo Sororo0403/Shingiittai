@@ -245,6 +245,17 @@ float Enemy::TakeDamage(float damage) {
     return appliedDamage;
 }
 
+float Enemy::TakeDamageNoReaction(float damage) {
+    const float previousHitReactionTimer = hitReactionTimer_;
+    const float appliedDamage = TakeDamageDeferTransitionsNoReaction(damage);
+    ResolveDeferredDamageTransitions();
+    if (!deathFinished_ && !isDying_ && hp_ > 0.0f &&
+        !phaseTransitionActive_) {
+        hitReactionTimer_ = previousHitReactionTimer;
+    }
+    return appliedDamage;
+}
+
 float Enemy::TakeDamageDeferTransitions(float damage) {
     if (damage <= 0.0f || deathFinished_ || isDying_ || hp_ <= 0.0f) {
         return 0.0f;
@@ -259,6 +270,15 @@ float Enemy::TakeDamageDeferTransitions(float damage) {
 
     if (hp_ > 0.0f) {
         hitReactionTimer_ = (std::max)(hitReactionTimer_, hitReactionDuration_);
+    }
+    return appliedDamage;
+}
+
+float Enemy::TakeDamageDeferTransitionsNoReaction(float damage) {
+    const float previousHitReactionTimer = hitReactionTimer_;
+    const float appliedDamage = TakeDamageDeferTransitions(damage);
+    if (!deathFinished_ && !isDying_ && hp_ > 0.0f) {
+        hitReactionTimer_ = previousHitReactionTimer;
     }
     return appliedDamage;
 }

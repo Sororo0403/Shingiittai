@@ -11,14 +11,14 @@ class GameSceneHud {
     void Initialize(const SceneContext &ctx);
     void Update(const SceneContext &ctx, float playerHp, float enemyHp,
                 float enemyMaxHp);
-    void Draw(const SceneContext &ctx);
+    void Draw(const SceneContext &ctx, float alpha = 1.0f);
 
   private:
     void DrawRect(const SceneContext &ctx, float x, float y, float w, float h,
-                  const DirectX::XMFLOAT4 &color);
+                  const DirectX::XMFLOAT4 &color, float alpha);
     void DrawBar(const SceneContext &ctx, float x, float y, float w, float h,
                  float rate, const DirectX::XMFLOAT4 &fill,
-                 const DirectX::XMFLOAT4 &accent);
+                 const DirectX::XMFLOAT4 &accent, float alpha);
 
     float playerHpRate_ = 1.0f;
     float bossHpRate_ = 1.0f;

@@ -389,56 +389,6 @@ bool Enemy::TryBeginQuickSlash(float chance) {
     return true;
 }
 
-bool Enemy::TryCounterGuardQuickSlash(float chance) {
-    if (phase_ != BossPhase::Phase3 || deathFinished_ || isDying_ ||
-        phaseTransitionActive_ || counterGuardQuickSlashTimer_ > 0.0f) {
-        return false;
-    }
-    if (!(action_.kind == ActionKind::Smash ||
-          action_.kind == ActionKind::Sweep)) {
-        return false;
-    }
-
-    chance = std::clamp(chance, 0.0f, 1.0f);
-    const float roll =
-        static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-    if (roll >= chance) {
-        return false;
-    }
-
-    const ActionKind followupKind = SelectNearPressureAction();
-    EndAttack();
-    hitReactionTimer_ = 0.0f;
-    counterRecoilTimer_ = 0.0f;
-    counterGuardQuickSlashFollowupKind_ = followupKind;
-    counterGuardQuickSlashTimer_ = 0.14f;
-    FaceTargetImmediately(playerPos_);
-    LockCurrentFacing();
-    UpdateParts();
-    return true;
-}
-
-void Enemy::BeginCounterGuardQuickSlashFollowup() {
-    ActionKind followupKind = counterGuardQuickSlashFollowupKind_;
-    if (followupKind != ActionKind::Smash && followupKind != ActionKind::Sweep) {
-        followupKind = SelectNearPressureAction();
-    }
-
-    counterGuardQuickSlashFollowupKind_ = ActionKind::None;
-    BeginAction(followupKind, ActionStep::Charge);
-    quickSlashActive_ = true;
-    warpFeintDecisionMade_ = true;
-    directionFeintDecisionMade_ = true;
-
-    const float chargeTime = action_.kind == ActionKind::Smash
-                                 ? GetCurrentSmashChargeTime()
-                                 : GetCurrentSweepChargeTime();
-    stateTimer_ = (std::max)(0.12f, chargeTime * 0.68f);
-    IssueReleaseCueIfReady();
-    UpdateFacingToPlayer();
-    UpdateParts();
-}
-
 bool Enemy::TryBeginFarWarpSlash(float chance) {
     const float unlock = TechniqueUnlock(BossPhase::Phase2);
     if (unlock <= 0.0f) {
@@ -554,14 +504,21 @@ bool Enemy::TryBeginArcaneLaser(float chance) {
         return false;
     }
 
+    const float distance = GetDistanceToPlayer();
+    if (distance < arcaneLaserMinDistance_) {
+        return false;
+    }
+
     if (lastActionKind_ == ActionKind::ArcaneLaser) {
         chance *= 0.42f;
+    } else if (lastActionKind_ == ActionKind::Warp) {
+        chance *= 0.68f;
     }
     if (phase_ == BossPhase::Phase3) {
-        chance += 0.12f;
+        chance += 0.18f;
     }
     chance *= unlock;
-    chance = std::clamp(chance, 0.0f, 0.74f);
+    chance = std::clamp(chance, 0.0f, 0.82f);
 
     const float roll =
         static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
@@ -762,7 +719,8 @@ void Enemy::BeginChaseAction() {
         !isDying_ && !phaseTransitionActive_ && distance >= 1.65f &&
         distance <= 9.8f;
     const bool canArcaneLaser =
-        phase2Unlocked && arcaneLaserCooldown_ <= 0.0f;
+        phase2Unlocked && arcaneLaserCooldown_ <= 0.0f &&
+        distance >= arcaneLaserMinDistance_;
     int stalkWeight = 100;
     int warpWeight = 0;
     int farWarpSlashWeight = 0;
@@ -771,15 +729,15 @@ void Enemy::BeginChaseAction() {
 
     if (phase3Unlocked) {
         stalkWeight = 10;
-        warpWeight = 18;
-        farWarpSlashWeight = 32;
+        warpWeight = 14;
+        farWarpSlashWeight = 26;
         phantomWarpWeight = 25;
-        arcaneLaserWeight = 34;
+        arcaneLaserWeight = 44;
     } else if (phase2Unlocked) {
-        stalkWeight = 28;
-        warpWeight = 22;
-        farWarpSlashWeight = 20;
-        arcaneLaserWeight = 34;
+        stalkWeight = 24;
+        warpWeight = 18;
+        farWarpSlashWeight = 18;
+        arcaneLaserWeight = 40;
     }
 
     const BossDecisionAction selected = PickWeightedAction(
