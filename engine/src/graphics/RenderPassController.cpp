@@ -48,6 +48,8 @@ std::string_view RenderPassController::GetPassName(RenderPass pass) {
         return "Shadow";
     case RenderPass::SceneColor:
         return "SceneColor";
+    case RenderPass::Foreground3D:
+        return "Foreground3D";
     case RenderPass::Transparent:
         return "Transparent";
     case RenderPass::PostProcess:

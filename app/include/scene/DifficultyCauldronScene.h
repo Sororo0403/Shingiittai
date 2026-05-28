@@ -66,6 +66,7 @@ class DifficultyCauldronScene : public BaseScene {
     CameraPreviewReceiver previewReceiver_{};
     std::array<Image, 10> digitImages_{};
     std::array<Image, 5> difficultyDescriptionImages_{};
+    Image controlsImage_{};
     Image triangleMaskImage_{};
     Image triangleGradientImage_{};
     float sceneTime_ = 0.0f;

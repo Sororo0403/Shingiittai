@@ -91,6 +91,16 @@ class SoundManager {
     void Stop(uint32_t voiceHandle);
 
     /// <summary>
+    /// 指定した再生中ボイスを一時停止する
+    /// </summary>
+    void Pause(uint32_t voiceHandle);
+
+    /// <summary>
+    /// 一時停止したボイスを再開する
+    /// </summary>
+    void Resume(uint32_t voiceHandle);
+
+    /// <summary>
     /// 指定した再生中ボイスの音量を設定する
     /// </summary>
     void SetVoiceVolume(uint32_t voiceHandle, float volume);
@@ -148,6 +158,18 @@ class SoundManager {
     /// 読み込み済み音声の情報を取得する
     /// </summary>
     const SoundInfo *GetInfo(uint32_t soundId) const;
+
+    /// <summary>
+    /// 指定秒付近のPCM振幅を0..1で取得する
+    /// </summary>
+    float GetAmplitudeAt(uint32_t soundId, float playbackSeconds,
+                         float windowSeconds = 0.045f) const;
+
+    /// <summary>
+    /// 指定秒付近のPCMから簡易スペクトラムを0..1で取得する
+    /// </summary>
+    void FillSpectrumBands(uint32_t soundId, float playbackSeconds,
+                           float *outBands, size_t bandCount) const;
 
     /// <summary>
     /// マスター音量を設定する

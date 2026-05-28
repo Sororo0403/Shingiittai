@@ -27,6 +27,10 @@ class Player {
                 float controlDeltaTime = -1.0f,
                 bool suppressLookAt = false,
                 bool suppressMovement = false);
+    void UpdateDebugSwordPoses(const SwordPose &leftPose,
+                               const SwordPose &rightPose, float deltaTime,
+                               const DirectX::XMFLOAT3 &position,
+                               float yaw);
     void UpdateDemo(float deltaTime, const DirectX::XMFLOAT3 &lookTarget);
 
     void Draw(ModelManager *modelManager, const Camera &camera,
@@ -59,6 +63,7 @@ class Player {
                                     float yaw, float pushRatio);
 
     float GetHP() const { return hp_; }
+    float TakeDamage(float damage);
 
     void AddKnockback(const DirectX::XMFLOAT3 &velocity);
     const DirectX::XMFLOAT3 &GetVelocity() const { return velocity_; }

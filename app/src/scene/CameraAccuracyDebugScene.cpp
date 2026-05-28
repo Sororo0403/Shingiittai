@@ -16,6 +16,8 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
+#include <iomanip>
 #include <memory>
 
 using namespace DirectX;
@@ -140,29 +142,49 @@ void CameraAccuracyDebugScene::Initialize(const SceneContext &ctx) {
 
     swordModelId_ =
         ctx_->rendering.model->Load(L"app/resources/models/player/sword.glb");
+    playerModelId_ =
+        ctx_->rendering.model->Load(L"app/resources/models/player/player.glb");
+    gamePreviewPlayer_.Initialize(playerModelId_, swordModelId_);
+    gamePreviewPlayer_.SetInputCalibration(calibration_);
+    OpenHandDebugLog();
 }
 
 void CameraAccuracyDebugScene::Update() {
     sceneTime_ += ctx_->frame.deltaTime;
     RequestHandTrackingStartOnce();
     controller_.Update(ctx_->frame.deltaTime);
+    UpdateGamePreview(ctx_->frame.deltaTime);
     previewReceiver_.Update(ctx_->frame.deltaTime);
     UpdateCamera();
 
     Input *input = ctx_->systems.input;
     if (input == nullptr) {
+        WriteHandDebugLog(ctx_->frame.deltaTime);
         return;
     }
     if (input->IsKeyTrigger(DIK_ESCAPE)) {
+        WriteHandDebugLog(ctx_->frame.deltaTime);
         sceneManager_->ChangeScene(std::make_unique<TitleScene>());
         return;
     }
+    if (input->IsKeyTrigger(DIK_1)) {
+        pendingLogMarker_ = "MISS";
+    }
+    if (input->IsKeyTrigger(DIK_2)) {
+        pendingLogMarker_ = "FALSE_HIT";
+    }
+    if (input->IsKeyTrigger(DIK_3)) {
+        pendingLogMarker_ = "GOOD";
+    }
     if (input->IsKeyTrigger(DIK_C)) {
         CaptureNeutral();
+        pendingLogMarker_ = "CALIBRATE";
     }
     if (input->IsKeyTrigger(DIK_R)) {
         ResetNeutral();
+        pendingLogMarker_ = "RESET";
     }
+    WriteHandDebugLog(ctx_->frame.deltaTime);
 }
 
 void CameraAccuracyDebugScene::Draw() {
@@ -223,6 +245,7 @@ void CameraAccuracyDebugScene::CaptureNeutral() {
     calibration_.hasHandNeutral = captured;
     neutralCapturedThisScene_ = captured;
     controller_.SetCalibration(calibration_);
+    gamePreviewPlayer_.SetInputCalibration(calibration_);
 }
 
 void CameraAccuracyDebugScene::ResetNeutral() {
@@ -230,6 +253,93 @@ void CameraAccuracyDebugScene::ResetNeutral() {
     calibration_.handNeutral = {XMFLOAT2{0.5f, 0.5f}, XMFLOAT2{0.5f, 0.5f}};
     neutralCapturedThisScene_ = false;
     controller_.SetCalibration(calibration_);
+    gamePreviewPlayer_.SetInputCalibration(calibration_);
+}
+
+void CameraAccuracyDebugScene::UpdateGamePreview(float deltaTime) {
+    SwordPose leftPose{};
+    SwordPose rightPose{};
+    if (controller_.IsActive(0)) {
+        leftPose = controller_.GetPose(0);
+    }
+    if (controller_.IsActive(1)) {
+        rightPose = controller_.GetPose(1);
+    }
+
+    gamePreviewPlayer_.UpdateDebugSwordPoses(leftPose, rightPose, deltaTime,
+                                             {0.0f, 0.0f, 0.0f}, 0.0f);
+}
+
+void CameraAccuracyDebugScene::OpenHandDebugLog() {
+    try {
+        const auto path =
+            std::filesystem::temp_directory_path() /
+            "shingiittai_hand_debug_game.csv";
+        handDebugLogPath_ = path.string();
+        handDebugLog_.open(path, std::ios::out | std::ios::trunc);
+        if (!handDebugLog_) {
+            handDebugLogPath_.clear();
+            return;
+        }
+        handDebugLog_
+            << "frame,sceneTime,dt,marker,hand,packetChanged,packetSeq,"
+               "packetFrame,packetTimestampMs,packetHandCount,bodyTracked,"
+               "bodyCorrected,fresh,active,lost,reacquired,slash,slashStart,"
+               "rawX,rawY,neutralX,neutralY,calX,calY,"
+               "dirX,dirY,motionSpeed,packetDtMs,packetDx,packetDy,"
+               "packetMotionSpeed,nearEdge,sourceLabel,sourceScore,"
+               "staleTimer,orientX,orientY,orientZ,orientW,"
+               "neutralCaptured\n";
+        handDebugLog_ << std::fixed << std::setprecision(6);
+    } catch (...) {
+        handDebugLogPath_.clear();
+    }
+}
+
+void CameraAccuracyDebugScene::WriteHandDebugLog(float deltaTime) {
+    if (!handDebugLog_) {
+        return;
+    }
+
+    for (size_t i = 0; i < 2; ++i) {
+        const auto sample = controller_.GetDebugHandState(i);
+        const bool lost = previousLogActive_[i] && !sample.active;
+        const bool reacquired = !previousLogActive_[i] && sample.active;
+        const bool slashStart = !previousLogSlash_[i] && sample.isSlashMode;
+
+        handDebugLog_
+            << handDebugLogFrame_ << ',' << sceneTime_ << ',' << deltaTime
+            << ',' << pendingLogMarker_ << ',' << i << ','
+            << (sample.packetChanged ? 1 : 0) << ',' << sample.packetSequence
+            << ',' << sample.packetFrame << ',' << sample.packetTimestampMs
+            << ',' << sample.handCount << ',' << (sample.bodyTracked ? 1 : 0)
+            << ',' << (sample.bodyCorrected ? 1 : 0) << ','
+            << (sample.fresh ? 1 : 0) << ','
+            << (sample.active ? 1 : 0) << ',' << (lost ? 1 : 0) << ','
+            << (reacquired ? 1 : 0) << ',' << (sample.isSlashMode ? 1 : 0)
+            << ',' << (slashStart ? 1 : 0) << ',' << sample.rawPalm.x << ','
+            << sample.rawPalm.y << ',' << sample.neutral.x << ','
+            << sample.neutral.y << ',' << sample.calibratedPalm.x << ','
+            << sample.calibratedPalm.y << ',' << sample.slashDir.x << ','
+            << sample.slashDir.y << ',' << sample.motionSpeed << ','
+            << sample.packetDeltaMs << ',' << sample.packetDeltaPalm.x << ','
+            << sample.packetDeltaPalm.y << ',' << sample.packetMotionSpeed
+            << ',' << (sample.nearEdge ? 1 : 0) << ','
+            << sample.sourceLabel << ',' << sample.sourceScore << ','
+            << sample.staleTimer << ',' << sample.orientation.x << ','
+            << sample.orientation.y << ',' << sample.orientation.z << ','
+            << sample.orientation.w << ','
+            << (neutralCapturedThisScene_ ? 1 : 0) << '\n';
+
+        previousLogActive_[i] = sample.active;
+        previousLogSlash_[i] = sample.isSlashMode;
+    }
+    ++handDebugLogFrame_;
+    pendingLogMarker_.clear();
+
+    if ((handDebugLogFrame_ % 30) == 0) {
+        handDebugLog_.flush();
+    }
 }
 
 SwordPose
@@ -274,8 +384,10 @@ void CameraAccuracyDebugScene::DrawDebugSwords() {
     }
 
     model->PreDraw();
+    gamePreviewPlayer_.Draw(model, camera_, true, false, 0.82f);
+
     for (size_t i = 0; i < 2; ++i) {
-        const bool isLeft = i == 1;
+        const bool isLeft = i == 0;
         const auto sample = controller_.GetDebugHandState(i);
 
         const SwordPose rawPose = MakePoseFromPalm(sample.rawPalm);
@@ -321,21 +433,28 @@ void CameraAccuracyDebugScene::DrawOverlay(float screenWidth,
     DrawRect(0.0f, 0.0f, screenWidth, 34.0f, Color(0.0f, 0.0f, 0.0f, 0.72f));
     DrawText("CAMERA SWORD DEBUG", 18.0f, 10.0f, 2.0f,
              Color(0.78f, 0.90f, 1.0f, 0.92f));
-    DrawText("F5 TITLE ENTRY  ESC TITLE  C CALIBRATE  R RESET", 312.0f, 12.0f,
-             1.4f, Color(0.82f, 0.78f, 0.62f, 0.88f));
+    DrawText("ESC TITLE  C CALIB  R RESET  1 MISS  2 FALSE  3 GOOD", 312.0f,
+             12.0f, 1.4f, Color(0.82f, 0.78f, 0.62f, 0.88f));
+    DrawText("LOG GAME CSV: TEMP/SHINGIITTAI_HAND_DEBUG_GAME.CSV", 18.0f,
+             38.0f, 1.15f, Color(0.66f, 0.76f, 0.86f, 0.76f));
+    DrawText("LOG RAW JSONL: TEMP/SHINGIITTAI_HAND_RAW.JSONL", 18.0f,
+             54.0f, 1.15f, Color(0.66f, 0.76f, 0.86f, 0.76f));
 
     DrawText("RAW SWORD", screenWidth * 0.5f - 232.0f,
              screenHeight * 0.50f - 158.0f, 2.0f,
              Color(0.36f, 0.72f, 1.0f, 0.82f));
+    DrawText("GAME PREVIEW", screenWidth * 0.5f - 58.0f,
+             screenHeight * 0.50f - 204.0f, 1.75f,
+             Color(0.86f, 0.92f, 0.98f, 0.88f));
     DrawText("CORRECTED SWORD", screenWidth * 0.5f + 66.0f,
              screenHeight * 0.50f - 158.0f, 2.0f,
              Color(1.0f, 0.76f, 0.28f, 0.88f));
 
     const float panelW = (std::min)(300.0f, screenWidth * 0.22f);
     const float panelH = 208.0f;
-    DrawHandPanel("RIGHT HAND", "INDEX 0", 0, screenWidth - panelW - 18.0f,
+    DrawHandPanel("LEFT HAND", "INDEX 0", 0, screenWidth - panelW - 18.0f,
                   56.0f, panelW, panelH);
-    DrawHandPanel("LEFT HAND", "INDEX 1", 1, screenWidth - panelW - 18.0f,
+    DrawHandPanel("RIGHT HAND", "INDEX 1", 1, screenWidth - panelW - 18.0f,
                   286.0f, panelW, panelH);
 
     const float statsX = 18.0f;

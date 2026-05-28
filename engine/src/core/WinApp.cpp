@@ -12,6 +12,7 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd,
 #endif
 
 bool WinApp::cursorVisible_ = true;
+bool WinApp::requestedCursorVisible_ = true;
 
 LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wParam,
                                     LPARAM lParam) {
@@ -26,6 +27,33 @@ LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wParam,
         if (!cursorVisible_) {
             SetCursor(nullptr);
             return TRUE;
+        }
+        SetCursor(LoadCursor(nullptr, IDC_ARROW));
+        return TRUE;
+    case WM_ACTIVATEAPP:
+        if (wParam == FALSE) {
+            RevealCursorForSystemInteraction();
+        } else {
+            RestoreCursorForAppInteraction();
+        }
+        break;
+    case WM_SETFOCUS:
+        RestoreCursorForAppInteraction();
+        break;
+    case WM_KILLFOCUS:
+        RevealCursorForSystemInteraction();
+        break;
+    case WM_KEYDOWN:
+    case WM_SYSKEYDOWN:
+        if (wParam == VK_LWIN || wParam == VK_RWIN || wParam == VK_MENU ||
+            wParam == VK_APPS) {
+            RevealCursorForSystemInteraction();
+        }
+        break;
+    case WM_SYSCOMMAND:
+        if ((wParam & 0xFFF0) == SC_MINIMIZE ||
+            (wParam & 0xFFF0) == SC_TASKLIST) {
+            RevealCursorForSystemInteraction();
         }
         break;
     case WM_DESTROY:
@@ -111,6 +139,7 @@ void WinApp::RequestClose() {
 }
 
 void WinApp::SetCursorVisible(bool visible) {
+    requestedCursorVisible_ = visible;
     cursorVisible_ = visible;
     if (!visible) {
         SetCursor(nullptr);
@@ -120,6 +149,34 @@ void WinApp::SetCursorVisible(bool visible) {
     }
 
     while (ShowCursor(TRUE) < 0) {
+    }
+    SetCursor(LoadCursor(nullptr, IDC_ARROW));
+}
+
+void WinApp::RevealCursorForSystemInteraction() {
+    if (cursorVisible_) {
+        SetCursor(LoadCursor(nullptr, IDC_ARROW));
+        return;
+    }
+
+    cursorVisible_ = true;
+    while (ShowCursor(TRUE) < 0) {
+    }
+    SetCursor(LoadCursor(nullptr, IDC_ARROW));
+}
+
+void WinApp::RestoreCursorForAppInteraction() {
+    if (requestedCursorVisible_) {
+        cursorVisible_ = true;
+        while (ShowCursor(TRUE) < 0) {
+        }
+        SetCursor(LoadCursor(nullptr, IDC_ARROW));
+        return;
+    }
+
+    cursorVisible_ = false;
+    SetCursor(nullptr);
+    while (ShowCursor(FALSE) >= 0) {
     }
 }
 

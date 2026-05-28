@@ -71,10 +71,13 @@ class WinApp {
     /// </summary>
     static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam,
                                        LPARAM lParam);
+    static void RevealCursorForSystemInteraction();
+    static void RestoreCursorForAppInteraction();
 
   private:
     static constexpr const wchar_t *kClassName = L"WindowClass";
     static bool cursorVisible_;
+    static bool requestedCursorVisible_;
 
     int width_;
     int height_;

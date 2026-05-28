@@ -48,6 +48,16 @@ class SceneManager {
     void Draw();
 
     /// <summary>
+    /// 現在のシーンが前面3D描画を必要とするかを返す
+    /// </summary>
+    bool UsesForeground3DPass() const;
+
+    /// <summary>
+    /// 現在のシーンの前面3D描画を描画する
+    /// </summary>
+    void DrawForeground3D();
+
+    /// <summary>
     /// 現在のシーンの透明描画を描画する
     /// </summary>
     void DrawTransparent();

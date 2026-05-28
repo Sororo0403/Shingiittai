@@ -214,6 +214,8 @@ struct EnemyRuntimeState {
     float currentHoldDuration = 0.0f;
     bool quickSlashActive = false;
     bool farSlashActive = false;
+    float counterGuardQuickSlashTimer = 0.0f;
+    ActionKind counterGuardQuickSlashFollowupKind = ActionKind::None;
     bool warpFeintFollowupLocked = false;
     bool warpFeintImmediate = false;
     bool warpFeintDecisionMade = false;
@@ -243,7 +245,8 @@ class Enemy {
     void UpdateTutorial(const PlayerCombatObservation &playerObs,
                         float deltaTime);
     void BeginTutorialAttack(ActionKind kind);
-    void BeginDebugBladeClash(const DirectX::XMFLOAT3 &targetPosition);
+    void BeginDifficultyNineOpeningCutIn(
+        const DirectX::XMFLOAT3 &targetPosition);
     void ResetTutorialState();
     void SetTutorialPosition(const DirectX::XMFLOAT3 &position);
 
@@ -254,6 +257,7 @@ class Enemy {
     void ResolveDeferredDamageTransitions();
     void ForcePunishRelease();
     bool NotifyCountered(float vulnerabilityDuration);
+    bool TryCounterGuardQuickSlash(float chance);
     bool IsBladeClashAction() const;
     bool IsBladeClashWindow() const;
     void ResolveBladeClash(bool playerWon);
@@ -301,7 +305,19 @@ class Enemy {
     bool IsAttackActive() const { return runtime_.isAttackActive; }
     OBB GetAttackOBB() const;
     bool IsFarWarpSlashActive() const { return runtime_.farSlashActive; }
+    bool IsCounterGuardQuickSlashPending() const {
+        return runtime_.counterGuardQuickSlashTimer > 0.0f;
+    }
+    bool ShouldSuppressRedAttackCue() const {
+        return runtime_.quickSlashActive || runtime_.farSlashActive ||
+               runtime_.warpFeintImmediate;
+    }
     bool IsWarpCollisionDisabled() const { return runtime_.warp.collisionDisabled; }
+    bool ShouldLockPlayerForArcaneLaser() const {
+        return runtime_.action.kind == ActionKind::ArcaneLaser ||
+               (runtime_.action.kind == ActionKind::Warp &&
+                runtime_.warp.followupKind == ActionKind::ArcaneLaser);
+    }
     bool ShouldLockPlayerForFarWarpSlash() const {
         const bool isFarWarpStartup =
             runtime_.action.kind == ActionKind::Warp &&
@@ -382,6 +398,10 @@ class Enemy {
     float &currentHoldDuration_ = runtime_.currentHoldDuration;
     bool &quickSlashActive_ = runtime_.quickSlashActive;
     bool &farSlashActive_ = runtime_.farSlashActive;
+    float &counterGuardQuickSlashTimer_ =
+        runtime_.counterGuardQuickSlashTimer;
+    ActionKind &counterGuardQuickSlashFollowupKind_ =
+        runtime_.counterGuardQuickSlashFollowupKind;
     bool &warpFeintFollowupLocked_ = runtime_.warpFeintFollowupLocked;
     bool &warpFeintImmediate_ = runtime_.warpFeintImmediate;
     bool &warpFeintDecisionMade_ = runtime_.warpFeintDecisionMade;
@@ -433,8 +453,11 @@ class Enemy {
     float phantomFinalLockDuration_ = 0.26f;
     float bladeClashChance_ = 0.26f;
     float arcaneLaserChance_ = 0.32f;
+    float arcaneLaserSlashFollowupChance_ = 0.42f;
     float arcaneLaserCooldownDuration_ = 7.4f;
     float arcaneLaserMinDistance_ = 4.4f;
+    float arcaneLaserWarpDistance_ = 18.5f;
+    float arcaneLaserSlashMinDistance_ = 7.5f;
 
     float stalkDurationMin_ = 0.45f;
     float stalkDurationMax_ = 1.10f;
@@ -477,10 +500,12 @@ class Enemy {
     ActionKind SelectNearPressureAction() const;
     bool TryBeginWarpAction(float chance);
     bool TryBeginQuickSlash(float chance);
+    void BeginCounterGuardQuickSlashFollowup();
     bool TryBeginFarWarpSlash(float chance);
     bool TryBeginPhantomWarpSkill(float chance);
     bool TryBeginBladeClash(float chance);
     bool TryBeginArcaneLaser(float chance);
+    bool TryBeginArcaneLaserSlashFollowup(float chance);
     void BeginPhantomWarpStep(int viewWarpsRemaining, bool finalBehind,
                               ActionKind followupKind);
     void BeginPressureAction();
@@ -518,6 +543,7 @@ class Enemy {
     bool PrepareWarpContext();
     bool DecideWarpTargetNearPlayer(DirectX::XMFLOAT3 &outTarget);
     bool DecideWarpTargetFarSlash(DirectX::XMFLOAT3 &outTarget);
+    bool DecideWarpTargetArcaneLaser(DirectX::XMFLOAT3 &outTarget);
     bool DecideWarpTargetInPlayerView(DirectX::XMFLOAT3 &outTarget);
     bool DecideWarpTargetBehindPlayer(DirectX::XMFLOAT3 &outTarget);
     bool RefreshLiveBehindWarpTarget();

@@ -1,7 +1,10 @@
 #include "TutorialSelectScene.h"
 #include "AppSceneServices.h"
+#include "CreditScene.h"
 #include "Input.h"
+#include "RankingScene.h"
 #include "SceneManager.h"
+#include "SoundTestScene.h"
 #include "Sprite.h"
 #include "SpriteManager.h"
 #include "TextureManager.h"
@@ -79,11 +82,14 @@ void TutorialSelectScene::Initialize(const SceneContext &ctx) {
     introTimer_ = 0.0f;
     transitionTimer_ = 0.0f;
     startRequested_ = false;
+    menuActionRequested_ = false;
+    utilityMenuVisible_ = false;
     waitingForHandTrackingReady_ = false;
     handTrackingStartRequested_ = false;
     handCameraConfirmVisible_ = false;
     preserveMenuBgmOnExit_ = false;
     handCameraConfirmIndex_ = 1;
+    utilityMenuIndex_ = 0;
     pulseTimers_.fill(0.0f);
     cameraAvailable_ = false;
 
@@ -95,6 +101,16 @@ void TutorialSelectScene::Initialize(const SceneContext &ctx) {
         L"app/resources/ui/tutorial_select/text/title_tutorial.png");
     controlsImage_ =
         LoadTextureImage(L"app/resources/ui/tutorial_select/text/controls.png");
+    menuPromptImage_ =
+        LoadTextureImage(L"app/resources/ui/common/tab_menu.png");
+    utilityMenuTitleImage_ =
+        LoadTextureImage(L"app/resources/ui/menu/menu_title.png");
+    utilityMenuOptionImages_[0] =
+        LoadTextureImage(L"app/resources/ui/menu/option_ranking.png");
+    utilityMenuOptionImages_[1] =
+        LoadTextureImage(L"app/resources/ui/menu/option_sound_test.png");
+    utilityMenuOptionImages_[2] =
+        LoadTextureImage(L"app/resources/ui/menu/option_credits.png");
     buttonNameImages_[0] =
         LoadTextureImage(L"app/resources/ui/tutorial_select/text/input_kbm.png");
     buttonNameImages_[1] =
@@ -165,6 +181,28 @@ void TutorialSelectScene::Update() {
         return;
     }
 
+    if (menuActionRequested_) {
+        transitionTimer_ += ctx_->frame.deltaTime;
+        if (transitionTimer_ >= kTransitionDuration) {
+            switch (utilityMenuIndex_) {
+            case 0:
+                preserveMenuBgmOnExit_ = true;
+                sceneManager_->ChangeScene(std::make_unique<RankingScene>(
+                    RankingScene::ReturnTarget::TutorialSelect));
+                break;
+            case 1:
+                sceneManager_->ChangeScene(std::make_unique<SoundTestScene>(
+                    SoundTestScene::ReturnTarget::TutorialSelect));
+                break;
+            case 2:
+                sceneManager_->ChangeScene(std::make_unique<CreditScene>(
+                    CreditScene::ReturnTarget::TutorialSelect));
+                break;
+            }
+        }
+        return;
+    }
+
     if (introTimer_ >= kIntroInputDelay) {
         UpdateSelection(ctx_->systems.input);
     }
@@ -187,6 +225,7 @@ void TutorialSelectScene::Draw() {
     DrawOverlay(screenWidth, screenHeight);
     DrawButtons();
     DrawLabels(screenWidth, screenHeight);
+    DrawUtilityMenuWindow(screenWidth, screenHeight);
     DrawHandCameraConfirmWindow(screenWidth, screenHeight);
     DrawStartTransition(screenWidth, screenHeight);
     ctx_->rendering.sprite->PostDraw();
@@ -209,9 +248,19 @@ void TutorialSelectScene::UpdateSelection(Input *input) {
         return;
     }
 
+    if (utilityMenuVisible_) {
+        UpdateUtilityMenu(input);
+        return;
+    }
+
     if (input->IsKeyTrigger(DIK_ESCAPE)) {
         selectedIndex_ = kBackButtonIndex;
         BeginStart();
+        return;
+    }
+
+    if (input->IsKeyTrigger(DIK_TAB)) {
+        BeginShowUtilityMenu();
         return;
     }
 
@@ -272,6 +321,41 @@ void TutorialSelectScene::ContinueHandStart() {
     waitingForHandTrackingReady_ = !IsHandTrackingReady();
     startRequested_ = true;
     transitionTimer_ = 0.0f;
+}
+
+void TutorialSelectScene::BeginShowUtilityMenu() {
+    utilityMenuVisible_ = true;
+    utilityMenuIndex_ = 0;
+}
+
+void TutorialSelectScene::BeginUtilityMenuAction() {
+    menuActionRequested_ = true;
+    startRequested_ = false;
+    utilityMenuVisible_ = false;
+    waitingForHandTrackingReady_ = false;
+    transitionTimer_ = 0.0f;
+}
+
+void TutorialSelectScene::UpdateUtilityMenu(Input *input) {
+    if (input == nullptr) {
+        return;
+    }
+    constexpr int kUtilityMenuItemCount = 3;
+    if (input->IsKeyTrigger(DIK_A) || input->IsKeyTrigger(DIK_LEFT)) {
+        utilityMenuIndex_ =
+            (utilityMenuIndex_ + kUtilityMenuItemCount - 1) %
+            kUtilityMenuItemCount;
+    }
+    if (input->IsKeyTrigger(DIK_D) || input->IsKeyTrigger(DIK_RIGHT)) {
+        utilityMenuIndex_ = (utilityMenuIndex_ + 1) % kUtilityMenuItemCount;
+    }
+    if (input->IsKeyTrigger(DIK_ESCAPE) || input->IsKeyTrigger(DIK_TAB)) {
+        utilityMenuVisible_ = false;
+        return;
+    }
+    if (input->IsKeyTrigger(DIK_SPACE) || input->IsKeyTrigger(DIK_RETURN)) {
+        BeginUtilityMenuAction();
+    }
 }
 
 void TutorialSelectScene::Layout(float screenWidth, float screenHeight) {
@@ -608,13 +692,140 @@ void TutorialSelectScene::DrawLabels(float screenWidth, float screenHeight) {
     const float controlsScale =
         (std::min)(0.80f, (screenWidth * 0.31f) /
                               (std::max)(controlsImage_.width, 1.0f));
-    DrawImage(controlsImage_, kControlsPadding,
-              screenHeight -
-                  (controlsImage_.height -
-                   kControlsImageBottomTransparentPixels) *
-                      controlsScale -
-                  kControlsPadding,
-              controlsScale, 0.58f * controlsIntro);
+    const float controlsY =
+        screenHeight -
+        (controlsImage_.height - kControlsImageBottomTransparentPixels) *
+            controlsScale -
+        kControlsPadding;
+    DrawImage(controlsImage_, kControlsPadding, controlsY, controlsScale,
+              0.58f * controlsIntro);
+    DrawImage(menuPromptImage_, kControlsPadding,
+              controlsY - 36.0f, controlsScale, 0.58f * controlsIntro);
+}
+
+void TutorialSelectScene::DrawUtilityMenuWindow(float screenWidth,
+                                                float screenHeight) {
+    if (!utilityMenuVisible_) {
+        return;
+    }
+
+    DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
+             MakeColor(0.0f, 0.0f, 0.0f, 0.54f));
+
+    const float panelW = std::clamp(screenWidth * 0.60f, 700.0f, 960.0f);
+    const float panelH = std::clamp(screenHeight * 0.42f, 360.0f, 460.0f);
+    const float panelX = (screenWidth - panelW) * 0.5f;
+    const float panelY = (screenHeight - panelH) * 0.5f;
+    const float edge = 3.0f;
+
+    DrawRect(panelX + 10.0f, panelY + 12.0f, panelW, panelH,
+             MakeColor(0.0f, 0.0f, 0.0f, 0.36f));
+    DrawRect(panelX, panelY, panelW, panelH,
+             MakeColor(0.018f, 0.020f, 0.026f, 0.96f));
+    DrawFrame(panelX, panelY, panelW, panelH, edge,
+              MakeColor(0.92f, 0.68f, 0.28f, 0.72f));
+
+    const float titleScale =
+        (std::min)(0.92f, (panelW * 0.24f) /
+                             (std::max)(utilityMenuTitleImage_.width, 1.0f));
+    const float titleW = utilityMenuTitleImage_.width * titleScale;
+    DrawImage(utilityMenuTitleImage_, panelX + (panelW - titleW) * 0.5f,
+              panelY + panelH * 0.18f, titleScale, 0.94f);
+
+    const float buttonSize = std::clamp(panelH * 0.50f, 152.0f, 196.0f);
+    const float buttonW = buttonSize;
+    const float buttonH = buttonSize;
+    const float buttonGap = panelW * 0.060f;
+    const float totalButtonW = buttonSize * 3.0f + buttonGap * 2.0f;
+    const float buttonY = panelY + panelH * 0.38f;
+    const float firstButtonX = panelX + (panelW - totalButtonW) * 0.5f;
+
+    for (int i = 0; i < 3; ++i) {
+        const float x =
+            firstButtonX + static_cast<float>(i) * (buttonW + buttonGap);
+        const bool selected = i == utilityMenuIndex_;
+        const XMFLOAT4 body =
+            selected ? MakeColor(0.18f, 0.13f, 0.055f, 0.98f)
+                     : MakeColor(0.040f, 0.046f, 0.058f, 0.92f);
+        const XMFLOAT4 line =
+            selected ? MakeColor(1.0f, 0.78f, 0.34f, 0.96f)
+                     : MakeColor(0.62f, 0.66f, 0.72f, 0.38f);
+
+        DrawRect(x, buttonY, buttonW, buttonH, body);
+        DrawFrame(x, buttonY, buttonW, buttonH, 2.0f, line);
+
+        const float iconBoxSize = buttonSize * 0.58f;
+        const float iconBoxX = x + (buttonSize - iconBoxSize) * 0.5f;
+        const float iconBoxY = buttonY + buttonSize * 0.15f;
+        DrawRect(iconBoxX, iconBoxY, iconBoxSize, iconBoxSize,
+                 selected ? MakeColor(0.10f, 0.075f, 0.036f, 0.72f)
+                          : MakeColor(0.020f, 0.024f, 0.030f, 0.58f));
+        DrawFrame(iconBoxX, iconBoxY, iconBoxSize, iconBoxSize, 2.0f, line);
+        DrawUtilityMenuIcon(i, iconBoxX + iconBoxSize * 0.5f,
+                            iconBoxY + iconBoxSize * 0.5f,
+                            iconBoxSize * 0.78f, selected ? 1.0f : 0.78f,
+                            selected);
+
+        const Image &label = utilityMenuOptionImages_[i];
+        const float labelScale =
+            (std::min)({1.0f,
+                        (buttonH * 0.18f) /
+                            (std::max)(label.height, 1.0f),
+                        (buttonW * 0.86f) /
+                            (std::max)(label.width, 1.0f)});
+        const float labelW = label.width * labelScale;
+        const float labelH = label.height * labelScale;
+        DrawImage(label, x + (buttonW - labelW) * 0.5f,
+                  buttonY + buttonH * 0.78f - labelH * 0.5f, labelScale,
+                  selected ? 1.0f : 0.82f);
+    }
+}
+
+void TutorialSelectScene::DrawUtilityMenuIcon(int index, float centerX,
+                                              float centerY, float size,
+                                              float alpha, bool selected) {
+    const XMFLOAT4 line =
+        selected ? MakeColor(1.0f, 0.78f, 0.34f, 0.92f * alpha)
+                 : MakeColor(0.82f, 0.86f, 0.92f, 0.66f * alpha);
+    const XMFLOAT4 fill =
+        selected ? MakeColor(0.16f, 0.12f, 0.070f, 0.48f * alpha)
+                 : MakeColor(0.10f, 0.11f, 0.13f, 0.38f * alpha);
+    const float s = size / 100.0f;
+    auto x = [&](float v) { return centerX + v * s; };
+    auto y = [&](float v) { return centerY + v * s; };
+    auto r = [&](float px, float py, float w, float h,
+                 const XMFLOAT4 &color) {
+        DrawRect(x(px), y(py), w * s, h * s, color);
+    };
+    auto f = [&](float px, float py, float w, float h) {
+        DrawFrame(x(px), y(py), w * s, h * s, 4.0f * s, line);
+    };
+
+    if (index == 0) {
+        r(-10.0f, -36.0f, 18.0f, 72.0f, line);
+        r(-28.0f, -22.0f, 34.0f, 14.0f, line);
+        r(-24.0f, 24.0f, 58.0f, 14.0f, line);
+        r(-4.0f, -30.0f, 12.0f, 60.0f, fill);
+        return;
+    }
+
+    if (index == 1) {
+        r(-12.0f, -38.0f, 12.0f, 64.0f, line);
+        r(0.0f, -38.0f, 42.0f, 10.0f, line);
+        r(34.0f, -28.0f, 10.0f, 44.0f, line);
+        r(-38.0f, 18.0f, 32.0f, 24.0f, fill);
+        f(-38.0f, 18.0f, 32.0f, 24.0f);
+        r(14.0f, 10.0f, 32.0f, 24.0f, fill);
+        f(14.0f, 10.0f, 32.0f, 24.0f);
+        return;
+    }
+
+    r(-34.0f, -38.0f, 56.0f, 72.0f, fill);
+    f(-34.0f, -38.0f, 56.0f, 72.0f);
+    r(10.0f, -38.0f, 18.0f, 18.0f, line);
+    r(-22.0f, -18.0f, 34.0f, 5.0f, line);
+    r(-22.0f, -3.0f, 30.0f, 5.0f, line);
+    r(-22.0f, 12.0f, 24.0f, 5.0f, line);
 }
 
 void TutorialSelectScene::DrawHandCameraConfirmWindow(float screenWidth,
@@ -694,7 +905,7 @@ void TutorialSelectScene::DrawHandCameraConfirmWindow(float screenWidth,
 
 void TutorialSelectScene::DrawStartTransition(float screenWidth,
                                               float screenHeight) {
-    if (!startRequested_) {
+    if (!startRequested_ && !menuActionRequested_) {
         return;
     }
     const float t =

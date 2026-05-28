@@ -219,6 +219,13 @@ void EngineRuntime::RenderFrame() {
     systems_->sceneManager.Draw();
     systems_->renderPassController.EndPass();
 
+    if (systems_->sceneManager.UsesForeground3DPass()) {
+        systems_->renderPassController.BeginPass(RenderPass::Foreground3D);
+        systems_->dxCommon.ClearDepth();
+        systems_->sceneManager.DrawForeground3D();
+        systems_->renderPassController.EndPass();
+    }
+
     systems_->renderPassController.BeginPass(RenderPass::Transparent);
     systems_->sceneManager.DrawTransparent();
     systems_->transparentQueue.Flush();

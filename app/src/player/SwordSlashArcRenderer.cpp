@@ -66,9 +66,23 @@ void SwordSlashArcRenderer::Reset() {
     for (ArcInstance &arc : arcs_) {
         arc.active = false;
         arc.age = 0.0f;
+        arc.isDirectionCue = false;
     }
     vertexCount_ = 0;
-    nextArc_ = 0;
+    nextArc_ = kDirectionCueArcCount;
+}
+
+SwordSlashArcRenderer::ArcInstance &SwordSlashArcRenderer::AcquireTransientArc() {
+    if (nextArc_ < kDirectionCueArcCount) {
+        nextArc_ = kDirectionCueArcCount;
+    }
+    ArcInstance &arc = arcs_[nextArc_];
+    nextArc_ = (nextArc_ + 1) % arcs_.size();
+    if (nextArc_ < kDirectionCueArcCount) {
+        nextArc_ = kDirectionCueArcCount;
+    }
+    arc.isDirectionCue = false;
+    return arc;
 }
 
 void SwordSlashArcRenderer::Emit(const XMFLOAT3 &root, const XMFLOAT3 &tip,
@@ -76,8 +90,7 @@ void SwordSlashArcRenderer::Emit(const XMFLOAT3 &root, const XMFLOAT3 &tip,
                                  const XMFLOAT3 &targetPosition,
                                  const Camera &camera,
                                  size_t swordIndex) {
-    ArcInstance &arc = arcs_[nextArc_];
-    nextArc_ = (nextArc_ + 1) % arcs_.size();
+    ArcInstance &arc = AcquireTransientArc();
 
     const XMFLOAT3 bladeDir = NormalizeSafe(Sub(tip, root), {0.0f, 1.0f, 0.0f});
     const XMFLOAT3 bladeCenter = Scale(Add(root, tip), 0.5f);
@@ -189,8 +202,7 @@ void SwordSlashArcRenderer::EmitHitLine(const XMFLOAT3 &position,
                           float normalOffset, float heightOffset,
                           float halfLength, float thickness, float life,
                           float delay, const XMFLOAT4 &color) {
-        ArcInstance &arc = arcs_[nextArc_];
-        nextArc_ = (nextArc_ + 1) % arcs_.size();
+        ArcInstance &arc = AcquireTransientArc();
 
         const XMFLOAT3 strokeNormal =
             NormalizeSafe(Cross(cameraForward, axis), lineNormal);
@@ -207,6 +219,7 @@ void SwordSlashArcRenderer::EmitHitLine(const XMFLOAT3 &position,
         arc.startAngle = 0.0f;
         arc.endAngle = 0.0f;
         arc.isLine = true;
+        arc.isDirectionCue = false;
         arc.active = true;
     };
 
@@ -268,23 +281,27 @@ void SwordSlashArcRenderer::EmitDirectionCueLine(
     XMFLOAT3 visualPosition = Add(position, Scale(cameraForward, -0.10f));
     visualPosition.y += 0.03f;
 
-    auto emitStroke = [&](float halfLength, float thickness, float life,
-                          float delay, const XMFLOAT4 &strokeColor,
+    size_t cueArcIndex = 0;
+    auto emitStroke = [&](float halfLength, float thickness,
+                          const XMFLOAT4 &strokeColor,
                           float alongOffset, float normalOffset) {
-        ArcInstance &arc = arcs_[nextArc_];
-        nextArc_ = (nextArc_ + 1) % arcs_.size();
+        if (cueArcIndex >= kDirectionCueArcCount) {
+            return;
+        }
+        ArcInstance &arc = arcs_[cueArcIndex++];
         arc.center = Add(visualPosition, Scale(lineDir, alongOffset));
         arc.center = Add(arc.center, Scale(lineNormal, normalOffset));
         arc.axisA = lineDir;
         arc.axisB = lineNormal;
         arc.radius = halfLength;
         arc.thickness = thickness;
-        arc.life = life;
-        arc.age = -delay;
+        arc.life = 1.0f;
+        arc.age = 1.0f;
         arc.color = strokeColor;
         arc.startAngle = 0.0f;
         arc.endAngle = 0.0f;
         arc.isLine = true;
+        arc.isDirectionCue = true;
         arc.active = true;
     };
 
@@ -302,20 +319,24 @@ void SwordSlashArcRenderer::EmitDirectionCueLine(
 
     emitStroke(releaseCounterCueVisible ? 1.62f : 1.50f,
                releaseCounterCueVisible ? 0.30f : 0.34f,
-               releaseCounterCueVisible ? 0.30f : 0.32f, 0.0f, outer, 0.0f,
-               0.0f);
+               outer, 0.0f, 0.0f);
     emitStroke(releaseCounterCueVisible ? 1.44f : 1.32f,
                releaseCounterCueVisible ? 0.18f : 0.21f,
-               releaseCounterCueVisible ? 0.26f : 0.28f, 0.0f, glow, -0.04f,
-               0.0f);
+               glow, -0.04f, 0.0f);
     emitStroke(releaseCounterCueVisible ? 1.30f : 1.18f,
                releaseCounterCueVisible ? 0.074f : 0.088f,
-               releaseCounterCueVisible ? 0.22f : 0.24f, 0.0f, core, 0.03f,
-               0.0f);
+               core, 0.03f, 0.0f);
     emitStroke(releaseCounterCueVisible ? 1.04f : 0.92f,
                releaseCounterCueVisible ? 0.034f : 0.042f,
-               releaseCounterCueVisible ? 0.16f : 0.18f, 0.016f, hot, 0.10f,
-               0.0f);
+               hot, 0.10f, 0.0f);
+}
+
+void SwordSlashArcRenderer::ClearDirectionCueLines() {
+    for (ArcInstance &arc : arcs_) {
+        if (arc.isDirectionCue) {
+            arc.active = false;
+        }
+    }
 }
 
 void SwordSlashArcRenderer::EmitParryLine(const XMFLOAT3 &position,
@@ -358,8 +379,7 @@ void SwordSlashArcRenderer::EmitParryLine(const XMFLOAT3 &position,
                           float normalOffset, float heightOffset,
                           float halfLength, float thickness, float life,
                           float delay, const XMFLOAT4 &color) {
-        ArcInstance &arc = arcs_[nextArc_];
-        nextArc_ = (nextArc_ + 1) % arcs_.size();
+        ArcInstance &arc = AcquireTransientArc();
 
         const XMFLOAT3 strokeNormal =
             NormalizeSafe(Cross(cameraForward, axis), lineNormal);
@@ -376,6 +396,7 @@ void SwordSlashArcRenderer::EmitParryLine(const XMFLOAT3 &position,
         arc.startAngle = 0.0f;
         arc.endAngle = 0.0f;
         arc.isLine = true;
+        arc.isDirectionCue = false;
         arc.active = true;
     };
 
@@ -420,6 +441,9 @@ void SwordSlashArcRenderer::Update(float deltaTime) {
         if (!arc.active) {
             continue;
         }
+        if (arc.isDirectionCue) {
+            continue;
+        }
         arc.age += deltaTime;
         if (arc.age >= arc.life) {
             arc.active = false;
@@ -429,6 +453,7 @@ void SwordSlashArcRenderer::Update(float deltaTime) {
 }
 
 void SwordSlashArcRenderer::Draw(const Camera &camera) {
+    BuildVertices();
     if (!dxCommon_ || !mappedViewProjection_ || vertexCount_ == 0) {
         return;
     }
@@ -458,15 +483,21 @@ void SwordSlashArcRenderer::BuildVertices() {
             continue;
         }
 
-        const float ageRate = std::clamp(arc.age / arc.life, 0.0f, 1.0f);
+        const float ageRate = arc.isDirectionCue
+                                  ? 1.0f
+                                  : std::clamp(arc.age / arc.life, 0.0f, 1.0f);
         if (arc.age < 0.0f) {
             continue;
         }
         const float grow = SmoothStep(0.0f, 0.20f, ageRate);
         const float fade = 1.0f - SmoothStep(0.46f, 1.0f, ageRate);
         if (arc.isLine) {
-            const float growLine = SmoothStep(0.0f, 0.18f, ageRate);
-            const float fadeLine = 1.0f - SmoothStep(0.35f, 1.0f, ageRate);
+            const float growLine =
+                arc.isDirectionCue ? 1.0f : SmoothStep(0.0f, 0.18f, ageRate);
+            const float fadeLine =
+                arc.isDirectionCue
+                    ? 1.0f
+                    : 1.0f - SmoothStep(0.35f, 1.0f, ageRate);
             const float halfLength = arc.radius * growLine;
             const float halfThickness = arc.thickness * (1.0f + 0.45f * (1.0f - ageRate));
             const XMFLOAT3 start = Add(arc.center, Scale(arc.axisA, -halfLength));

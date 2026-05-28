@@ -89,6 +89,31 @@ bool Enemy::DecideWarpTargetFarSlash(DirectX::XMFLOAT3 &outTarget) {
     return true;
 }
 
+bool Enemy::DecideWarpTargetArcaneLaser(DirectX::XMFLOAT3 &outTarget) {
+    float awayX = tf_.position.x - playerPos_.x;
+    float awayZ = tf_.position.z - playerPos_.z;
+    float awayLength = std::sqrt(awayX * awayX + awayZ * awayZ);
+    if (awayLength <= 0.0001f) {
+        awayX = -std::sin(facingYaw_);
+        awayZ = -std::cos(facingYaw_);
+        awayLength = 1.0f;
+    }
+    awayX /= awayLength;
+    awayZ /= awayLength;
+
+    const float sideSign = (std::rand() % 2 == 0) ? -1.0f : 1.0f;
+    const float rightX = awayZ;
+    const float rightZ = -awayX;
+    const float sideOffset = sideSign * (0.65f + 0.75f * Random01());
+
+    outTarget = playerPos_;
+    outTarget.x += awayX * arcaneLaserWarpDistance_ + rightX * sideOffset;
+    outTarget.z += awayZ * arcaneLaserWarpDistance_ + rightZ * sideOffset;
+    outTarget.y = tf_.position.y;
+    FinalizeWarpTargetFacing(outTarget);
+    return true;
+}
+
 bool Enemy::DecideWarpTargetInPlayerView(DirectX::XMFLOAT3 &outTarget) {
     float forwardX = playerPos_.x - tf_.position.x;
     float forwardZ = playerPos_.z - tf_.position.z;
@@ -202,6 +227,8 @@ void Enemy::UpdateWarpStart(float deltaTime) {
     float startTime = config_.warp.startTime;
     if (warp_.phantomChain) {
         startTime = warp_.phantomFinal ? 0.13f : 0.11f;
+    } else if (warp_.followupKind == ActionKind::ArcaneLaser) {
+        startTime *= 0.56f;
     } else if (warp_.feintFollowup) {
         startTime *= 0.55f;
     } else if (warp_.farSlashFollowup) {
@@ -254,11 +281,10 @@ void Enemy::UpdateWarpMove(float deltaTime) {
 
     if (stateTimer_ >= moveTime) {
         tf_.position = warp_.targetPos;
-        const bool delayFinalLock = warp_.phantomChain && warp_.phantomFinal;
         if ((warp_.faceLivePlayerOnEnd ||
              warp_.followupKind == ActionKind::Smash ||
-             warp_.followupKind == ActionKind::Sweep) &&
-            !delayFinalLock) {
+             warp_.followupKind == ActionKind::Sweep ||
+             warp_.followupKind == ActionKind::ArcaneLaser)) {
             UpdateFacingToPlayer();
             LockCurrentFacing();
         } else if (warp_.hasTargetYaw) {
@@ -275,10 +301,9 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
     isVisible_ = true;
     warp_.collisionDisabled = false;
     RefreshLiveBehindWarpTarget();
-    const bool delayFinalLock = warp_.phantomChain && warp_.phantomFinal;
     if ((warp_.faceLivePlayerOnEnd || warp_.followupKind == ActionKind::Smash ||
-         warp_.followupKind == ActionKind::Sweep) &&
-        !delayFinalLock) {
+         warp_.followupKind == ActionKind::Sweep ||
+         warp_.followupKind == ActionKind::ArcaneLaser)) {
         UpdateFacingToPlayer();
         LockCurrentFacing();
     } else if (warp_.hasTargetYaw) {
@@ -288,13 +313,16 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
         UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_ * 0.75f);
     }
 
-    const float endTime =
-        warp_.phantomChain
-            ? PhantomWarpEndTime(warp_.phantomFinal)
-            : warp_.isFeint ? config_.warp.endTime * warpFeintEndTimeScale_
-                             : warp_.farSlashFollowup
-                                   ? config_.warp.endTime * 0.38f
-                                   : config_.warp.endTime;
+    float endTime = config_.warp.endTime;
+    if (warp_.phantomChain) {
+        endTime = PhantomWarpEndTime(warp_.phantomFinal);
+    } else if (warp_.isFeint) {
+        endTime = config_.warp.endTime * warpFeintEndTimeScale_;
+    } else if (warp_.followupKind == ActionKind::ArcaneLaser) {
+        endTime = config_.warp.endTime * 0.42f;
+    } else if (warp_.farSlashFollowup) {
+        endTime = config_.warp.endTime * 0.38f;
+    }
     if (stateTimer_ < endTime) {
         return;
     }
@@ -337,10 +365,8 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
     }
 
     if (followupKind == ActionKind::Smash || followupKind == ActionKind::Sweep) {
-        if (!(phantomChain && phantomFinal)) {
-            UpdateFacingToPlayer();
-            LockCurrentFacing();
-        }
+        UpdateFacingToPlayer();
+        LockCurrentFacing();
         if (!farSlashFollowup && !IsPlayerInMeleeFront()) {
             BeginChaseAction();
             return;
@@ -366,6 +392,13 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
             warpFeintDecisionMade_ = true;
             directionFeintDecisionMade_ = true;
         }
+        return;
+    }
+
+    if (followupKind == ActionKind::ArcaneLaser) {
+        UpdateFacingToPlayer();
+        LockCurrentFacing();
+        BeginAction(ActionKind::ArcaneLaser, ActionStep::Charge);
         return;
     }
 

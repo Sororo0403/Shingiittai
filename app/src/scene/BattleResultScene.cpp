@@ -6,6 +6,7 @@
 #include "Material.h"
 #include "Model.h"
 #include "ModelManager.h"
+#include "ParticleEmitterSettings.h"
 #include "PostProcessSystem.h"
 #include "SceneManager.h"
 #include "SpriteManager.h"
@@ -31,8 +32,11 @@ constexpr float kHandSwingResetSpeed = 0.32f;
 constexpr int kRequiredHandSwings = 3;
 constexpr float kHandIdleMenuSeconds = 5.0f;
 constexpr float kReturnTitleFadeDuration = 0.42f;
-constexpr size_t kRankingKeepCount = 10;
 constexpr size_t kRankingDrawCount = 5;
+constexpr float kCelebrationParticleInterval = 0.18f;
+constexpr float kTimeRevealDuration = 2.55f;
+constexpr float kScoreRevealDuration = 1.55f;
+constexpr float kRevealHoldDuration = 0.46f;
 
 XMFLOAT4 Color(float r, float g, float b, float a = 1.0f) {
     return {r, g, b, a};
@@ -126,6 +130,24 @@ uint32_t CreateResultRustedMetalTexture(TextureManager *texture) {
                                          0.62f);
 }
 
+uint32_t CreateResultArenaStoneTexture(TextureManager *texture) {
+    return CreateResultProceduralTexture(texture, 768u, 768u,
+                                         {0.06f, 0.075f, 0.09f},
+                                         {0.24f, 0.25f, 0.22f}, 0x51C3u,
+                                         0.50f);
+}
+
+Material MakeResultArenaMaterial(const XMFLOAT4 &color, bool useTexture,
+                                 float reflection, float roughness) {
+    Material material{};
+    material.color = color;
+    material.enableTexture = useTexture ? 1 : 0;
+    material.reflectionStrength = reflection;
+    material.reflectionFresnelStrength = reflection * 0.40f;
+    material.reflectionRoughness = roughness;
+    return material;
+}
+
 void ApplyResultEnemyMaterial(ModelManager *modelManager, uint32_t modelId,
                               uint32_t rustTextureId) {
     if (modelManager == nullptr) {
@@ -185,19 +207,26 @@ BattleResultScene::BattleResultScene(
 void BattleResultScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
     sceneTime_ = 0.0f;
+    clearRevealTimer_ = 0.0f;
+    clearRevealPhase_ = ClearRevealPhase::Time;
+    celebrationParticleTimer_ = 0.0f;
     handIdleTimer_ = 0.0f;
     returnTitleFadeTimer_ = 0.0f;
     handSwingCount_ = 0;
     handSwingArmed_ = true;
     returnTitleConfirmVisible_ = false;
     returnTitleFadeActive_ = false;
+    clearActionButtonIndex_ = 1;
     returnTitleConfirmIndex_ = 1;
+    celebrationParticlesReady_ = false;
 
     if (IsHandControl(inputCalibration_.controlType)) {
         handController_.SetCalibration(inputCalibration_);
     }
 
-    InitializeWorld();
+    if (resultKind_ == ResultKind::Clear) {
+        InitializeWorld();
+    }
     if (ctx_->rendering.postProcessSystem != nullptr) {
         ctx_->rendering.postProcessSystem->SetProfile(PostProcessProfile{});
     }
@@ -206,8 +235,12 @@ void BattleResultScene::Initialize(const SceneContext &ctx) {
         LoadTextureImage(L"app/resources/ui/result/mplus/mission_complete.png");
     clearTimeLabel_ =
         LoadTextureImage(L"app/resources/ui/result/mplus/clear_time.png");
+    scoreTitleLabel_ =
+        LoadTextureImage(L"app/resources/ui/result/text/score_title.png");
     currentRecordLabel_ =
         LoadTextureImage(L"app/resources/ui/result/text/current_record.png");
+    scoreFormulaLabel_ =
+        LoadTextureImage(L"app/resources/ui/result/text/score_formula.png");
     rankingTitleLabel_ =
         LoadTextureImage(L"app/resources/ui/result/text/ranking_title.png");
     controlsKbmClearImage_ =
@@ -216,10 +249,10 @@ void BattleResultScene::Initialize(const SceneContext &ctx) {
         L"app/resources/ui/result/mplus/controls_kbm_gameover.png");
     controlsHandImage_ =
         LoadTextureImage(L"app/resources/ui/result/mplus/controls_hand.png");
-    gameOverTitle_ =
-        LoadTextureImage(L"app/resources/ui/result/game_over_title.png");
-    noClearTimeLabel_ =
-        LoadTextureImage(L"app/resources/ui/result/no_clear_time.png");
+    missionFailedLabel_ =
+        LoadTextureImage(L"app/resources/ui/result/mplus/mission_failed.png");
+    retryButtonLabel_ = LoadTextureImage(L"app/resources/ui/gameover/retry.png");
+    titleButtonLabel_ = LoadTextureImage(L"app/resources/ui/gameover/title.png");
     returnTitleConfirmMessageImage_ = LoadTextureImage(
         L"app/resources/ui/result/text/return_title_confirm_message.png");
     returnTitleConfirmYesImage_ =
@@ -247,6 +280,8 @@ void BattleResultScene::Initialize(const SceneContext &ctx) {
 
 void BattleResultScene::Update() {
     sceneTime_ += ctx_->frame.deltaTime;
+    UpdateClearReveal(ctx_->frame.deltaTime);
+    UpdateCelebrationParticles(ctx_->frame.deltaTime);
     Input *input = ctx_->systems.input;
 
     if (returnTitleFadeActive_) {
@@ -264,7 +299,18 @@ void BattleResultScene::Update() {
         return;
     }
 
-    if (input->IsKeyTrigger(DIK_TAB) ||
+    const bool isClear = resultKind_ == ResultKind::Clear;
+    if (isClear) {
+        UpdateClearActionButtons(*input);
+        return;
+    }
+
+    const bool retryKey =
+        input->IsKeyTrigger(DIK_SPACE);
+    const bool titleKey =
+        input->IsKeyTrigger(DIK_TAB);
+
+    if (retryKey ||
         (input->IsGamepadConnected() &&
          input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_A))) {
         sceneManager_->ChangeScene(
@@ -273,13 +319,65 @@ void BattleResultScene::Update() {
     }
 
     const bool title =
-        input->IsKeyTrigger(DIK_SPACE) ||
+        titleKey || input->IsKeyTrigger(DIK_ESCAPE) ||
         (input->IsGamepadConnected() &&
          input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_B));
     if (title) {
-        returnTitleConfirmVisible_ = true;
-        returnTitleConfirmIndex_ = 1;
+        BeginReturnTitleConfirm();
         return;
+    }
+}
+
+void BattleResultScene::UpdateClearActionButtons(Input &input) {
+    if (clearRevealPhase_ != ClearRevealPhase::Ranking) {
+        const bool skip =
+            input.IsKeyTrigger(DIK_SPACE) || input.IsKeyTrigger(DIK_RETURN) ||
+            (input.IsGamepadConnected() &&
+             input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_A));
+        if (!skip) {
+            return;
+        }
+
+        if (clearRevealPhase_ == ClearRevealPhase::Time) {
+            if (clearRevealTimer_ < kTimeRevealDuration) {
+                clearRevealTimer_ = kTimeRevealDuration;
+            } else {
+                clearRevealPhase_ = ClearRevealPhase::Score;
+                clearRevealTimer_ = 0.0f;
+            }
+            return;
+        }
+
+        if (clearRevealTimer_ < kScoreRevealDuration) {
+            clearRevealTimer_ = kScoreRevealDuration;
+        } else {
+            clearRevealPhase_ = ClearRevealPhase::Ranking;
+            clearRevealTimer_ = 0.0f;
+        }
+        return;
+    }
+
+    if (input.IsKeyTrigger(DIK_A) || input.IsKeyTrigger(DIK_LEFT)) {
+        clearActionButtonIndex_ = 0;
+    }
+    if (input.IsKeyTrigger(DIK_D) || input.IsKeyTrigger(DIK_RIGHT)) {
+        clearActionButtonIndex_ = 1;
+    }
+
+    const bool confirm =
+        input.IsKeyTrigger(DIK_RETURN) || input.IsKeyTrigger(DIK_SPACE) ||
+        (input.IsGamepadConnected() &&
+         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_A));
+    if (!confirm) {
+        return;
+    }
+
+    if (clearActionButtonIndex_ == 0) {
+        sceneManager_->ChangeScene(
+            std::make_unique<GameScene>(inputCalibration_, combatDifficulty_));
+    } else {
+        returnTitleFadeActive_ = true;
+        returnTitleFadeTimer_ = 0.0f;
     }
 }
 
@@ -307,8 +405,13 @@ void BattleResultScene::UpdateHandResultInput(float deltaTime) {
     }
 
     if (handIdleTimer_ >= kHandIdleMenuSeconds) {
-        sceneManager_->ChangeScene(std::make_unique<TitleScene>());
+        BeginReturnTitleConfirm();
     }
+}
+
+void BattleResultScene::BeginReturnTitleConfirm() {
+    returnTitleConfirmVisible_ = true;
+    returnTitleConfirmIndex_ = 1;
 }
 
 void BattleResultScene::UpdateReturnTitleConfirm(Input &input) {
@@ -344,8 +447,10 @@ void BattleResultScene::Draw() {
     const float w = static_cast<float>(ctx_->systems.winApp->GetWidth());
     const float h = static_cast<float>(ctx_->systems.winApp->GetHeight());
 
-    UpdateResultCamera(w, h);
-    DrawWorld(w, h);
+    if (resultKind_ == ResultKind::Clear) {
+        UpdateResultCamera(w, h);
+        DrawWorld(w, h);
+    }
 
     ctx_->rendering.sprite->PreDraw();
     DrawResultOverlay(w, h);
@@ -382,10 +487,6 @@ void BattleResultScene::RegisterClearRanking() {
                          return a.difficulty > b.difficulty;
                      });
 
-    if (rankingEntries_.size() > kRankingKeepCount) {
-        rankingEntries_.resize(kRankingKeepCount);
-    }
-
     for (size_t i = 0; i < rankingEntries_.size(); ++i) {
         if (rankingEntries_[i].isCurrent) {
             currentRank_ = static_cast<int>(i) + 1;
@@ -396,13 +497,18 @@ void BattleResultScene::RegisterClearRanking() {
 }
 
 int BattleResultScene::ComputeScore(float clearTime, float difficulty) const {
-    const float d = std::clamp(difficulty, 0.0f, 9.0f);
-    const float t = (std::max)(clearTime, 1.0f);
-    const float difficultyMultiplier = 1.0f + d * 0.32f + d * d * 0.018f;
-    const float timeComponent = 110000.0f * difficultyMultiplier / (t + 40.0f);
-    const float difficultyFloor = d * 250.0f;
-    return (std::max)(1, static_cast<int>(std::round(timeComponent +
-                                                     difficultyFloor)));
+    const float p = std::clamp(difficulty / 9.0f, 0.0f, 1.0f);
+    const float smooth = p * p * (3.0f - 2.0f * p);
+    const float effectiveDifficulty = std::clamp(
+        difficulty + 0.55f + 0.45f * smooth, 0.0f, 9.0f);
+    const float difficultyBonus =
+        1.0f + effectiveDifficulty * 0.22f +
+        effectiveDifficulty * effectiveDifficulty * 0.035f;
+    const float safeClearTime = (std::max)(clearTime, 0.0f);
+    const float timeBonus = 180.0f / (safeClearTime + 30.0f);
+    return (std::max)(
+        1, static_cast<int>(
+               std::round(1000.0f * difficultyBonus * timeBonus)));
 }
 
 void BattleResultScene::LoadRanking() {
@@ -422,9 +528,9 @@ void BattleResultScene::LoadRanking() {
         std::istringstream iss(line);
         RankingEntry entry{};
         if (iss >> entry.score >> entry.difficulty >> entry.clearTime) {
-            entry.score = (std::max)(0, entry.score);
             entry.difficulty = std::clamp(entry.difficulty, 0.0f, 9.0f);
             entry.clearTime = (std::max)(0.0f, entry.clearTime);
+            entry.score = ComputeScore(entry.clearTime, entry.difficulty);
             rankingEntries_.push_back(entry);
         }
     }
@@ -451,6 +557,30 @@ void BattleResultScene::SaveRanking() const {
     }
 }
 
+void BattleResultScene::UpdateClearReveal(float deltaTime) {
+    if (resultKind_ != ResultKind::Clear) {
+        return;
+    }
+
+    clearRevealTimer_ += deltaTime;
+    switch (clearRevealPhase_) {
+    case ClearRevealPhase::Time:
+        if (clearRevealTimer_ >= kTimeRevealDuration + kRevealHoldDuration) {
+            clearRevealPhase_ = ClearRevealPhase::Score;
+            clearRevealTimer_ = 0.0f;
+        }
+        break;
+    case ClearRevealPhase::Score:
+        if (clearRevealTimer_ >= kScoreRevealDuration + kRevealHoldDuration) {
+            clearRevealPhase_ = ClearRevealPhase::Ranking;
+            clearRevealTimer_ = 0.0f;
+        }
+        break;
+    case ClearRevealPhase::Ranking:
+        break;
+    }
+}
+
 void BattleResultScene::InitializeWorld() {
     const float aspect = static_cast<float>(ctx_->systems.winApp->GetWidth()) /
                          static_cast<float>(ctx_->systems.winApp->GetHeight());
@@ -461,20 +591,128 @@ void BattleResultScene::InitializeWorld() {
     playerModelId_ = model->Load(L"app/resources/models/player/player.glb");
     swordModelId_ = model->Load(L"app/resources/models/player/sword.glb");
     enemyModelId_ = model->Load(L"app/resources/models/boss/boss.gltf");
+    celebrationParticleTextureId_ =
+        ctx_->rendering.texture->Load(L"app/resources/effects/particles/smoke.png");
 
     if (ctx_->rendering.texture != nullptr) {
         const uint32_t enemyRustTextureId =
             CreateResultRustedMetalTexture(ctx_->rendering.texture);
         ApplyResultEnemyMaterial(model, enemyModelId_, enemyRustTextureId);
+
+        const uint32_t arenaTextureId =
+            CreateResultArenaStoneTexture(ctx_->rendering.texture);
+        resultArenaFloorModelId_ = model->CreatePlane(
+            arenaTextureId,
+            MakeResultArenaMaterial({0.070f, 0.085f, 0.105f, 1.0f}, true,
+                                    0.025f, 0.84f));
+        resultArenaSpokeModelId_ = model->CreatePlane(
+            arenaTextureId,
+            MakeResultArenaMaterial({0.28f, 0.21f, 0.12f, 1.0f}, false,
+                                    0.06f, 0.58f));
+        resultArenaCenterDiskModelId_ = model->CreateRing(
+            arenaTextureId,
+            MakeResultArenaMaterial({0.72f, 0.58f, 0.30f, 1.0f}, false,
+                                    0.12f, 0.30f),
+            96, 1.95f, 0.0f);
+        resultArenaInnerRingModelId_ = model->CreateRing(
+            arenaTextureId,
+            MakeResultArenaMaterial({0.64f, 0.60f, 0.44f, 1.0f}, false,
+                                    0.12f, 0.32f),
+            96, 4.9f, 4.35f);
+        resultArenaOuterRingModelId_ = model->CreateRing(
+            arenaTextureId,
+            MakeResultArenaMaterial({0.68f, 0.28f, 0.18f, 1.0f}, false,
+                                    0.10f, 0.38f),
+            128, 12.3f, 11.6f);
+        resultArenaColumnModelId_ = model->CreateCylinder(
+            arenaTextureId,
+            MakeResultArenaMaterial({0.22f, 0.26f, 0.30f, 1.0f}, true,
+                                    0.045f, 0.68f),
+            24, 0.26f, 0.38f, 5.4f);
+        resultArenaLightModelId_ = model->CreatePlane(
+            0, MakeResultArenaMaterial({0.72f, 0.90f, 0.96f, 0.58f}, false,
+                                       0.0f, 0.40f));
+        resultArenaTowerModelId_ = model->CreateCylinder(
+            arenaTextureId,
+            MakeResultArenaMaterial({0.18f, 0.24f, 0.29f, 1.0f}, true,
+                                    0.025f, 0.76f),
+            4, 0.72f, 0.72f, 1.0f);
     }
 
     ResetModelToBindPose(model, playerModelId_);
     ResetModelToBindPose(model, enemyModelId_);
+
+    if (ctx_->rendering.dxCommon != nullptr && ctx_->rendering.srv != nullptr &&
+        ctx_->rendering.texture != nullptr && celebrationParticleTextureId_ != 0) {
+        celebrationParticles_.Initialize(ctx_->rendering.dxCommon,
+                                         ctx_->rendering.srv,
+                                         ctx_->rendering.texture,
+                                         celebrationParticleTextureId_, 1024);
+        celebrationParticlesReady_ = true;
+    }
+}
+
+void BattleResultScene::UpdateCelebrationParticles(float deltaTime) {
+    if (resultKind_ != ResultKind::Clear || !celebrationParticlesReady_) {
+        return;
+    }
+
+    celebrationParticleTimer_ -= deltaTime;
+    while (celebrationParticleTimer_ <= 0.0f) {
+        celebrationParticleTimer_ += kCelebrationParticleInterval;
+
+        const float t = sceneTime_ * 1.9f;
+        const float side = std::sinf(t) >= 0.0f ? 1.0f : -1.0f;
+        const XMFLOAT3 origin{side * (2.0f + 0.9f * std::sinf(t * 0.71f)),
+                              3.1f + 0.35f * std::sinf(t * 0.37f),
+                              -0.5f + 0.7f * std::cosf(t * 0.53f)};
+
+        ParticleEmitterSettings settings{};
+        settings.position = origin;
+        settings.emissionType = ParticleEmissionType::Burst;
+        settings.spawnShape = ParticleSpawnShape::Box;
+        settings.burstCount = 42;
+        settings.maxParticles = 42;
+        settings.spawnOffsetScale = {0.70f, 0.20f, 0.38f};
+        settings.tintColor =
+            side > 0.0f ? XMFLOAT4{1.0f, 0.72f, 0.24f, 0.92f}
+                         : XMFLOAT4{0.70f, 0.92f, 1.0f, 0.84f};
+        settings.direction = {-side * 0.28f, 1.0f, 0.06f};
+        settings.velocityBias = {-side * 0.52f, 0.70f, 0.0f};
+        settings.directionalVelocity = 0.85f;
+        settings.radialVelocity = 0.95f;
+        settings.baseLifeTime = 1.55f;
+        settings.lifeTimeRandom = 0.45f;
+        settings.startScale = 0.075f;
+        settings.endScale = 0.018f;
+        settings.scaleRandom = 0.035f;
+        settings.stretch = 1.25f;
+        settings.acceleration = {0.0f, -0.36f, 0.0f};
+        settings.turbulence = 0.42f;
+        settings.damping = 0.96f;
+        settings.fadeInTime = 0.04f;
+        settings.fadeOutTime = 0.50f;
+        celebrationParticles_.EmitOnce(settings);
+    }
+
+    celebrationParticles_.Update(deltaTime);
 }
 
 void BattleResultScene::UpdateResultCamera(float screenWidth,
                                            float screenHeight) {
     camera_.SetAspect(screenWidth / (std::max)(screenHeight, 1.0f));
+    if (resultKind_ == ResultKind::GameOver) {
+        const float orbit = sceneTime_ * 0.26f;
+        const float radius = 13.0f;
+        const XMFLOAT3 target = {0.0f, 1.34f, 0.0f};
+        const XMFLOAT3 eye = {std::sinf(orbit) * radius, 3.75f,
+                              std::cosf(orbit) * radius};
+        camera_.SetPerspectiveFovDeg(38.0f);
+        camera_.SetPosition(eye);
+        camera_.SetRotation(CameraRotationLookAt(eye, target));
+        return;
+    }
+
     const float orbit = sceneTime_ * 0.34f;
     const float radius = 6.2f;
     const XMFLOAT3 target = {0.0f, 1.05f, 0.0f};
@@ -510,9 +748,168 @@ void BattleResultScene::DrawWorld(float screenWidth, float screenHeight) {
     ctx_->rendering.dxCommon->SetClearColor(0.06f, 0.065f, 0.075f, 1.0f);
 
     model->PrepareSkinning({playerModelId_, enemyModelId_});
+    if (resultKind_ == ResultKind::Clear && celebrationParticlesReady_) {
+        celebrationParticles_.DispatchPendingUpdate();
+    }
     model->PreDraw();
+    DrawResultStage();
     DrawResultModels();
     model->PostDraw();
+    if (resultKind_ == ResultKind::Clear && celebrationParticlesReady_) {
+        celebrationParticles_.Draw(camera_);
+    }
+}
+
+void BattleResultScene::DrawResultStage() {
+    ModelManager *model = ctx_->rendering.model;
+    if (model == nullptr || resultArenaFloorModelId_ == 0) {
+        return;
+    }
+
+    const float pulse = 0.5f + 0.5f * std::sinf(sceneTime_ * 2.2f);
+    constexpr float kPatternSpacing = 3.55f;
+    constexpr float kLaneSpacing = 4.25f;
+
+    Transform floor{};
+    floor.position = {0.0f, -0.04f, 0.0f};
+    floor.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
+    floor.scale = {180.0f, 180.0f, 1.0f};
+    model->Draw(resultArenaFloorModelId_, floor, camera_);
+
+    ModelDrawEffect fieldEffect{};
+    fieldEffect.enabled = true;
+    fieldEffect.additiveBlend = false;
+    fieldEffect.disableCulling = true;
+    fieldEffect.color = {0.085f, 0.075f, 0.060f, 0.115f};
+    fieldEffect.intensity = 0.004f;
+    fieldEffect.fresnelPower = 0.7f;
+    fieldEffect.noiseAmount = 0.0f;
+    fieldEffect.baseDim = 0.0f;
+    fieldEffect.time = sceneTime_;
+    model->SetDrawEffect(fieldEffect);
+
+    std::vector<Transform> fieldTiles;
+    fieldTiles.reserve(520u);
+    for (int z = -14; z <= 14; ++z) {
+        for (int x = -14; x <= 14; ++x) {
+            if ((std::abs(x) + std::abs(z)) % 2 != 0) {
+                continue;
+            }
+            Transform tile{};
+            tile.position = {static_cast<float>(x) * kPatternSpacing, 0.004f,
+                             static_cast<float>(z) * kPatternSpacing};
+            tile.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
+            tile.scale = {2.26f, 2.26f, 1.0f};
+            fieldTiles.push_back(tile);
+        }
+    }
+
+    Transform centerTile{};
+    centerTile.position = {0.0f, 0.012f, 0.0f};
+    centerTile.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
+    centerTile.scale = {4.8f, 4.8f, 1.0f};
+    fieldTiles.push_back(centerTile);
+
+    for (int i = -13; i <= 13; ++i) {
+        Transform laneX{};
+        laneX.position = {0.0f, 0.016f, static_cast<float>(i) * kLaneSpacing};
+        laneX.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
+        laneX.scale = {168.0f, i == 0 ? 0.080f : 0.034f, 1.0f};
+        fieldTiles.push_back(laneX);
+
+        Transform laneZ{};
+        laneZ.position = {static_cast<float>(i) * kLaneSpacing, 0.017f, 0.0f};
+        laneZ.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
+        laneZ.scale = {i == 0 ? 0.080f : 0.034f, 168.0f, 1.0f};
+        fieldTiles.push_back(laneZ);
+    }
+    model->DrawInstanced(resultArenaSpokeModelId_, fieldTiles.data(),
+                         static_cast<uint32_t>(fieldTiles.size()), camera_);
+    model->ClearDrawEffect();
+
+    Transform center{};
+    center.position = {0.0f, 0.006f, 0.0f};
+    center.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
+    center.scale = {1.0f, 1.0f, 1.0f};
+    model->Draw(resultArenaCenterDiskModelId_, center, camera_);
+
+    Transform innerRing{};
+    innerRing.position = {0.0f, 0.032f, 0.0f};
+    innerRing.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
+    innerRing.scale = {1.0f, 1.0f, 1.0f};
+    model->Draw(resultArenaInnerRingModelId_, innerRing, camera_);
+
+    Transform outerRing{};
+    outerRing.position = {0.0f, 0.040f, 0.0f};
+    outerRing.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
+    outerRing.scale = {1.0f, 1.0f, 1.0f};
+    model->Draw(resultArenaOuterRingModelId_, outerRing, camera_);
+
+    std::vector<Transform> columns;
+    columns.reserve(8u);
+    for (int i = 0; i < 8; ++i) {
+        const float a = static_cast<float>(i) / 8.0f * kPi * 2.0f;
+        Transform column{};
+        column.position = {std::cosf(a) * 11.7f, 2.35f,
+                           std::sinf(a) * 11.7f};
+        column.rotation = MakeQuat(0.0f, -a, 0.0f);
+        column.scale = {1.0f, 0.82f, 1.0f};
+        columns.push_back(column);
+    }
+    model->DrawInstanced(resultArenaColumnModelId_, columns.data(),
+                         static_cast<uint32_t>(columns.size()), camera_);
+
+    std::vector<Transform> towers;
+    towers.reserve(36u);
+    for (int side = 0; side < 2; ++side) {
+        const float sign = side == 0 ? -1.0f : 1.0f;
+        for (int i = -8; i <= 8; ++i) {
+            Transform tower{};
+            tower.position = {static_cast<float>(i) * 4.0f, -0.62f,
+                              sign * (38.0f + std::fabs(static_cast<float>(i)) *
+                                                    0.62f)};
+            tower.rotation = MakeQuat(0.0f, 0.0f, 0.0f);
+            tower.scale = {0.58f + static_cast<float>((i + 8) % 3) * 0.16f,
+                           2.6f + static_cast<float>((i * i + side) % 7) *
+                                      0.38f,
+                           0.72f};
+            towers.push_back(tower);
+        }
+    }
+    model->DrawInstanced(resultArenaTowerModelId_, towers.data(),
+                         static_cast<uint32_t>(towers.size()), camera_);
+
+    ModelDrawEffect lineEffect{};
+    lineEffect.enabled = true;
+    lineEffect.additiveBlend = true;
+    lineEffect.disableCulling = true;
+    lineEffect.color = {0.22f, 0.10f, 0.045f, 0.026f};
+    lineEffect.intensity = 0.0015f + 0.0015f * pulse;
+    lineEffect.fresnelPower = 0.75f;
+    lineEffect.noiseAmount = 0.0f;
+    lineEffect.time = sceneTime_;
+    model->SetDrawEffect(lineEffect);
+
+    std::vector<Transform> glowLines;
+    glowLines.reserve(62u);
+    for (int i = -15; i <= 15; ++i) {
+        Transform line{};
+        line.position = {0.0f, 0.034f,
+                         static_cast<float>(i) * kPatternSpacing};
+        line.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
+        line.scale = {160.0f, 0.016f, 1.0f};
+        glowLines.push_back(line);
+
+        Transform cross{};
+        cross.position = {static_cast<float>(i) * kPatternSpacing, 0.035f,
+                          0.0f};
+        cross.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
+        cross.scale = {0.016f, 160.0f, 1.0f};
+        glowLines.push_back(cross);
+    }
+    model->DrawInstanced(resultArenaLightModelId_, glowLines.data(),
+                         static_cast<uint32_t>(glowLines.size()), camera_);
+    model->ClearDrawEffect();
 }
 
 void BattleResultScene::DrawResultModels() {
@@ -533,35 +930,29 @@ void BattleResultScene::DrawResultModels() {
         return;
     }
 
-    Transform sword{};
-    sword.position = {-0.95f, 0.42f, 0.0f};
-    sword.rotation = MakeQuat(0.0f, 0.0f, 0.0f);
-    sword.scale = {3.0f, 3.0f, 3.0f};
-    model->Draw(swordModelId_, sword, camera_);
-
     Transform enemy{};
-    enemy.position = {0.72f, 0.0f, 0.0f};
-    enemy.rotation = MakeQuat(0.0f, -0.22f, 0.0f);
-    enemy.scale = {1.0f, 1.0f, 1.0f};
+    enemy.position = {0.0f, 0.0f, 0.0f};
+    enemy.rotation = MakeQuat(0.0f, -0.06f, 0.0f);
+    enemy.scale = {1.23f, 1.23f, 1.23f};
     model->Draw(enemyModelId_, enemy, camera_);
 }
 
 void BattleResultScene::DrawResultOverlay(float screenWidth,
                                           float screenHeight) {
-    const float pulse = 0.5f + 0.5f * std::sin(sceneTime_ * 2.0f);
-    const XMFLOAT4 wash =
-        resultKind_ == ResultKind::Clear
-            ? Color(0.01f, 0.025f + pulse * 0.010f, 0.030f, 0.54f)
-            : Color(0.055f + pulse * 0.010f, 0.012f, 0.014f, 0.62f);
-    DrawRect(0.0f, 0.0f, screenWidth, screenHeight, wash);
-    DrawRect(0.0f, 0.0f, screenWidth, screenHeight * 0.18f,
-             Color(0.0f, 0.0f, 0.0f, 0.22f));
-    DrawRect(0.0f, screenHeight * 0.82f, screenWidth, screenHeight * 0.18f,
-             Color(0.0f, 0.0f, 0.0f, 0.42f));
-
     if (resultKind_ == ResultKind::Clear) {
+        const float pulse = 0.5f + 0.5f * std::sin(sceneTime_ * 2.0f);
+        DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
+                 Color(0.006f, 0.018f + pulse * 0.008f, 0.022f, 0.34f));
+        DrawRect(0.0f, 0.0f, screenWidth, screenHeight * 0.18f,
+                 Color(0.0f, 0.0f, 0.0f, 0.16f));
+        DrawRect(0.0f, screenHeight * 0.82f, screenWidth,
+                 screenHeight * 0.18f, Color(0.0f, 0.0f, 0.0f, 0.34f));
         DrawClear(screenWidth, screenHeight);
     } else {
+        DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
+                 Color(0.010f, 0.012f, 0.016f, 1.0f));
+        DrawRect(0.0f, screenHeight * 0.72f, screenWidth,
+                 screenHeight * 0.28f, Color(0.0f, 0.0f, 0.0f, 0.22f));
         DrawGameOver(screenWidth, screenHeight);
         DrawHandInputStatus(screenWidth, screenHeight);
     }
@@ -587,73 +978,110 @@ void BattleResultScene::DrawClear(float screenWidth, float screenHeight) {
     DrawImage(missionCompleteLabel_, (screenWidth - titleW) * 0.5f, titleY,
               titleScale, 0.98f);
 
-    const float lineAlpha = 0.42f + 0.18f * std::sin(sceneTime_ * 2.6f);
-    DrawRect(screenWidth * 0.16f, screenHeight * 0.148f, screenWidth * 0.68f,
-             2.0f, Color(0.95f, 0.72f, 0.28f, lineAlpha));
-    DrawRect(screenWidth * 0.22f, screenHeight * 0.158f, screenWidth * 0.56f,
-             1.0f, Color(0.95f, 0.90f, 0.68f, lineAlpha * 0.52f));
+    switch (clearRevealPhase_) {
+    case ClearRevealPhase::Time:
+        DrawClearTimeScreen(screenWidth, screenHeight);
+        break;
+    case ClearRevealPhase::Score:
+        DrawScoreScreen(screenWidth, screenHeight);
+        break;
+    case ClearRevealPhase::Ranking:
+        DrawRankingScreen(screenWidth, screenHeight);
+        DrawClearActionButtons(screenWidth, screenHeight);
+        break;
+    }
+}
 
-    const float panelH = std::clamp(screenHeight * 0.32f, 220.0f, 286.0f);
-    const float scorePanelW =
-        std::clamp(screenWidth * 0.39f, 460.0f, 610.0f);
-    const float rankingPanelW =
-        std::clamp(screenWidth * 0.32f, 360.0f, 500.0f);
-    const float panelGap = std::clamp(screenWidth * 0.032f, 28.0f, 46.0f);
-    const float totalW = scorePanelW + panelGap + rankingPanelW;
-    const float panelX = (screenWidth - totalW) * 0.5f;
-    const float panelY = screenHeight * 0.360f;
-    DrawRect(panelX + 10.0f, panelY + 12.0f, scorePanelW, panelH,
+void BattleResultScene::DrawClearTimeScreen(float screenWidth,
+                                            float screenHeight) {
+    const float panelW = std::clamp(screenWidth * 0.68f, 760.0f, 1040.0f);
+    const float panelH = std::clamp(screenHeight * 0.30f, 260.0f, 340.0f);
+    const float panelX = (screenWidth - panelW) * 0.5f;
+    const float panelY = screenHeight * 0.345f;
+
+    DrawRect(panelX + 14.0f, panelY + 16.0f, panelW, panelH,
              Color(0.0f, 0.0f, 0.0f, 0.30f));
-    DrawRect(panelX, panelY, scorePanelW, panelH,
-             Color(0.018f, 0.022f, 0.026f, 0.76f));
-    DrawFrame(panelX, panelY, scorePanelW, panelH, 2.0f,
-              Color(0.95f, 0.72f, 0.28f, 0.70f));
+    DrawRect(panelX, panelY, panelW, panelH,
+             Color(0.018f, 0.022f, 0.026f, 0.78f));
+    DrawFrame(panelX, panelY, panelW, panelH, 2.0f,
+              Color(0.95f, 0.72f, 0.28f, 0.72f));
 
     const float labelScale =
-        std::clamp((scorePanelW * 0.30f) /
-                       (std::max)(clearTimeLabel_.width, 1.0f),
-                   0.42f, 0.72f);
+        std::clamp((panelW * 0.24f) / (std::max)(clearTimeLabel_.width, 1.0f),
+                   0.52f, 0.86f);
     const float labelW = clearTimeLabel_.width * labelScale;
-    DrawImage(clearTimeLabel_, panelX + (scorePanelW - labelW) * 0.5f,
-              panelY + panelH * 0.11f, labelScale, 0.86f);
+    DrawImage(clearTimeLabel_, panelX + (panelW - labelW) * 0.5f,
+              panelY + panelH * 0.16f, labelScale, 0.88f);
+
+    const std::string time = FormatAnimatedTime();
+    const float timeScale =
+        std::clamp((panelW * 0.62f) / MeasureTextLine(time, 1.0f), 1.24f,
+                   1.92f);
+    DrawTextLine(time, panelX + panelW * 0.5f, panelY + panelH * 0.46f,
+                 timeScale, 1.0f);
+}
+
+void BattleResultScene::DrawScoreScreen(float screenWidth,
+                                        float screenHeight) {
+    const float panelW = std::clamp(screenWidth * 0.68f, 760.0f, 1040.0f);
+    const float panelH = std::clamp(screenHeight * 0.34f, 292.0f, 380.0f);
+    const float panelX = (screenWidth - panelW) * 0.5f;
+    const float panelY = screenHeight * 0.325f;
+
+    DrawRect(panelX + 14.0f, panelY + 16.0f, panelW, panelH,
+             Color(0.0f, 0.0f, 0.0f, 0.30f));
+    DrawRect(panelX, panelY, panelW, panelH,
+             Color(0.018f, 0.022f, 0.026f, 0.80f));
+    DrawFrame(panelX, panelY, panelW, panelH, 2.0f,
+              Color(0.95f, 0.72f, 0.28f, 0.72f));
+
+    const Image &label =
+        scoreTitleLabel_.textureId != 0 ? scoreTitleLabel_ : currentRecordLabel_;
+    const float labelScale =
+        std::clamp((panelW * 0.20f) / (std::max)(label.width, 1.0f), 0.50f,
+                   0.88f);
+    const float labelW = label.width * labelScale;
+    DrawImage(label, panelX + (panelW - labelW) * 0.5f,
+              panelY + panelH * 0.12f, labelScale, 0.90f);
+
+    const std::string score = FormatAnimatedScore();
+    const float scoreScale =
+        std::clamp((panelW * 0.46f) / MeasureTextLine(score, 1.0f), 1.28f,
+                   1.92f);
+    DrawTextLine(score, panelX + panelW * 0.5f, panelY + panelH * 0.42f,
+                 scoreScale, 1.0f);
 
     const std::string time = FormatTime(clearTime_);
     const float timeScale =
-        std::clamp((scorePanelW * 0.68f) / MeasureTextLine(time, 1.0f), 1.02f,
-                   1.72f);
-    DrawTextLine(time, panelX + scorePanelW * 0.5f, panelY + panelH * 0.31f,
-                 timeScale, 1.0f);
+        std::clamp((panelW * 0.22f) / MeasureTextLine(time, 1.0f), 0.38f,
+                   0.58f);
+    DrawTextLine(time, panelX + panelW * 0.5f, panelY + panelH * 0.78f,
+                 timeScale, 0.74f);
+}
 
-    const float scoreLabelScale =
-        std::clamp((scorePanelW * 0.36f) /
-                       (std::max)(currentRecordLabel_.width, 1.0f),
-                   0.46f, 0.76f);
-    const float scoreLabelW = currentRecordLabel_.width * scoreLabelScale;
-    DrawImage(currentRecordLabel_,
-              panelX + (scorePanelW - scoreLabelW) * 0.5f,
-              panelY + panelH * 0.58f, scoreLabelScale, 0.86f);
-
-    const std::string score = FormatScore(currentScore_);
-    const float scoreScale =
-        std::clamp((scorePanelW * 0.58f) / MeasureTextLine(score, 1.0f),
-                   1.18f, 1.86f);
-    DrawTextLine(score, panelX + scorePanelW * 0.5f,
-                 panelY + panelH * 0.735f, scoreScale, 1.0f);
-
-    DrawRanking(panelX + scorePanelW + panelGap, panelY, rankingPanelW,
-                panelH);
+void BattleResultScene::DrawRankingScreen(float screenWidth,
+                                          float screenHeight) {
+    const float panelW = std::clamp(screenWidth * 0.74f, 880.0f, 1180.0f);
+    const float panelH = std::clamp(screenHeight * 0.42f, 340.0f, 460.0f);
+    const float panelX = (screenWidth - panelW) * 0.5f;
+    const float panelY = screenHeight * 0.305f;
+    DrawRanking(panelX, panelY, panelW, panelH, true);
 }
 
 void BattleResultScene::DrawGameOver(float screenWidth, float screenHeight) {
     const float titleScale =
-        std::clamp(screenWidth * 0.34f / gameOverTitle_.width, 0.62f, 1.05f);
-    DrawImage(gameOverTitle_, screenWidth * 0.048f, screenHeight * 0.032f,
-              titleScale);
-    DrawImage(noClearTimeLabel_, screenWidth * 0.070f, screenHeight * 0.872f,
-              0.70f);
+        std::clamp(screenWidth * 0.52f /
+                       (std::max)(missionFailedLabel_.width, 1.0f),
+                   0.46f, 0.82f);
+    const float titleW = missionFailedLabel_.width * titleScale;
+    const float titleY =
+        screenHeight * 0.38f - missionFailedLabel_.height * titleScale * 0.5f;
+    DrawImage(missionFailedLabel_, (screenWidth - titleW) * 0.5f, titleY,
+              titleScale, 0.96f);
 }
 
-void BattleResultScene::DrawRanking(float x, float y, float w, float h) {
+void BattleResultScene::DrawRanking(float x, float y, float w, float h,
+                                    bool fullDetail) {
     DrawRect(x + 10.0f, y + 12.0f, w, h, Color(0.0f, 0.0f, 0.0f, 0.30f));
     DrawRect(x, y, w, h, Color(0.016f, 0.019f, 0.023f, 0.78f));
     DrawFrame(x, y, w, h, 2.0f, Color(0.95f, 0.72f, 0.28f, 0.62f));
@@ -665,7 +1093,14 @@ void BattleResultScene::DrawRanking(float x, float y, float w, float h) {
     DrawImage(rankingTitleLabel_, x + (w - titleW) * 0.5f, y + h * 0.10f,
               titleScale, 0.92f);
 
-    const float rowScale = std::clamp(w * 0.30f / 180.0f, 0.56f, 0.82f);
+    const float rankX = x + w * 0.08f;
+    const float scoreRightX = x + w * (fullDetail ? 0.36f : 0.54f);
+    const float timeRightX = x + w * (fullDetail ? 0.66f : 0.92f);
+    const float difficultyRightX = x + w * 0.90f;
+    const float rankColumnW = w * 0.10f;
+    const float scoreColumnW = w * (fullDetail ? 0.20f : 0.26f);
+    const float timeColumnW = w * (fullDetail ? 0.25f : 0.33f);
+    const float difficultyColumnW = w * 0.12f;
     const float rowStartY = y + h * 0.33f;
     const float rowGap = h * 0.115f;
     const size_t rows = (std::min)(rankingEntries_.size(), kRankingDrawCount);
@@ -681,15 +1116,50 @@ void BattleResultScene::DrawRanking(float x, float y, float w, float h) {
                       Color(0.95f, 0.72f, 0.28f, 0.36f));
         }
 
-        std::ostringstream row;
-        row << (i + 1) << ": " << FormatScore(entry.score);
-        DrawTextLineLeft(row.str(), x + w * 0.16f, rowY, rowScale,
-                         highlight ? 1.0f : 0.78f);
+        std::ostringstream rank;
+        rank << (i + 1) << ":";
+        const std::string score = FormatScore(entry.score);
+        const std::string time = FormatTime(entry.clearTime);
+        const std::string difficulty = FormatDifficulty(entry.difficulty);
+        const float alpha = highlight ? 1.0f : 0.86f;
+        const float rankScale =
+            std::clamp(rankColumnW / MeasureTextLine(rank.str(), 1.0f),
+                       fullDetail ? 0.42f : 0.34f,
+                       fullDetail ? 0.58f : 0.44f);
+        const float scoreScale =
+            std::clamp(scoreColumnW / MeasureTextLine(score, 1.0f),
+                       fullDetail ? 0.42f : 0.30f,
+                       fullDetail ? 0.58f : 0.44f);
+        const float timeScale =
+            std::clamp(timeColumnW / MeasureTextLine(time, 1.0f),
+                       fullDetail ? 0.42f : 0.30f,
+                       fullDetail ? 0.58f : 0.44f);
+        const float difficultyScale =
+            std::clamp(difficultyColumnW / MeasureTextLine(difficulty, 1.0f),
+                       0.42f, 0.58f);
+
+        DrawTextLineLeft(rank.str(), rankX, rowY, rankScale, alpha);
+        DrawTextLineLeft(score,
+                         scoreRightX - MeasureTextLine(score, scoreScale),
+                         rowY, scoreScale, alpha);
+        DrawTextLineLeft(time, timeRightX - MeasureTextLine(time, timeScale),
+                         rowY, timeScale, highlight ? 1.0f : 0.90f);
+        if (fullDetail) {
+            DrawTextLineLeft(difficulty,
+                             difficultyRightX -
+                                 MeasureTextLine(difficulty, difficultyScale),
+                             rowY, difficultyScale,
+                             highlight ? 1.0f : 0.90f);
+        }
     }
 }
 
 void BattleResultScene::DrawControlsHint(float screenWidth,
                                          float screenHeight) {
+    if (resultKind_ == ResultKind::Clear) {
+        return;
+    }
+
     const Image *hint = resultKind_ == ResultKind::Clear
                             ? &controlsKbmClearImage_
                             : &controlsKbmGameOverImage_;
@@ -699,23 +1169,54 @@ void BattleResultScene::DrawControlsHint(float screenWidth,
     }
 
     constexpr float kControlsPadding = 32.0f;
-    float leftTransparentPixels = 0.0f;
-    float bottomTransparentPixels = 0.0f;
-    if (hint == &controlsKbmClearImage_ || hint == &controlsKbmGameOverImage_) {
-        leftTransparentPixels = 5.0f;
-        bottomTransparentPixels = 18.0f;
-    } else if (hint == &controlsHandImage_) {
-        leftTransparentPixels = 18.0f;
-        bottomTransparentPixels = 29.0f;
-    }
+    const float bottomTransparentPixels =
+        hint == &controlsHandImage_ ? 26.0f : 18.0f;
     const float controlsScale =
         std::min(0.80f,
                  (screenWidth * 0.31f) / (std::max)(hint->width, 1.0f));
-    DrawImage(*hint, kControlsPadding - leftTransparentPixels * controlsScale,
+    DrawImage(*hint, kControlsPadding,
               screenHeight -
                   (hint->height - bottomTransparentPixels) * controlsScale -
                   kControlsPadding,
               controlsScale, 0.70f);
+}
+
+void BattleResultScene::DrawClearActionButtons(float screenWidth,
+                                               float screenHeight) {
+    const float buttonW = std::clamp(screenWidth * 0.14f, 180.0f, 252.0f);
+    const float buttonH = std::clamp(screenHeight * 0.072f, 62.0f, 84.0f);
+    const float buttonGap = std::clamp(screenWidth * 0.028f, 34.0f, 56.0f);
+    const float totalW = buttonW * 2.0f + buttonGap;
+    const float firstX = (screenWidth - totalW) * 0.5f;
+    const float y = screenHeight * 0.828f;
+    const Image *labels[2] = {&retryButtonLabel_, &titleButtonLabel_};
+
+    for (int i = 0; i < 2; ++i) {
+        const float x = firstX + static_cast<float>(i) * (buttonW + buttonGap);
+        const bool selected = i == clearActionButtonIndex_;
+        const XMFLOAT4 body =
+            selected ? Color(0.18f, 0.13f, 0.055f, 0.98f)
+                     : Color(0.040f, 0.046f, 0.058f, 0.90f);
+        const XMFLOAT4 line =
+            selected ? Color(1.0f, 0.78f, 0.34f, 0.98f)
+                     : Color(0.62f, 0.66f, 0.72f, 0.40f);
+
+        DrawRect(x + 6.0f, y + 8.0f, buttonW, buttonH,
+                 Color(0.0f, 0.0f, 0.0f, selected ? 0.32f : 0.22f));
+        DrawRect(x, y, buttonW, buttonH, body);
+        DrawFrame(x, y, buttonW, buttonH, selected ? 3.0f : 2.0f, line);
+
+        const Image &label = *labels[i];
+        const float labelScale =
+            (std::min)({1.0f,
+                        (buttonH * 0.60f) / (std::max)(label.height, 1.0f),
+                        (buttonW * 0.72f) / (std::max)(label.width, 1.0f)});
+        const float labelW = label.width * labelScale;
+        const float labelH = label.height * labelScale;
+        DrawImage(label, x + (buttonW - labelW) * 0.5f,
+                  y + (buttonH - labelH) * 0.5f, labelScale,
+                  selected ? 1.0f : 0.80f);
+    }
 }
 
 void BattleResultScene::DrawHandInputStatus(float screenWidth,
@@ -852,7 +1353,7 @@ void BattleResultScene::DrawTextLineLeft(const std::string &text, float x,
                                          float y, float scale, float alpha) {
     for (char c : text) {
         if (c == ' ') {
-            x += 18.0f * scale;
+            x += GetCharAdvance(c) * scale;
             continue;
         }
         const Image *image = FindCharImage(c);
@@ -860,8 +1361,30 @@ void BattleResultScene::DrawTextLineLeft(const std::string &text, float x,
             continue;
         }
         DrawImage(*image, x, y, scale, alpha);
-        x += image->width * scale - 4.0f * scale;
+        x += GetCharAdvance(c) * scale;
     }
+}
+
+float BattleResultScene::GetCharAdvance(char c) const {
+    if (c >= '0' && c <= '9') {
+        return 44.0f;
+    }
+    if (c == ':') {
+        return 28.0f;
+    }
+    if (c == '.') {
+        return 22.0f;
+    }
+    if (c == 's' || c == 'S') {
+        return 36.0f;
+    }
+    if (c == '-') {
+        return 34.0f;
+    }
+    if (c == ' ') {
+        return 18.0f;
+    }
+    return 40.0f;
 }
 
 float BattleResultScene::MeasureTextLine(const std::string &text,
@@ -869,12 +1392,12 @@ float BattleResultScene::MeasureTextLine(const std::string &text,
     float width = 0.0f;
     for (char c : text) {
         if (c == ' ') {
-            width += 18.0f * scale;
+            width += GetCharAdvance(c) * scale;
             continue;
         }
         const Image *image = FindCharImage(c);
         if (image != nullptr) {
-            width += image->width * scale - 4.0f * scale;
+            width += GetCharAdvance(c) * scale;
         }
     }
     return (std::max)(0.0f, width);
@@ -911,6 +1434,66 @@ std::string BattleResultScene::FormatTime(float seconds) const {
     return oss.str();
 }
 
+std::string BattleResultScene::FormatAnimatedTime() const {
+    std::string text = FormatTime(clearTime_);
+    int digitCount = 0;
+    for (char c : text) {
+        if (c >= '0' && c <= '9') {
+            ++digitCount;
+        }
+    }
+
+    const float progress =
+        std::clamp(clearRevealTimer_ / kTimeRevealDuration, 0.0f, 1.0f);
+    const int lockedDigits =
+        (std::min)(digitCount, static_cast<int>(progress * digitCount + 0.001f));
+    const uint32_t frame = static_cast<uint32_t>(sceneTime_ * 42.0f);
+
+    int digitsFromRight = 0;
+    for (int i = static_cast<int>(text.size()) - 1; i >= 0; --i) {
+        char &c = text[static_cast<size_t>(i)];
+        if (c < '0' || c > '9') {
+            continue;
+        }
+        const bool locked = digitsFromRight < lockedDigits;
+        if (!locked) {
+            c = static_cast<char>('0' +
+                                  (Hash2D(static_cast<uint32_t>(i), frame,
+                                          0xC1EAu) %
+                                   10u));
+        }
+        ++digitsFromRight;
+    }
+    return text;
+}
+
 std::string BattleResultScene::FormatScore(int score) const {
     return std::to_string((std::max)(0, score));
+}
+
+std::string BattleResultScene::FormatAnimatedScore() const {
+    std::string text = FormatScore(currentScore_);
+    const int digitCount = static_cast<int>(text.size());
+    const float progress =
+        std::clamp(clearRevealTimer_ / kScoreRevealDuration, 0.0f, 1.0f);
+    const int lockedDigits =
+        (std::min)(digitCount, static_cast<int>(progress * digitCount + 0.001f));
+    const uint32_t frame = static_cast<uint32_t>(sceneTime_ * 34.0f);
+
+    for (int i = digitCount - 1; i >= 0; --i) {
+        const int digitsFromRight = digitCount - 1 - i;
+        if (digitsFromRight >= lockedDigits) {
+            text[static_cast<size_t>(i)] = static_cast<char>(
+                '0' + (Hash2D(static_cast<uint32_t>(i), frame, 0x5C0A3u) %
+                       10u));
+        }
+    }
+    return text;
+}
+
+std::string BattleResultScene::FormatDifficulty(float difficulty) const {
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(1)
+        << std::clamp(difficulty, 0.0f, 9.0f);
+    return oss.str();
 }

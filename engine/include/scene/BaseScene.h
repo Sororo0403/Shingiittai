@@ -35,6 +35,16 @@ class BaseScene {
     virtual void Draw() = 0;
 
     /// <summary>
+    /// 背景や通常3Dの手前に重ねる3D描画が必要かを返す。
+    /// </summary>
+    virtual bool UsesForeground3DPass() const { return false; }
+
+    /// <summary>
+    /// 背景深度を無視して手前に重ねる3D描画を行う。
+    /// </summary>
+    virtual void DrawForeground3D() {}
+
+    /// <summary>
     /// 透明描画だけをSceneColorPassの後段で描画する。
     /// </summary>
     virtual void DrawTransparent() {}

@@ -7,11 +7,24 @@
 #include <cmath>
 #include <cstring>
 #include <string>
+#include <vector>
 
 using namespace DirectX;
 
 namespace {
 constexpr char kRawMagic[] = "HAND_RAW ";
+constexpr float kSingleHandLeftThreshold = 0.45f;
+constexpr float kSingleHandRightThreshold = 0.55f;
+constexpr float kSlowPalmSmoothingAlpha = 0.24f;
+constexpr float kFastPalmSmoothingAlpha = 0.72f;
+constexpr float kFastPalmSpeed = 2.0f;
+
+struct HandSample {
+    DirectX::XMFLOAT2 palm{0.5f, 0.5f};
+    bool bodyCorrected = false;
+    std::string label{};
+    float score = 0.0f;
+};
 
 SOCKET ToSocket(uintptr_t value) {
     return static_cast<SOCKET>(value);
@@ -28,6 +41,17 @@ bool ReadPoint01(const nlohmann::json &object, const char *key,
     out.y = std::clamp((*it)[1].get<float>(), 0.0f, 1.0f);
     return true;
 }
+
+float Length(const DirectX::XMFLOAT2 &value) {
+    return std::sqrt(value.x * value.x + value.y * value.y);
+}
+
+DirectX::XMFLOAT2 LerpPoint(const DirectX::XMFLOAT2 &from,
+                            const DirectX::XMFLOAT2 &to, float alpha) {
+    return {from.x + (to.x - from.x) * alpha,
+            from.y + (to.y - from.y) * alpha};
+}
+
 }
 
 SwordUdpController::~SwordUdpController() {
@@ -68,6 +92,15 @@ void SwordUdpController::SetCalibration(
     previousCalibratedPalm_ = {DirectX::XMFLOAT2{0.5f, 0.5f},
                                DirectX::XMFLOAT2{0.5f, 0.5f}};
     hasPreviousCalibratedPalm_ = {false, false};
+    filteredCalibratedPalm_ = {DirectX::XMFLOAT2{0.5f, 0.5f},
+                               DirectX::XMFLOAT2{0.5f, 0.5f}};
+    hasFilteredCalibratedPalm_ = {false, false};
+    hasPreviousPacketPalm_ = {false, false};
+    packetDeltaPalm_ = {DirectX::XMFLOAT2{0.0f, 0.0f},
+                        DirectX::XMFLOAT2{0.0f, 0.0f}};
+    packetMotionSpeed_ = {0.0f, 0.0f};
+    lastAppliedPacketSequence_ = 0;
+    packetChangedThisUpdate_ = false;
     motionSpeed_ = {0.0f, 0.0f};
 }
 
@@ -78,13 +111,21 @@ void SwordUdpController::Update(float dt) {
 
     ReceivePackets();
     rawInput_.staleTimer += dt;
+    packetChangedThisUpdate_ =
+        rawInput_.hasPacket && rawInput_.sequence != lastAppliedPacketSequence_;
     if (HasFreshRawInput()) {
         ApplyRawInput(dt);
+        lastAppliedPacketSequence_ = rawInput_.sequence;
     } else {
         rawInput_.active = {false, false};
         swordStates_ = {};
         hasPreviousCalibratedPalm_ = {false, false};
+        hasFilteredCalibratedPalm_ = {false, false};
+        packetChangedThisUpdate_ = false;
         motionSpeed_ = {0.0f, 0.0f};
+        packetDeltaPalm_ = {DirectX::XMFLOAT2{0.0f, 0.0f},
+                            DirectX::XMFLOAT2{0.0f, 0.0f}};
+        packetMotionSpeed_ = {0.0f, 0.0f};
     }
 }
 
@@ -109,6 +150,22 @@ SwordUdpController::GetDebugHandState(size_t handIndex) const {
     debug.orientation = swordStates_[handIndex].orientation;
     debug.isSlashMode = debug.active && swordStates_[handIndex].isSlashMode;
     debug.motionSpeed = debug.active ? motionSpeed_[handIndex] : 0.0f;
+    debug.packetFrame = rawInput_.frame;
+    debug.packetTimestampMs = rawInput_.timestampMs;
+    debug.packetSequence = rawInput_.sequence;
+    debug.handCount = rawInput_.handCount;
+    debug.bodyTracked = rawInput_.bodyTracked;
+    debug.bodyCorrected = rawInput_.bodyCorrected[handIndex];
+    debug.packetChanged = packetChangedThisUpdate_;
+    debug.packetDeltaMs = rawInput_.packetDeltaMs;
+    debug.packetDeltaPalm = packetDeltaPalm_[handIndex];
+    debug.packetMotionSpeed = debug.active ? packetMotionSpeed_[handIndex] : 0.0f;
+    debug.nearEdge =
+        debug.active &&
+        (debug.rawPalm.x < 0.05f || debug.rawPalm.x > 0.95f ||
+         debug.rawPalm.y < 0.05f || debug.rawPalm.y > 0.95f);
+    debug.sourceLabel = rawInput_.sourceLabel[handIndex];
+    debug.sourceScore = rawInput_.sourceScore[handIndex];
     return debug;
 }
 
@@ -188,17 +245,70 @@ void SwordUdpController::ReceivePackets() {
                 continue;
             }
 
-            rawInput_.active = {false, false};
+            std::vector<HandSample> hands;
+            hands.reserve(2);
             for (size_t i = 0; i < handsIt->size() && i < rawInput_.palm.size();
                  ++i) {
                 DirectX::XMFLOAT2 palm{};
-                if (ReadPoint01((*handsIt)[i], "mirroredPalm01", palm) ||
+                const bool hasBodyCorrected =
+                    ReadPoint01((*handsIt)[i], "bodyCorrectedMirroredGrip01",
+                                palm) ||
+                    ReadPoint01((*handsIt)[i], "bodyCorrectedMirroredPalm01",
+                                palm);
+                if (hasBodyCorrected ||
+                    ReadPoint01((*handsIt)[i], "mirroredGrip01", palm) ||
+                    ReadPoint01((*handsIt)[i], "mirroredPalm01", palm) ||
+                    ReadPoint01((*handsIt)[i], "grip01", palm) ||
                     ReadPoint01((*handsIt)[i], "palm01", palm)) {
-                    rawInput_.palm[i] = palm;
-                    rawInput_.active[i] = true;
+                    HandSample sample{};
+                    sample.palm = palm;
+                    sample.bodyCorrected = hasBodyCorrected;
+                    sample.label = (*handsIt)[i].value("label", "");
+                    sample.score = (*handsIt)[i].value("score", 0.0f);
+                    hands.push_back(sample);
                 }
             }
+
+            rawInput_.active = {false, false};
+            rawInput_.bodyCorrected = {false, false};
+            rawInput_.sourceLabel = {"", ""};
+            rawInput_.sourceScore = {0.0f, 0.0f};
+            rawInput_.handCount = static_cast<uint32_t>(hands.size());
+            const auto bodyIt = packet.find("body");
+            rawInput_.bodyTracked =
+                bodyIt != packet.end() && !bodyIt->is_null();
+            rawInput_.frame = packet.value("frame", 0ull);
+            const uint64_t previousTimestampMs = rawInput_.timestampMs;
+            rawInput_.timestampMs = packet.value("timestampMs", 0ull);
+            rawInput_.packetDeltaMs =
+                previousTimestampMs > 0 &&
+                        rawInput_.timestampMs >= previousTimestampMs
+                    ? rawInput_.timestampMs - previousTimestampMs
+                    : 0;
+            if (hands.size() >= 2) {
+                std::sort(hands.begin(), hands.end(),
+                          [](const HandSample &a, const HandSample &b) {
+                              return a.palm.x < b.palm.x;
+                          });
+                rawInput_.palm[0] = hands[0].palm;
+                rawInput_.palm[1] = hands[1].palm;
+                rawInput_.bodyCorrected[0] = hands[0].bodyCorrected;
+                rawInput_.bodyCorrected[1] = hands[1].bodyCorrected;
+                rawInput_.sourceLabel[0] = hands[0].label;
+                rawInput_.sourceLabel[1] = hands[1].label;
+                rawInput_.sourceScore[0] = hands[0].score;
+                rawInput_.sourceScore[1] = hands[1].score;
+                rawInput_.active = {true, true};
+            } else if (hands.size() == 1) {
+                const size_t slot = ChooseSingleHandSlot(hands[0].palm);
+                rawInput_.palm[slot] = hands[0].palm;
+                rawInput_.active[slot] = true;
+                rawInput_.bodyCorrected[slot] = hands[0].bodyCorrected;
+                rawInput_.sourceLabel[slot] = hands[0].label;
+                rawInput_.sourceScore[slot] = hands[0].score;
+            }
             rawInput_.hasPacket = true;
+            ++rawInput_.sequence;
             rawInput_.staleTimer = 0.0f;
         } catch (...) {
             continue;
@@ -212,7 +322,11 @@ void SwordUdpController::ApplyRawInput(float dt) {
         if (!rawInput_.active[i]) {
             state = {};
             hasPreviousCalibratedPalm_[i] = false;
+            hasFilteredCalibratedPalm_[i] = false;
+            hasPreviousPacketPalm_[i] = false;
             motionSpeed_[i] = 0.0f;
+            packetDeltaPalm_[i] = {0.0f, 0.0f};
+            packetMotionSpeed_[i] = 0.0f;
             continue;
         }
 
@@ -223,6 +337,22 @@ void SwordUdpController::ApplyRawInput(float dt) {
         DirectX::XMFLOAT2 corrected{
             std::clamp(palm.x - neutral.x + 0.5f, 0.0f, 1.0f),
             std::clamp(palm.y - neutral.y + 0.5f, 0.0f, 1.0f)};
+        if (hasFilteredCalibratedPalm_[i]) {
+            const DirectX::XMFLOAT2 delta{
+                corrected.x - filteredCalibratedPalm_[i].x,
+                corrected.y - filteredCalibratedPalm_[i].y};
+            const float speed = dt > 0.0001f ? Length(delta) / dt : 0.0f;
+            const float speedRatio =
+                std::clamp(speed / kFastPalmSpeed, 0.0f, 1.0f);
+            const float alpha =
+                kSlowPalmSmoothingAlpha +
+                (kFastPalmSmoothingAlpha - kSlowPalmSmoothingAlpha) *
+                    speedRatio;
+            corrected = LerpPoint(filteredCalibratedPalm_[i], corrected, alpha);
+        } else {
+            hasFilteredCalibratedPalm_[i] = true;
+        }
+        filteredCalibratedPalm_[i] = corrected;
         calibratedPalm_[i] = corrected;
 
         if (hasPreviousCalibratedPalm_[i] && dt > 0.0001f) {
@@ -234,6 +364,27 @@ void SwordUdpController::ApplyRawInput(float dt) {
         }
         previousCalibratedPalm_[i] = corrected;
         hasPreviousCalibratedPalm_[i] = true;
+
+        if (packetChangedThisUpdate_) {
+            if (hasPreviousPacketPalm_[i]) {
+                const float dx = corrected.x - previousPacketPalm_[i].x;
+                const float dy = corrected.y - previousPacketPalm_[i].y;
+                packetDeltaPalm_[i] = {dx, dy};
+                const float packetDt =
+                    static_cast<float>(rawInput_.packetDeltaMs) * 0.001f;
+                packetMotionSpeed_[i] =
+                    packetDt > 0.0001f ? std::sqrt(dx * dx + dy * dy) / packetDt
+                                        : 0.0f;
+            } else {
+                packetDeltaPalm_[i] = {0.0f, 0.0f};
+                packetMotionSpeed_[i] = 0.0f;
+            }
+            previousPacketPalm_[i] = corrected;
+            hasPreviousPacketPalm_[i] = true;
+        } else {
+            packetDeltaPalm_[i] = {0.0f, 0.0f};
+            packetMotionSpeed_[i] = 0.0f;
+        }
 
         const float dirX =
             std::clamp((corrected.x - 0.5f) * 2.0f, -1.0f, 1.0f);
@@ -254,6 +405,24 @@ void SwordUdpController::ApplyRawInput(float dt) {
             &state.orientation,
             XMQuaternionNormalize(XMQuaternionMultiply(qPitch, qYaw)));
     }
+}
+
+size_t SwordUdpController::ChooseSingleHandSlot(
+    const DirectX::XMFLOAT2 &palm) const {
+    if (palm.x < kSingleHandLeftThreshold) {
+        return 0u;
+    }
+    if (palm.x > kSingleHandRightThreshold) {
+        return 1u;
+    }
+
+    if (rawInput_.active[0] != rawInput_.active[1]) {
+        return rawInput_.active[0] ? 0u : 1u;
+    }
+    if (hasPreviousCalibratedPalm_[0] != hasPreviousCalibratedPalm_[1]) {
+        return hasPreviousCalibratedPalm_[0] ? 0u : 1u;
+    }
+    return palm.x < 0.5f ? 0u : 1u;
 }
 
 void SwordUdpController::CloseSocket() {

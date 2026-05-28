@@ -2,12 +2,15 @@
 #include "BaseScene.h"
 #include "Camera.h"
 #include "CameraPreviewReceiver.h"
+#include "Player.h"
 #include "SwordInputCalibration.h"
 #include "SwordPose.h"
 #include "SwordUdpController.h"
 #include "Transform.h"
 #include <DirectXMath.h>
+#include <array>
 #include <cstdint>
+#include <fstream>
 #include <string>
 
 class CameraAccuracyDebugScene : public BaseScene {
@@ -24,6 +27,9 @@ class CameraAccuracyDebugScene : public BaseScene {
     void UpdateCamera();
     void CaptureNeutral();
     void ResetNeutral();
+    void UpdateGamePreview(float deltaTime);
+    void OpenHandDebugLog();
+    void WriteHandDebugLog(float deltaTime);
     SwordPose MakePoseFromPalm(const DirectX::XMFLOAT2 &palm) const;
     Transform BuildSwordTransform(const SwordPose &pose,
                                   const DirectX::XMFLOAT3 &anchor,
@@ -46,7 +52,15 @@ class CameraAccuracyDebugScene : public BaseScene {
     SwordUdpController controller_{};
     CameraPreviewReceiver previewReceiver_{};
     Camera camera_{};
+    Player gamePreviewPlayer_{};
+    uint32_t playerModelId_ = 0;
     uint32_t swordModelId_ = 0;
+    std::ofstream handDebugLog_{};
+    std::string handDebugLogPath_{};
+    std::string pendingLogMarker_{};
+    uint64_t handDebugLogFrame_ = 0;
+    std::array<bool, 2> previousLogActive_ = {false, false};
+    std::array<bool, 2> previousLogSlash_ = {false, false};
     bool handTrackingStartRequested_ = false;
     bool neutralCapturedThisScene_ = false;
     float sceneTime_ = 0.0f;

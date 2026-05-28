@@ -186,6 +186,16 @@ bool Enemy::ShouldUseLockedAttackYaw() const {
     case ActionKind::Sweep:
     case ActionKind::BladeClash:
     case ActionKind::ArcaneLaser:
+        break;
+    default:
+        return false;
+    }
+
+    switch (action_.step) {
+    case ActionStep::Charge:
+        return hasTrackingLocked_;
+    case ActionStep::Hold:
+    case ActionStep::Active:
         return true;
     default:
         return false;

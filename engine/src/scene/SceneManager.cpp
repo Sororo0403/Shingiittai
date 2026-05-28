@@ -107,6 +107,18 @@ void SceneManager::Draw() {
     }
 }
 
+bool SceneManager::UsesForeground3DPass() const {
+    return currentScene_ && currentScene_->UsesForeground3DPass();
+}
+
+void SceneManager::DrawForeground3D() {
+    if (currentScene_) {
+        isDrawing_ = true;
+        currentScene_->DrawForeground3D();
+        isDrawing_ = false;
+    }
+}
+
 void SceneManager::DrawTransparent() {
     if (currentScene_) {
         isDrawing_ = true;

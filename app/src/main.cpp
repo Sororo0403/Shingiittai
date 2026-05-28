@@ -109,9 +109,6 @@ class HandUdpSenderProcess {
         const std::filesystem::path modelPath =
             runtimeRoot / L"tools" / L"hand_tracking" / L"models" /
             L"hand_landmarker.task";
-        const std::filesystem::path poseModelPath =
-            ResolvePoseModelPath(runtimeRoot);
-
         if (!std::filesystem::exists(modelPath)) {
             return false;
         }
@@ -124,11 +121,6 @@ class HandUdpSenderProcess {
         const std::filesystem::path venvPython =
             runtimeRoot / L"tools" / L"hand_tracking" / L".venv" / L"Scripts" /
             L"python.exe";
-        const auto appendPoseModel = [&](std::wstring& command) {
-            if (!command.empty() && std::filesystem::exists(poseModelPath)) {
-                command += L" --pose-model \"" + poseModelPath.wstring() + L"\"";
-            }
-        };
         const auto appendCameraArg = [](std::wstring& command,
                                         const wchar_t* envName,
                                         const wchar_t* argName) {
@@ -161,14 +153,12 @@ class HandUdpSenderProcess {
             scriptCommand = L"py -3.11 \"" + scriptPath.wstring() +
                             L"\" --model \"" + modelPath.wstring() + L"\"";
         }
-        appendPoseModel(scriptCommand);
         appendCameraArg(scriptCommand, L"SHINGIITTAI_MAIN_CAMERA", L"--camera");
         std::wstring packagedCommand;
         if (std::filesystem::exists(packagedExe)) {
             packagedCommand = L"\"" + packagedExe.wstring() + L"\" --model \"" +
                               modelPath.wstring() + L"\"";
         }
-        appendPoseModel(packagedCommand);
         appendCameraArg(packagedCommand, L"SHINGIITTAI_MAIN_CAMERA", L"--camera");
 
         std::wstring command;
@@ -288,13 +278,6 @@ class HandUdpSenderProcess {
             L"SHINGIITTAI_DISABLE_HAND_CAMERA", value,
             static_cast<DWORD>(std::size(value)));
         return length > 0 && value[0] == L'1';
-    }
-
-    static std::filesystem::path
-    ResolvePoseModelPath(const std::filesystem::path &runtimeRoot) {
-        const std::filesystem::path modelDir =
-            runtimeRoot / L"tools" / L"hand_tracking" / L"models";
-        return modelDir / L"pose_landmarker_full.task";
     }
 
     static std::filesystem::path ResolveRepoRoot() {
@@ -539,6 +522,10 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
         if (postProcessSystem.RequiresPostProcess()) {
             dxCommon.BeginScenePass();
             sceneManager.Draw();
+            if (sceneManager.UsesForeground3DPass()) {
+                dxCommon.ClearDepth();
+                sceneManager.DrawForeground3D();
+            }
             sceneManager.DrawTransparent();
             dxCommon.EndScenePass();
 
@@ -550,6 +537,10 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
         } else {
             dxCommon.BeginBackBufferPass(true);
             sceneManager.Draw();
+            if (sceneManager.UsesForeground3DPass()) {
+                dxCommon.ClearDepth();
+                sceneManager.DrawForeground3D();
+            }
             sceneManager.DrawTransparent();
         }
 

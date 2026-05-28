@@ -33,6 +33,7 @@ class SwordSlashArcRenderer {
                               const Camera &camera,
                               const DirectX::XMFLOAT4 &color,
                               bool releaseCounterCueVisible);
+    void ClearDirectionCueLines();
     void Update(float deltaTime);
     void Draw(const Camera &camera);
 
@@ -49,6 +50,7 @@ class SwordSlashArcRenderer {
         float age = 0.0f;
         float life = 0.16f;
         bool isLine = false;
+        bool isDirectionCue = false;
         bool active = false;
     };
 
@@ -68,8 +70,10 @@ class SwordSlashArcRenderer {
     void CreateBuffers();
     void EnsureVertexCapacity(uint32_t vertexCount);
     void BuildVertices();
+    ArcInstance &AcquireTransientArc();
 
   private:
+    static constexpr size_t kDirectionCueArcCount = 4;
     static constexpr size_t kMaxArcs = 24;
     static constexpr uint32_t kSegments = 28;
     static constexpr uint32_t kInitialMaxVertices = kMaxArcs * kSegments * 6;

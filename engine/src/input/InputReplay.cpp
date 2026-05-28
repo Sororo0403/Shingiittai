@@ -218,23 +218,7 @@ void Input::ApplyReplayFrame(const InputFrame &frame) {
 }
 
 void Input::UpdateReplayHotkeys(float fixedDeltaTime) {
-    if (!replayHotkeysEnabled_ || replayMode_ == ReplayMode::Replay) {
-        return;
-    }
-
-    if (!IsKeyTrigger(DIK_F9)) {
-        return;
-    }
-
-    DebugLog::Get().Write("Input", "Keyboard", "hotkey", "F9",
-                          {{"mode", ReplayModeName(replayMode_)}});
-
-    if (replayMode_ == ReplayMode::Record) {
-        StopRecording();
-        return;
-    }
-
-    StartRecording(MakeAutoReplayPath(), fixedDeltaTime);
+    (void)fixedDeltaTime;
 }
 
 std::wstring Input::MakeAutoReplayPath() const {

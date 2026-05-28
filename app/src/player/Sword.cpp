@@ -40,6 +40,8 @@ void Sword::Initialize(uint32_t modelId) {
     tf_.position = {0, 0, 0};
     tf_.scale = {1, 1, 1};
     tf_.rotation = {0, 0, 0, 1};
+    previousTf_ = tf_;
+    hasPreviousTransform_ = false;
 
     slashFollowThroughTimer_ = 0.0f;
     slashFollowThroughStarted_ = false;
@@ -51,6 +53,8 @@ void Sword::Initialize(uint32_t modelId) {
 
 void Sword::Update(const Transform &transform, const SwordPose &pose,
                    float deltaTime) {
+    previousTf_ = hasPreviousTransform_ ? tf_ : transform;
+    hasPreviousTransform_ = true;
     tf_ = transform;
     isSlashMode_ = pose.isSlashMode;
     slashDir_ = pose.slashDir;
@@ -58,7 +62,7 @@ void Sword::Update(const Transform &transform, const SwordPose &pose,
     UpdateSlashFollowThrough(deltaTime);
 }
 
-OBB Sword::GetOBB() const {
+OBB Sword::BuildOBB(const Transform &transform) const {
     OBB box;
 
     float hitBoxDepth = size_.z;
@@ -68,16 +72,48 @@ OBB Sword::GetOBB() const {
         forwardOffset += kSlashHitDepthExtension * 0.5f;
     }
 
-    XMVECTOR pos = XMLoadFloat3(&tf_.position);
-    XMVECTOR rot = XMLoadFloat4(&tf_.rotation);
+    XMVECTOR pos = XMLoadFloat3(&transform.position);
+    XMVECTOR rot = XMLoadFloat4(&transform.rotation);
     XMVECTOR forward = XMVector3Rotate(XMVectorSet(0, 0, 1, 0), rot);
     XMVECTOR center = pos + forward * forwardOffset;
 
     XMStoreFloat3(&box.center, center);
     box.size = size_;
     box.size.z = hitBoxDepth;
-    box.rotation = tf_.rotation;
+    box.rotation = transform.rotation;
     return box;
+}
+
+OBB Sword::GetOBB() const { return BuildOBB(tf_); }
+
+Transform Sword::InterpolateTransform(float alpha) const {
+    Transform result = tf_;
+    if (!hasPreviousTransform_) {
+        return result;
+    }
+
+    alpha = std::clamp(alpha, 0.0f, 1.0f);
+    result.position = {
+        previousTf_.position.x +
+            (tf_.position.x - previousTf_.position.x) * alpha,
+        previousTf_.position.y +
+            (tf_.position.y - previousTf_.position.y) * alpha,
+        previousTf_.position.z +
+            (tf_.position.z - previousTf_.position.z) * alpha};
+    result.scale = {
+        previousTf_.scale.x + (tf_.scale.x - previousTf_.scale.x) * alpha,
+        previousTf_.scale.y + (tf_.scale.y - previousTf_.scale.y) * alpha,
+        previousTf_.scale.z + (tf_.scale.z - previousTf_.scale.z) * alpha};
+
+    XMVECTOR from = XMQuaternionNormalize(XMLoadFloat4(&previousTf_.rotation));
+    XMVECTOR to = XMQuaternionNormalize(XMLoadFloat4(&tf_.rotation));
+    XMStoreFloat4(&result.rotation, XMQuaternionSlerp(from, to, alpha));
+    return result;
+}
+
+std::array<OBB, 3> Sword::GetOBBSamples() const {
+    return {BuildOBB(InterpolateTransform(0.0f)),
+            BuildOBB(InterpolateTransform(0.5f)), BuildOBB(tf_)};
 }
 
 DirectX::XMFLOAT3 Sword::GetVisualBladeRootWorld() const {

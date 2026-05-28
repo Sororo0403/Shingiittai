@@ -124,7 +124,6 @@ class GameScene : public BaseScene {
     void ApplyEnemyProceduralAnimation();
     void SetEnemyAnimationFrozen(bool frozen);
     void UpdateCombat(float gameplayDeltaTime);
-    void TriggerDebugBladeClash();
     void BeginBladeClash(size_t swordIndex);
     void UpdateBladeClash(float gameplayDeltaTime);
     void FinishBladeClash(bool playerWon);
@@ -139,12 +138,32 @@ class GameScene : public BaseScene {
     void EmitEnemyActionParticles(ActionKind kind, ActionStep step);
     void EmitArcaneLaserParticles(float deltaTime);
     void EmitEnemyCueParticles(float deltaTime);
+    void BeginArcaneProjectileVolley();
+    void UpdateArcaneProjectileVolley(float deltaTime);
+    void SpawnArcaneProjectile();
+    void ResetArcaneProjectile();
+    void UpdateArcaneProjectile(float deltaTime);
+    void ReflectArcaneProjectile(size_t swordIndex);
+    bool IsArcaneProjectileInDeflectRange() const;
+    bool IsArcaneProjectileSlashAligned(const Sword &sword) const;
+    DirectX::XMFLOAT2 GetArcaneProjectileCueDirection() const;
+    uint32_t GetCurrentEnemyTextureId() const;
+    void ApplyBulletTextureToModel(uint32_t textureId);
+    DirectX::XMFLOAT2
+    ProjectWorldDirectionToCueDirection(const DirectX::XMFLOAT3 &worldDir) const;
+    void DrawArcaneProjectile();
     void UpdateBattlePostProcessState(float deltaTime);
     PlayerCombatObservation BuildPlayerCombatObservation() const;
     float ComputeGameplayTimeScale() const;
     void UpdateSwordVfx(float deltaTime);
-    float GetReleaseCounterWindowDuration() const;
+    float GetDifficultyRatio() const;
+    float GetHighDifficultyPressure() const;
+    float GetCounterCinematicDuration() const;
+    float GetCounterVulnerabilityDuration() const;
+    float GetCounterPlayerHitCooldown(float baseCooldown) const;
+    float GetEnemyNormalHitCooldown() const;
     float ApplyEnemyDamage(float damage, bool deferTransitions = false);
+    float ApplyPlayerDamage(float enemyAttackDamage);
     void StartBattleBgm();
     void StopBattleBgm();
 
@@ -171,14 +190,33 @@ class GameScene : public BaseScene {
     GPUParticleSystem swordFlashParticles_;
     SwordTrailRenderer swordTrailRenderer_;
     SwordSlashArcRenderer swordSlashArcRenderer_;
+    struct ArcaneProjectileState {
+        bool active = false;
+        bool reflected = false;
+        DirectX::XMFLOAT3 position = {0.0f, 0.0f, 0.0f};
+        DirectX::XMFLOAT3 velocity = {0.0f, 0.0f, 0.0f};
+        float life = 0.0f;
+        float damage = 0.0f;
+        float knockback = 0.0f;
+        uint32_t textureId = 0;
+        DirectX::XMFLOAT2 cueDirection = {1.0f, 0.0f};
+        size_t reflectedBySwordIndex = 0;
+    };
+    ArcaneProjectileState arcaneProjectile_{};
+    bool arcaneProjectileVolleyActive_ = false;
+    int arcaneProjectileVolleyShotsFired_ = 0;
+    int arcaneProjectileVolleyReflectedHits_ = 0;
+    float arcaneProjectileVolleyTimer_ = 0.0f;
     uint32_t particleTextureId_ = 0;
     uint32_t playerModelId_ = 0;
     uint32_t swordModelId_ = 0;
     uint32_t enemyModelId_ = 0;
+    uint32_t bulletModelId_ = 0;
     uint32_t enemyRustTextureId_ = 0;
     uint32_t enemyCleanMetalTextureId_ = 0;
     uint32_t enemyGoldMetalTextureId_ = 0;
     uint32_t enemyPhaseBlendTextureId_ = 0;
+    uint32_t currentEnemyTextureId_ = 0;
     std::vector<uint8_t> enemyRustMetalPixels_{};
     std::vector<uint8_t> enemyCleanMetalPixels_{};
     std::vector<uint8_t> enemyGoldMetalPixels_{};
@@ -212,9 +250,6 @@ class GameScene : public BaseScene {
     uint32_t battleBgmVoiceHandle_ = UINT32_MAX;
     bool soundsLoaded_ = false;
     std::array<bool, Player::kSwordCount> previousSwordSoundStates_{};
-    float enemyCueParticleTimer_ = 0.0f;
-    EnemyAttackCueEvent enemyCueVisual_{};
-    float enemyCueVisualTimer_ = 0.0f;
     float arcaneLaserParticleTimer_ = 0.0f;
     uint32_t arenaNoiseTextureId_ = 0;
     std::string enemyAnimationName_{};
@@ -222,6 +257,7 @@ class GameScene : public BaseScene {
 
     float playerHitCooldown_ = 0.0f;
     float enemyHitCooldown_ = 0.0f;
+    bool enemyMeleeHitConsumed_ = false;
     float cameraYaw_ = 0.0f;
     float cameraPitch_ = 0.12f;
     float cameraPitchMin_ = -0.20f;
@@ -314,6 +350,8 @@ class GameScene : public BaseScene {
 
     bool enemyRedPunishUncounterable_ = false;
     std::array<bool, Player::kSwordCount> previousCombatSlashStates_{};
+    std::array<bool, Player::kSwordCount> normalSlashHitConsumed_{};
+    std::array<float, Player::kSwordCount> normalSlashRearmTimers_{};
     bool bladeClashActive_ = false;
     float bladeClashTimer_ = 0.0f;
     float bladeClashDuration_ = 4.8f;
@@ -355,13 +393,16 @@ class GameScene : public BaseScene {
     float tutorialRedWaitTimer_ = 0.0f;
     float tutorialGreenCutTimer_ = 0.0f;
     int tutorialStep_ = 0;
+    int tutorialPendingStep_ = -1;
+    int tutorialPendingAttackIndexIncrement_ = 0;
+    int tutorialOperationSlashCount_ = 0;
     int tutorialAttackIndex_ = 0;
     bool tutorialAttackInProgress_ = false;
     bool tutorialCounterSuccess_ = false;
     bool tutorialExitRequested_ = false;
     bool tutorialExitToSelect_ = false;
     bool tutorialImagesLoaded_ = false;
-    std::array<uint32_t, 10> tutorialTextureIds_{};
-    std::array<float, 10> tutorialTextureWidths_{};
-    std::array<float, 10> tutorialTextureHeights_{};
+    std::array<uint32_t, 11> tutorialTextureIds_{};
+    std::array<float, 11> tutorialTextureWidths_{};
+    std::array<float, 11> tutorialTextureHeights_{};
 };

@@ -7,6 +7,25 @@ namespace {
 float ChargeTurnScaleAfterStance(float stateTimer, float stanceTime) {
     return stateTimer < stanceTime ? 1.0f : 0.035f;
 }
+
+float SmoothStep01(float value) {
+    const float t = std::clamp(value, 0.0f, 1.0f);
+    return t * t * (3.0f - 2.0f * t);
+}
+
+float EffectiveCombatDifficulty(float difficulty) {
+    const float clamped = std::clamp(difficulty, 0.0f, 9.0f);
+    const float pressure = SmoothStep01(clamped / 9.0f);
+    return std::clamp(clamped + 0.55f + 0.45f * pressure, 0.0f, 9.0f);
+}
+
+float HighDifficultyPressure(float difficulty) {
+    return EffectiveCombatDifficulty(difficulty) / 9.0f;
+}
+
+float RecoveryPadding(float basePadding, float difficulty) {
+    return basePadding * (1.0f - 0.55f * HighDifficultyPressure(difficulty));
+}
 } // namespace
 
 void Enemy::UpdateSmashByStep(float deltaTime) {
@@ -116,7 +135,7 @@ void Enemy::UpdateSmashCharge(float deltaTime) {
         return;
     }
 
-    const float stanceTime = (std::min)(trackingEnd, 0.46f);
+    const float stanceTime = (std::min)(trackingEnd, 0.30f);
     if (stateTimer_ < trackingEnd) {
         UpdateFacingToPlayerWithSpeed(
             deltaTime,
@@ -188,7 +207,7 @@ void Enemy::UpdateSmashRecovery(float deltaTime) {
     if (recoveryDuration < 0.0f) {
         recoveryDuration = 0.0f;
     }
-    recoveryDuration += 0.18f;
+    recoveryDuration += RecoveryPadding(0.18f, difficulty_);
 
     if (stateTimer_ >= recoveryDuration) {
         EndAttack();
@@ -228,7 +247,7 @@ void Enemy::UpdateSweepCharge(float deltaTime) {
         return;
     }
 
-    const float stanceTime = (std::min)(trackingEnd, 0.42f);
+    const float stanceTime = (std::min)(trackingEnd, 0.28f);
     if (stateTimer_ < trackingEnd) {
         UpdateFacingToPlayerWithSpeed(
             deltaTime,
@@ -300,7 +319,7 @@ void Enemy::UpdateSweepRecovery(float deltaTime) {
     if (recoveryDuration < 0.0f) {
         recoveryDuration = 0.0f;
     }
-    recoveryDuration += 0.16f;
+    recoveryDuration += RecoveryPadding(0.16f, difficulty_);
 
     if (stateTimer_ >= recoveryDuration) {
         EndAttack();
@@ -337,7 +356,7 @@ void Enemy::UpdateBladeClashRecovery(float deltaTime) {
     if (recoveryDuration < 0.0f) {
         recoveryDuration = 0.0f;
     }
-    recoveryDuration += 0.20f;
+    recoveryDuration += RecoveryPadding(0.20f, difficulty_);
 
     if (stateTimer_ >= recoveryDuration) {
         EndAttack();
@@ -382,6 +401,10 @@ void Enemy::UpdateArcaneLaserRecovery(float deltaTime) {
     UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_ * 0.20f);
 
     if (stateTimer_ >= config_.attacks.arcaneLaser.recoveryDuration) {
+        if (TryBeginArcaneLaserSlashFollowup(
+                arcaneLaserSlashFollowupChance_)) {
+            return;
+        }
         EndAttack();
     }
 }

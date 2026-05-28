@@ -76,16 +76,16 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     }
 
     SwordPose leftPose = MakeIdleSwordPose(true);
-    if (useUdpSword && swordUdpController_.IsActive(1)) {
-        leftPose = swordUdpController_.GetPose(1);
+    if (useUdpSword && swordUdpController_.IsActive(0)) {
+        leftPose = swordUdpController_.GetPose(0);
     } else if (useKeyboardMouse) {
         leftPose = UpdateKeyboardLeftSword(input, inputDeltaTime);
     }
 
     SwordPose rightPose = MakeIdleSwordPose(false);
     if (useUdpSword) {
-        if (swordUdpController_.IsActive(0)) {
-            rightPose = swordUdpController_.GetPose(0);
+        if (swordUdpController_.IsActive(1)) {
+            rightPose = swordUdpController_.GetPose(1);
         }
     } else if (useMouseRightSword) {
         swordMouseController_.Update(input, inputDeltaTime,
@@ -128,6 +128,30 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
                       inputDeltaTime);
     rightSword_.Update(BuildSwordTransform(rightPose, false), rightPose,
                        inputDeltaTime);
+
+    leftSwordSlashMode_ = leftPose.isSlashMode;
+    rightSwordSlashMode_ = rightPose.isSlashMode;
+    leftSwordVisible_ = true;
+    rightSwordVisible_ = true;
+}
+
+void Player::UpdateDebugSwordPoses(const SwordPose &leftPoseInput,
+                                   const SwordPose &rightPoseInput,
+                                   float deltaTime,
+                                   const XMFLOAT3 &position, float yaw) {
+    tf_.position = position;
+    SetYaw(yaw);
+    velocity_ = {0.0f, 0.0f, 0.0f};
+    knockbackVelocity_ = {0.0f, 0.0f, 0.0f};
+
+    SwordPose leftPose = leftPoseInput;
+    SwordPose rightPose = rightPoseInput;
+    UpdateWeaponRules(nullptr, leftPose, rightPose, true, deltaTime);
+
+    leftSword_.Update(BuildSwordTransform(leftPose, true), leftPose,
+                      deltaTime);
+    rightSword_.Update(BuildSwordTransform(rightPose, false), rightPose,
+                       deltaTime);
 
     leftSwordSlashMode_ = leftPose.isSlashMode;
     rightSwordSlashMode_ = rightPose.isSlashMode;
@@ -400,6 +424,16 @@ float Player::GetCounterDamageMultiplier() const {
 }
 
 float Player::GetCounterVulnerabilityDuration() const { return 1.35f; }
+
+float Player::TakeDamage(float damage) {
+    if (damage <= 0.0f || hp_ <= 0.0f) {
+        return 0.0f;
+    }
+
+    const float previousHp = hp_;
+    hp_ = (std::max)(0.0f, hp_ - damage);
+    return previousHp - hp_;
+}
 
 Transform Player::BuildSwordTransform(const SwordPose &pose, bool isLeft) const {
     Transform swordTransform{};

@@ -23,6 +23,8 @@ constexpr float kIntroBackgroundDuration = 0.86f;
 constexpr float kIntroGaugeDelay = 0.12f;
 constexpr float kIntroGaugeDuration = 0.62f;
 constexpr float kIntroInputDelay = 0.62f;
+constexpr float kControlsPadding = 32.0f;
+constexpr float kControlsImageBottomTransparentPixels = 18.0f;
 constexpr float kHandSwingStartSpeed = 0.78f;
 constexpr float kHandSwingResetSpeed = 0.32f;
 constexpr int kDifficultyMinTenths = 0;
@@ -170,6 +172,8 @@ void DifficultyCauldronScene::Initialize(const SceneContext &ctx) {
         L"app/resources/ui/difficulty/description_hard.png");
     difficultyDescriptionImages_[4] = LoadTextureImage(
         L"app/resources/ui/difficulty/description_extreme.png");
+    controlsImage_ = LoadTextureImage(
+        L"app/resources/ui/weapon_select/text/weapon_controls.png");
     triangleMaskImage_.textureId =
         CreateTriangleTexture(ctx_->rendering.texture, false);
     triangleMaskImage_.width = 512.0f;
@@ -247,6 +251,16 @@ void DifficultyCauldronScene::Draw() {
                            backgroundIntro));
     DrawHeatEffects(w, h);
     DrawDifficultyGauge(w, h);
+    const float controlsIntro = SmoothStep((sceneTime_ - 0.24f) / 0.28f);
+    const float controlsScale =
+        (std::min)(0.80f, (w * 0.31f) /
+                              (std::max)(controlsImage_.width, 1.0f));
+    DrawImage(controlsImage_, kControlsPadding,
+              h - (controlsImage_.height -
+                   kControlsImageBottomTransparentPixels) *
+                      controlsScale -
+                  kControlsPadding,
+              controlsScale, 0.58f * controlsIntro);
 
     const float outroBlack =
         returnToSelectRequested_
@@ -419,6 +433,7 @@ void DifficultyCauldronScene::BeginReturnToWeaponSelect() {
 }
 
 void DifficultyCauldronScene::BeginStartGame() {
+    AppSceneServices::StopMenuBgm(ctx_);
     startGameRequested_ = true;
     returnToSelectRequested_ = false;
     transitionTimer_ = 0.0f;

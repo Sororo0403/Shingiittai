@@ -40,9 +40,6 @@
     <Filter Include="Resources\Effects\particles">
       <UniqueIdentifier>{b9e4f8ac-0f67-4e8d-a727-42d51b920f0c}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Resources\Fonts">
-      <UniqueIdentifier>{c3d893b7-1762-4f77-8cab-6e57296c608e}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Resources\Shaders">
       <UniqueIdentifier>{68685a10-6401-4a43-986b-85723dbe8c62}</UniqueIdentifier>
     </Filter>
@@ -70,14 +67,20 @@
     <Filter Include="Resources\UI\difficulty">
       <UniqueIdentifier>{5dfc2270-7225-45a9-9083-8e9d11e978ea}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Resources\UI\tip">
-      <UniqueIdentifier>{bb9ad012-f356-4583-a407-37f1f8f0941f}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Resources\UI\tip\text">
-      <UniqueIdentifier>{92411db9-62e0-4e80-b324-0273de7bd803}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Resources\UI\title">
       <UniqueIdentifier>{8020483a-1e1a-4a79-aa16-00b02627f518}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\UI\credits">
+      <UniqueIdentifier>{fe4a21df-bb23-4370-a6a7-1d73d7fe2be0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\UI\common">
+      <UniqueIdentifier>{31becad1-9582-41ff-9a50-a83b3d3d7bd9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\UI\menu">
+      <UniqueIdentifier>{6d09f9d4-b61f-44dc-8f54-422a58ef8780}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\UI\sound_test">
+      <UniqueIdentifier>{a1d4c71a-68be-4b99-a10f-56c95e10c756}</UniqueIdentifier>
     </Filter>
     <Filter Include="Resources\UI\weapon_select">
       <UniqueIdentifier>{90b565c7-e349-45d9-8b03-d0581d2805a5}</UniqueIdentifier>
@@ -103,6 +106,15 @@
       <Filter>Source Files\scene</Filter>
     </ClCompile>
     <ClCompile Include="src\scene\CameraAccuracyDebugScene.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\scene\CreditScene.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\scene\RankingScene.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\scene\SoundTestScene.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
     <ClCompile Include="src\scene\BattleResultScene.cpp">
@@ -142,6 +154,9 @@
       <Filter>Source Files\player</Filter>
     </ClCompile>
     <ClCompile Include="src\scene\CombatFeedbackDirector.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\scene\GameOverScene.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
     <ClCompile Include="src\scene\GameScene.cpp">
@@ -198,6 +213,15 @@
     <ClInclude Include="include\scene\CameraAccuracyDebugScene.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
+    <ClInclude Include="include\scene\CreditScene.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="include\scene\RankingScene.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="include\scene\SoundTestScene.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
     <ClInclude Include="include\scene\BattleResultScene.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
@@ -226,6 +250,9 @@
       <Filter>Header Files\scene</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\CombatFeedbackDirector.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="include\scene\GameOverScene.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\GameScene.h">
@@ -309,9 +336,6 @@
     <None Include="resources\effects\particles\smoke.png">
       <Filter>Resources\Effects\particles</Filter>
     </None>
-    <None Include="resources\fonts\MPLUS1p-ExtraBold.ttf">
-      <Filter>Resources\Fonts</Filter>
-    </None>
     <None Include="resources\ui\difficulty\description_easy.png">
       <Filter>Resources\UI\difficulty</Filter>
     </None>
@@ -354,12 +378,6 @@
     <None Include="resources\shaders\sword_trail\SwordTrailVS.hlsl">
       <Filter>Resources\Shaders\sword_trail</Filter>
     </None>
-    <None Include="resources\ui\result\clear_time.png">
-      <Filter>Resources\UI\result</Filter>
-    </None>
-    <None Include="resources\ui\result\clear_title.png">
-      <Filter>Resources\UI\result</Filter>
-    </None>
     <None Include="resources\ui\result\game_over_title.png">
       <Filter>Resources\UI\result</Filter>
     </None>
@@ -393,20 +411,8 @@
     <None Include="resources\ui\result\glyphs\char_9.png">
       <Filter>Resources\UI\result\glyphs</Filter>
     </None>
-    <None Include="resources\ui\result\glyphs\char_colon.png">
-      <Filter>Resources\UI\result\glyphs</Filter>
-    </None>
-    <None Include="resources\ui\result\glyphs\char_dash.png">
-      <Filter>Resources\UI\result\glyphs</Filter>
-    </None>
     <None Include="resources\ui\result\glyphs\char_dot.png">
       <Filter>Resources\UI\result\glyphs</Filter>
-    </None>
-    <None Include="resources\ui\result\glyphs\char_s.png">
-      <Filter>Resources\UI\result\glyphs</Filter>
-    </None>
-    <None Include="resources\ui\result\menu.png">
-      <Filter>Resources\UI\result</Filter>
     </None>
     <None Include="resources\ui\result\mplus\clear_time.png">
       <Filter>Resources\UI\result\mplus</Filter>
@@ -465,32 +471,11 @@
     <None Include="resources\ui\result\mplus\mission_complete.png">
       <Filter>Resources\UI\result\mplus</Filter>
     </None>
+    <None Include="resources\ui\result\mplus\mission_failed.png">
+      <Filter>Resources\UI\result\mplus</Filter>
+    </None>
     <None Include="resources\ui\result\no_clear_time.png">
       <Filter>Resources\UI\result</Filter>
-    </None>
-    <None Include="resources\ui\result\retry.png">
-      <Filter>Resources\UI\result</Filter>
-    </None>
-    <None Include="resources\ui\tip\text\tip_body.png">
-      <Filter>Resources\UI\tip\text</Filter>
-    </None>
-    <None Include="resources\ui\tip\text\tip_body_0.png">
-      <Filter>Resources\UI\tip\text</Filter>
-    </None>
-    <None Include="resources\ui\tip\text\tip_body_1.png">
-      <Filter>Resources\UI\tip\text</Filter>
-    </None>
-    <None Include="resources\ui\tip\text\tip_body_2.png">
-      <Filter>Resources\UI\tip\text</Filter>
-    </None>
-    <None Include="resources\ui\tip\text\tip_hand.png">
-      <Filter>Resources\UI\tip\text</Filter>
-    </None>
-    <None Include="resources\ui\tip\text\tip_kbm.png">
-      <Filter>Resources\UI\tip\text</Filter>
-    </None>
-    <None Include="resources\ui\tip\text\tip_title.png">
-      <Filter>Resources\UI\tip\text</Filter>
     </None>
     <None Include="resources\ui\title\gamelogo.png">
       <Filter>Resources\UI\title</Filter>
@@ -507,25 +492,94 @@
     <None Include="resources\ui\title\press_any_button.png">
       <Filter>Resources\UI\title</Filter>
     </None>
+    <None Include="resources\ui\title\tab_credit.png">
+      <Filter>Resources\UI\title</Filter>
+    </None>
+    <None Include="resources\ui\credits\credits_title.png">
+      <Filter>Resources\UI\credits</Filter>
+    </None>
+    <None Include="resources\ui\credits\credits_controls.png">
+      <Filter>Resources\UI\credits</Filter>
+    </None>
+    <None Include="resources\ui\credits\thank_you_for_playing.png">
+      <Filter>Resources\UI\credits</Filter>
+    </None>
+    <None Include="resources\ui\credits\lines\art_sound_direction.png">
+      <Filter>Resources\UI\credits</Filter>
+    </None>
+    <None Include="resources\ui\credits\lines\game_design_programming.png">
+      <Filter>Resources\UI\credits</Filter>
+    </None>
+    <None Include="resources\ui\credits\lines\special_thanks.png">
+      <Filter>Resources\UI\credits</Filter>
+    </None>
+    <None Include="resources\ui\credits\lines\taro_name.png">
+      <Filter>Resources\UI\credits</Filter>
+    </None>
+    <None Include="resources\ui\credits\lines\taro_role.png">
+      <Filter>Resources\UI\credits</Filter>
+    </None>
+    <None Include="resources\ui\credits\lines\team.png">
+      <Filter>Resources\UI\credits</Filter>
+    </None>
+    <None Include="resources\ui\credits\lines\thanks_message.png">
+      <Filter>Resources\UI\credits</Filter>
+    </None>
+    <None Include="resources\ui\credits\lines\title.png">
+      <Filter>Resources\UI\credits</Filter>
+    </None>
+    <None Include="resources\ui\credits\lines\year.png">
+      <Filter>Resources\UI\credits</Filter>
+    </None>
+    <None Include="resources\ui\common\tab_ranking.png">
+      <Filter>Resources\UI\common</Filter>
+    </None>
+    <None Include="resources\ui\common\tab_select.png">
+      <Filter>Resources\UI\common</Filter>
+    </None>
+    <None Include="resources\ui\common\tab_menu.png">
+      <Filter>Resources\UI\common</Filter>
+    </None>
+    <None Include="resources\ui\menu\menu_title.png">
+      <Filter>Resources\UI\menu</Filter>
+    </None>
+    <None Include="resources\ui\menu\option_credits.png">
+      <Filter>Resources\UI\menu</Filter>
+    </None>
+    <None Include="resources\ui\menu\option_ranking.png">
+      <Filter>Resources\UI\menu</Filter>
+    </None>
+    <None Include="resources\ui\menu\option_sound_test.png">
+      <Filter>Resources\UI\menu</Filter>
+    </None>
+    <None Include="resources\ui\sound_test\controls.png">
+      <Filter>Resources\UI\sound_test</Filter>
+    </None>
+    <None Include="resources\ui\sound_test\playing.png">
+      <Filter>Resources\UI\sound_test</Filter>
+    </None>
+    <None Include="resources\ui\sound_test\title.png">
+      <Filter>Resources\UI\sound_test</Filter>
+    </None>
+    <None Include="resources\ui\sound_test\track_battle.png">
+      <Filter>Resources\UI\sound_test</Filter>
+    </None>
+    <None Include="resources\ui\sound_test\track_menu.png">
+      <Filter>Resources\UI\sound_test</Filter>
+    </None>
+    <None Include="resources\ui\sound_test\track_title.png">
+      <Filter>Resources\UI\sound_test</Filter>
+    </None>
+    <None Include="resources\ui\sound_test\track_tutorial.png">
+      <Filter>Resources\UI\sound_test</Filter>
+    </None>
     <None Include="resources\ui\weapon_select\text\input_hand.png">
       <Filter>Resources\UI\weapon_select\text</Filter>
     </None>
     <None Include="resources\ui\weapon_select\text\input_kbm.png">
       <Filter>Resources\UI\weapon_select\text</Filter>
     </None>
-    <None Include="resources\ui\weapon_select\text\input_ready_hand.png">
-      <Filter>Resources\UI\weapon_select\text</Filter>
-    </None>
-    <None Include="resources\ui\weapon_select\text\input_ready_kbm.png">
-      <Filter>Resources\UI\weapon_select\text</Filter>
-    </None>
-    <None Include="resources\ui\weapon_select\text\input_title.png">
-      <Filter>Resources\UI\weapon_select\text</Filter>
-    </None>
     <None Include="resources\ui\weapon_select\text\weapon_controls.png">
-      <Filter>Resources\UI\weapon_select\text</Filter>
-    </None>
-    <None Include="resources\ui\weapon_select\text\weapon_ready.png">
       <Filter>Resources\UI\weapon_select\text</Filter>
     </None>
     <None Include="resources\ui\weapon_select\weapon_select_bg.png">

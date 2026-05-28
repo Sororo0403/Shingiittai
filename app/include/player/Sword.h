@@ -3,6 +3,7 @@
 #include "SwordPose.h"
 #include "Transform.h"
 #include <DirectXMath.h>
+#include <array>
 
 class ModelManager;
 class Camera;
@@ -20,6 +21,7 @@ class Sword {
 
     const Transform &GetTransform() const { return tf_; }
     OBB GetOBB() const;
+    std::array<OBB, 3> GetOBBSamples() const;
 
     DirectX::XMFLOAT3 GetVisualBladeRootWorld() const;
     DirectX::XMFLOAT3 GetVisualBladeTipWorld() const;
@@ -32,6 +34,8 @@ class Sword {
 
   private:
     Transform BuildVisualTransform() const;
+    OBB BuildOBB(const Transform &transform) const;
+    Transform InterpolateTransform(float alpha) const;
     void UpdateSlashFollowThrough(float deltaTime);
     void ApplySlashFollowThrough(Transform &drawTransform) const;
     SwordCounterAxis ComputeSlashAxis() const;
@@ -43,6 +47,8 @@ class Sword {
 
     uint32_t modelId_ = 0;
     Transform tf_;
+    Transform previousTf_;
+    bool hasPreviousTransform_ = false;
 
     bool isSlashMode_ = false;
 

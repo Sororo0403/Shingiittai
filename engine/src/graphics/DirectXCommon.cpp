@@ -257,6 +257,13 @@ void DirectXCommon::RestoreSceneRenderState(bool clearDepth) {
     }
 }
 
+void DirectXCommon::ClearDepth() {
+    TrackGpuPhase("ClearDepth");
+    auto dsvHandle = dsvHeap_->GetCPUDescriptorHandleForHeapStart();
+    commandList_->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH,
+                                        1.0f, 0, 0, nullptr);
+}
+
 void DirectXCommon::EndScenePass() {
     TrackGpuPhase("EndScenePass");
     TransitionSceneColor(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);

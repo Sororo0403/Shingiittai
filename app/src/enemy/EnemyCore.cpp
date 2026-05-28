@@ -15,6 +15,8 @@ void Enemy::Initialize(uint32_t modelId) {
     runtime_.attackCueSequence = 0;
     runtime_.arcaneLaserCooldown = 0.0f;
     runtime_.arcaneLaserDirection = {0.0f, 0.0f, 1.0f};
+    runtime_.counterGuardQuickSlashTimer = 0.0f;
+    runtime_.counterGuardQuickSlashFollowupKind = ActionKind::None;
     tf_.position = {0.0f, 0.0f, 10.0f};
     tf_.scale = {1.0f, 1.0f, 1.0f};
     tf_.rotation = {0.0f, 0.0f, 0.0f, 1.0f};
@@ -107,6 +109,18 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
 
     if (action_.kind == ActionKind::None) {
         UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_);
+    }
+
+    if (counterGuardQuickSlashTimer_ > 0.0f) {
+        counterGuardQuickSlashTimer_ -= deltaTime;
+        isAttackActive_ = false;
+        UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_ * 0.30f);
+        if (counterGuardQuickSlashTimer_ <= 0.0f) {
+            counterGuardQuickSlashTimer_ = 0.0f;
+            BeginCounterGuardQuickSlashFollowup();
+        }
+        UpdateParts();
+        return;
     }
 
     stateTimer_ += deltaTime;
@@ -203,22 +217,6 @@ bool Enemy::ConsumeAttackCueEvent(EnemyAttackCueEvent &event) {
     return true;
 }
 
-void Enemy::BeginDebugBladeClash(const DirectX::XMFLOAT3 &targetPosition) {
-    if (deathFinished_ || isDying_ || phaseTransitionActive_) {
-        return;
-    }
-
-    hitReactionTimer_ = 0.0f;
-    counterRecoilTimer_ = 0.0f;
-    playerPos_ = targetPosition;
-    FaceTargetImmediately(targetPosition);
-    BeginAction(ActionKind::BladeClash, ActionStep::Active);
-    LockCurrentFacing();
-    stateTimer_ = config_.attacks.bladeClash.profile.timing.activeStartTime;
-    isAttackActive_ = true;
-    UpdateParts();
-}
-
 void Enemy::ResetTutorialState() {
     EndAttack();
     runtime_.hp = config_.core.maxHp;
@@ -228,6 +226,8 @@ void Enemy::ResetTutorialState() {
     runtime_.phase2BladeClashPending = false;
     runtime_.arcaneLaserCooldown = 0.0f;
     runtime_.arcaneLaserDirection = {0.0f, 0.0f, 1.0f};
+    runtime_.counterGuardQuickSlashTimer = 0.0f;
+    runtime_.counterGuardQuickSlashFollowupKind = ActionKind::None;
     runtime_.hitReactionTimer = 0.0f;
     runtime_.counterRecoilTimer = 0.0f;
     runtime_.isDying = false;
@@ -309,11 +309,14 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     currentHoldDuration_ = 0.0f;
     quickSlashActive_ = false;
     farSlashActive_ = false;
+    counterGuardQuickSlashTimer_ = 0.0f;
+    counterGuardQuickSlashFollowupKind_ = ActionKind::None;
     warpFeintFollowupLocked_ = false;
     warpFeintImmediate_ = false;
     warpFeintDecisionMade_ = false;
     directionFeintDecisionMade_ = false;
     attackReleaseCueIssued_ = false;
+    lockedAttackYaw_ = facingYaw_;
     arcaneLaserDirection_ = {std::sin(facingYaw_), 0.0f, std::cos(facingYaw_)};
     isAttackActive_ = false;
     stateTimer_ = 0.0f;
@@ -352,6 +355,21 @@ void Enemy::ChangeActionStep(ActionStep step) {
     isAttackActive_ = false;
     stateTimer_ = 0.0f;
 
+    const bool usesLockedAttackYaw =
+        action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
+        action_.kind == ActionKind::BladeClash ||
+        action_.kind == ActionKind::ArcaneLaser;
+    const bool enteringActive =
+        step == ActionStep::Active && previousStep != ActionStep::Active;
+    if (enteringActive && usesLockedAttackYaw && !hasTrackingLocked_) {
+        LockCurrentFacing();
+        hasTrackingLocked_ = true;
+    }
+    if (enteringActive && action_.kind == ActionKind::ArcaneLaser) {
+        arcaneLaserDirection_ = {std::sin(lockedAttackYaw_), 0.0f,
+                                 std::cos(lockedAttackYaw_)};
+    }
+
     if (step != ActionStep::Charge && step != ActionStep::Hold) {
         ResetPreAttackPresentationState();
     }
@@ -379,6 +397,8 @@ void Enemy::EndAttack() {
     currentHoldDuration_ = 0.0f;
     quickSlashActive_ = false;
     farSlashActive_ = false;
+    counterGuardQuickSlashTimer_ = 0.0f;
+    counterGuardQuickSlashFollowupKind_ = ActionKind::None;
     warpFeintFollowupLocked_ = false;
     warpFeintImmediate_ = false;
     warpFeintDecisionMade_ = false;

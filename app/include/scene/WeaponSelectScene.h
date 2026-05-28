@@ -45,6 +45,9 @@ class WeaponSelectScene : public BaseScene {
     void BeginHandCameraConfirm();
     void ContinueHandStart();
     void BeginReturnToTitle();
+    void BeginShowUtilityMenu();
+    void BeginUtilityMenuAction();
+    void UpdateUtilityMenu(Input *input);
     void UpdateHandCameraConfirm(Input *input);
     void Layout(float screenWidth, float screenHeight);
     float ButtonIntroProgress(int index, float offset = 0.0f) const;
@@ -61,6 +64,9 @@ class WeaponSelectScene : public BaseScene {
     void DrawButtonIllustration(int index, const ButtonRect &rect, float lift,
                                 float alpha, bool selected);
     void DrawLabels(float screenWidth, float screenHeight);
+    void DrawUtilityMenuWindow(float screenWidth, float screenHeight);
+    void DrawUtilityMenuIcon(int index, float centerX, float centerY,
+                             float size, float alpha, bool selected);
     void DrawHandCameraConfirmWindow(float screenWidth, float screenHeight);
     void DrawStartTransition(float screenWidth, float screenHeight);
     void DrawRect(float x, float y, float w, float h,
@@ -76,15 +82,21 @@ class WeaponSelectScene : public BaseScene {
     float transitionTimer_ = 0.0f;
     bool startRequested_ = false;
     bool titleReturnRequested_ = false;
+    bool menuActionRequested_ = false;
+    bool utilityMenuVisible_ = false;
     bool waitingForHandTrackingReady_ = false;
     bool handTrackingStartRequested_ = false;
     bool handCameraConfirmVisible_ = false;
     bool preserveMenuBgmOnExit_ = false;
     int handCameraConfirmIndex_ = 1;
+    int utilityMenuIndex_ = 0;
 
     std::unique_ptr<GameScene> backgroundScene_;
     Image sceneTitleImage_{};
     Image controlsImage_{};
+    Image menuPromptImage_{};
+    Image utilityMenuTitleImage_{};
+    std::array<Image, 3> utilityMenuOptionImages_{};
     std::array<Image, kButtonCount> modeNameImages_{};
     Image handCameraConfirmMessageImage_{};
     Image handCameraConfirmYesImage_{};

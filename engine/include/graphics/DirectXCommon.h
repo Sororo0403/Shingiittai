@@ -66,6 +66,11 @@ class DirectXCommon {
     void RestoreSceneRenderState(bool clearDepth = false);
 
     /// <summary>
+    /// 現在の描画先を維持したまま深度だけをクリアする
+    /// </summary>
+    void ClearDepth();
+
+    /// <summary>
     /// シーンカラー用レンダーターゲットをシェーダー読み取り可能な状態へ戻す
     /// </summary>
     void EndScenePass();

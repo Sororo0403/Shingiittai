@@ -103,6 +103,9 @@
   <ItemGroup>
     <ClCompile Include="src\scene\CameraPreviewReceiver.cpp" />
     <ClCompile Include="src\scene\CameraAccuracyDebugScene.cpp" />
+    <ClCompile Include="src\scene\CreditScene.cpp" />
+    <ClCompile Include="src\scene\RankingScene.cpp" />
+    <ClCompile Include="src\scene\SoundTestScene.cpp" />
     <ClCompile Include="src\player\SwordSlashArcRenderer.cpp" />
     <ClCompile Include="src\player\SwordTrailRenderer.cpp" />
     <ClCompile Include="src\scene\BattleResultScene.cpp" />
@@ -119,6 +122,7 @@
     <ClCompile Include="src\enemy\EnemyWarp.cpp" />
     <ClCompile Include="src\player\Player.cpp" />
     <ClCompile Include="src\scene\CombatFeedbackDirector.cpp" />
+    <ClCompile Include="src\scene\GameOverScene.cpp" />
     <ClCompile Include="src\scene\GameScene.cpp" />
     <ClCompile Include="src\scene\GameSceneAnimation.cpp" />
     <ClCompile Include="src\scene\GameSceneCamera.cpp" />
@@ -136,6 +140,9 @@
   <ItemGroup>
     <ClInclude Include="include\scene\CameraPreviewReceiver.h" />
     <ClInclude Include="include\scene\CameraAccuracyDebugScene.h" />
+    <ClInclude Include="include\scene\CreditScene.h" />
+    <ClInclude Include="include\scene\RankingScene.h" />
+    <ClInclude Include="include\scene\SoundTestScene.h" />
     <ClInclude Include="include\player\SwordSlashArcRenderer.h" />
     <ClInclude Include="include\player\SwordTrailRenderer.h" />
     <ClInclude Include="include\player\InputControlType.h" />
@@ -153,6 +160,7 @@
     <ClInclude Include="include\enemy\Enemy.h" />
     <ClInclude Include="include\scene\BladeClashCinematic.h" />
     <ClInclude Include="include\scene\CombatFeedbackDirector.h" />
+    <ClInclude Include="include\scene\GameOverScene.h" />
     <ClInclude Include="include\scene\GameScene.h" />
     <ClInclude Include="include\scene\TitleScene.h" />
     <ClInclude Include="include\scene\TutorialScene.h" />
@@ -182,7 +190,6 @@
     <None Include="resources\audio\sfx\hit_impact.wav" />
     <None Include="resources\audio\sfx\slash_hero.wav" />
     <None Include="resources\effects\particles\smoke.png" />
-    <None Include="resources\fonts\MPLUS1p-ExtraBold.ttf" />
     <None Include="resources\ui\difficulty\description_easy.png" />
     <None Include="resources\ui\difficulty\description_experienced.png" />
     <None Include="resources\ui\difficulty\description_extreme.png" />
@@ -197,8 +204,6 @@
     <None Include="resources\shaders\sword_arc\SwordArcVS.hlsl" />
     <None Include="resources\shaders\sword_trail\SwordTrailPS.hlsl" />
     <None Include="resources\shaders\sword_trail\SwordTrailVS.hlsl" />
-    <None Include="resources\ui\result\clear_time.png" />
-    <None Include="resources\ui\result\clear_title.png" />
     <None Include="resources\ui\result\game_over_title.png" />
     <None Include="resources\ui\result\glyphs\char_0.png" />
     <None Include="resources\ui\result\glyphs\char_1.png" />
@@ -210,11 +215,7 @@
     <None Include="resources\ui\result\glyphs\char_7.png" />
     <None Include="resources\ui\result\glyphs\char_8.png" />
     <None Include="resources\ui\result\glyphs\char_9.png" />
-    <None Include="resources\ui\result\glyphs\char_colon.png" />
-    <None Include="resources\ui\result\glyphs\char_dash.png" />
     <None Include="resources\ui\result\glyphs\char_dot.png" />
-    <None Include="resources\ui\result\glyphs\char_s.png" />
-    <None Include="resources\ui\result\menu.png" />
     <None Include="resources\ui\result\mplus\clear_time.png" />
     <None Include="resources\ui\result\mplus\controls_hand.png" />
     <None Include="resources\ui\result\mplus\controls_kbm_clear.png" />
@@ -234,31 +235,47 @@
     <None Include="resources\ui\result\mplus\glyphs\char_dot.png" />
     <None Include="resources\ui\result\mplus\glyphs\char_s.png" />
     <None Include="resources\ui\result\mplus\mission_complete.png" />
+    <None Include="resources\ui\result\mplus\mission_failed.png" />
     <None Include="resources\ui\result\no_clear_time.png" />
-    <None Include="resources\ui\result\retry.png" />
-    <None Include="resources\ui\tip\text\tip_body.png" />
-    <None Include="resources\ui\tip\text\tip_body_0.png" />
-    <None Include="resources\ui\tip\text\tip_body_1.png" />
-    <None Include="resources\ui\tip\text\tip_body_2.png" />
-    <None Include="resources\ui\tip\text\tip_hand.png" />
-    <None Include="resources\ui\tip\text\tip_kbm.png" />
-    <None Include="resources\ui\tip\text\tip_title.png" />
     <None Include="resources\ui\title\exit_confirm_message.png" />
     <None Include="resources\ui\title\exit_confirm_no.png" />
     <None Include="resources\ui\title\exit_confirm_yes.png" />
     <None Include="resources\ui\title\gamelogo.png" />
     <None Include="resources\ui\title\press_any_button.png" />
+    <None Include="resources\ui\title\tab_credit.png" />
+    <None Include="resources\ui\credits\credits_controls.png" />
+    <None Include="resources\ui\credits\credits_title.png" />
+    <None Include="resources\ui\credits\thank_you_for_playing.png" />
+    <None Include="resources\ui\credits\lines\art_sound_direction.png" />
+    <None Include="resources\ui\credits\lines\game_design_programming.png" />
+    <None Include="resources\ui\credits\lines\special_thanks.png" />
+    <None Include="resources\ui\credits\lines\taro_name.png" />
+    <None Include="resources\ui\credits\lines\taro_role.png" />
+    <None Include="resources\ui\credits\lines\team.png" />
+    <None Include="resources\ui\credits\lines\thanks_message.png" />
+    <None Include="resources\ui\credits\lines\title.png" />
+    <None Include="resources\ui\credits\lines\year.png" />
+    <None Include="resources\ui\common\tab_ranking.png" />
+    <None Include="resources\ui\common\tab_select.png" />
+    <None Include="resources\ui\common\tab_menu.png" />
+    <None Include="resources\ui\menu\menu_title.png" />
+    <None Include="resources\ui\menu\option_credits.png" />
+    <None Include="resources\ui\menu\option_ranking.png" />
+    <None Include="resources\ui\menu\option_sound_test.png" />
+    <None Include="resources\ui\sound_test\controls.png" />
+    <None Include="resources\ui\sound_test\playing.png" />
+    <None Include="resources\ui\sound_test\title.png" />
+    <None Include="resources\ui\sound_test\track_battle.png" />
+    <None Include="resources\ui\sound_test\track_menu.png" />
+    <None Include="resources\ui\sound_test\track_title.png" />
+    <None Include="resources\ui\sound_test\track_tutorial.png" />
     <None Include="resources\ui\weapon_select\text\input_hand.png" />
     <None Include="resources\ui\weapon_select\text\input_kbm.png" />
-    <None Include="resources\ui\weapon_select\text\input_ready_hand.png" />
-    <None Include="resources\ui\weapon_select\text\input_ready_kbm.png" />
-    <None Include="resources\ui\weapon_select\text\input_title.png" />
     <None Include="resources\ui\weapon_select\text\weapon_controls.png" />
-    <None Include="resources\ui\weapon_select\text\weapon_ready.png" />
     <None Include="resources\ui\weapon_select\weapon_select_bg.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <Target Name="BuildHandTrackingHelper" BeforeTargets="CopyRuntimeDlls" Condition="'$(Configuration)' == 'Release'" Inputs="$(SolutionDir)tools\hand_tracking\build-hand-udp-exe.ps1;$(SolutionDir)tools\hand_tracking\hand_udp_sender.py;$(SolutionDir)tools\hand_tracking\requirements-hand-udp.txt;$(SolutionDir)tools\hand_tracking\models\hand_landmarker.task;$(SolutionDir)tools\hand_tracking\models\pose_landmarker_full.task" Outputs="$(SolutionDir)tools\hand_tracking\dist\hand_udp_sender\hand_udp_sender.exe">
+  <Target Name="BuildHandTrackingHelper" BeforeTargets="CopyRuntimeDlls" Condition="'$(Configuration)' == 'Release'" Inputs="$(SolutionDir)tools\hand_tracking\build-hand-udp-exe.ps1;$(SolutionDir)tools\hand_tracking\hand_udp_sender.py;$(SolutionDir)tools\hand_tracking\requirements-hand-udp.txt;$(SolutionDir)tools\hand_tracking\models\hand_landmarker.task" Outputs="$(SolutionDir)tools\hand_tracking\dist\hand_udp_sender\hand_udp_sender.exe">
     <Message Text="Building hand tracking helper for Release output." Importance="High" />
     <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(SolutionDir)tools\hand_tracking\build-hand-udp-exe.ps1&quot;" />
   </Target>
