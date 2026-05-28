@@ -3488,6 +3488,13 @@ void GameScene::UpdateBladeClashFinish(float deltaTime) {
                                        -bladeClashDirection_.x};
             slashFeedback.power = 13.0f;
             DispatchCombatFeedback(slashFeedback);
+
+            XMFLOAT3 cinematicCutCenter = cutCenter;
+            cinematicCutCenter.y += 0.04f;
+            swordSlashArcRenderer_.EmitCinematicCutLine(
+                cinematicCutCenter,
+                {bladeClashDirection_.z, 0.0f, -bladeClashDirection_.x},
+                camera_, 4.2f);
         }
         if (!bladeClashFinishSkidEmitted_ &&
             bladeClashWinActionTimer >= 0.76f) {

@@ -28,6 +28,9 @@ class SwordSlashArcRenderer {
                        const DirectX::XMFLOAT3 &direction, const Camera &camera,
                        float power,
                        const DirectX::XMFLOAT2 &slashDirection = {0.0f, 0.0f});
+    void EmitCinematicCutLine(const DirectX::XMFLOAT3 &position,
+                              const DirectX::XMFLOAT3 &direction,
+                              const Camera &camera, float power);
     void EmitDirectionCueLine(const DirectX::XMFLOAT3 &position,
                               const DirectX::XMFLOAT2 &direction,
                               const Camera &camera,
@@ -74,7 +77,7 @@ class SwordSlashArcRenderer {
 
   private:
     static constexpr size_t kDirectionCueArcCount = 4;
-    static constexpr size_t kMaxArcs = 24;
+    static constexpr size_t kMaxArcs = 36;
     static constexpr uint32_t kSegments = 28;
     static constexpr uint32_t kInitialMaxVertices = kMaxArcs * kSegments * 6;
 

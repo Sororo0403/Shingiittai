@@ -436,6 +436,96 @@ void SwordSlashArcRenderer::EmitParryLine(const XMFLOAT3 &position,
                0.012f, 0.088f, 0.024f, {0.52f, 0.55f, 1.00f, 0.58f});
 }
 
+void SwordSlashArcRenderer::EmitCinematicCutLine(
+    const XMFLOAT3 &position, const XMFLOAT3 &direction, const Camera &camera,
+    float power) {
+    const XMFLOAT3 cameraForward =
+        NormalizeSafe(AppCameraForward(camera), {0.0f, 0.0f, 1.0f});
+    const XMFLOAT3 worldUp{0.0f, 1.0f, 0.0f};
+    const XMFLOAT3 cameraRight =
+        NormalizeSafe(Cross(worldUp, cameraForward), {1.0f, 0.0f, 0.0f});
+    const XMFLOAT3 cameraUp =
+        NormalizeSafe(Cross(cameraForward, cameraRight), {0.0f, 1.0f, 0.0f});
+
+    XMFLOAT3 cutSide = direction;
+    cutSide.y = 0.0f;
+    cutSide = NormalizeSafe(cutSide, cameraRight);
+    const float facing = cutSide.x * cameraRight.x + cutSide.y * cameraRight.y +
+                         cutSide.z * cameraRight.z;
+    if (std::fabs(facing) < 0.18f) {
+        cutSide = Scale(cameraRight, facing >= 0.0f ? 1.0f : -1.0f);
+    }
+
+    const XMFLOAT3 lineDir =
+        NormalizeSafe(Add(Scale(cutSide, 0.78f), Scale(cameraUp, 0.44f)),
+                      cameraRight);
+    const XMFLOAT3 crossLineDir =
+        NormalizeSafe(Add(Scale(cutSide, 0.76f), Scale(cameraUp, -0.46f)),
+                      cameraRight);
+    const XMFLOAT3 lineNormal =
+        NormalizeSafe(Cross(cameraForward, lineDir), cameraUp);
+    const float clampedPower = std::clamp(power, 1.0f, 5.0f);
+
+    XMFLOAT3 visualPosition = Add(position, Scale(cameraForward, -0.34f));
+    visualPosition.y += 0.06f;
+
+    auto emitStroke = [&](const XMFLOAT3 &axis, float alongOffset,
+                          float normalOffset, float heightOffset,
+                          float halfLength, float thickness, float life,
+                          float delay, const XMFLOAT4 &color) {
+        ArcInstance &arc = AcquireTransientArc();
+
+        const XMFLOAT3 strokeNormal =
+            NormalizeSafe(Cross(cameraForward, axis), lineNormal);
+        arc.center = Add(visualPosition, Scale(axis, alongOffset));
+        arc.center = Add(arc.center, Scale(strokeNormal, normalOffset));
+        arc.center.y += heightOffset;
+        arc.axisA = axis;
+        arc.axisB = strokeNormal;
+        arc.radius = halfLength;
+        arc.thickness = thickness;
+        arc.life = life;
+        arc.age = -delay;
+        arc.color = color;
+        arc.startAngle = 0.0f;
+        arc.endAngle = 0.0f;
+        arc.isLine = true;
+        arc.isDirectionCue = false;
+        arc.active = true;
+    };
+
+    const float longHalf = 4.48f + clampedPower * 0.34f;
+    emitStroke(lineDir, 0.00f, 0.00f, 0.00f, longHalf, 0.210f, 0.66f, 0.0f,
+               {0.02f, 0.58f, 1.00f, 0.36f});
+    emitStroke(lineDir, 0.00f, 0.00f, 0.00f, longHalf * 1.03f, 0.068f, 0.58f,
+               0.0f, {0.88f, 1.00f, 1.00f, 0.92f});
+    emitStroke(lineDir, -0.10f, 0.060f, 0.00f, longHalf * 0.94f, 0.044f,
+               0.52f, 0.030f, {0.20f, 0.86f, 1.00f, 0.58f});
+    emitStroke(lineDir, 0.14f, -0.070f, 0.00f, longHalf * 0.86f, 0.034f,
+               0.46f, 0.055f, {0.58f, 0.18f, 1.00f, 0.46f});
+
+    const float crossHalf = longHalf * 0.96f;
+    emitStroke(crossLineDir, 0.00f, 0.00f, 0.00f, crossHalf, 0.178f, 0.58f,
+               0.018f, {0.02f, 0.50f, 1.00f, 0.30f});
+    emitStroke(crossLineDir, 0.00f, 0.00f, 0.00f, crossHalf * 1.02f, 0.054f,
+               0.50f, 0.018f, {0.86f, 1.00f, 1.00f, 0.78f});
+    emitStroke(crossLineDir, 0.10f, 0.052f, 0.00f, crossHalf * 0.84f, 0.032f,
+               0.42f, 0.055f, {0.20f, 0.78f, 1.00f, 0.46f});
+    emitStroke(crossLineDir, -0.12f, -0.060f, 0.00f, crossHalf * 0.76f,
+               0.026f, 0.38f, 0.080f, {0.58f, 0.18f, 1.00f, 0.34f});
+
+    const XMFLOAT3 splitUp =
+        NormalizeSafe(Add(Scale(lineNormal, 0.82f), Scale(lineDir, 0.20f)),
+                      lineNormal);
+    const XMFLOAT3 splitDown =
+        NormalizeSafe(Add(Scale(lineNormal, -0.72f), Scale(lineDir, 0.24f)),
+                      Scale(lineNormal, -1.0f));
+    emitStroke(splitUp, 0.18f, 0.04f, 0.00f, 0.78f, 0.014f, 0.34f, 0.055f,
+               {0.82f, 0.96f, 1.00f, 0.64f});
+    emitStroke(splitDown, -0.16f, -0.03f, 0.00f, 0.62f, 0.012f, 0.30f, 0.080f,
+               {0.36f, 0.72f, 1.00f, 0.50f});
+}
+
 void SwordSlashArcRenderer::Update(float deltaTime) {
     for (ArcInstance &arc : arcs_) {
         if (!arc.active) {
