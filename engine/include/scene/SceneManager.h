@@ -62,6 +62,11 @@ class SceneManager {
     /// </summary>
     void DrawTransparent();
 
+    /// <summary>
+    /// 現在のシーンのポストエフェクト後UIを描画する
+    /// </summary>
+    void DrawPostProcessOverlay();
+
   private:
     /// <summary>
     /// 保留中のシーン切り替えを適用する

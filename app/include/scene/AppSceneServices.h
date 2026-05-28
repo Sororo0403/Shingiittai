@@ -1,6 +1,7 @@
 #pragma once
 #include "SceneContext.h"
 #include "SoundManager.h"
+#include <algorithm>
 #include <cstdint>
 #include <functional>
 
@@ -11,6 +12,13 @@ using VoidCallback = std::function<void()>;
 
 inline constexpr const wchar_t *kMenuBgmPath =
     L"app/resources/audio/bgm/bgm_MenuTheme.wav";
+inline constexpr const wchar_t *kSelectSePath =
+    L"app/resources/audio/se/se_Select.mp3";
+inline constexpr const wchar_t *kSelectedSePath =
+    L"app/resources/audio/se/se_Selected.mp3";
+inline constexpr const wchar_t *kCancelSePath =
+    L"app/resources/audio/se/se_Cancel.mp3";
+inline constexpr float kMenuBgmBaseVolume = 0.24f;
 
 inline StartCallback requestHandTrackingStart;
 inline VoidCallback requestHandTrackingStop;
@@ -18,6 +26,18 @@ inline BoolCallback isCameraDeviceAvailable;
 inline BoolCallback isHandTrackingReady;
 inline uint32_t menuBgmSoundId = SoundManager::kInvalidSoundId;
 inline uint32_t menuBgmVoiceHandle = SoundManager::kInvalidVoiceHandle;
+inline uint32_t selectSeSoundId = SoundManager::kInvalidSoundId;
+inline uint32_t selectedSeSoundId = SoundManager::kInvalidSoundId;
+inline uint32_t cancelSeSoundId = SoundManager::kInvalidSoundId;
+inline float bgmVolume = 1.0f;
+inline float seVolume = 1.0f;
+inline float mouseSlashSensitivity = 0.5f;
+
+enum class MenuSe {
+    Select,
+    Selected,
+    Cancel,
+};
 
 inline void ConfigureHandTracking(StartCallback start, VoidCallback stop,
                                   BoolCallback cameraAvailable,
@@ -65,6 +85,29 @@ inline bool IsHandTrackingReady() {
     return !isHandTrackingReady || isHandTrackingReady();
 }
 
+inline float GetBgmVolume() { return bgmVolume; }
+
+inline float GetSeVolume() { return seVolume; }
+
+inline float GetMouseSlashSensitivity() { return mouseSlashSensitivity; }
+
+inline void SetBgmVolume(const SceneContext &ctx, float volume) {
+    bgmVolume = std::clamp(volume, 0.0f, 1.0f);
+    if (ctx.systems.sound != nullptr &&
+        menuBgmVoiceHandle != SoundManager::kInvalidVoiceHandle) {
+        ctx.systems.sound->SetVoiceVolume(menuBgmVoiceHandle,
+                                          kMenuBgmBaseVolume * bgmVolume);
+    }
+}
+
+inline void SetSeVolume(float volume) {
+    seVolume = std::clamp(volume, 0.0f, 1.0f);
+}
+
+inline void SetMouseSlashSensitivity(float sensitivity) {
+    mouseSlashSensitivity = std::clamp(sensitivity, 0.0f, 1.0f);
+}
+
 inline void StartMenuBgm(const SceneContext &ctx) {
     if (ctx.systems.sound == nullptr ||
         menuBgmVoiceHandle != SoundManager::kInvalidVoiceHandle) {
@@ -72,7 +115,9 @@ inline void StartMenuBgm(const SceneContext &ctx) {
     }
 
     menuBgmSoundId = ctx.systems.sound->LoadOrCreateSilent(kMenuBgmPath);
-    menuBgmVoiceHandle = ctx.systems.sound->Play(menuBgmSoundId, 0.36f, true);
+    menuBgmVoiceHandle =
+        ctx.systems.sound->Play(menuBgmSoundId,
+                                kMenuBgmBaseVolume * bgmVolume, true);
 }
 
 inline void StopMenuBgm(const SceneContext *ctx) {
@@ -83,5 +128,37 @@ inline void StopMenuBgm(const SceneContext *ctx) {
 
     ctx->systems.sound->Stop(menuBgmVoiceHandle);
     menuBgmVoiceHandle = SoundManager::kInvalidVoiceHandle;
+}
+
+inline void PlayMenuSe(const SceneContext &ctx, MenuSe se,
+                       float volume = 0.95f) {
+    if (ctx.systems.sound == nullptr) {
+        return;
+    }
+
+    uint32_t *soundId = nullptr;
+    const wchar_t *path = nullptr;
+    switch (se) {
+    case MenuSe::Select:
+        soundId = &selectSeSoundId;
+        path = kSelectSePath;
+        break;
+    case MenuSe::Selected:
+        soundId = &selectedSeSoundId;
+        path = kSelectedSePath;
+        break;
+    case MenuSe::Cancel:
+        soundId = &cancelSeSoundId;
+        path = kCancelSePath;
+        break;
+    }
+
+    if (soundId == nullptr || path == nullptr) {
+        return;
+    }
+    if (*soundId == SoundManager::kInvalidSoundId) {
+        *soundId = ctx.systems.sound->LoadOrCreateSilent(path);
+    }
+    ctx.systems.sound->Play(*soundId, volume * seVolume, false);
 }
 }

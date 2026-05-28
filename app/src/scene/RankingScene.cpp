@@ -20,9 +20,10 @@
 using namespace DirectX;
 
 namespace {
-constexpr float kIntroDuration = 0.56f;
-constexpr float kContentFadeDelay = 0.26f;
-constexpr float kContentFadeDuration = 0.46f;
+constexpr float kIntroDuration = 1.10f;
+constexpr float kBackgroundRevealDuration = 0.84f;
+constexpr float kContentFadeDelay = 0.48f;
+constexpr float kContentFadeDuration = 0.50f;
 constexpr float kTransitionDuration = 0.16f;
 constexpr size_t kRankingDrawCount = 5;
 
@@ -58,6 +59,14 @@ void RankingScene::Initialize(const SceneContext &ctx) {
 
     rankingTitleLabel_ =
         LoadTextureImage(L"app/resources/ui/result/text/ranking_title.png");
+    rankHeaderLabel_ =
+        LoadTextureImage(L"app/resources/ui/result/text/ranking_rank.png");
+    scoreHeaderLabel_ =
+        LoadTextureImage(L"app/resources/ui/result/text/ranking_score.png");
+    timeHeaderLabel_ =
+        LoadTextureImage(L"app/resources/ui/result/text/ranking_time.png");
+    difficultyHeaderLabel_ =
+        LoadTextureImage(L"app/resources/ui/result/text/ranking_difficulty.png");
     for (int i = 0; i < 10; ++i) {
         digitImages_[static_cast<size_t>(i)] =
             LoadTextureImage(L"app/resources/ui/result/mplus/glyphs/char_" +
@@ -77,7 +86,7 @@ void RankingScene::Initialize(const SceneContext &ctx) {
 
 void RankingScene::Update() {
     introTimer_ = (std::min)(introTimer_ + ctx_->frame.deltaTime,
-                             kContentFadeDelay + kContentFadeDuration + 0.2f);
+                             kIntroDuration + 0.2f);
     if (backgroundScene_) {
         backgroundScene_->Update();
     }
@@ -93,6 +102,7 @@ void RankingScene::Update() {
     Input *input = ctx_->systems.input;
     if (input != nullptr &&
         (input->IsKeyTrigger(DIK_ESCAPE) || input->IsKeyTrigger(DIK_SPACE))) {
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
         BeginReturn();
     }
 }
@@ -163,28 +173,37 @@ void RankingScene::BeginReturn() {
 }
 
 void RankingScene::DrawOverlay(float screenWidth, float screenHeight) {
-    const float intro = Smooth01((introTimer_ - 0.08f) / 0.42f);
+    const float backgroundReveal =
+        Smooth01(introTimer_ / kBackgroundRevealDuration);
     DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
-             Color(0.0f, 0.0f, 0.0f, 0.72f + (1.0f - intro) * 0.28f));
+             Color(0.0f, 0.0f, 0.0f,
+                   0.72f + (1.0f - backgroundReveal) * 0.22f));
     DrawRect(0.0f, 0.0f, screenWidth, screenHeight * 0.20f,
-             Color(0.0f, 0.0f, 0.0f, 0.32f * intro));
+             Color(0.0f, 0.0f, 0.0f, 0.32f * backgroundReveal));
     DrawRect(0.0f, screenHeight * 0.80f, screenWidth, screenHeight * 0.20f,
-             Color(0.0f, 0.0f, 0.0f, 0.36f * intro));
+             Color(0.0f, 0.0f, 0.0f, 0.36f * backgroundReveal));
 }
 
 void RankingScene::DrawRanking(float screenWidth, float screenHeight) {
     const float intro =
         Smooth01((introTimer_ - kContentFadeDelay) / kContentFadeDuration);
+    if (intro <= 0.0f) {
+        return;
+    }
     const float panelW = std::clamp(screenWidth * 0.55f, 620.0f, 860.0f);
     const float panelH = std::clamp(screenHeight * 0.70f, 440.0f, 620.0f);
     const float x = (screenWidth - panelW) * 0.5f;
-    const float y = (screenHeight - panelH) * 0.5f;
+    const float y =
+        (screenHeight - panelH) * 0.5f + (1.0f - intro) * 30.0f;
 
     DrawRect(x + 12.0f, y + 14.0f, panelW, panelH,
-             Color(0.0f, 0.0f, 0.0f, 0.34f * intro));
-    DrawRect(x, y, panelW, panelH, Color(0.016f, 0.019f, 0.023f, 0.86f * intro));
+             Color(0.0f, 0.0f, 0.0f, 0.44f * intro));
+    DrawRect(x, y, panelW, panelH,
+             Color(0.010f, 0.013f, 0.018f, 0.92f * intro));
+    DrawRect(x + panelW * 0.05f, y + panelH * 0.245f, panelW * 0.90f,
+             panelH * 0.60f, Color(0.0f, 0.0f, 0.0f, 0.24f * intro));
     DrawFrame(x, y, panelW, panelH, 2.0f,
-              Color(0.95f, 0.72f, 0.28f, 0.70f * intro));
+              Color(0.95f, 0.72f, 0.28f, 0.82f * intro));
 
     const float titleScale =
         std::clamp((panelW * 0.42f) /
@@ -214,8 +233,33 @@ void RankingScene::DrawRanking(float screenWidth, float screenHeight) {
         scoreRight + gap + timeColumnW * rowScale;
     const float difficultyRight =
         timeRight + gap + difficultyColumnW * rowScale;
-    const float rowStartY = y + panelH * 0.24f;
-    const float rowGap = panelH * 0.066f;
+    const float rankX = contentLeft;
+    const float headerY = y + panelH * 0.245f;
+    const float rowStartY = y + panelH * 0.335f;
+    const float rowGap = panelH * 0.070f;
+    const float headerScale = std::clamp(rowScale * 0.86f, 0.34f, 0.50f);
+    DrawImage(rankHeaderLabel_, rankX, headerY, headerScale, 0.72f * intro);
+    DrawImage(scoreHeaderLabel_,
+              scoreRight - scoreHeaderLabel_.width * headerScale, headerY,
+              headerScale, 0.72f * intro);
+    DrawImage(timeHeaderLabel_, timeRight - timeHeaderLabel_.width * headerScale,
+              headerY, headerScale, 0.72f * intro);
+    DrawImage(difficultyHeaderLabel_,
+              difficultyRight - difficultyHeaderLabel_.width * headerScale,
+              headerY, headerScale, 0.72f * intro);
+    DrawRect(contentLeft - panelW * 0.020f, y + panelH * 0.305f,
+             contentW + panelW * 0.040f, 1.0f,
+             Color(0.95f, 0.72f, 0.28f, 0.30f * intro));
+    const float tableTop = y + panelH * 0.245f;
+    const float tableBottom = rowStartY + rowGap * 4.72f;
+    const float lineAlpha = 0.22f * intro;
+    DrawRect(contentLeft + rankColumnW * rowScale + gap * 0.50f, tableTop,
+             1.0f, tableBottom - tableTop,
+             Color(0.95f, 0.72f, 0.28f, lineAlpha));
+    DrawRect(scoreRight + gap * 0.50f, tableTop, 1.0f,
+             tableBottom - tableTop, Color(0.95f, 0.72f, 0.28f, lineAlpha));
+    DrawRect(timeRight + gap * 0.50f, tableTop, 1.0f,
+             tableBottom - tableTop, Color(0.95f, 0.72f, 0.28f, lineAlpha));
     if (rankingEntries_.empty()) {
         DrawTextLineLeft("--", x + panelW * 0.45f, rowStartY + rowGap * 2.0f,
                          rowScale, 0.70f * intro);
@@ -228,7 +272,8 @@ void RankingScene::DrawRanking(float screenWidth, float screenHeight) {
         const float rowY = rowStartY + static_cast<float>(i) * rowGap;
         DrawRect(contentLeft - panelW * 0.020f, rowY - rowGap * 0.12f,
                  contentW + panelW * 0.040f, rowGap * 0.84f,
-                 Color(0.0f, 0.0f, 0.0f, (i % 2 == 0 ? 0.16f : 0.08f) * intro));
+                 Color(1.0f, 1.0f, 1.0f,
+                       (i % 2 == 0 ? 0.030f : 0.015f) * intro));
         std::ostringstream row;
         row << (i + 1) << ":";
         DrawTextLineLeft(row.str(), contentLeft, rowY, rowScale,

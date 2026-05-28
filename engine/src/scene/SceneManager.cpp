@@ -127,6 +127,14 @@ void SceneManager::DrawTransparent() {
     }
 }
 
+void SceneManager::DrawPostProcessOverlay() {
+    if (currentScene_) {
+        isDrawing_ = true;
+        currentScene_->DrawPostProcessOverlay();
+        isDrawing_ = false;
+    }
+}
+
 void SceneManager::DrawShadow() {
     if (currentScene_) {
         isDrawing_ = true;

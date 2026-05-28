@@ -1,4 +1,5 @@
 #include "GameOverScene.h"
+#include "AppSceneServices.h"
 #include "DirectXCommon.h"
 #include "GameScene.h"
 #include "Input.h"
@@ -37,15 +38,33 @@ constexpr DirectX::XMFLOAT3 kDefeatSpotlightTarget{
     kPlayerDefeatPosition.z,
 };
 constexpr size_t kSpotlightDustCount = 150;
-constexpr float kRetryRiseDuration = 1.18f;
+constexpr float kRetryRiseAnimDuration = 0.78f;
+constexpr float kRetryRunStart = 0.84f;
+constexpr float kRetryRunEndZ = 11.6f;
+constexpr float kRetryBlackFadeDuration = 0.88f;
+constexpr float kRetryBlackHoldDuration = 0.5f;
+constexpr float kRetrySkipFadeDuration = 0.18f;
+constexpr float kRetryRiseDuration =
+    kRetryRunStart + kRetryBlackFadeDuration + kRetryBlackHoldDuration;
 constexpr int kGameOverLetterCount = 8;
 constexpr float kGameOverLetterStart = 0.54f;
 constexpr float kGameOverLetterInterval = 0.13f;
-constexpr float kGameOverLetterFadeDuration = 0.18f;
-constexpr float kTitleFadeDuration =
+constexpr float kGameOverLetterFadeDuration = 0.34f;
+constexpr float kGameOverLetterOozeDuration = 0.48f;
+constexpr float kGameOverTextHoldDuration = 3.0f;
+constexpr float kGameOverBlackFadeDuration = 0.78f;
+constexpr float kGameOverBlackHoldDuration = 3.0f;
+constexpr float kGameOverTextCompleteTime =
     kGameOverLetterStart +
     kGameOverLetterInterval * static_cast<float>(kGameOverLetterCount - 1) +
-    kGameOverLetterFadeDuration + 0.62f;
+    kGameOverLetterFadeDuration;
+constexpr float kGameOverBlackFadeStartTime =
+    kGameOverTextCompleteTime + kGameOverTextHoldDuration;
+constexpr float kTitleFadeDuration =
+    kGameOverBlackFadeStartTime + kGameOverBlackFadeDuration +
+    kGameOverBlackHoldDuration;
+constexpr float kTitleFadeSkipDuration =
+    kGameOverBlackFadeStartTime + kGameOverBlackFadeDuration;
 
 std::array<int, 10> g_defeatsByDifficulty{};
 
@@ -236,7 +255,10 @@ void GameOverScene::Initialize(const SceneContext &ctx) {
     promptCloseTimer_ = 0.0f;
     difficultyDropTimer_ = 0.0f;
     retryRiseTimer_ = 0.0f;
+    retrySkipFadeTimer_ = 0.0f;
     titleFadeTimer_ = 0.0f;
+    retrySkipFadeActive_ = false;
+    titleFadeSkipRequested_ = false;
     difficultyBeforeDrop_ = combatDifficulty_;
     displayedDifficulty_ = combatDifficulty_;
 
@@ -343,11 +365,6 @@ void GameOverScene::Update() {
         UpdateMenu();
         break;
     case State::RetryRise:
-        if (IsAdvancePressed(ctx_->systems.input)) {
-            sceneManager_->ChangeScene(
-                std::make_unique<GameScene>(inputCalibration_, combatDifficulty_));
-            return;
-        }
         UpdateRetryRise(deltaTime);
         break;
     case State::TitleFade:
@@ -441,10 +458,18 @@ void GameOverScene::UpdateDifficultyPrompt(float deltaTime) {
     }
 
     if (input->IsKeyTrigger(DIK_A) || input->IsKeyTrigger(DIK_LEFT)) {
-        promptIndex_ = 0;
+        if (promptIndex_ != 0) {
+            promptIndex_ = 0;
+            AppSceneServices::PlayMenuSe(*ctx_,
+                                         AppSceneServices::MenuSe::Select);
+        }
     }
     if (input->IsKeyTrigger(DIK_D) || input->IsKeyTrigger(DIK_RIGHT)) {
-        promptIndex_ = 1;
+        if (promptIndex_ != 1) {
+            promptIndex_ = 1;
+            AppSceneServices::PlayMenuSe(*ctx_,
+                                         AppSceneServices::MenuSe::Select);
+        }
     }
 
     if (!confirm) {
@@ -452,11 +477,13 @@ void GameOverScene::UpdateDifficultyPrompt(float deltaTime) {
     }
 
     if (promptIndex_ == 0) {
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Selected);
         difficultyBeforeDrop_ = combatDifficulty_;
         combatDifficulty_ = std::clamp(combatDifficulty_ - 1.0f, 0.0f, 9.0f);
         difficultyDropTimer_ = 0.0f;
         state_ = State::DifficultyDrop;
     } else {
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
         promptCloseTimer_ = 0.0f;
         state_ = State::DifficultyPromptClose;
     }
@@ -500,10 +527,18 @@ void GameOverScene::UpdateDifficultyPromptClose(float deltaTime) {
 void GameOverScene::UpdateMenu() {
     Input *input = ctx_->systems.input;
     if (input->IsKeyTrigger(DIK_A) || input->IsKeyTrigger(DIK_LEFT)) {
-        menuIndex_ = 0;
+        if (menuIndex_ != 0) {
+            menuIndex_ = 0;
+            AppSceneServices::PlayMenuSe(*ctx_,
+                                         AppSceneServices::MenuSe::Select);
+        }
     }
     if (input->IsKeyTrigger(DIK_D) || input->IsKeyTrigger(DIK_RIGHT)) {
-        menuIndex_ = 1;
+        if (menuIndex_ != 1) {
+            menuIndex_ = 1;
+            AppSceneServices::PlayMenuSe(*ctx_,
+                                         AppSceneServices::MenuSe::Select);
+        }
     }
 
     const bool confirm = IsAdvancePressed(input);
@@ -512,36 +547,70 @@ void GameOverScene::UpdateMenu() {
     }
 
     if (menuIndex_ == 0) {
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Selected);
         retryRiseTimer_ = 0.0f;
         state_ = State::RetryRise;
     } else {
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Selected);
         titleFadeTimer_ = 0.0f;
+        titleFadeSkipRequested_ = false;
         state_ = State::TitleFade;
     }
 }
 
 void GameOverScene::UpdateRetryRise(float deltaTime) {
+    if (retrySkipFadeActive_) {
+        retrySkipFadeTimer_ =
+            (std::min)(retrySkipFadeTimer_ + deltaTime, kRetrySkipFadeDuration);
+        if (retrySkipFadeTimer_ >= kRetrySkipFadeDuration) {
+            sceneManager_->ChangeScene(
+                std::make_unique<GameScene>(inputCalibration_, combatDifficulty_));
+        }
+        return;
+    }
+    if (IsAdvancePressed(ctx_->systems.input)) {
+        retrySkipFadeActive_ = true;
+        retrySkipFadeTimer_ = 0.0f;
+        return;
+    }
+
     retryRiseTimer_ = (std::min)(retryRiseTimer_ + deltaTime, kRetryRiseDuration);
-    const float rawT = std::clamp(retryRiseTimer_ / kRetryRiseDuration, 0.0f, 1.0f);
-    constexpr float kTrembleEnd = 0.28f;
-    constexpr float kSnapEnd = 0.58f;
-    const float snapT = std::clamp((rawT - kTrembleEnd) / (kSnapEnd - kTrembleEnd),
-                                   0.0f, 1.0f);
-    const float riseT =
-        std::clamp(1.0f - std::powf(1.0f - snapT, 4.2f), 0.0f, 1.0f);
+    const float rawT =
+        std::clamp(retryRiseTimer_ / kRetryRiseAnimDuration, 0.0f, 1.0f);
+    constexpr float kSqueezeEnd = 0.16f;
+    constexpr float kPopEnd = 0.68f;
+    constexpr float kTrembleEnd = 0.24f;
+    const float squeezeT = std::clamp(rawT / kSqueezeEnd, 0.0f, 1.0f);
+    const float popT =
+        std::clamp((rawT - kSqueezeEnd) / (kPopEnd - kSqueezeEnd), 0.0f, 1.0f);
+    const float riseT = rawT < kSqueezeEnd
+                            ? 0.0f
+                            : std::clamp(1.0f - std::powf(1.0f - popT, 4.2f),
+                                         0.0f, 1.0f);
     const float defeatPose = 1.0f - riseT;
     const float defeatPoseEased = SmoothStep01(defeatPose);
     constexpr float kDefeatVisualGroundOffset = 0.48f;
+    const float squeezeDip = std::sinf(squeezeT * XM_PI) * 0.10f;
     const float tremble =
         rawT < kTrembleEnd ? (1.0f - rawT / kTrembleEnd) : 0.0f;
-    const float shakeX = std::sinf(retryRiseTimer_ * 92.0f) * 0.030f * tremble;
-    const float shakeZ = std::cosf(retryRiseTimer_ * 76.0f) * 0.018f * tremble;
-    const float shakeYaw = std::sinf(retryRiseTimer_ * 84.0f) * 0.070f * tremble;
-    player_.LockPosition({kPlayerDefeatPosition.x + shakeX,
-                          kPlayerDefeatPosition.y -
-                              kDefeatVisualGroundOffset * (1.0f - defeatPoseEased),
-                          kPlayerDefeatPosition.z + shakeZ});
-    player_.SetYaw(0.65f + shakeYaw);
+    const float shakeX = std::sinf(retryRiseTimer_ * 118.0f) * 0.038f * tremble;
+    const float shakeZ = std::cosf(retryRiseTimer_ * 96.0f) * 0.024f * tremble;
+    const float shakeYaw = std::sinf(retryRiseTimer_ * 110.0f) * 0.092f * tremble;
+    const float turnT =
+        SmoothStep01((retryRiseTimer_ - kRetryRiseAnimDuration * 0.58f) /
+                     (kRetryRiseAnimDuration * 0.34f));
+    const float runT = SmoothStep01((retryRiseTimer_ - kRetryRunStart) /
+                                    kRetryBlackFadeDuration);
+    const float runZ =
+        kPlayerDefeatPosition.z +
+        (kRetryRunEndZ - kPlayerDefeatPosition.z) * runT;
+    player_.LockPosition({
+        kPlayerDefeatPosition.x + shakeX,
+        kPlayerDefeatPosition.y -
+            kDefeatVisualGroundOffset * (1.0f - defeatPoseEased) - squeezeDip,
+        runZ + shakeZ,
+    });
+    player_.SetYaw((0.65f + shakeYaw) * (1.0f - turnT));
     player_.SetDefeatPoseRatio(defeatPose);
     if (retryRiseTimer_ >= kRetryRiseDuration) {
         sceneManager_->ChangeScene(
@@ -550,8 +619,16 @@ void GameOverScene::UpdateRetryRise(float deltaTime) {
 }
 
 void GameOverScene::UpdateTitleFade(float deltaTime) {
-    titleFadeTimer_ = (std::min)(titleFadeTimer_ + deltaTime, kTitleFadeDuration);
-    if (titleFadeTimer_ >= kTitleFadeDuration) {
+    if (IsAdvancePressed(ctx_->systems.input)) {
+        titleFadeSkipRequested_ = true;
+        if (titleFadeTimer_ < kGameOverBlackFadeStartTime) {
+            titleFadeTimer_ = kGameOverBlackFadeStartTime;
+        }
+    }
+    const float targetDuration =
+        titleFadeSkipRequested_ ? kTitleFadeSkipDuration : kTitleFadeDuration;
+    titleFadeTimer_ = (std::min)(titleFadeTimer_ + deltaTime, targetDuration);
+    if (titleFadeTimer_ >= targetDuration) {
         ResetDefeatCounts();
         sceneManager_->ChangeScene(std::make_unique<TitleScene>());
     }
@@ -572,6 +649,10 @@ void GameOverScene::DrawWorld() {
         return;
     }
 
+    const bool retrySpotlightOff =
+        state_ == State::RetryRise &&
+        (retrySkipFadeActive_ || retryRiseTimer_ >= kRetryRunStart);
+
     SceneLighting lighting{};
     lighting.keyLightDirection = {-0.08f, -1.0f, 0.18f};
     lighting.keyLightColor = {0.34f, 0.30f, 0.24f, 1.0f};
@@ -584,7 +665,8 @@ void GameOverScene::DrawWorld() {
                                         kDefeatSpotlightPosition.y,
                                         kDefeatSpotlightPosition.z, 8.20f};
     lighting.spotLight.direction = {0.083f, -0.979f, 0.183f, 0.0f};
-    lighting.spotLight.colorIntensity = {1.0f, 0.86f, 0.58f, 11.50f};
+    lighting.spotLight.colorIntensity = {
+        1.0f, 0.86f, 0.58f, retrySpotlightOff ? 0.0f : 11.50f};
     lighting.spotLight.angleParams = {0.976f, 0.620f, 1.85f, 1.0f};
     lighting.lightingParams = {64.0f, 0.26f, 2.60f, 0.03f};
     model->SetSceneLighting(lighting);
@@ -603,10 +685,10 @@ void GameOverScene::DrawWorld() {
         Transform floor{};
         floor.position = {0.0f, -0.46f, 2.35f};
         floor.rotation = MakeQuat(-XM_PIDIV2, 0.0f, 0.0f);
-        floor.scale = {8.6f, 8.6f, 1.0f};
+        floor.scale = {32.0f, 32.0f, 1.0f};
         model->Draw(gameOverFloorModelId_, floor, camera_);
     }
-    if (spotlightPoolModelId_ != 0) {
+    if (!retrySpotlightOff && spotlightPoolModelId_ != 0) {
         Transform pool{};
         pool.position = {kDefeatSpotlightTarget.x, kPlayerDefeatPosition.y - 0.45f,
                          kDefeatSpotlightTarget.z};
@@ -615,7 +697,9 @@ void GameOverScene::DrawWorld() {
         model->Draw(spotlightPoolModelId_, pool, camera_);
     }
     player_.Draw(model, camera_, true, true, 0.92f);
-    DrawSpotlightDust();
+    if (!retrySpotlightOff) {
+        DrawSpotlightDust();
+    }
     model->PostDraw();
 }
 
@@ -743,6 +827,20 @@ void GameOverScene::DrawOverlay(float screenWidth, float screenHeight) {
     }
     if (state_ == State::Menu || state_ == State::RetryRise) {
         DrawMenu(screenWidth, screenHeight);
+    }
+    if (state_ == State::RetryRise) {
+        const float retryFade =
+            SmoothStep01((retryRiseTimer_ - kRetryRunStart) /
+                         kRetryBlackFadeDuration);
+        const float skipFade =
+            retrySkipFadeActive_
+                ? SmoothStep01(retrySkipFadeTimer_ / kRetrySkipFadeDuration)
+                : 0.0f;
+        const float fade = (std::max)(retryFade, skipFade);
+        if (fade > 0.001f) {
+            DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
+                     Color(0.0f, 0.0f, 0.0f, fade));
+        }
     }
     if (state_ == State::TitleFade) {
         DrawTitleFade(screenWidth, screenHeight);
@@ -983,18 +1081,74 @@ void GameOverScene::DrawTitleFade(float screenWidth, float screenHeight) {
     const float textH = maxLetterHeight * scale;
     const float x = (screenWidth - textW) * 0.5f;
     const float y = (screenHeight - textH) * 0.5f;
+    const float blackFade =
+        SmoothStep01((titleFadeTimer_ - kGameOverBlackFadeStartTime) /
+                     kGameOverBlackFadeDuration);
     float cursorX = x;
     for (int i = 0; i < kGameOverLetterCount; ++i) {
         const Image &letter = gameOverLetterImages_[static_cast<size_t>(i)];
+        const float letterStart =
+            kGameOverLetterStart +
+            kGameOverLetterInterval * static_cast<float>(i);
         const float appear =
-            SmoothStep01((titleFadeTimer_ - kGameOverLetterStart -
-                          kGameOverLetterInterval * static_cast<float>(i)) /
+            SmoothStep01((titleFadeTimer_ - letterStart) /
                          kGameOverLetterFadeDuration);
         if (appear > 0.001f) {
-            const float lift = (1.0f - appear) * 16.0f;
-            DrawImage(letter, cursorX, y + lift, scale, appear);
+            const float ooze =
+                1.0f - SmoothStep01((titleFadeTimer_ - letterStart) /
+                                    kGameOverLetterOozeDuration);
+            const float wave =
+                std::sinf(titleFadeTimer_ * 7.4f + static_cast<float>(i) * 1.83f);
+            const float slide = ooze * (5.0f + 1.8f * wave);
+            const float wobbleX = ooze * wave * 1.4f;
+            const float letterAlpha = appear;
+            const float lx = cursorX + wobbleX;
+            const float ly = y + slide;
+            const float letterW = letter.width * scale;
+            const float letterH = letter.height * scale;
+            const float centerX = lx + letterW * 0.5f;
+            const float centerY = ly + letterH * 0.5f;
+
+            for (int layer = 4; layer >= 1; --layer) {
+                const float layerF = static_cast<float>(layer);
+                const float bloomAlpha =
+                    letterAlpha * ooze * (0.12f + 0.035f * layerF);
+                if (bloomAlpha <= 0.001f) {
+                    continue;
+                }
+                const float bloomScale = scale * (1.0f + ooze * 0.16f +
+                                                  layerF * 0.015f);
+                const float bloomW = letter.width * bloomScale;
+                const float bloomH = letter.height * bloomScale;
+                const float offsetX =
+                    std::sinf(titleFadeTimer_ * 9.2f + layerF * 2.1f +
+                              static_cast<float>(i)) *
+                    ooze * layerF * 1.1f;
+                const float offsetY =
+                    std::cosf(titleFadeTimer_ * 8.4f + layerF * 1.7f +
+                              static_cast<float>(i) * 0.6f) *
+                    ooze * layerF * 0.9f;
+                DrawImageTint(letter, centerX - bloomW * 0.5f + offsetX,
+                              centerY - bloomH * 0.5f + offsetY, bloomScale,
+                              Color(0.56f, 0.56f, 0.55f, bloomAlpha));
+            }
+
+            const float bodyScale = scale * (0.96f + 0.04f * appear);
+            const float bodyW = letter.width * bodyScale;
+            const float bodyH = letter.height * bodyScale;
+            DrawImageTint(letter, lx - 2.0f, ly + 2.0f, scale,
+                          Color(0.30f, 0.30f, 0.30f,
+                                letterAlpha * (0.26f + ooze * 0.16f)));
+            DrawImageTint(letter, centerX - bodyW * 0.5f,
+                          centerY - bodyH * 0.5f, bodyScale,
+                          Color(0.72f, 0.72f, 0.70f, letterAlpha));
         }
         cursorX += letter.width * scale;
+    }
+
+    if (blackFade > 0.001f) {
+        DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
+                 Color(0.0f, 0.0f, 0.0f, blackFade));
     }
 }
 
@@ -1008,6 +1162,20 @@ void GameOverScene::DrawImage(const Image &image, float x, float y, float scale,
     sprite.position = {x, y};
     sprite.size = {image.width * scale, image.height * scale};
     sprite.color = {1.0f, 1.0f, 1.0f, alpha};
+    ctx_->rendering.sprite->DrawSprite(sprite);
+}
+
+void GameOverScene::DrawImageTint(const Image &image, float x, float y,
+                                  float scale, const XMFLOAT4 &color) {
+    if (image.textureId == 0 || image.width <= 0.0f || image.height <= 0.0f ||
+        color.w <= 0.0f) {
+        return;
+    }
+    Sprite sprite{};
+    sprite.textureId = image.textureId;
+    sprite.position = {x, y};
+    sprite.size = {image.width * scale, image.height * scale};
+    sprite.color = color;
     ctx_->rendering.sprite->DrawSprite(sprite);
 }
 

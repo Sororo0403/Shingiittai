@@ -42,7 +42,9 @@ class Sword {
 
   private:
     static constexpr float kSwordLength = 1.2f;
-    static constexpr float kSlashHitDepthExtension = 1.55f;
+    static constexpr float kSlashHitDepthExtension = 2.35f;
+    static constexpr float kSlashHitWidthScale = 2.0f;
+    static constexpr float kSlashHitHeightScale = 1.65f;
     DirectX::XMFLOAT3 size_{0.34f, 0.34f, 0.78f};
 
     uint32_t modelId_ = 0;

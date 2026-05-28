@@ -241,6 +241,10 @@ void EngineRuntime::RenderFrame() {
     systems_->renderPassController.EndPass();
     systems_->dxCommon.TransitionDepthToWrite();
 
+    systems_->renderPassController.BeginPass(RenderPass::UI);
+    systems_->sceneManager.DrawPostProcessOverlay();
+    systems_->renderPassController.EndPass();
+
 #ifdef _DEBUG
     systems_->renderPassController.BeginPass(RenderPass::UI);
     systems_->imguiManager.End(systems_->dxCommon.GetCommandList());

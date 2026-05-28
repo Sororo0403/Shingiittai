@@ -69,9 +69,12 @@ OBB Sword::BuildOBB(const Transform &transform) const {
 
     float hitBoxDepth = size_.z;
     float forwardOffset = kSwordLength * 0.5f;
+    XMFLOAT3 hitBoxSize = size_;
     if (isSlashMode_) {
         hitBoxDepth += kSlashHitDepthExtension;
         forwardOffset += kSlashHitDepthExtension * 0.5f;
+        hitBoxSize.x *= kSlashHitWidthScale;
+        hitBoxSize.y *= kSlashHitHeightScale;
     }
 
     XMVECTOR pos = XMLoadFloat3(&transform.position);
@@ -80,7 +83,7 @@ OBB Sword::BuildOBB(const Transform &transform) const {
     XMVECTOR center = pos + forward * forwardOffset;
 
     XMStoreFloat3(&box.center, center);
-    box.size = size_;
+    box.size = hitBoxSize;
     box.size.z = hitBoxDepth;
     box.rotation = transform.rotation;
     return box;

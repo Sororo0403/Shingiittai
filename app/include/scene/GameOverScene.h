@@ -67,6 +67,8 @@ class GameOverScene : public BaseScene {
     void DrawTitleFade(float screenWidth, float screenHeight);
     void DrawImage(const Image &image, float x, float y, float scale = 1.0f,
                    float alpha = 1.0f);
+    void DrawImageTint(const Image &image, float x, float y, float scale,
+                       const DirectX::XMFLOAT4 &color);
     void DrawTextureRect(uint32_t textureId, float x, float y, float w, float h,
                          const DirectX::XMFLOAT4 &color, float uvWidth,
                          SpriteBlendMode blendMode, float uvLeft = 0.0f);
@@ -92,7 +94,10 @@ class GameOverScene : public BaseScene {
     float difficultyBeforeDrop_ = 5.0f;
     float displayedDifficulty_ = 5.0f;
     float retryRiseTimer_ = 0.0f;
+    float retrySkipFadeTimer_ = 0.0f;
     float titleFadeTimer_ = 0.0f;
+    bool retrySkipFadeActive_ = false;
+    bool titleFadeSkipRequested_ = false;
 
     Camera camera_;
     Player player_;

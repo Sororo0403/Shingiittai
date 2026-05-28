@@ -27,6 +27,7 @@ constexpr float kCreditRollFastSpeed = 360.0f;
 constexpr float kCreditVirtualWidth = 760.0f;
 constexpr float kTaroLineCenterY = 374.0f;
 constexpr float kAotoMoriLineCenterY = 650.0f;
+constexpr float kTsunaguLineCenterY = 1178.0f;
 constexpr float kLogoStartAfterTextPadding = 80.0f;
 constexpr float kLogoStartBelowScreenPadding = 150.0f;
 constexpr float kSignatureColumnCenterRatio = 0.78f;
@@ -38,12 +39,18 @@ struct CreditLineSpec {
     float scale;
 };
 
-constexpr std::array<CreditLineSpec, 5> kCreditLineSpecs{{
+constexpr std::array<CreditLineSpec, 9> kCreditLineSpecs{{
     {L"app/resources/ui/credits/lines/title.png", 78.0f, 1.0f},
     {L"app/resources/ui/credits/lines/taro_name.png", 374.0f, 1.0f},
     {L"app/resources/ui/credits/lines/taro_role.png", 426.0f, 1.0f},
     {L"app/resources/ui/credits/lines/aotomori_name.png", 650.0f, 1.0f},
     {L"app/resources/ui/credits/lines/aotomori_role.png", 702.0f, 1.0f},
+    {L"app/resources/ui/credits/lines/yutaka_name.png", 914.0f, 1.0f},
+    {L"app/resources/ui/credits/lines/yutaka_role.png", 966.0f, 1.0f},
+    {L"app/resources/ui/credits/lines/tsunagu_miyashita_name.png", 1178.0f,
+     1.0f},
+    {L"app/resources/ui/credits/lines/tsunagu_miyashita_role.png", 1228.0f,
+     1.0f},
 }};
 
 XMFLOAT4 MakeColor(float r, float g, float b, float a = 1.0f) {
@@ -84,6 +91,8 @@ void CreditScene::Initialize(const SceneContext &ctx) {
         LoadTextureImage(L"app/resources/ui/credits/taro_signature.png");
     aotoMoriSignatureImage_ =
         LoadTextureImage(L"app/resources/ui/credits/name_AotoMori.png");
+    tsunaguSignatureImage_ =
+        LoadTextureImage(L"app/resources/ui/credits/tsunagu_sign.png");
 
     StartCreditBgm();
 }
@@ -115,6 +124,7 @@ void CreditScene::Update() {
     }
 
     if (input != nullptr && input->IsKeyTrigger(DIK_ESCAPE)) {
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
         BeginReturnToTitle();
     }
 }
@@ -218,6 +228,7 @@ void CreditScene::DrawCredits(float screenWidth, float screenHeight) {
     drawSignature(taroSignatureImage_, kTaroLineCenterY, 0.38f,
                   kSignatureMaxScale);
     drawSignature(aotoMoriSignatureImage_, kAotoMoriLineCenterY, 0.16f, 0.42f);
+    drawSignature(tsunaguSignatureImage_, kTsunaguLineCenterY, 0.24f, 0.46f);
 
     if (logoImage_.width > 0.0f && logoImage_.height > 0.0f) {
         const float logoScale =
@@ -313,7 +324,9 @@ void CreditScene::StartCreditBgm() {
     creditBgmSoundId_ = ctx_->systems.sound->LoadOrCreateSilent(
         L"app/resources/audio/bgm/bgm_TitleTheme.wav");
     creditBgmVoiceHandle_ =
-        ctx_->systems.sound->Play(creditBgmSoundId_, 0.36f, true);
+        ctx_->systems.sound->Play(creditBgmSoundId_,
+                                  0.24f * AppSceneServices::GetBgmVolume(),
+                                  true);
 }
 
 void CreditScene::StopCreditBgm() {

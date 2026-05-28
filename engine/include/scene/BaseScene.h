@@ -50,6 +50,11 @@ class BaseScene {
     virtual void DrawTransparent() {}
 
     /// <summary>
+    /// ポストエフェクト適用後のバックバッファへUIを描画する。
+    /// </summary>
+    virtual void DrawPostProcessOverlay() {}
+
+    /// <summary>
     /// シーンマネージャーを設定する
     /// </summary>
     /// <param name="sceneManager">関連付けるシーンマネージャー</param>

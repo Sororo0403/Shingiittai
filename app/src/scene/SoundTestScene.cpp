@@ -15,9 +15,12 @@
 using namespace DirectX;
 
 namespace {
-constexpr float kIntroDuration = 0.50f;
-constexpr float kContentFadeDelay = 0.18f;
-constexpr float kContentFadeDuration = 0.34f;
+constexpr float kIntroDuration = 1.10f;
+constexpr float kBackgroundRevealDuration = 0.84f;
+constexpr float kBarIntroDelay = 0.24f;
+constexpr float kBarIntroDuration = 0.62f;
+constexpr float kContentFadeDelay = 0.48f;
+constexpr float kContentFadeDuration = 0.50f;
 constexpr float kTransitionDuration = 0.16f;
 constexpr float kControlsPadding = 32.0f;
 
@@ -106,6 +109,7 @@ void SoundTestScene::Update() {
     }
 
     if (input->IsKeyTrigger(DIK_ESCAPE)) {
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
         BeginReturn();
         return;
     }
@@ -114,12 +118,15 @@ void SoundTestScene::Update() {
             (selectedIndex_ + static_cast<int>(kTrackCount) - 1) %
             static_cast<int>(kTrackCount);
         StopPlayingTrack();
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
     }
     if (input->IsKeyTrigger(DIK_D) || input->IsKeyTrigger(DIK_RIGHT)) {
         selectedIndex_ = (selectedIndex_ + 1) % static_cast<int>(kTrackCount);
         StopPlayingTrack();
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
     }
     if (input->IsKeyTrigger(DIK_SPACE) || input->IsKeyTrigger(DIK_RETURN)) {
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Selected);
         ToggleSelectedTrackPlayback();
     }
 }
@@ -170,7 +177,8 @@ void SoundTestScene::PlaySelectedTrack() {
         return;
     }
 
-    playingVoiceHandle_ = ctx_->systems.sound->Play(track.soundId, 0.40f, true);
+    playingVoiceHandle_ = ctx_->systems.sound->Play(
+        track.soundId, 0.28f * AppSceneServices::GetBgmVolume(), true);
     playingIndex_ = selectedIndex_;
     playbackPaused_ = false;
 }
@@ -257,20 +265,21 @@ void SoundTestScene::UpdateVisualizer(float deltaTime) {
 }
 
 void SoundTestScene::DrawOverlay(float screenWidth, float screenHeight) {
-    const float intro = Smooth01(introTimer_ / kIntroDuration);
+    const float backgroundReveal =
+        Smooth01(introTimer_ / kBackgroundRevealDuration);
     DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
-             Color(0.0f, 0.0f, 0.0f, 0.72f + (1.0f - intro) * 0.28f));
+             Color(0.0f, 0.0f, 0.0f,
+                   0.72f + (1.0f - backgroundReveal) * 0.22f));
     DrawRect(0.0f, 0.0f, screenWidth, screenHeight * 0.20f,
-             Color(0.0f, 0.0f, 0.0f, 0.32f * intro));
+             Color(0.0f, 0.0f, 0.0f, 0.32f * backgroundReveal));
     DrawRect(0.0f, screenHeight * 0.80f, screenWidth, screenHeight * 0.20f,
-             Color(0.0f, 0.0f, 0.0f, 0.36f * intro));
+             Color(0.0f, 0.0f, 0.0f, 0.36f * backgroundReveal));
 }
 
 void SoundTestScene::DrawAudioVisualizer(float screenWidth,
                                          float screenHeight) {
-    const float intro =
-        Smooth01((introTimer_ - kContentFadeDelay * 0.45f) /
-                 kContentFadeDuration);
+    const float intro = Smooth01((introTimer_ - kBarIntroDelay) /
+                                 kBarIntroDuration);
     if (intro <= 0.0f) {
         return;
     }
@@ -296,10 +305,14 @@ void SoundTestScene::DrawAudioVisualizer(float screenWidth,
                 : 0.018f + 0.020f *
                              (0.5f + 0.5f * std::sinf(sceneTime_ * 1.8f +
                                                       static_cast<float>(i)));
-        const float height = std::clamp(
-            maxH * (0.018f + std::pow(beat, 1.18f) * 1.46f) *
-                (0.58f + 0.62f * mirror),
-            8.0f, maxH);
+        const float height =
+            std::clamp(maxH * (0.018f + std::pow(beat, 1.18f) * 1.46f) *
+                           (0.58f + 0.62f * mirror),
+                       1.0f, maxH) *
+            intro;
+        if (height <= 1.0f) {
+            continue;
+        }
         const float x = startX + static_cast<float>(i) * (barW + barGap);
         const XMFLOAT4 color =
             i % 3 == 0
@@ -316,10 +329,14 @@ void SoundTestScene::DrawAudioVisualizer(float screenWidth,
 void SoundTestScene::DrawPanel(float screenWidth, float screenHeight) {
     const float intro =
         Smooth01((introTimer_ - kContentFadeDelay) / kContentFadeDuration);
+    if (intro <= 0.0f) {
+        return;
+    }
     const float panelW = std::clamp(screenWidth * 0.58f, 660.0f, 900.0f);
     const float panelH = std::clamp(screenHeight * 0.58f, 400.0f, 540.0f);
     const float x = (screenWidth - panelW) * 0.5f;
-    const float y = (screenHeight - panelH) * 0.5f;
+    const float y =
+        (screenHeight - panelH) * 0.5f + (1.0f - intro) * 30.0f;
 
     DrawRect(x + 12.0f, y + 14.0f, panelW, panelH,
              Color(0.0f, 0.0f, 0.0f, 0.34f * intro));

@@ -3,8 +3,9 @@
 #include <DirectXMath.h>
 
 struct SwordControllerState {
-    void UpdateSlash(float motionSpeed, float dt) {
-        if (motionSpeed > kSlashThreshold && !isSlashMode) {
+    void UpdateSlash(float motionSpeed, float dt,
+                     float slashThreshold = kSlashThreshold) {
+        if (motionSpeed > slashThreshold && !isSlashMode) {
             isSlashMode = true;
             slashTimer = 0.0f;
         }
@@ -16,7 +17,7 @@ struct SwordControllerState {
         slashTimer += dt;
 
         if (slashTimer > kSlashTimeLimit ||
-            (motionSpeed < kSlashThreshold * 0.5f && slashTimer > 0.1f)) {
+            (motionSpeed < slashThreshold * 0.5f && slashTimer > 0.1f)) {
             isSlashMode = false;
         }
     }
