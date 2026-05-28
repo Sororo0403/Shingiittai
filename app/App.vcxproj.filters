@@ -79,6 +79,12 @@
     <Filter Include="Resources\UI\menu">
       <UniqueIdentifier>{6d09f9d4-b61f-44dc-8f54-422a58ef8780}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Resources\UI\option">
+      <UniqueIdentifier>{47fe7ce2-52c4-4e40-9b0b-67ad80ea6f35}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\Fonts">
+      <UniqueIdentifier>{c19f3d03-d2f9-4305-b7b6-f85efcf4fa56}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Resources\UI\sound_test">
       <UniqueIdentifier>{a1d4c71a-68be-4b99-a10f-56c95e10c756}</UniqueIdentifier>
     </Filter>
@@ -111,6 +117,9 @@
     <ClCompile Include="src\scene\CreditScene.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
+    <ClCompile Include="src\scene\OptionScene.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
     <ClCompile Include="src\scene\RankingScene.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
@@ -118,6 +127,9 @@
       <Filter>Source Files\scene</Filter>
     </ClCompile>
     <ClCompile Include="src\scene\BattleResultScene.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\scene\BattleArenaRenderer.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
     <ClCompile Include="src\scene\CalibrationScene.cpp">
@@ -219,6 +231,9 @@
     <ClInclude Include="include\scene\CreditScene.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
+    <ClInclude Include="include\scene\OptionScene.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
     <ClInclude Include="include\scene\RankingScene.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
@@ -226,6 +241,9 @@
       <Filter>Header Files\scene</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\BattleResultScene.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="include\scene\BattleArenaRenderer.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\CalibrationScene.h">
@@ -338,6 +356,9 @@
     </None>
     <None Include="resources\audio\sfx\slash_hero.wav">
       <Filter>Resources\Audio\sfx</Filter>
+    </None>
+    <None Include="resources\fonts\MPLUS1p-ExtraBold.ttf">
+      <Filter>Resources\Fonts</Filter>
     </None>
     <None Include="resources\effects\particles\smoke.png">
       <Filter>Resources\Effects\particles</Filter>
@@ -513,6 +534,9 @@
     <None Include="resources\ui\credits\thank_you_for_playing.png">
       <Filter>Resources\UI\credits</Filter>
     </None>
+    <None Include="resources\ui\credits\tsunagu_sign.png">
+      <Filter>Resources\UI\credits</Filter>
+    </None>
     <None Include="resources\ui\credits\lines\aotomori_name.png">
       <Filter>Resources\UI\credits</Filter>
     </None>
@@ -543,6 +567,18 @@
     <None Include="resources\ui\credits\lines\title.png">
       <Filter>Resources\UI\credits</Filter>
     </None>
+    <None Include="resources\ui\credits\lines\tsunagu_miyashita_name.png">
+      <Filter>Resources\UI\credits</Filter>
+    </None>
+    <None Include="resources\ui\credits\lines\tsunagu_miyashita_role.png">
+      <Filter>Resources\UI\credits</Filter>
+    </None>
+    <None Include="resources\ui\credits\lines\yutaka_name.png">
+      <Filter>Resources\UI\credits</Filter>
+    </None>
+    <None Include="resources\ui\credits\lines\yutaka_role.png">
+      <Filter>Resources\UI\credits</Filter>
+    </None>
     <None Include="resources\ui\credits\lines\year.png">
       <Filter>Resources\UI\credits</Filter>
     </None>
@@ -566,6 +602,24 @@
     </None>
     <None Include="resources\ui\menu\option_sound_test.png">
       <Filter>Resources\UI\menu</Filter>
+    </None>
+    <None Include="resources\ui\option\bgm.png">
+      <Filter>Resources\UI\option</Filter>
+    </None>
+    <None Include="resources\ui\option\menu_label.png">
+      <Filter>Resources\UI\option</Filter>
+    </None>
+    <None Include="resources\ui\option\mouse_slash.png">
+      <Filter>Resources\UI\option</Filter>
+    </None>
+    <None Include="resources\ui\option\se.png">
+      <Filter>Resources\UI\option</Filter>
+    </None>
+    <None Include="resources\ui\option\tab_back.png">
+      <Filter>Resources\UI\option</Filter>
+    </None>
+    <None Include="resources\ui\option\title.png">
+      <Filter>Resources\UI\option</Filter>
     </None>
     <None Include="resources\ui\sound_test\controls.png">
       <Filter>Resources\UI\sound_test</Filter>

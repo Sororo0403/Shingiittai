@@ -296,12 +296,13 @@ class GameScene : public BaseScene {
     float targetFovDeg_ = 82.0f;
     float normalFovDeg_ = 82.0f;
     float lockOnFovDeg_ = 82.0f;
-    float phaseTransitionFovDeg_ = 58.0f;
+    float phaseTransitionFovDeg_ = 68.0f;
     float fovLerpSpeed_ = 6.5f;
     float phaseTransitionFovLerpSpeed_ = 8.0f;
-    float phaseTransitionLookAtEnemyWeight_ = 0.92f;
-    float phaseTransitionLookAtHeight_ = 1.90f;
-    float phaseTransitionPushIn_ = 2.05f;
+    float phaseTransitionLookAtEnemyWeight_ = 0.96f;
+    float phaseTransitionLookAtHeight_ = 1.55f;
+    float phaseTransitionCameraPullBack_ = 2.25f;
+    float phaseTransitionCameraRise_ = 1.35f;
     bool playerViewCamera_ = false;
     float playerViewEyeHeight_ = 1.42f;
     float playerViewForwardOffset_ = 0.10f;

@@ -188,7 +188,8 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
     playerVisual.scale.z *= kPlayerVisualScaleMultiplier * visualScale;
     if (bladeClashPoseActive_) {
         const float push = std::clamp(bladeClashPosePushRatio_, 0.0f, 1.0f);
-        const float lean = 0.12f + 0.34f * push;
+        const float leanDirection = bladeClashPoseForwardLean_ ? -1.0f : 1.0f;
+        const float lean = (0.12f + 0.34f * push) * leanDirection;
         XMVECTOR baseRot = XMLoadFloat4(&playerVisual.rotation);
         XMVECTOR qLean =
             XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), lean);
@@ -274,17 +275,31 @@ void Player::SetYaw(float yaw) {
 }
 
 void Player::SetCinematicBladeClashPose(const XMFLOAT3 &position, float yaw,
-                                        float pushRatio) {
+                                        float pushRatio, bool forwardLean) {
     LockPosition(position);
     SetYaw(yaw);
 
     bladeClashPoseActive_ = true;
     bladeClashPosePushRatio_ = std::clamp(pushRatio, 0.0f, 1.0f);
+    bladeClashPoseForwardLean_ = forwardLean;
 
     const float push = bladeClashPosePushRatio_;
     auto makeFinishPose = [&](bool isLeft) {
         SwordPose pose = MakeIdleSwordPose(isLeft);
         const float side = isLeft ? -1.0f : 1.0f;
+        if (forwardLean) {
+            XMVECTOR qPitch =
+                XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), -0.88f);
+            XMVECTOR qYaw = XMQuaternionRotationAxis(
+                XMVectorSet(0, 1, 0, 0), 3.14159265f - side * 0.22f);
+            XMVECTOR qRoll = XMQuaternionRotationAxis(
+                XMVectorSet(0, 0, 1, 0), side * 0.52f);
+            XMStoreFloat4(&pose.orientation,
+                          XMQuaternionNormalize(XMQuaternionMultiply(
+                              XMQuaternionMultiply(qPitch, qYaw), qRoll)));
+            pose.isSlashMode = false;
+            return pose;
+        }
         const float finish = std::clamp((push - 0.52f) / 0.48f, 0.0f, 1.0f);
         const float swingOut = 0.72f + 0.28f * push;
         const float yawOut =

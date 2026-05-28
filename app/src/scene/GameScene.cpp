@@ -1,6 +1,6 @@
 ﻿#include "GameScene.h"
 #include "AppSceneServices.h"
-#include "BattleResultScene.h"
+#include "BattleArenaRenderer.h"
 #include "BladeClashCinematic.h"
 #include "DirectXCommon.h"
 #include "GameOverScene.h"
@@ -31,12 +31,12 @@ using namespace DirectX;
 namespace {
 constexpr float kPi = 3.14159265f;
 namespace Clash = BladeClashCinematic;
-constexpr float kSlashSoundVolume = 0.48f;
-constexpr float kEnemyReleaseSoundVolume = 0.42f;
-constexpr float kHitSoundVolume = 0.46f;
-constexpr float kCounterSoundVolume = 0.44f;
-constexpr float kDamageSoundVolume = 0.46f;
-constexpr float kExplosionSoundVolume = 0.40f;
+constexpr float kSlashSoundVolume = 0.76f;
+constexpr float kEnemyReleaseSoundVolume = 0.68f;
+constexpr float kHitSoundVolume = 0.74f;
+constexpr float kCounterSoundVolume = 0.72f;
+constexpr float kDamageSoundVolume = 0.74f;
+constexpr float kExplosionSoundVolume = 0.68f;
 constexpr float kArcaneProjectileHostileSpeed = 11.8f;
 constexpr float kArcaneProjectileReflectedSpeed = 18.5f;
 constexpr float kArcaneProjectileDeflectRange = 5.80f;
@@ -68,6 +68,7 @@ constexpr float kTutorialExitFadeDuration = 0.42f;
 constexpr float kTutorialControlsPadding = 32.0f;
 constexpr float kTutorialControlsImageBottomTransparentPixels = 18.0f;
 constexpr float kPauseExitFadeDuration = 0.42f;
+constexpr float kBattleBgmBaseVolume = 0.24f;
 constexpr uint16_t kHandCameraPreviewPort = 5006;
 constexpr float kHandCameraPreviewStaleSeconds = 0.75f;
 #ifdef _DEBUG
@@ -609,8 +610,9 @@ void GameScene::StartBattleBgm() {
                                  ? L"app/resources/audio/bgm/bgm_TutorialTheme.wav"
                                  : L"app/resources/audio/bgm/bgm_Battle.wav";
     battleBgmSoundId_ = ctx_->systems.sound->LoadOrCreateSilent(bgmPath);
-    battleBgmVoiceHandle_ = ctx_->systems.sound->Play(battleBgmSoundId_, 0.36f,
-                                                      true);
+    battleBgmVoiceHandle_ = ctx_->systems.sound->Play(
+        battleBgmSoundId_, kBattleBgmBaseVolume * AppSceneServices::GetBgmVolume(),
+        true);
 }
 
 void GameScene::StopBattleBgm() {
@@ -1029,9 +1031,8 @@ void GameScene::Update() {
     }
 #ifdef _DEBUG
     if (input != nullptr && input->IsKeyTrigger(kDebugClearSceneKey)) {
-        sceneManager_->ChangeScene(std::make_unique<BattleResultScene>(
-            BattleResultScene::ResultKind::Clear, battleElapsedTime_,
-            inputCalibration_, combatDifficulty_));
+        sceneManager_->ChangeScene(std::make_unique<GameVictoryScene>(
+            battleElapsedTime_, inputCalibration_, combatDifficulty_));
         return;
     }
 #endif
@@ -1115,12 +1116,7 @@ void GameScene::Update() {
             bladeClashFinishPlayerWon_ ? 0.08f : 0.04f;
         ctx_->rendering.model->UpdateAnimation(playerModelId_,
                                                baseDeltaTime * playerAnimScale);
-        if (bladeClashFinishPlayerWon_) {
-            UpdateBladeClashEnemyAnimation(baseDeltaTime);
-        } else {
-            ctx_->rendering.model->UpdateAnimation(enemyModelId_,
-                                                   baseDeltaTime * 0.08f);
-        }
+        UpdateBladeClashEnemyAnimation(baseDeltaTime);
         UpdateSwordVfx(baseDeltaTime);
         UpdateSceneLighting();
         ApplyEnemyProceduralAnimation();
@@ -1169,7 +1165,9 @@ void GameScene::Update() {
         const auto slashStates = player_.GetSwordSlashStates();
         for (size_t i = 0; i < slashStates.size(); ++i) {
             if (slashStates[i] && !previousSwordSoundStates_[i]) {
-                ctx_->systems.sound->Play(slashSoundId_, kSlashSoundVolume);
+                ctx_->systems.sound->Play(
+                    slashSoundId_,
+                    kSlashSoundVolume * AppSceneServices::GetSeVolume());
             }
         }
         previousSwordSoundStates_ = slashStates;
@@ -1200,8 +1198,10 @@ void GameScene::Update() {
             currentEnemyActionStep == ActionStep::Active;
         if (isEnemyAttackRelease) {
             if (soundsLoaded_ && ctx_->systems.sound != nullptr) {
-                ctx_->systems.sound->Play(enemyReleaseSoundId_,
-                                          kEnemyReleaseSoundVolume);
+                ctx_->systems.sound->Play(
+                    enemyReleaseSoundId_,
+                    kEnemyReleaseSoundVolume *
+                        AppSceneServices::GetSeVolume());
             }
             if (currentEnemyActionKind == ActionKind::ArcaneLaser) {
                 BeginArcaneProjectileVolley();
@@ -1551,8 +1551,9 @@ void GameScene::UpdateTutorial(float deltaTime) {
              currentEnemyActionKind == ActionKind::Sweep) &&
             currentEnemyActionStep == ActionStep::Active &&
             soundsLoaded_ && ctx_->systems.sound != nullptr) {
-            ctx_->systems.sound->Play(enemyReleaseSoundId_,
-                                      kEnemyReleaseSoundVolume);
+            ctx_->systems.sound->Play(
+                enemyReleaseSoundId_,
+                kEnemyReleaseSoundVolume * AppSceneServices::GetSeVolume());
         }
     }
 
@@ -1751,6 +1752,7 @@ void GameScene::OpenPauseMenu() {
     pauseExitFadeActive_ = false;
     pauseExitFadeTimer_ = 0.0f;
     pauseExitTarget_ = 0;
+    AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Selected);
 }
 
 void GameScene::ClosePauseMenu() {
@@ -1798,14 +1800,17 @@ void GameScene::UpdatePauseMenu(Input *input) {
     if (moveUp && !moveDown) {
         pauseMenuIndex_ =
             (pauseMenuIndex_ + kPauseMenuItemCount - 1) % kPauseMenuItemCount;
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
     } else if (moveDown && !moveUp) {
         pauseMenuIndex_ = (pauseMenuIndex_ + 1) % kPauseMenuItemCount;
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
     }
 
     const bool cancel =
         input->IsKeyTrigger(DIK_ESCAPE) || input->IsKeyTrigger(DIK_TAB) ||
         (gamepad && input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_B));
     if (cancel) {
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
         ClosePauseMenu();
         return;
     }
@@ -1814,6 +1819,9 @@ void GameScene::UpdatePauseMenu(Input *input) {
         input->IsKeyTrigger(DIK_RETURN) || input->IsKeyTrigger(DIK_SPACE) ||
         (gamepad && input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_A));
     if (confirm) {
+        AppSceneServices::PlayMenuSe(*ctx_, pauseMenuIndex_ == 0
+                                                ? AppSceneServices::MenuSe::Cancel
+                                                : AppSceneServices::MenuSe::Selected);
         ExecutePauseMenuSelection();
     }
 }
@@ -2260,14 +2268,20 @@ void GameScene::DispatchCombatFeedback(const CombatFeedbackEvent &event) {
     switch (event.type) {
     case CombatFeedbackEventType::CounterSuccess:
     case CombatFeedbackEventType::BladeClashGuardBreak:
-        ctx_->systems.sound->Play(counterSoundId_, kCounterSoundVolume);
+        ctx_->systems.sound->Play(
+            counterSoundId_,
+            kCounterSoundVolume * AppSceneServices::GetSeVolume());
         break;
     case CombatFeedbackEventType::PlayerSlashHit:
     case CombatFeedbackEventType::BladeClashPierce:
-        ctx_->systems.sound->Play(hitSoundId_, kHitSoundVolume);
+        ctx_->systems.sound->Play(hitSoundId_,
+                                  kHitSoundVolume *
+                                      AppSceneServices::GetSeVolume());
         break;
     case CombatFeedbackEventType::PlayerDamaged:
-        ctx_->systems.sound->Play(damageSoundId_, kDamageSoundVolume);
+        ctx_->systems.sound->Play(
+            damageSoundId_,
+            kDamageSoundVolume * AppSceneServices::GetSeVolume());
         break;
     default:
         break;
@@ -2320,8 +2334,9 @@ void GameScene::UpdateArcaneProjectileVolley(float deltaTime) {
     arcaneProjectileVolleyTimer_ = kArcaneProjectileVolleyInterval;
     if (soundsLoaded_ && ctx_ != nullptr && ctx_->systems.sound != nullptr &&
         arcaneProjectileVolleyShotsFired_ > 1) {
-        ctx_->systems.sound->Play(enemyReleaseSoundId_,
-                                  kEnemyReleaseSoundVolume);
+        ctx_->systems.sound->Play(
+            enemyReleaseSoundId_,
+            kEnemyReleaseSoundVolume * AppSceneServices::GetSeVolume());
     }
 }
 
@@ -3135,8 +3150,9 @@ void GameScene::EmitPhaseTransitionStartEffects() {
                       AppParticleBurstStyle::Sparks,
                       {1.0f, 0.72f, 0.24f, 0.96f}, {0.0f, 1.0f, 0.0f}, 3.2f);
     if (soundsLoaded_ && ctx_ != nullptr && ctx_->systems.sound != nullptr) {
-        ctx_->systems.sound->Play(enemyReleaseSoundId_,
-                                  kEnemyReleaseSoundVolume);
+        ctx_->systems.sound->Play(
+            enemyReleaseSoundId_,
+            kEnemyReleaseSoundVolume * AppSceneServices::GetSeVolume());
     }
 }
 
@@ -3195,7 +3211,9 @@ void GameScene::EmitPhaseTransitionReleaseEffects() {
                       AppParticleBurstStyle::Flash, smokeColor,
                       {0.0f, 1.0f, 0.0f}, 1.0f);
     if (soundsLoaded_ && ctx_ != nullptr && ctx_->systems.sound != nullptr) {
-        ctx_->systems.sound->Play(explosionSoundId_, kExplosionSoundVolume);
+        ctx_->systems.sound->Play(
+            explosionSoundId_,
+            kExplosionSoundVolume * AppSceneServices::GetSeVolume());
     }
 }
 
@@ -3236,8 +3254,9 @@ void GameScene::UpdateBattleIntro(float deltaTime) {
             {1.0f, 1.0f, 0.96f, 0.68f}, {0.0f, 1.0f, 0.0f}, 1.52f);
         if (soundsLoaded_ && ctx_ != nullptr &&
             ctx_->systems.sound != nullptr) {
-            ctx_->systems.sound->Play(enemyReleaseSoundId_,
-                                      kEnemyReleaseSoundVolume);
+            ctx_->systems.sound->Play(
+                enemyReleaseSoundId_,
+                kEnemyReleaseSoundVolume * AppSceneServices::GetSeVolume());
         }
     }
 
@@ -3805,6 +3824,7 @@ void GameScene::CompleteBladeClashFinish() {
 void GameScene::BeginVictorySequence() {
     battleResultRequested_ = true;
     victoryClearTime_ = battleElapsedTime_;
+    StopBattleBgm();
     if (!titleDemoMode_) {
         ClearBattlePostProcess(ctx_);
         sceneManager_->ChangeScene(std::make_unique<GameVictoryScene>(
@@ -3839,6 +3859,7 @@ void GameScene::BeginVictorySequence() {
 
 void GameScene::BeginDefeatSequence() {
     battleResultRequested_ = true;
+    StopBattleBgm();
     defeatSequenceActive_ = true;
     defeatSequenceTimer_ = 0.0f;
     defeatImpactEmitted_ = false;
@@ -3931,8 +3952,9 @@ void GameScene::UpdateVictorySequence(float deltaTime) {
         const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
         if (soundsLoaded_ && ctx_ != nullptr &&
             ctx_->systems.sound != nullptr) {
-            ctx_->systems.sound->Play(explosionSoundId_,
-                                      kExplosionSoundVolume);
+            ctx_->systems.sound->Play(
+                explosionSoundId_,
+                kExplosionSoundVolume * AppSceneServices::GetSeVolume());
         }
         EmitParticleBurst(
             explosionParticles_, {enemyPos.x, enemyPos.y + 1.05f, enemyPos.z},
@@ -3964,9 +3986,8 @@ void GameScene::UpdateVictorySequence(float deltaTime) {
             ApplyEnemyIntroDissolve(0.0f);
             return;
         }
-        sceneManager_->ChangeScene(std::make_unique<BattleResultScene>(
-            BattleResultScene::ResultKind::Clear, victoryClearTime_,
-            inputCalibration_, combatDifficulty_));
+        sceneManager_->ChangeScene(std::make_unique<GameVictoryScene>(
+            victoryClearTime_, inputCalibration_, combatDifficulty_));
     }
 }
 
@@ -4319,151 +4340,33 @@ void GameScene::DrawDistantHazardBackdrop(float buildProgress) {
 }
 
 void GameScene::DrawArena() {
-    ModelManager *model = ctx_->rendering.model;
-    const float pulse = 0.5f + 0.5f * std::sinf(sceneLightTime_ * 2.2f);
-    constexpr float kPatternSpacing = 3.55f;
-    constexpr float kLaneSpacing = 4.25f;
-
     const float floorBuild = BackgroundBuildProgress(0.00f, 0.20f);
     const float tileBuild = BackgroundBuildProgress(0.10f, 0.30f);
     const float lineBuild = BackgroundBuildProgress(0.18f, 0.28f);
     const float distantBuild = BackgroundBuildProgress(0.24f, 0.38f);
 
-    if (!backgroundOnlyMode_) {
-        DrawDistantHazardBackdrop(distantBuild);
-    }
-
-    Transform floor{};
-    if (floorBuild > 0.0f) {
-        floor.position = {0.0f, -0.04f, 0.0f};
-        floor.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
-        floor.scale = {180.0f * floorBuild, 180.0f * floorBuild, 1.0f};
-        model->Draw(arenaFloorModelId_, floor, camera_);
-    }
-
-    if (!tutorialBackgroundMode_) {
-        ModelDrawEffect fieldEffect{};
-        fieldEffect.enabled = true;
-        fieldEffect.additiveBlend = false;
-        fieldEffect.disableCulling = true;
-        fieldEffect.color = {0.085f, 0.075f, 0.060f, 0.115f * tileBuild};
-        fieldEffect.intensity = 0.004f * tileBuild;
-        fieldEffect.fresnelPower = 0.7f;
-        fieldEffect.noiseAmount = 0.0f;
-        fieldEffect.baseDim = 0.0f;
-        fieldEffect.time = sceneLightTime_;
-        model->SetDrawEffect(fieldEffect);
-    }
-
-    std::vector<Transform> fieldTiles;
-    fieldTiles.reserve(480u);
-    for (int z = -14; z <= 14; ++z) {
-        for (int x = -14; x <= 14; ++x) {
-            if ((std::abs(x) + std::abs(z)) % 2 != 0) {
-                continue;
-            }
-            const float distance =
-                (std::fabs(static_cast<float>(x)) + std::fabs(static_cast<float>(z))) /
-                28.0f;
-            const float tileLocalBuild =
-                SmoothStep01((tileBuild - distance * 0.34f) / 0.46f);
-            if (tileLocalBuild <= 0.0f) {
-                continue;
-            }
-            Transform tile{};
-            tile.position = {static_cast<float>(x) * kPatternSpacing, 0.004f,
-                             static_cast<float>(z) * kPatternSpacing};
-            tile.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
-            tile.scale = {2.26f * tileLocalBuild, 2.26f * tileLocalBuild,
-                          1.0f};
-            fieldTiles.push_back(tile);
-        }
-    }
-
-    if (tileBuild > 0.0f) {
-        Transform center{};
-        center.position = {0.0f, 0.012f, 0.0f};
-        center.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
-        center.scale = {4.8f * tileBuild, 4.8f * tileBuild, 1.0f};
-        fieldTiles.push_back(center);
-    }
-
-    for (int i = -13; i <= 13; ++i) {
-        const float laneLocalBuild =
-            SmoothStep01((lineBuild -
-                          std::fabs(static_cast<float>(i)) / 13.0f * 0.24f) /
-                         0.56f);
-        if (laneLocalBuild <= 0.0f) {
-            continue;
-        }
-        Transform laneX{};
-        laneX.position = {0.0f, 0.016f, static_cast<float>(i) * kLaneSpacing};
-        laneX.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
-        laneX.scale = {168.0f * laneLocalBuild, i == 0 ? 0.080f : 0.034f,
-                       1.0f};
-        fieldTiles.push_back(laneX);
-
-        Transform laneZ{};
-        laneZ.position = {static_cast<float>(i) * kLaneSpacing, 0.017f, 0.0f};
-        laneZ.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
-        laneZ.scale = {i == 0 ? 0.080f : 0.034f, 168.0f * laneLocalBuild,
-                       1.0f};
-        fieldTiles.push_back(laneZ);
-    }
-    if (!fieldTiles.empty()) {
-        const uint32_t spokeModelId =
-            tutorialBackgroundMode_ ? arenaTutorialSpokeModelId_
-                                    : arenaSpokeModelId_;
-        model->DrawInstanced(spokeModelId, fieldTiles.data(),
-                             static_cast<uint32_t>(fieldTiles.size()), camera_);
-    }
-    model->ClearDrawEffect();
-
-    if (!tutorialBackgroundMode_) {
-        ModelDrawEffect lineEffect{};
-        lineEffect.enabled = true;
-        lineEffect.additiveBlend = true;
-        lineEffect.disableCulling = true;
-        lineEffect.color = {0.22f, 0.10f, 0.045f, 0.026f * lineBuild};
-        lineEffect.intensity = (0.0015f + 0.0015f * pulse) * lineBuild;
-        lineEffect.fresnelPower = 0.75f;
-        lineEffect.noiseAmount = 0.0f;
-        lineEffect.time = sceneLightTime_;
-        model->SetDrawEffect(lineEffect);
-        std::vector<Transform> glowLines;
-        glowLines.reserve(62u);
-        for (int i = -15; i <= 15; ++i) {
-            const float glowBuild =
-                SmoothStep01(
-                    (lineBuild -
-                     std::fabs(static_cast<float>(i)) / 15.0f * 0.28f) /
-                    0.52f);
-            if (glowBuild <= 0.0f) {
-                continue;
-            }
-            Transform lightX{};
-            lightX.position = {0.0f, 0.034f,
-                               static_cast<float>(i) * kPatternSpacing};
-            lightX.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
-            lightX.scale = {160.0f * glowBuild, 0.016f, 1.0f};
-            glowLines.push_back(lightX);
-
-            Transform lightZ{};
-            lightZ.position = {static_cast<float>(i) * kPatternSpacing, 0.035f,
-                               0.0f};
-            lightZ.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
-            lightZ.scale = {0.016f, 160.0f * glowBuild, 1.0f};
-            glowLines.push_back(lightZ);
-        }
-        if (!glowLines.empty()) {
-            model->DrawInstanced(arenaCityWindowModelId_, glowLines.data(),
-                                 static_cast<uint32_t>(glowLines.size()),
-                                 camera_);
-        }
-        model->ClearDrawEffect();
-    }
-
-    if (backgroundOnlyMode_) {
-        DrawDistantHazardBackdrop(distantBuild);
-    }
+    BattleArenaModelIds ids{};
+    ids.arenaNoiseTextureId = arenaNoiseTextureId_;
+    ids.arenaFloorModelId = arenaFloorModelId_;
+    ids.arenaLowPolyTerrainModelId = arenaLowPolyTerrainModelId_;
+    ids.arenaDistantTerrainModelId = arenaDistantTerrainModelId_;
+    ids.arenaHazardSpireModelId = arenaHazardSpireModelId_;
+    ids.arenaHazardGlowRingModelId = arenaHazardGlowRingModelId_;
+    ids.arenaCityTowerModelId = arenaCityTowerModelId_;
+    ids.arenaCityWindowModelId = arenaCityWindowModelId_;
+    ids.arenaGiantBodyModelId = arenaGiantBodyModelId_;
+    ids.arenaGiantHeadModelId = arenaGiantHeadModelId_;
+    ids.arenaCenterDiskModelId = arenaCenterDiskModelId_;
+    ids.arenaSpokeModelId = arenaSpokeModelId_;
+    ids.arenaTutorialSpokeModelId = arenaTutorialSpokeModelId_;
+    ids.arenaInnerRingModelId = arenaInnerRingModelId_;
+    ids.arenaOuterRingModelId = arenaOuterRingModelId_;
+    ids.arenaColumnModelId = arenaColumnModelId_;
+    ids.arenaColumnCapModelId = arenaColumnCapModelId_;
+    ids.arenaDomeModelId = arenaDomeModelId_;
+    ids.arenaBarrierRingModelId = arenaBarrierRingModelId_;
+    ids.chargeWeakPointModelId = chargeWeakPointModelId_;
+    DrawBattleArena(ctx_->rendering.model, camera_, ids, sceneLightTime_,
+                    floorBuild, tileBuild, lineBuild, distantBuild,
+                    tutorialBackgroundMode_, backgroundOnlyMode_);
 }

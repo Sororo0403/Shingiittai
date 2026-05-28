@@ -534,6 +534,7 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
             postProcessSystem.Draw(dxCommon.GetSceneSrvGpuHandle(&srvManager),
                                    dxCommon.GetDepthStencilGpuHandle());
             dxCommon.TransitionDepthToWrite();
+            sceneManager.DrawPostProcessOverlay();
         } else {
             dxCommon.BeginBackBufferPass(true);
             sceneManager.Draw();
@@ -542,6 +543,7 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
                 sceneManager.DrawForeground3D();
             }
             sceneManager.DrawTransparent();
+            sceneManager.DrawPostProcessOverlay();
         }
 
         dxCommon.EndFrame();

@@ -451,7 +451,6 @@ void Enemy::BeginDifficultyNineOpeningCutIn(
     warp_.followupStep = ActionStep::Charge;
     warp_.faceLivePlayerOnEnd = true;
     BeginAction(ActionKind::Warp, ActionStep::Start);
-    stateTimer_ = config_.warp.startTime;
 }
 
 bool Enemy::TryBeginPhantomWarpSkill(float chance) {

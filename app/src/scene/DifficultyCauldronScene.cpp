@@ -409,10 +409,12 @@ void DifficultyCauldronScene::UpdateSelection() {
         selectedDifficultyTenths_ = nextDifficultyTenths;
         selectionPulse_ = 1.0f;
         ApplyHeatPostProcess();
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
     }
 
     if (input->IsKeyTrigger(DIK_ESCAPE) ||
         (gamepad && input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_B))) {
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
         BeginReturnToWeaponSelect();
         return;
     }
@@ -422,6 +424,7 @@ void DifficultyCauldronScene::UpdateSelection() {
         input->IsMouseTrigger(0) ||
         (gamepad && input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_A));
     if (confirm) {
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Selected);
         BeginStartGame();
     }
 }

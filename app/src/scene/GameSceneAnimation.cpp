@@ -206,6 +206,13 @@ static std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
         }
         break;
 
+    case ActionKind::Warp:
+        outLoop = false;
+        if (HasAnimation(model, kBossAnimTeleport)) {
+            return kBossAnimTeleport;
+        }
+        break;
+
     case ActionKind::Stalk:
         if (HasAnimation(model, kBossAnimMove)) {
             return kBossAnimMove;
@@ -411,6 +418,27 @@ void GameScene::UpdateBladeClashEnemyAnimation(float deltaTime) {
             clip = kBossAnimTeleport;
             const float hit = Smooth01((finishActionTimer - 0.06f) / 0.34f);
             clipRatio = kBladeClashActivePoseClipRatio + 0.18f * hit;
+        }
+        clipRatio = Clamp01(clipRatio);
+    } else if (bladeClashFinishActive_ && !bladeClashFinishPlayerWon_) {
+        const float windup =
+            Smooth01(bladeClashFinishTimer_ / Clash::kLossHitTime);
+        const float strike =
+            Smooth01((bladeClashFinishTimer_ - Clash::kLossHitTime) / 0.22f);
+        const float recover = Smooth01(
+            (bladeClashFinishTimer_ - Clash::kLossSlideStartTime) / 0.62f);
+        if (hasSweep) {
+            clip = kBossAnimSweep;
+            clipRatio = 0.22f + 0.34f * windup + 0.28f * strike +
+                        0.10f * recover;
+        } else if (hasSmash) {
+            clip = kBossAnimSmash;
+            clipRatio = 0.24f + 0.30f * windup + 0.26f * strike +
+                        0.08f * recover;
+        } else if (hasTeleport) {
+            clip = kBossAnimTeleport;
+            clipRatio = kBladeClashActivePoseClipRatio + 0.20f * windup +
+                        0.16f * strike;
         }
         clipRatio = Clamp01(clipRatio);
     }
@@ -738,6 +766,42 @@ void GameScene::ApplyEnemyProceduralAnimation() {
         } else if (step == ActionStep::Recovery) {
             PoseBoneTree(*enemyModel, chest, 0.06f, 0.0f, 0.02f);
             poseArms(0.10f, 0.0f, -0.08f);
+        }
+        break;
+
+    case ActionKind::Warp:
+        if (step == ActionStep::Start) {
+            const float chant = Smooth01(actionTimer / 0.42f);
+            const float gather = 0.86f + 0.14f * pulse;
+            PoseBoneTree(*enemyModel, root,
+                         -0.07f * phaseScale * chant, 0.0f,
+                         0.018f * slowPulse * chant);
+            PoseBoneTree(*enemyModel, chest,
+                         -0.18f * phaseScale * chant,
+                         0.020f * slowPulse * chant,
+                         0.060f * pulse * chant);
+            PoseBoneTree(*enemyModel, head,
+                         -0.06f * phaseScale * chant,
+                         0.025f * pulse * chant, 0.0f);
+            poseArms(-0.42f * phaseScale * chant,
+                     0.08f * slowPulse * chant,
+                     -0.34f * phaseScale * gather * chant);
+        } else if (step == ActionStep::Move) {
+            const float vanish = 0.74f + 0.26f * pulse;
+            PoseBoneTree(*enemyModel, chest, -0.10f * phaseScale * vanish,
+                         0.0f, 0.08f * vanish);
+            poseArms(-0.22f * phaseScale * vanish, 0.0f,
+                     -0.18f * phaseScale);
+        } else if (step == ActionStep::End) {
+            const float settle = Smooth01(actionTimer / 0.24f);
+            PoseBoneTree(*enemyModel, root,
+                         -0.04f * phaseScale * (1.0f - settle), 0.0f,
+                         0.0f);
+            PoseBoneTree(*enemyModel, chest,
+                         -0.08f * phaseScale * (1.0f - settle), 0.0f,
+                         0.04f * pulse * (1.0f - settle));
+            poseArms(-0.18f * phaseScale * (1.0f - settle), 0.0f,
+                     -0.16f * phaseScale * (1.0f - settle));
         }
         break;
 

@@ -1,4 +1,5 @@
 #include "BattleResultScene.h"
+#include "AppSceneServices.h"
 #include "AssetManager.h"
 #include "DirectXCommon.h"
 #include "GameScene.h"
@@ -243,6 +244,14 @@ void BattleResultScene::Initialize(const SceneContext &ctx) {
         LoadTextureImage(L"app/resources/ui/result/text/score_formula.png");
     rankingTitleLabel_ =
         LoadTextureImage(L"app/resources/ui/result/text/ranking_title.png");
+    rankingRankHeaderLabel_ =
+        LoadTextureImage(L"app/resources/ui/result/text/ranking_rank.png");
+    rankingScoreHeaderLabel_ =
+        LoadTextureImage(L"app/resources/ui/result/text/ranking_score.png");
+    rankingTimeHeaderLabel_ =
+        LoadTextureImage(L"app/resources/ui/result/text/ranking_time.png");
+    rankingDifficultyHeaderLabel_ =
+        LoadTextureImage(L"app/resources/ui/result/text/ranking_difficulty.png");
     controlsKbmClearImage_ =
         LoadTextureImage(L"app/resources/ui/result/mplus/controls_kbm_clear.png");
     controlsKbmGameOverImage_ = LoadTextureImage(
@@ -313,6 +322,7 @@ void BattleResultScene::Update() {
     if (retryKey ||
         (input->IsGamepadConnected() &&
          input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_A))) {
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Selected);
         sceneManager_->ChangeScene(
             std::make_unique<GameScene>(inputCalibration_, combatDifficulty_));
         return;
@@ -345,6 +355,8 @@ void BattleResultScene::UpdateClearActionButtons(Input &input) {
                 clearRevealPhase_ = ClearRevealPhase::Score;
                 clearRevealTimer_ = 0.0f;
             }
+            AppSceneServices::PlayMenuSe(*ctx_,
+                                         AppSceneServices::MenuSe::Selected);
             return;
         }
 
@@ -354,14 +366,24 @@ void BattleResultScene::UpdateClearActionButtons(Input &input) {
             clearRevealPhase_ = ClearRevealPhase::Ranking;
             clearRevealTimer_ = 0.0f;
         }
+        AppSceneServices::PlayMenuSe(*ctx_,
+                                     AppSceneServices::MenuSe::Selected);
         return;
     }
 
     if (input.IsKeyTrigger(DIK_A) || input.IsKeyTrigger(DIK_LEFT)) {
-        clearActionButtonIndex_ = 0;
+        if (clearActionButtonIndex_ != 0) {
+            clearActionButtonIndex_ = 0;
+            AppSceneServices::PlayMenuSe(*ctx_,
+                                         AppSceneServices::MenuSe::Select);
+        }
     }
     if (input.IsKeyTrigger(DIK_D) || input.IsKeyTrigger(DIK_RIGHT)) {
-        clearActionButtonIndex_ = 1;
+        if (clearActionButtonIndex_ != 1) {
+            clearActionButtonIndex_ = 1;
+            AppSceneServices::PlayMenuSe(*ctx_,
+                                         AppSceneServices::MenuSe::Select);
+        }
     }
 
     const bool confirm =
@@ -373,9 +395,11 @@ void BattleResultScene::UpdateClearActionButtons(Input &input) {
     }
 
     if (clearActionButtonIndex_ == 0) {
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Selected);
         sceneManager_->ChangeScene(
             std::make_unique<GameScene>(inputCalibration_, combatDifficulty_));
     } else {
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Selected);
         returnTitleFadeActive_ = true;
         returnTitleFadeTimer_ = 0.0f;
     }
@@ -412,19 +436,29 @@ void BattleResultScene::UpdateHandResultInput(float deltaTime) {
 void BattleResultScene::BeginReturnTitleConfirm() {
     returnTitleConfirmVisible_ = true;
     returnTitleConfirmIndex_ = 1;
+    AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
 }
 
 void BattleResultScene::UpdateReturnTitleConfirm(Input &input) {
     if (input.IsKeyTrigger(DIK_A) || input.IsKeyTrigger(DIK_LEFT)) {
-        returnTitleConfirmIndex_ = 0;
+        if (returnTitleConfirmIndex_ != 0) {
+            returnTitleConfirmIndex_ = 0;
+            AppSceneServices::PlayMenuSe(*ctx_,
+                                         AppSceneServices::MenuSe::Select);
+        }
     }
     if (input.IsKeyTrigger(DIK_D) || input.IsKeyTrigger(DIK_RIGHT)) {
-        returnTitleConfirmIndex_ = 1;
+        if (returnTitleConfirmIndex_ != 1) {
+            returnTitleConfirmIndex_ = 1;
+            AppSceneServices::PlayMenuSe(*ctx_,
+                                         AppSceneServices::MenuSe::Select);
+        }
     }
 
     if (input.IsKeyTrigger(DIK_ESCAPE)) {
         returnTitleConfirmVisible_ = false;
         returnTitleConfirmIndex_ = 1;
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
         return;
     }
 
@@ -435,11 +469,13 @@ void BattleResultScene::UpdateReturnTitleConfirm(Input &input) {
     }
 
     if (returnTitleConfirmIndex_ == 0) {
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Selected);
         returnTitleFadeActive_ = true;
         returnTitleFadeTimer_ = 0.0f;
     } else {
         returnTitleConfirmVisible_ = false;
         returnTitleConfirmIndex_ = 1;
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
     }
 }
 
@@ -1082,9 +1118,11 @@ void BattleResultScene::DrawGameOver(float screenWidth, float screenHeight) {
 
 void BattleResultScene::DrawRanking(float x, float y, float w, float h,
                                     bool fullDetail) {
-    DrawRect(x + 10.0f, y + 12.0f, w, h, Color(0.0f, 0.0f, 0.0f, 0.30f));
-    DrawRect(x, y, w, h, Color(0.016f, 0.019f, 0.023f, 0.78f));
-    DrawFrame(x, y, w, h, 2.0f, Color(0.95f, 0.72f, 0.28f, 0.62f));
+    DrawRect(x + 12.0f, y + 14.0f, w, h, Color(0.0f, 0.0f, 0.0f, 0.42f));
+    DrawRect(x, y, w, h, Color(0.010f, 0.013f, 0.018f, 0.91f));
+    DrawRect(x + w * 0.035f, y + h * 0.265f, w * 0.93f, h * 0.650f,
+             Color(0.0f, 0.0f, 0.0f, 0.24f));
+    DrawFrame(x, y, w, h, 2.0f, Color(0.95f, 0.72f, 0.28f, 0.78f));
 
     const float titleScale =
         std::clamp((w * 0.54f) / (std::max)(rankingTitleLabel_.width, 1.0f),
@@ -1101,19 +1139,52 @@ void BattleResultScene::DrawRanking(float x, float y, float w, float h,
     const float scoreColumnW = w * (fullDetail ? 0.20f : 0.26f);
     const float timeColumnW = w * (fullDetail ? 0.25f : 0.33f);
     const float difficultyColumnW = w * 0.12f;
-    const float rowStartY = y + h * 0.33f;
-    const float rowGap = h * 0.115f;
+    const float headerY = y + h * 0.265f;
+    const float rowStartY = y + h * 0.38f;
+    const float rowGap = h * 0.105f;
+    const float headerScale = fullDetail ? 0.50f : 0.42f;
+    DrawImage(rankingRankHeaderLabel_, rankX, headerY, headerScale, 0.72f);
+    DrawImage(rankingScoreHeaderLabel_,
+              scoreRightX -
+                  rankingScoreHeaderLabel_.width * headerScale,
+              headerY, headerScale, 0.72f);
+    DrawImage(rankingTimeHeaderLabel_,
+              timeRightX - rankingTimeHeaderLabel_.width * headerScale,
+              headerY, headerScale, 0.72f);
+    if (fullDetail) {
+        DrawImage(rankingDifficultyHeaderLabel_,
+                  difficultyRightX -
+                      rankingDifficultyHeaderLabel_.width * headerScale,
+                  headerY, headerScale, 0.72f);
+    }
+    DrawRect(x + w * 0.07f, y + h * 0.335f, w * 0.86f, 1.0f,
+             Color(0.95f, 0.72f, 0.28f, 0.30f));
+    const float tableTop = y + h * 0.255f;
+    const float tableBottom = rowStartY + rowGap * 4.72f;
+    const float separatorAlpha = 0.22f;
+    DrawRect(x + w * 0.205f, tableTop, 1.0f, tableBottom - tableTop,
+             Color(0.95f, 0.72f, 0.28f, separatorAlpha));
+    DrawRect(x + w * (fullDetail ? 0.405f : 0.620f), tableTop, 1.0f,
+             tableBottom - tableTop,
+             Color(0.95f, 0.72f, 0.28f, separatorAlpha));
+    if (fullDetail) {
+        DrawRect(x + w * 0.705f, tableTop, 1.0f, tableBottom - tableTop,
+                 Color(0.95f, 0.72f, 0.28f, separatorAlpha));
+    }
     const size_t rows = (std::min)(rankingEntries_.size(), kRankingDrawCount);
     for (size_t i = 0; i < rows; ++i) {
         const RankingEntry &entry = rankingEntries_[i];
         const float rowY = rowStartY + static_cast<float>(i) * rowGap;
         const bool highlight = entry.isCurrent;
+        DrawRect(x + w * 0.07f, rowY - rowGap * 0.12f, w * 0.86f,
+                 rowGap * 0.82f,
+                 Color(1.0f, 1.0f, 1.0f, (i % 2 == 0 ? 0.030f : 0.015f)));
         if (highlight) {
-            DrawRect(x + w * 0.10f, rowY - 4.0f, w * 0.80f, rowGap * 0.78f,
-                     Color(0.95f, 0.72f, 0.28f, 0.16f));
-            DrawFrame(x + w * 0.10f, rowY - 4.0f, w * 0.80f,
-                      rowGap * 0.78f, 1.0f,
-                      Color(0.95f, 0.72f, 0.28f, 0.36f));
+            DrawRect(x + w * 0.07f, rowY - rowGap * 0.12f, w * 0.86f,
+                     rowGap * 0.82f, Color(0.95f, 0.72f, 0.28f, 0.20f));
+            DrawFrame(x + w * 0.07f, rowY - rowGap * 0.12f, w * 0.86f,
+                      rowGap * 0.82f, 1.0f,
+                      Color(0.95f, 0.72f, 0.28f, 0.46f));
         }
 
         std::ostringstream rank;

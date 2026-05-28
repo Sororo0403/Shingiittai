@@ -61,6 +61,10 @@ class RankingScene : public BaseScene {
     ReturnTarget returnTarget_ = ReturnTarget::WeaponSelect;
     std::unique_ptr<GameScene> backgroundScene_;
     Image rankingTitleLabel_{};
+    Image rankHeaderLabel_{};
+    Image scoreHeaderLabel_{};
+    Image timeHeaderLabel_{};
+    Image difficultyHeaderLabel_{};
     std::array<Image, 10> digitImages_{};
     Image colonImage_{};
     Image dotImage_{};

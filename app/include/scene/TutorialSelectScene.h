@@ -90,6 +90,7 @@ class TutorialSelectScene : public BaseScene {
     Image controlsImage_{};
     Image menuPromptImage_{};
     Image utilityMenuTitleImage_{};
+    Image optionMenuLabelImage_{};
     std::array<Image, 3> utilityMenuOptionImages_{};
     std::array<Image, kButtonCount> buttonNameImages_{};
     Image handCameraConfirmMessageImage_{};

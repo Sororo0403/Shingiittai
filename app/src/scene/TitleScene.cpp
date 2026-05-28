@@ -1,6 +1,7 @@
 #include "TitleScene.h"
 #include "AppSceneServices.h"
 #include "GameOverScene.h"
+#include "GameVictoryScene.h"
 #include "Input.h"
 #include "PostProcessSystem.h"
 #include "SceneManager.h"
@@ -21,6 +22,9 @@ namespace {
 constexpr float kFadeDuration = 0.48f;
 constexpr float kFrameIntroDuration = 1.12f;
 constexpr float kPi = 3.14159265f;
+#ifdef _DEBUG
+constexpr int kDebugVictorySceneKey = DIK_F9;
+#endif
 
 XMFLOAT4 MakeColor(float r, float g, float b, float a = 1.0f) {
     return {r, g, b, a};
@@ -90,12 +94,25 @@ void TitleScene::Update() {
     if (ctx_->systems.input->IsKeyTrigger(DIK_ESCAPE)) {
         exitConfirmVisible_ = true;
         exitConfirmIndex_ = 1;
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
         return;
     }
+
+#ifdef _DEBUG
+    if (ctx_->systems.input->IsKeyTrigger(kDebugVictorySceneKey)) {
+        if (ctx_->rendering.postProcessSystem != nullptr) {
+            ctx_->rendering.postProcessSystem->SetProfile(PostProcessProfile{});
+        }
+        sceneManager_->ChangeScene(std::make_unique<GameVictoryScene>(
+            0.0f, SwordInputCalibration{}, 5.0f));
+        return;
+    }
+#endif
 
     if (IsAnyButtonTriggered(*ctx_->systems.input)) {
         startRequested_ = true;
         fadeTimer_ = 0.0f;
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Selected);
         return;
     }
 
@@ -131,15 +148,24 @@ TitleScene::Image TitleScene::LoadTitleImage(const std::wstring &path) {
 
 void TitleScene::UpdateExitConfirm(Input &input) {
     if (input.IsKeyTrigger(DIK_A) || input.IsKeyTrigger(DIK_LEFT)) {
-        exitConfirmIndex_ = 0;
+        if (exitConfirmIndex_ != 0) {
+            exitConfirmIndex_ = 0;
+            AppSceneServices::PlayMenuSe(*ctx_,
+                                         AppSceneServices::MenuSe::Select);
+        }
     }
     if (input.IsKeyTrigger(DIK_D) || input.IsKeyTrigger(DIK_RIGHT)) {
-        exitConfirmIndex_ = 1;
+        if (exitConfirmIndex_ != 1) {
+            exitConfirmIndex_ = 1;
+            AppSceneServices::PlayMenuSe(*ctx_,
+                                         AppSceneServices::MenuSe::Select);
+        }
     }
 
     if (input.IsKeyTrigger(DIK_ESCAPE)) {
         exitConfirmVisible_ = false;
         exitConfirmIndex_ = 1;
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
         return;
     }
 
@@ -150,9 +176,11 @@ void TitleScene::UpdateExitConfirm(Input &input) {
     }
 
     if (exitConfirmIndex_ == 0) {
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Selected);
         ctx_->systems.winApp->RequestClose();
     } else {
         exitConfirmVisible_ = false;
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
     }
 }
 
@@ -440,8 +468,8 @@ void TitleScene::StartTitleBgm() {
 
     titleBgmSoundId_ = ctx_->systems.sound->LoadOrCreateSilent(
         L"app/resources/audio/bgm/bgm_TitleTheme.wav");
-    titleBgmVoiceHandle_ = ctx_->systems.sound->Play(titleBgmSoundId_, 0.36f,
-                                                     true);
+    titleBgmVoiceHandle_ = ctx_->systems.sound->Play(
+        titleBgmSoundId_, 0.24f * AppSceneServices::GetBgmVolume(), true);
 }
 
 void TitleScene::StopTitleBgm() {

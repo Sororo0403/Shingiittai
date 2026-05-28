@@ -51,6 +51,7 @@ class CreditScene : public BaseScene {
     Image thankYouImage_{};
     Image taroSignatureImage_{};
     Image aotoMoriSignatureImage_{};
+    Image tsunaguSignatureImage_{};
     struct CreditLine {
         Image image{};
         float centerY = 0.0f;

@@ -60,7 +60,8 @@ class Player {
     float GetYaw() const { return yaw_; }
     void SetYaw(float yaw);
     void SetCinematicBladeClashPose(const DirectX::XMFLOAT3 &position,
-                                    float yaw, float pushRatio);
+                                    float yaw, float pushRatio,
+                                    bool forwardLean = false);
 
     float GetHP() const { return hp_; }
     float TakeDamage(float damage);
@@ -72,6 +73,7 @@ class Player {
     void SetBladeClashPose(bool active, float pushRatio = 0.5f) {
         bladeClashPoseActive_ = active;
         bladeClashPosePushRatio_ = pushRatio;
+        bladeClashPoseForwardLean_ = false;
     }
     bool UsesGamepadCameraLook() const { return useGamepadCameraLook_; }
   private:
@@ -121,6 +123,7 @@ class Player {
     float defeatPoseRatio_ = 0.0f;
     bool bladeClashPoseActive_ = false;
     float bladeClashPosePushRatio_ = 0.5f;
+    bool bladeClashPoseForwardLean_ = false;
 
     float minTargetDistance_ = 2.7f;
 

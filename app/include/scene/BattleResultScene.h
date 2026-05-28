@@ -120,6 +120,10 @@ class BattleResultScene : public BaseScene {
     Image currentRecordLabel_{};
     Image scoreFormulaLabel_{};
     Image rankingTitleLabel_{};
+    Image rankingRankHeaderLabel_{};
+    Image rankingScoreHeaderLabel_{};
+    Image rankingTimeHeaderLabel_{};
+    Image rankingDifficultyHeaderLabel_{};
     Image controlsKbmClearImage_{};
     Image controlsKbmGameOverImage_{};
     Image controlsHandImage_{};

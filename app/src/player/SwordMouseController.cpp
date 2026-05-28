@@ -1,4 +1,5 @@
 #include "SwordMouseController.h"
+#include "AppSceneServices.h"
 #include "Input.h"
 #include <algorithm>
 #include <cmath>
@@ -10,6 +11,8 @@ constexpr float kMouseSwordOrientationScale = 0.0065f;
 constexpr float kMouseSlashSpeedScale = 0.64f;
 constexpr float kMouseSwordMaxAngle = 1.18f;
 constexpr float kMouseSlashMinDeltaSq = 12.0f * 12.0f;
+constexpr float kMouseSlashHardThresholdScale = 1.45f;
+constexpr float kMouseSlashEasyThresholdScale = 0.65f;
 }
 
 SwordPose SwordMouseController::GetPose() const {
@@ -55,5 +58,10 @@ void SwordMouseController::UpdateSlash(Input *input, float dt) {
         const float invLength = 1.0f / speed;
         state_.slashDir = {dx * invLength, -dy * invLength};
     }
-    state_.UpdateSlash(mouseSpeed * kMouseSlashSpeedScale, dt);
+    const float sensitivity = AppSceneServices::GetMouseSlashSensitivity();
+    const float thresholdScale =
+        std::lerp(kMouseSlashHardThresholdScale, kMouseSlashEasyThresholdScale,
+                  sensitivity);
+    state_.UpdateSlash(mouseSpeed * kMouseSlashSpeedScale, dt,
+                       SwordControllerState::kSlashThreshold * thresholdScale);
 }

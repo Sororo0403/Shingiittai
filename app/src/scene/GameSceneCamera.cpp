@@ -638,6 +638,12 @@ void GameScene::UpdateBattleCamera() {
             DirectX::XMFLOAT3 transitionLookAt = {
                 enemyPos.x, enemyPos.y + phaseTransitionLookAtHeight_,
                 enemyPos.z};
+            cameraPos.x -= viewForward.x * phaseTransitionCameraPullBack_ *
+                           enemyPhaseTransitionRatio;
+            cameraPos.y += phaseTransitionCameraRise_ *
+                           enemyPhaseTransitionRatio;
+            cameraPos.z -= viewForward.z * phaseTransitionCameraPullBack_ *
+                           enemyPhaseTransitionRatio;
             lookAt = Lerp(lookAt, transitionLookAt, enemyPhaseTransitionRatio);
         }
         combatFeedback_.ApplyCameraImpulse(cameraPos, lookAt, sceneLightTime_);
@@ -738,9 +744,12 @@ void GameScene::UpdateBattleCamera() {
             usedRadius -= 0.45f;
         }
         if (isEnemyPhaseTransition) {
-            usedRadius -= phaseTransitionPushIn_ * enemyPhaseTransitionRatio;
+            usedRadius +=
+                phaseTransitionCameraPullBack_ * enemyPhaseTransitionRatio;
         }
-        usedRadius = Clamp(usedRadius, 3.35f, 7.4f);
+        usedRadius =
+            Clamp(usedRadius, 3.35f,
+                  isEnemyPhaseTransition ? 9.2f : 7.4f);
 
         // cameraYaw_
         // 縺�E�謨�E�譁E��蜷代Λ繧�E�繝ｳ縺�E�縺�E�蟾�E�縺�E�縲∝�E蠑ｧ荳翫・蟾�E�蜿�E�菴咲�E��E�繧呈ｱ�E�繧√ａE
@@ -760,7 +769,8 @@ void GameScene::UpdateBattleCamera() {
         DirectX::XMFLOAT3 desiredCameraPos = {
             playerPos.x - lineX * usedRadius * cosA +
                 orbitRightX * usedRadius * sinA + orbitRightX * sideBias,
-            playerPos.y + 1.42f + 0.16f * pullT,
+            playerPos.y + 1.42f + 0.16f * pullT +
+                phaseTransitionCameraRise_ * enemyPhaseTransitionRatio,
             playerPos.z - lineZ * usedRadius * cosA +
                 orbitRightZ * usedRadius * sinA + orbitRightZ * sideBias};
 
@@ -790,11 +800,12 @@ void GameScene::UpdateBattleCamera() {
                          right.z * cameraSideOffset_};
 
         if (isEnemyPhaseTransition) {
-            cameraPos.x +=
-                forward.x * phaseTransitionPushIn_ * enemyPhaseTransitionRatio;
-            cameraPos.y += 0.12f * enemyPhaseTransitionRatio;
-            cameraPos.z +=
-                forward.z * phaseTransitionPushIn_ * enemyPhaseTransitionRatio;
+            cameraPos.x -= forward.x * phaseTransitionCameraPullBack_ *
+                           enemyPhaseTransitionRatio;
+            cameraPos.y += phaseTransitionCameraRise_ *
+                           enemyPhaseTransitionRatio;
+            cameraPos.z -= forward.z * phaseTransitionCameraPullBack_ *
+                           enemyPhaseTransitionRatio;
         }
         // 髱槭Ο繝�Eけ譎ゅ・蜀・�E��E�逕ｨ迴�E�蝨�E�蛟､繧貞�E譛�E
         lockOnOrbitCameraPos_ = cameraPos;

@@ -44,6 +44,10 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <BundleHandTrackingHelper Condition="'$(BundleHandTrackingHelper)' == ''">true</BundleHandTrackingHelper>
+    <IncludeReleasePdb Condition="'$(IncludeReleasePdb)' == ''">false</IncludeReleasePdb>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)generated\outputs\$(Platform)\$(Configuration)\$(ProjectName)\</OutDir>
     <IntDir>$(SolutionDir)generated\intermediate\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
@@ -71,7 +75,7 @@
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <GenerateDebugInformation>$(IncludeReleasePdb)</GenerateDebugInformation>
       <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
       <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;dxcompiler.lib;dinput8.lib;dxguid.lib;xinput.lib;ws2_32.lib;mfplat.lib;mfreadwrite.lib;mfuuid.lib;assimp-vc145-mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(ProjectDir)..\engine\externals\assimp\lib\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
@@ -104,11 +108,13 @@
     <ClCompile Include="src\scene\CameraPreviewReceiver.cpp" />
     <ClCompile Include="src\scene\CameraAccuracyDebugScene.cpp" />
     <ClCompile Include="src\scene\CreditScene.cpp" />
+    <ClCompile Include="src\scene\OptionScene.cpp" />
     <ClCompile Include="src\scene\RankingScene.cpp" />
     <ClCompile Include="src\scene\SoundTestScene.cpp" />
     <ClCompile Include="src\player\SwordSlashArcRenderer.cpp" />
     <ClCompile Include="src\player\SwordTrailRenderer.cpp" />
     <ClCompile Include="src\scene\BattleResultScene.cpp" />
+    <ClCompile Include="src\scene\BattleArenaRenderer.cpp" />
     <ClCompile Include="src\scene\CalibrationScene.cpp" />
     <ClCompile Include="src\scene\DifficultyCauldronScene.cpp" />
     <ClCompile Include="src\scene\GameSceneHud.cpp" />
@@ -142,6 +148,7 @@
     <ClInclude Include="include\scene\CameraPreviewReceiver.h" />
     <ClInclude Include="include\scene\CameraAccuracyDebugScene.h" />
     <ClInclude Include="include\scene\CreditScene.h" />
+    <ClInclude Include="include\scene\OptionScene.h" />
     <ClInclude Include="include\scene\RankingScene.h" />
     <ClInclude Include="include\scene\SoundTestScene.h" />
     <ClInclude Include="include\player\SwordSlashArcRenderer.h" />
@@ -150,6 +157,7 @@
     <ClInclude Include="include\compat\EngineCompat.h" />
     <ClInclude Include="include\compat\ParticleCompat.h" />
     <ClInclude Include="include\scene\AppSceneServices.h" />
+    <ClInclude Include="include\scene\BattleArenaRenderer.h" />
     <ClInclude Include="include\scene\BattleResultScene.h" />
     <ClInclude Include="include\scene\CalibrationScene.h" />
     <ClInclude Include="include\scene\DifficultyCauldronScene.h" />
@@ -191,6 +199,7 @@
     <None Include="resources\audio\sfx\explosion_boss.wav" />
     <None Include="resources\audio\sfx\hit_impact.wav" />
     <None Include="resources\audio\sfx\slash_hero.wav" />
+    <None Include="resources\fonts\MPLUS1p-ExtraBold.ttf" />
     <None Include="resources\effects\particles\smoke.png" />
     <None Include="resources\ui\difficulty\description_easy.png" />
     <None Include="resources\ui\difficulty\description_experienced.png" />
@@ -249,6 +258,7 @@
     <None Include="resources\ui\credits\credits_title.png" />
     <None Include="resources\ui\credits\name_AotoMori.png" />
     <None Include="resources\ui\credits\thank_you_for_playing.png" />
+    <None Include="resources\ui\credits\tsunagu_sign.png" />
     <None Include="resources\ui\credits\lines\aotomori_name.png" />
     <None Include="resources\ui\credits\lines\aotomori_role.png" />
     <None Include="resources\ui\credits\lines\art_sound_direction.png" />
@@ -259,6 +269,10 @@
     <None Include="resources\ui\credits\lines\team.png" />
     <None Include="resources\ui\credits\lines\thanks_message.png" />
     <None Include="resources\ui\credits\lines\title.png" />
+    <None Include="resources\ui\credits\lines\tsunagu_miyashita_name.png" />
+    <None Include="resources\ui\credits\lines\tsunagu_miyashita_role.png" />
+    <None Include="resources\ui\credits\lines\yutaka_name.png" />
+    <None Include="resources\ui\credits\lines\yutaka_role.png" />
     <None Include="resources\ui\credits\lines\year.png" />
     <None Include="resources\ui\common\tab_ranking.png" />
     <None Include="resources\ui\common\tab_select.png" />
@@ -267,6 +281,12 @@
     <None Include="resources\ui\menu\option_credits.png" />
     <None Include="resources\ui\menu\option_ranking.png" />
     <None Include="resources\ui\menu\option_sound_test.png" />
+    <None Include="resources\ui\option\bgm.png" />
+    <None Include="resources\ui\option\menu_label.png" />
+    <None Include="resources\ui\option\mouse_slash.png" />
+    <None Include="resources\ui\option\se.png" />
+    <None Include="resources\ui\option\tab_back.png" />
+    <None Include="resources\ui\option\title.png" />
     <None Include="resources\ui\sound_test\controls.png" />
     <None Include="resources\ui\sound_test\playing.png" />
     <None Include="resources\ui\sound_test\title.png" />
@@ -280,7 +300,7 @@
     <None Include="resources\ui\weapon_select\weapon_select_bg.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <Target Name="BuildHandTrackingHelper" BeforeTargets="CopyRuntimeDlls" Condition="'$(Configuration)' == 'Release'" Inputs="$(SolutionDir)tools\hand_tracking\build-hand-udp-exe.ps1;$(SolutionDir)tools\hand_tracking\hand_udp_sender.py;$(SolutionDir)tools\hand_tracking\requirements-hand-udp.txt;$(SolutionDir)tools\hand_tracking\models\hand_landmarker.task" Outputs="$(SolutionDir)tools\hand_tracking\dist\hand_udp_sender\hand_udp_sender.exe">
+  <Target Name="BuildHandTrackingHelper" BeforeTargets="CopyRuntimeDlls" Condition="'$(Configuration)' == 'Release' and '$(BundleHandTrackingHelper)' == 'true'" Inputs="$(SolutionDir)tools\hand_tracking\build-hand-udp-exe.ps1;$(SolutionDir)tools\hand_tracking\hand_udp_sender.py;$(SolutionDir)tools\hand_tracking\requirements-hand-udp.txt;$(SolutionDir)tools\hand_tracking\models\hand_landmarker.task" Outputs="$(SolutionDir)tools\hand_tracking\dist\hand_udp_sender\hand_udp_sender.exe">
     <Message Text="Building hand tracking helper for Release output." Importance="High" />
     <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(SolutionDir)tools\hand_tracking\build-hand-udp-exe.ps1&quot;" />
   </Target>
@@ -296,16 +316,23 @@
       <HandTrackingScript Include="$(SolutionDir)tools\hand_tracking\requirements-hand-udp.txt" />
       <HandTrackingScript Include="$(SolutionDir)tools\hand_tracking\setup-hand-udp.ps1" />
       <HandTrackingModel Include="$(SolutionDir)tools\hand_tracking\models\**\*" />
+      <HandTrackingDist Include="$(SolutionDir)tools\hand_tracking\dist\hand_udp_sender\**\*" Condition="'$(BundleHandTrackingHelper)' == 'true' and Exists('$(SolutionDir)tools\hand_tracking\dist\hand_udp_sender')" />
+      <RuntimeResourceDir Include="$(TargetDir)app\resources" Condition="Exists('$(TargetDir)app\resources')" />
+      <RuntimeResourceDir Include="$(TargetDir)engine\resources" Condition="Exists('$(TargetDir)engine\resources')" />
+      <ReleasePdb Include="$(TargetDir)*.pdb" Condition="'$(Configuration)' == 'Release' and '$(IncludeReleasePdb)' != 'true'" />
       <StaleRuntimeDir Include="$(TargetDir)resources\app" Condition="Exists('$(TargetDir)resources\app')" />
       <StaleRuntimeDir Include="$(TargetDir)resources\engine" Condition="Exists('$(TargetDir)resources\engine')" />
       <StaleRuntimeDir Include="$(TargetDir)tools\hand_tracking\hand_udp_sender" Condition="Exists('$(TargetDir)tools\hand_tracking\hand_udp_sender')" />
     </ItemGroup>
     <RemoveDir Directories="@(StaleRuntimeDir)" Condition="'@(StaleRuntimeDir)' != ''" />
+    <RemoveDir Directories="@(RuntimeResourceDir)" Condition="'@(RuntimeResourceDir)' != ''" />
+    <Delete Files="@(ReleasePdb)" Condition="'@(ReleasePdb)' != ''" />
     <Copy SourceFiles="@(RuntimeDll)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" Condition="'@(RuntimeDll)' != ''" />
     <Copy SourceFiles="@(AppResource)" DestinationFiles="@(AppResource->'$(TargetDir)app\resources\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" Condition="'@(AppResource)' != ''" />
     <Copy SourceFiles="@(EngineResource)" DestinationFiles="@(EngineResource->'$(TargetDir)engine\resources\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" Condition="'@(EngineResource)' != ''" />
     <Copy SourceFiles="@(HandTrackingScript)" DestinationFolder="$(TargetDir)tools\hand_tracking\" SkipUnchangedFiles="true" Condition="'@(HandTrackingScript)' != ''" />
     <Copy SourceFiles="@(HandTrackingModel)" DestinationFiles="@(HandTrackingModel->'$(TargetDir)tools\hand_tracking\models\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" Condition="'@(HandTrackingModel)' != ''" />
+    <Copy SourceFiles="@(HandTrackingDist)" DestinationFiles="@(HandTrackingDist->'$(TargetDir)tools\hand_tracking\hand_udp_sender\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" Condition="'@(HandTrackingDist)' != ''" />
   </Target>
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

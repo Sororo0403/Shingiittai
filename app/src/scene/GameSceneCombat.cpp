@@ -603,13 +603,13 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
          enemyActionStep == ActionStep::None)) {
         enemyRedPunishUncounterable_ = false;
     }
+    const bool isFarWarpSlashCommit = enemy_.IsFarWarpSlashActive();
     const bool isEnemyMeleePreparationOrRelease =
         (enemyActionKind == ActionKind::Smash ||
          enemyActionKind == ActionKind::Sweep) &&
         (enemyActionStep == ActionStep::Charge ||
          enemyActionStep == ActionStep::Hold ||
          enemyActionStep == ActionStep::Active);
-    const bool isFarWarpSlashCommit = enemy_.IsFarWarpSlashActive();
     const bool isPreReleaseCounterWindow =
         !isFarWarpSlashCommit &&
         (enemyActionKind == ActionKind::Smash ||
@@ -619,11 +619,6 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         enemy_.GetReleaseAnticipationRatio() > 0.0f;
     const bool isReleaseCounterWindow =
         !enemyRedPunishUncounterable_ && isPreReleaseCounterWindow;
-    const bool suppressNormalSlashHitDuringEnemyMelee =
-        (isEnemyMeleePreparationOrRelease && !enemyRedPunishUncounterable_ &&
-         !isReleaseCounterWindow) ||
-        isEnemyBladeClashCommitted;
-
     const float enemyAttackDamage = enemy_.GetCurrentAttackDamage();
     const float enemyAttackKnockback = enemy_.GetCurrentAttackKnockback();
     const bool isEnemyCounterWindow = isReleaseCounterWindow;
@@ -638,6 +633,14 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                              kLayerEnemyAttack,
                              kLayerPlayer | kLayerPlayerAttack);
     }
+
+    const bool enemyMeleeDamagePending =
+        isEnemyMeleeActive &&
+        enemyAttackBody != CollisionManager::kInvalidBodyId &&
+        IsNearXZ(player_.GetTransform().position, enemyAttackBox.center,
+                 GetReadableMeleeRadius(enemyAttackBox)) &&
+        playerHitCooldown_ <= 0.0f && !enemyMeleeHitConsumed_ &&
+        !enemyRedPunishUncounterable_;
 
     const bool isEnemyMeleePreparation =
         (enemyActionKind == ActionKind::Smash ||
@@ -752,8 +755,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             break;
         }
 
-        if (enemyHitCooldown_ <= 0.0f && !normalSlashHitConsumed_[i] &&
-            !suppressNormalSlashHitDuringEnemyMelee) {
+        if (enemyHitCooldown_ <= 0.0f && !normalSlashHitConsumed_[i]) {
             if (hitBody) {
                 const float swordDamage = swordAttackDamages[i];
                 const float appliedDamage =
@@ -853,13 +855,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     }
 
     if (isEnemyMeleeActive && !counterTriggeredThisFrame) {
-        const bool bossHitPlayer =
-            enemyAttackBody != CollisionManager::kInvalidBodyId &&
-            IsNearXZ(player_.GetTransform().position, enemyAttackBox.center,
-                     GetReadableMeleeRadius(enemyAttackBox));
-
-        if (bossHitPlayer && playerHitCooldown_ <= 0.0f &&
-            !enemyMeleeHitConsumed_ && !enemyRedPunishUncounterable_) {
+        if (enemyMeleeDamagePending) {
             enemyMeleeHitConsumed_ = true;
             const XMFLOAT2 knockbackDir = NormalizeXZ(
                 player_.GetTransform().position.x -

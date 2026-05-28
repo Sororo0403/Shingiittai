@@ -3,6 +3,7 @@
 #include "CreditScene.h"
 #include "SoundTestScene.h"
 #include "Input.h"
+#include "OptionScene.h"
 #include "RankingScene.h"
 #include "SceneManager.h"
 #include "SoundManager.h"
@@ -30,6 +31,7 @@ constexpr float kButtonGroupYOffset = 24.0f;
 constexpr float kTitleBandVerticalPadding = 32.0f;
 constexpr float kNormalButtonNameMaxAspect = 495.0f / 53.0f;
 constexpr float kSmallButtonNameMaxAspect = 374.0f / 47.0f;
+constexpr int kUtilityMenuItemCount = 4;
 
 struct ImageContentBounds {
     float left = 0.0f;
@@ -110,6 +112,8 @@ void WeaponSelectScene::Initialize(const SceneContext &ctx) {
         LoadTextureImage(L"app/resources/ui/common/tab_menu.png");
     utilityMenuTitleImage_ =
         LoadTextureImage(L"app/resources/ui/menu/menu_title.png");
+    optionMenuLabelImage_ =
+        LoadTextureImage(L"app/resources/ui/option/menu_label.png");
     utilityMenuOptionImages_[0] =
         LoadTextureImage(L"app/resources/ui/menu/option_ranking.png");
     utilityMenuOptionImages_[1] =
@@ -174,6 +178,11 @@ void WeaponSelectScene::Update() {
             case 2:
                 sceneManager_->ChangeScene(std::make_unique<CreditScene>(
                     CreditScene::ReturnTarget::WeaponSelect));
+                break;
+            case 3:
+                preserveMenuBgmOnExit_ = true;
+                sceneManager_->ChangeScene(std::make_unique<OptionScene>(
+                    OptionScene::ReturnTarget::WeaponSelect));
                 break;
             }
         }
@@ -269,11 +278,13 @@ void WeaponSelectScene::UpdateSelection(Input *input) {
     }
 
     if (input->IsKeyTrigger(DIK_ESCAPE)) {
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
         BeginReturnToTitle();
         return;
     }
 
     if (input->IsKeyTrigger(DIK_TAB)) {
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Selected);
         BeginShowUtilityMenu();
         return;
     }
@@ -291,10 +302,12 @@ void WeaponSelectScene::UpdateSelection(Input *input) {
     if (nextIndex != selectedIndex_) {
         selectedIndex_ = nextIndex;
         pulseTimers_[selectedIndex_] = 1.0f;
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
     }
 
     const bool confirm = input->IsKeyTrigger(DIK_SPACE);
     if (confirm) {
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Selected);
         BeginStart();
     }
 }
@@ -363,7 +376,7 @@ void WeaponSelectScene::BeginUtilityMenuAction() {
     menuActionRequested_ = true;
     startRequested_ = false;
     titleReturnRequested_ = false;
-    utilityMenuVisible_ = false;
+    utilityMenuVisible_ = true;
     waitingForHandTrackingReady_ = false;
     transitionTimer_ = 0.0f;
 }
@@ -372,20 +385,23 @@ void WeaponSelectScene::UpdateUtilityMenu(Input *input) {
     if (input == nullptr) {
         return;
     }
-    constexpr int kUtilityMenuItemCount = 3;
     if (input->IsKeyTrigger(DIK_A) || input->IsKeyTrigger(DIK_LEFT)) {
         utilityMenuIndex_ =
             (utilityMenuIndex_ + kUtilityMenuItemCount - 1) %
             kUtilityMenuItemCount;
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
     }
     if (input->IsKeyTrigger(DIK_D) || input->IsKeyTrigger(DIK_RIGHT)) {
         utilityMenuIndex_ = (utilityMenuIndex_ + 1) % kUtilityMenuItemCount;
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
     }
     if (input->IsKeyTrigger(DIK_ESCAPE) || input->IsKeyTrigger(DIK_TAB)) {
         utilityMenuVisible_ = false;
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
         return;
     }
     if (input->IsKeyTrigger(DIK_SPACE) || input->IsKeyTrigger(DIK_RETURN)) {
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Selected);
         BeginUtilityMenuAction();
     }
 }
@@ -453,14 +469,23 @@ void WeaponSelectScene::UpdateHandCameraConfirm(Input *input) {
     }
 
     if (input->IsKeyTrigger(DIK_A) || input->IsKeyTrigger(DIK_LEFT)) {
-        handCameraConfirmIndex_ = 0;
+        if (handCameraConfirmIndex_ != 0) {
+            handCameraConfirmIndex_ = 0;
+            AppSceneServices::PlayMenuSe(*ctx_,
+                                         AppSceneServices::MenuSe::Select);
+        }
     }
     if (input->IsKeyTrigger(DIK_D) || input->IsKeyTrigger(DIK_RIGHT)) {
-        handCameraConfirmIndex_ = 1;
+        if (handCameraConfirmIndex_ != 1) {
+            handCameraConfirmIndex_ = 1;
+            AppSceneServices::PlayMenuSe(*ctx_,
+                                         AppSceneServices::MenuSe::Select);
+        }
     }
     if (input->IsKeyTrigger(DIK_ESCAPE)) {
         handCameraConfirmVisible_ = false;
         handCameraConfirmIndex_ = 1;
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
         return;
     }
 
@@ -471,10 +496,12 @@ void WeaponSelectScene::UpdateHandCameraConfirm(Input *input) {
     }
     if (handCameraConfirmIndex_ != 0) {
         handCameraConfirmVisible_ = false;
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
         return;
     }
 
     handCameraConfirmVisible_ = false;
+    AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Selected);
     ContinueHandStart();
 }
 
@@ -798,12 +825,14 @@ void WeaponSelectScene::DrawUtilityMenuWindow(float screenWidth,
     const float buttonSize = std::clamp(panelH * 0.50f, 152.0f, 196.0f);
     const float buttonW = buttonSize;
     const float buttonH = buttonSize;
-    const float buttonGap = panelW * 0.060f;
-    const float totalButtonW = buttonSize * 3.0f + buttonGap * 2.0f;
+    const float buttonGap = panelW * 0.040f;
+    const float totalButtonW =
+        buttonSize * static_cast<float>(kUtilityMenuItemCount) +
+        buttonGap * static_cast<float>(kUtilityMenuItemCount - 1);
     const float buttonY = panelY + panelH * 0.38f;
     const float firstButtonX = panelX + (panelW - totalButtonW) * 0.5f;
 
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < kUtilityMenuItemCount; ++i) {
         const float x =
             firstButtonX + static_cast<float>(i) * (buttonW + buttonGap);
         const bool selected = i == utilityMenuIndex_;
@@ -829,18 +858,32 @@ void WeaponSelectScene::DrawUtilityMenuWindow(float screenWidth,
                             iconBoxSize * 0.78f, selected ? 1.0f : 0.78f,
                             selected);
 
-        const Image &label = utilityMenuOptionImages_[i];
-        const float labelScale =
-            (std::min)({1.0f,
-                        (buttonH * 0.18f) /
-                            (std::max)(label.height, 1.0f),
-                        (buttonW * 0.86f) /
-                            (std::max)(label.width, 1.0f)});
-        const float labelW = label.width * labelScale;
-        const float labelH = label.height * labelScale;
-        DrawImage(label, x + (buttonW - labelW) * 0.5f,
-                  buttonY + buttonH * 0.78f - labelH * 0.5f, labelScale,
-                  selected ? 1.0f : 0.82f);
+        if (i < 3) {
+            const Image &label = utilityMenuOptionImages_[i];
+            const float labelScale =
+                (std::min)({1.0f,
+                            (buttonH * 0.18f) /
+                                (std::max)(label.height, 1.0f),
+                            (buttonW * 0.86f) /
+                                (std::max)(label.width, 1.0f)});
+            const float labelW = label.width * labelScale;
+            const float labelH = label.height * labelScale;
+            DrawImage(label, x + (buttonW - labelW) * 0.5f,
+                      buttonY + buttonH * 0.78f - labelH * 0.5f, labelScale,
+                      selected ? 1.0f : 0.82f);
+        } else {
+            const float labelScale =
+                (std::min)({1.0f,
+                            (buttonH * 0.18f) /
+                                (std::max)(optionMenuLabelImage_.height, 1.0f),
+                            (buttonW * 0.86f) /
+                                (std::max)(optionMenuLabelImage_.width, 1.0f)});
+            const float labelW = optionMenuLabelImage_.width * labelScale;
+            const float labelH = optionMenuLabelImage_.height * labelScale;
+            DrawImage(optionMenuLabelImage_, x + (buttonW - labelW) * 0.5f,
+                      buttonY + buttonH * 0.78f - labelH * 0.5f, labelScale,
+                      selected ? 1.0f : 0.82f);
+        }
     }
 }
 
@@ -880,6 +923,16 @@ void WeaponSelectScene::DrawUtilityMenuIcon(int index, float centerX,
         f(-38.0f, 18.0f, 32.0f, 24.0f);
         r(14.0f, 10.0f, 32.0f, 24.0f, fill);
         f(14.0f, 10.0f, 32.0f, 24.0f);
+        return;
+    }
+
+    if (index == 3) {
+        r(-36.0f, -22.0f, 72.0f, 10.0f, line);
+        r(-36.0f, 14.0f, 72.0f, 10.0f, line);
+        r(-18.0f, -30.0f, 12.0f, 26.0f, fill);
+        f(-18.0f, -30.0f, 12.0f, 26.0f);
+        r(10.0f, 6.0f, 12.0f, 26.0f, fill);
+        f(10.0f, 6.0f, 12.0f, 26.0f);
         return;
     }
 
