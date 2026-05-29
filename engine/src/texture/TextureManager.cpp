@@ -83,6 +83,7 @@ void TextureManager::Initialize(DirectXCommon *dxCommon,
     filePathToTextureId_.clear();
     asyncRequests_.clear();
     nextAsyncRequestId_ = 1;
+    lastDynamicUploadFrameIndex_ = UINT_MAX;
 
     uint32_t whitePixel = 0xFFFFFFFF;
     Image image{};
@@ -103,6 +104,16 @@ void TextureManager::Initialize(DirectXCommon *dxCommon,
     metadata.dimension = TEX_DIMENSION_TEXTURE2D;
 
     whiteTextureId_ = CreateTexture(&image, 1, metadata);
+
+    Image cubeImages[6]{};
+    for (Image &cubeImage : cubeImages) {
+        cubeImage = image;
+    }
+    TexMetadata cubeMetadata = metadata;
+    cubeMetadata.arraySize = 6;
+    cubeMetadata.miscFlags = TEX_MISC_TEXTURECUBE;
+    whiteCubeTextureId_ = CreateTexture(cubeImages, _countof(cubeImages),
+                                        cubeMetadata);
 
     uint32_t flatNormalPixel = 0xFFFF8080;
     image.pixels = reinterpret_cast<uint8_t *>(&flatNormalPixel);

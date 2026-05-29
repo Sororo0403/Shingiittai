@@ -2,7 +2,7 @@
 #include "AppSceneServices.h"
 #include "GameScene.h"
 #include "Input.h"
-#include "PostProcessSystem.h"
+#include "PostEffectManager.h"
 #include "SceneManager.h"
 #include "SpriteManager.h"
 #include "TextureManager.h"
@@ -63,9 +63,9 @@ XMFLOAT4 LerpColor(const XMFLOAT4 &a, const XMFLOAT4 &b, float t) {
 
 XMFLOAT4 GaugeHeatColor(float t, float alpha) {
     t = std::clamp(t, 0.0f, 1.0f);
-    const XMFLOAT4 blue = Color(0.015f, 0.075f, 0.50f, alpha);
-    const XMFLOAT4 yellow = Color(1.0f, 0.78f, 0.10f, alpha);
-    const XMFLOAT4 red = Color(0.62f, 0.018f, 0.010f, alpha);
+    const XMFLOAT4 blue = Color(0.05f, 0.36f, 1.0f, alpha);
+    const XMFLOAT4 yellow = Color(1.0f, 0.84f, 0.16f, alpha);
+    const XMFLOAT4 red = Color(1.0f, 0.09f, 0.035f, alpha);
     if (t < 0.62f) {
         return LerpColor(blue, yellow, t / 0.62f);
     }
@@ -247,14 +247,22 @@ void DifficultyCauldronScene::Draw() {
     DrawRect(0.0f, 0.0f, w, h,
              Color(0.0f, 0.0f, 0.0f,
                    1.0f - backgroundIntro +
-                       (0.26f - overlayIntro * 0.10f + t * 0.025f) *
+                       (0.16f - overlayIntro * 0.08f + t * 0.018f) *
                            backgroundIntro));
     DrawHeatEffects(w, h);
+    ctx_->rendering.sprite->PostDraw();
+}
+
+void DifficultyCauldronScene::DrawPostProcessOverlay() {
+    const float w = static_cast<float>(ctx_->systems.winApp->GetWidth());
+    const float h = static_cast<float>(ctx_->systems.winApp->GetHeight());
+
+    ctx_->rendering.sprite->PreDraw(true);
     DrawDifficultyGauge(w, h);
     const float controlsIntro = SmoothStep((sceneTime_ - 0.24f) / 0.28f);
     const float controlsScale =
-        (std::min)(0.80f, (w * 0.31f) /
-                              (std::max)(controlsImage_.width, 1.0f));
+        (std::min)(0.80f,
+                   (w * 0.31f) / (std::max)(controlsImage_.width, 1.0f));
     DrawImage(controlsImage_, kControlsPadding,
               h - (controlsImage_.height -
                    kControlsImageBottomTransparentPixels) *
@@ -275,15 +283,15 @@ void DifficultyCauldronScene::Draw() {
         DrawRect(0.0f, 0.0f, w, h, Color(0.0f, 0.0f, 0.0f, fadeAlpha));
     }
     ctx_->rendering.sprite->PostDraw();
+
+    if (!startGameRequested_ && !returnToSelectRequested_ &&
+        IsHandControl(inputCalibration_.controlType)) {
+        previewReceiver_.Draw(ctx_->rendering.sprite, ctx_->rendering.texture,
+                              kPreviewStaleSeconds, true);
+    }
 }
 
 void DifficultyCauldronScene::DrawTransparent() {
-    if (startGameRequested_ || returnToSelectRequested_) {
-        return;
-    }
-    if (IsHandControl(inputCalibration_.controlType)) {
-        DrawCameraPreview();
-    }
 }
 
 DifficultyCauldronScene::Image
@@ -443,7 +451,7 @@ void DifficultyCauldronScene::BeginStartGame() {
 }
 
 void DifficultyCauldronScene::ApplyHeatPostProcess() {
-    if (ctx_ == nullptr || ctx_->rendering.postProcessSystem == nullptr) {
+    if (ctx_ == nullptr || ctx_->rendering.postEffectManager == nullptr) {
         return;
     }
 
@@ -452,14 +460,14 @@ void DifficultyCauldronScene::ApplyHeatPostProcess() {
     const float danger = t * t * (3.0f - 2.0f * t);
     PostProcessProfile profile{};
     profile.vignette.enabled = true;
-    profile.vignette.strength = (0.08f + 0.09f * t + 0.10f * danger) * intro;
+    profile.vignette.strength = (0.04f + 0.06f * t + 0.08f * danger) * intro;
     profile.vignette.scale = 8.2f + 1.4f * t + 1.8f * danger;
     profile.vignette.power = 1.02f + 0.08f * danger;
     profile.radialBlur.sampleCount = 1;
     profile.radialBlur.strength = 0.0f;
     profile.sceneDim.strength =
-        (0.010f + 0.032f * t + 0.040f * danger) * intro;
-    ctx_->rendering.postProcessSystem->SetProfile(profile);
+        (0.004f + 0.018f * t + 0.030f * danger) * intro;
+    ctx_->rendering.postEffectManager->SetBaseProfile(profile);
 }
 
 void DifficultyCauldronScene::DrawHeatEffects(float screenWidth,
@@ -472,9 +480,10 @@ void DifficultyCauldronScene::DrawHeatEffects(float screenWidth,
     const float panic =
         danger * (0.72f + 0.28f * std::sinf(sceneTime_ * 17.0f));
     DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
-             Color(0.12f * t + 0.22f * danger, 0.024f * t,
-                   0.020f * (1.0f - t),
-                   (0.018f + 0.035f * t + 0.050f * danger) * intro));
+             Color(0.08f + 0.18f * t + 0.22f * danger,
+                   0.055f + 0.060f * t,
+                   0.15f * (1.0f - t) + 0.04f * t,
+                   (0.040f + 0.050f * t + 0.055f * danger) * intro));
 
     if (t > 0.18f) {
         const float bandAlpha = (0.055f + 0.20f * danger) *
@@ -596,7 +605,7 @@ void DifficultyCauldronScene::DrawDifficultyGauge(float screenWidth,
             fillW > 0.0f ? (fillTrim / fillW) * fillT : 0.0f;
         DrawTextureRect(triangleGradientImage_.textureId, innerX + fillTrim,
                         innerY, fillW - fillTrim, innerH,
-                        Color(1.0f, 1.0f, 1.0f, 0.98f * form),
+                        Color(1.18f, 1.12f, 1.06f, 1.0f * form),
                         fillT - fillUvLeft, SpriteBlendMode::Alpha,
                         fillUvLeft);
     }

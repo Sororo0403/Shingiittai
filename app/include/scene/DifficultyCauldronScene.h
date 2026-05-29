@@ -22,6 +22,7 @@ class DifficultyCauldronScene : public BaseScene {
     void Update() override;
     void Draw() override;
     void DrawTransparent() override;
+    void DrawPostProcessOverlay() override;
 
   private:
     struct Image {

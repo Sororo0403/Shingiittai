@@ -21,8 +21,8 @@ cbuffer ParticleArgsParams : register(b0)
     uint maxInstanceCount15;
 };
 
-RWByteAddressBuffer gActiveCounts[MAX_PARTICLE_ARGS_JOBS] : register(u0);
-RWByteAddressBuffer gDrawArgsBuffers[MAX_PARTICLE_ARGS_JOBS] : register(u32);
+RWByteAddressBuffer gActiveCount : register(u0);
+RWByteAddressBuffer gDrawArgsBuffer : register(u32);
 
 uint GetMaxInstanceCount(uint jobIndex)
 {
@@ -54,9 +54,9 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     }
 
     uint activeCount =
-        min(gActiveCounts[jobIndex].Load(0), GetMaxInstanceCount(jobIndex));
-    gDrawArgsBuffers[jobIndex].Store(0, 6u);
-    gDrawArgsBuffers[jobIndex].Store(4, activeCount);
-    gDrawArgsBuffers[jobIndex].Store(8, 0u);
-    gDrawArgsBuffers[jobIndex].Store(12, 0u);
+        min(gActiveCount.Load(0), GetMaxInstanceCount(jobIndex));
+    gDrawArgsBuffer.Store(0, 6u);
+    gDrawArgsBuffer.Store(4, activeCount);
+    gDrawArgsBuffer.Store(8, 0u);
+    gDrawArgsBuffer.Store(12, 0u);
 }

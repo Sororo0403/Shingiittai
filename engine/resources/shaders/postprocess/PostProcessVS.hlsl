@@ -1,4 +1,4 @@
-#include "PostProcess.hlsli"
+#include "PostProcessCommon.hlsli"
 
 PostProcessVSOutput main(uint vertexId : SV_VertexID)
 {

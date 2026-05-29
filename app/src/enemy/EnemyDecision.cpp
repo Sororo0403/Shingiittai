@@ -16,6 +16,7 @@ enum class BossDecisionAction {
     PhantomWarp,
     Stalk,
     ArcaneLaser,
+    CataclysmLaser,
 };
 
 struct WeightedActionChoice {
@@ -581,6 +582,47 @@ bool Enemy::TryBeginArcaneLaserSlashFollowup(float chance) {
     return true;
 }
 
+bool Enemy::TryBeginCataclysmLaser(float chance) {
+    const float unlock = TechniqueUnlock(BossPhase::Phase3);
+    if (unlock <= 0.0f || cataclysmLaserCooldown_ > 0.0f ||
+        deathFinished_ || isDying_ || phaseTransitionActive_) {
+        return false;
+    }
+
+    const float distance = GetDistanceToPlayer();
+    if (distance < cataclysmLaserMinDistance_) {
+        return false;
+    }
+
+    if (lastActionKind_ == ActionKind::CataclysmLaser) {
+        chance *= 0.30f;
+    } else if (lastActionKind_ == ActionKind::ArcaneLaser) {
+        chance *= 0.58f;
+    }
+    chance *= unlock;
+    chance = std::clamp(chance, 0.0f, 0.68f);
+
+    const float roll =
+        static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+    if (roll >= chance) {
+        return false;
+    }
+
+    cataclysmLaserCooldown_ = cataclysmLaserCooldownDuration_;
+    ResetWarpContext();
+    warp_.isCutIn = true;
+    warp_.followupKind = ActionKind::CataclysmLaser;
+    warp_.followupStep = ActionStep::Charge;
+    warp_.faceLivePlayerOnEnd = true;
+    if (!DecideWarpTargetCataclysmLaser(warp_.targetPos)) {
+        ResetWarpContext();
+        return false;
+    }
+    warp_.hasValidTarget = true;
+    BeginAction(ActionKind::Warp, ActionStep::Start);
+    return true;
+}
+
 void Enemy::BeginPhantomWarpStep(int viewWarpsRemaining, bool finalBehind,
                                  ActionKind followupKind) {
     ResetWarpContext();
@@ -720,18 +762,23 @@ void Enemy::BeginChaseAction() {
     const bool canArcaneLaser =
         phase2Unlocked && arcaneLaserCooldown_ <= 0.0f &&
         distance >= arcaneLaserMinDistance_;
+    const bool canCataclysmLaser =
+        phase3Unlocked && cataclysmLaserCooldown_ <= 0.0f &&
+        distance >= cataclysmLaserMinDistance_;
     int stalkWeight = 100;
     int warpWeight = 0;
     int farWarpSlashWeight = 0;
     int phantomWarpWeight = 0;
     int arcaneLaserWeight = 0;
+    int cataclysmLaserWeight = 0;
 
     if (phase3Unlocked) {
         stalkWeight = 10;
         warpWeight = 14;
         farWarpSlashWeight = 26;
         phantomWarpWeight = 25;
-        arcaneLaserWeight = 44;
+        arcaneLaserWeight = 34;
+        cataclysmLaserWeight = 24;
     } else if (phase2Unlocked) {
         stalkWeight = 24;
         warpWeight = 18;
@@ -747,7 +794,9 @@ void Enemy::BeginChaseAction() {
          {BossDecisionAction::PhantomWarp,
           canPhantomWarp ? phantomWarpWeight : 0},
          {BossDecisionAction::ArcaneLaser,
-          canArcaneLaser ? arcaneLaserWeight : 0}},
+          canArcaneLaser ? arcaneLaserWeight : 0},
+         {BossDecisionAction::CataclysmLaser,
+          canCataclysmLaser ? cataclysmLaserWeight : 0}},
         BossDecisionAction::Stalk);
 
     switch (selected) {
@@ -780,6 +829,12 @@ void Enemy::BeginChaseAction() {
         return;
     case BossDecisionAction::ArcaneLaser:
         if (TryBeginArcaneLaser(1.0f)) {
+            return;
+        }
+        BeginStalkAction();
+        return;
+    case BossDecisionAction::CataclysmLaser:
+        if (TryBeginCataclysmLaser(1.0f)) {
             return;
         }
         BeginStalkAction();

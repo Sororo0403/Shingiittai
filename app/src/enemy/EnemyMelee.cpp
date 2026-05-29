@@ -102,6 +102,23 @@ void Enemy::UpdateArcaneLaserByStep(float deltaTime) {
     }
 }
 
+void Enemy::UpdateCataclysmLaserByStep(float deltaTime) {
+    switch (action_.step) {
+    case ActionStep::Charge:
+        UpdateCataclysmLaserCharge(deltaTime);
+        break;
+    case ActionStep::Active:
+        UpdateCataclysmLaserActive(deltaTime);
+        break;
+    case ActionStep::Recovery:
+        UpdateCataclysmLaserRecovery(deltaTime);
+        break;
+    default:
+        EndAttack();
+        break;
+    }
+}
+
 void Enemy::UpdateSmashCharge(float deltaTime) {
     float currentChargeTime = GetCurrentSmashChargeTime();
     float trackingEnd = config_.attacks.smash.melee.base.timing.trackingEndTime;
@@ -405,6 +422,48 @@ void Enemy::UpdateArcaneLaserRecovery(float deltaTime) {
                 arcaneLaserSlashFollowupChance_)) {
             return;
         }
+        EndAttack();
+    }
+}
+
+void Enemy::UpdateCataclysmLaserCharge(float deltaTime) {
+    const auto &profile = config_.attacks.cataclysmLaser.profile;
+    const float trackingEnd =
+        std::clamp(profile.timing.trackingEndTime, 0.0f, profile.chargeTime);
+
+    if (stateTimer_ < trackingEnd) {
+        UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_ * 0.30f);
+    } else if (!hasTrackingLocked_) {
+        LockCurrentFacing();
+        hasTrackingLocked_ = true;
+        cataclysmLaserDirection_ = {std::sin(lockedAttackYaw_), 0.0f,
+                                    std::cos(lockedAttackYaw_)};
+    }
+
+    if (stateTimer_ >= profile.chargeTime) {
+        if (!hasTrackingLocked_) {
+            LockCurrentFacing();
+            hasTrackingLocked_ = true;
+        }
+        cataclysmLaserDirection_ = {std::sin(lockedAttackYaw_), 0.0f,
+                                    std::cos(lockedAttackYaw_)};
+        ChangeActionStep(ActionStep::Active);
+    }
+}
+
+void Enemy::UpdateCataclysmLaserActive(float) {
+    const auto &timing = config_.attacks.cataclysmLaser.profile.timing;
+    isAttackActive_ = stateTimer_ >= timing.activeStartTime &&
+                      stateTimer_ <= timing.activeEndTime;
+    if (stateTimer_ >= timing.activeEndTime) {
+        ChangeActionStep(ActionStep::Recovery);
+    }
+}
+
+void Enemy::UpdateCataclysmLaserRecovery(float deltaTime) {
+    UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_ * 0.12f);
+
+    if (stateTimer_ >= config_.attacks.cataclysmLaser.recoveryDuration) {
         EndAttack();
     }
 }

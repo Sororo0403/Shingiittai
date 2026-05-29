@@ -117,8 +117,10 @@ void TextureManager::UpdateTexture2D(uint32_t textureId, const uint8_t *pixels,
     }
 
     const UINT frameIndex = dxCommon_->GetBackBufferIndex();
-    if (frameIndex < frameUploadBuffers_.size()) {
+    if (frameIndex < frameUploadBuffers_.size() &&
+        lastDynamicUploadFrameIndex_ != frameIndex) {
         frameUploadBuffers_[frameIndex].clear();
+        lastDynamicUploadFrameIndex_ = frameIndex;
     }
 
     D3D12_RESOURCE_DESC textureDesc = texture.resource->GetDesc();

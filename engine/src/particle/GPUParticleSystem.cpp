@@ -20,17 +20,11 @@ namespace {
 
 constexpr uint32_t kParticleThreadCount = 256u;
 constexpr uint32_t kMaxParticleArgsJobs = 16u;
-constexpr uint32_t kParticleArgsDescriptorFrameCount = 3u;
 
 ID3D12Device *gCachedParticleDrawDevice = nullptr;
 ComPtr<ID3D12RootSignature> gCachedParticleDrawRootSignature;
 ComPtr<ID3D12CommandSignature> gCachedParticleDrawCommandSignature;
 std::map<std::wstring, ComPtr<ID3D12PipelineState>> gParticleDrawPsoCache;
-ID3D12Device *gCachedParticleArgsDevice = nullptr;
-SrvManager *gCachedParticleArgsSrvManager = nullptr;
-uint32_t gParticleArgsCountUavBase[kParticleArgsDescriptorFrameCount] = {};
-uint32_t gParticleArgsDrawUavBase[kParticleArgsDescriptorFrameCount] = {};
-bool gParticleArgsDescriptorsInitialized = false;
 
 float EstimateParticleActiveDuration(const ParticleEmitterSettings &settings) {
     return (std::max)(0.0f, settings.baseLifeTime + settings.lifeTimeRandom +
@@ -264,26 +258,6 @@ ID3D12CommandSignature *GetSharedParticleDrawCommandSignature(
                       IID_PPV_ARGS(&gCachedParticleDrawCommandSignature)),
                   "CreateCommandSignature(GPUParticleDraw) failed");
     return gCachedParticleDrawCommandSignature.Get();
-}
-
-void EnsureParticleArgsDescriptorRanges(ID3D12Device *device,
-                                        SrvManager *srvManager) {
-    if (gParticleArgsDescriptorsInitialized &&
-        gCachedParticleArgsDevice == device &&
-        gCachedParticleArgsSrvManager == srvManager) {
-        return;
-    }
-
-    gCachedParticleArgsDevice = device;
-    gCachedParticleArgsSrvManager = srvManager;
-    for (uint32_t frameIndex = 0;
-         frameIndex < kParticleArgsDescriptorFrameCount; ++frameIndex) {
-        gParticleArgsCountUavBase[frameIndex] =
-            srvManager->AllocateRange(kMaxParticleArgsJobs);
-        gParticleArgsDrawUavBase[frameIndex] =
-            srvManager->AllocateRange(kMaxParticleArgsJobs);
-    }
-    gParticleArgsDescriptorsInitialized = true;
 }
 
 }
@@ -573,53 +547,26 @@ void GPUParticleSystem::RecordUpdateDispatch(uint32_t phase) {
 void GPUParticleSystem::RecordDrawArgsDispatches(
     DirectXCommon *dxCommon, SrvManager *srvManager,
     const std::vector<GPUParticleSystem *> &jobs) {
+    (void)srvManager;
     if (jobs.empty()) {
         return;
     }
-
-    EnsureParticleArgsDescriptorRanges(dxCommon->GetDevice(), srvManager);
 
     auto *cmd = dxCommon->GetCommandList();
     cmd->SetComputeRootSignature(jobs.front()->argsRootSignature_.Get());
     cmd->SetPipelineState(jobs.front()->argsPSO_.Get());
 
-    const uint32_t descriptorFrame =
-        dxCommon->GetBackBufferIndex() % kParticleArgsDescriptorFrameCount;
-    const uint32_t countUavBase =
-        gParticleArgsCountUavBase[descriptorFrame];
-    const uint32_t drawUavBase = gParticleArgsDrawUavBase[descriptorFrame];
-
-    auto copyDescriptor = [&](UINT destinationIndex,
-                              D3D12_CPU_DESCRIPTOR_HANDLE source) {
-        dxCommon->GetDevice()->CopyDescriptorsSimple(
-            1, srvManager->GetCpuHandle(destinationIndex), source,
-            D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    };
-
-    for (size_t chunkStart = 0; chunkStart < jobs.size();
-         chunkStart += kMaxParticleArgsJobs) {
-        const size_t chunkCount = (std::min<size_t>)(
-            kMaxParticleArgsJobs, jobs.size() - chunkStart);
-        for (size_t localIndex = 0; localIndex < chunkCount; ++localIndex) {
-            GPUParticleSystem *job = jobs[chunkStart + localIndex];
-            copyDescriptor(countUavBase + static_cast<UINT>(localIndex),
-                           job->activeCountUavCpuHandle_);
-            copyDescriptor(drawUavBase + static_cast<UINT>(localIndex),
-                           job->drawArgsUavCpuHandle_);
+    for (GPUParticleSystem *job : jobs) {
+        if (job == nullptr) {
+            continue;
         }
-
         uint32_t constants[1u + kMaxParticleArgsJobs] = {};
-        constants[0] = static_cast<uint32_t>(chunkCount);
-        for (size_t localIndex = 0; localIndex < chunkCount; ++localIndex) {
-            constants[1u + localIndex] =
-                jobs[chunkStart + localIndex]->maxParticles_;
-        }
+        constants[0] = 1u;
+        constants[1] = job->maxParticles_;
         cmd->SetComputeRoot32BitConstants(
             0, static_cast<UINT>(_countof(constants)), constants, 0);
-        cmd->SetComputeRootDescriptorTable(1,
-                                           srvManager->GetGpuHandle(countUavBase));
-        cmd->SetComputeRootDescriptorTable(2,
-                                           srvManager->GetGpuHandle(drawUavBase));
+        cmd->SetComputeRootDescriptorTable(1, job->activeCountUavGpuHandle_);
+        cmd->SetComputeRootDescriptorTable(2, job->drawArgsUavGpuHandle_);
         cmd->Dispatch(1, 1, 1);
     }
 }
@@ -717,13 +664,11 @@ void GPUParticleSystem::CreateRootSignatures() {
         params[0].InitAsConstants(1u + kMaxParticleArgsJobs, 0);
 
         CD3DX12_DESCRIPTOR_RANGE activeCountRange;
-        activeCountRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
-                              kMaxParticleArgsJobs, 0);
+        activeCountRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
         params[1].InitAsDescriptorTable(1, &activeCountRange);
 
         CD3DX12_DESCRIPTOR_RANGE drawArgsRange;
-        drawArgsRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
-                           kMaxParticleArgsJobs, 32);
+        drawArgsRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 32);
         params[2].InitAsDescriptorTable(1, &drawArgsRange);
 
         CD3DX12_ROOT_SIGNATURE_DESC desc;
@@ -1044,6 +989,16 @@ void GPUParticleSystem::CreateActiveDrawBuffers() {
     rawUavDesc.Buffer.NumElements = drawArgsBufferSize / sizeof(uint32_t);
     device->CreateUnorderedAccessView(drawArgsResource_.Get(), nullptr,
                                       &rawUavDesc, drawArgsUavCpuHandle_);
+
+    ID3D12DescriptorHeap *heaps[] = {srvManager_->GetHeap()};
+    dxCommon_->GetCommandList()->SetDescriptorHeaps(1, heaps);
+    const UINT safeDrawArgs[4] = {6u, 0u, 0u, 0u};
+    dxCommon_->GetCommandList()->ClearUnorderedAccessViewUint(
+        drawArgsUavGpuHandle_, drawArgsUavCpuHandle_, drawArgsResource_.Get(),
+        safeDrawArgs, 0, nullptr);
+    auto drawArgsClearBarrier =
+        CD3DX12_RESOURCE_BARRIER::UAV(drawArgsResource_.Get());
+    dxCommon_->GetCommandList()->ResourceBarrier(1, &drawArgsClearBarrier);
 }
 
 void GPUParticleSystem::CreateConstantBuffers() {

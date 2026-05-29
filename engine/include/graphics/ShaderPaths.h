@@ -11,6 +11,8 @@ inline constexpr const wchar_t *PostProcessVS =
     L"engine/resources/shaders/postprocess/PostProcessVS.hlsl";
 inline constexpr const wchar_t *PostProcessPS =
     L"engine/resources/shaders/postprocess/PostProcessPS.hlsl";
+inline constexpr const wchar_t *PostProcessCopyPS =
+    L"engine/resources/shaders/postprocess/CopyPS.hlsl";
 
 inline constexpr const wchar_t *SkyboxVS =
     L"engine/resources/shaders/skybox/SkyboxVS.hlsl";
@@ -53,5 +55,7 @@ inline constexpr const wchar_t *ParticleVS =
     L"engine/resources/shaders/particle/GPUParticleVS.hlsl";
 inline constexpr const wchar_t *ParticlePS =
     L"engine/resources/shaders/particle/GPUParticlePS.hlsl";
+inline constexpr const wchar_t *ParticleSmokePS =
+    L"engine/resources/shaders/particle/GPUParticleSmokePS.hlsl";
 
 } // namespace ShaderPaths

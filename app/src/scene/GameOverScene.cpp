@@ -4,7 +4,7 @@
 #include "GameScene.h"
 #include "Input.h"
 #include "ModelManager.h"
-#include "PostProcessSystem.h"
+#include "PostEffectManager.h"
 #include "SceneManager.h"
 #include "SpriteManager.h"
 #include "TextureManager.h"
@@ -12,7 +12,6 @@
 #include "WinApp.h"
 #include <Xinput.h>
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <memory>
 #include <vector>
@@ -20,12 +19,8 @@
 using namespace DirectX;
 
 namespace {
-constexpr float kDifficultyDropDuration = 0.82f;
-constexpr float kDifficultyDropHoldDuration = 1.35f;
 constexpr float kDefeatIntroDuration = 2.35f;
 constexpr float kDefeatIntroBlackFadeDuration = 0.18f;
-constexpr float kPromptOpenDuration = 0.28f;
-constexpr float kPromptCloseDuration = 0.22f;
 constexpr DirectX::XMFLOAT3 kPlayerDefeatPosition{0.0f, 0.0f, 2.35f};
 constexpr DirectX::XMFLOAT3 kDefeatSpotlightPosition{
     kPlayerDefeatPosition.x - 0.25f,
@@ -52,6 +47,10 @@ constexpr float kGameOverLetterInterval = 0.13f;
 constexpr float kGameOverLetterFadeDuration = 0.34f;
 constexpr float kGameOverLetterOozeDuration = 0.48f;
 constexpr float kGameOverTextHoldDuration = 3.0f;
+constexpr int kGameOverParticleColumns = 40;
+constexpr int kGameOverParticleRows = 12;
+constexpr float kGameOverCrumbleStartDelay = 0.74f;
+constexpr float kGameOverCrumbleDuration = 2.10f;
 constexpr float kGameOverBlackFadeDuration = 0.78f;
 constexpr float kGameOverBlackHoldDuration = 3.0f;
 constexpr float kGameOverTextCompleteTime =
@@ -65,12 +64,6 @@ constexpr float kTitleFadeDuration =
     kGameOverBlackHoldDuration;
 constexpr float kTitleFadeSkipDuration =
     kGameOverBlackFadeStartTime + kGameOverBlackFadeDuration;
-
-std::array<int, 10> g_defeatsByDifficulty{};
-
-int DifficultyBucket(float difficulty) {
-    return std::clamp(static_cast<int>(std::lround(difficulty)), 0, 9);
-}
 
 bool IsAdvancePressed(Input *input) {
     return input != nullptr &&
@@ -97,23 +90,6 @@ float SmoothStep01(float t) {
 float EaseInQuad(float t) {
     t = std::clamp(t, 0.0f, 1.0f);
     return t * t;
-}
-
-XMFLOAT4 LerpColor(const XMFLOAT4 &a, const XMFLOAT4 &b, float t) {
-    t = std::clamp(t, 0.0f, 1.0f);
-    return {a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t,
-            a.z + (b.z - a.z) * t, a.w + (b.w - a.w) * t};
-}
-
-XMFLOAT4 GaugeHeatColor(float t, float alpha) {
-    t = std::clamp(t, 0.0f, 1.0f);
-    const XMFLOAT4 blue{0.015f, 0.075f, 0.50f, alpha};
-    const XMFLOAT4 yellow{1.0f, 0.78f, 0.10f, alpha};
-    const XMFLOAT4 red{0.62f, 0.018f, 0.010f, alpha};
-    if (t < 0.62f) {
-        return LerpColor(blue, yellow, t / 0.62f);
-    }
-    return LerpColor(yellow, red, (t - 0.62f) / 0.38f);
 }
 
 XMFLOAT4 RotationFromZAxisTo(const XMFLOAT3 &direction) {
@@ -197,37 +173,6 @@ uint32_t CreateDustTexture(TextureManager *texture) {
     return texture->CreateFromRgbaPixels(kSize, kSize, pixels.data());
 }
 
-uint32_t CreateTriangleTexture(TextureManager *texture, bool gradient) {
-    constexpr uint32_t kWidth = 512;
-    constexpr uint32_t kHeight = 128;
-    constexpr float kAaPixels = 1.8f;
-    std::vector<uint8_t> pixels(static_cast<size_t>(kWidth) * kHeight * 4u);
-    for (uint32_t py = 0; py < kHeight; ++py) {
-        for (uint32_t px = 0; px < kWidth; ++px) {
-            const float x = (static_cast<float>(px) + 0.5f) /
-                            static_cast<float>(kWidth - 1u);
-            const float y = (static_cast<float>(py) + 0.5f) /
-                            static_cast<float>(kHeight - 1u);
-            const float line = 1.0f - x;
-            const float distancePixels = (y - line) * static_cast<float>(kHeight);
-            const float alpha =
-                std::clamp(distancePixels / kAaPixels + 0.5f, 0.0f, 1.0f);
-            const XMFLOAT4 color =
-                gradient ? GaugeHeatColor(x, alpha)
-                         : XMFLOAT4{1.0f, 1.0f, 1.0f, alpha};
-            const size_t index = (static_cast<size_t>(py) * kWidth + px) * 4u;
-            pixels[index + 0] =
-                static_cast<uint8_t>(std::clamp(color.x, 0.0f, 1.0f) * 255.0f);
-            pixels[index + 1] =
-                static_cast<uint8_t>(std::clamp(color.y, 0.0f, 1.0f) * 255.0f);
-            pixels[index + 2] =
-                static_cast<uint8_t>(std::clamp(color.z, 0.0f, 1.0f) * 255.0f);
-            pixels[index + 3] =
-                static_cast<uint8_t>(std::clamp(color.w, 0.0f, 1.0f) * 255.0f);
-        }
-    }
-    return texture->CreateFromRgbaPixels(kWidth, kHeight, pixels.data());
-}
 } // namespace
 
 GameOverScene::GameOverScene(float elapsedTime,
@@ -235,47 +180,36 @@ GameOverScene::GameOverScene(float elapsedTime,
                              float combatDifficulty)
     : inputCalibration_(inputCalibration),
       combatDifficulty_(std::clamp(combatDifficulty, 0.0f, 9.0f)),
-      elapsedTime_((std::max)(0.0f, elapsedTime)),
-      difficultyBeforeDrop_(std::clamp(combatDifficulty, 0.0f, 9.0f)),
-      displayedDifficulty_(std::clamp(combatDifficulty, 0.0f, 9.0f)) {}
+      elapsedTime_((std::max)(0.0f, elapsedTime)) {}
 
-void GameOverScene::ResetDefeatCounts() { g_defeatsByDifficulty.fill(0); }
+void GameOverScene::ResetDefeatCounts() {}
 
 void GameOverScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
     sceneTime_ = 0.0f;
     introTimer_ = 0.0f;
     state_ = State::DefeatIntro;
-    const int difficultyBucket = DifficultyBucket(combatDifficulty_);
-    offerDifficultyDrop_ = ++g_defeatsByDifficulty[static_cast<size_t>(
-                               difficultyBucket)] >= 3;
-    promptIndex_ = 1;
     menuIndex_ = 0;
-    promptWindowTimer_ = 0.0f;
-    promptCloseTimer_ = 0.0f;
-    difficultyDropTimer_ = 0.0f;
     retryRiseTimer_ = 0.0f;
     retrySkipFadeTimer_ = 0.0f;
     titleFadeTimer_ = 0.0f;
     retrySkipFadeActive_ = false;
     titleFadeSkipRequested_ = false;
-    difficultyBeforeDrop_ = combatDifficulty_;
-    displayedDifficulty_ = combatDifficulty_;
 
     const float aspect = static_cast<float>(ctx_->systems.winApp->GetWidth()) /
                          static_cast<float>(ctx_->systems.winApp->GetHeight());
     camera_.Initialize(aspect);
     camera_.SetClipRange(0.05f, 80.0f);
 
-    if (ctx_->rendering.postProcessSystem != nullptr) {
-        ctx_->rendering.postProcessSystem->SetProfile(PostProcessProfile{});
+    if (ctx_->rendering.postEffectManager != nullptr) {
+        ctx_->rendering.postEffectManager->SetBaseProfile(PostProcessProfile{});
     }
     if (ctx_->rendering.dxCommon != nullptr) {
         ctx_->rendering.dxCommon->SetClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     }
 
     ModelManager *model = ctx_->rendering.model;
-    playerModelId_ = model->Load(L"app/resources/models/player/player.glb");
+    playerModelId_ = model->Load(L"app/resources/models/player/player.gltf");
     swordModelId_ = model->Load(L"app/resources/models/player/sword.glb");
     player_.Initialize(playerModelId_, swordModelId_);
     player_.SetInputCalibration(inputCalibration_);
@@ -331,7 +265,7 @@ void GameOverScene::Update() {
     switch (state_) {
     case State::DefeatIntro:
         if (IsAdvancePressed(ctx_->systems.input)) {
-            FinishDefeatIntro(true);
+            FinishDefeatIntro();
             break;
         }
         introTimer_ = (std::min)(introTimer_ + deltaTime, kDefeatIntroDuration);
@@ -351,15 +285,6 @@ void GameOverScene::Update() {
         if (introTimer_ >= kDefeatIntroDuration) {
             FinishDefeatIntro();
         }
-        break;
-    case State::DifficultyPrompt:
-        UpdateDifficultyPrompt(deltaTime);
-        break;
-    case State::DifficultyDrop:
-        UpdateDifficultyDrop(deltaTime);
-        break;
-    case State::DifficultyPromptClose:
-        UpdateDifficultyPromptClose(deltaTime);
         break;
     case State::Menu:
         UpdateMenu();
@@ -400,10 +325,6 @@ void GameOverScene::CreateTextImages() {
 
     defeatCleanImage_ = load(L"app/resources/ui/gameover/defeat_clean.png");
     defeatImage_ = load(L"app/resources/ui/gameover/defeat.png");
-    lowerDifficultyImage_ =
-        load(L"app/resources/ui/gameover/lower_difficulty.png");
-    yesImage_ = load(L"app/resources/ui/gameover/yes.png");
-    noImage_ = load(L"app/resources/ui/gameover/no.png");
     retryImage_ = load(L"app/resources/ui/gameover/retry.png");
     titleImage_ = load(L"app/resources/ui/gameover/title.png");
     const wchar_t *gameOverLetterPaths[kGameOverLetterCount] = {
@@ -420,108 +341,15 @@ void GameOverScene::CreateTextImages() {
         gameOverLetterImages_[static_cast<size_t>(i)] =
             load(gameOverLetterPaths[i]);
     }
-    triangleMaskImage_.textureId =
-        CreateTriangleTexture(ctx_->rendering.texture, false);
-    triangleMaskImage_.width = 512.0f;
-    triangleMaskImage_.height = 128.0f;
-    triangleGradientImage_.textureId =
-        CreateTriangleTexture(ctx_->rendering.texture, true);
-    triangleGradientImage_.width = 512.0f;
-    triangleGradientImage_.height = 128.0f;
 }
 
-void GameOverScene::FinishDefeatIntro(bool skipPromptOpen) {
+void GameOverScene::FinishDefeatIntro() {
     introTimer_ = kDefeatIntroDuration;
     player_.LockPosition(kPlayerDefeatPosition);
     player_.SetYaw(0.65f);
     player_.SetDefeatPoseRatio(1.0f);
-    promptWindowTimer_ = skipPromptOpen ? kPromptOpenDuration : 0.0f;
-    if (offerDifficultyDrop_) {
-        state_ = State::DifficultyPrompt;
-    } else {
-        state_ = State::Menu;
-        menuIndex_ = 0;
-    }
-}
-
-void GameOverScene::UpdateDifficultyPrompt(float deltaTime) {
-    Input *input = ctx_->systems.input;
-    const bool confirm = IsAdvancePressed(input);
-    if (promptWindowTimer_ < kPromptOpenDuration) {
-        if (confirm) {
-            promptWindowTimer_ = kPromptOpenDuration;
-        } else {
-            promptWindowTimer_ =
-                (std::min)(promptWindowTimer_ + deltaTime, kPromptOpenDuration);
-        }
-        return;
-    }
-
-    if (input->IsKeyTrigger(DIK_A) || input->IsKeyTrigger(DIK_LEFT)) {
-        if (promptIndex_ != 0) {
-            promptIndex_ = 0;
-            AppSceneServices::PlayMenuSe(*ctx_,
-                                         AppSceneServices::MenuSe::Select);
-        }
-    }
-    if (input->IsKeyTrigger(DIK_D) || input->IsKeyTrigger(DIK_RIGHT)) {
-        if (promptIndex_ != 1) {
-            promptIndex_ = 1;
-            AppSceneServices::PlayMenuSe(*ctx_,
-                                         AppSceneServices::MenuSe::Select);
-        }
-    }
-
-    if (!confirm) {
-        return;
-    }
-
-    if (promptIndex_ == 0) {
-        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Selected);
-        difficultyBeforeDrop_ = combatDifficulty_;
-        combatDifficulty_ = std::clamp(combatDifficulty_ - 1.0f, 0.0f, 9.0f);
-        difficultyDropTimer_ = 0.0f;
-        state_ = State::DifficultyDrop;
-    } else {
-        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
-        promptCloseTimer_ = 0.0f;
-        state_ = State::DifficultyPromptClose;
-    }
-}
-
-void GameOverScene::UpdateDifficultyDrop(float deltaTime) {
-    if (IsAdvancePressed(ctx_->systems.input)) {
-        displayedDifficulty_ = combatDifficulty_;
-        promptCloseTimer_ = kPromptCloseDuration;
-        state_ = State::DifficultyPromptClose;
-        return;
-    }
-    difficultyDropTimer_ =
-        (std::min)(difficultyDropTimer_ + deltaTime,
-                   kDifficultyDropDuration + kDifficultyDropHoldDuration);
-    const float t = SmoothStep01(difficultyDropTimer_ / kDifficultyDropDuration);
-    displayedDifficulty_ =
-        difficultyBeforeDrop_ + (combatDifficulty_ - difficultyBeforeDrop_) * t;
-    if (difficultyDropTimer_ >= kDifficultyDropDuration + kDifficultyDropHoldDuration) {
-        displayedDifficulty_ = combatDifficulty_;
-        promptCloseTimer_ = 0.0f;
-        state_ = State::DifficultyPromptClose;
-    }
-}
-
-void GameOverScene::UpdateDifficultyPromptClose(float deltaTime) {
-    if (IsAdvancePressed(ctx_->systems.input)) {
-        state_ = State::Menu;
-        menuIndex_ = 0;
-        return;
-    }
-
-    promptCloseTimer_ =
-        (std::min)(promptCloseTimer_ + deltaTime, kPromptCloseDuration);
-    if (promptCloseTimer_ >= kPromptCloseDuration) {
-        state_ = State::Menu;
-        menuIndex_ = 0;
-    }
+    state_ = State::Menu;
+    menuIndex_ = 0;
 }
 
 void GameOverScene::UpdateMenu() {
@@ -821,10 +649,6 @@ void GameOverScene::DrawOverlay(float screenWidth, float screenHeight) {
         }
         return;
     }
-    if (state_ == State::DifficultyPrompt || state_ == State::DifficultyDrop ||
-        state_ == State::DifficultyPromptClose) {
-        DrawDifficultyPrompt(screenWidth, screenHeight);
-    }
     if (state_ == State::Menu || state_ == State::RetryRise) {
         DrawMenu(screenWidth, screenHeight);
     }
@@ -884,70 +708,6 @@ void GameOverScene::DrawDefeatTitle(float screenWidth, float screenHeight) {
     DrawImage(image, x, y, defeatScale, introAlpha);
 }
 
-void GameOverScene::DrawDifficultyPrompt(float screenWidth, float screenHeight) {
-    float windowForm = 1.0f;
-    if (state_ == State::DifficultyPrompt) {
-        windowForm = SmoothStep01(promptWindowTimer_ / kPromptOpenDuration);
-    } else if (state_ == State::DifficultyPromptClose) {
-        windowForm = 1.0f - SmoothStep01(promptCloseTimer_ / kPromptCloseDuration);
-    }
-    const float contentAlpha = SmoothStep01((windowForm - 0.35f) / 0.45f);
-    const float windowScale = 0.08f + 0.92f * windowForm;
-
-    const float basePanelW =
-        screenWidth - std::clamp(screenWidth * 0.10f, 96.0f, 150.0f);
-    const float basePanelH =
-        screenHeight - std::clamp(screenHeight * 0.16f, 96.0f, 150.0f);
-    const float panelW = basePanelW * windowScale;
-    const float panelH = basePanelH * windowScale;
-    const float panelX = (screenWidth - panelW) * 0.5f;
-    const float panelY = (screenHeight - panelH) * 0.5f;
-
-    DrawRect(panelX + 14.0f, panelY + 16.0f, panelW, panelH,
-             Color(0.0f, 0.0f, 0.0f, 0.44f * windowForm));
-    DrawRect(panelX, panelY, panelW, panelH,
-             Color(0.018f, 0.020f, 0.024f, 0.96f * windowForm));
-    DrawFrame(panelX, panelY, panelW, panelH, 3.0f,
-              Color(0.90f, 0.70f, 0.32f, 0.78f * windowForm));
-
-    const float messageScale =
-        std::min(1.22f, (panelW * 0.64f) /
-                           (std::max)(lowerDifficultyImage_.width, 1.0f));
-    const float messageW = lowerDifficultyImage_.width * messageScale;
-    DrawImage(lowerDifficultyImage_, panelX + (panelW - messageW) * 0.5f,
-              panelY + panelH * 0.17f, messageScale, contentAlpha);
-
-    DrawDifficultyGauge(panelX + panelW * 0.13f, panelY + panelH * 0.40f,
-                        panelW * 0.74f, std::clamp(panelH * 0.19f, 110.0f, 158.0f),
-                        displayedDifficulty_, contentAlpha);
-
-    const float buttonW = std::clamp(panelW * 0.20f, 170.0f, 240.0f);
-    const float buttonH = std::clamp(panelH * 0.12f, 70.0f, 92.0f);
-    const float gap = panelW * 0.10f;
-    const float totalW = buttonW * 2.0f + gap;
-    const float buttonY = panelY + panelH * 0.72f;
-    const float firstX = panelX + (panelW - totalW) * 0.5f;
-    const Image *labels[2] = {&yesImage_, &noImage_};
-    for (int i = 0; i < 2; ++i) {
-        const float x = firstX + static_cast<float>(i) * (buttonW + gap);
-        const bool selected = i == promptIndex_;
-        DrawRect(x, buttonY, buttonW, buttonH,
-                 selected ? Color(0.18f, 0.13f, 0.055f, 0.98f * contentAlpha)
-                          : Color(0.040f, 0.046f, 0.058f,
-                                  0.92f * contentAlpha));
-        DrawFrame(x, buttonY, buttonW, buttonH, 2.0f,
-                  selected ? Color(1.0f, 0.78f, 0.34f, 0.96f * contentAlpha)
-                           : Color(0.62f, 0.66f, 0.72f, 0.38f * contentAlpha));
-        const Image &label = *labels[i];
-        const float scale =
-            (std::min)({1.0f, (buttonW * 0.70f) / (std::max)(label.width, 1.0f),
-                        (buttonH * 0.62f) / (std::max)(label.height, 1.0f)});
-        DrawImage(label, x + (buttonW - label.width * scale) * 0.5f,
-                  buttonY + (buttonH - label.height * scale) * 0.5f, scale,
-                  (selected ? 1.0f : 0.82f) * contentAlpha);
-    }
-}
-
 void GameOverScene::DrawMenu(float screenWidth, float screenHeight) {
     const float buttonW = std::clamp(screenWidth * 0.18f, 210.0f, 300.0f);
     const float buttonH = 72.0f;
@@ -973,87 +733,6 @@ void GameOverScene::DrawMenu(float screenWidth, float screenHeight) {
         DrawImage(label, x + (buttonW - label.width * scale) * 0.5f,
                   y + (buttonH - label.height * scale) * 0.5f, scale,
                   selected ? 1.0f : 0.82f);
-    }
-}
-
-void GameOverScene::DrawDifficultyGauge(float x, float y, float w, float h,
-                                        float difficulty, float form) {
-    form = std::clamp(form, 0.0f, 1.0f);
-    const float t = std::clamp(difficulty, 0.0f, 9.0f) / 9.0f;
-    const float formedW = w * form;
-    if (formedW <= 0.0f) {
-        return;
-    }
-    const float leftTrim = 3.0f;
-    const XMFLOAT4 gold = Color(0.86f, 0.61f - 0.22f * t, 0.21f, 0.94f);
-    const XMFLOAT4 brightGold = Color(1.0f, 0.86f - 0.32f * t, 0.38f, 0.92f);
-
-    const float shadowW = formedW + 36.0f * form;
-    const float shadowTrim = (std::min)(leftTrim, shadowW);
-    const float shadowUvLeft = shadowW > 0.0f ? (shadowTrim / shadowW) * form : 0.0f;
-    DrawTextureRect(triangleMaskImage_.textureId, x - 18.0f + shadowTrim,
-                    y - 16.0f, shadowW - shadowTrim, h + 32.0f,
-                    Color(0.0f, 0.0f, 0.0f, 0.46f * form),
-                    form - shadowUvLeft, SpriteBlendMode::PremultipliedMask,
-                    shadowUvLeft);
-
-    const float outerW = formedW + 16.0f * form;
-    const float outerTrim = (std::min)(leftTrim, outerW);
-    const float outerUvLeft = outerW > 0.0f ? (outerTrim / outerW) * form : 0.0f;
-    DrawTextureRect(triangleMaskImage_.textureId, x - 8.0f + outerTrim,
-                    y - 8.0f, outerW - outerTrim, h + 16.0f,
-                    Color(gold.x, gold.y, gold.z, gold.w * form),
-                    form - outerUvLeft, SpriteBlendMode::PremultipliedMask,
-                    outerUvLeft);
-
-    const float backW = (w - 32.0f) * form;
-    const float backTrim = (std::min)(leftTrim, backW);
-    const float backUvLeft = backW > 0.0f ? (backTrim / backW) * form : 0.0f;
-    DrawTextureRect(triangleMaskImage_.textureId, x + 12.0f + backTrim,
-                    y + 14.0f, backW - backTrim, h - 30.0f,
-                    Color(0.010f, 0.012f, 0.020f, 0.94f * form),
-                    form - backUvLeft, SpriteBlendMode::PremultipliedMask,
-                    backUvLeft);
-
-    const float innerW = w - 44.0f;
-    const float innerH = h - 40.0f;
-    const float innerX = x + 18.0f;
-    const float innerY = y + 20.0f;
-    if (t > 0.001f) {
-        const float fillT = (std::min)(t, form);
-        const float fillW = innerW * fillT;
-        const float fillTrim = (std::min)(leftTrim, fillW);
-        const float fillUvLeft =
-            fillW > 0.0f ? (fillTrim / fillW) * fillT : 0.0f;
-        DrawTextureRect(triangleGradientImage_.textureId, innerX + fillTrim,
-                        innerY, fillW - fillTrim, innerH,
-                        Color(1.0f, 1.0f, 1.0f, 0.98f * form),
-                        fillT - fillUvLeft, SpriteBlendMode::Alpha,
-                        fillUvLeft);
-    }
-
-    for (int i = 0; i < 10; ++i) {
-        const float markerT = static_cast<float>(i) / 9.0f;
-        if (markerT > form + 0.015f) {
-            continue;
-        }
-        const float markerX = innerX + innerW * markerT;
-        const float markerH = (std::max)(6.0f, innerH * markerT);
-        const float markerY = innerY + innerH - markerH;
-        const bool selected =
-            std::abs(std::lround(std::clamp(difficulty, 0.0f, 9.0f)) - i) == 0;
-        const float markerAlpha = std::clamp((form - markerT) * 8.0f, 0.0f, 1.0f);
-        const XMFLOAT4 markerColor =
-            selected ? Color(brightGold.x, brightGold.y, brightGold.z,
-                             brightGold.w * markerAlpha)
-                     : Color(0.70f, 0.76f, 0.88f, 0.20f * markerAlpha);
-        if (i != 0) {
-            DrawRect(markerX - 2.0f, markerY, 4.0f, markerH, markerColor);
-            DrawRect(markerX - 5.0f, markerY - 5.0f, 10.0f, 4.0f,
-                     selected ? markerColor
-                              : Color(0.52f, 0.45f, 0.32f,
-                                      0.42f * markerAlpha));
-        }
     }
 }
 
@@ -1084,6 +763,8 @@ void GameOverScene::DrawTitleFade(float screenWidth, float screenHeight) {
     const float blackFade =
         SmoothStep01((titleFadeTimer_ - kGameOverBlackFadeStartTime) /
                      kGameOverBlackFadeDuration);
+    const float crumbleStart =
+        kGameOverTextCompleteTime + kGameOverCrumbleStartDelay;
     float cursorX = x;
     for (int i = 0; i < kGameOverLetterCount; ++i) {
         const Image &letter = gameOverLetterImages_[static_cast<size_t>(i)];
@@ -1108,11 +789,15 @@ void GameOverScene::DrawTitleFade(float screenWidth, float screenHeight) {
             const float letterH = letter.height * scale;
             const float centerX = lx + letterW * 0.5f;
             const float centerY = ly + letterH * 0.5f;
+            const float textDissolve =
+                SmoothStep01((titleFadeTimer_ - crumbleStart) /
+                             (kGameOverCrumbleDuration * 0.46f));
 
             for (int layer = 4; layer >= 1; --layer) {
                 const float layerF = static_cast<float>(layer);
                 const float bloomAlpha =
-                    letterAlpha * ooze * (0.12f + 0.035f * layerF);
+                    letterAlpha * ooze * (1.0f - textDissolve) *
+                    (0.12f + 0.035f * layerF);
                 if (bloomAlpha <= 0.001f) {
                     continue;
                 }
@@ -1136,12 +821,87 @@ void GameOverScene::DrawTitleFade(float screenWidth, float screenHeight) {
             const float bodyScale = scale * (0.96f + 0.04f * appear);
             const float bodyW = letter.width * bodyScale;
             const float bodyH = letter.height * bodyScale;
-            DrawImageTint(letter, lx - 2.0f, ly + 2.0f, scale,
-                          Color(0.30f, 0.30f, 0.30f,
-                                letterAlpha * (0.26f + ooze * 0.16f)));
-            DrawImageTint(letter, centerX - bodyW * 0.5f,
-                          centerY - bodyH * 0.5f, bodyScale,
-                          Color(0.72f, 0.72f, 0.70f, letterAlpha));
+            const float bodyX = centerX - bodyW * 0.5f;
+            const float bodyY = centerY - bodyH * 0.5f;
+            if (textDissolve < 0.995f) {
+                const float wholeAlpha = letterAlpha * (1.0f - textDissolve);
+                DrawImageTint(letter, bodyX - 2.0f, bodyY + 2.0f, bodyScale,
+                              Color(0.30f, 0.30f, 0.30f,
+                                    wholeAlpha * (0.26f + ooze * 0.16f)));
+                DrawImageTint(letter, bodyX, bodyY, bodyScale,
+                              Color(0.72f, 0.72f, 0.70f, wholeAlpha));
+            }
+            const float cellW =
+                bodyW / static_cast<float>(kGameOverParticleColumns);
+            const float cellH =
+                bodyH / static_cast<float>(kGameOverParticleRows);
+            for (int row = 0; row < kGameOverParticleRows; ++row) {
+                for (int col = 0; col < kGameOverParticleColumns; ++col) {
+                    const float colF = static_cast<float>(col);
+                    const float rowF = static_cast<float>(row);
+                    const float seed =
+                        static_cast<float>(i) * 13.0f + colF * 3.17f +
+                        rowF * 7.31f;
+                    const float randomA = std::sinf(seed) * 0.5f + 0.5f;
+                    const float randomB = std::cosf(seed * 1.63f) * 0.5f + 0.5f;
+                    const float startOffset = randomA * 0.28f + randomB * 0.10f;
+                    const float local =
+                        SmoothStep01((titleFadeTimer_ - crumbleStart -
+                                      startOffset) /
+                                     kGameOverCrumbleDuration);
+                    if (local <= 0.002f) {
+                        continue;
+                    }
+                    const float gust = local * local;
+                    const float spray = SmoothStep01((local - 0.08f) / 0.62f);
+                    const float windX =
+                        screenWidth * (0.16f + randomA * 0.18f) +
+                        colF * 3.2f;
+                    const float windY =
+                        -screenHeight * (0.05f + randomB * 0.14f) +
+                        (rowF - 4.5f) * 4.2f;
+                    const float flutterX =
+                        std::sinf(titleFadeTimer_ * (8.0f + randomA * 4.0f) +
+                                  seed) *
+                        spray * 20.0f;
+                    const float flutterY =
+                        std::cosf(titleFadeTimer_ * (7.0f + randomB * 5.0f) +
+                                  seed * 0.71f) *
+                        spray * 14.0f;
+                    const float fade =
+                        letterAlpha * SmoothStep01(local / 0.18f) *
+                        (1.0f - local * 0.96f);
+                    if (fade <= 0.003f) {
+                        continue;
+                    }
+
+                    const float grainBase =
+                        std::clamp(scale * (2.6f + randomA * 2.4f), 1.0f, 3.6f);
+                    const float particleSize =
+                        grainBase * (1.0f - local * (0.22f + randomB * 0.24f));
+                    const float baseX = bodyX + cellW * colF;
+                    const float baseY = bodyY + cellH * rowF;
+                    const float particleX =
+                        baseX + cellW * randomA + gust * windX + flutterX -
+                        particleSize * 0.5f;
+                    const float particleY =
+                        baseY + cellH * randomB + gust * windY + flutterY -
+                        particleSize * 0.5f;
+                    const float uvLeft =
+                        colF / static_cast<float>(kGameOverParticleColumns);
+                    const float uvTop =
+                        rowF / static_cast<float>(kGameOverParticleRows);
+                    const float uvWidth =
+                        1.0f / static_cast<float>(kGameOverParticleColumns);
+                    const float uvHeight =
+                        1.0f / static_cast<float>(kGameOverParticleRows);
+                    const float particleAlpha = fade * (0.58f + spray * 0.32f);
+                    DrawImageSlice(letter, particleX, particleY, particleSize,
+                                   particleSize,
+                                   Color(0.72f, 0.72f, 0.70f, particleAlpha),
+                                   uvLeft, uvTop, uvWidth, uvHeight);
+                }
+            }
         }
         cursorX += letter.width * scale;
     }
@@ -1175,6 +935,25 @@ void GameOverScene::DrawImageTint(const Image &image, float x, float y,
     sprite.textureId = image.textureId;
     sprite.position = {x, y};
     sprite.size = {image.width * scale, image.height * scale};
+    sprite.color = color;
+    ctx_->rendering.sprite->DrawSprite(sprite);
+}
+
+void GameOverScene::DrawImageSlice(const Image &image, float x, float y,
+                                   float w, float h, const XMFLOAT4 &color,
+                                   float uvLeft, float uvTop, float uvWidth,
+                                   float uvHeight) {
+    if (image.textureId == 0 || w <= 0.0f || h <= 0.0f || color.w <= 0.0f) {
+        return;
+    }
+    Sprite sprite{};
+    sprite.textureId = image.textureId;
+    sprite.position = {x, y};
+    sprite.size = {w, h};
+    sprite.uvLeftTop = {std::clamp(uvLeft, 0.0f, 1.0f),
+                        std::clamp(uvTop, 0.0f, 1.0f)};
+    sprite.uvSize = {std::clamp(uvWidth, 0.0f, 1.0f),
+                     std::clamp(uvHeight, 0.0f, 1.0f)};
     sprite.color = color;
     ctx_->rendering.sprite->DrawSprite(sprite);
 }

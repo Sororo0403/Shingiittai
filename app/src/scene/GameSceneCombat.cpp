@@ -488,8 +488,9 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     const auto enemyBodyBox = enemy_.GetBodyOBB();
     const auto enemyLeftHandBox = enemy_.GetLeftHandOBB();
     const auto enemyRightHandBox = enemy_.GetRightHandOBB();
-    AddCollisionBody(collisionManager_, playerBox, kLayerPlayer,
-                     kLayerEnemyAttack);
+    const CollisionManager::BodyId playerBody =
+        AddCollisionBody(collisionManager_, playerBox, kLayerPlayer,
+                         kLayerEnemyAttack);
     const bool enemyCollisionDisabled = enemy_.IsWarpCollisionDisabled();
     const CollisionManager::BodyId enemyBody =
         enemyCollisionDisabled
@@ -594,8 +595,15 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         isEnemySmashCommitted || isEnemySweepCommitted ||
         isEnemyBladeClashCommitted;
     const bool isEnemyLaserCommitted =
-        enemyActionKind == ActionKind::ArcaneLaser &&
+        (enemyActionKind == ActionKind::ArcaneLaser ||
+         enemyActionKind == ActionKind::CataclysmLaser) &&
         enemyActionStep == ActionStep::Active;
+    const bool isEnemyBeamActive =
+        enemyActionKind == ActionKind::CataclysmLaser &&
+        enemyActionStep == ActionStep::Active && enemy_.IsAttackActive();
+    if (!isEnemyBeamActive) {
+        enemyLaserHitConsumed_ = false;
+    }
     if (enemyRedPunishUncounterable_ &&
         (!(enemyActionKind == ActionKind::Smash ||
            enemyActionKind == ActionKind::Sweep) ||
@@ -641,6 +649,12 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                  GetReadableMeleeRadius(enemyAttackBox)) &&
         playerHitCooldown_ <= 0.0f && !enemyMeleeHitConsumed_ &&
         !enemyRedPunishUncounterable_;
+    const bool enemyLaserDamagePending =
+        isEnemyBeamActive &&
+        enemyAttackBody != CollisionManager::kInvalidBodyId &&
+        playerBody != CollisionManager::kInvalidBodyId &&
+        collisionManager_.Test(enemyAttackBody, playerBody) &&
+        playerHitCooldown_ <= 0.0f && !enemyLaserHitConsumed_;
 
     const bool isEnemyMeleePreparation =
         (enemyActionKind == ActionKind::Smash ||
@@ -879,6 +893,25 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             DispatchCombatFeedback(feedback);
             playerHitCooldown_ = 0.4f;
         }
+    }
+
+    if (enemyLaserDamagePending && !counterTriggeredThisFrame) {
+        enemyLaserHitConsumed_ = true;
+        const XMFLOAT3 beamDir = enemy_.GetCataclysmLaserDirection();
+        const XMFLOAT2 knockbackDir = NormalizeXZ(beamDir.x, beamDir.z);
+        player_.AddKnockback(
+            {knockbackDir.x * enemyAttackKnockback, 0.0f,
+             knockbackDir.y * enemyAttackKnockback});
+        const float appliedDamage = ApplyPlayerDamage(enemyAttackDamage);
+        CombatFeedbackEvent feedback{};
+        feedback.type = CombatFeedbackEventType::PlayerDamaged;
+        feedback.position = player_.GetTransform().position;
+        feedback.position.y += 1.0f;
+        feedback.direction = beamDir;
+        feedback.power =
+            (std::max)(appliedDamage / 8.0f, enemyAttackDamage / 7.0f);
+        DispatchCombatFeedback(feedback);
+        playerHitCooldown_ = 0.72f;
     }
 
     previousCombatSlashStates_ = swordSlashStates;

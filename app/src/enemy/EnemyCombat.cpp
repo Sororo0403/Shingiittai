@@ -46,6 +46,8 @@ OBB Enemy::GetAttackOBB() const {
         return MakeOBB(bodyTf_, GetCurrentAttackHitBoxSize());
     case ActionKind::ArcaneLaser:
         return GetArcaneLaserAttackOBB();
+    case ActionKind::CataclysmLaser:
+        return GetCataclysmLaserAttackOBB();
     default:
         return OBB{};
     }
@@ -101,6 +103,24 @@ OBB Enemy::GetArcaneLaserAttackOBB() const {
     return MakeOBB(attackTf, {radius * 2.0f, radius * 2.0f, range});
 }
 
+OBB Enemy::GetCataclysmLaserAttackOBB() const {
+    const DirectX::XMFLOAT3 muzzle = GetCataclysmLaserMuzzlePosition();
+    const DirectX::XMFLOAT3 direction = GetCataclysmLaserDirection();
+    const float range = config_.attacks.cataclysmLaser.range;
+    const float radius = config_.attacks.cataclysmLaser.radius;
+
+    Transform attackTf{};
+    attackTf.scale = {1.0f, 1.0f, 1.0f};
+    attackTf.position = {muzzle.x + direction.x * range * 0.5f,
+                         muzzle.y - radius * 0.46f,
+                         muzzle.z + direction.z * range * 0.5f};
+    const float yaw = std::atan2(direction.x, direction.z);
+    DirectX::XMStoreFloat4(
+        &attackTf.rotation,
+        DirectX::XMQuaternionRotationRollPitchYaw(0.0f, yaw, 0.0f));
+    return MakeOBB(attackTf, {radius * 2.0f, radius * 2.0f, range});
+}
+
 float Enemy::GetCurrentAttackDamage() const {
     const AttackParam *param = GetCurrentAttackParam();
     return param ? param->damage : 0.0f;
@@ -122,6 +142,8 @@ bool Enemy::IsPunishableRecovery() const {
     case ActionKind::Sweep:
     case ActionKind::BladeClash:
     case ActionKind::ArcaneLaser:
+        return action_.step == ActionStep::Recovery && hitReactionTimer_ <= 0.0f;
+    case ActionKind::CataclysmLaser:
         return action_.step == ActionStep::Recovery && hitReactionTimer_ <= 0.0f;
     default:
         return false;
@@ -145,6 +167,8 @@ const AttackTimingParam *Enemy::GetCurrentAttackTiming() const {
         return &config_.attacks.bladeClash.profile.timing;
     case ActionKind::ArcaneLaser:
         return &config_.attacks.arcaneLaser.profile.timing;
+    case ActionKind::CataclysmLaser:
+        return &config_.attacks.cataclysmLaser.profile.timing;
     default:
         return nullptr;
     }
@@ -160,6 +184,8 @@ AttackParam *Enemy::GetCurrentAttackParam() {
         return &config_.attacks.bladeClash.profile.attack;
     case ActionKind::ArcaneLaser:
         return &config_.attacks.arcaneLaser.profile.attack;
+    case ActionKind::CataclysmLaser:
+        return &config_.attacks.cataclysmLaser.profile.attack;
     default:
         return nullptr;
     }
@@ -175,6 +201,8 @@ const AttackParam *Enemy::GetCurrentAttackParam() const {
         return &config_.attacks.bladeClash.profile.attack;
     case ActionKind::ArcaneLaser:
         return &config_.attacks.arcaneLaser.profile.attack;
+    case ActionKind::CataclysmLaser:
+        return &config_.attacks.cataclysmLaser.profile.attack;
     default:
         return nullptr;
     }
@@ -186,6 +214,7 @@ bool Enemy::ShouldUseLockedAttackYaw() const {
     case ActionKind::Sweep:
     case ActionKind::BladeClash:
     case ActionKind::ArcaneLaser:
+    case ActionKind::CataclysmLaser:
         break;
     default:
         return false;
@@ -214,6 +243,18 @@ DirectX::XMFLOAT3 Enemy::GetArcaneLaserMuzzlePosition() const {
                 forwardZ * config_.attacks.arcaneLaser.muzzleForwardOffset};
 }
 
+DirectX::XMFLOAT3 Enemy::GetCataclysmLaserMuzzlePosition() const {
+    const float usedYaw =
+        ShouldUseLockedAttackYaw() ? lockedAttackYaw_ : facingYaw_;
+    const float forwardX = std::sin(usedYaw);
+    const float forwardZ = std::cos(usedYaw);
+    return {tf_.position.x +
+                forwardX * config_.attacks.cataclysmLaser.muzzleForwardOffset,
+            tf_.position.y + config_.attacks.cataclysmLaser.muzzleHeightOffset,
+            tf_.position.z +
+                forwardZ * config_.attacks.cataclysmLaser.muzzleForwardOffset};
+}
+
 float Enemy::GetArcaneLaserChargeRatio() const {
     if (action_.kind != ActionKind::ArcaneLaser) {
         return 0.0f;
@@ -235,6 +276,31 @@ bool Enemy::IsArcaneLaserCounterWindow() const {
     }
 
     const auto &timing = config_.attacks.arcaneLaser.profile.timing;
+    return stateTimer_ >= timing.activeStartTime &&
+           stateTimer_ <= timing.activeEndTime;
+}
+
+float Enemy::GetCataclysmLaserChargeRatio() const {
+    if (action_.kind != ActionKind::CataclysmLaser) {
+        return 0.0f;
+    }
+    const float chargeTime = config_.attacks.cataclysmLaser.profile.chargeTime;
+    if (chargeTime <= 0.0001f) {
+        return action_.step == ActionStep::Charge ? 1.0f : 0.0f;
+    }
+    if (action_.step == ActionStep::Charge) {
+        return std::clamp(stateTimer_ / chargeTime, 0.0f, 1.0f);
+    }
+    return action_.step == ActionStep::Active ? 1.0f : 0.0f;
+}
+
+bool Enemy::IsCataclysmLaserCounterWindow() const {
+    if (action_.kind != ActionKind::CataclysmLaser ||
+        action_.step != ActionStep::Active) {
+        return false;
+    }
+
+    const auto &timing = config_.attacks.cataclysmLaser.profile.timing;
     return stateTimer_ >= timing.activeStartTime &&
            stateTimer_ <= timing.activeEndTime;
 }
@@ -392,7 +458,8 @@ bool Enemy::ApplyCounterBreakReaction(float vulnerabilityDuration) {
     const bool isCounterBreakableAction =
         action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
         action_.kind == ActionKind::BladeClash ||
-        action_.kind == ActionKind::ArcaneLaser;
+        action_.kind == ActionKind::ArcaneLaser ||
+        action_.kind == ActionKind::CataclysmLaser;
     if (!isCounterBreakableAction) {
         return false;
     }

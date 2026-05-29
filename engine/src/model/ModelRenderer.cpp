@@ -174,6 +174,8 @@ void ModelRenderer::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
     meshManager_ = meshManager;
     textureManager_ = textureManager;
     materialManager_ = materialManager;
+    environmentTextureId_ = textureManager_->GetWhiteCubeTextureId();
+    hasEnvironmentTexture_ = true;
     dissolveNoiseTextureId_ = textureManager_->GetWhiteTextureId();
     const std::vector<uint8_t> dissolveNoise =
         CreateDissolveNoisePixels(128u, 128u);

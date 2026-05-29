@@ -2,8 +2,9 @@
 #include "AppSceneServices.h"
 #include "GameOverScene.h"
 #include "GameVictoryScene.h"
+#include "HandTrackingTestScene.h"
 #include "Input.h"
-#include "PostProcessSystem.h"
+#include "PostEffectManager.h"
 #include "SceneManager.h"
 #include "SoundManager.h"
 #include "Sprite.h"
@@ -77,8 +78,8 @@ void TitleScene::Update() {
     if (startRequested_) {
         fadeTimer_ += ctx_->frame.deltaTime;
         if (fadeTimer_ >= kFadeDuration) {
-            if (ctx_->rendering.postProcessSystem != nullptr) {
-                ctx_->rendering.postProcessSystem->SetProfile(
+            if (ctx_->rendering.postEffectManager != nullptr) {
+                ctx_->rendering.postEffectManager->SetBaseProfile(
                     PostProcessProfile{});
             }
             sceneManager_->ChangeScene(std::make_unique<WeaponSelectScene>());
@@ -99,9 +100,17 @@ void TitleScene::Update() {
     }
 
 #ifdef _DEBUG
+    if (ctx_->systems.input->IsKeyTrigger(DIK_F2)) {
+        if (ctx_->rendering.postEffectManager != nullptr) {
+            ctx_->rendering.postEffectManager->SetBaseProfile(PostProcessProfile{});
+        }
+        sceneManager_->ChangeScene(std::make_unique<HandTrackingTestScene>());
+        return;
+    }
+
     if (ctx_->systems.input->IsKeyTrigger(kDebugVictorySceneKey)) {
-        if (ctx_->rendering.postProcessSystem != nullptr) {
-            ctx_->rendering.postProcessSystem->SetProfile(PostProcessProfile{});
+        if (ctx_->rendering.postEffectManager != nullptr) {
+            ctx_->rendering.postEffectManager->SetBaseProfile(PostProcessProfile{});
         }
         sceneManager_->ChangeScene(std::make_unique<GameVictoryScene>(
             0.0f, SwordInputCalibration{}, 5.0f));
@@ -431,7 +440,7 @@ void TitleScene::DrawImage(const Image &image, float x, float y, float alpha,
 
 bool TitleScene::IsAnyButtonTriggered(const Input &input) const {
     for (int key = 0; key < 256; ++key) {
-        if (key == DIK_ESCAPE) {
+        if (key == DIK_ESCAPE || key == DIK_F2) {
             continue;
         }
         if (input.IsKeyTrigger(key)) {

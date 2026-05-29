@@ -150,6 +150,9 @@
     <ClCompile Include="src\enemy\EnemyDecision.cpp">
       <Filter>Source Files\enemy</Filter>
     </ClCompile>
+    <ClCompile Include="src\enemy\EnemyPhaseMaterial.cpp">
+      <Filter>Source Files\enemy</Filter>
+    </ClCompile>
     <ClCompile Include="src\enemy\EnemyMovement.cpp">
       <Filter>Source Files\enemy</Filter>
     </ClCompile>
@@ -187,6 +190,9 @@
       <Filter>Source Files\scene</Filter>
     </ClCompile>
     <ClCompile Include="src\scene\GameSceneLighting.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\scene\HandTrackingTestScene.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
     <ClCompile Include="src\scene\TitleScene.cpp">
@@ -255,6 +261,9 @@
     <ClInclude Include="include\enemy\EnemyActionData.h">
       <Filter>Header Files\enemy</Filter>
     </ClInclude>
+    <ClInclude Include="include\enemy\EnemyPhaseMaterial.h">
+      <Filter>Header Files\enemy</Filter>
+    </ClInclude>
     <ClInclude Include="include\player\SwordControllerState.h">
       <Filter>Header Files\player</Filter>
     </ClInclude>
@@ -280,6 +289,9 @@
       <Filter>Header Files\scene</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\GameScene.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="include\scene\HandTrackingTestScene.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\TitleScene.h">
@@ -387,7 +399,7 @@
     <None Include="resources\models\boss\boss.png">
       <Filter>Resources\Models\boss</Filter>
     </None>
-    <None Include="resources\models\player\player.glb">
+    <None Include="resources\models\player\player.gltf">
       <Filter>Resources\Models\player</Filter>
     </None>
     <None Include="resources\models\player\sword.glb">

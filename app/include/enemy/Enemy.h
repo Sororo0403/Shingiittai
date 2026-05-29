@@ -154,6 +154,18 @@ struct EnemyArcaneLaserConfig {
     float recoveryDuration = 0.64f;
 };
 
+struct EnemyCataclysmLaserConfig {
+    EnemyAttackProfile profile = {
+        {26.0f, 7.2f, {5.6f, 4.2f, 25.0f}},
+        {4.25f, 1.72f, 0.0f, 1.35f, 1.35f},
+        1.72f};
+    float range = 25.0f;
+    float radius = 2.45f;
+    float muzzleForwardOffset = 1.85f;
+    float muzzleHeightOffset = 1.58f;
+    float recoveryDuration = 1.08f;
+};
+
 struct EnemyAttackSet {
     EnemySmashConfig smash = {{{{15.0f, 4.0f, {2.8f, 2.1f, 3.2f}},
                                 {1.20f, 0.86f, 0.05f, 0.22f, 0.38f}, 1.64f},
@@ -165,6 +177,7 @@ struct EnemyAttackSet {
                               0.2f, 0.8f};
     EnemyBladeClashConfig bladeClash{};
     EnemyArcaneLaserConfig arcaneLaser{};
+    EnemyCataclysmLaserConfig cataclysmLaser{};
 };
 
 struct EnemyWarpConfig {
@@ -223,6 +236,8 @@ struct EnemyRuntimeState {
     float phantomFinalLockTimer = 0.0f;
     float arcaneLaserCooldown = 0.0f;
     DirectX::XMFLOAT3 arcaneLaserDirection = {0.0f, 0.0f, 1.0f};
+    float cataclysmLaserCooldown = 0.0f;
+    DirectX::XMFLOAT3 cataclysmLaserDirection = {0.0f, 0.0f, 1.0f};
 
     bool tellActive = false;
     float tellDuration = 0.0f;
@@ -265,6 +280,7 @@ class Enemy {
     void ApplyVictoryDefeatPose(float ratio,
                                 const DirectX::XMFLOAT3 &startPosition,
                                 const DirectX::XMFLOAT3 &playerPosition);
+    void SetBossPhaseForPresentation(BossPhase phase) { runtime_.phase = phase; }
     void SetCinematicTransform(const DirectX::XMFLOAT3 &position, float yaw);
     void SetCinematicTransform(const DirectX::XMFLOAT3 &position, float yaw,
                                float pitch, float roll);
@@ -311,8 +327,10 @@ class Enemy {
     bool IsWarpCollisionDisabled() const { return runtime_.warp.collisionDisabled; }
     bool ShouldLockPlayerForArcaneLaser() const {
         return runtime_.action.kind == ActionKind::ArcaneLaser ||
+               runtime_.action.kind == ActionKind::CataclysmLaser ||
                (runtime_.action.kind == ActionKind::Warp &&
-                runtime_.warp.followupKind == ActionKind::ArcaneLaser);
+                (runtime_.warp.followupKind == ActionKind::ArcaneLaser ||
+                 runtime_.warp.followupKind == ActionKind::CataclysmLaser));
     }
     bool ShouldLockPlayerForFarWarpSlash() const {
         const bool isFarWarpStartup =
@@ -338,6 +356,18 @@ class Enemy {
     float GetArcaneLaserRadius() const { return config_.attacks.arcaneLaser.radius; }
     float GetArcaneLaserChargeRatio() const;
     bool IsArcaneLaserCounterWindow() const;
+    DirectX::XMFLOAT3 GetCataclysmLaserMuzzlePosition() const;
+    DirectX::XMFLOAT3 GetCataclysmLaserDirection() const {
+        return runtime_.cataclysmLaserDirection;
+    }
+    float GetCataclysmLaserRange() const {
+        return config_.attacks.cataclysmLaser.range;
+    }
+    float GetCataclysmLaserRadius() const {
+        return config_.attacks.cataclysmLaser.radius;
+    }
+    float GetCataclysmLaserChargeRatio() const;
+    bool IsCataclysmLaserCounterWindow() const;
 
   private:
     Transform tf_{};
@@ -404,6 +434,9 @@ class Enemy {
     float &arcaneLaserCooldown_ = runtime_.arcaneLaserCooldown;
     DirectX::XMFLOAT3 &arcaneLaserDirection_ =
         runtime_.arcaneLaserDirection;
+    float &cataclysmLaserCooldown_ = runtime_.cataclysmLaserCooldown;
+    DirectX::XMFLOAT3 &cataclysmLaserDirection_ =
+        runtime_.cataclysmLaserDirection;
 
     bool isPhaseChanging_ = false;
 
@@ -450,6 +483,10 @@ class Enemy {
     float arcaneLaserMinDistance_ = 4.4f;
     float arcaneLaserWarpDistance_ = 18.5f;
     float arcaneLaserSlashMinDistance_ = 7.5f;
+    float cataclysmLaserChance_ = 0.28f;
+    float cataclysmLaserCooldownDuration_ = 13.5f;
+    float cataclysmLaserMinDistance_ = 8.8f;
+    float cataclysmLaserWarpDistance_ = 24.0f;
 
     float stalkDurationMin_ = 0.45f;
     float stalkDurationMax_ = 1.10f;
@@ -486,6 +523,7 @@ class Enemy {
     void UpdateWarpByStep(float deltaTime);
     void UpdateIdle(float deltaTime);
     void UpdateArcaneLaserByStep(float deltaTime);
+    void UpdateCataclysmLaserByStep(float deltaTime);
 
     TacticState DecideTactic() const;
     void BeginActionFromTactic(TacticState tactic);
@@ -497,6 +535,7 @@ class Enemy {
     bool TryBeginBladeClash(float chance);
     bool TryBeginArcaneLaser(float chance);
     bool TryBeginArcaneLaserSlashFollowup(float chance);
+    bool TryBeginCataclysmLaser(float chance);
     void BeginPhantomWarpStep(int viewWarpsRemaining, bool finalBehind,
                               ActionKind followupKind);
     void BeginPressureAction();
@@ -518,6 +557,9 @@ class Enemy {
     void UpdateArcaneLaserCharge(float deltaTime);
     void UpdateArcaneLaserActive(float deltaTime);
     void UpdateArcaneLaserRecovery(float deltaTime);
+    void UpdateCataclysmLaserCharge(float deltaTime);
+    void UpdateCataclysmLaserActive(float deltaTime);
+    void UpdateCataclysmLaserRecovery(float deltaTime);
 
     void UpdateFacingToPlayer();
     void LockCurrentFacing();
@@ -535,6 +577,7 @@ class Enemy {
     bool DecideWarpTargetNearPlayer(DirectX::XMFLOAT3 &outTarget);
     bool DecideWarpTargetFarSlash(DirectX::XMFLOAT3 &outTarget);
     bool DecideWarpTargetArcaneLaser(DirectX::XMFLOAT3 &outTarget);
+    bool DecideWarpTargetCataclysmLaser(DirectX::XMFLOAT3 &outTarget);
     bool DecideWarpTargetInPlayerView(DirectX::XMFLOAT3 &outTarget);
     bool DecideWarpTargetBehindPlayer(DirectX::XMFLOAT3 &outTarget);
     bool RefreshLiveBehindWarpTarget();
@@ -551,6 +594,7 @@ class Enemy {
     OBB GetSmashAttackOBB() const;
     OBB GetSweepAttackOBB() const;
     OBB GetArcaneLaserAttackOBB() const;
+    OBB GetCataclysmLaserAttackOBB() const;
     float GetVisualYaw() const;
     bool IsPunishableRecovery() const;
     float GetDistanceToPlayer() const;

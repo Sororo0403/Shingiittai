@@ -38,19 +38,13 @@ class GameOverScene : public BaseScene {
     };
     enum class State {
         DefeatIntro,
-        DifficultyPrompt,
-        DifficultyDrop,
-        DifficultyPromptClose,
         Menu,
         RetryRise,
         TitleFade,
     };
 
     void CreateTextImages();
-    void FinishDefeatIntro(bool skipPromptOpen = false);
-    void UpdateDifficultyPrompt(float deltaTime);
-    void UpdateDifficultyDrop(float deltaTime);
-    void UpdateDifficultyPromptClose(float deltaTime);
+    void FinishDefeatIntro();
     void UpdateMenu();
     void UpdateRetryRise(float deltaTime);
     void UpdateTitleFade(float deltaTime);
@@ -60,15 +54,15 @@ class GameOverScene : public BaseScene {
     void DrawSpotlightDust();
     void DrawOverlay(float screenWidth, float screenHeight);
     void DrawDefeatTitle(float screenWidth, float screenHeight);
-    void DrawDifficultyPrompt(float screenWidth, float screenHeight);
     void DrawMenu(float screenWidth, float screenHeight);
-    void DrawDifficultyGauge(float x, float y, float w, float h,
-                             float difficulty, float form = 1.0f);
     void DrawTitleFade(float screenWidth, float screenHeight);
     void DrawImage(const Image &image, float x, float y, float scale = 1.0f,
                    float alpha = 1.0f);
     void DrawImageTint(const Image &image, float x, float y, float scale,
                        const DirectX::XMFLOAT4 &color);
+    void DrawImageSlice(const Image &image, float x, float y, float w, float h,
+                        const DirectX::XMFLOAT4 &color, float uvLeft,
+                        float uvTop, float uvWidth, float uvHeight);
     void DrawTextureRect(uint32_t textureId, float x, float y, float w, float h,
                          const DirectX::XMFLOAT4 &color, float uvWidth,
                          SpriteBlendMode blendMode, float uvLeft = 0.0f);
@@ -84,15 +78,8 @@ class GameOverScene : public BaseScene {
     float elapsedTime_ = 0.0f;
     float sceneTime_ = 0.0f;
     State state_ = State::DefeatIntro;
-    bool offerDifficultyDrop_ = false;
     float introTimer_ = 0.0f;
-    int promptIndex_ = 1;
     int menuIndex_ = 0;
-    float promptWindowTimer_ = 0.0f;
-    float promptCloseTimer_ = 0.0f;
-    float difficultyDropTimer_ = 0.0f;
-    float difficultyBeforeDrop_ = 5.0f;
-    float displayedDifficulty_ = 5.0f;
     float retryRiseTimer_ = 0.0f;
     float retrySkipFadeTimer_ = 0.0f;
     float titleFadeTimer_ = 0.0f;
@@ -111,11 +98,6 @@ class GameOverScene : public BaseScene {
 
     Image defeatCleanImage_{};
     Image defeatImage_{};
-    Image triangleMaskImage_{};
-    Image triangleGradientImage_{};
-    Image lowerDifficultyImage_{};
-    Image yesImage_{};
-    Image noImage_{};
     Image retryImage_{};
     Image titleImage_{};
     std::array<Image, 8> gameOverLetterImages_{};

@@ -5,6 +5,7 @@
 #include "core/WinApp.h"
 #include "debug/DebugLog.h"
 #include "graphics/DirectXCommon.h"
+#include "graphics/PostEffectManager.h"
 #include "graphics/PostProcessSystem.h"
 #include "graphics/RenderPassController.h"
 #include "graphics/ShadowMapRenderer.h"
@@ -35,6 +36,7 @@ struct EngineRuntime::Systems {
     MeshManager meshManager;
     MeshRenderer meshRenderer;
     PostProcessSystem postProcessSystem;
+    PostEffectManager postEffectManager;
     ShadowMapRenderer shadowMapRenderer;
     TransparentRenderQueue transparentQueue;
     RenderPassController renderPassController;
@@ -126,6 +128,7 @@ void EngineRuntime::Initialize(HINSTANCE instance, int showCommand,
     systems_->meshRenderer.Initialize(&systems_->dxCommon, &systems_->srvManager, &systems_->textureManager);
     systems_->postProcessSystem.Initialize(&systems_->dxCommon, &systems_->srvManager, currentWidth_,
                                    currentHeight_);
+    systems_->postEffectManager.Initialize(&systems_->postProcessSystem);
     systems_->shadowMapRenderer.Initialize(&systems_->dxCommon, &systems_->srvManager);
     systems_->renderPassController.Initialize(&systems_->dxCommon, &systems_->srvManager);
     systems_->input.Initialize(instance, systems_->winApp.GetHwnd());
@@ -155,7 +158,7 @@ void EngineRuntime::Initialize(HINSTANCE instance, int showCommand,
     systems_->sceneContext.rendering.texture = &systems_->textureManager;
     systems_->sceneContext.rendering.dxCommon = &systems_->dxCommon;
     systems_->sceneContext.rendering.srv = &systems_->srvManager;
-    systems_->sceneContext.rendering.postProcessSystem = &systems_->postProcessSystem;
+    systems_->sceneContext.rendering.postEffectManager = &systems_->postEffectManager;
     systems_->sceneContext.rendering.shadowMapRenderer = &systems_->shadowMapRenderer;
     systems_->sceneContext.rendering.transparentQueue = &systems_->transparentQueue;
     systems_->sceneContext.render = systems_->renderPassController.GetContextPtr();
@@ -211,6 +214,10 @@ void EngineRuntime::RenderFrame() {
     systems_->meshRenderer.PreDrawShadow();
     systems_->sceneManager.DrawShadow();
     systems_->shadowMapRenderer.End();
+    systems_->meshRenderer.SetShadowMap(
+        systems_->shadowMapRenderer.GetGpuHandle(),
+        systems_->shadowMapRenderer.GetLightViewProjection(),
+        SceneShadowSettings{});
     systems_->renderPassController.EndPass();
 
     systems_->dxCommon.BeginScenePass();
@@ -230,6 +237,7 @@ void EngineRuntime::RenderFrame() {
     systems_->sceneManager.DrawTransparent();
     systems_->transparentQueue.Flush();
     systems_->renderPassController.EndPass();
+
     systems_->meshRenderer.PostDraw();
     systems_->dxCommon.EndScenePass();
 

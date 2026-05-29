@@ -60,7 +60,9 @@ uint32_t SpriteManager::Create(const std::wstring &filePath) {
 
 void SpriteManager::BeginFrame() { spriteRenderer_.BeginFrame(); }
 
-void SpriteManager::PreDraw() { spriteRenderer_.PreDraw(); }
+void SpriteManager::PreDraw(bool backBufferTarget) {
+    spriteRenderer_.PreDraw(backBufferTarget);
+}
 
 void SpriteManager::PostDraw() { spriteRenderer_.PostDraw(); }
 

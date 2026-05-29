@@ -15,6 +15,8 @@ void Enemy::Initialize(uint32_t modelId) {
     runtime_.attackCueSequence = 0;
     runtime_.arcaneLaserCooldown = 0.0f;
     runtime_.arcaneLaserDirection = {0.0f, 0.0f, 1.0f};
+    runtime_.cataclysmLaserCooldown = 0.0f;
+    runtime_.cataclysmLaserDirection = {0.0f, 0.0f, 1.0f};
     tf_.position = {0.0f, 0.0f, 10.0f};
     tf_.scale = {1.0f, 1.0f, 1.0f};
     tf_.rotation = {0.0f, 0.0f, 0.0f, 1.0f};
@@ -49,6 +51,12 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
         arcaneLaserCooldown_ -= deltaTime;
         if (arcaneLaserCooldown_ < 0.0f) {
             arcaneLaserCooldown_ = 0.0f;
+        }
+    }
+    if (cataclysmLaserCooldown_ > 0.0f) {
+        cataclysmLaserCooldown_ -= deltaTime;
+        if (cataclysmLaserCooldown_ < 0.0f) {
+            cataclysmLaserCooldown_ = 0.0f;
         }
     }
 
@@ -212,6 +220,8 @@ void Enemy::ResetTutorialState() {
     runtime_.phase2BladeClashPending = false;
     runtime_.arcaneLaserCooldown = 0.0f;
     runtime_.arcaneLaserDirection = {0.0f, 0.0f, 1.0f};
+    runtime_.cataclysmLaserCooldown = 0.0f;
+    runtime_.cataclysmLaserDirection = {0.0f, 0.0f, 1.0f};
     runtime_.hitReactionTimer = 0.0f;
     runtime_.counterRecoilTimer = 0.0f;
     runtime_.isDying = false;
@@ -270,6 +280,9 @@ void Enemy::UpdateByAction(float deltaTime) {
     case ActionKind::ArcaneLaser:
         UpdateArcaneLaserByStep(deltaTime);
         break;
+    case ActionKind::CataclysmLaser:
+        UpdateCataclysmLaserByStep(deltaTime);
+        break;
     default:
         UpdateIdle(deltaTime);
         break;
@@ -300,6 +313,7 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     attackReleaseCueIssued_ = false;
     lockedAttackYaw_ = facingYaw_;
     arcaneLaserDirection_ = {std::sin(facingYaw_), 0.0f, std::cos(facingYaw_)};
+    cataclysmLaserDirection_ = arcaneLaserDirection_;
     isAttackActive_ = false;
     stateTimer_ = 0.0f;
     cinematicPitch_ = 0.0f;
@@ -340,7 +354,8 @@ void Enemy::ChangeActionStep(ActionStep step) {
     const bool usesLockedAttackYaw =
         action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
         action_.kind == ActionKind::BladeClash ||
-        action_.kind == ActionKind::ArcaneLaser;
+        action_.kind == ActionKind::ArcaneLaser ||
+        action_.kind == ActionKind::CataclysmLaser;
     const bool enteringActive =
         step == ActionStep::Active && previousStep != ActionStep::Active;
     if (enteringActive && usesLockedAttackYaw && !hasTrackingLocked_) {
@@ -350,6 +365,10 @@ void Enemy::ChangeActionStep(ActionStep step) {
     if (enteringActive && action_.kind == ActionKind::ArcaneLaser) {
         arcaneLaserDirection_ = {std::sin(lockedAttackYaw_), 0.0f,
                                  std::cos(lockedAttackYaw_)};
+    }
+    if (enteringActive && action_.kind == ActionKind::CataclysmLaser) {
+        cataclysmLaserDirection_ = {std::sin(lockedAttackYaw_), 0.0f,
+                                    std::cos(lockedAttackYaw_)};
     }
 
     if (step != ActionStep::Charge && step != ActionStep::Hold) {
@@ -386,6 +405,7 @@ void Enemy::EndAttack() {
     attackReleaseCueIssued_ = false;
     isAttackActive_ = false;
     arcaneLaserDirection_ = {0.0f, 0.0f, 1.0f};
+    cataclysmLaserDirection_ = {0.0f, 0.0f, 1.0f};
     stateTimer_ = 0.0f;
     cinematicPitch_ = 0.0f;
     cinematicRoll_ = 0.0f;

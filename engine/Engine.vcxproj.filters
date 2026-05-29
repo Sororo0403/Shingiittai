@@ -141,6 +141,9 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)src\graphics\PipelineManager.cpp">
       <Filter>src\graphics</Filter>
     </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\graphics\PostEffectManager.cpp">
+      <Filter>src\graphics</Filter>
+    </ClCompile>
     <ClCompile Include="$(MSBuildThisFileDirectory)src\graphics\PostProcessSystem.cpp">
       <Filter>src\graphics</Filter>
     </ClCompile>
@@ -330,6 +333,9 @@
       <Filter>include\graphics</Filter>
     </ClInclude>
     <ClInclude Include="$(MSBuildThisFileDirectory)include\graphics\PipelineManager.h">
+      <Filter>include\graphics</Filter>
+    </ClInclude>
+    <ClInclude Include="$(MSBuildThisFileDirectory)include\graphics\PostEffectManager.h">
       <Filter>include\graphics</Filter>
     </ClInclude>
     <ClInclude Include="$(MSBuildThisFileDirectory)include\graphics\PostProcessSystem.h">
@@ -571,12 +577,15 @@
     <FxCompile Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\PostProcessPS.hlsl">
       <Filter>resources\shaders\postprocess</Filter>
     </FxCompile>
+    <FxCompile Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\CopyPS.hlsl">
+      <Filter>resources\shaders\postprocess</Filter>
+    </FxCompile>
     <FxCompile Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\PostProcessVS.hlsl">
       <Filter>resources\shaders\postprocess</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\BloomEffect.hlsli">
+    <None Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\BloomPS.hlsli">
       <Filter>resources\shaders\postprocess</Filter>
     </None>
     <None Include="$(MSBuildThisFileDirectory)resources\shaders\model\Model.hlsli">
@@ -594,22 +603,28 @@
     <None Include="$(MSBuildThisFileDirectory)resources\shaders\particle\GPUParticle.hlsli">
       <Filter>resources\shaders\particle</Filter>
     </None>
-    <None Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\ColorEffect.hlsli">
+    <None Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\BlurPS.hlsli">
       <Filter>resources\shaders\postprocess</Filter>
     </None>
-    <None Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\EdgeEffect.hlsli">
+    <None Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\ColorGradingPS.hlsli">
       <Filter>resources\shaders\postprocess</Filter>
     </None>
-    <None Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\FilterEffect.hlsli">
+    <None Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\EdgePS.hlsli">
       <Filter>resources\shaders\postprocess</Filter>
     </None>
-    <None Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\NoiseEffect.hlsli">
+    <None Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\LensFlarePS.hlsli">
       <Filter>resources\shaders\postprocess</Filter>
     </None>
-    <None Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\PostProcess.hlsli">
+    <None Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\NoisePS.hlsli">
       <Filter>resources\shaders\postprocess</Filter>
     </None>
-    <None Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\TonemapEffect.hlsli">
+    <None Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\PostProcessCommon.hlsli">
+      <Filter>resources\shaders\postprocess</Filter>
+    </None>
+    <None Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\ToonPS.hlsli">
+      <Filter>resources\shaders\postprocess</Filter>
+    </None>
+    <None Include="$(MSBuildThisFileDirectory)resources\shaders\postprocess\VignettePS.hlsli">
       <Filter>resources\shaders\postprocess</Filter>
     </None>
   </ItemGroup>

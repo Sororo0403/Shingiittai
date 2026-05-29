@@ -48,6 +48,8 @@ static float GetChargeStanceSettleTime(ActionKind kind) {
         return 0.42f;
     case ActionKind::ArcaneLaser:
         return 0.72f;
+    case ActionKind::CataclysmLaser:
+        return 1.10f;
     default:
         return 0.42f;
     }
@@ -220,6 +222,7 @@ static std::string PickEnemyAnimation(const Model *model, const Enemy &enemy,
         break;
 
     case ActionKind::ArcaneLaser:
+    case ActionKind::CataclysmLaser:
         outLoop = false;
         if (HasAnimation(model, kBossAnimBulletShot)) {
             return kBossAnimBulletShot;
@@ -766,6 +769,29 @@ void GameScene::ApplyEnemyProceduralAnimation() {
         } else if (step == ActionStep::Recovery) {
             PoseBoneTree(*enemyModel, chest, 0.06f, 0.0f, 0.02f);
             poseArms(0.10f, 0.0f, -0.08f);
+        }
+        break;
+
+    case ActionKind::CataclysmLaser:
+        if (step == ActionStep::Charge) {
+            const float aim = Smooth01(actionTimer / 1.10f);
+            PoseBoneTree(*enemyModel, root, -0.10f * phaseScale * aim, 0.0f,
+                         0.018f * slowPulse * aim);
+            PoseBoneTree(*enemyModel, chest, -0.24f * phaseScale * aim,
+                         0.0f, 0.060f * pulse * aim);
+            poseArms(-0.42f * phaseScale * aim, 0.0f,
+                     -0.36f * phaseScale * aim);
+        } else if (step == ActionStep::Active) {
+            const float recoil = 0.78f + 0.22f * pulse;
+            PoseBoneTree(*enemyModel, root, -0.12f * phaseScale, 0.0f,
+                         0.012f * slowPulse);
+            PoseBoneTree(*enemyModel, chest, -0.30f * phaseScale * recoil,
+                         0.0f, 0.085f * pulse);
+            poseArms(-0.58f * phaseScale * recoil, 0.0f,
+                     -0.44f * phaseScale);
+        } else if (step == ActionStep::Recovery) {
+            PoseBoneTree(*enemyModel, chest, 0.10f, 0.0f, 0.03f);
+            poseArms(0.16f, 0.0f, -0.10f);
         }
         break;
 

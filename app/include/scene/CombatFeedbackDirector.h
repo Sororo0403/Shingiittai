@@ -1,6 +1,6 @@
 #pragma once
 #include "Camera.h"
-#include "PostProcessSystem.h"
+#include "PostEffectManager.h"
 #include <DirectXMath.h>
 #include <cstddef>
 
@@ -22,7 +22,9 @@ struct CombatFeedbackEvent {
 
 class CombatFeedbackDirector {
   public:
-    void Initialize(PostProcessSystem *postProcessSystem);
+    ~CombatFeedbackDirector();
+
+    void Initialize(PostEffectManager *postEffectManager);
     void Reset();
     void Update(float deltaTime, float sceneTime);
 
@@ -37,13 +39,15 @@ class CombatFeedbackDirector {
   private:
     void AddHitStop(float duration, float timeScale);
     void AddPostFlash(float duration, float blurStrength, float noiseStrength,
-                      float vignetteBoost,
-                      float damageVignetteStrength = 0.0f,
-                      float parryVignetteStrength = 0.0f);
+                      float vignetteBoost, float primaryTintStrength = 0.0f,
+                      const float *primaryTintColor = nullptr,
+                      float secondaryTintStrength = 0.0f,
+                      const float *secondaryTintColor = nullptr);
     float ShakeRatio() const;
 
   private:
-    PostProcessSystem *postProcessSystem_ = nullptr;
+    PostEffectManager *postEffectManager_ = nullptr;
+    PostEffectLayerId postEffectLayer_ = 0;
 
     float hitStopTimer_ = 0.0f;
     float hitStopDuration_ = 0.0f;
@@ -59,7 +63,9 @@ class CombatFeedbackDirector {
     float radialBlurStrength_ = 0.0f;
     float randomStrength_ = 0.0f;
     float vignetteBoost_ = 0.0f;
-    float damageVignetteStrength_ = 0.0f;
-    float parryVignetteStrength_ = 0.0f;
+    float primaryTintStrength_ = 0.0f;
+    float primaryTintColor_[3]{1.0f, 1.0f, 1.0f};
+    float secondaryTintStrength_ = 0.0f;
+    float secondaryTintColor_[3]{1.0f, 1.0f, 1.0f};
     float fovKickDeg_ = 0.0f;
 };

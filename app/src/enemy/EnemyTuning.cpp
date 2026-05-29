@@ -75,6 +75,9 @@ void Enemy::SetDifficulty(float difficulty) {
                        knockbackScale, hitBoxScale, timingScale);
     ScaleAttackProfile(config_.attacks.arcaneLaser.profile, damageScale * 1.08f,
                        knockbackScale * 1.06f, hitBoxScale, timingScale);
+    ScaleAttackProfile(config_.attacks.cataclysmLaser.profile,
+                       damageScale * 1.24f, knockbackScale * 1.18f,
+                       hitBoxScale, timingScale);
 
     constexpr float kEasyActiveWindowDuration = 2.0f;
     auto widenActiveWindow = [&](EnemyAttackProfile &profile) {
@@ -101,6 +104,8 @@ void Enemy::SetDifficulty(float difficulty) {
     config_.attacks.bladeClash.advanceSpeed = 2.8f + 2.0f * t;
     config_.attacks.arcaneLaser.recoveryDuration *=
         1.0f - 0.38f * highPressure;
+    config_.attacks.cataclysmLaser.recoveryDuration *=
+        1.0f - 0.26f * highPressure;
 
     const float warpTimeScale = 1.30f - 0.54f * t;
     config_.warp.startTime *= warpTimeScale;
@@ -139,6 +144,10 @@ void Enemy::SetDifficulty(float difficulty) {
     arcaneLaserMinDistance_ = 4.8f - 0.8f * t;
     arcaneLaserWarpDistance_ = 18.5f + 3.5f * t;
     arcaneLaserSlashMinDistance_ = 8.8f - 2.0f * t;
+    cataclysmLaserChance_ = 0.18f + 0.20f * t;
+    cataclysmLaserCooldownDuration_ = 15.5f - 4.0f * t;
+    cataclysmLaserMinDistance_ = 9.6f - 1.4f * t;
+    cataclysmLaserWarpDistance_ = 23.0f + 5.5f * t;
     config_.attacks.arcaneLaser.range = 13.5f + 4.0f * t;
     config_.attacks.arcaneLaser.radius = 0.44f + 0.10f * t;
     config_.attacks.arcaneLaser.profile.chargeTime = 1.16f - 0.24f * t;
@@ -152,6 +161,19 @@ void Enemy::SetDifficulty(float difficulty) {
     config_.attacks.arcaneLaser.profile.timing.totalTime =
         config_.attacks.arcaneLaser.profile.timing.activeEndTime +
         config_.attacks.arcaneLaser.recoveryDuration;
+    config_.attacks.cataclysmLaser.range = 24.0f + 7.5f * t;
+    config_.attacks.cataclysmLaser.radius = 1.85f + 0.70f * t;
+    config_.attacks.cataclysmLaser.profile.chargeTime = 1.78f - 0.28f * t;
+    config_.attacks.cataclysmLaser.profile.timing.trackingEndTime =
+        0.95f - 0.18f * t;
+    config_.attacks.cataclysmLaser.profile.timing.activeStartTime = 0.0f;
+    config_.attacks.cataclysmLaser.profile.timing.activeEndTime =
+        1.42f - 0.22f * t;
+    config_.attacks.cataclysmLaser.profile.timing.recoveryStartTime =
+        config_.attacks.cataclysmLaser.profile.timing.activeEndTime;
+    config_.attacks.cataclysmLaser.profile.timing.totalTime =
+        config_.attacks.cataclysmLaser.profile.timing.activeEndTime +
+        config_.attacks.cataclysmLaser.recoveryDuration;
 
     stalkDurationMin_ = 0.70f - 0.42f * t;
     stalkDurationMax_ = 1.48f - 0.84f * t;
@@ -284,5 +306,7 @@ void Enemy::ValidateAllTimings() {
                    config_.attacks.bladeClash.profile.chargeTime);
     ValidateTiming(config_.attacks.arcaneLaser.profile.timing,
                    config_.attacks.arcaneLaser.profile.chargeTime);
+    ValidateTiming(config_.attacks.cataclysmLaser.profile.timing,
+                   config_.attacks.cataclysmLaser.profile.chargeTime);
 }
 

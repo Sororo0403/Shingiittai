@@ -9,6 +9,28 @@
 
 using namespace DxUtils;
 
+namespace {
+bool HasSpecial(const PostProcessProfile &profile) {
+    return profile.special.mode == PostProcessSpecialMode::Vignette ||
+           profile.special.mode == PostProcessSpecialMode::Dissolve;
+}
+
+bool HasVignette(const PostProcessProfile &profile) {
+    return (profile.vignette.enabled && profile.vignette.strength > 0.0f) ||
+           profile.vignette.primaryTintStrength > 0.0f ||
+           profile.vignette.secondaryTintStrength > 0.0f;
+}
+
+bool HasRandomNoise(const PostProcessProfile &profile) {
+    return profile.randomNoise.mode != PostProcessRandomMode::None &&
+           profile.randomNoise.strength > 0.0f;
+}
+
+bool HasToon(const PostProcessProfile &profile) {
+    return profile.toon.enabled && profile.toon.strength > 0.0f;
+}
+} // namespace
+
 void PostProcessSystem::Initialize(DirectXCommon *dxCommon,
                                     SrvManager *srvManager, int width,
                                     int height) {
@@ -50,14 +72,12 @@ bool PostProcessSystem::RequiresPostProcess() const {
            profile_.filter.mode != PostProcessFilterMode::None ||
            profile_.edge.mode != PostProcessEdgeMode::None ||
            profile_.tonemap.enabled || profile_.bloom.enabled ||
-           profile_.noise.enabled ||
-           profile_.special.mode != PostProcessSpecialMode::None ||
-           profile_.lensFlare.enabled || profile_.vignette.enabled ||
-           profile_.vignette.damageStrength > 0.0f ||
-           profile_.vignette.parryStrength > 0.0f ||
-           profile_.randomNoise.mode != PostProcessRandomMode::None ||
+           profile_.noise.enabled || HasSpecial(profile_) ||
+           profile_.lensFlare.enabled || HasVignette(profile_) ||
+           HasRandomNoise(profile_) ||
            profile_.radialBlur.strength > 0.0f ||
-           profile_.sceneDim.strength > 0.0f;
+           profile_.sceneDim.strength > 0.0f ||
+           HasToon(profile_);
 }
 
 void PostProcessSystem::Draw(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle,
@@ -69,7 +89,8 @@ void PostProcessSystem::Draw(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle,
 
     commandList->RSSetViewports(1, &viewport_);
     commandList->RSSetScissorRects(1, &scissorRect_);
-    commandList->SetPipelineState(pipelineState_.Get());
+    commandList->SetPipelineState(
+        RequiresPostProcess() ? pipelineState_.Get() : copyPipelineState_.Get());
     commandList->SetGraphicsRootSignature(rootSignature_.Get());
     commandList->SetGraphicsRootDescriptorTable(0, textureHandle);
     commandList->SetGraphicsRootDescriptorTable(1, depthHandle);
@@ -119,6 +140,8 @@ void PostProcessSystem::CreatePipelineState() {
         ShaderCompiler::Compile(ShaderPaths::PostProcessVS, "main", "vs_6_6");
     auto ps =
         ShaderCompiler::Compile(ShaderPaths::PostProcessPS, "main", "ps_6_6");
+    auto copyPs = ShaderCompiler::Compile(ShaderPaths::PostProcessCopyPS,
+                                          "main", "ps_6_6");
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
     desc.pRootSignature = rootSignature_.Get();
@@ -142,6 +165,11 @@ void PostProcessSystem::CreatePipelineState() {
     ThrowIfFailed(dxCommon_->GetDevice()->CreateGraphicsPipelineState(
                       &desc, IID_PPV_ARGS(&pipelineState_)),
                   "Create post-process pipeline state failed");
+
+    desc.PS = {copyPs->GetBufferPointer(), copyPs->GetBufferSize()};
+    ThrowIfFailed(dxCommon_->GetDevice()->CreateGraphicsPipelineState(
+                      &desc, IID_PPV_ARGS(&copyPipelineState_)),
+                  "Create post-process copy pipeline state failed");
 }
 
 void PostProcessSystem::CreateConstantBuffer() {
@@ -180,6 +208,7 @@ void PostProcessSystem::UpdateConstantBuffer() {
     const auto &radialBlur = profile_.radialBlur;
     const auto &randomNoise = profile_.randomNoise;
     const auto &sceneDim = profile_.sceneDim;
+    const auto &toon = profile_.toon;
     const auto &dissolve = profile_.dissolve;
     const auto &lensFlare = profile_.lensFlare;
 
@@ -254,9 +283,27 @@ void PostProcessSystem::UpdateConstantBuffer() {
     mappedConstBuffer_->sepiaTone[0] = color.sepiaTone[0];
     mappedConstBuffer_->sepiaTone[1] = color.sepiaTone[1];
     mappedConstBuffer_->sepiaTone[2] = color.sepiaTone[2];
-    mappedConstBuffer_->damageVignetteStrength = vignette.damageStrength;
-    mappedConstBuffer_->parryVignetteStrength = vignette.parryStrength;
-    mappedConstBuffer_->legacyPadding0[0] = 0.0f;
-    mappedConstBuffer_->legacyPadding0[1] = 0.0f;
-    mappedConstBuffer_->legacyPadding0[2] = 0.0f;
+    mappedConstBuffer_->primaryVignetteTintStrength =
+        vignette.primaryTintStrength;
+    mappedConstBuffer_->secondaryVignetteTintStrength =
+        vignette.secondaryTintStrength;
+    for (int i = 0; i < 3; ++i) {
+        mappedConstBuffer_->primaryVignetteTintColor[i] =
+            vignette.primaryTintColor[i];
+        mappedConstBuffer_->secondaryVignetteTintColor[i] =
+            vignette.secondaryTintColor[i];
+    }
+    mappedConstBuffer_->toonEnabled = toon.enabled ? 1 : 0;
+    mappedConstBuffer_->toonStrength = toon.strength;
+    mappedConstBuffer_->toonColorSteps = toon.colorSteps;
+    mappedConstBuffer_->toonEdgeStrength = toon.edgeStrength;
+    mappedConstBuffer_->toonPaddingAlign = 0.0f;
+    mappedConstBuffer_->toonPadding[0] = 0.0f;
+    mappedConstBuffer_->toonPadding[1] = 0.0f;
+    mappedConstBuffer_->toonPadding[2] = 0.0f;
+    mappedConstBuffer_->toonPaddingFinal = 0.0f;
+    mappedConstBuffer_->constantsPadding[0] = 0.0f;
+    mappedConstBuffer_->constantsPadding[1] = 0.0f;
+    mappedConstBuffer_->constantsPadding[2] = 0.0f;
+    mappedConstBuffer_->constantsPadding[3] = 0.0f;
 }

@@ -188,16 +188,21 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
     playerVisual.scale.z *= kPlayerVisualScaleMultiplier * visualScale;
     if (bladeClashPoseActive_) {
         const float push = std::clamp(bladeClashPosePushRatio_, 0.0f, 1.0f);
-        const float leanDirection = bladeClashPoseForwardLean_ ? -1.0f : 1.0f;
-        const float lean = (0.12f + 0.34f * push) * leanDirection;
+        const float leanDirection = 1.0f;
+        const float lean =
+            (bladeClashPoseForwardLean_ ? 0.28f + 0.46f * push
+                                        : 0.12f + 0.34f * push) *
+            leanDirection;
         XMVECTOR baseRot = XMLoadFloat4(&playerVisual.rotation);
         XMVECTOR qLean =
             XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), lean);
         XMStoreFloat4(&playerVisual.rotation,
                       XMQuaternionNormalize(XMQuaternionMultiply(qLean, baseRot)));
-        playerVisual.position.y -= 0.10f * push;
-        playerVisual.position.z += std::cosf(yaw_) * 0.10f * push;
-        playerVisual.position.x += std::sinf(yaw_) * 0.10f * push;
+        playerVisual.position.y -=
+            (bladeClashPoseForwardLean_ ? 0.04f : 0.10f) * push;
+        const float forwardShift = bladeClashPoseForwardLean_ ? 0.18f : 0.10f;
+        playerVisual.position.z += std::cosf(yaw_) * forwardShift * push;
+        playerVisual.position.x += std::sinf(yaw_) * forwardShift * push;
     }
     if (defeatPoseRatio_ > 0.0f) {
         const float fall = std::clamp(defeatPoseRatio_, 0.0f, 1.0f);
@@ -289,11 +294,11 @@ void Player::SetCinematicBladeClashPose(const XMFLOAT3 &position, float yaw,
         const float side = isLeft ? -1.0f : 1.0f;
         if (forwardLean) {
             XMVECTOR qPitch =
-                XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), -0.88f);
+                XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), -0.24f);
             XMVECTOR qYaw = XMQuaternionRotationAxis(
-                XMVectorSet(0, 1, 0, 0), 3.14159265f - side * 0.22f);
+                XMVectorSet(0, 1, 0, 0), 3.14159265f - side * 0.72f);
             XMVECTOR qRoll = XMQuaternionRotationAxis(
-                XMVectorSet(0, 0, 1, 0), side * 0.52f);
+                XMVectorSet(0, 0, 1, 0), side * 0.58f);
             XMStoreFloat4(&pose.orientation,
                           XMQuaternionNormalize(XMQuaternionMultiply(
                               XMQuaternionMultiply(qPitch, qYaw), qRoll)));

@@ -1,4 +1,4 @@
-﻿#include "GameScene.h"
+#include "GameScene.h"
 #include "AppSceneServices.h"
 #include "BattleArenaRenderer.h"
 #include "BladeClashCinematic.h"
@@ -6,10 +6,11 @@
 #include "GameOverScene.h"
 #include "GameVictoryScene.h"
 #include "Input.h"
+#include "debug/DebugLog.h"
 #include "Material.h"
 #include "Model.h"
 #include "ModelManager.h"
-#include "PostProcessSystem.h"
+#include "PostEffectManager.h"
 #include "SceneManager.h"
 #include "SoundManager.h"
 #include "SpriteManager.h"
@@ -43,6 +44,7 @@ constexpr float kArcaneProjectileDeflectRange = 5.80f;
 constexpr float kArcaneProjectileSlashDot = 0.55f;
 constexpr int kArcaneProjectileVolleyShotCount = 1;
 constexpr float kArcaneProjectileVolleyInterval = 0.62f;
+constexpr float kArcaneProjectileVisualScaleMultiplier = 5.0f;
 constexpr int kTutorialTextLeftRight = 0;
 constexpr int kTutorialTextRightSword = 1;
 constexpr int kTutorialTextWait = 2;
@@ -76,26 +78,46 @@ constexpr int kDebugClearSceneKey = DIK_F9;
 #endif
 
 PostProcessProfile GetPostProcessProfile(const SceneContext *ctx) {
-    if (ctx == nullptr || ctx->rendering.postProcessSystem == nullptr) {
+    if (ctx == nullptr || ctx->rendering.postEffectManager == nullptr) {
         return {};
     }
-    return ctx->rendering.postProcessSystem->GetProfile();
+    return ctx->rendering.postEffectManager->GetBaseProfile();
 }
 
 void SetPostProcessProfile(const SceneContext *ctx,
                            const PostProcessProfile &profile) {
-    if (ctx == nullptr || ctx->rendering.postProcessSystem == nullptr) {
+    if (ctx == nullptr || ctx->rendering.postEffectManager == nullptr) {
         return;
     }
-    ctx->rendering.postProcessSystem->SetProfile(profile);
+    ctx->rendering.postEffectManager->SetBaseProfile(profile);
 }
 
-void ApplyBattlePostProcess(const SceneContext *ctx, float radialBlurStrength,
+void SetCinematicPostProcessProfile(const SceneContext *ctx,
+                                    PostEffectLayerId layerId,
+                                    const PostProcessProfile &profile) {
+    if (ctx == nullptr || ctx->rendering.postEffectManager == nullptr ||
+        layerId == 0) {
+        return;
+    }
+    ctx->rendering.postEffectManager->SetLayerProfile(layerId, profile);
+}
+
+void ClearCinematicPostProcessProfile(const SceneContext *ctx,
+                                      PostEffectLayerId layerId) {
+    if (ctx == nullptr || ctx->rendering.postEffectManager == nullptr ||
+        layerId == 0) {
+        return;
+    }
+    ctx->rendering.postEffectManager->ClearLayer(layerId);
+}
+
+void ApplyBattlePostProcess(const SceneContext *ctx, PostEffectLayerId layerId,
+                            float radialBlurStrength,
                             float vignetteStrength, float sceneDimStrength,
                             float centerY = 0.48f, int32_t sampleCount = 20,
                             float vignetteScale = 11.0f,
                             float vignettePower = 1.15f) {
-    PostProcessProfile profile = GetPostProcessProfile(ctx);
+    PostProcessProfile profile{};
     profile.colorGrade.mode = PostProcessColorMode::None;
     profile.vignette.enabled = true;
     profile.vignette.strength = vignetteStrength;
@@ -106,11 +128,11 @@ void ApplyBattlePostProcess(const SceneContext *ctx, float radialBlurStrength,
     profile.radialBlur.sampleCount = sampleCount;
     profile.radialBlur.strength = radialBlurStrength;
     profile.sceneDim.strength = sceneDimStrength;
-    SetPostProcessProfile(ctx, profile);
+    SetCinematicPostProcessProfile(ctx, layerId, profile);
 }
 
-void ClearBattlePostProcess(const SceneContext *ctx) {
-    SetPostProcessProfile(ctx, PostProcessProfile{});
+void ClearBattlePostProcess(const SceneContext *ctx, PostEffectLayerId layerId) {
+    ClearCinematicPostProcessProfile(ctx, layerId);
 }
 
 struct SharedBattleModels {
@@ -356,6 +378,7 @@ XMFLOAT3 Lerp(const XMFLOAT3 &a, const XMFLOAT3 &b, float t) {
 }
 
 XMFLOAT4 Lerp(const XMFLOAT4 &a, const XMFLOAT4 &b, float t) {
+    t = std::clamp(t, 0.0f, 1.0f);
     return {a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t,
             a.z + (b.z - a.z) * t, a.w + (b.w - a.w) * t};
 }
@@ -369,6 +392,17 @@ float EffectiveCombatDifficulty(float difficulty) {
     const float clamped = std::clamp(difficulty, 0.0f, 9.0f);
     const float pressure = SmoothStep01(clamped / 9.0f);
     return std::clamp(clamped + 0.55f + 0.45f * pressure, 0.0f, 9.0f);
+}
+
+XMFLOAT4 DifficultyGaugeHeatColor(float difficulty, float alpha) {
+    const float t = std::clamp(difficulty, 0.0f, 9.0f) / 9.0f;
+    const XMFLOAT4 blue{0.015f, 0.075f, 0.50f, alpha};
+    const XMFLOAT4 yellow{1.0f, 0.78f, 0.10f, alpha};
+    const XMFLOAT4 red{0.62f, 0.018f, 0.010f, alpha};
+    if (t < 0.62f) {
+        return Lerp(blue, yellow, t / 0.62f);
+    }
+    return Lerp(yellow, red, (t - 0.62f) / 0.38f);
 }
 
 void ApplyBattleIntroClearColor(DirectXCommon *dxCommon, float introTimer) {
@@ -392,20 +426,9 @@ void ApplyReleasedClearColor(DirectXCommon *dxCommon) {
     dxCommon->SetClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
-void ApplyReleasedPostProcess(const SceneContext *ctx) {
-    if (ctx == nullptr || ctx->rendering.postProcessSystem == nullptr) {
-        return;
-    }
-
-    PostProcessProfile profile = GetPostProcessProfile(ctx);
-    profile.vignette.enabled = false;
-    profile.vignette.strength = 0.0f;
-    profile.radialBlur.center[0] = 0.5f;
-    profile.radialBlur.center[1] = 0.48f;
-    profile.radialBlur.sampleCount = 18;
-    profile.radialBlur.strength = 0.0f;
-    profile.sceneDim.strength = 0.0f;
-    SetPostProcessProfile(ctx, profile);
+void ApplyReleasedPostProcess(const SceneContext *ctx,
+                              PostEffectLayerId layerId) {
+    ClearCinematicPostProcessProfile(ctx, layerId);
 }
 
 float GetChargeStanceSettleTime(ActionKind kind) {
@@ -491,74 +514,21 @@ void ApplyRustedRobotMaterials(ModelManager *modelManager, uint32_t modelId,
     }
 }
 
-struct EnemyPhaseMaterialProfile {
-    uint32_t textureId = 0;
-    std::vector<XMFLOAT4> palette{};
-    float reflection = 0.0f;
-    float fresnel = 0.0f;
-    float roughness = 0.0f;
-};
-
-EnemyPhaseMaterialProfile LerpEnemyPhaseProfile(
-    const EnemyPhaseMaterialProfile &from,
-    const EnemyPhaseMaterialProfile &to, float t) {
-    t = SmoothStep01(t);
-    EnemyPhaseMaterialProfile profile = to;
-    profile.reflection = from.reflection + (to.reflection - from.reflection) * t;
-    profile.fresnel = from.fresnel + (to.fresnel - from.fresnel) * t;
-    profile.roughness = from.roughness + (to.roughness - from.roughness) * t;
-
-    const size_t paletteSize = (std::max)(from.palette.size(), to.palette.size());
-    profile.palette.clear();
-    profile.palette.reserve(paletteSize);
-    for (size_t i = 0; i < paletteSize; ++i) {
-        const XMFLOAT4 fromColor =
-            from.palette.empty() ? XMFLOAT4{1.0f, 1.0f, 1.0f, 1.0f}
-                                 : from.palette[i % from.palette.size()];
-        const XMFLOAT4 toColor =
-            to.palette.empty() ? XMFLOAT4{1.0f, 1.0f, 1.0f, 1.0f}
-                               : to.palette[i % to.palette.size()];
-        profile.palette.push_back(Lerp(fromColor, toColor, t));
-    }
-    return profile;
-}
-
-void ApplyEnemyPhaseMaterialProfile(ModelManager *modelManager, uint32_t modelId,
-                                    const EnemyPhaseMaterialProfile &profile) {
-    if (!modelManager || profile.palette.empty()) {
-        return;
-    }
-
-    Model *model = modelManager->GetModel(modelId);
-    if (!model) {
-        return;
-    }
-
-    model->textureId = profile.textureId;
-    size_t colorIndex = 0;
-    for (ModelSubMesh &subMesh : model->subMeshes) {
-        subMesh.textureId = profile.textureId;
-
-        Material material = modelManager->GetMaterial(subMesh.materialId);
-        const float alpha = material.color.w;
-        material.enableTexture = 1;
-        material.baseColorTextureId = profile.textureId;
-        material.color = profile.palette[colorIndex % profile.palette.size()];
-        material.color.w = alpha;
-        XMStoreFloat4x4(&material.uvTransform,
-                        XMMatrixTranspose(XMMatrixIdentity()));
-        material.reflectionStrength = profile.reflection;
-        material.reflectionFresnelStrength = profile.fresnel;
-        material.reflectionRoughness = profile.roughness;
-        material.roughness = profile.roughness;
-        modelManager->SetMaterial(subMesh.materialId, material);
-        ++colorIndex;
-    }
+void LogGameSceneInitializePhase(const char *phase) {
+    DebugLog::Get().Write("Scene", "GameScene", "initialize", phase);
 }
 
 } // namespace
 
-GameScene::~GameScene() { StopBattleBgm(); }
+GameScene::~GameScene() {
+    StopBattleBgm();
+    if (ctx_ != nullptr && ctx_->rendering.postEffectManager != nullptr &&
+        postEffectCinematicLayer_ != 0) {
+        ctx_->rendering.postEffectManager->DestroyLayer(
+            postEffectCinematicLayer_);
+        postEffectCinematicLayer_ = 0;
+    }
+}
 
 float GameScene::GetDifficultyRatio() const {
     return EffectiveCombatDifficulty(combatDifficulty_) / 9.0f;
@@ -626,15 +596,21 @@ void GameScene::StopBattleBgm() {
 }
 
 void GameScene::Initialize(const SceneContext &ctx) {
+    LogGameSceneInitializePhase("begin");
     BaseScene::Initialize(ctx);
     ctx_->rendering.dxCommon->ResetClearColor();
-    if (ctx_->rendering.postProcessSystem != nullptr) {
-        ctx_->rendering.postProcessSystem->SetProfile(PostProcessProfile{});
+    if (ctx_->rendering.postEffectManager != nullptr) {
+        ctx_->rendering.postEffectManager->SetBaseProfile(PostProcessProfile{});
+        PostEffectLayerDesc desc{};
+        desc.priority = 10;
+        desc.blendMode = PostEffectLayerBlendMode::Overlay;
+        postEffectCinematicLayer_ =
+            ctx_->rendering.postEffectManager->CreateLayer(desc);
     }
     combatFeedback_.Initialize((titleDemoMode_ || backgroundOnlyMode_ ||
                                 readyPreviewMode_)
                                    ? nullptr
-                                   : ctx_->rendering.postProcessSystem);
+                                   : ctx_->rendering.postEffectManager);
 
     float aspect = static_cast<float>(ctx_->systems.winApp->GetWidth()) /
                    static_cast<float>(ctx_->systems.winApp->GetHeight());
@@ -642,49 +618,31 @@ void GameScene::Initialize(const SceneContext &ctx) {
     camera_.Initialize(aspect);
     camera_.UpdateMatrices();
     camera_.SetPerspectiveFovDeg(currentFovDeg_);
+    LogGameSceneInitializePhase("camera_ready");
 
     DirectXCommon *dx = ctx_->rendering.dxCommon;
     ModelManager *model = ctx_->rendering.model;
     TextureManager *texture = ctx_->rendering.texture;
 
+    LogGameSceneInitializePhase("model_load_begin");
     uint32_t playerModel =
-        model->Load(L"app/resources/models/player/player.glb");
+        model->Load(L"app/resources/models/player/player.gltf");
     uint32_t swordModel = model->Load(L"app/resources/models/player/sword.glb");
     uint32_t enemyModel = model->Load(L"app/resources/models/boss/boss.gltf");
     uint32_t bulletModel = model->Load(L"app/resources/models/boss/bullet.gltf");
+    LogGameSceneInitializePhase("model_load_end");
+    LogGameSceneInitializePhase("texture_load_begin");
     particleTextureId_ =
         texture->Load(L"app/resources/effects/particles/smoke.png");
-    constexpr uint32_t kEnemyPhaseTextureSize = 512;
-    enemyRustMetalPixels_ = CreateProceduralTexturePixels(
-        kEnemyPhaseTextureSize, kEnemyPhaseTextureSize, {0.23f, 0.22f, 0.20f},
-        {0.70f, 0.30f, 0.12f}, 0x914Au, 0.62f, true);
-    enemyCleanMetalPixels_ = CreateSmoothMetalTexturePixels(
-        kEnemyPhaseTextureSize, kEnemyPhaseTextureSize, {0.40f, 0.42f, 0.41f},
-        {0.62f, 0.63f, 0.57f});
-    enemyGoldMetalPixels_ = CreateProceduralTexturePixels(
-        kEnemyPhaseTextureSize, kEnemyPhaseTextureSize, {0.43f, 0.34f, 0.17f},
-        {0.70f, 0.58f, 0.30f}, 0xB05Du, 0.38f, true);
-    enemyPhaseBlendPixels_ = enemyRustMetalPixels_;
-    const uint32_t enemyRustTextureId =
-        texture->CreateFromRgbaPixels(kEnemyPhaseTextureSize,
-                                      kEnemyPhaseTextureSize,
-                                      enemyRustMetalPixels_.data());
-    const uint32_t enemyCleanMetalTextureId =
-        texture->CreateFromRgbaPixels(kEnemyPhaseTextureSize,
-                                      kEnemyPhaseTextureSize,
-                                      enemyCleanMetalPixels_.data());
-    const uint32_t enemyGoldMetalTextureId =
-        texture->CreateFromRgbaPixels(kEnemyPhaseTextureSize,
-                                      kEnemyPhaseTextureSize,
-                                      enemyGoldMetalPixels_.data());
-    enemyPhaseBlendTextureId_ =
-        texture->CreateFromRgbaPixels(kEnemyPhaseTextureSize,
-                                      kEnemyPhaseTextureSize,
-                                      enemyPhaseBlendPixels_.data());
+    InitializeEnemyPhaseMaterialSet(texture, enemyPhaseMaterials_);
+    LogGameSceneInitializePhase("texture_load_end");
+    LogGameSceneInitializePhase("procedural_texture_begin");
     const uint32_t worldRustTextureId =
         AppCreateRustedMetalTexture(texture, 768, 768);
     const uint32_t arenaStoneTextureId =
         AppCreateArenaStoneTexture(texture, 1024, 1024);
+    LogGameSceneInitializePhase("procedural_texture_end");
+    LogGameSceneInitializePhase("material_apply_begin");
     ApplyWeatheredMetalMaterials(model, playerModel, worldRustTextureId,
                                  {{0.22f, 0.31f, 0.56f, 0.98f},
                                   {0.11f, 0.17f, 0.32f, 0.98f},
@@ -695,12 +653,11 @@ void GameScene::Initialize(const SceneContext &ctx) {
                                   {0.13f, 0.23f, 0.46f, 1.0f},
                                   {0.34f, 0.25f, 0.21f, 1.0f}},
                                  0.24f, 0.12f, 0.64f);
-    enemyRustTextureId_ = enemyRustTextureId;
-    enemyCleanMetalTextureId_ = enemyCleanMetalTextureId;
-    enemyGoldMetalTextureId_ = enemyGoldMetalTextureId;
-    currentEnemyTextureId_ = enemyRustTextureId_;
-    ApplyRustedRobotMaterials(model, enemyModel, enemyRustTextureId_);
+    ApplyEnemyPhaseMaterial(model, texture, enemyModel, enemyPhaseMaterials_,
+                            BossPhase::Phase1, false, 1.0f);
+    LogGameSceneInitializePhase("material_apply_end");
     if (!gSharedBattleModels.initialized) {
+        LogGameSceneInitializePhase("shared_models_begin");
         gSharedBattleModels.arenaNoiseTextureId = arenaStoneTextureId;
         gSharedBattleModels.arenaFloorModelId =
             model->CreatePlane(arenaStoneTextureId,
@@ -781,8 +738,10 @@ void GameScene::Initialize(const SceneContext &ctx) {
             model->CreatePlane(0, MakeArenaMaterial({1.0f, 0.96f, 0.78f, 0.92f},
                                                     false, 0.02f, 0.20f));
         gSharedBattleModels.initialized = true;
+        LogGameSceneInitializePhase("shared_models_end");
     }
 
+    LogGameSceneInitializePhase("shared_model_assign_begin");
     arenaNoiseTextureId_ = gSharedBattleModels.arenaNoiseTextureId;
     arenaFloorModelId_ = gSharedBattleModels.arenaFloorModelId;
     arenaLowPolyTerrainModelId_ =
@@ -806,16 +765,18 @@ void GameScene::Initialize(const SceneContext &ctx) {
     arenaDomeModelId_ = gSharedBattleModels.arenaDomeModelId;
     arenaBarrierRingModelId_ = gSharedBattleModels.arenaBarrierRingModelId;
     chargeWeakPointModelId_ = gSharedBattleModels.chargeWeakPointModelId;
+    LogGameSceneInitializePhase("shared_model_assign_end");
+    LogGameSceneInitializePhase("particles_begin");
     sparkParticles_.Initialize(dx, ctx_->rendering.srv, texture,
-                               particleTextureId_, 2048);
+                               particleTextureId_, 9000);
     sparkParticles_.SetEmission(1, 1000.0f);
     sparkParticles_.SetEmitterRadius(0.08f);
     explosionParticles_.Initialize(dx, ctx_->rendering.srv, texture,
-                                   particleTextureId_, 2048);
+                                   particleTextureId_, 9000);
     explosionParticles_.SetEmission(1, 1000.0f);
     explosionParticles_.SetEmitterRadius(0.25f);
     smokeParticles_.Initialize(dx, ctx_->rendering.srv, texture,
-                               particleTextureId_, 1024);
+                               particleTextureId_, 3500);
     smokeParticles_.SetEmission(1, 1000.0f);
     smokeParticles_.SetEmitterRadius(0.40f);
 
@@ -823,11 +784,15 @@ void GameScene::Initialize(const SceneContext &ctx) {
                                     particleTextureId_, 256);
     swordFlashParticles_.SetEmission(1, 1000.0f);
     swordFlashParticles_.SetEmitterRadius(0.06f);
+    LogGameSceneInitializePhase("particles_end");
+    LogGameSceneInitializePhase("sword_renderers_begin");
     swordTrailRenderer_.Initialize(dx);
     swordTrailRenderer_.Reset();
     swordSlashArcRenderer_.Initialize(dx);
     swordSlashArcRenderer_.Reset();
+    LogGameSceneInitializePhase("sword_renderers_end");
 
+    LogGameSceneInitializePhase("actors_begin");
     player_.Initialize(playerModel, swordModel);
     player_.SetInputCalibration(inputCalibration_);
     playerModelId_ = playerModel;
@@ -837,7 +802,9 @@ void GameScene::Initialize(const SceneContext &ctx) {
     enemy_.SetDifficulty(combatDifficulty_);
     enemy_.Initialize(enemyModel);
     enemyModelId_ = enemyModel;
+    LogGameSceneInitializePhase("actors_end");
     if (ctx_->systems.sound != nullptr) {
+        LogGameSceneInitializePhase("sound_load_begin");
         slashSoundId_ = ctx_->systems.sound->Load(
             L"app/resources/audio/sfx/slash_hero.wav");
         enemyReleaseSoundId_ = ctx_->systems.sound->Load(
@@ -851,8 +818,11 @@ void GameScene::Initialize(const SceneContext &ctx) {
         explosionSoundId_ = ctx_->systems.sound->Load(
             L"app/resources/audio/sfx/explosion_boss.wav");
         soundsLoaded_ = true;
+        LogGameSceneInitializePhase("sound_load_end");
     }
+    LogGameSceneInitializePhase("battle_bgm_begin");
     StartBattleBgm();
+    LogGameSceneInitializePhase("battle_bgm_end");
     cameraYaw_ = 0.0f;
     cameraPitch_ = 0.0f;
     isLockOn_ = true;
@@ -882,6 +852,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
     }
     SyncEnemyAnimation();
     UpdateSceneLighting();
+    LogGameSceneInitializePhase("state_setup_begin");
     battleElapsedTime_ = 0.0f;
     battleIntroActive_ = true;
     battleIntroTimer_ = 0.0f;
@@ -954,7 +925,9 @@ void GameScene::Initialize(const SceneContext &ctx) {
     pauseExitFadeTimer_ = 0.0f;
     pauseExitTarget_ = 0;
     player_.SetCameraSwordSlashSuppressed(false);
+    LogGameSceneInitializePhase("state_setup_end");
     if (inputCalibration_.controlType == InputControlType::Hand) {
+        LogGameSceneInitializePhase("hand_tracking_begin");
         if (AppSceneServices::HasHandTrackingStart()) {
             handTrackingStartRequested_ =
                 AppSceneServices::RequestHandTrackingStart();
@@ -963,9 +936,13 @@ void GameScene::Initialize(const SceneContext &ctx) {
             cameraPreviewReceiver_.Initialize(ctx_->rendering.texture,
                                               kHandCameraPreviewPort);
         }
+        LogGameSceneInitializePhase("hand_tracking_end");
     }
+    LogGameSceneInitializePhase("hud_begin");
     hud_.Initialize(*ctx_);
+    LogGameSceneInitializePhase("hud_end");
     if (tutorialMode_) {
+        LogGameSceneInitializePhase("tutorial_assets_begin");
         LoadTutorialImages();
         tutorialEntryFadeTimer_ = -kTutorialEntryBlackHold;
         enemy_.SetTutorialPosition({0.0f, 0.0f, 3.10f});
@@ -977,8 +954,11 @@ void GameScene::Initialize(const SceneContext &ctx) {
         UpdateBattleCamera();
         camera_.UpdateMatrices();
         UpdateSceneLighting();
+        LogGameSceneInitializePhase("tutorial_assets_end");
     } else if (!titleDemoMode_ && !backgroundOnlyMode_ && !readyPreviewMode_) {
+        LogGameSceneInitializePhase("pause_assets_begin");
         LoadPauseMenuImages();
+        LogGameSceneInitializePhase("pause_assets_end");
     }
     enemy_.FaceTargetImmediately(player_.GetTransform().position);
     ApplyEnemyIntroDissolve(0.0f);
@@ -997,6 +977,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
         }
         UpdateSceneLighting();
     }
+    LogGameSceneInitializePhase("end");
 }
 
 void GameScene::Update() {
@@ -1194,7 +1175,8 @@ void GameScene::Update() {
             (currentEnemyActionKind == ActionKind::Smash ||
              currentEnemyActionKind == ActionKind::Sweep ||
              currentEnemyActionKind == ActionKind::BladeClash ||
-             currentEnemyActionKind == ActionKind::ArcaneLaser) &&
+             currentEnemyActionKind == ActionKind::ArcaneLaser ||
+             currentEnemyActionKind == ActionKind::CataclysmLaser) &&
             currentEnemyActionStep == ActionStep::Active;
         if (isEnemyAttackRelease) {
             if (soundsLoaded_ && ctx_->systems.sound != nullptr) {
@@ -1226,7 +1208,8 @@ void GameScene::Update() {
         } else if (enemyActionKind == ActionKind::Smash ||
                    enemyActionKind == ActionKind::Sweep ||
                    enemyActionKind == ActionKind::BladeClash ||
-                   enemyActionKind == ActionKind::ArcaneLaser) {
+                   enemyActionKind == ActionKind::ArcaneLaser ||
+                   enemyActionKind == ActionKind::CataclysmLaser) {
             const float enemyActionTimer = enemy_.GetActionTimerForPresentation();
             const bool farWarpSlashStance =
                 enemy_.IsFarWarpSlashActive() &&
@@ -1742,10 +1725,12 @@ void GameScene::OpenPauseMenu() {
     if (paused_) {
         return;
     }
-    if (ctx_ != nullptr && ctx_->rendering.postProcessSystem != nullptr) {
-        pauseSavedPostProcess_ = ctx_->rendering.postProcessSystem->GetProfile();
+    if (ctx_ != nullptr && ctx_->rendering.postEffectManager != nullptr) {
+        pauseSavedPostProcess_ =
+            ctx_->rendering.postEffectManager->GetComposedProfile();
         pausePostProcessSaved_ = true;
-        ctx_->rendering.postProcessSystem->SetProfile(PostProcessProfile{});
+        ctx_->rendering.postEffectManager->ClearLayers();
+        ctx_->rendering.postEffectManager->SetBaseProfile(PostProcessProfile{});
     }
     paused_ = true;
     pauseMenuIndex_ = 0;
@@ -1761,8 +1746,8 @@ void GameScene::ClosePauseMenu() {
     pauseExitFadeTimer_ = 0.0f;
     pauseExitTarget_ = 0;
     if (pausePostProcessSaved_ && ctx_ != nullptr &&
-        ctx_->rendering.postProcessSystem != nullptr) {
-        ctx_->rendering.postProcessSystem->SetProfile(pauseSavedPostProcess_);
+        ctx_->rendering.postEffectManager != nullptr) {
+        ctx_->rendering.postEffectManager->SetBaseProfile(pauseSavedPostProcess_);
     }
     pausePostProcessSaved_ = false;
 }
@@ -2470,13 +2455,7 @@ XMFLOAT2 GameScene::GetArcaneProjectileCueDirection() const {
 }
 
 uint32_t GameScene::GetCurrentEnemyTextureId() const {
-    if (currentEnemyTextureId_ != 0) {
-        return currentEnemyTextureId_;
-    }
-    if (enemyRustTextureId_ != 0) {
-        return enemyRustTextureId_;
-    }
-    return enemyPhaseBlendTextureId_;
+    return GetEnemyPhaseTextureId(enemyPhaseMaterials_);
 }
 
 void GameScene::ApplyBulletTextureToModel(uint32_t textureId) {
@@ -2575,8 +2554,9 @@ void GameScene::DrawArcaneProjectile() {
     ctx_->rendering.model->SetDrawEffect(effect);
 
     const float pulse = 0.5f + 0.5f * std::sinf(sceneLightTime_ * 15.0f);
-    const float scale = (arcaneProjectile_.reflected ? 0.72f : 0.62f) +
-                        pulse * 0.07f;
+    const float scale = ((arcaneProjectile_.reflected ? 0.72f : 0.62f) +
+                         pulse * 0.07f) *
+                        kArcaneProjectileVisualScaleMultiplier;
     const XMFLOAT3 direction =
         NormalizeParticleCompatVec3(arcaneProjectile_.velocity,
                                     {0.0f, 0.0f, 1.0f});
@@ -2852,6 +2832,18 @@ void GameScene::EmitEnemyActionParticles(ActionKind kind, ActionStep step) {
                               {0.26f, 1.0f, 0.78f, 0.92f},
                               enemy_.GetArcaneLaserDirection(), 0.72f);
             break;
+        case ActionKind::CataclysmLaser:
+            EmitParticleBurst(swordFlashParticles_,
+                              enemy_.GetCataclysmLaserMuzzlePosition(), 120,
+                              0.48f, AppParticleBurstStyle::Flash,
+                              {0.18f, 0.90f, 1.0f, 0.98f},
+                              enemy_.GetCataclysmLaserDirection(), 1.75f);
+            EmitParticleBurst(explosionParticles_,
+                              enemy_.GetCataclysmLaserMuzzlePosition(), 220,
+                              0.72f, AppParticleBurstStyle::SpiritSparkle,
+                              {0.20f, 0.96f, 1.0f, 0.88f},
+                              enemy_.GetCataclysmLaserDirection(), 3.25f);
+            break;
         default:
             break;
         }
@@ -2859,7 +2851,10 @@ void GameScene::EmitEnemyActionParticles(ActionKind kind, ActionStep step) {
 }
 
 void GameScene::EmitArcaneLaserParticles(float deltaTime) {
+    const bool isCataclysmLaser =
+        enemy_.GetActionKind() == ActionKind::CataclysmLaser;
     if (enemy_.GetActionKind() != ActionKind::ArcaneLaser &&
+        !isCataclysmLaser &&
         !arcaneProjectile_.active) {
         arcaneLaserParticleTimer_ = 0.0f;
         return;
@@ -2872,24 +2867,37 @@ void GameScene::EmitArcaneLaserParticles(float deltaTime) {
     }
 
     const ActionStep step = enemy_.GetActionStep();
-    const XMFLOAT3 muzzle = enemy_.GetArcaneLaserMuzzlePosition();
-    const XMFLOAT3 direction = enemy_.GetArcaneLaserDirection();
-    const float charge = enemy_.GetArcaneLaserChargeRatio();
-    const float radius = enemy_.GetArcaneLaserRadius();
+    const XMFLOAT3 muzzle = isCataclysmLaser
+                                ? enemy_.GetCataclysmLaserMuzzlePosition()
+                                : enemy_.GetArcaneLaserMuzzlePosition();
+    const XMFLOAT3 direction = isCataclysmLaser
+                                   ? enemy_.GetCataclysmLaserDirection()
+                                   : enemy_.GetArcaneLaserDirection();
+    const float charge = isCataclysmLaser
+                             ? enemy_.GetCataclysmLaserChargeRatio()
+                             : enemy_.GetArcaneLaserChargeRatio();
+    const float radius = isCataclysmLaser ? enemy_.GetCataclysmLaserRadius()
+                                          : enemy_.GetArcaneLaserRadius();
     const XMFLOAT3 circlePos{muzzle.x + direction.x * 0.34f,
                              muzzle.y + 0.04f,
                              muzzle.z + direction.z * 0.34f};
     const XMFLOAT3 right{direction.z, 0.0f, -direction.x};
-    const XMFLOAT4 laserColor{0.22f, 1.0f, 0.78f, 0.92f};
+    const XMFLOAT4 laserColor = isCataclysmLaser
+                                    ? XMFLOAT4{0.18f, 0.90f, 1.0f, 0.96f}
+                                    : XMFLOAT4{0.22f, 1.0f, 0.78f, 0.92f};
 
     if (step == ActionStep::Charge) {
-        arcaneLaserParticleTimer_ = 0.072f - 0.038f * charge;
+        arcaneLaserParticleTimer_ =
+            isCataclysmLaser ? 0.054f - 0.028f * charge
+                             : 0.072f - 0.038f * charge;
 
         ParticleEmitterSettings ring{};
         ring.position = circlePos;
         ring.emissionType = ParticleEmissionType::Burst;
         ring.spawnShape = ParticleSpawnShape::Ring;
-        ring.burstCount = static_cast<uint32_t>(110.0f + 210.0f * charge);
+        ring.burstCount = static_cast<uint32_t>(
+            (isCataclysmLaser ? 180.0f : 110.0f) +
+            (isCataclysmLaser ? 360.0f : 210.0f) * charge);
         ring.maxParticles = ring.burstCount;
         const float ringRadius = radius * (0.82f + 0.58f * charge);
         ring.spawnOffsetScale = {ringRadius, ringRadius, 0.02f};
@@ -2903,7 +2911,8 @@ void GameScene::EmitArcaneLaserParticles(float deltaTime) {
         ring.baseLifeTime = 0.30f + 0.18f * charge;
         ring.lifeTimeRandom = 0.06f;
         ring.fadeOutTime = 0.14f;
-        ring.startScale = 0.050f + 0.030f * charge;
+        ring.startScale =
+            (isCataclysmLaser ? 0.075f : 0.050f) + 0.030f * charge;
         ring.endScale = 0.008f;
         ring.scaleRandom = 0.012f;
         explosionParticles_.EmitOnce(ring);
@@ -2914,6 +2923,29 @@ void GameScene::EmitArcaneLaserParticles(float deltaTime) {
                           AppParticleBurstStyle::SpiritSparkle, laserColor,
                           {direction.x, 0.22f, direction.z},
                           0.92f + 1.95f * charge);
+        return;
+    }
+
+    if (isCataclysmLaser && step == ActionStep::Active) {
+        arcaneLaserParticleTimer_ = 0.020f;
+        const float range = enemy_.GetCataclysmLaserRange();
+        const float pulse = 0.5f + 0.5f * std::sinf(sceneLightTime_ * 32.0f);
+        for (int i = 0; i < 7; ++i) {
+            const float lane = (static_cast<float>(i) + 0.5f) / 7.0f;
+            XMFLOAT3 beamPos{muzzle.x + direction.x * range * lane,
+                             muzzle.y + 0.10f * std::sinf(sceneLightTime_ * 9.0f + i),
+                             muzzle.z + direction.z * range * lane};
+            EmitParticleBurst(swordFlashParticles_, beamPos, 24, 0.16f,
+                              AppParticleBurstStyle::Flash, laserColor,
+                              direction,
+                              radius * (0.58f + 0.22f * pulse));
+            EmitParticleBurst(explosionParticles_, beamPos, 34, 0.26f,
+                              AppParticleBurstStyle::SpiritSparkle,
+                              {laserColor.x, laserColor.y, laserColor.z,
+                               0.72f},
+                              {direction.x, 0.10f, direction.z},
+                              radius * (0.68f + 0.18f * pulse));
+        }
         return;
     }
 
@@ -3030,23 +3062,6 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
 
 void GameScene::UpdateBattlePostProcessState(float deltaTime) {
     (void)deltaTime;
-    if (titleDemoMode_ || backgroundOnlyMode_ || readyPreviewMode_ ||
-        ctx_ == nullptr ||
-        ctx_->rendering.postProcessSystem == nullptr) {
-        return;
-    }
-
-    PostProcessProfile profile = GetPostProcessProfile(ctx_);
-    const bool hasFeedbackPost = profile.radialBlur.strength > 0.001f ||
-                                 profile.randomNoise.strength > 0.001f;
-    if (!hasFeedbackPost) {
-        profile.vignette.enabled = false;
-        profile.vignette.strength = 0.0f;
-    }
-    profile.vignette.scale = 11.0f;
-    profile.vignette.power = 1.15f;
-    profile.sceneDim.strength = 0.0f;
-    SetPostProcessProfile(ctx_, profile);
 }
 
 void GameScene::DrawTransparent() {
@@ -3108,7 +3123,7 @@ void GameScene::UpdatePhaseTransitionCinematic(float deltaTime) {
         SmoothStep01((ratio - kReleaseStart) / kReleaseDuration);
     const float hold = charge * (1.0f - release);
     if (!titleDemoMode_) {
-        ApplyBattlePostProcess(ctx_, 0.010f + 0.026f * hold + 0.036f * release,
+        ApplyBattlePostProcess(ctx_, postEffectCinematicLayer_, 0.010f + 0.026f * hold + 0.036f * release,
                                0.30f + 0.42f * hold, 0.10f + 0.18f * hold);
     }
 
@@ -3135,7 +3150,7 @@ void GameScene::UpdatePhaseTransitionCinematic(float deltaTime) {
     if (!enemy_.IsPhaseTransitionActive()) {
         phaseTransitionWasActive_ = false;
         phaseTransitionReleaseEmitted_ = false;
-        ClearBattlePostProcess(ctx_);
+        ClearBattlePostProcess(ctx_, postEffectCinematicLayer_);
         ApplyReleasedClearColor(ctx_->rendering.dxCommon);
     }
 }
@@ -3230,18 +3245,18 @@ void GameScene::UpdateBattleIntro(float deltaTime) {
     ApplyEnemyIntroDissolve(reveal);
     ApplyBattleIntroClearColor(ctx_->rendering.dxCommon, battleIntroTimer_);
     if (!titleDemoMode_ && !battleIntroRevealEmitted_) {
-        ApplyBattlePostProcess(ctx_, 0.035f * (1.0f - ratio),
+        ApplyBattlePostProcess(ctx_, postEffectCinematicLayer_, 0.035f * (1.0f - ratio),
                                0.16f + 0.06f * ratio, 0.0f, 0.48f, 18);
     } else if (!titleDemoMode_) {
         if (!titleDemoMode_) {
-            ApplyReleasedPostProcess(ctx_);
+            ApplyReleasedPostProcess(ctx_, postEffectCinematicLayer_);
         }
     }
     if (!battleIntroRevealEmitted_ && battleIntroTimer_ >= 2.36f) {
         battleIntroRevealEmitted_ = true;
         combatFeedback_.AddCameraShake(0.38f, 0.055f, 0.034f);
         if (!titleDemoMode_) {
-            ApplyReleasedPostProcess(ctx_);
+            ApplyReleasedPostProcess(ctx_, postEffectCinematicLayer_);
         }
         const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
         EmitParticleBurst(
@@ -3282,9 +3297,9 @@ void GameScene::FinishBattleIntro() {
     battleIntroTimer_ = battleIntroDuration_;
     battleIntroRevealEmitted_ = true;
     ApplyEnemyIntroDissolve(1.0f);
-    ClearBattlePostProcess(ctx_);
+    ClearBattlePostProcess(ctx_, postEffectCinematicLayer_);
     if (!titleDemoMode_) {
-        ApplyReleasedPostProcess(ctx_);
+        ApplyReleasedPostProcess(ctx_, postEffectCinematicLayer_);
     }
     ApplyReleasedClearColor(ctx_->rendering.dxCommon);
     enemy_.FaceTargetImmediately(player_.GetTransform().position);
@@ -3298,76 +3313,18 @@ void GameScene::FinishBattleIntro() {
 
 void GameScene::ApplyEnemyPhaseMaterials() {
     if (ctx_ == nullptr || ctx_->rendering.model == nullptr ||
-        enemyModelId_ == 0 || enemyRustTextureId_ == 0 ||
-        enemyCleanMetalTextureId_ == 0 || enemyGoldMetalTextureId_ == 0 ||
-        enemyPhaseBlendTextureId_ == 0) {
+        enemyModelId_ == 0) {
         return;
     }
 
-    const EnemyPhaseMaterialProfile rustProfile{
-        enemyRustTextureId_,
-        {{0.35f, 0.33f, 0.28f, 1.0f},
-         {0.30f, 0.29f, 0.25f, 1.0f},
-         {0.42f, 0.34f, 0.26f, 1.0f}},
-        0.045f,
-        0.012f,
-        0.94f};
-    const EnemyPhaseMaterialProfile cleanMetalProfile{
-        enemyCleanMetalTextureId_,
-        {{0.62f, 0.64f, 0.62f, 1.0f},
-         {0.38f, 0.41f, 0.41f, 1.0f},
-         {0.78f, 0.76f, 0.68f, 1.0f}},
-        0.44f,
-        0.18f,
-        0.27f};
-    const EnemyPhaseMaterialProfile goldProfile{
-        enemyGoldMetalTextureId_,
-        {{0.66f, 0.52f, 0.28f, 1.0f},
-         {0.48f, 0.38f, 0.20f, 1.0f},
-         {0.76f, 0.64f, 0.36f, 1.0f}},
-        0.25f,
-        0.11f,
-        0.46f};
-
-    EnemyPhaseMaterialProfile profile = rustProfile;
     const BossPhase phase = enemy_.GetBossPhase();
     const float transitionRatio =
         enemy_.IsPhaseTransitionActive() ? enemy_.GetPhaseTransitionRatio() : 1.0f;
-    const std::vector<uint8_t> *blendFromPixels = nullptr;
-    const std::vector<uint8_t> *blendToPixels = nullptr;
-    if (phase == BossPhase::Phase2) {
-        profile = LerpEnemyPhaseProfile(rustProfile, cleanMetalProfile,
-                                        transitionRatio);
-        if (enemy_.IsPhaseTransitionActive()) {
-            blendFromPixels = &enemyRustMetalPixels_;
-            blendToPixels = &enemyCleanMetalPixels_;
-            profile.textureId = enemyPhaseBlendTextureId_;
-        } else {
-            profile.textureId = enemyCleanMetalTextureId_;
-        }
-    } else if (phase == BossPhase::Phase3) {
-        profile = LerpEnemyPhaseProfile(cleanMetalProfile, goldProfile,
-                                        transitionRatio);
-        if (enemy_.IsPhaseTransitionActive()) {
-            blendFromPixels = &enemyCleanMetalPixels_;
-            blendToPixels = &enemyGoldMetalPixels_;
-            profile.textureId = enemyPhaseBlendTextureId_;
-        } else {
-            profile.textureId = enemyGoldMetalTextureId_;
-        }
-    }
-
-    if (blendFromPixels != nullptr && blendToPixels != nullptr) {
-        BlendTexturePixels(*blendFromPixels, *blendToPixels,
-                           enemyPhaseBlendPixels_, SmoothStep01(transitionRatio));
-        ctx_->rendering.texture->UpdateTexture2D(
-            enemyPhaseBlendTextureId_, enemyPhaseBlendPixels_.data(), 512u * 4u);
-    }
-
-    currentEnemyTextureId_ = profile.textureId;
-    ApplyEnemyPhaseMaterialProfile(ctx_->rendering.model, enemyModelId_, profile);
+    ApplyEnemyPhaseMaterial(ctx_->rendering.model, ctx_->rendering.texture,
+                            enemyModelId_, enemyPhaseMaterials_, phase,
+                            enemy_.IsPhaseTransitionActive(), transitionRatio);
     if (!arcaneProjectile_.active) {
-        ApplyBulletTextureToModel(currentEnemyTextureId_);
+        ApplyBulletTextureToModel(enemyPhaseMaterials_.currentTextureId);
     }
 }
 
@@ -3808,7 +3765,8 @@ void GameScene::ApplyBladeClashFinishPostProcess() {
             : 1.0f;
     const float hold = 1.0f - std::clamp((ratio - 0.76f) / 0.24f, 0.0f, 1.0f);
     ApplyBattlePostProcess(
-        ctx_, bladeClashFinishPlayerWon_ ? 0.018f * hold : 0.020f * hold,
+        ctx_, postEffectCinematicLayer_,
+        bladeClashFinishPlayerWon_ ? 0.018f * hold : 0.020f * hold,
         bladeClashFinishPlayerWon_ ? 0.22f : 0.46f,
         bladeClashFinishPlayerWon_ ? 0.03f * hold : 0.16f * hold, 0.48f, 18);
 }
@@ -3821,7 +3779,7 @@ void GameScene::CompleteBladeClashFinish() {
     player_.SetBladeClashPose(false);
     player_.SetDefeatPoseRatio(0.0f);
     SetEnemyAnimationFrozen(false);
-    ClearBattlePostProcess(ctx_);
+    ClearBattlePostProcess(ctx_, postEffectCinematicLayer_);
     if (shouldResolveEnemyTransition) {
         enemy_.ResolveDeferredDamageTransitions();
         enemyHitCooldown_ = 0.22f;
@@ -3832,12 +3790,6 @@ void GameScene::BeginVictorySequence() {
     battleResultRequested_ = true;
     victoryClearTime_ = battleElapsedTime_;
     StopBattleBgm();
-    if (!titleDemoMode_) {
-        ClearBattlePostProcess(ctx_);
-        sceneManager_->ChangeScene(std::make_unique<GameVictoryScene>(
-            victoryClearTime_, inputCalibration_, combatDifficulty_));
-        return;
-    }
 
     victorySequenceActive_ = true;
     victorySequenceTimer_ = 0.0f;
@@ -3850,7 +3802,7 @@ void GameScene::BeginVictorySequence() {
     }
 
     if (!titleDemoMode_) {
-        ApplyBattlePostProcess(ctx_, 0.055f, 0.58f, 0.10f, 0.48f, 24);
+        ApplyBattlePostProcess(ctx_, postEffectCinematicLayer_, 0.055f, 0.58f, 0.10f, 0.48f, 24);
     }
 
     const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
@@ -3878,7 +3830,7 @@ void GameScene::BeginDefeatSequence() {
     }
 
     if (!titleDemoMode_) {
-        ApplyBattlePostProcess(ctx_, 0.040f, 0.62f, 0.18f, 0.54f, 22);
+        ApplyBattlePostProcess(ctx_, postEffectCinematicLayer_, 0.040f, 0.62f, 0.18f, 0.54f, 22);
     }
 
     const XMFLOAT3 playerPos = player_.GetTransform().position;
@@ -3903,7 +3855,7 @@ void GameScene::UpdateDefeatSequence(float deltaTime) {
     const float postProcessRatio =
         std::clamp(defeatSequenceTimer_ / defeatSequenceDuration_, 0.0f, 1.0f);
     if (!titleDemoMode_) {
-        ApplyBattlePostProcess(ctx_, 0.040f * (1.0f - postProcessRatio), 0.62f,
+        ApplyBattlePostProcess(ctx_, postEffectCinematicLayer_, 0.040f * (1.0f - postProcessRatio), 0.62f,
                                0.18f + 0.22f * postProcessRatio, 0.54f, 22);
     }
 
@@ -3923,7 +3875,7 @@ void GameScene::UpdateDefeatSequence(float deltaTime) {
     if (defeatSequenceTimer_ >= defeatSequenceDuration_) {
         defeatSequenceActive_ = false;
         player_.SetDefeatPoseRatio(0.0f);
-        ClearBattlePostProcess(ctx_);
+        ClearBattlePostProcess(ctx_, postEffectCinematicLayer_);
         if (titleDemoMode_) {
             battleResultRequested_ = false;
             battleIntroActive_ = true;
@@ -3950,36 +3902,54 @@ void GameScene::UpdateVictorySequence(float deltaTime) {
     const float stepped = std::floor(ratio * 14.0f) / 14.0f;
     const float blur = (1.0f - stepped) * 0.070f;
     if (!titleDemoMode_) {
-        ApplyBattlePostProcess(ctx_, blur, 0.58f, 0.10f + stepped * 0.18f,
+        ApplyBattlePostProcess(ctx_, postEffectCinematicLayer_, blur, 0.58f, 0.10f + stepped * 0.18f,
                                0.48f, 24);
     }
 
     if (!victoryFinalExplosionEmitted_ && victorySequenceTimer_ >= 3.90f) {
         victoryFinalExplosionEmitted_ = true;
         const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
+        const float difficultyT = GetDifficultyRatio();
+        const float burstAmount = 0.42f + 1.38f * difficultyT;
+        const float burstSize = 0.48f + 1.52f * difficultyT;
+        const float burstSpeed = 0.56f + 1.08f * difficultyT;
+        const XMFLOAT4 explosionColor =
+            DifficultyGaugeHeatColor(combatDifficulty_, 1.0f);
+        const XMFLOAT4 sparkColor{
+            std::clamp(explosionColor.x + 0.20f, 0.0f, 1.0f),
+            std::clamp(explosionColor.y + 0.20f, 0.0f, 1.0f),
+            std::clamp(explosionColor.z + 0.20f, 0.0f, 1.0f), 1.0f};
+        const XMFLOAT4 flashColor{
+            std::clamp(explosionColor.x + 0.34f, 0.0f, 1.0f),
+            std::clamp(explosionColor.y + 0.34f, 0.0f, 1.0f),
+            std::clamp(explosionColor.z + 0.34f, 0.0f, 1.0f), 1.0f};
         if (soundsLoaded_ && ctx_ != nullptr &&
             ctx_->systems.sound != nullptr) {
             ctx_->systems.sound->Play(
                 explosionSoundId_,
-                kExplosionSoundVolume * AppSceneServices::GetSeVolume());
+                kExplosionSoundVolume * (0.82f + 0.24f * difficultyT) *
+                    AppSceneServices::GetSeVolume());
         }
         EmitParticleBurst(
             explosionParticles_, {enemyPos.x, enemyPos.y + 1.05f, enemyPos.z},
-            3200, 8.40f, AppParticleBurstStyle::Explosion,
-            {1.0f, 0.64f, 0.08f, 1.0f}, {0.0f, 1.0f, 0.0f}, 5.80f);
+            static_cast<uint32_t>(3200.0f * burstAmount), 8.40f * burstSize,
+            AppParticleBurstStyle::Explosion, explosionColor, {0.0f, 1.0f, 0.0f},
+            5.80f * burstSpeed);
         EmitParticleBurst(
-            sparkParticles_, {enemyPos.x, enemyPos.y + 1.22f, enemyPos.z}, 3600,
-            9.20f, AppParticleBurstStyle::Sparks, {1.0f, 0.98f, 0.58f, 1.0f},
-            {0.0f, 1.0f, 0.0f}, 12.4f);
+            sparkParticles_, {enemyPos.x, enemyPos.y + 1.22f, enemyPos.z},
+            static_cast<uint32_t>(3600.0f * burstAmount), 9.20f * burstSize,
+            AppParticleBurstStyle::Sparks, sparkColor, {0.0f, 1.0f, 0.0f},
+            12.4f * burstSpeed);
         EmitParticleBurst(
-            smokeParticles_, {enemyPos.x, enemyPos.y + 1.12f, enemyPos.z}, 680,
-            6.80f, AppParticleBurstStyle::Flash, {1.0f, 0.94f, 0.70f, 1.0f},
-            {0.0f, 1.0f, 0.0f}, 1.55f);
+            smokeParticles_, {enemyPos.x, enemyPos.y + 1.12f, enemyPos.z},
+            static_cast<uint32_t>(680.0f * burstAmount), 6.80f * burstSize,
+            AppParticleBurstStyle::Flash, flashColor, {0.0f, 1.0f, 0.0f},
+            1.55f * burstSpeed);
     }
 
     if (victorySequenceTimer_ >= victorySequenceDuration_) {
         victorySequenceActive_ = false;
-        ClearBattlePostProcess(ctx_);
+        ClearBattlePostProcess(ctx_, postEffectCinematicLayer_);
         if (titleDemoMode_) {
             battleResultRequested_ = false;
             battleIntroActive_ = true;
@@ -4036,7 +4006,10 @@ void GameScene::DrawVictoryFlash() {
     flash.position = {0.0f, 0.0f};
     flash.size = {static_cast<float>(ctx_->systems.winApp->GetWidth()),
                   static_cast<float>(ctx_->systems.winApp->GetHeight())};
-    flash.color = {1.0f, 1.0f, 1.0f, alpha};
+    flash.color = DifficultyGaugeHeatColor(combatDifficulty_, alpha);
+    flash.color.x = std::clamp(flash.color.x + 0.18f, 0.0f, 1.0f);
+    flash.color.y = std::clamp(flash.color.y + 0.18f, 0.0f, 1.0f);
+    flash.color.z = std::clamp(flash.color.z + 0.18f, 0.0f, 1.0f);
 
     ctx_->rendering.sprite->PreDraw();
     ctx_->rendering.sprite->DrawSprite(flash);

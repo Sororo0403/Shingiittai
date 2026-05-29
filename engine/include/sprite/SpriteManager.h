@@ -60,7 +60,7 @@ class SpriteManager {
     /// <summary>
     /// スプライト描画の開始状態を設定する
     /// </summary>
-    void PreDraw();
+    void PreDraw(bool backBufferTarget = false);
 
     /// <summary>
     /// スプライト描画の終了状態を設定する

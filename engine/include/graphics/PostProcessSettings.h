@@ -82,8 +82,10 @@ struct PostProcessVignetteSettings {
     float radius = 0.72f;
     float scale = 16.0f;
     float power = 0.8f;
-    float damageStrength = 0.0f;
-    float parryStrength = 0.0f;
+    float primaryTintStrength = 0.0f;
+    float primaryTintColor[3]{1.0f, 1.0f, 1.0f};
+    float secondaryTintStrength = 0.0f;
+    float secondaryTintColor[3]{1.0f, 1.0f, 1.0f};
 };
 
 struct PostProcessRadialBlurSettings {
@@ -102,6 +104,13 @@ struct PostProcessRandomNoiseSettings {
 
 struct PostProcessSceneDimSettings {
     float strength = 0.0f;
+};
+
+struct PostProcessToonSettings {
+    bool enabled = false;
+    float strength = 0.0f;
+    float colorSteps = 5.0f;
+    float edgeStrength = 0.0f;
 };
 
 struct PostProcessDissolveSettings {
@@ -142,6 +151,7 @@ struct PostProcessProfile {
     PostProcessRadialBlurSettings radialBlur;
     PostProcessRandomNoiseSettings randomNoise;
     PostProcessSceneDimSettings sceneDim;
+    PostProcessToonSettings toon;
     PostProcessDissolveSettings dissolve;
     PostProcessLensFlareSettings lensFlare;
 };
@@ -207,9 +217,18 @@ struct PostProcessConstants {
     float randomSeed = 0.0f;
     float sceneDimStrength = 0.0f;
     float sepiaTone[3]{1.20f, 1.00f, 0.80f};
-    float damageVignetteStrength = 0.0f;
-    float parryVignetteStrength = 0.0f;
-    float legacyPadding0[3]{};
+    float primaryVignetteTintStrength = 0.0f;
+    float primaryVignetteTintColor[3]{1.0f, 1.0f, 1.0f};
+    float secondaryVignetteTintStrength = 0.0f;
+    float secondaryVignetteTintColor[3]{1.0f, 1.0f, 1.0f};
+    int32_t toonEnabled = 0;
+    float toonStrength = 0.0f;
+    float toonColorSteps = 5.0f;
+    float toonEdgeStrength = 0.0f;
+    float toonPaddingAlign = 0.0f;
+    float toonPadding[3]{};
+    float toonPaddingFinal = 0.0f;
+    float constantsPadding[4]{};
 };
 
 static_assert(sizeof(PostProcessConstants) % 16 == 0,

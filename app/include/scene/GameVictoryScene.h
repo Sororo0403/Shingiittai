@@ -3,6 +3,7 @@
 #include "BattleArenaRenderer.h"
 #include "Camera.h"
 #include "Enemy.h"
+#include "EnemyPhaseMaterial.h"
 #include "GPUParticleSystem.h"
 #include "Player.h"
 #include "SwordInputCalibration.h"
@@ -20,6 +21,8 @@ class GameVictoryScene : public BaseScene {
     void Initialize(const SceneContext &ctx) override;
     void Update() override;
     void Draw() override;
+    bool UsesForeground3DPass() const override;
+    void DrawForeground3D() override;
     void DrawTransparent() override;
     void DrawPostProcessOverlay() override;
 
@@ -32,28 +35,42 @@ class GameVictoryScene : public BaseScene {
 
     void UpdateCamera(float screenWidth, float screenHeight);
     void UpdateCinematic(float deltaTime);
+    void EmitPreImpactBurst();
     void EmitImpactBurst();
     void DrawWorld();
     void DrawStage();
-    void DrawExplodingEnemy();
     void DrawSlash();
+    void DrawPreExplosionCharge();
+    void DrawExplosionFlash();
+    void DrawExplosionCore();
+    void DrawExplosionBillboards();
+    void DrawForegroundEnemy();
     void DrawOverlay(float screenWidth, float screenHeight);
     void BeginResult();
     void UpdateResultPostProcess();
+    void UpdateResultInput();
     void DrawResultOverlay(float screenWidth, float screenHeight);
+    void DrawActionButtons(float screenWidth, float screenHeight, float alpha);
     int ComputeScore(float clearTime, float difficulty) const;
     std::string FormatTime(float seconds) const;
+    std::string FormatDifficulty(float difficulty) const;
     std::string FormatScore(int score) const;
     void DrawImage(const Image &image, float x, float y,
                    float scale = 1.0f, float alpha = 1.0f);
+    void DrawImage(const Image &image, float x, float y, float scale,
+                   const DirectX::XMFLOAT4 &color);
     void DrawRect(float x, float y, float w, float h,
                   const DirectX::XMFLOAT4 &color);
     void DrawFrame(float x, float y, float w, float h, float thickness,
                    const DirectX::XMFLOAT4 &color);
     void DrawTextLine(const std::string &text, float centerX, float y,
                       float scale = 1.0f, float alpha = 1.0f);
+    void DrawTextLine(const std::string &text, float centerX, float y,
+                      float scale, const DirectX::XMFLOAT4 &color);
     void DrawTextLineLeft(const std::string &text, float x, float y,
                           float scale = 1.0f, float alpha = 1.0f);
+    void DrawTextLineLeft(const std::string &text, float x, float y,
+                          float scale, const DirectX::XMFLOAT4 &color);
     float GetCharAdvance(char c) const;
     float MeasureTextLine(const std::string &text, float scale) const;
     const Image *FindCharImage(char c) const;
@@ -65,7 +82,9 @@ class GameVictoryScene : public BaseScene {
     float clearTime_ = 0.0f;
     int currentScore_ = 0;
     float sceneTime_ = 0.0f;
+    float realSceneTime_ = 0.0f;
     float resultTimer_ = 0.0f;
+    bool preImpactEmitted_ = false;
     bool impactEmitted_ = false;
     bool resultMode_ = false;
     Transform explosionEnemyTransform_{};
@@ -73,23 +92,38 @@ class GameVictoryScene : public BaseScene {
     Camera camera_;
     Player player_;
     Enemy enemy_;
+    EnemyPhaseMaterialSet enemyPhaseMaterials_{};
     uint32_t playerModelId_ = 0;
     uint32_t swordModelId_ = 0;
     uint32_t enemyModelId_ = 0;
-    uint32_t enemyTextureId_ = 0;
     BattleArenaModelIds arenaModels_{};
     uint32_t slashModelId_ = 0;
     uint32_t slashTextureId_ = 0;
+    uint32_t explosionCoreModelId_ = 0;
+    uint32_t explosionFlashModelId_ = 0;
     uint32_t particleTextureId_ = 0;
+    uint32_t fireBillboardModelId_ = 0;
+    uint32_t smokeBillboardModelId_ = 0;
+    uint32_t darkSmokeBillboardModelId_ = 0;
+    uint32_t explosionSoundId_ = UINT32_MAX;
     bool particlesReady_ = false;
     GPUParticleSystem impactParticles_;
+    GPUParticleSystem shockParticles_;
+    GPUParticleSystem pierceParticles_;
+    GPUParticleSystem fireCloudParticles_;
+    GPUParticleSystem darkSmokeParticles_;
+    GPUParticleSystem smokeParticles_;
 
     Image missionCompleteLabel_{};
     Image clearTimeLabel_{};
     Image scoreTitleLabel_{};
+    Image difficultyLabel_{};
+    Image retryButtonLabel_{};
+    Image titleButtonLabel_{};
     std::array<Image, 10> digitImages_{};
     Image colonImage_{};
     Image dotImage_{};
     Image dashImage_{};
     Image secondImage_{};
+    int actionButtonIndex_ = 1;
 };

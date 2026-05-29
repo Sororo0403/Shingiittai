@@ -16,7 +16,7 @@ class CameraPreviewReceiver {
     void Update(float deltaTime);
     void Close();
     void Draw(SpriteManager *sprite, TextureManager *texture,
-              float staleSeconds);
+              float staleSeconds, bool backBufferTarget = false);
 
   private:
     struct Frame {

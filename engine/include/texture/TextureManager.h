@@ -122,6 +122,7 @@ class TextureManager {
     D3D12_GPU_DESCRIPTOR_HANDLE GetGpuHandle(uint32_t textureId) const;
 
     uint32_t GetWhiteTextureId() const { return whiteTextureId_; }
+    uint32_t GetWhiteCubeTextureId() const { return whiteCubeTextureId_; }
     uint32_t GetDefaultNormalTextureId() const { return defaultNormalTextureId_; }
 
     /// <summary>
@@ -183,5 +184,7 @@ class TextureManager {
     std::vector<AsyncTextureRequest> asyncRequests_;
     uint32_t nextAsyncRequestId_ = 1;
     uint32_t whiteTextureId_ = 0;
+    uint32_t whiteCubeTextureId_ = 0;
     uint32_t defaultNormalTextureId_ = 0;
+    UINT lastDynamicUploadFrameIndex_ = UINT_MAX;
 };

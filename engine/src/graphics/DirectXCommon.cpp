@@ -524,6 +524,7 @@ void DirectXCommon::CreateFactory() {
 }
 
 void DirectXCommon::CreateDevice() {
+#ifdef _DEBUG
     Microsoft::WRL::ComPtr<ID3D12DeviceRemovedExtendedDataSettings>
         dredSettings;
     if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&dredSettings)))) {
@@ -532,6 +533,7 @@ void DirectXCommon::CreateDevice() {
         dredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
         dredSettings->SetWatsonDumpEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
     }
+#endif
 
     Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter =
         PickHighPerformanceAdapter(factory_.Get());

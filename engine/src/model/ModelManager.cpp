@@ -245,6 +245,79 @@ uint32_t ModelManager::CreateBox(uint32_t textureId, const Material &material,
     return static_cast<uint32_t>(models_.size() - 1);
 }
 
+uint32_t ModelManager::CreateSphere(uint32_t textureId,
+                                    const Material &material, uint32_t slice,
+                                    uint32_t stack, float radius) {
+    slice = (std::max)(slice, 3u);
+    stack = (std::max)(stack, 2u);
+    radius = (std::max)(radius, 0.001f);
+
+    Material sphereMaterial = material;
+    if (sphereMaterial.baseColorTextureId == UINT32_MAX) {
+        sphereMaterial.baseColorTextureId = textureId;
+    }
+    XMStoreFloat4x4(&sphereMaterial.uvTransform,
+                    XMMatrixTranspose(XMMatrixIdentity()));
+
+    std::vector<Vertex> vertices;
+    std::vector<uint32_t> indices;
+    vertices.reserve(static_cast<size_t>(slice + 1u) *
+                     static_cast<size_t>(stack + 1u));
+    indices.reserve(static_cast<size_t>(slice) * static_cast<size_t>(stack) *
+                    6u);
+
+    constexpr float pi = std::numbers::pi_v<float>;
+    for (uint32_t y = 0; y <= stack; ++y) {
+        const float v = static_cast<float>(y) / static_cast<float>(stack);
+        const float pitch = v * pi;
+        const float sinPitch = std::sinf(pitch);
+        const float cosPitch = std::cosf(pitch);
+        for (uint32_t x = 0; x <= slice; ++x) {
+            const float u = static_cast<float>(x) / static_cast<float>(slice);
+            const float yaw = u * pi * 2.0f;
+            XMFLOAT3 normal{std::sinf(yaw) * sinPitch, cosPitch,
+                            std::cosf(yaw) * sinPitch};
+            XMFLOAT3 position{normal.x * radius, normal.y * radius,
+                              normal.z * radius};
+            vertices.push_back({position, normal, {u, v}});
+        }
+    }
+
+    const uint32_t row = slice + 1u;
+    for (uint32_t y = 0; y < stack; ++y) {
+        for (uint32_t x = 0; x < slice; ++x) {
+            const uint32_t i0 = y * row + x;
+            const uint32_t i1 = i0 + 1u;
+            const uint32_t i2 = i0 + row;
+            const uint32_t i3 = i2 + 1u;
+            indices.push_back(i0);
+            indices.push_back(i1);
+            indices.push_back(i2);
+            indices.push_back(i2);
+            indices.push_back(i1);
+            indices.push_back(i3);
+        }
+    }
+
+    Model model{};
+    ModelSubMesh subMesh{};
+    subMesh.vertexCount = static_cast<uint32_t>(vertices.size());
+    subMesh.meshId = meshManager_.CreateMesh(
+        vertices.data(), sizeof(Vertex), static_cast<uint32_t>(vertices.size()),
+        indices.data(), static_cast<uint32_t>(indices.size()));
+    subMesh.textureId = textureId;
+    subMesh.materialId = materialManager_.CreateMaterial(sphereMaterial);
+
+    model.subMeshes.push_back(subMesh);
+    model.meshId = subMesh.meshId;
+    model.textureId = textureId;
+    model.materialId = subMesh.materialId;
+
+    modelRenderer_.CreateSkinClusters(model);
+    models_.push_back(model);
+    return static_cast<uint32_t>(models_.size() - 1);
+}
+
 uint32_t ModelManager::CreateRing(uint32_t textureId, const Material &material,
                                   uint32_t divide, float outerRadius,
                                   float innerRadius) {

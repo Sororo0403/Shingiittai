@@ -8,7 +8,7 @@
 #include "Model.h"
 #include "ModelManager.h"
 #include "ParticleEmitterSettings.h"
-#include "PostProcessSystem.h"
+#include "PostEffectManager.h"
 #include "SceneManager.h"
 #include "SpriteManager.h"
 #include "TitleScene.h"
@@ -228,8 +228,8 @@ void BattleResultScene::Initialize(const SceneContext &ctx) {
     if (resultKind_ == ResultKind::Clear) {
         InitializeWorld();
     }
-    if (ctx_->rendering.postProcessSystem != nullptr) {
-        ctx_->rendering.postProcessSystem->SetProfile(PostProcessProfile{});
+    if (ctx_->rendering.postEffectManager != nullptr) {
+        ctx_->rendering.postEffectManager->SetBaseProfile(PostProcessProfile{});
     }
 
     missionCompleteLabel_ =
@@ -624,7 +624,7 @@ void BattleResultScene::InitializeWorld() {
     camera_.SetClipRange(0.05f, 160.0f);
 
     ModelManager *model = ctx_->rendering.model;
-    playerModelId_ = model->Load(L"app/resources/models/player/player.glb");
+    playerModelId_ = model->Load(L"app/resources/models/player/player.gltf");
     swordModelId_ = model->Load(L"app/resources/models/player/sword.glb");
     enemyModelId_ = model->Load(L"app/resources/models/boss/boss.gltf");
     celebrationParticleTextureId_ =

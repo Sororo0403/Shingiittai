@@ -87,15 +87,20 @@ void SpriteRenderer::BeginFrame() {
     batchVertices_.clear();
 }
 
-void SpriteRenderer::PreDraw() {
+void SpriteRenderer::PreDraw(bool backBufferTarget) {
     auto cmd = dxCommon_->GetCommandList();
 
     ID3D12DescriptorHeap *heaps[] = {srvManager_->GetHeap()};
     cmd->SetDescriptorHeaps(1, heaps);
 
+    activeRenderTargetKind_ = backBufferTarget
+                                  ? RenderTargetKind::BackBuffer
+                                  : RenderTargetKind::SceneColor;
     activePipelineKind_ = PipelineKind::Alpha;
     cmd->SetPipelineState(
-        pipelineStates_[static_cast<uint32_t>(activePipelineKind_)].Get());
+        pipelineStates_[static_cast<uint32_t>(activeRenderTargetKind_)]
+                       [static_cast<uint32_t>(activePipelineKind_)]
+                           .Get());
     cmd->SetGraphicsRootSignature(rootSignature_.Get());
 
     SpriteConstBuffer constants{};
@@ -129,8 +134,9 @@ void SpriteRenderer::FlushQueuedDraws() {
         if (activePipelineKind_ != first.pipelineKind) {
             activePipelineKind_ = first.pipelineKind;
             cmd->SetPipelineState(
-                pipelineStates_[static_cast<uint32_t>(activePipelineKind_)]
-                    .Get());
+                pipelineStates_[static_cast<uint32_t>(activeRenderTargetKind_)]
+                               [static_cast<uint32_t>(activePipelineKind_)]
+                                   .Get());
         }
 
         batchVertices_.clear();
@@ -226,7 +232,6 @@ void SpriteRenderer::CreatePipelineState() {
     desc.InputLayout = {layout, _countof(layout)};
     desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     desc.NumRenderTargets = 1;
-    desc.RTVFormats[0] = DirectXCommon::kSceneColorFormat;
     desc.SampleDesc.Count = 1;
     desc.SampleMask = UINT_MAX;
     desc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
@@ -234,6 +239,7 @@ void SpriteRenderer::CreatePipelineState() {
     depth.DepthEnable = FALSE;
     depth.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
     desc.DepthStencilState = depth;
+    desc.RTVFormats[0] = DirectXCommon::kSceneColorFormat;
 
     D3D12_BLEND_DESC blend = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
     auto &rt = blend.RenderTarget[0];
@@ -247,36 +253,50 @@ void SpriteRenderer::CreatePipelineState() {
     rt.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
     desc.BlendState = blend;
 
-    desc.PS = {psAlpha->GetBufferPointer(), psAlpha->GetBufferSize()};
-    ThrowIfFailed(
-        dxCommon_->GetDevice()->CreateGraphicsPipelineState(
-            &desc,
-            IID_PPV_ARGS(
-                &pipelineStates_[static_cast<uint32_t>(PipelineKind::Alpha)])),
-        "Create alpha sprite pipeline failed");
+    const DXGI_FORMAT formats[] = {DirectXCommon::kSceneColorFormat,
+                                   DirectXCommon::kBackBufferFormat};
+    for (uint32_t target = 0;
+         target < static_cast<uint32_t>(RenderTargetKind::Count); ++target) {
+        desc.RTVFormats[0] = formats[target];
 
-    rt.SrcBlend = D3D12_BLEND_ZERO;
-    rt.DestBlend = D3D12_BLEND_SRC_COLOR;
-    rt.SrcBlendAlpha = D3D12_BLEND_ZERO;
-    rt.DestBlendAlpha = D3D12_BLEND_ONE;
-    desc.BlendState = blend;
-    desc.PS = {psModulate->GetBufferPointer(), psModulate->GetBufferSize()};
-    ThrowIfFailed(
-        dxCommon_->GetDevice()->CreateGraphicsPipelineState(
-            &desc, IID_PPV_ARGS(&pipelineStates_[static_cast<uint32_t>(
-                       PipelineKind::Modulate)])),
-        "Create modulate sprite pipeline failed");
+        rt.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+        rt.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+        rt.SrcBlendAlpha = D3D12_BLEND_ONE;
+        rt.DestBlendAlpha = D3D12_BLEND_ZERO;
+        desc.BlendState = blend;
+        desc.PS = {psAlpha->GetBufferPointer(), psAlpha->GetBufferSize()};
+        ThrowIfFailed(dxCommon_->GetDevice()->CreateGraphicsPipelineState(
+                          &desc,
+                          IID_PPV_ARGS(&pipelineStates_[target]
+                                                     [static_cast<uint32_t>(
+                                                         PipelineKind::Alpha)])),
+                      "Create alpha sprite pipeline failed");
 
-    rt.SrcBlend = D3D12_BLEND_ONE;
-    rt.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-    rt.SrcBlendAlpha = D3D12_BLEND_ONE;
-    rt.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
-    desc.BlendState = blend;
-    desc.PS = {psPremultipliedMask->GetBufferPointer(),
-               psPremultipliedMask->GetBufferSize()};
-    ThrowIfFailed(
-        dxCommon_->GetDevice()->CreateGraphicsPipelineState(
-            &desc, IID_PPV_ARGS(&pipelineStates_[static_cast<uint32_t>(
-                       PipelineKind::PremultipliedMask)])),
-        "Create premultiplied mask sprite pipeline failed");
+        rt.SrcBlend = D3D12_BLEND_ZERO;
+        rt.DestBlend = D3D12_BLEND_SRC_COLOR;
+        rt.SrcBlendAlpha = D3D12_BLEND_ZERO;
+        rt.DestBlendAlpha = D3D12_BLEND_ONE;
+        desc.BlendState = blend;
+        desc.PS = {psModulate->GetBufferPointer(), psModulate->GetBufferSize()};
+        ThrowIfFailed(dxCommon_->GetDevice()->CreateGraphicsPipelineState(
+                          &desc,
+                          IID_PPV_ARGS(&pipelineStates_[target]
+                                                     [static_cast<uint32_t>(
+                                                         PipelineKind::Modulate)])),
+                      "Create modulate sprite pipeline failed");
+
+        rt.SrcBlend = D3D12_BLEND_ONE;
+        rt.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+        rt.SrcBlendAlpha = D3D12_BLEND_ONE;
+        rt.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+        desc.BlendState = blend;
+        desc.PS = {psPremultipliedMask->GetBufferPointer(),
+                   psPremultipliedMask->GetBufferSize()};
+        ThrowIfFailed(
+            dxCommon_->GetDevice()->CreateGraphicsPipelineState(
+                &desc, IID_PPV_ARGS(
+                           &pipelineStates_[target][static_cast<uint32_t>(
+                               PipelineKind::PremultipliedMask)])),
+            "Create premultiplied mask sprite pipeline failed");
+    }
 }

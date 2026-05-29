@@ -40,7 +40,7 @@ class SpriteRenderer {
     /// <summary>
     /// スプライト用パイプラインを描画前に設定する
     /// </summary>
-    void PreDraw();
+    void PreDraw(bool backBufferTarget = false);
 
     /// <summary>
     /// スプライト描画後の状態を整理する
@@ -57,6 +57,12 @@ class SpriteRenderer {
         Alpha = 0,
         Modulate = 1,
         PremultipliedMask = 2,
+        Count,
+    };
+
+    enum class RenderTargetKind : uint32_t {
+        SceneColor = 0,
+        BackBuffer = 1,
         Count,
     };
 
@@ -95,8 +101,9 @@ class SpriteRenderer {
     SrvManager *srvManager_ = nullptr;
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState>
-        pipelineStates_[static_cast<uint32_t>(PipelineKind::Count)];
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineStates_
+        [static_cast<uint32_t>(RenderTargetKind::Count)]
+        [static_cast<uint32_t>(PipelineKind::Count)];
 
     UploadRingBuffer uploadBuffer_;
     uint32_t drawCursor_ = 0;
@@ -105,4 +112,5 @@ class SpriteRenderer {
 
     DirectX::XMFLOAT4X4 matProjection_{};
     PipelineKind activePipelineKind_ = PipelineKind::Alpha;
+    RenderTargetKind activeRenderTargetKind_ = RenderTargetKind::SceneColor;
 };

@@ -254,7 +254,7 @@ void CameraPreviewReceiver::UploadTextureIfNeeded(TextureManager *texture) {
 }
 
 void CameraPreviewReceiver::Draw(SpriteManager *sprite, TextureManager *texture,
-                                 float staleSeconds) {
+                                 float staleSeconds, bool backBufferTarget) {
     if (sprite == nullptr || texture == nullptr) {
         return;
     }
@@ -267,7 +267,7 @@ void CameraPreviewReceiver::Draw(SpriteManager *sprite, TextureManager *texture,
     const bool fresh = frame_.valid && frame_.staleTimer <= staleSeconds;
     const float alpha = fresh ? 0.88f : 0.34f;
 
-    sprite->PreDraw();
+    sprite->PreDraw(backBufferTarget);
     DrawRect(sprite, kPreviewMargin - 4.0f, kPreviewMargin - 4.0f,
              kPreviewWidth + 8.0f, previewHeight + 8.0f,
              {0.0f, 0.0f, 0.0f, 0.52f});

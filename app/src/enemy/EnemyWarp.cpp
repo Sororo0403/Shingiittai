@@ -114,6 +114,31 @@ bool Enemy::DecideWarpTargetArcaneLaser(DirectX::XMFLOAT3 &outTarget) {
     return true;
 }
 
+bool Enemy::DecideWarpTargetCataclysmLaser(DirectX::XMFLOAT3 &outTarget) {
+    float awayX = tf_.position.x - playerPos_.x;
+    float awayZ = tf_.position.z - playerPos_.z;
+    float awayLength = std::sqrt(awayX * awayX + awayZ * awayZ);
+    if (awayLength <= 0.0001f) {
+        awayX = -std::sin(facingYaw_);
+        awayZ = -std::cos(facingYaw_);
+        awayLength = 1.0f;
+    }
+    awayX /= awayLength;
+    awayZ /= awayLength;
+
+    const float sideSign = (std::rand() % 2 == 0) ? -1.0f : 1.0f;
+    const float rightX = awayZ;
+    const float rightZ = -awayX;
+    const float sideOffset = sideSign * (1.15f + 1.35f * Random01());
+
+    outTarget = playerPos_;
+    outTarget.x += awayX * cataclysmLaserWarpDistance_ + rightX * sideOffset;
+    outTarget.z += awayZ * cataclysmLaserWarpDistance_ + rightZ * sideOffset;
+    outTarget.y = tf_.position.y;
+    FinalizeWarpTargetFacing(outTarget);
+    return true;
+}
+
 bool Enemy::DecideWarpTargetInPlayerView(DirectX::XMFLOAT3 &outTarget) {
     float forwardX = playerPos_.x - tf_.position.x;
     float forwardZ = playerPos_.z - tf_.position.z;
@@ -227,7 +252,8 @@ void Enemy::UpdateWarpStart(float deltaTime) {
     float startTime = config_.warp.startTime;
     if (warp_.phantomChain) {
         startTime = warp_.phantomFinal ? 0.13f : 0.11f;
-    } else if (warp_.followupKind == ActionKind::ArcaneLaser) {
+    } else if (warp_.followupKind == ActionKind::ArcaneLaser ||
+               warp_.followupKind == ActionKind::CataclysmLaser) {
         startTime *= 0.56f;
     } else if (warp_.feintFollowup) {
         startTime *= 0.55f;
@@ -284,7 +310,8 @@ void Enemy::UpdateWarpMove(float deltaTime) {
         if ((warp_.faceLivePlayerOnEnd ||
              warp_.followupKind == ActionKind::Smash ||
              warp_.followupKind == ActionKind::Sweep ||
-             warp_.followupKind == ActionKind::ArcaneLaser)) {
+             warp_.followupKind == ActionKind::ArcaneLaser ||
+             warp_.followupKind == ActionKind::CataclysmLaser)) {
             UpdateFacingToPlayer();
             LockCurrentFacing();
         } else if (warp_.hasTargetYaw) {
@@ -303,7 +330,8 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
     RefreshLiveBehindWarpTarget();
     if ((warp_.faceLivePlayerOnEnd || warp_.followupKind == ActionKind::Smash ||
          warp_.followupKind == ActionKind::Sweep ||
-         warp_.followupKind == ActionKind::ArcaneLaser)) {
+         warp_.followupKind == ActionKind::ArcaneLaser ||
+         warp_.followupKind == ActionKind::CataclysmLaser)) {
         UpdateFacingToPlayer();
         LockCurrentFacing();
     } else if (warp_.hasTargetYaw) {
@@ -318,7 +346,8 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
         endTime = PhantomWarpEndTime(warp_.phantomFinal);
     } else if (warp_.isFeint) {
         endTime = config_.warp.endTime * warpFeintEndTimeScale_;
-    } else if (warp_.followupKind == ActionKind::ArcaneLaser) {
+    } else if (warp_.followupKind == ActionKind::ArcaneLaser ||
+               warp_.followupKind == ActionKind::CataclysmLaser) {
         endTime = config_.warp.endTime * 0.42f;
     } else if (warp_.farSlashFollowup) {
         endTime = config_.warp.endTime * 0.38f;
@@ -399,6 +428,13 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
         UpdateFacingToPlayer();
         LockCurrentFacing();
         BeginAction(ActionKind::ArcaneLaser, ActionStep::Charge);
+        return;
+    }
+
+    if (followupKind == ActionKind::CataclysmLaser) {
+        UpdateFacingToPlayer();
+        LockCurrentFacing();
+        BeginAction(ActionKind::CataclysmLaser, ActionStep::Charge);
         return;
     }
 

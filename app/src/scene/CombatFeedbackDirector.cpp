@@ -1,5 +1,5 @@
 #include "CombatFeedbackDirector.h"
-#include "PostProcessSystem.h"
+#include "PostEffectManager.h"
 #include <algorithm>
 #include <cmath>
 
@@ -7,6 +7,8 @@ using namespace DirectX;
 
 namespace {
 constexpr float kMinVectorLength = 0.0001f;
+constexpr float kPlayerDamageTint[3]{0.92f, 0.02f, 0.015f};
+constexpr float kCounterTint[3]{0.08f, 0.62f, 1.0f};
 
 float Clamp01(float value) {
     return std::clamp(value, 0.0f, 1.0f);
@@ -27,8 +29,20 @@ XMFLOAT3 Add(const XMFLOAT3 &a, const XMFLOAT3 &b) {
 
 } // namespace
 
-void CombatFeedbackDirector::Initialize(PostProcessSystem *postProcessSystem) {
-    postProcessSystem_ = postProcessSystem;
+CombatFeedbackDirector::~CombatFeedbackDirector() {
+    if (postEffectManager_ && postEffectLayer_ != 0) {
+        postEffectManager_->DestroyLayer(postEffectLayer_);
+    }
+}
+
+void CombatFeedbackDirector::Initialize(PostEffectManager *postEffectManager) {
+    postEffectManager_ = postEffectManager;
+    if (postEffectManager_ != nullptr && postEffectLayer_ == 0) {
+        PostEffectLayerDesc desc{};
+        desc.priority = 20;
+        desc.blendMode = PostEffectLayerBlendMode::Overlay;
+        postEffectLayer_ = postEffectManager_->CreateLayer(desc);
+    }
     Reset();
 }
 
@@ -45,22 +59,12 @@ void CombatFeedbackDirector::Reset() {
     radialBlurStrength_ = 0.0f;
     randomStrength_ = 0.0f;
     vignetteBoost_ = 0.0f;
-    damageVignetteStrength_ = 0.0f;
-    parryVignetteStrength_ = 0.0f;
+    primaryTintStrength_ = 0.0f;
+    secondaryTintStrength_ = 0.0f;
     fovKickDeg_ = 0.0f;
 
-    if (postProcessSystem_) {
-        PostProcessProfile profile = postProcessSystem_->GetProfile();
-        profile.radialBlur.strength = 0.0f;
-        profile.radialBlur.sampleCount = 14;
-        profile.randomNoise.mode = PostProcessRandomMode::None;
-        profile.randomNoise.strength = 0.0f;
-        profile.sceneDim.strength = 0.0f;
-        profile.vignette.enabled = false;
-        profile.vignette.strength = 0.0f;
-        profile.vignette.damageStrength = 0.0f;
-        profile.vignette.parryStrength = 0.0f;
-        postProcessSystem_->SetProfile(profile);
+    if (postEffectManager_ && postEffectLayer_ != 0) {
+        postEffectManager_->ClearLayer(postEffectLayer_);
     }
 }
 
@@ -88,30 +92,34 @@ void CombatFeedbackDirector::Update(float deltaTime, float sceneTime) {
         radialBlurStrength_ = 0.0f;
         randomStrength_ = 0.0f;
         vignetteBoost_ = 0.0f;
-        damageVignetteStrength_ = 0.0f;
-        parryVignetteStrength_ = 0.0f;
+        primaryTintStrength_ = 0.0f;
+        secondaryTintStrength_ = 0.0f;
         fovKickDeg_ = 0.0f;
     }
 
-    if (!postProcessSystem_) {
+    if (!postEffectManager_ || postEffectLayer_ == 0) {
         return;
     }
 
     const float postRatio =
         postDuration_ > kMinVectorLength ? postTimer_ / postDuration_ : 0.0f;
     const float eased = EaseOut(postRatio);
-    PostProcessProfile profile = postProcessSystem_->GetProfile();
+    PostProcessProfile profile{};
     profile.radialBlur.center[0] = 0.5f;
     profile.radialBlur.center[1] = 0.5f;
     profile.radialBlur.strength = radialBlurStrength_ * eased;
     profile.radialBlur.sampleCount = 18;
     const float vignetteStrength = vignetteBoost_ * eased;
-    profile.vignette.damageStrength = damageVignetteStrength_ * eased;
-    profile.vignette.parryStrength = parryVignetteStrength_ * eased;
+    profile.vignette.primaryTintStrength = primaryTintStrength_ * eased;
+    profile.vignette.secondaryTintStrength = secondaryTintStrength_ * eased;
+    std::copy(std::begin(primaryTintColor_), std::end(primaryTintColor_),
+              std::begin(profile.vignette.primaryTintColor));
+    std::copy(std::begin(secondaryTintColor_), std::end(secondaryTintColor_),
+              std::begin(profile.vignette.secondaryTintColor));
     profile.vignette.enabled =
         vignetteStrength > 0.001f ||
-        profile.vignette.damageStrength > 0.001f ||
-        profile.vignette.parryStrength > 0.001f;
+        profile.vignette.primaryTintStrength > 0.001f ||
+        profile.vignette.secondaryTintStrength > 0.001f;
     profile.vignette.strength = vignetteStrength;
     profile.vignette.scale = 11.0f;
     profile.vignette.power = 1.15f;
@@ -127,7 +135,18 @@ void CombatFeedbackDirector::Update(float deltaTime, float sceneTime) {
         profile.randomNoise.strength = 0.0f;
     }
     profile.sceneDim.strength = 0.0f;
-    postProcessSystem_->SetProfile(profile);
+
+    const bool hasFeedback =
+        profile.radialBlur.strength > 0.001f ||
+        profile.randomNoise.strength > 0.001f ||
+        profile.vignette.strength > 0.001f ||
+        profile.vignette.primaryTintStrength > 0.001f ||
+        profile.vignette.secondaryTintStrength > 0.001f;
+    if (hasFeedback) {
+        postEffectManager_->SetLayerProfile(postEffectLayer_, profile);
+    } else {
+        postEffectManager_->ClearLayer(postEffectLayer_);
+    }
 }
 
 void CombatFeedbackDirector::PushEvent(const CombatFeedbackEvent &event) {
@@ -144,13 +163,15 @@ void CombatFeedbackDirector::PushEvent(const CombatFeedbackEvent &event) {
     case CombatFeedbackEventType::PlayerDamaged:
         AddHitStop(0.115f, 0.035f);
         AddCameraShake(0.24f, 0.046f, 0.030f);
-        AddPostFlash(0.34f, 0.034f, 0.072f, 0.12f, 0.88f);
+        AddPostFlash(0.34f, 0.034f, 0.072f, 0.12f, 0.88f,
+                     kPlayerDamageTint);
         fovKickDeg_ = (std::max)(fovKickDeg_, 2.6f);
         break;
     case CombatFeedbackEventType::CounterSuccess:
         AddHitStop(0.285f, 0.012f);
         AddCameraShake(0.42f, 0.082f, 0.052f);
-        AddPostFlash(0.48f, 0.22f, 0.13f, 0.18f, 0.0f, 0.94f);
+        AddPostFlash(0.48f, 0.22f, 0.13f, 0.18f, 0.0f, nullptr, 0.94f,
+                     kCounterTint);
         fovKickDeg_ = (std::max)(fovKickDeg_, 7.0f);
         break;
     case CombatFeedbackEventType::BladeClashGuardBreak:
@@ -245,8 +266,10 @@ void CombatFeedbackDirector::AddCameraShake(float duration, float horizontal,
 void CombatFeedbackDirector::AddPostFlash(float duration, float blurStrength,
                                           float noiseStrength,
                                           float vignetteBoost,
-                                          float damageVignetteStrength,
-                                          float parryVignetteStrength) {
+                                          float primaryTintStrength,
+                                          const float *primaryTintColor,
+                                          float secondaryTintStrength,
+                                          const float *secondaryTintColor) {
     if (duration > postTimer_) {
         postTimer_ = duration;
         postDuration_ = duration;
@@ -254,10 +277,20 @@ void CombatFeedbackDirector::AddPostFlash(float duration, float blurStrength,
     radialBlurStrength_ = (std::max)(radialBlurStrength_, blurStrength);
     randomStrength_ = (std::max)(randomStrength_, noiseStrength);
     vignetteBoost_ = (std::max)(vignetteBoost_, vignetteBoost);
-    damageVignetteStrength_ =
-        (std::max)(damageVignetteStrength_, damageVignetteStrength);
-    parryVignetteStrength_ =
-        (std::max)(parryVignetteStrength_, parryVignetteStrength);
+    if (primaryTintStrength >= primaryTintStrength_) {
+        primaryTintStrength_ = primaryTintStrength;
+        if (primaryTintColor) {
+            std::copy(primaryTintColor, primaryTintColor + 3,
+                      std::begin(primaryTintColor_));
+        }
+    }
+    if (secondaryTintStrength >= secondaryTintStrength_) {
+        secondaryTintStrength_ = secondaryTintStrength;
+        if (secondaryTintColor) {
+            std::copy(secondaryTintColor, secondaryTintColor + 3,
+                      std::begin(secondaryTintColor_));
+        }
+    }
 }
 
 float CombatFeedbackDirector::ShakeRatio() const {

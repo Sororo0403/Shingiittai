@@ -3,9 +3,11 @@
 #include "Input.h"
 #include "AppSceneServices.h"
 #include "core/AssetManager.h"
+#include "debug/DebugLog.h"
 #include "Lighting.h"
 #include "ModelManager.h"
 #include "RenderPassController.h"
+#include "PostEffectManager.h"
 #include "PostProcessSystem.h"
 #include "SceneContext.h"
 #include "SceneManager.h"
@@ -374,43 +376,67 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
     const std::filesystem::path executableDirectory = ResolveExecutableDirectory();
     SetCurrentDirectoryW(executableDirectory.wstring().c_str());
     AssetManager::SetAssetRoot(executableDirectory);
+    DebugLog::Get().OpenDefault();
+    DebugLog::Get().Write("App", "RunApp", "phase", "start");
 
     HandUdpSenderProcess handUdpSenderProcess;
     const bool handTrackingRuntimeAvailable =
         HandUdpSenderProcess::IsRuntimeAvailable();
+    DebugLog::Get().Write(
+        "App", "HandTracking", "runtime_available",
+        handTrackingRuntimeAvailable ? "true" : "false");
 
     // WinApp初期化
+    DebugLog::Get().Write("App", "WinApp", "phase", "initialize_begin");
     WinApp winApp;
     winApp.Initialize(hInstance, nCmdShow, 1280, 720, L"3145_身技一体", true);
     winApp.SetCursorVisible(false);
+    DebugLog::Get().Write("App", "WinApp", "phase", "initialize_end");
 
     // クライアント領域の幅と高さ
     int width = winApp.GetWidth();
     int height = winApp.GetHeight();
 
     // DirectX
+    DebugLog::Get().Write("App", "DirectXCommon", "phase", "initialize_begin");
     DirectXCommon dxCommon;
     dxCommon.Initialize(winApp.GetHwnd(), width, height);
+    DebugLog::Get().Write("App", "DirectXCommon", "phase", "initialize_end",
+                          {{"width", std::to_string(width)},
+                           {"height", std::to_string(height)}});
 
     // SrvManager
+    DebugLog::Get().Write("App", "SrvManager", "phase", "initialize_begin");
     SrvManager srvManager;
     srvManager.Initialize(&dxCommon, 4096);
     dxCommon.RegisterSceneColorSRV(&srvManager);
     dxCommon.CreateDepthStencilSrv(&srvManager);
+    DebugLog::Get().Write("App", "SrvManager", "phase", "initialize_end");
 
+    DebugLog::Get().Write("App", "PostProcessSystem", "phase",
+                          "initialize_begin");
     PostProcessSystem postProcessSystem;
     postProcessSystem.Initialize(&dxCommon, &srvManager, width, height);
-    postProcessSystem.SetProfile(PostProcessProfile{});
+    PostEffectManager postEffectManager;
+    postEffectManager.Initialize(&postProcessSystem);
+    postEffectManager.SetBaseProfile(PostProcessProfile{});
+    DebugLog::Get().Write("App", "PostProcessSystem", "phase",
+                          "initialize_end");
 
     // Input
+    DebugLog::Get().Write("App", "Input", "phase", "initialize_begin");
     Input input;
     input.Initialize(hInstance, winApp.GetHwnd());
+    DebugLog::Get().Write("App", "Input", "phase", "initialize_end");
 
     // SoundManager
+    DebugLog::Get().Write("App", "SoundManager", "phase", "initialize_begin");
     SoundManager soundManager;
     soundManager.Initialize();
+    DebugLog::Get().Write("App", "SoundManager", "phase", "initialize_end");
 
     // TextureManager
+    DebugLog::Get().Write("App", "TextureManager", "phase", "initialize_begin");
     TextureManager textureManager;
     textureManager.Initialize(&dxCommon, &srvManager);
     const float dummyShadowDepth = 1.0f;
@@ -418,8 +444,10 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
         1, 1, DXGI_FORMAT_R32_FLOAT,
         reinterpret_cast<const uint8_t *>(&dummyShadowDepth),
         sizeof(dummyShadowDepth));
+    DebugLog::Get().Write("App", "TextureManager", "phase", "initialize_end");
 
     // ModelManager
+    DebugLog::Get().Write("App", "ModelManager", "phase", "initialize_begin");
     ModelManager modelManager;
     modelManager.Initialize(&dxCommon, &srvManager, &textureManager);
     DirectX::XMFLOAT4X4 identityLightViewProjection{
@@ -433,12 +461,15 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
         textureManager.GetGpuHandle(dummyShadowTextureId),
         identityLightViewProjection, noShadow);
     modelManager.GetRenderer()->SetEnvironmentTexture(
-        textureManager.GetWhiteTextureId());
+        textureManager.GetWhiteCubeTextureId());
+    DebugLog::Get().Write("App", "ModelManager", "phase", "initialize_end");
 
     // SpriteManager
+    DebugLog::Get().Write("App", "SpriteManager", "phase", "initialize_begin");
     SpriteManager &spriteManager = SpriteManager::GetInstance();
     spriteManager.Initialize(&dxCommon, &textureManager, &srvManager, width,
                              height);
+    DebugLog::Get().Write("App", "SpriteManager", "phase", "initialize_end");
 
     SceneContext sceneCtx{};
     sceneCtx.systems.input = &input;
@@ -450,7 +481,7 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
     sceneCtx.rendering.srv = &srvManager;
     sceneCtx.rendering.texture = &textureManager;
     sceneCtx.rendering.dxCommon = &dxCommon;
-    sceneCtx.rendering.postProcessSystem = &postProcessSystem;
+    sceneCtx.rendering.postEffectManager = &postEffectManager;
     sceneCtx.frame.deltaTime = 0.0f;
     AppSceneServices::ConfigureHandTracking(
         [&handUdpSenderProcess, &winApp]() {
@@ -471,9 +502,12 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
         });
 
     // SceneManager
+    DebugLog::Get().Write("App", "SceneManager", "phase", "initialize_begin");
     SceneManager sceneManager;
     sceneManager.Initialize(sceneCtx);
+    DebugLog::Get().Write("App", "SceneManager", "phase", "change_title_begin");
     sceneManager.ChangeScene(std::make_unique<TitleScene>());
+    DebugLog::Get().Write("App", "SceneManager", "phase", "change_title_end");
 
     // 高精細タイマの周波数を取得
     LARGE_INTEGER freq;
@@ -481,6 +515,7 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
 
     LARGE_INTEGER prevTime;
     QueryPerformanceCounter(&prevTime);
+    uint64_t debugFrame = 0;
 
     // メインループ
     while (winApp.ProcessMessage()) {
@@ -495,6 +530,7 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
         prevTime = currentTime;
 
         sceneCtx.frame.deltaTime = deltaTime;
+        DebugLog::Get().SetFrame(debugFrame++, deltaTime);
         handUdpSenderProcess.Update();
 
         // 入力更新
@@ -519,32 +555,21 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
         modelManager.BeginFrame();
         spriteManager.BeginFrame();
 
-        if (postProcessSystem.RequiresPostProcess()) {
-            dxCommon.BeginScenePass();
-            sceneManager.Draw();
-            if (sceneManager.UsesForeground3DPass()) {
-                dxCommon.ClearDepth();
-                sceneManager.DrawForeground3D();
-            }
-            sceneManager.DrawTransparent();
-            dxCommon.EndScenePass();
-
-            dxCommon.BeginBackBufferPass(false);
-            dxCommon.TransitionDepthToShaderResource();
-            postProcessSystem.Draw(dxCommon.GetSceneSrvGpuHandle(&srvManager),
-                                   dxCommon.GetDepthStencilGpuHandle());
-            dxCommon.TransitionDepthToWrite();
-            sceneManager.DrawPostProcessOverlay();
-        } else {
-            dxCommon.BeginBackBufferPass(true);
-            sceneManager.Draw();
-            if (sceneManager.UsesForeground3DPass()) {
-                dxCommon.ClearDepth();
-                sceneManager.DrawForeground3D();
-            }
-            sceneManager.DrawTransparent();
-            sceneManager.DrawPostProcessOverlay();
+        dxCommon.BeginScenePass();
+        sceneManager.Draw();
+        if (sceneManager.UsesForeground3DPass()) {
+            dxCommon.ClearDepth();
+            sceneManager.DrawForeground3D();
         }
+        sceneManager.DrawTransparent();
+        dxCommon.EndScenePass();
+
+        dxCommon.BeginBackBufferPass(false);
+        dxCommon.TransitionDepthToShaderResource();
+        postProcessSystem.Draw(dxCommon.GetSceneSrvGpuHandle(&srvManager),
+                               dxCommon.GetDepthStencilGpuHandle());
+        dxCommon.TransitionDepthToWrite();
+        sceneManager.DrawPostProcessOverlay();
 
         dxCommon.EndFrame();
     }

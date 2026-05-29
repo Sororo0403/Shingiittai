@@ -1,6 +1,6 @@
 #include "CalibrationScene.h"
 #include "DirectXCommon.h"
-#include "PostProcessSystem.h"
+#include "PostEffectManager.h"
 #include "SceneManager.h"
 #include "SpriteManager.h"
 #include "TextureManager.h"
@@ -40,7 +40,7 @@ void CalibrationScene::Initialize(const SceneContext &ctx) {
     PostProcessProfile postProfile{};
     postProfile.vignette.enabled = true;
     postProfile.vignette.strength = 0.24f;
-    ctx_->rendering.postProcessSystem->SetProfile(postProfile);
+    ctx_->rendering.postEffectManager->SetBaseProfile(postProfile);
 }
 
 void CalibrationScene::Update() {

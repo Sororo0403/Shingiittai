@@ -4,7 +4,7 @@
 #include "Input.h"
 #include "ModelDrawEffect.h"
 #include "ModelManager.h"
-#include "PostProcessSystem.h"
+#include "PostEffectManager.h"
 #include "SceneManager.h"
 #include "Sprite.h"
 #include "SpriteManager.h"
@@ -19,6 +19,10 @@
 #include <filesystem>
 #include <iomanip>
 #include <memory>
+
+#ifdef DrawText
+#undef DrawText
+#endif
 
 using namespace DirectX;
 
@@ -127,8 +131,8 @@ void CameraAccuracyDebugScene::Initialize(const SceneContext &ctx) {
     RequestHandTrackingStartOnce();
     previewReceiver_.Initialize(ctx_->rendering.texture, kPreviewPort);
 
-    if (ctx_->rendering.postProcessSystem != nullptr) {
-        ctx_->rendering.postProcessSystem->SetProfile(PostProcessProfile{});
+    if (ctx_->rendering.postEffectManager != nullptr) {
+        ctx_->rendering.postEffectManager->SetBaseProfile(PostProcessProfile{});
     }
     if (ctx_->rendering.dxCommon != nullptr) {
         ctx_->rendering.dxCommon->SetClearColor(0.018f, 0.020f, 0.026f, 1.0f);
@@ -143,7 +147,7 @@ void CameraAccuracyDebugScene::Initialize(const SceneContext &ctx) {
     swordModelId_ =
         ctx_->rendering.model->Load(L"app/resources/models/player/sword.glb");
     playerModelId_ =
-        ctx_->rendering.model->Load(L"app/resources/models/player/player.glb");
+        ctx_->rendering.model->Load(L"app/resources/models/player/player.gltf");
     gamePreviewPlayer_.Initialize(playerModelId_, swordModelId_);
     gamePreviewPlayer_.SetInputCalibration(calibration_);
     OpenHandDebugLog();

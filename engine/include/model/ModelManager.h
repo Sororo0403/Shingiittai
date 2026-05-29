@@ -62,6 +62,13 @@ class ModelManager {
                        float depth = 1.0f);
 
     /// <summary>
+    /// 球体Primitiveを生成する
+    /// </summary>
+    uint32_t CreateSphere(uint32_t textureId, const Material &material,
+                          uint32_t slice = 24, uint32_t stack = 12,
+                          float radius = 1.0f);
+
+    /// <summary>
     /// XY平面のリング形状を生成する
     /// </summary>
     /// <param name="textureId">貼り付けるテクスチャID</param>

@@ -5,6 +5,7 @@
 #include "CollisionManager.h"
 #include "CombatFeedbackDirector.h"
 #include "Enemy.h"
+#include "EnemyPhaseMaterial.h"
 #include "GPUParticleSystem.h"
 #include "GameSceneHud.h"
 #include "Player.h"
@@ -214,15 +215,7 @@ class GameScene : public BaseScene {
     uint32_t swordModelId_ = 0;
     uint32_t enemyModelId_ = 0;
     uint32_t bulletModelId_ = 0;
-    uint32_t enemyRustTextureId_ = 0;
-    uint32_t enemyCleanMetalTextureId_ = 0;
-    uint32_t enemyGoldMetalTextureId_ = 0;
-    uint32_t enemyPhaseBlendTextureId_ = 0;
-    uint32_t currentEnemyTextureId_ = 0;
-    std::vector<uint8_t> enemyRustMetalPixels_{};
-    std::vector<uint8_t> enemyCleanMetalPixels_{};
-    std::vector<uint8_t> enemyGoldMetalPixels_{};
-    std::vector<uint8_t> enemyPhaseBlendPixels_{};
+    EnemyPhaseMaterialSet enemyPhaseMaterials_{};
     uint32_t arenaFloorModelId_ = 0;
     uint32_t arenaLowPolyTerrainModelId_ = 0;
     uint32_t arenaDistantTerrainModelId_ = 0;
@@ -322,6 +315,7 @@ class GameScene : public BaseScene {
     bool phaseTransitionWasActive_ = false;
     bool phaseTransitionReleaseEmitted_ = false;
     float phaseTransitionLoopTimer_ = 0.0f;
+    PostEffectLayerId postEffectCinematicLayer_ = 0;
     bool battleResultRequested_ = false;
     bool paused_ = false;
     bool pausePostProcessSaved_ = false;
@@ -352,6 +346,7 @@ class GameScene : public BaseScene {
     float counterTimeScale_ = 0.05f;
 
     bool enemyRedPunishUncounterable_ = false;
+    bool enemyLaserHitConsumed_ = false;
     std::array<bool, Player::kSwordCount> previousCombatSlashStates_{};
     std::array<bool, Player::kSwordCount> normalSlashHitConsumed_{};
     std::array<float, Player::kSwordCount> normalSlashRearmTimers_{};

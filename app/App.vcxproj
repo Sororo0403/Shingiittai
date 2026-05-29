@@ -122,6 +122,7 @@
     <ClCompile Include="src\enemy\EnemyCombat.cpp" />
     <ClCompile Include="src\enemy\EnemyCore.cpp" />
     <ClCompile Include="src\enemy\EnemyDecision.cpp" />
+    <ClCompile Include="src\enemy\EnemyPhaseMaterial.cpp" />
     <ClCompile Include="src\enemy\EnemyMovement.cpp" />
     <ClCompile Include="src\enemy\EnemyPresentation.cpp" />
     <ClCompile Include="src\enemy\EnemyTuning.cpp" />
@@ -135,6 +136,7 @@
     <ClCompile Include="src\scene\GameSceneCamera.cpp" />
     <ClCompile Include="src\scene\GameSceneCombat.cpp" />
     <ClCompile Include="src\scene\GameSceneLighting.cpp" />
+    <ClCompile Include="src\scene\HandTrackingTestScene.cpp" />
     <ClCompile Include="src\scene\TitleScene.cpp" />
     <ClCompile Include="src\scene\TutorialScene.cpp" />
     <ClCompile Include="src\scene\TutorialSelectScene.cpp" />
@@ -163,6 +165,7 @@
     <ClInclude Include="include\scene\DifficultyCauldronScene.h" />
     <ClInclude Include="include\scene\GameSceneHud.h" />
     <ClInclude Include="include\enemy\EnemyActionData.h" />
+    <ClInclude Include="include\enemy\EnemyPhaseMaterial.h" />
     <ClInclude Include="include\player\SwordControllerState.h" />
     <ClInclude Include="include\player\SwordInputCalibration.h" />
     <ClInclude Include="include\player\SwordPose.h" />
@@ -172,6 +175,7 @@
     <ClInclude Include="include\scene\GameOverScene.h" />
     <ClInclude Include="include\scene\GameVictoryScene.h" />
     <ClInclude Include="include\scene\GameScene.h" />
+    <ClInclude Include="include\scene\HandTrackingTestScene.h" />
     <ClInclude Include="include\scene\TitleScene.h" />
     <ClInclude Include="include\scene\TutorialScene.h" />
     <ClInclude Include="include\scene\TutorialSelectScene.h" />
@@ -209,7 +213,7 @@
     <None Include="resources\models\boss\boss.bin" />
     <None Include="resources\models\boss\boss.gltf" />
     <None Include="resources\models\boss\boss.png" />
-    <None Include="resources\models\player\player.glb" />
+    <None Include="resources\models\player\player.gltf" />
     <None Include="resources\models\player\sword.glb" />
     <None Include="resources\shaders\sword_arc\SwordArcPS.hlsl" />
     <None Include="resources\shaders\sword_arc\SwordArcVS.hlsl" />
