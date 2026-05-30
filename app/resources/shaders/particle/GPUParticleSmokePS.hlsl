@@ -1,4 +1,4 @@
-#include "GPUParticle.hlsli"
+#include "../../../../engine/resources/shaders/particle/GPUParticle.hlsli"
 
 Texture2D particleTexture : register(t1);
 Texture2D noiseTexture : register(t2);

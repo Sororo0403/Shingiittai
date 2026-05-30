@@ -49,6 +49,9 @@
     <Filter Include="Resources\Shaders\sword_trail">
       <UniqueIdentifier>{0f6cc620-1696-45ee-a64a-2a27fe4b1786}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Resources\Shaders\particle">
+      <UniqueIdentifier>{5e2c8272-bfc3-4233-85d4-6ff2dd3791b4}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Resources\UI">
       <UniqueIdentifier>{be18388a-c7d7-463b-a082-6451e4a7e26b}</UniqueIdentifier>
     </Filter>
@@ -106,6 +109,12 @@
     <Filter Include="Source Files\scene">
       <UniqueIdentifier>{4b6c6162-2d8e-9803-3ac2-e0f5c0fb33de}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\effect">
+      <UniqueIdentifier>{db0d5230-49b9-4100-829e-6f51f5441f8f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\effect">
+      <UniqueIdentifier>{f3a6d2b6-7a67-4667-9218-1dbf493b2174}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\scene\CameraPreviewReceiver.cpp">
@@ -125,6 +134,9 @@
     </ClCompile>
     <ClCompile Include="src\scene\SoundTestScene.cpp">
       <Filter>Source Files\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\effect\EffectManager.cpp">
+      <Filter>Source Files\effect</Filter>
     </ClCompile>
     <ClCompile Include="src\scene\BattleResultScene.cpp">
       <Filter>Source Files\scene</Filter>
@@ -246,6 +258,12 @@
     <ClInclude Include="include\scene\SoundTestScene.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
+    <ClInclude Include="include\effect\EffectAsset.h">
+      <Filter>Header Files\effect</Filter>
+    </ClInclude>
+    <ClInclude Include="include\effect\EffectManager.h">
+      <Filter>Header Files\effect</Filter>
+    </ClInclude>
     <ClInclude Include="include\scene\BattleResultScene.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
@@ -351,6 +369,9 @@
     <None Include="resources\audio\bgm\bgm_TutorialTheme.wav">
       <Filter>Resources\Audio\bgm</Filter>
     </None>
+    <None Include="resources\audio\se\剣で斬る2.mp3">
+      <Filter>Resources\Audio\sfx</Filter>
+    </None>
     <None Include="resources\audio\sfx\counter_burst.wav">
       <Filter>Resources\Audio\sfx</Filter>
     </None>
@@ -410,6 +431,9 @@
     </None>
     <None Include="resources\shaders\sword_arc\SwordArcVS.hlsl">
       <Filter>Resources\Shaders\sword_arc</Filter>
+    </None>
+    <None Include="resources\shaders\particle\GPUParticleSmokePS.hlsl">
+      <Filter>Resources\Shaders\particle</Filter>
     </None>
     <None Include="resources\shaders\sword_trail\SwordTrailPS.hlsl">
       <Filter>Resources\Shaders\sword_trail</Filter>

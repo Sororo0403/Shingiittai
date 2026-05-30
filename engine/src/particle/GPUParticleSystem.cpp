@@ -20,7 +20,7 @@ namespace {
 
 constexpr uint32_t kParticleThreadCount = 256u;
 constexpr uint32_t kMaxParticleArgsJobs = 16u;
-constexpr float kBurstParticleDensityScale = 0.55f;
+constexpr size_t kMaxQueuedParticleEmitsPerFrame = 64u;
 
 ID3D12Device *gCachedParticleDrawDevice = nullptr;
 ComPtr<ID3D12RootSignature> gCachedParticleDrawRootSignature;
@@ -61,12 +61,6 @@ NormalizeParticleEmitterSettings(ParticleEmitterSettings settings) {
     settings.maxParticles = (std::max)(1u, settings.maxParticles);
     settings.emitRate = (std::max)(0.0f, settings.emitRate);
     settings.burstCount = (std::max)(1u, settings.burstCount);
-    if (settings.emissionType == ParticleEmissionType::Burst) {
-        settings.burstCount = (std::max)(
-            1u, static_cast<uint32_t>(std::round(
-                    static_cast<float>(settings.burstCount) *
-                    kBurstParticleDensityScale)));
-    }
     settings.position = SanitizeFinite(settings.position, {0.0f, 0.0f, 0.0f});
     settings.spawnOffsetScale =
         SanitizeFinite(settings.spawnOffsetScale, {0.0f, 0.0f, 0.0f});
@@ -275,6 +269,8 @@ void GPUParticleSystem::Initialize(DirectXCommon *dxCommon,
                                    SrvManager *srvManager,
                                    TextureManager *textureManager,
                                    uint32_t textureId, uint32_t maxParticles) {
+    std::vector<ParticleEmitterSettings> pendingBeforeInitialize;
+    pendingBeforeInitialize.swap(pendingEmitSettings_);
     ReleaseResources();
 
     dxCommon_ = dxCommon;
@@ -286,7 +282,13 @@ void GPUParticleSystem::Initialize(DirectXCommon *dxCommon,
     emitterFrequencyTime_ = 0.0f;
     activeTimeRemaining_ = 0.0f;
     emitterSettings_ = NormalizeParticleEmitterSettings(ParticleEmitterSettings{});
-    emitOncePending_ = false;
+    pendingEmitSettings_ = std::move(pendingBeforeInitialize);
+    for (const ParticleEmitterSettings &settings : pendingEmitSettings_) {
+        emitterSettings_ = settings;
+        activeTimeRemaining_ =
+            (std::max)(activeTimeRemaining_,
+                       EstimateParticleActiveDuration(settings));
+    }
 
     std::mt19937 randomEngine{std::random_device{}()};
     std::uniform_real_distribution<float> dist01(0.0f, 1.0f);
@@ -303,6 +305,8 @@ void GPUParticleSystem::Initialize(DirectXCommon *dxCommon,
         particle.isActive = 0;
         particle.params0 = {};
         particle.params1 = {};
+        particle.params2 = {};
+        particle.params3 = {};
     }
 
     CreateRootSignatures();
@@ -311,11 +315,24 @@ void GPUParticleSystem::Initialize(DirectXCommon *dxCommon,
     CreateFreeListBuffers();
     CreateActiveDrawBuffers();
     CreateConstantBuffers();
+
+    if (!pendingEmitSettings_.empty() && mappedUpdateCB_) {
+        mappedUpdateCB_->time = {totalTime_, 0.0f,
+                                 static_cast<float>(maxParticles_), 0.0f};
+        updatePending_ = true;
+    }
 }
 
 void GPUParticleSystem::SetEmitterSettings(
     const ParticleEmitterSettings &settings) {
-    emitterSettings_ = NormalizeParticleEmitterSettings(settings);
+    ParticleEmitterSettings normalized = NormalizeParticleEmitterSettings(settings);
+    const bool keepFrequencyTime =
+        IsContinuousEmitter(emitterSettings_) && IsContinuousEmitter(normalized) &&
+        std::abs(emitterSettings_.emitRate - normalized.emitRate) < 0.0001f;
+    emitterSettings_ = normalized;
+    if (!keepFrequencyTime) {
+        emitterFrequencyTime_ = 0.0f;
+    }
 }
 
 void GPUParticleSystem::SetTextureFromFile(const std::wstring &filePath) {
@@ -330,55 +347,69 @@ void GPUParticleSystem::SetTextureFromFile(const std::wstring &filePath) {
 void GPUParticleSystem::SetMaterialSettings(
     const GPUParticleMaterialSettings &settings) {
     materialSettings_ = settings;
+    if (dxCommon_ && drawRootSignature_) {
+        const std::wstring pixelShaderPath =
+            materialSettings_.pixelShaderPath.empty()
+                ? std::wstring(ShaderPaths::ParticlePS)
+                : materialSettings_.pixelShaderPath;
+        drawPSO_ = GetOrCreateParticleDrawPso(
+            dxCommon_->GetDevice(), drawRootSignature_.Get(), pixelShaderPath);
+    }
 }
 
 void GPUParticleSystem::EmitOnce(const ParticleEmitterSettings &settings) {
-    SetEmitterSettings(settings);
+    ParticleEmitterSettings normalized = NormalizeParticleEmitterSettings(settings);
+    emitterSettings_ = normalized;
     emitterFrequencyTime_ = 0.0f;
     activeTimeRemaining_ =
         (std::max)(activeTimeRemaining_,
-                   EstimateParticleActiveDuration(emitterSettings_));
-    emitOncePending_ = true;
+                   EstimateParticleActiveDuration(normalized));
+    pendingEmitSettings_.push_back(normalized);
+    if (mappedUpdateCB_ && !updatePending_) {
+        mappedUpdateCB_->time = {totalTime_, 0.0f,
+                                 static_cast<float>(maxParticles_), 0.0f};
+        updatePending_ = true;
+    }
 }
 
 void GPUParticleSystem::Update(float deltaTime) {
     deltaTime = std::clamp(SanitizeFinite(deltaTime, 0.0f), 0.0f, 0.1f);
     totalTime_ += deltaTime;
 
-    if (!mappedUpdateCB_ || !mappedEmitterCB_) {
+    if (!mappedUpdateCB_) {
         return;
     }
 
     const bool continuousEmitter = IsContinuousEmitter(emitterSettings_);
     const bool wasActive = activeTimeRemaining_ > 0.0f;
-    if (!emitOncePending_ && !continuousEmitter && !wasActive) {
-        return;
-    }
 
     if (wasActive) {
         activeTimeRemaining_ =
             (std::max)(0.0f, activeTimeRemaining_ - deltaTime);
     }
 
-    emitterFrequencyTime_ += deltaTime;
-    uint32_t emit = 0;
-    if (emitOncePending_) {
-        emitOncePending_ = false;
-        emit = 1;
-    } else if (continuousEmitter &&
-               emitterFrequencyTime_ >= 1.0f / emitterSettings_.emitRate) {
-        emitterFrequencyTime_ -= 1.0f / emitterSettings_.emitRate;
-        emit = 1;
+    if (continuousEmitter) {
+        emitterFrequencyTime_ += deltaTime;
+        const float interval = 1.0f / emitterSettings_.emitRate;
+        while (emitterFrequencyTime_ >= interval &&
+               pendingEmitSettings_.size() < kMaxQueuedParticleEmitsPerFrame) {
+            emitterFrequencyTime_ -= interval;
+            pendingEmitSettings_.push_back(emitterSettings_);
+            activeTimeRemaining_ =
+                (std::max)(activeTimeRemaining_,
+                           EstimateParticleActiveDuration(emitterSettings_));
+        }
+        if (emitterFrequencyTime_ >= interval) {
+            emitterFrequencyTime_ = std::fmod(emitterFrequencyTime_, interval);
+        }
     }
-    if (emit != 0) {
-        activeTimeRemaining_ =
-            (std::max)(activeTimeRemaining_,
-                       EstimateParticleActiveDuration(emitterSettings_));
+
+    if (pendingEmitSettings_.empty() && !continuousEmitter && !wasActive) {
+        return;
     }
 
     mappedUpdateCB_->time = {totalTime_, deltaTime,
                              static_cast<float>(maxParticles_), 0.0f};
-    *mappedEmitterCB_ = BuildEmitterForGPU(emit);
 
     updatePending_ = true;
     if (dxCommon_ && dxCommon_->IsCommandListRecording()) {
@@ -392,7 +423,8 @@ void GPUParticleSystem::Draw(const Camera &camera) {
         !drawCommandSignature_) {
         return;
     }
-    if (!updatePending_ && activeTimeRemaining_ <= 0.0f &&
+    if (!updatePending_ && pendingEmitSettings_.empty() &&
+        activeTimeRemaining_ <= 0.0f &&
         !IsContinuousEmitter(emitterSettings_)) {
         return;
     }
@@ -457,7 +489,7 @@ void GPUParticleSystem::DispatchPendingUpdate() {
 void GPUParticleSystem::DispatchUpdate() {
     if (!dxCommon_ || !srvManager_ || !particleResource_ ||
         !activeIndexResource_ || !activeCountResource_ || !drawArgsResource_ ||
-        !updateConstantBuffer_ || !emitterConstantBuffer_) {
+        !updateConstantBuffer_) {
         return;
     }
 
@@ -492,7 +524,10 @@ void GPUParticleSystem::DispatchUpdate() {
     auto clearBarrier = CD3DX12_RESOURCE_BARRIER::UAV(activeCountResource_.Get());
     cmd->ResourceBarrier(1, &clearBarrier);
 
-    RecordUpdateDispatch(0);
+    std::vector<ParticleEmitterSettings> emitSettings;
+    emitSettings.swap(pendingEmitSettings_);
+
+    RecordUpdateDispatch(BuildEmitterForGPU(emitterSettings_, 0));
 
     D3D12_RESOURCE_BARRIER uavBarriers[] = {
         CD3DX12_RESOURCE_BARRIER::UAV(particleResource_.Get()),
@@ -503,8 +538,8 @@ void GPUParticleSystem::DispatchUpdate() {
     };
     cmd->ResourceBarrier(_countof(uavBarriers), uavBarriers);
 
-    if (mappedEmitterCB_->config.w != 0u) {
-        RecordUpdateDispatch(1);
+    for (const ParticleEmitterSettings &settings : emitSettings) {
+        RecordUpdateDispatch(BuildEmitterForGPU(settings, 1));
         cmd->ResourceBarrier(_countof(uavBarriers), uavBarriers);
     }
 
@@ -532,20 +567,21 @@ void GPUParticleSystem::DispatchUpdate() {
     updatePending_ = false;
 }
 
-void GPUParticleSystem::RecordUpdateDispatch(uint32_t phase) {
+void GPUParticleSystem::RecordUpdateDispatch(const EmitterForGPU &emitter) {
     auto *cmd = dxCommon_->GetCommandList();
     cmd->SetComputeRootSignature(updateRootSignature_.Get());
     cmd->SetPipelineState(updatePSO_.Get());
     cmd->SetComputeRootConstantBufferView(
         0, updateConstantBuffer_->GetGPUVirtualAddress());
-    cmd->SetComputeRootConstantBufferView(
-        1, emitterConstantBuffer_->GetGPUVirtualAddress());
+    static_assert(sizeof(EmitterForGPU) % sizeof(uint32_t) == 0);
+    cmd->SetComputeRoot32BitConstants(
+        1, static_cast<UINT>(sizeof(EmitterForGPU) / sizeof(uint32_t)),
+        &emitter, 0);
     cmd->SetComputeRootDescriptorTable(2, particleUavGpuHandle_);
     cmd->SetComputeRootDescriptorTable(3, freeListUavGpuHandle_);
     cmd->SetComputeRootDescriptorTable(4, freeListIndexUavGpuHandle_);
     cmd->SetComputeRootDescriptorTable(5, activeIndexUavGpuHandle_);
     cmd->SetComputeRootDescriptorTable(6, activeCountUavGpuHandle_);
-    cmd->SetComputeRoot32BitConstant(7, phase, 0);
     cmd->Dispatch((maxParticles_ + kParticleThreadCount - 1u) /
                       kParticleThreadCount,
                   1, 1);
@@ -579,57 +615,59 @@ void GPUParticleSystem::RecordDrawArgsDispatches(
 }
 
 GPUParticleSystem::EmitterForGPU
-GPUParticleSystem::BuildEmitterForGPU(uint32_t emit) const {
+GPUParticleSystem::BuildEmitterForGPU(const ParticleEmitterSettings &settings,
+                                      uint32_t emit) const {
     EmitterForGPU emitter{};
-    emitter.position = {emitterSettings_.position.x, emitterSettings_.position.y,
-                        emitterSettings_.position.z, 0.0f};
+    emitter.position = {settings.position.x, settings.position.y,
+                        settings.position.z, 0.0f};
     emitter.spawnOffsetScale = {
-        emitterSettings_.spawnOffsetScale.x, emitterSettings_.spawnOffsetScale.y,
-        emitterSettings_.spawnOffsetScale.z, 0.0f};
-    emitter.spawnShapeParams = emitterSettings_.spawnShapeParams;
-    emitter.basisRight = {emitterSettings_.basisRight.x,
-                          emitterSettings_.basisRight.y,
-                          emitterSettings_.basisRight.z, 0.0f};
-    emitter.basisUp = {emitterSettings_.basisUp.x, emitterSettings_.basisUp.y,
-                       emitterSettings_.basisUp.z, 0.0f};
-    emitter.basisForward = {emitterSettings_.basisForward.x,
-                            emitterSettings_.basisForward.y,
-                            emitterSettings_.basisForward.z, 0.0f};
+        settings.spawnOffsetScale.x, settings.spawnOffsetScale.y,
+        settings.spawnOffsetScale.z, settings.spawnShapeParams.x};
+    emitter.basisRight = {settings.basisRight.x, settings.basisRight.y,
+                          settings.basisRight.z, 0.0f};
+    emitter.basisUp = {settings.basisUp.x, settings.basisUp.y,
+                       settings.basisUp.z, 0.0f};
+    emitter.basisForward = {settings.basisForward.x,
+                            settings.basisForward.y,
+                            settings.basisForward.z, 0.0f};
     emitter.directionAndDirectionalVelocity = {
-        emitterSettings_.direction.x, emitterSettings_.direction.y,
-        emitterSettings_.direction.z, emitterSettings_.directionalVelocity};
+        settings.direction.x, settings.direction.y, settings.direction.z,
+        settings.directionalVelocity};
     emitter.velocityBiasAndRadialVelocity = {
-        emitterSettings_.velocityBias.x, emitterSettings_.velocityBias.y,
-        emitterSettings_.velocityBias.z, emitterSettings_.radialVelocity};
-    emitter.lifeAndFade = {emitterSettings_.baseLifeTime,
-                           emitterSettings_.lifeTimeRandom,
-                           emitterSettings_.fadeInTime,
-                           emitterSettings_.fadeOutTime};
-    emitter.scale = {emitterSettings_.startScale, emitterSettings_.endScale,
-                     emitterSettings_.scaleRandom, emitterSettings_.stretch};
+        settings.velocityBias.x, settings.velocityBias.y, settings.velocityBias.z,
+        settings.radialVelocity};
+    emitter.lifeAndFade = {settings.baseLifeTime, settings.lifeTimeRandom,
+                           settings.fadeInTime, settings.fadeOutTime};
+    emitter.scale = {settings.startScale, settings.endScale,
+                     settings.scaleRandom, settings.stretch};
     emitter.accelerationAndTurbulence = {
-        emitterSettings_.acceleration.x, emitterSettings_.acceleration.y,
-        emitterSettings_.acceleration.z, emitterSettings_.turbulence};
-    emitter.motion = {emitterSettings_.damping, emitterSettings_.fadeOutPower,
-                      emitterSettings_.emitRate, 0.0f};
+        settings.acceleration.x, settings.acceleration.y, settings.acceleration.z,
+        settings.turbulence};
+    emitter.motion = {settings.damping, settings.fadeOutPower,
+                      static_cast<float>(settings.atlasColumns),
+                      static_cast<float>(settings.atlasRows)};
     emitter.atlasAndRotation = {
-        static_cast<float>(emitterSettings_.atlasFrameStart),
-        static_cast<float>(emitterSettings_.atlasFrameCount),
-        emitterSettings_.rotationSpeed,
-        emitterSettings_.randomStartRotation ? 1.0f : 0.0f};
-    emitter.tintColor = emitterSettings_.tintColor;
+        static_cast<float>(settings.atlasFrameStart),
+        static_cast<float>(settings.atlasFrameCount), settings.rotationSpeed,
+        settings.randomStartRotation ? 1.0f : 0.0f};
+    emitter.tintColor = settings.tintColor;
     emitter.config = {
-        static_cast<uint32_t>(emitterSettings_.emissionType),
-        static_cast<uint32_t>(emitterSettings_.spawnShape),
-        (std::min)(emitterSettings_.burstCount, maxParticles_), emit};
+        static_cast<uint32_t>(settings.emissionType),
+        static_cast<uint32_t>(settings.spawnShape),
+        (std::min)({settings.burstCount, settings.maxParticles, maxParticles_}),
+        emit};
     return emitter;
 }
 
 void GPUParticleSystem::CreateRootSignatures() {
     {
-        CD3DX12_ROOT_PARAMETER params[8];
+        static_assert((sizeof(EmitterForGPU) / sizeof(uint32_t)) + 2u + 5u <=
+                          64u,
+                      "GPUParticle update root signature exceeds 64 DWORDs");
+        CD3DX12_ROOT_PARAMETER params[7];
         params[0].InitAsConstantBufferView(0);
-        params[1].InitAsConstantBufferView(1);
+        params[1].InitAsConstants(
+            static_cast<UINT>(sizeof(EmitterForGPU) / sizeof(uint32_t)), 1);
 
         CD3DX12_DESCRIPTOR_RANGE particleRange;
         particleRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
@@ -650,8 +688,6 @@ void GPUParticleSystem::CreateRootSignatures() {
         CD3DX12_DESCRIPTOR_RANGE activeCountRange;
         activeCountRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 4);
         params[6].InitAsDescriptorTable(1, &activeCountRange);
-
-        params[7].InitAsConstants(1, 2);
 
         CD3DX12_ROOT_SIGNATURE_DESC desc;
         desc.Init(_countof(params), params, 0, nullptr);
@@ -1023,17 +1059,6 @@ void GPUParticleSystem::CreateConstantBuffers() {
                       0, nullptr, reinterpret_cast<void **>(&mappedUpdateCB_)),
                   "GPUParticleUpdateCB Map failed");
 
-    auto emitterDesc =
-        CD3DX12_RESOURCE_DESC::Buffer(Align256(sizeof(EmitterForGPU)));
-    ThrowIfFailed(device->CreateCommittedResource(
-                      &uploadHeap, D3D12_HEAP_FLAG_NONE, &emitterDesc,
-                      D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-                      IID_PPV_ARGS(&emitterConstantBuffer_)),
-                  "CreateCommittedResource(GPUParticleEmitterCB) failed");
-    ThrowIfFailed(emitterConstantBuffer_->Map(
-                      0, nullptr, reinterpret_cast<void **>(&mappedEmitterCB_)),
-                  "GPUParticleEmitterCB Map failed");
-
     auto drawDesc =
         CD3DX12_RESOURCE_DESC::Buffer(Align256(sizeof(DrawConstantBufferData)));
     ThrowIfFailed(device->CreateCommittedResource(
@@ -1049,7 +1074,7 @@ void GPUParticleSystem::CreateConstantBuffers() {
 void GPUParticleSystem::ReleaseResources() {
 
     const bool hasGpuResources =
-        updateConstantBuffer_ || emitterConstantBuffer_ || drawConstantBuffer_ ||
+        updateConstantBuffer_ || drawConstantBuffer_ ||
         particleResource_ || particleUploadResource_ || freeListResource_ ||
         freeListUploadResource_ || freeListIndexResource_ ||
         freeListIndexUploadResource_ || activeIndexResource_ ||
@@ -1098,17 +1123,12 @@ void GPUParticleSystem::ReleaseResources() {
         updateConstantBuffer_->Unmap(0, nullptr);
         mappedUpdateCB_ = nullptr;
     }
-    if (emitterConstantBuffer_ && mappedEmitterCB_) {
-        emitterConstantBuffer_->Unmap(0, nullptr);
-        mappedEmitterCB_ = nullptr;
-    }
     if (drawConstantBuffer_ && mappedDrawCB_) {
         drawConstantBuffer_->Unmap(0, nullptr);
         mappedDrawCB_ = nullptr;
     }
 
     updateConstantBuffer_.Reset();
-    emitterConstantBuffer_.Reset();
     drawConstantBuffer_.Reset();
     particleResource_.Reset();
     particleUploadResource_.Reset();
@@ -1130,5 +1150,6 @@ void GPUParticleSystem::ReleaseResources() {
     drawArgsState_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     updatePending_ = false;
     activeTimeRemaining_ = 0.0f;
+    pendingEmitSettings_.clear();
 }
 

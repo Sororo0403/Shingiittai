@@ -90,9 +90,6 @@ class SwordUdpController {
     std::array<DirectX::XMFLOAT2, 2> previousCalibratedPalm_ = {
         DirectX::XMFLOAT2{0.5f, 0.5f}, DirectX::XMFLOAT2{0.5f, 0.5f}};
     std::array<bool, 2> hasPreviousCalibratedPalm_ = {false, false};
-    std::array<DirectX::XMFLOAT2, 2> filteredCalibratedPalm_ = {
-        DirectX::XMFLOAT2{0.5f, 0.5f}, DirectX::XMFLOAT2{0.5f, 0.5f}};
-    std::array<bool, 2> hasFilteredCalibratedPalm_ = {false, false};
     std::array<DirectX::XMFLOAT2, 2> previousPacketPalm_ = {
         DirectX::XMFLOAT2{0.5f, 0.5f}, DirectX::XMFLOAT2{0.5f, 0.5f}};
     std::array<bool, 2> hasPreviousPacketPalm_ = {false, false};

@@ -35,26 +35,28 @@ class GameVictoryScene : public BaseScene {
         float height = 0.0f;
     };
 
-    struct ConfettiPiece {
+    struct VictoryShard {
         DirectX::XMFLOAT2 position{0.0f, 0.0f};
         DirectX::XMFLOAT2 velocity{0.0f, 0.0f};
         DirectX::XMFLOAT4 color{1.0f, 1.0f, 1.0f, 1.0f};
+        DirectX::XMFLOAT4 edgeColor{1.0f, 1.0f, 1.0f, 1.0f};
         float width = 0.0f;
         float height = 0.0f;
         float phase = 0.0f;
         float spinSpeed = 0.0f;
         float resetDelay = 0.0f;
         float startTime = 0.0f;
+        float glint = 0.0f;
     };
 
     void UpdateCamera(float screenWidth, float screenHeight);
     void UpdateCinematic(float deltaTime);
-    void ResetConfetti(float screenWidth, float screenHeight);
-    void RespawnConfettiPiece(ConfettiPiece &piece, float screenWidth,
-                              float screenHeight, size_t index,
-                              bool initial);
-    void UpdateConfetti(float deltaTime, float screenWidth, float screenHeight);
-    void DrawConfetti(float screenWidth, float screenHeight, float alpha);
+    void ResetVictoryShards(float screenWidth, float screenHeight);
+    void RespawnVictoryShard(VictoryShard &shard, float screenWidth,
+                             float screenHeight, size_t index, bool initial);
+    void UpdateVictoryShards(float deltaTime, float screenWidth,
+                             float screenHeight);
+    void DrawVictoryShards(float screenWidth, float screenHeight, float alpha);
     void StartResultCrowdAudio();
     void StopResultCrowdAudio();
     void EmitPreImpactBurst();
@@ -131,8 +133,15 @@ class GameVictoryScene : public BaseScene {
     uint32_t smokeBillboardModelId_ = 0;
     uint32_t darkSmokeBillboardModelId_ = 0;
     uint32_t explosionSoundId_ = UINT32_MAX;
+    uint32_t slashSoundId_ = UINT32_MAX;
     uint32_t resultCrowdIntroSoundId_ = UINT32_MAX;
     uint32_t resultCrowdIntroVoiceHandle_ = UINT32_MAX;
+    uint32_t slashSound1VoiceHandle_ = UINT32_MAX;
+    uint32_t slashSound2VoiceHandle_ = UINT32_MAX;
+    uint32_t slashSound3VoiceHandle_ = UINT32_MAX;
+    bool slashSound1Played_ = false;
+    bool slashSound2Played_ = false;
+    bool slashSound3Played_ = false;
     bool particlesReady_ = false;
     GPUParticleSystem impactParticles_;
     GPUParticleSystem shockParticles_;
@@ -140,7 +149,7 @@ class GameVictoryScene : public BaseScene {
     GPUParticleSystem fireCloudParticles_;
     GPUParticleSystem darkSmokeParticles_;
     GPUParticleSystem smokeParticles_;
-    std::array<ConfettiPiece, 180> confettiPieces_{};
+    std::array<VictoryShard, 180> victoryShards_{};
 
     Image missionCompleteLabel_{};
     Image clearTimeLabel_{};

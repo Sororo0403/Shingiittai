@@ -1,4 +1,5 @@
 import argparse
+import atexit
 import json
 import math
 import os
@@ -31,20 +32,6 @@ PALM_INDICES = (
 )
 MCP_INDICES = (HAND_INDEX_MCP, HAND_MIDDLE_MCP, HAND_RING_MCP, HAND_PINKY_MCP)
 PIP_INDICES = (HAND_INDEX_PIP, HAND_MIDDLE_PIP, HAND_RING_PIP, HAND_PINKY_PIP)
-POSE_LEFT_SHOULDER = 11
-POSE_RIGHT_SHOULDER = 12
-POSE_LEFT_HIP = 23
-POSE_RIGHT_HIP = 24
-BODY_LANDMARK_INDICES = (
-    POSE_LEFT_SHOULDER,
-    POSE_RIGHT_SHOULDER,
-    POSE_LEFT_HIP,
-    POSE_RIGHT_HIP,
-)
-NOMINAL_SHOULDER_WIDTH = 0.32
-NOMINAL_TORSO_HEIGHT = 0.34
-
-
 def clamp01(value):
     return max(0.0, min(1.0, float(value)))
 
@@ -52,10 +39,6 @@ def clamp01(value):
 def parse_camera(value):
     text = str(value)
     return int(text) if text.isdigit() else text
-
-
-def mirror_point(point):
-    return (1.0 - point[0], point[1])
 
 
 def point_to_px(point, width, height):
@@ -97,12 +80,8 @@ def open_camera(source, width, height):
 
 
 def create_tasks_vision():
-    try:
-        from mediapipe.tasks import python as mp_python
-        from mediapipe.tasks.python import vision
-    except Exception as error:
-        log_warn(f"MediaPipe Tasks unavailable: {error}")
-        return None, None
+    from mediapipe.tasks import python as mp_python
+    from mediapipe.tasks.python import vision
     return mp_python, vision
 
 
@@ -144,24 +123,6 @@ def create_hands_detector(mp, model_path):
     }
 
 
-def create_pose_detector(mp):
-    if hasattr(mp, "solutions") and hasattr(mp.solutions, "pose"):
-        log_info("Pose: solutions API")
-        return {
-            "type": "solutions",
-            "detector": mp.solutions.pose.Pose(
-                static_image_mode=False,
-                model_complexity=1,
-                smooth_landmarks=True,
-                min_detection_confidence=0.45,
-                min_tracking_confidence=0.45,
-            ),
-        }
-
-    log_warn("Pose detector unavailable. Body-angle correction disabled.")
-    return None
-
-
 def close_detector(detector):
     if detector is not None and detector.get("detector") is not None:
         detector["detector"].close()
@@ -199,18 +160,10 @@ def weighted_point(items):
 
 
 def grip_center(points):
-    # Fingertips become unstable when the hand is closed, so use knuckle and
-    # palm-base landmarks that remain visible in both open and fist poses.
     mcp = average_point([points[index] for index in MCP_INDICES])
     pip = average_point([points[index] for index in PIP_INDICES])
     wrist = points[HAND_WRIST]
     return weighted_point(((mcp, 0.55), (pip, 0.25), (wrist, 0.20)))
-
-
-def distance(a, b):
-    dx = a[0] - b[0]
-    dy = a[1] - b[1]
-    return math.sqrt(dx * dx + dy * dy)
 
 
 def average_point(points):
@@ -220,135 +173,20 @@ def average_point(points):
     )
 
 
-def normalize2(vector, fallback):
-    length = math.sqrt(vector[0] * vector[0] + vector[1] * vector[1])
-    if length < 0.0001:
-        return fallback
-    return (vector[0] / length, vector[1] / length)
-
-
-def dot2(a, b):
-    return a[0] * b[0] + a[1] * b[1]
-
-
 def hand_to_raw_dict(raw_index, points, label, score):
-    mirrored_points = [mirror_point(point) for point in points]
     palm = palm_center(points)
-    mirrored_palm = mirror_point(palm)
     grip = grip_center(points)
-    mirrored_grip = mirror_point(grip)
     wrist = points[HAND_WRIST]
-    mirrored_wrist = mirror_point(wrist)
 
     return {
         "rawIndex": raw_index,
         "label": label,
         "score": round(score, 6),
         "landmarks01": [rounded_point(point) for point in points],
-        "mirroredLandmarks01": [
-            rounded_point(point) for point in mirrored_points
-        ],
         "wrist01": rounded_point(wrist),
-        "mirroredWrist01": rounded_point(mirrored_wrist),
         "palm01": rounded_point(palm),
-        "mirroredPalm01": rounded_point(mirrored_palm),
         "grip01": rounded_point(grip),
-        "mirroredGrip01": rounded_point(mirrored_grip),
     }
-
-
-def body_to_raw_dict(points):
-    left_shoulder = points[POSE_LEFT_SHOULDER]
-    right_shoulder = points[POSE_RIGHT_SHOULDER]
-    left_hip = points[POSE_LEFT_HIP]
-    right_hip = points[POSE_RIGHT_HIP]
-    center = average_point(
-        [left_shoulder, right_shoulder, left_hip, right_hip]
-    )
-    shoulder_center = average_point([left_shoulder, right_shoulder])
-    hip_center = average_point([left_hip, right_hip])
-    shoulder_width = max(0.08, distance(left_shoulder, right_shoulder))
-    torso_height = max(0.10, distance(shoulder_center, hip_center))
-
-    return {
-        "center01": rounded_point(center),
-        "mirroredCenter01": rounded_point(mirror_point(center)),
-        "leftShoulder01": rounded_point(left_shoulder),
-        "rightShoulder01": rounded_point(right_shoulder),
-        "leftHip01": rounded_point(left_hip),
-        "rightHip01": rounded_point(right_hip),
-        "mirroredLeftShoulder01": rounded_point(mirror_point(left_shoulder)),
-        "mirroredRightShoulder01": rounded_point(mirror_point(right_shoulder)),
-        "mirroredLeftHip01": rounded_point(mirror_point(left_hip)),
-        "mirroredRightHip01": rounded_point(mirror_point(right_hip)),
-        "shoulderWidth01": round(shoulder_width, 6),
-        "torsoHeight01": round(torso_height, 6),
-    }
-
-
-def body_correct_point(point, body, mirrored):
-    if body is None:
-        return point
-
-    if mirrored:
-        center = body["mirroredCenter01"]
-        left_shoulder = body["mirroredLeftShoulder01"]
-        right_shoulder = body["mirroredRightShoulder01"]
-        left_hip = body["mirroredLeftHip01"]
-        right_hip = body["mirroredRightHip01"]
-    else:
-        center = body["center01"]
-        left_shoulder = body["leftShoulder01"]
-        right_shoulder = body["rightShoulder01"]
-        left_hip = body["leftHip01"]
-        right_hip = body["rightHip01"]
-
-    shoulder_center = average_point([left_shoulder, right_shoulder])
-    hip_center = average_point([left_hip, right_hip])
-    right_axis = normalize2(
-        (right_shoulder[0] - left_shoulder[0],
-         right_shoulder[1] - left_shoulder[1]),
-        (1.0, 0.0),
-    )
-    down_axis = normalize2(
-        (hip_center[0] - shoulder_center[0],
-         hip_center[1] - shoulder_center[1]),
-        (-right_axis[1], right_axis[0]),
-    )
-    # Keep axes orthogonal enough that shoulder tilt does not leak into swing up/down.
-    down_axis = normalize2(
-        (down_axis[0] - right_axis[0] * dot2(down_axis, right_axis),
-         down_axis[1] - right_axis[1] * dot2(down_axis, right_axis)),
-        (-right_axis[1], right_axis[0]),
-    )
-
-    shoulder_width = max(0.08, float(body.get("shoulderWidth01", 0.0)))
-    torso_height = max(0.10, float(body.get("torsoHeight01", 0.0)))
-    scale_x = max(0.72, min(1.80, NOMINAL_SHOULDER_WIDTH / shoulder_width))
-    scale_y = max(0.72, min(1.55, NOMINAL_TORSO_HEIGHT / torso_height))
-    offset = (point[0] - center[0], point[1] - center[1])
-    return (
-        clamp01(0.5 + dot2(offset, right_axis) * scale_x),
-        clamp01(0.5 + dot2(offset, down_axis) * scale_y),
-    )
-
-
-def apply_body_correction(hands, body):
-    if body is None:
-        return
-    for hand in hands:
-        hand["bodyCorrectedPalm01"] = rounded_point(
-            body_correct_point(hand["palm01"], body, False)
-        )
-        hand["bodyCorrectedMirroredPalm01"] = rounded_point(
-            body_correct_point(hand["mirroredPalm01"], body, True)
-        )
-        hand["bodyCorrectedGrip01"] = rounded_point(
-            body_correct_point(hand["grip01"], body, False)
-        )
-        hand["bodyCorrectedMirroredGrip01"] = rounded_point(
-            body_correct_point(hand["mirroredGrip01"], body, True)
-        )
 
 
 def detect_hands(detector, frame, timestamp_ms):
@@ -382,44 +220,16 @@ def detect_hands(detector, frame, timestamp_ms):
     return hands
 
 
-def detect_body(detector, frame, timestamp_ms):
-    if detector is None or detector["type"] != "solutions":
-        return None
-
-    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    result = detector["detector"].process(rgb)
-    if result is None or not result.pose_landmarks:
-        return None
-    landmarks = result.pose_landmarks.landmark
-    if not landmarks or len(landmarks) <= max(BODY_LANDMARK_INDICES):
-        return None
-
-    points = [landmark_xy(landmark) for landmark in landmarks]
-    return body_to_raw_dict(points)
-
-
 def build_raw_packet(frame_index, timestamp_ms, dt, frame, hands, body, args):
     height, width = frame.shape[:2]
     debug = {
         "handCount": len(hands),
-        "bodyTracked": body is not None,
-        "bodyCorrectedHands": sum(
-            1 for hand in hands if "bodyCorrectedMirroredPalm01" in hand
-        ),
+        "bodyTracked": False,
+        "bodyCorrectedHands": 0,
         "labels": [hand.get("label", "Hand") for hand in hands],
         "scores": [round(float(hand.get("score", 0.0)), 6) for hand in hands],
-        "mirroredPalms01": [
-            hand.get("mirroredPalm01", [0.5, 0.5]) for hand in hands
-        ],
-        "mirroredGrips01": [
-            hand.get("mirroredGrip01", [0.5, 0.5]) for hand in hands
-        ],
-        "bodyCorrectedMirroredPalms01": [
-            hand.get("bodyCorrectedMirroredPalm01") for hand in hands
-        ],
-        "bodyCorrectedMirroredGrips01": [
-            hand.get("bodyCorrectedMirroredGrip01") for hand in hands
-        ],
+        "palms01": [hand.get("palm01", [0.5, 0.5]) for hand in hands],
+        "grips01": [hand.get("grip01", [0.5, 0.5]) for hand in hands],
     }
     packet = {
         "type": "HAND_RAW",
@@ -432,7 +242,7 @@ def build_raw_packet(frame_index, timestamp_ms, dt, frame, hands, body, args):
             "height": height,
             "camera": str(args.camera),
             "mirrorPreview": args.mirror_preview,
-            "mirrorControls": args.mirror_controls,
+            "mirrorControls": False,
             "coordinateSpace": "MediaPipe normalized image coordinates",
         },
         "body": body,
@@ -444,14 +254,14 @@ def build_raw_packet(frame_index, timestamp_ms, dt, frame, hands, body, args):
 def draw_hands(frame, hands, mirror_preview):
     height, width = frame.shape[:2]
     for hand in hands:
-        points = hand["mirroredLandmarks01"] if mirror_preview else hand["landmarks01"]
+        points = hand["landmarks01"]
         color = (40, 180, 255) if hand["rawIndex"] == 0 else (80, 240, 120)
         for point in points:
             x, y = point_to_px(point, width, height)
             cv2.circle(frame, (x, y), 2, color, -1, cv2.LINE_AA)
 
-        palm = hand["mirroredGrip01"] if mirror_preview else hand["grip01"]
-        wrist = hand["mirroredWrist01"] if mirror_preview else hand["wrist01"]
+        palm = hand["grip01"]
+        wrist = hand["wrist01"]
         px, py = point_to_px(palm, width, height)
         wx, wy = point_to_px(wrist, width, height)
         cv2.circle(frame, (px, py), 8, color, 2, cv2.LINE_AA)
@@ -466,35 +276,6 @@ def draw_hands(frame, hands, mirror_preview):
             1,
             cv2.LINE_AA,
         )
-
-
-def body_point(body, name, mirror_preview):
-    if mirror_preview:
-        return body.get("mirrored" + name[0].upper() + name[1:])
-    return body.get(name)
-
-
-def draw_body(frame, body, mirror_preview):
-    if body is None:
-        return
-
-    height, width = frame.shape[:2]
-    names = ("leftShoulder01", "rightShoulder01", "leftHip01", "rightHip01")
-    points = []
-    for name in names:
-        point = body_point(body, name, mirror_preview)
-        if point is None:
-            return
-        points.append(point_to_px(point, width, height))
-
-    color = (255, 210, 80)
-    cv2.line(frame, tuple(points[0]), tuple(points[1]), color, 2, cv2.LINE_AA)
-    cv2.line(frame, tuple(points[0]), tuple(points[2]), color, 2, cv2.LINE_AA)
-    cv2.line(frame, tuple(points[1]), tuple(points[3]), color, 2, cv2.LINE_AA)
-    cv2.line(frame, tuple(points[2]), tuple(points[3]), color, 2, cv2.LINE_AA)
-    center_key = "mirroredCenter01" if mirror_preview else "center01"
-    cx, cy = point_to_px(body[center_key], width, height)
-    cv2.circle(frame, (cx, cy), 7, color, 2, cv2.LINE_AA)
 
 
 def send_preview(sock, target, frame, state, args, now):
@@ -527,15 +308,12 @@ def send_preview(sock, target, frame, state, args, now):
     state["last_time"] = now
 
 
-def print_startup_log(args, cap, backend, hands_detector, pose_detector):
+def print_startup_log(args, cap, backend, hands_detector):
     actual_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     actual_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     actual_fps = cap.get(cv2.CAP_PROP_FPS)
-    try:
-        import mediapipe as mp
-        mediapipe_version = getattr(mp, "__version__", "unknown")
-    except Exception:
-        mediapipe_version = "unavailable"
+    import mediapipe as mp
+    mediapipe_version = getattr(mp, "__version__", "unknown")
 
     log_info(f"Python: {platform.python_version()}")
     log_info(f"MediaPipe: {mediapipe_version}")
@@ -547,9 +325,6 @@ def print_startup_log(args, cap, backend, hands_detector, pose_detector):
     log_info(
         f"Hands API: {hands_detector['type'] if hands_detector else 'disabled'}"
     )
-    log_info(
-        f"Pose API: {pose_detector['type'] if pose_detector else 'disabled'}"
-    )
     log_info("Mode: HAND_RAW only.")
     log_info(f"UDP: {args.udp_host}:{args.udp_port}")
     log_info(f"Preview UDP: {args.preview_host}:{args.preview_port}")
@@ -557,8 +332,7 @@ def print_startup_log(args, cap, backend, hands_detector, pose_detector):
         f"Raw log: {args.raw_log if args.raw_log_enabled else 'disabled'}"
     )
     log_info(
-        f"mirror_preview={args.mirror_preview} "
-        f"mirror_controls={args.mirror_controls}"
+        f"mirror_preview={args.mirror_preview} mirror_controls=False"
     )
 
 
@@ -617,25 +391,19 @@ def main():
         log_error("Camera open failed.")
         log_error(
             f"index={args.camera} requested={args.width}x{args.height}@30 "
-            "hint=try --camera 1 or close other camera apps"
+            "hint=use --camera 1 or close other camera apps"
         )
         return 1
 
-    try:
-        import mediapipe as mp
-    except Exception as error:
-        log_error(f"MediaPipe unavailable: {error}")
-        cap.release()
-        return 1
+    import mediapipe as mp
+    atexit.register(cap.release)
 
     hands_detector = create_hands_detector(mp, args.model)
     if hands_detector is None:
         log_error("Hands detector is unavailable.")
         cap.release()
         return 1
-    pose_detector = create_pose_detector(mp)
-
-    print_startup_log(args, cap, camera_backend, hands_detector, pose_detector)
+    print_startup_log(args, cap, camera_backend, hands_detector)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     target = (args.udp_host, args.udp_port)
@@ -643,17 +411,19 @@ def main():
     preview_state = {"frame_id": 0, "last_time": 0.0}
     raw_log_file = None
     if args.raw_log_enabled:
-        try:
-            raw_log_file = open(args.raw_log, "w", encoding="utf-8")
-            log_info(f"Raw JSONL log opened: {args.raw_log}")
-        except Exception as error:
-            log_warn(f"Raw JSONL log open failed: {error}")
+        raw_log_file = open(args.raw_log, "w", encoding="utf-8")
+        atexit.register(raw_log_file.close)
+        log_info(f"Raw JSONL log opened: {args.raw_log}")
 
     last_time = time.perf_counter()
     last_log_time = 0.0
     frame_index = 0
     log_info("Raw hand sender started")
-    try:
+    atexit.register(close_detector, hands_detector)
+    atexit.register(sock.close)
+    if args.show_window:
+        atexit.register(cv2.destroyAllWindows)
+    if True:
         while True:
             ok, frame = cap.read()
             if not ok or frame is None:
@@ -667,8 +437,7 @@ def main():
             frame_index += 1
 
             hands = detect_hands(hands_detector, frame, timestamp_ms)
-            body = detect_body(pose_detector, frame, timestamp_ms)
-            apply_body_correction(hands, body)
+            body = None
             if args.raw_json:
                 raw_packet = build_raw_packet(
                     frame_index, timestamp_ms, dt, frame, hands, body, args
@@ -680,8 +449,7 @@ def main():
                 raw_payload = raw_packet.encode("utf-8")
                 sock.sendto(raw_payload, target)
 
-            display = cv2.flip(frame, 1) if args.mirror_preview else frame.copy()
-            draw_body(display, body, args.mirror_preview)
+            display = frame.copy()
             draw_hands(display, hands, args.mirror_preview)
             cv2.putText(
                 display,
@@ -703,15 +471,6 @@ def main():
                 cv2.imshow("Shingiittai Hand Raw", display)
                 if cv2.waitKey(1) & 0xFF == 27:
                     break
-    finally:
-        close_detector(hands_detector)
-        close_detector(pose_detector)
-        cap.release()
-        if raw_log_file is not None:
-            raw_log_file.close()
-        sock.close()
-        if args.show_window:
-            cv2.destroyAllWindows()
     return 0
 
 

@@ -1,7 +1,6 @@
 #include "effect/EffectManager.h"
 
 #include "core/AssetManager.h"
-#include "debug/DebugLog.h"
 #include "graphics/DirectXCommon.h"
 #include "texture/TextureManager.h"
 
@@ -351,18 +350,13 @@ void EffectManager::LoadEffect(const std::string &name,
     std::ifstream file(resolvedPath);
     if (!file) {
         const std::string resolved = PathToString(resolvedPath);
-        Log("load_failed", "file_not_found", {{"name", name}, {"path", resolved}});
         throw std::runtime_error("Effect file not found: " + resolved);
     }
 
-    json root{};
-    try {
-        file >> root;
-    } catch (const std::exception &e) {
+    json root = json::parse(file, nullptr, false);
+    if (root.is_discarded()) {
         const std::string resolved = PathToString(resolvedPath);
-        Log("load_failed", "json_parse_error",
-            {{"name", name}, {"path", resolved}, {"error", e.what()}});
-        throw;
+        throw std::runtime_error("Effect json parse failed: " + resolved);
     }
 
     EffectAsset asset{};
@@ -394,7 +388,6 @@ void EffectManager::LoadEffect(const std::string &name,
     activeEffects_.clear();
     cameraShakes_.clear();
     BuildRuntimesFromLoadedAssets();
-    Log("loaded", "ok", {{"name", name}, {"path", PathToString(resolvedPath)}});
 }
 
 bool EffectManager::InitializeGpu(const SceneRenderServices &rendering) {
@@ -411,27 +404,13 @@ bool EffectManager::InitializeGpu(const SceneRenderServices &rendering) {
         ParticleLayerRuntime &layer = *layerPtr;
         uint32_t textureId = rendering.texture->GetWhiteTextureId();
         if (!layer.desc.texture.empty()) {
-            try {
-                textureId = rendering.texture->Load(ToWidePath(layer.desc.texture));
-            } catch (const std::exception &e) {
-                Log("texture_load_failed", "fallback_white",
-                    {{"layer", layer.desc.name},
-                     {"texture", layer.desc.texture},
-                     {"error", e.what()}});
-            }
+            textureId = rendering.texture->Load(ToWidePath(layer.desc.texture));
         }
 
         uint32_t noiseTextureId = rendering.texture->GetWhiteTextureId();
         if (!layer.desc.noiseTexture.empty()) {
-            try {
-                noiseTextureId =
-                    rendering.texture->Load(ToWidePath(layer.desc.noiseTexture));
-            } catch (const std::exception &e) {
-                Log("noise_texture_load_failed", "fallback_white",
-                    {{"layer", layer.desc.name},
-                     {"texture", layer.desc.noiseTexture},
-                     {"error", e.what()}});
-            }
+            noiseTextureId =
+                rendering.texture->Load(ToWidePath(layer.desc.noiseTexture));
         }
 
         GPUParticleMaterialSettings materialSettings{};
@@ -456,11 +435,9 @@ void EffectManager::Play(const std::string &name,
                          const DirectX::XMFLOAT3 &worldPosition) {
     const std::optional<size_t> assetIndex = FindAssetIndex(name);
     if (!assetIndex) {
-        Log("play_ignored", "effect_not_found", {{"name", name}});
         return;
     }
     if (!gpuInitialized_) {
-        Log("play_ignored", "gpu_not_initialized", {{"name", name}});
         return;
     }
 
@@ -487,11 +464,9 @@ void EffectManager::Play(const std::string &name,
 void EffectManager::Play(const std::string &name, const PlayDesc &desc) {
     const std::optional<size_t> assetIndex = FindAssetIndex(name);
     if (!assetIndex) {
-        Log("play_ignored", "effect_not_found", {{"name", name}});
         return;
     }
     if (!gpuInitialized_) {
-        Log("play_ignored", "gpu_not_initialized", {{"name", name}});
         return;
     }
 
@@ -714,8 +689,3 @@ void EffectManager::BuildRuntimesFromLoadedAssets() {
     }
 }
 
-void EffectManager::Log(
-    std::string_view state, std::string_view value,
-    std::initializer_list<DebugLogField> fields) const {
-    DebugLog::Get().Write("EffectManager", "Effect", state, value, fields);
-}

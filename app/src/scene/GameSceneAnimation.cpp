@@ -652,12 +652,19 @@ void GameScene::ApplyEnemyProceduralAnimation() {
     const float stanceSettleTime = GetChargeStanceSettleTime(action);
     const bool chargeSettled =
         IsChargeStanceSettled(action, step, actionTimer);
+    const bool farSlashFlashHold =
+        enemy_.IsFarWarpSlashActive() && step == ActionStep::Active &&
+        actionTimer <= enemy_.GetFarWarpSlashStanceHoldDuration();
+    const bool farSlashPostPierceSlash =
+        enemy_.IsFarWarpSlashActive() && step == ActionStep::Recovery;
     const float chargePose =
-        step == ActionStep::Hold
+        farSlashFlashHold
             ? 1.0f
-            : (step == ActionStep::Charge
-                   ? Smooth01(actionTimer / stanceSettleTime)
-                   : 0.0f);
+            : (step == ActionStep::Hold
+                   ? 1.0f
+                   : (step == ActionStep::Charge
+                          ? Smooth01(actionTimer / stanceSettleTime)
+                          : 0.0f));
     const float idleMotion = chargeSettled ? 0.10f : 1.0f;
 
     auto poseArms = [&](float pitch, float yaw, float roll) {
@@ -682,7 +689,8 @@ void GameScene::ApplyEnemyProceduralAnimation() {
 
     switch (action) {
     case ActionKind::Smash:
-        if (step == ActionStep::Charge || step == ActionStep::Hold) {
+        if (step == ActionStep::Charge || step == ActionStep::Hold ||
+            farSlashFlashHold) {
             const float hold = 0.98f + 0.02f * pulse;
             PoseBoneTree(*enemyModel, root,
                          -0.08f * phaseScale * chargePose, 0.0f, 0.0f);
@@ -691,7 +699,7 @@ void GameScene::ApplyEnemyProceduralAnimation() {
                          0.012f * hold * chargePose);
             poseArms(-0.58f * phaseScale * chargePose,
                      0.08f * chargePose, 0.18f * hold * chargePose);
-        } else if (step == ActionStep::Active) {
+        } else if (step == ActionStep::Active || farSlashPostPierceSlash) {
             const float strike = Smooth01(time / 0.18f);
             PoseBoneTree(*enemyModel, root, 0.10f * phaseScale, 0.0f, 0.0f);
             PoseBoneTree(*enemyModel, chest, 0.34f * phaseScale * strike,
@@ -705,13 +713,14 @@ void GameScene::ApplyEnemyProceduralAnimation() {
         break;
 
     case ActionKind::Sweep:
-        if (step == ActionStep::Charge || step == ActionStep::Hold) {
+        if (step == ActionStep::Charge || step == ActionStep::Hold ||
+            farSlashFlashHold) {
             PoseBoneTree(*enemyModel, chest, -0.06f * chargePose,
                          -0.30f * phaseScale * chargePose,
                          -0.025f * chargePose);
             poseArms(-0.05f * chargePose,
                      -0.34f * phaseScale * chargePose, 0.30f * chargePose);
-        } else if (step == ActionStep::Active) {
+        } else if (step == ActionStep::Active || farSlashPostPierceSlash) {
             const float strike = Smooth01(time / 0.24f);
             PoseBoneTree(*enemyModel, root, 0.0f, 0.18f * phaseScale * strike,
                          0.0f);

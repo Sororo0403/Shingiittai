@@ -88,8 +88,13 @@ void Enemy::UpdateParts() {
     const bool isTelegraphCharge =
         action_.step == ActionStep::Charge &&
         (action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep);
+    const bool isFarSlashFlashHold =
+        farSlashActive_ && action_.step == ActionStep::Active &&
+        runtime_.stateTimer <= GetFarWarpSlashStanceHoldDuration();
+    const bool isFarSlashPostPierceSlash =
+        farSlashActive_ && action_.step == ActionStep::Recovery;
 
-    if (tellActive_ || isTelegraphCharge) {
+    if (tellActive_ || isTelegraphCharge || isFarSlashFlashHold) {
         const float chargePulse = tellActive_ ? (1.0f + 0.55f * pulse)
                                               : (0.72f + 0.42f * pulse);
         constexpr float bodyChargeScale = 0.24f;
@@ -107,7 +112,8 @@ void Enemy::UpdateParts() {
         visualTf_.scale.z += 0.050f * chargePulse;
     }
 
-    if (!suppressActionPresentation && farSlashActive_ && isTelegraphCharge) {
+    if (!suppressActionPresentation && farSlashActive_ &&
+        (isTelegraphCharge || isFarSlashFlashHold)) {
         const float chargeTime =
             action_.kind == ActionKind::Smash ? GetCurrentSmashChargeTime()
                                               : GetCurrentSweepChargeTime();
@@ -200,7 +206,8 @@ void Enemy::UpdateParts() {
     }
 
     if (!suppressActionPresentation && action_.kind == ActionKind::Smash) {
-        if (action_.step == ActionStep::Charge || action_.step == ActionStep::Hold) {
+        if (action_.step == ActionStep::Charge ||
+            action_.step == ActionStep::Hold || isFarSlashFlashHold) {
             const bool isDelayBait = action_.step == ActionStep::Hold;
             bodyTf_.position.y -= 0.28f + 0.08f * pulse;
             bodyTf_.scale.y += 0.24f;
@@ -233,7 +240,8 @@ void Enemy::UpdateParts() {
                 leftHandTf_.position.z += forwardZ * 0.28f;
                 visualPitch -= 0.22f;
             }
-        } else if (action_.step == ActionStep::Active) {
+        } else if (action_.step == ActionStep::Active ||
+                   isFarSlashPostPierceSlash) {
             bodyTf_.position.x += forwardX * 0.18f;
             bodyTf_.position.z += forwardZ * 0.18f;
             bodyTf_.position.y -= 0.05f;
@@ -255,7 +263,8 @@ void Enemy::UpdateParts() {
             visualPitch += 0.10f;
         }
     } else if (!suppressActionPresentation && action_.kind == ActionKind::Sweep) {
-        if (action_.step == ActionStep::Charge || action_.step == ActionStep::Hold) {
+        if (action_.step == ActionStep::Charge ||
+            action_.step == ActionStep::Hold || isFarSlashFlashHold) {
             const bool isWideTell = action_.step == ActionStep::Hold;
             bodyTf_.position.y -= 0.24f + 0.06f * pulse;
             bodyTf_.position.x += rightX * (0.44f + 0.10f * pulse);
@@ -287,7 +296,8 @@ void Enemy::UpdateParts() {
                 visualYaw += 0.20f;
                 visualRoll -= 0.18f;
             }
-        } else if (action_.step == ActionStep::Active) {
+        } else if (action_.step == ActionStep::Active ||
+                   isFarSlashPostPierceSlash) {
             bodyTf_.position.x += (-rightX) * 0.18f;
             bodyTf_.position.z += (-rightZ) * 0.18f;
             rightHandTf_.position.x += (-rightX) * 2.00f;
@@ -552,7 +562,7 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
             hasHitReactionFlash ? hitReactionDuration_ - runtime_.hitReactionTimer
                                 : damageFlashDuration_ - runtime_.damageFlashTimer;
         const float hitStrobe =
-            std::sinf(flashElapsed * 110.0f) > -0.25f
+            std::sinf(flashElapsed * 45.0f) > 0.0f
                 ? 1.0f
                 : 0.0f;
         const float hitFlashAmount = hitFlash * hitStrobe;
@@ -565,15 +575,15 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
                 : LerpColor({1.0f, 0.82f, 0.50f, 0.42f},
                             {1.0f, 0.95f, 0.74f, 0.52f}, damageFlash);
         hitEffect.intensity =
-            hasHitReactionFlash ? 0.65f + 0.82f * hitFlashAmount
-                                : 0.18f + 0.28f * hitFlashAmount;
+            hasHitReactionFlash ? 0.46f + 0.62f * hitFlashAmount
+                                : 0.16f + 0.22f * hitFlashAmount;
         hitEffect.fresnelPower = 1.8f;
         hitEffect.noiseAmount = 0.08f;
         hitEffect.time = flashElapsed;
         hitEffect.surfaceTint =
-            hasHitReactionFlash ? 0.52f + 0.38f * hitFlashAmount
-                                : 0.10f + 0.18f * hitFlashAmount;
-        hitEffect.alphaBoost = hasHitReactionFlash ? 0.82f : 0.42f;
+            hasHitReactionFlash ? 0.40f + 0.24f * hitFlashAmount
+                                : 0.09f + 0.14f * hitFlashAmount;
+        hitEffect.alphaBoost = hasHitReactionFlash ? 0.62f : 0.34f;
     }
 
     if (isHitFlashing) {
@@ -628,34 +638,30 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
         drawEnemyVisual(visualTf_);
     }
 
-    if (action_.kind == ActionKind::Warp) {
-        for (const auto &trail : warpTrailGhosts_) {
-            if (!trail.isActive) {
-                continue;
-            }
-            const float alpha = warpTrailLife_ > 0.0001f
-                                    ? std::clamp(trail.life / warpTrailLife_,
-                                                 0.0f, 1.0f)
-                                    : 0.0f;
-            Transform trailVisual = visualTf_;
-            trailVisual.position = trail.position;
-            trailVisual.position.y += warpArrivalPreviewHeight_;
-            trailVisual.scale.x *= trail.scale * visualScale;
-            trailVisual.scale.y *= trail.scale * visualScale;
-            trailVisual.scale.z *= trail.scale * visualScale;
-
-            ModelDrawEffect trailEffect{};
-            trailEffect.enabled = true;
-            trailEffect.additiveBlend = true;
-            trailEffect.disableCulling = true;
-            trailEffect.color = {0.42f, 0.78f, 1.0f, 0.30f * alpha};
-            trailEffect.intensity = 0.24f * alpha;
-            trailEffect.fresnelPower = 1.7f;
-            trailEffect.noiseAmount = 0.14f;
-            trailEffect.time = runtime_.stateTimer;
-            modelManager->SetDrawEffect(trailEffect);
-            modelManager->Draw(modelId_, trailVisual, camera);
+    for (const auto &trail : afterimageGhosts_) {
+        if (!trail.isActive) {
+            continue;
         }
+        const float alpha = trail.maxLife > 0.0001f
+                                ? std::clamp(trail.life / trail.maxLife, 0.0f,
+                                             1.0f)
+                                : 0.0f;
+        Transform trailVisual = trail.visual;
+        trailVisual.scale.x *= visualScale * (0.98f + 0.04f * alpha);
+        trailVisual.scale.y *= visualScale * (0.98f + 0.04f * alpha);
+        trailVisual.scale.z *= visualScale * (0.98f + 0.04f * alpha);
+
+        ModelDrawEffect trailEffect{};
+        trailEffect.enabled = true;
+        trailEffect.additiveBlend = true;
+        trailEffect.disableCulling = true;
+        trailEffect.color = {0.46f, 0.82f, 1.0f, 0.34f * alpha};
+        trailEffect.intensity = 0.30f * alpha;
+        trailEffect.fresnelPower = 1.45f;
+        trailEffect.noiseAmount = 0.18f;
+        trailEffect.time = runtime_.stateTimer + (1.0f - alpha) * 0.35f;
+        modelManager->SetDrawEffect(trailEffect);
+        modelManager->Draw(modelId_, trailVisual, camera);
     }
 
     modelManager->ClearDrawEffect();

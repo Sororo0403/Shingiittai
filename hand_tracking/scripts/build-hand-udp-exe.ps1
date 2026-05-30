@@ -1,10 +1,19 @@
+param(
+    [string]$Platform = "x64",
+    [string]$Configuration = "Release"
+)
+
 $ErrorActionPreference = "Stop"
 
-$script = Join-Path $PSScriptRoot "hand_udp_sender.py"
-$requirements = Join-Path $PSScriptRoot "requirements-hand-udp.txt"
-$dist = Join-Path $PSScriptRoot "dist"
-$build = Join-Path $PSScriptRoot "build"
-$venv = Join-Path $PSScriptRoot ".venv"
+$handTrackingRoot = Split-Path -Parent $PSScriptRoot
+$repoRoot = Split-Path -Parent $handTrackingRoot
+$script = Join-Path $handTrackingRoot "src\hand_udp_sender.py"
+$requirements = Join-Path $handTrackingRoot "requirements\hand-udp.txt"
+$generated = Join-Path $repoRoot "generated"
+$projectName = "HandUdpSender"
+$dist = Join-Path $generated "outputs\$Platform\$Configuration\$projectName"
+$build = Join-Path $generated "intermediate\$Platform\$Configuration\$projectName\pyinstaller"
+$venv = Join-Path $generated "intermediate\$projectName\.venv"
 $venvPython = Join-Path $venv "Scripts\python.exe"
 
 function Invoke-BasePython {

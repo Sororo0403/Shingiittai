@@ -1,5 +1,4 @@
 #include "input/Input.h"
-#include "debug/DebugLog.h"
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -99,17 +98,7 @@ void Input::Update(float deltaTime) {
             ApplyReplayFrame(replayFrames_[replayFrameIndex_]);
             ++replayFrameIndex_;
             replayFinished_ = replayFrameIndex_ >= replayFrames_.size();
-            if (replayFinished_) {
-                DebugLog::Get().Write(
-                    "Input", "ReplayPlayer", "finished", "ok",
-                    {{"frames", std::to_string(replayFrames_.size())}});
-            }
         } else {
-            if (!replayFinished_) {
-                DebugLog::Get().Write(
-                    "Input", "ReplayPlayer", "finished", "ok",
-                    {{"frames", std::to_string(replayFrames_.size())}});
-            }
             replayFinished_ = true;
         }
         return;

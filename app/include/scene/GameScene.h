@@ -150,6 +150,10 @@ class GameScene : public BaseScene {
     void ReflectArcaneProjectile(size_t swordIndex);
     void ReflectArcaneProjectile(ArcaneProjectileState &projectile,
                                  size_t swordIndex);
+    void EmitArcaneProjectileExplosion(const ArcaneProjectileState &projectile,
+                                       const DirectX::XMFLOAT3 &position,
+                                       const DirectX::XMFLOAT3 &direction,
+                                       bool hitEnemy);
     bool IsArcaneProjectileInDeflectRange() const;
     bool IsArcaneProjectileSlashAligned(const Sword &sword) const;
     DirectX::XMFLOAT2 GetArcaneProjectileCueDirection() const;
@@ -246,6 +250,7 @@ class GameScene : public BaseScene {
     uint32_t arenaBarrierRingModelId_ = 0;
     uint32_t chargeWeakPointModelId_ = 0;
     uint32_t slashSoundId_ = 0;
+    uint32_t normalHitSlashSoundId_ = 0;
     uint32_t enemyReleaseSoundId_ = 0;
     uint32_t hitSoundId_ = 0;
     uint32_t counterSoundId_ = 0;
@@ -256,6 +261,7 @@ class GameScene : public BaseScene {
     bool soundsLoaded_ = false;
     std::array<bool, Player::kSwordCount> previousSwordSoundStates_{};
     float arcaneLaserParticleTimer_ = 0.0f;
+    float farSlashChargeParticleTimer_ = 0.0f;
     uint32_t arenaNoiseTextureId_ = 0;
     std::string enemyAnimationName_{};
     bool enemyAnimationLoop_ = true;

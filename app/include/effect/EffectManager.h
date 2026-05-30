@@ -1,18 +1,15 @@
 #pragma once
 
 #include "camera/Camera.h"
-#include "debug/DebugLog.h"
 #include "effect/EffectAsset.h"
 #include "particle/GPUParticleSystem.h"
 #include "particle/ParticleEmitterSettings.h"
 #include "scene/SceneContext.h"
 
 #include <DirectXMath.h>
-#include <initializer_list>
 #include <memory>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <vector>
 
 class EffectManager {
@@ -66,8 +63,6 @@ class EffectManager {
     std::optional<size_t> FindAssetIndex(const std::string &name) const;
     size_t GetRuntimeLayerOffset(size_t assetIndex) const;
     void BuildRuntimesFromLoadedAssets();
-    void Log(std::string_view state, std::string_view value,
-             std::initializer_list<DebugLogField> fields = {}) const;
 
     std::vector<EffectAsset> assets_;
     std::vector<std::unique_ptr<ParticleLayerRuntime>> particleLayers_;

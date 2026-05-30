@@ -338,8 +338,6 @@ class DirectXCommon {
     void WaitForFrame(UINT frameIndex);
 
     void TrackGpuPhase(const char *phase);
-    void WriteDeviceRemovedLog(HRESULT presentResult,
-                               HRESULT removedReason) const;
 
   private:
     static constexpr UINT kSwapChainBufferCount = 2;

@@ -6,7 +6,6 @@
 #include "GameOverScene.h"
 #include "GameVictoryScene.h"
 #include "Input.h"
-#include "debug/DebugLog.h"
 #include "Material.h"
 #include "Model.h"
 #include "ModelManager.h"
@@ -38,8 +37,8 @@ constexpr float kHitSoundVolume = 0.74f;
 constexpr float kCounterSoundVolume = 0.72f;
 constexpr float kDamageSoundVolume = 0.74f;
 constexpr float kExplosionSoundVolume = 0.68f;
-constexpr float kArcaneProjectileHostileSpeed = 11.8f;
-constexpr float kCataclysmProjectileHostileSpeed = 8.8f;
+constexpr float kArcaneProjectileHostileSpeed = 15.0f;
+constexpr float kCataclysmProjectileHostileSpeed = 12.0f;
 constexpr float kArcaneProjectileReflectedSpeed = 18.5f;
 constexpr float kCataclysmProjectileReflectedSpeed = 42.0f;
 constexpr float kCataclysmProjectileHomingDelay = 0.34f;
@@ -80,6 +79,9 @@ constexpr float kPauseExitFadeDuration = 0.42f;
 constexpr float kBattleBgmBaseVolume = 0.24f;
 constexpr uint16_t kHandCameraPreviewPort = 5006;
 constexpr float kHandCameraPreviewStaleSeconds = 0.75f;
+constexpr float kReadyPreviewParticleCountScale = 0.34f;
+constexpr float kReadyPreviewParticleAlphaScale = 0.68f;
+constexpr float kReadyPreviewParticleVelocityScale = 0.78f;
 
 PostProcessProfile GetPostProcessProfile(const SceneContext *ctx) {
     if (ctx == nullptr || ctx->rendering.postEffectManager == nullptr) {
@@ -193,6 +195,18 @@ float DistanceSq(const XMFLOAT3 &a, const XMFLOAT3 &b) {
     const float dz = a.z - b.z;
     return dx * dx + dy * dy + dz * dz;
 }
+
+uint32_t ReadyPreviewParticleCount(float count) {
+    return (std::max)(
+        1u, static_cast<uint32_t>(
+                std::round(count * kReadyPreviewParticleCountScale)));
+}
+
+XMFLOAT4 ReadyPreviewParticleColor(float r, float g, float b, float a) {
+    return {r, g, b, a * kReadyPreviewParticleAlphaScale};
+}
+
+constexpr float kFarSlashCounterFlashDuration = 0.50f;
 
 SwordCounterAxis RequiredVisualCounterAxisForAction(ActionKind kind) {
     switch (kind) {
@@ -525,10 +539,6 @@ void ApplyRustedRobotMaterials(ModelManager *modelManager, uint32_t modelId,
     }
 }
 
-void LogGameSceneInitializePhase(const char *phase) {
-    DebugLog::Get().Write("Scene", "GameScene", "initialize", phase);
-}
-
 } // namespace
 
 GameScene::~GameScene() {
@@ -607,7 +617,6 @@ void GameScene::StopBattleBgm() {
 }
 
 void GameScene::Initialize(const SceneContext &ctx) {
-    LogGameSceneInitializePhase("begin");
     BaseScene::Initialize(ctx);
     ctx_->rendering.dxCommon->ResetClearColor();
     if (ctx_->rendering.postEffectManager != nullptr) {
@@ -629,31 +638,23 @@ void GameScene::Initialize(const SceneContext &ctx) {
     camera_.Initialize(aspect);
     camera_.UpdateMatrices();
     camera_.SetPerspectiveFovDeg(currentFovDeg_);
-    LogGameSceneInitializePhase("camera_ready");
 
     DirectXCommon *dx = ctx_->rendering.dxCommon;
     ModelManager *model = ctx_->rendering.model;
     TextureManager *texture = ctx_->rendering.texture;
 
-    LogGameSceneInitializePhase("model_load_begin");
     uint32_t playerModel =
         model->Load(L"app/resources/models/player/player.gltf");
     uint32_t swordModel = model->Load(L"app/resources/models/player/sword.glb");
     uint32_t enemyModel = model->Load(L"app/resources/models/boss/boss.gltf");
     uint32_t bulletModel = model->Load(L"app/resources/models/boss/bullet.gltf");
-    LogGameSceneInitializePhase("model_load_end");
-    LogGameSceneInitializePhase("texture_load_begin");
     particleTextureId_ =
         texture->Load(L"app/resources/effects/particles/smoke.png");
     InitializeEnemyPhaseMaterialSet(texture, enemyPhaseMaterials_);
-    LogGameSceneInitializePhase("texture_load_end");
-    LogGameSceneInitializePhase("procedural_texture_begin");
     const uint32_t worldRustTextureId =
         AppCreateRustedMetalTexture(texture, 768, 768);
     const uint32_t arenaStoneTextureId =
         AppCreateArenaStoneTexture(texture, 1024, 1024);
-    LogGameSceneInitializePhase("procedural_texture_end");
-    LogGameSceneInitializePhase("material_apply_begin");
     ApplyWeatheredMetalMaterials(model, playerModel, worldRustTextureId,
                                  {{0.22f, 0.31f, 0.56f, 0.98f},
                                   {0.11f, 0.17f, 0.32f, 0.98f},
@@ -666,9 +667,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
                                  0.24f, 0.12f, 0.64f);
     ApplyEnemyPhaseMaterial(model, texture, enemyModel, enemyPhaseMaterials_,
                             BossPhase::Phase1, false, 1.0f);
-    LogGameSceneInitializePhase("material_apply_end");
     if (!gSharedBattleModels.initialized) {
-        LogGameSceneInitializePhase("shared_models_begin");
         gSharedBattleModels.arenaNoiseTextureId = arenaStoneTextureId;
         gSharedBattleModels.arenaFloorModelId =
             model->CreatePlane(arenaStoneTextureId,
@@ -749,10 +748,8 @@ void GameScene::Initialize(const SceneContext &ctx) {
             model->CreatePlane(0, MakeArenaMaterial({1.0f, 0.96f, 0.78f, 0.92f},
                                                     false, 0.02f, 0.20f));
         gSharedBattleModels.initialized = true;
-        LogGameSceneInitializePhase("shared_models_end");
     }
 
-    LogGameSceneInitializePhase("shared_model_assign_begin");
     arenaNoiseTextureId_ = gSharedBattleModels.arenaNoiseTextureId;
     arenaFloorModelId_ = gSharedBattleModels.arenaFloorModelId;
     arenaLowPolyTerrainModelId_ =
@@ -776,8 +773,6 @@ void GameScene::Initialize(const SceneContext &ctx) {
     arenaDomeModelId_ = gSharedBattleModels.arenaDomeModelId;
     arenaBarrierRingModelId_ = gSharedBattleModels.arenaBarrierRingModelId;
     chargeWeakPointModelId_ = gSharedBattleModels.chargeWeakPointModelId;
-    LogGameSceneInitializePhase("shared_model_assign_end");
-    LogGameSceneInitializePhase("particles_begin");
     sparkParticles_.Initialize(dx, ctx_->rendering.srv, texture,
                                particleTextureId_, 9000);
     sparkParticles_.SetEmission(1, 1000.0f);
@@ -795,15 +790,11 @@ void GameScene::Initialize(const SceneContext &ctx) {
                                     particleTextureId_, 256);
     swordFlashParticles_.SetEmission(1, 1000.0f);
     swordFlashParticles_.SetEmitterRadius(0.06f);
-    LogGameSceneInitializePhase("particles_end");
-    LogGameSceneInitializePhase("sword_renderers_begin");
     swordTrailRenderer_.Initialize(dx);
     swordTrailRenderer_.Reset();
     swordSlashArcRenderer_.Initialize(dx);
     swordSlashArcRenderer_.Reset();
-    LogGameSceneInitializePhase("sword_renderers_end");
 
-    LogGameSceneInitializePhase("actors_begin");
     player_.Initialize(playerModel, swordModel);
     player_.SetInputCalibration(inputCalibration_);
     playerModelId_ = playerModel;
@@ -813,11 +804,11 @@ void GameScene::Initialize(const SceneContext &ctx) {
     enemy_.SetDifficulty(combatDifficulty_);
     enemy_.Initialize(enemyModel);
     enemyModelId_ = enemyModel;
-    LogGameSceneInitializePhase("actors_end");
     if (ctx_->systems.sound != nullptr) {
-        LogGameSceneInitializePhase("sound_load_begin");
         slashSoundId_ = ctx_->systems.sound->Load(
             L"app/resources/audio/sfx/slash_hero.wav");
+        normalHitSlashSoundId_ = ctx_->systems.sound->Load(
+            L"app/resources/audio/se/剣で斬る2.mp3");
         enemyReleaseSoundId_ = ctx_->systems.sound->Load(
             L"app/resources/audio/sfx/enemy_release_snap.wav");
         hitSoundId_ = ctx_->systems.sound->Load(
@@ -829,11 +820,8 @@ void GameScene::Initialize(const SceneContext &ctx) {
         explosionSoundId_ = ctx_->systems.sound->Load(
             L"app/resources/audio/sfx/explosion_boss.wav");
         soundsLoaded_ = true;
-        LogGameSceneInitializePhase("sound_load_end");
     }
-    LogGameSceneInitializePhase("battle_bgm_begin");
     StartBattleBgm();
-    LogGameSceneInitializePhase("battle_bgm_end");
     cameraYaw_ = 0.0f;
     cameraPitch_ = 0.0f;
     isLockOn_ = true;
@@ -863,7 +851,6 @@ void GameScene::Initialize(const SceneContext &ctx) {
     }
     SyncEnemyAnimation();
     UpdateSceneLighting();
-    LogGameSceneInitializePhase("state_setup_begin");
     battleElapsedTime_ = 0.0f;
     battleIntroActive_ = true;
     battleIntroTimer_ = 0.0f;
@@ -936,9 +923,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
     pauseExitFadeTimer_ = 0.0f;
     pauseExitTarget_ = 0;
     player_.SetCameraSwordSlashSuppressed(false);
-    LogGameSceneInitializePhase("state_setup_end");
     if (inputCalibration_.controlType == InputControlType::Hand) {
-        LogGameSceneInitializePhase("hand_tracking_begin");
         if (AppSceneServices::HasHandTrackingStart()) {
             handTrackingStartRequested_ =
                 AppSceneServices::RequestHandTrackingStart();
@@ -947,13 +932,9 @@ void GameScene::Initialize(const SceneContext &ctx) {
             cameraPreviewReceiver_.Initialize(ctx_->rendering.texture,
                                               kHandCameraPreviewPort);
         }
-        LogGameSceneInitializePhase("hand_tracking_end");
     }
-    LogGameSceneInitializePhase("hud_begin");
     hud_.Initialize(*ctx_);
-    LogGameSceneInitializePhase("hud_end");
     if (tutorialMode_) {
-        LogGameSceneInitializePhase("tutorial_assets_begin");
         LoadTutorialImages();
         tutorialEntryFadeTimer_ = -kTutorialEntryBlackHold;
         enemy_.SetTutorialPosition({0.0f, 0.0f, 3.10f});
@@ -965,11 +946,8 @@ void GameScene::Initialize(const SceneContext &ctx) {
         UpdateBattleCamera();
         camera_.UpdateMatrices();
         UpdateSceneLighting();
-        LogGameSceneInitializePhase("tutorial_assets_end");
     } else if (!titleDemoMode_ && !backgroundOnlyMode_ && !readyPreviewMode_) {
-        LogGameSceneInitializePhase("pause_assets_begin");
         LoadPauseMenuImages();
-        LogGameSceneInitializePhase("pause_assets_end");
     }
     enemy_.FaceTargetImmediately(player_.GetTransform().position);
     ApplyEnemyIntroDissolve(0.0f);
@@ -988,7 +966,6 @@ void GameScene::Initialize(const SceneContext &ctx) {
         }
         UpdateSceneLighting();
     }
-    LogGameSceneInitializePhase("end");
 }
 
 void GameScene::Update() {
@@ -2242,6 +2219,7 @@ void GameScene::DispatchCombatFeedback(const CombatFeedbackEvent &event) {
     combatFeedback_.PushEvent(event);
     EmitCombatParticles(event);
     if (event.type == CombatFeedbackEventType::PlayerSlashHit ||
+        event.type == CombatFeedbackEventType::MistimedCounterSlash ||
         event.type == CombatFeedbackEventType::CounterSuccess ||
         event.type == CombatFeedbackEventType::BladeClashPierce) {
         DirectX::XMFLOAT2 slashDirection{0.0f, 0.0f};
@@ -2254,9 +2232,13 @@ void GameScene::DispatchCombatFeedback(const CombatFeedbackEvent &event) {
                                                  camera_, event.power,
                                                  slashDirection);
         } else {
+            const SwordSlashHitLineStyle hitLineStyle =
+                event.type == CombatFeedbackEventType::MistimedCounterSlash
+                    ? SwordSlashHitLineStyle::RedPunish
+                    : SwordSlashHitLineStyle::Normal;
             swordSlashArcRenderer_.EmitHitLine(event.position, event.direction,
                                                camera_, event.power,
-                                               slashDirection);
+                                               slashDirection, hitLineStyle);
         }
     }
     if (!soundsLoaded_ || ctx_ == nullptr || ctx_->systems.sound == nullptr) {
@@ -2276,6 +2258,7 @@ void GameScene::DispatchCombatFeedback(const CombatFeedbackEvent &event) {
                                   kHitSoundVolume *
                                       AppSceneServices::GetSeVolume());
         break;
+    case CombatFeedbackEventType::MistimedCounterSlash:
     case CombatFeedbackEventType::PlayerDamaged:
         ctx_->systems.sound->Play(
             damageSoundId_,
@@ -2555,6 +2538,44 @@ void GameScene::ReflectArcaneProjectile(ArcaneProjectileState &projectile,
                       {0.20f, 1.0f, 0.88f, 0.90f}, direction, 2.10f);
 }
 
+void GameScene::EmitArcaneProjectileExplosion(
+    const ArcaneProjectileState &projectile, const XMFLOAT3 &position,
+    const XMFLOAT3 &direction, bool hitEnemy) {
+    const bool cataclysm = projectile.cataclysm;
+    const bool reflected = projectile.reflected || hitEnemy;
+    const XMFLOAT4 coreColor =
+        reflected ? XMFLOAT4{0.24f, 1.0f, 0.68f, 0.92f}
+                  : XMFLOAT4{0.18f, 0.92f, 1.0f, 0.90f};
+    const XMFLOAT4 smokeColor =
+        reflected ? XMFLOAT4{0.20f, 0.44f, 0.32f, 0.72f}
+                  : XMFLOAT4{0.20f, 0.36f, 0.44f, 0.70f};
+    const float scale = cataclysm ? 1.28f : 1.0f;
+
+    EmitParticleBurst(explosionParticles_, position,
+                      static_cast<uint32_t>((hitEnemy ? 190.0f : 142.0f) *
+                                            scale),
+                      (hitEnemy ? 0.62f : 0.46f) * scale,
+                      AppParticleBurstStyle::Explosion, coreColor, direction,
+                      (hitEnemy ? 2.65f : 2.05f) * scale);
+    EmitParticleBurst(sparkParticles_, position,
+                      static_cast<uint32_t>((hitEnemy ? 124.0f : 96.0f) *
+                                            scale),
+                      0.30f * scale, AppParticleBurstStyle::Sparks, coreColor,
+                      direction, (hitEnemy ? 2.25f : 1.65f) * scale);
+    EmitParticleBurst(smokeParticles_, position,
+                      static_cast<uint32_t>((hitEnemy ? 46.0f : 38.0f) *
+                                            scale),
+                      0.52f * scale, AppParticleBurstStyle::Smoke, smokeColor,
+                      direction, 0.92f * scale);
+
+    if (soundsLoaded_ && ctx_ != nullptr && ctx_->systems.sound != nullptr) {
+        ctx_->systems.sound->Play(
+            explosionSoundId_,
+            kExplosionSoundVolume * (hitEnemy ? 0.84f : 0.68f) *
+                AppSceneServices::GetSeVolume());
+    }
+}
+
 bool GameScene::IsArcaneProjectileInDeflectRange() const {
     if (!arcaneProjectile_.active || arcaneProjectile_.reflected) {
         return false;
@@ -2737,16 +2758,27 @@ void GameScene::EmitReadyPreviewHeatParticles(float deltaTime) {
         return;
     }
 
-    constexpr float kReadyPreviewParticleSurgeHeat = 7.0f / 9.0f;
-    const float midHeat = std::clamp(
-        (readyPreviewHeat_ - 2.0f / 9.0f) / (5.0f / 9.0f), 0.0f, 1.0f);
-    const float preSurgeScale = 0.38f + 0.42f * SmoothStep01(midHeat);
+    constexpr float kReadyPreviewParticleVisibleHeat = 2.0f / 9.0f;
+    constexpr float kReadyPreviewParticleHighHeat = 7.0f / 9.0f;
+    const float midHeat =
+        std::clamp((readyPreviewHeat_ - kReadyPreviewParticleVisibleHeat) /
+                       (kReadyPreviewParticleHighHeat -
+                        kReadyPreviewParticleVisibleHeat),
+                   0.0f, 1.0f);
+    const float highHeat =
+        std::clamp((readyPreviewHeat_ - kReadyPreviewParticleHighHeat) /
+                       (1.0f - kReadyPreviewParticleHighHeat),
+                   0.0f, 1.0f);
     const float heat =
-        readyPreviewHeat_ >= kReadyPreviewParticleSurgeHeat
-            ? readyPreviewHeat_
-            : readyPreviewHeat_ * preSurgeScale;
+        readyPreviewHeat_ < kReadyPreviewParticleVisibleHeat
+            ? readyPreviewHeat_ * (0.34f / kReadyPreviewParticleVisibleHeat)
+            : 0.34f + 0.51f * SmoothStep01(midHeat);
     const float danger = heat * heat * (3.0f - 2.0f * heat);
-    readyPreviewParticleTimer_ = 0.055f - 0.046f * danger;
+    const float highDensity = 1.0f - 0.32f * SmoothStep01(highHeat);
+    auto previewCount = [highDensity](float count) {
+        return ReadyPreviewParticleCount(count * highDensity);
+    };
+    readyPreviewParticleTimer_ = 0.120f - 0.070f * danger;
     const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
     const float wave = sceneLightTime_ * (2.6f + danger * 7.4f);
     const float ringRadius = 0.52f + 1.18f * danger;
@@ -2760,46 +2792,57 @@ void GameScene::EmitReadyPreviewHeatParticles(float deltaTime) {
     const XMFLOAT3 upward{std::sinf(wave) * (0.12f + 0.24f * danger), 1.0f,
                           std::cosf(wave * 0.8f) *
                               (0.10f + 0.22f * danger)};
-    const XMFLOAT4 flameColor{1.0f, 0.30f + 0.48f * heat, 0.04f,
-                              0.88f + 0.12f * danger};
-    const XMFLOAT4 smokeColor{0.26f + 0.36f * danger, 0.18f + 0.10f * heat,
-                              0.12f, 0.60f + 0.28f * danger};
+    const XMFLOAT4 flameColor = ReadyPreviewParticleColor(
+        1.0f, 0.30f + 0.48f * heat, 0.04f, 0.88f + 0.12f * danger);
+    const XMFLOAT4 smokeColor = ReadyPreviewParticleColor(
+        0.26f + 0.36f * danger, 0.18f + 0.10f * heat, 0.12f,
+        0.60f + 0.28f * danger);
 
     EmitParticleBurst(
         smokeParticles_, {core.x, core.y - 0.36f, core.z},
-        static_cast<uint32_t>(34.0f + 88.0f * heat + 250.0f * danger),
+        previewCount(34.0f + 88.0f * heat + 250.0f * danger),
         0.82f + 0.58f * heat + 1.24f * danger, AppParticleBurstStyle::Smoke,
-        smokeColor, upward, 0.85f + 1.18f * heat + 2.28f * danger);
+        smokeColor, upward,
+        (0.85f + 1.18f * heat + 2.28f * danger) *
+            kReadyPreviewParticleVelocityScale);
     EmitParticleBurst(
         sparkParticles_, {core.x, core.y + 0.12f, core.z},
-        static_cast<uint32_t>(96.0f + 220.0f * heat + 520.0f * danger),
+        previewCount(96.0f + 220.0f * heat + 520.0f * danger),
         0.30f + 0.34f * heat + 0.70f * danger, AppParticleBurstStyle::Sparks,
-        flameColor, upward, 2.60f + 3.90f * heat + 6.90f * danger);
+        flameColor, upward,
+        (2.60f + 3.90f * heat + 6.90f * danger) *
+            kReadyPreviewParticleVelocityScale);
 
     const XMFLOAT3 secondOrigin{enemyPos.x - side * 0.68f,
                                 enemyPos.y + 0.62f + 0.42f * danger,
                                 enemyPos.z - 0.42f - depth * 0.36f};
     EmitParticleBurst(
         sparkParticles_, secondOrigin,
-        static_cast<uint32_t>(74.0f + 176.0f * heat + 410.0f * danger),
+        previewCount(74.0f + 176.0f * heat + 410.0f * danger),
         0.24f + 0.30f * heat + 0.64f * danger, AppParticleBurstStyle::Sparks,
-        {1.0f, 0.22f + 0.44f * heat, 0.03f, 0.86f + 0.12f * danger},
-        upward, 2.10f + 3.50f * heat + 6.20f * danger);
+        ReadyPreviewParticleColor(1.0f, 0.22f + 0.44f * heat, 0.03f,
+                                  0.86f + 0.12f * danger),
+        upward,
+        (2.10f + 3.50f * heat + 6.20f * danger) *
+            kReadyPreviewParticleVelocityScale);
 
     if (heat > 0.24f) {
         EmitParticleBurst(
             explosionParticles_, {core.x, core.y + 0.22f, core.z},
-            static_cast<uint32_t>(54.0f + 152.0f * heat + 350.0f * danger),
+            previewCount(54.0f + 152.0f * heat + 350.0f * danger),
             0.24f + 0.30f * heat + 0.76f * danger,
             AppParticleBurstStyle::Explosion, flameColor, upward,
-            1.75f + 2.80f * heat + 5.20f * danger);
+            (1.75f + 2.80f * heat + 5.20f * danger) *
+                kReadyPreviewParticleVelocityScale);
         EmitParticleBurst(
             smokeParticles_,
             {core.x - side * 0.24f, core.y - 0.04f, core.z - depth * 0.18f},
-            static_cast<uint32_t>(18.0f + 58.0f * heat + 170.0f * danger),
+            previewCount(18.0f + 58.0f * heat + 170.0f * danger),
             0.38f + 0.78f * danger, AppParticleBurstStyle::Flash,
-            {1.0f, 0.44f + 0.18f * heat, 0.08f, 0.30f + 0.42f * danger},
-            upward, 0.86f + 2.55f * danger);
+            ReadyPreviewParticleColor(1.0f, 0.44f + 0.18f * heat, 0.08f,
+                                      0.30f + 0.42f * danger),
+            upward, (0.86f + 2.55f * danger) *
+                        kReadyPreviewParticleVelocityScale);
     }
 
     if (heat > 0.52f) {
@@ -2808,16 +2851,20 @@ void GameScene::EmitReadyPreviewHeatParticles(float deltaTime) {
                                   enemyPos.z - 0.36f + depth * 0.74f};
         EmitParticleBurst(
             explosionParticles_, ringOrigin,
-            static_cast<uint32_t>(110.0f + 360.0f * danger),
+            previewCount(110.0f + 360.0f * danger),
             0.38f + 0.78f * danger, AppParticleBurstStyle::SlashLine,
-            {1.0f, 0.64f, 0.08f, 0.76f + 0.22f * danger},
+            ReadyPreviewParticleColor(1.0f, 0.64f, 0.08f,
+                                      0.76f + 0.22f * danger),
             {std::cosf(wave), 0.18f + 0.32f * danger, std::sinf(wave)},
-            1.80f + 4.80f * danger);
+            (1.80f + 4.80f * danger) *
+                kReadyPreviewParticleVelocityScale);
         EmitParticleBurst(
             sparkParticles_, {ringOrigin.x, ringOrigin.y + 0.18f, ringOrigin.z},
-            static_cast<uint32_t>(150.0f + 450.0f * danger),
+            previewCount(150.0f + 450.0f * danger),
             0.30f + 0.70f * danger, AppParticleBurstStyle::Sparks,
-            {1.0f, 0.78f, 0.18f, 0.98f}, upward, 2.70f + 6.30f * danger);
+            ReadyPreviewParticleColor(1.0f, 0.78f, 0.18f, 0.98f), upward,
+            (2.70f + 6.30f * danger) *
+                kReadyPreviewParticleVelocityScale);
     }
 
     if (heat > 0.72f) {
@@ -2827,16 +2874,22 @@ void GameScene::EmitReadyPreviewHeatParticles(float deltaTime) {
                                    enemyPos.z - 0.30f - depth * 0.46f};
         EmitParticleBurst(
             explosionParticles_, panicOrigin,
-            static_cast<uint32_t>(260.0f + 520.0f * danger),
+            previewCount(260.0f + 520.0f * danger),
             0.42f + 0.96f * danger, AppParticleBurstStyle::Explosion,
-            {1.0f, 0.10f + 0.30f * heat, 0.02f, 0.94f}, upward,
-            3.10f + 7.40f * danger);
+            ReadyPreviewParticleColor(1.0f, 0.10f + 0.30f * heat, 0.02f,
+                                      0.94f),
+            upward,
+            (3.10f + 7.40f * danger) *
+                kReadyPreviewParticleVelocityScale);
         EmitParticleBurst(
             smokeParticles_, {panicOrigin.x, panicOrigin.y - 0.16f, panicOrigin.z},
-            static_cast<uint32_t>(86.0f + 250.0f * danger),
+            previewCount(86.0f + 250.0f * danger),
             0.78f + 1.54f * danger, AppParticleBurstStyle::Flash,
-            {1.0f, 0.34f, 0.08f, 0.58f + 0.34f * danger}, upward,
-            1.50f + 4.10f * danger);
+            ReadyPreviewParticleColor(1.0f, 0.34f, 0.08f,
+                                      0.58f + 0.34f * danger),
+            upward,
+            (1.50f + 4.10f * danger) *
+                kReadyPreviewParticleVelocityScale);
     }
 }
 
@@ -2870,6 +2923,24 @@ void GameScene::EmitCombatParticles(const CombatFeedbackEvent &event) {
                           {0.96f, 0.97f, 1.00f, 0.16f}, direction,
                           1.26f + power * 0.12f);
         break;
+    case CombatFeedbackEventType::MistimedCounterSlash:
+        EmitParticleBurst(sparkParticles_, position, 76, 0.16f,
+                          AppParticleBurstStyle::Sparks,
+                          {1.00f, 0.08f, 0.03f, 0.92f}, direction, 2.36f);
+        EmitParticleBurst(swordFlashParticles_, position,
+                          static_cast<uint32_t>(18.0f + power * 5.0f),
+                          0.12f + power * 0.014f, AppParticleBurstStyle::Flash,
+                          {1.0f, 0.18f, 0.10f, 0.82f}, direction,
+                          0.48f + power * 0.06f);
+        EmitParticleBurst(
+            explosionParticles_, position,
+            static_cast<uint32_t>(68.0f + power * 10.0f),
+            0.21f + power * 0.014f, AppParticleBurstStyle::SlashLine,
+            {1.00f, 0.04f, 0.02f, 0.86f}, direction, 2.34f + power * 0.24f);
+        EmitParticleBurst(smokeParticles_, position, 18, 0.24f,
+                          AppParticleBurstStyle::Smoke,
+                          {0.34f, 0.08f, 0.06f, 0.34f}, direction, 0.86f);
+        break;
     case CombatFeedbackEventType::PlayerDamaged:
         EmitParticleBurst(sparkParticles_, position, 110, 0.24f,
                           AppParticleBurstStyle::Sparks,
@@ -2882,32 +2953,6 @@ void GameScene::EmitCombatParticles(const CombatFeedbackEvent &event) {
                           {0.48f, 0.36f, 0.28f, 1.0f}, direction, 0.78f);
         break;
     case CombatFeedbackEventType::CounterSuccess:
-        EmitParticleBurst(swordFlashParticles_, position,
-                          static_cast<uint32_t>(18.0f + power * 5.0f),
-                          0.24f + power * 0.030f, AppParticleBurstStyle::Flash,
-                          {0.88f, 1.00f, 1.00f, 0.92f}, direction,
-                          0.62f + power * 0.06f);
-        EmitParticleBurst(sparkParticles_, position,
-                          static_cast<uint32_t>(154.0f + power * 24.0f),
-                          0.42f + power * 0.035f,
-                          AppParticleBurstStyle::Sparks,
-                          {0.04f, 0.72f, 1.00f, 0.96f}, direction,
-                          2.55f + power * 0.30f);
-        EmitParticleBurst(explosionParticles_, position,
-                          static_cast<uint32_t>(62.0f + power * 14.0f),
-                          0.48f + power * 0.030f,
-                          AppParticleBurstStyle::SlashLine,
-                          {0.74f, 0.14f, 1.00f, 0.88f}, direction,
-                          1.80f + power * 0.18f);
-        EmitParticleBurst(explosionParticles_, position,
-                          static_cast<uint32_t>(70.0f + power * 12.0f),
-                          0.58f + power * 0.035f,
-                          AppParticleBurstStyle::SpiritSparkle,
-                          {0.28f, 0.92f, 1.00f, 0.76f}, direction,
-                          1.62f + power * 0.20f);
-        EmitParticleBurst(smokeParticles_, position, 12, 0.34f,
-                          AppParticleBurstStyle::Flash,
-                          {0.52f, 0.22f, 1.00f, 0.24f}, direction, 0.48f);
         break;
     case CombatFeedbackEventType::BladeClashGuardBreak:
         EmitParticleBurst(sparkParticles_, position, 170, 0.34f,
@@ -2951,16 +2996,40 @@ void GameScene::EmitEnemyActionParticles(ActionKind kind, ActionStep step) {
         origin.z += forward.z * 1.10f;
         switch (kind) {
         case ActionKind::Smash:
+            if (enemy_.IsFarWarpSlashActive()) {
+                EmitParticleBurst(swordFlashParticles_, origin, 32, 0.50f,
+                                  AppParticleBurstStyle::Flash,
+                                  {1.0f, 0.96f, 0.70f, 0.94f}, forward, 0.76f);
+                EmitParticleBurst(sparkParticles_, origin, 62, 0.24f,
+                                  AppParticleBurstStyle::SpiritSparkle,
+                                  {1.0f, 0.88f, 0.42f, 0.70f}, forward, 1.10f);
+                break;
+            }
+            swordSlashArcRenderer_.EmitEnemyWindSlash(enemyPos, yaw, camera_,
+                                                       false, 3.6f);
             EmitParticleBurst(explosionParticles_, origin, 150, 2.10f,
                               AppParticleBurstStyle::SpiritSparkle,
                               {1.0f, 1.0f, 0.96f, 0.72f}, forward, 1.68f);
             break;
         case ActionKind::Sweep:
+            if (enemy_.IsFarWarpSlashActive()) {
+                EmitParticleBurst(swordFlashParticles_, origin, 32, 0.50f,
+                                  AppParticleBurstStyle::Flash,
+                                  {1.0f, 0.96f, 0.70f, 0.94f}, forward, 0.76f);
+                EmitParticleBurst(sparkParticles_, origin, 64, 0.24f,
+                                  AppParticleBurstStyle::SpiritSparkle,
+                                  {1.0f, 0.88f, 0.42f, 0.70f}, forward, 1.16f);
+                break;
+            }
+            swordSlashArcRenderer_.EmitEnemyWindSlash(enemyPos, yaw, camera_,
+                                                       true, 3.8f);
             EmitParticleBurst(explosionParticles_, origin, 158, 2.18f,
                               AppParticleBurstStyle::SpiritSparkle,
                               {1.0f, 1.0f, 0.96f, 0.70f}, forward, 1.58f);
             break;
         case ActionKind::BladeClash:
+            swordSlashArcRenderer_.EmitEnemyWindSlash(enemyPos, yaw, camera_,
+                                                       true, 4.4f);
             EmitParticleBurst(explosionParticles_, origin, 180, 2.24f,
                               AppParticleBurstStyle::SpiritSparkle,
                               {1.0f, 0.92f, 0.66f, 0.78f}, forward, 1.82f);
@@ -3019,56 +3088,12 @@ void GameScene::EmitArcaneLaserParticles(float deltaTime) {
     const XMFLOAT3 direction = isCataclysmLaser
                                    ? enemy_.GetCataclysmLaserDirection()
                                    : enemy_.GetArcaneLaserDirection();
-    const float charge = isCataclysmLaser
-                             ? enemy_.GetCataclysmLaserChargeRatio()
-                             : enemy_.GetArcaneLaserChargeRatio();
-    const float radius = isCataclysmLaser ? enemy_.GetCataclysmLaserRadius()
-                                          : enemy_.GetArcaneLaserRadius();
     const XMFLOAT3 circlePos{muzzle.x + direction.x * 0.34f,
                              muzzle.y + 0.04f,
                              muzzle.z + direction.z * 0.34f};
-    const XMFLOAT3 right{direction.z, 0.0f, -direction.x};
-    const XMFLOAT4 laserColor = isCataclysmLaser
-                                    ? XMFLOAT4{0.18f, 0.90f, 1.0f, 0.96f}
-                                    : XMFLOAT4{0.22f, 1.0f, 0.78f, 0.92f};
 
     if (step == ActionStep::Charge) {
-        arcaneLaserParticleTimer_ =
-            isCataclysmLaser ? 0.054f - 0.028f * charge
-                             : 0.072f - 0.038f * charge;
-
-        ParticleEmitterSettings ring{};
-        ring.position = circlePos;
-        ring.emissionType = ParticleEmissionType::Burst;
-        ring.spawnShape = ParticleSpawnShape::Ring;
-        ring.burstCount = static_cast<uint32_t>(
-            (isCataclysmLaser ? 180.0f : 110.0f) +
-            (isCataclysmLaser ? 360.0f : 210.0f) * charge);
-        ring.maxParticles = ring.burstCount;
-        const float ringRadius = radius * (0.82f + 0.58f * charge);
-        ring.spawnOffsetScale = {ringRadius, ringRadius, 0.02f};
-        ring.basisRight = right;
-        ring.basisUp = {0.0f, 1.0f, 0.0f};
-        ring.basisForward = direction;
-        ring.tintColor = {0.18f, 1.0f, 0.74f, 0.62f + 0.30f * charge};
-        ring.direction = direction;
-        ring.radialVelocity = 0.18f + 0.28f * charge;
-        ring.directionalVelocity = 0.06f;
-        ring.baseLifeTime = 0.30f + 0.18f * charge;
-        ring.lifeTimeRandom = 0.06f;
-        ring.fadeOutTime = 0.14f;
-        ring.startScale =
-            (isCataclysmLaser ? 0.075f : 0.050f) + 0.030f * charge;
-        ring.endScale = 0.008f;
-        ring.scaleRandom = 0.012f;
-        explosionParticles_.EmitOnce(ring);
-
-        EmitParticleBurst(sparkParticles_, circlePos,
-                          static_cast<uint32_t>(95.0f + 230.0f * charge),
-                          0.42f + 0.34f * charge,
-                          AppParticleBurstStyle::SpiritSparkle, laserColor,
-                          {direction.x, 0.22f, direction.z},
-                          0.92f + 1.95f * charge);
+        arcaneLaserParticleTimer_ = 0.10f;
         return;
     }
 
@@ -3134,47 +3159,86 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
         (void)cueEvent;
     }
 
-    const ActionKind kind = enemy_.GetActionKind();
-    const ActionStep step = enemy_.GetActionStep();
-    const ArcaneProjectileState *cueProjectile = nullptr;
-    if (arcaneProjectile_.active && !arcaneProjectile_.reflected) {
-        cueProjectile = &arcaneProjectile_;
-    }
-    for (const ArcaneProjectileState &projectile : cataclysmProjectiles_) {
+    bool projectileCueVisible = false;
+    auto emitProjectileCue = [&](const ArcaneProjectileState &projectile) {
         if (!projectile.active || projectile.reflected) {
-            continue;
+            return;
         }
-        if (cueProjectile == nullptr ||
-            DistanceSq(projectile.position, player_.GetTransform().position) <
-                DistanceSq(cueProjectile->position,
-                           player_.GetTransform().position)) {
-            cueProjectile = &projectile;
-        }
-    }
-    if (cueProjectile != nullptr) {
         const bool canDeflect =
-            DistanceSq(cueProjectile->position, player_.GetTransform().position) <=
+            DistanceSq(projectile.position, player_.GetTransform().position) <=
             kArcaneProjectileDeflectRange * kArcaneProjectileDeflectRange;
         const XMFLOAT4 lineColor =
             canDeflect ? XMFLOAT4{0.20f, 1.0f, 0.32f, 1.0f}
                        : XMFLOAT4{1.0f, 0.06f, 0.06f, 1.0f};
-        XMFLOAT3 cuePos = cueProjectile->position;
+        XMFLOAT3 cuePos = projectile.position;
         cuePos.y += 0.08f;
         swordSlashArcRenderer_.EmitDirectionCueLine(
-            cuePos, cueProjectile->cueDirection, camera_, lineColor,
-            canDeflect, 1.55f);
+            cuePos, projectile.cueDirection, camera_, lineColor, canDeflect,
+            1.55f);
+        projectileCueVisible = true;
+    };
+
+    emitProjectileCue(arcaneProjectile_);
+    for (const ArcaneProjectileState &projectile : cataclysmProjectiles_) {
+        emitProjectileCue(projectile);
+    }
+    if (projectileCueVisible) {
         return;
     }
 
+    const ActionKind kind = enemy_.GetActionKind();
+    const ActionStep step = enemy_.GetActionStep();
+    const bool farWarpSlashActive = enemy_.IsFarWarpSlashActive();
     if (!(kind == ActionKind::Smash || kind == ActionKind::Sweep ||
           kind == ActionKind::BladeClash) ||
         !(step == ActionStep::Charge || step == ActionStep::Hold ||
+          (farWarpSlashActive && step == ActionStep::Active) ||
           (kind == ActionKind::BladeClash && step == ActionStep::Active))) {
+        farSlashChargeParticleTimer_ = 0.0f;
         return;
     }
 
-    bool releaseCounterCueVisible = kind == ActionKind::BladeClash ||
-                                    enemy_.GetReleaseAnticipationRatio() > 0.0f;
+    if (farWarpSlashActive &&
+        (step == ActionStep::Charge || step == ActionStep::Hold)) {
+        farSlashChargeParticleTimer_ =
+            (std::max)(0.0f, farSlashChargeParticleTimer_ - deltaTime);
+        if (farSlashChargeParticleTimer_ <= 0.0f) {
+            XMFLOAT3 chargePos = enemy_.GetTransform().position;
+            chargePos.y += 1.05f;
+            const float yaw = enemy_.GetTelegraphYaw();
+            const XMFLOAT3 inward = {-std::sinf(yaw), 0.26f, -std::cosf(yaw)};
+            EmitParticleBurst(smokeParticles_, chargePos, 18, 0.32f,
+                              AppParticleBurstStyle::SpiritSparkle,
+                              {1.0f, 0.92f, 0.58f, 0.42f}, inward, 0.72f);
+            farSlashChargeParticleTimer_ = 0.075f;
+        }
+    } else if (farWarpSlashActive && step == ActionStep::Active) {
+        farSlashChargeParticleTimer_ =
+            (std::max)(0.0f, farSlashChargeParticleTimer_ - deltaTime);
+        if (farSlashChargeParticleTimer_ <= 0.0f) {
+            XMFLOAT3 trailPos = enemy_.GetTransform().position;
+            trailPos.y += 1.00f;
+            const float yaw = enemy_.GetTelegraphYaw();
+            const XMFLOAT3 rushTrail = {-std::sinf(yaw), 0.08f,
+                                        -std::cosf(yaw)};
+            EmitParticleBurst(sparkParticles_, trailPos, 24, 0.18f,
+                              AppParticleBurstStyle::SlashLine,
+                              {1.0f, 0.94f, 0.58f, 0.78f}, rushTrail, 1.18f);
+            EmitParticleBurst(smokeParticles_, trailPos, 16, 0.26f,
+                              AppParticleBurstStyle::SpiritSparkle,
+                              {1.0f, 0.88f, 0.48f, 0.46f}, rushTrail, 0.82f);
+            farSlashChargeParticleTimer_ = 0.030f;
+        }
+    } else {
+        farSlashChargeParticleTimer_ = 0.0f;
+    }
+
+    const bool farWarpActiveCueLine =
+        farWarpSlashActive && step == ActionStep::Active;
+    bool releaseCounterCueVisible =
+        kind == ActionKind::BladeClash ||
+        (!farWarpSlashActive && enemy_.GetReleaseAnticipationRatio() > 0.0f) ||
+        farWarpActiveCueLine;
     if (tutorialMode_ &&
         (kind == ActionKind::Smash || kind == ActionKind::Sweep)) {
         if (tutorialStep_ == kTutorialStepRedSmash ||
@@ -3187,7 +3251,8 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
         }
     }
 
-    if (!releaseCounterCueVisible && enemy_.ShouldSuppressRedAttackCue()) {
+    if (!releaseCounterCueVisible && enemy_.ShouldSuppressRedAttackCue() &&
+        !farWarpSlashActive) {
         return;
     }
 

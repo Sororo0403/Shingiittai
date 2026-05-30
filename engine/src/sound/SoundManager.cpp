@@ -1,6 +1,5 @@
 #include "sound/SoundManager.h"
 #include "core/AssetManager.h"
-#include "debug/DebugLog.h"
 
 #include <Objbase.h>
 #include <algorithm>
@@ -224,15 +223,33 @@ void SoundManager::Initialize() {
     if (SUCCEEDED(coResult)) {
         comInitialized_ = true;
     } else if (coResult != RPC_E_CHANGED_MODE) {
-        ThrowIfFailed(coResult, "CoInitializeEx failed");
+        return;
     }
 
-    ThrowIfFailed(MFStartup(MF_VERSION), "MFStartup failed");
+    if (FAILED(MFStartup(MF_VERSION))) {
+        if (comInitialized_) {
+            CoUninitialize();
+            comInitialized_ = false;
+        }
+        return;
+    }
     mediaFoundationStarted_ = true;
 
-    ThrowIfFailed(XAudio2Create(&xAudio2_, 0), "XAudio2Create failed");
-    ThrowIfFailed(xAudio2_->CreateMasteringVoice(&masterVoice_),
-                  "CreateMasteringVoice failed");
+    if (FAILED(XAudio2Create(&xAudio2_, 0)) ||
+        FAILED(xAudio2_->CreateMasteringVoice(&masterVoice_))) {
+        if (masterVoice_) {
+            masterVoice_->DestroyVoice();
+            masterVoice_ = nullptr;
+        }
+        xAudio2_.Reset();
+        MFShutdown();
+        mediaFoundationStarted_ = false;
+        if (comInitialized_) {
+            CoUninitialize();
+            comInitialized_ = false;
+        }
+        return;
+    }
 
     SetMasterVolume(masterVolume_);
 }
@@ -262,19 +279,31 @@ uint32_t SoundManager::Load(const std::wstring &path) {
 }
 
 bool SoundManager::TryLoad(const std::wstring &path, uint32_t &soundId) {
-    try {
-        soundId = Load(path);
-        return true;
-    } catch (const std::exception &e) {
-        DebugLog::Get().Write("Sound", "SoundManager", "load_failed",
-                              e.what());
-    } catch (...) {
-        DebugLog::Get().Write("Sound", "SoundManager", "load_failed",
-                              "unknown error");
+    soundId = kInvalidSoundId;
+
+    const std::filesystem::path resolvedPath = ResolveAudioPath(path);
+    if (!std::filesystem::exists(resolvedPath)) {
+        return false;
     }
 
-    soundId = kInvalidSoundId;
-    return false;
+    const std::wstring key = NormalizePathKey(resolvedPath);
+    const auto cached = pathToSoundId_.find(key);
+    if (cached != pathToSoundId_.end()) {
+        soundId = cached->second;
+        return true;
+    }
+
+    AudioFileLoader::SoundData data{};
+    if (!AudioFileLoader::TryLoad(path, data)) {
+        return false;
+    }
+
+    SoundResource resource{};
+    resource.data = std::move(data);
+    sounds_.push_back(std::move(resource));
+    soundId = static_cast<uint32_t>(sounds_.size() - 1);
+    pathToSoundId_[key] = soundId;
+    return true;
 }
 
 uint32_t SoundManager::LoadOrCreateSilent(const std::wstring &path) {
@@ -346,6 +375,16 @@ uint32_t SoundManager::Play(uint32_t soundId, float volume, bool loop) {
     return CreateSourceVoice(soundId, volume, loop);
 }
 
+uint32_t SoundManager::PlayFrom(uint32_t soundId, float startSeconds,
+                                float volume, bool loop) {
+    Update();
+    if (soundId >= sounds_.size() || !xAudio2_) {
+        return kInvalidVoiceHandle;
+    }
+
+    return CreateSourceVoice(soundId, volume, loop, startSeconds);
+}
+
 void SoundManager::Stop(uint32_t voiceHandle) {
     for (auto it = playingVoices_.begin(); it != playingVoices_.end(); ++it) {
         if (it->handle == voiceHandle) {
@@ -383,6 +422,29 @@ void SoundManager::SetVoiceVolume(uint32_t voiceHandle, float volume) {
             return;
         }
     }
+}
+
+void SoundManager::SetVoiceFrequencyRatio(uint32_t voiceHandle,
+                                          float frequencyRatio) {
+    const float clampedRatio =
+        std::clamp(frequencyRatio, XAUDIO2_MIN_FREQ_RATIO,
+                   XAUDIO2_MAX_FREQ_RATIO);
+    for (PlayingVoice &playingVoice : playingVoices_) {
+        if (playingVoice.handle == voiceHandle && playingVoice.voice) {
+            playingVoice.frequencyRatio = clampedRatio;
+            playingVoice.voice->SetFrequencyRatio(clampedRatio);
+            return;
+        }
+    }
+}
+
+float SoundManager::GetVoiceFrequencyRatio(uint32_t voiceHandle) const {
+    for (const PlayingVoice &playingVoice : playingVoices_) {
+        if (playingVoice.handle == voiceHandle) {
+            return playingVoice.frequencyRatio;
+        }
+    }
+    return XAUDIO2_DEFAULT_FREQ_RATIO;
 }
 
 float SoundManager::GetVoiceVolume(uint32_t voiceHandle) const {
@@ -661,23 +723,46 @@ void SoundManager::SetMasterVolume(float volume) {
 }
 
 uint32_t SoundManager::CreateSourceVoice(uint32_t soundId, float volume,
-                                         bool loop) {
+                                         bool loop, float startSeconds) {
     const AudioFileLoader::SoundData &sound = sounds_[soundId].data;
+    const WAVEFORMATEX *format = sound.GetFormat();
+    if (!format || format->nSamplesPerSec == 0 || format->nBlockAlign == 0 ||
+        sound.decodedPcm.empty()) {
+        return kInvalidVoiceHandle;
+    }
 
     IXAudio2SourceVoice *voice = nullptr;
     auto callback = std::make_unique<SoundVoiceCallback>();
     HRESULT hr = xAudio2_->CreateSourceVoice(
-        &voice, sound.GetFormat(), 0, XAUDIO2_DEFAULT_FREQ_RATIO,
+        &voice, format, 0, XAUDIO2_DEFAULT_FREQ_RATIO,
         callback.get());
     if (FAILED(hr)) {
         return kInvalidVoiceHandle;
     }
 
+    const UINT32 totalFrames = static_cast<UINT32>(
+        sound.decodedPcm.size() / static_cast<size_t>(format->nBlockAlign));
+    if (totalFrames == 0u) {
+        voice->DestroyVoice();
+        return kInvalidVoiceHandle;
+    }
+    const float clampedStartSeconds = (std::max)(startSeconds, 0.0f);
+    const UINT32 startFrame = (std::min)(
+        static_cast<UINT32>(clampedStartSeconds *
+                            static_cast<float>(format->nSamplesPerSec)),
+        totalFrames - 1u);
+
     XAUDIO2_BUFFER buffer{};
     buffer.pAudioData = sound.decodedPcm.data();
     buffer.AudioBytes = static_cast<UINT32>(sound.decodedPcm.size());
     buffer.Flags = XAUDIO2_END_OF_STREAM;
-    buffer.LoopCount = loop ? XAUDIO2_LOOP_INFINITE : 0;
+    buffer.PlayBegin = startFrame;
+    buffer.PlayLength = totalFrames - startFrame;
+    if (loop) {
+        buffer.LoopBegin = startFrame;
+        buffer.LoopLength = totalFrames - startFrame;
+        buffer.LoopCount = XAUDIO2_LOOP_INFINITE;
+    }
 
     hr = voice->SubmitSourceBuffer(&buffer);
     if (FAILED(hr)) {
@@ -748,7 +833,6 @@ uint32_t SoundManager::CreateSilentSound(const std::wstring &cacheKey,
     const uint32_t soundId = static_cast<uint32_t>(sounds_.size() - 1);
     pathToSoundId_[cacheKey] = soundId;
 
-    DebugLog::Get().Write("Sound", "SoundManager", "fallback", "silent");
     return soundId;
 }
 

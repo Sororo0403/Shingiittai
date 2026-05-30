@@ -26,5 +26,6 @@ struct SoundData {
 };
 
 SoundData Load(const std::wstring &path);
+bool TryLoad(const std::wstring &path, SoundData &outData);
 
 } // namespace AudioFileLoader

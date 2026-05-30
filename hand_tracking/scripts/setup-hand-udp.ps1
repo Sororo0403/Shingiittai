@@ -1,7 +1,9 @@
 $ErrorActionPreference = "Stop"
 
-$requirements = Join-Path $PSScriptRoot "requirements-hand-udp.txt"
-$venv = Join-Path $PSScriptRoot ".venv"
+$handTrackingRoot = Split-Path -Parent $PSScriptRoot
+$repoRoot = Split-Path -Parent $handTrackingRoot
+$requirements = Join-Path $handTrackingRoot "requirements\hand-udp.txt"
+$venv = Join-Path $repoRoot "generated\intermediate\HandUdpSender\.venv"
 $venvPython = Join-Path $venv "Scripts\python.exe"
 
 function Test-Python311 {

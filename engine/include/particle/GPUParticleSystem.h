@@ -95,6 +95,8 @@ class GPUParticleSystem {
         uint32_t isActive = 0;
         DirectX::XMFLOAT4 params0{};
         DirectX::XMFLOAT4 params1{};
+        DirectX::XMFLOAT4 params2{};
+        DirectX::XMFLOAT4 params3{};
     };
 
     struct UpdateConstantBufferData {
@@ -104,7 +106,6 @@ class GPUParticleSystem {
     struct EmitterForGPU {
         DirectX::XMFLOAT4 position{};
         DirectX::XMFLOAT4 spawnOffsetScale{0.1f, 0.1f, 0.1f, 0.0f};
-        DirectX::XMFLOAT4 spawnShapeParams{};
         DirectX::XMFLOAT4 basisRight{1.0f, 0.0f, 0.0f, 0.0f};
         DirectX::XMFLOAT4 basisUp{0.0f, 1.0f, 0.0f, 0.0f};
         DirectX::XMFLOAT4 basisForward{0.0f, 0.0f, 1.0f, 0.0f};
@@ -153,7 +154,7 @@ class GPUParticleSystem {
     void CreateActiveDrawBuffers();
 
     /// <summary>
-    /// 更新・Emitter・描画用の定数バッファを生成する
+    /// 更新・描画用の定数バッファを生成する
     /// </summary>
     void CreateConstantBuffers();
 
@@ -161,12 +162,13 @@ class GPUParticleSystem {
     /// パーティクル更新用ComputeShaderを実行する
     /// </summary>
     void DispatchUpdate();
-    void RecordUpdateDispatch(uint32_t phase);
+    void RecordUpdateDispatch(const EmitterForGPU &emitter);
     static void RecordDrawArgsDispatches(
         DirectXCommon *dxCommon, SrvManager *srvManager,
         const std::vector<GPUParticleSystem *> &jobs);
 
-    EmitterForGPU BuildEmitterForGPU(uint32_t emit) const;
+    EmitterForGPU BuildEmitterForGPU(const ParticleEmitterSettings &settings,
+                                     uint32_t emit) const;
 
     /// <summary>
     /// 保持しているGPUリソースを解放する
@@ -182,8 +184,8 @@ class GPUParticleSystem {
     float emitterFrequencyTime_ = 0.0f;
     float activeTimeRemaining_ = 0.0f;
     bool updatePending_ = false;
-    bool emitOncePending_ = false;
     ParticleEmitterSettings emitterSettings_{};
+    std::vector<ParticleEmitterSettings> pendingEmitSettings_;
     GPUParticleMaterialSettings materialSettings_{};
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> updateRootSignature_;
@@ -238,9 +240,7 @@ class GPUParticleSystem {
         D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> updateConstantBuffer_;
-    Microsoft::WRL::ComPtr<ID3D12Resource> emitterConstantBuffer_;
     Microsoft::WRL::ComPtr<ID3D12Resource> drawConstantBuffer_;
     UpdateConstantBufferData *mappedUpdateCB_ = nullptr;
-    EmitterForGPU *mappedEmitterCB_ = nullptr;
     DrawConstantBufferData *mappedDrawCB_ = nullptr;
 };

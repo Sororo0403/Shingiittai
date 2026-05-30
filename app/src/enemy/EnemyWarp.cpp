@@ -9,6 +9,8 @@ float Random01() {
     return static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
 }
 
+constexpr float kFarSlashCounterFlashDuration = 0.50f;
+
 float PhantomWarpMoveTime(bool finalWarp) { return finalWarp ? 0.24f : 0.20f; }
 
 float PhantomWarpEndTime(bool finalWarp) { return finalWarp ? 0.18f : 0.42f; }
@@ -208,6 +210,79 @@ void Enemy::FinalizeWarpTargetFacing(DirectX::XMFLOAT3 &target) {
     warp_.hasTargetYaw = true;
 }
 
+void Enemy::ConfigureFarSlashLungeTarget() {
+    if (!farSlashActive_ || !(action_.kind == ActionKind::Smash ||
+                              action_.kind == ActionKind::Sweep)) {
+        hasFarSlashLungeTarget_ = false;
+        farSlashLungeDuration_ = 0.0f;
+        return;
+    }
+
+    farSlashLungeStartPos_ = tf_.position;
+
+    float forwardX = std::sin(lockedAttackYaw_);
+    float forwardZ = std::cos(lockedAttackYaw_);
+
+    float toPlayerX = playerPos_.x - tf_.position.x;
+    float toPlayerZ = playerPos_.z - tf_.position.z;
+    const float toPlayerLength =
+        std::sqrt(toPlayerX * toPlayerX + toPlayerZ * toPlayerZ);
+    if (toPlayerLength > 0.0001f) {
+        forwardX = toPlayerX / toPlayerLength;
+        forwardZ = toPlayerZ / toPlayerLength;
+    }
+
+    float approachOffset = std::clamp(config_.core.nearAttackDistance * 0.42f, 1.1f,
+                                     2.1f);
+    if (toPlayerLength > 0.0001f) {
+        approachOffset = toPlayerLength > 0.45f
+                             ? std::clamp(approachOffset, 0.45f, toPlayerLength)
+                             : 0.0f;
+    }
+
+    const float pierceThroughDistance =
+        approachOffset + std::clamp(config_.core.nearAttackDistance * 0.88f,
+                                    2.4f, 4.2f);
+    farSlashLungeTargetPos_.x = playerPos_.x + forwardX * pierceThroughDistance;
+    farSlashLungeTargetPos_.z = playerPos_.z + forwardZ * pierceThroughDistance;
+    farSlashLungeTargetPos_.y = tf_.position.y;
+
+    float toTargetX = farSlashLungeTargetPos_.x - farSlashLungeStartPos_.x;
+    float toTargetZ = farSlashLungeTargetPos_.z - farSlashLungeStartPos_.z;
+    const float targetDistance = std::sqrt(toTargetX * toTargetX + toTargetZ * toTargetZ);
+    const float travelDuration = targetDistance / std::max(1.0f, farSlashLungeSpeed_);
+    farSlashLungeDuration_ = std::max(travelDuration, 0.06f);
+    hasFarSlashLungeTarget_ = true;
+}
+
+void Enemy::UpdateFarSlashLunge(float deltaTime) {
+    (void)deltaTime;
+    if (!hasFarSlashLungeTarget_ || farSlashLungeDuration_ <= 0.0001f) {
+        return;
+    }
+
+    const float lungeTimer =
+        std::max(0.0f, stateTimer_ - kFarSlashCounterFlashDuration);
+    const float t =
+        std::clamp(lungeTimer / farSlashLungeDuration_, 0.0f, 1.0f);
+    const float eased = 1.0f - std::pow(1.0f - t, 2.3f);
+
+    tf_.position.x =
+        farSlashLungeStartPos_.x +
+        (farSlashLungeTargetPos_.x - farSlashLungeStartPos_.x) * eased;
+    tf_.position.z =
+        farSlashLungeStartPos_.z +
+        (farSlashLungeTargetPos_.z - farSlashLungeStartPos_.z) * eased;
+    tf_.position.y = farSlashLungeStartPos_.y +
+                     (farSlashLungeTargetPos_.y - farSlashLungeStartPos_.y) *
+                         eased;
+
+    if (t >= 1.0f) {
+        tf_.position = farSlashLungeTargetPos_;
+        hasFarSlashLungeTarget_ = false;
+    }
+}
+
 bool Enemy::PrepareWarpContext() {
     ResetWarpContext();
 
@@ -282,7 +357,7 @@ void Enemy::UpdateWarpMove(float deltaTime) {
     const float moveTime =
         warp_.phantomChain
             ? PhantomWarpMoveTime(warp_.phantomFinal)
-            : warp_.farSlashFollowup ? config_.warp.moveTime * 0.72f
+            : warp_.farSlashFollowup ? config_.warp.moveTime * 1.80f
                                       : config_.warp.moveTime;
     if (moveTime > 0.0001f) {
         t = stateTimer_ / moveTime;
@@ -404,6 +479,7 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
         quickSlashActive_ = immediateFollowup || (phantomChain && phantomFinal);
         farSlashActive_ = farSlashFollowup;
         if (farSlashActive_) {
+            ConfigureFarSlashLungeTarget();
             const float chargeTime =
                 followupKind == ActionKind::Smash ? GetCurrentSmashChargeTime()
                                                   : GetCurrentSweepChargeTime();
@@ -442,7 +518,7 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
 }
 
 void Enemy::UpdateWarpTrails(float deltaTime) {
-    for (auto &trail : warpTrailGhosts_) {
+    for (auto &trail : afterimageGhosts_) {
         if (!trail.isActive) {
             continue;
         }
@@ -457,8 +533,8 @@ void Enemy::UpdateWarpTrails(float deltaTime) {
 
 void Enemy::EmitWarpTrailGhost(const DirectX::XMFLOAT3 &position, float scale) {
     int slot = -1;
-    for (int i = 0; i < kWarpTrailGhostCount_; ++i) {
-        if (!warpTrailGhosts_[i].isActive) {
+    for (int i = 0; i < kAfterimageGhostCount_; ++i) {
+        if (!afterimageGhosts_[i].isActive) {
             slot = i;
             break;
         }
@@ -467,15 +543,21 @@ void Enemy::EmitWarpTrailGhost(const DirectX::XMFLOAT3 &position, float scale) {
         slot = 0;
     }
 
-    warpTrailGhosts_[slot].position = position;
-    warpTrailGhosts_[slot].life = warpTrailLife_;
-    warpTrailGhosts_[slot].scale = scale;
-    warpTrailGhosts_[slot].isActive = true;
+    EnemyAfterimageGhost &ghost = afterimageGhosts_[slot];
+    ghost.visual = visualTf_;
+    ghost.visual.position = position;
+    ghost.visual.position.y += warpArrivalPreviewHeight_;
+    ghost.visual.scale.x *= scale;
+    ghost.visual.scale.y *= scale;
+    ghost.visual.scale.z *= scale;
+    ghost.life = warpTrailLife_;
+    ghost.maxLife = warpTrailLife_;
+    ghost.isActive = true;
 }
 
 void Enemy::ResetWarpTrails() {
     warpTrailEmitTimer_ = 0.0f;
-    for (auto &trail : warpTrailGhosts_) {
-        trail = WarpTrailGhost{};
+    for (auto &trail : afterimageGhosts_) {
+        trail = EnemyAfterimageGhost{};
     }
 }

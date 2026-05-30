@@ -162,6 +162,7 @@ class TextureManager {
         std::wstring pathKey;
         DirectX::ScratchImage scratch;
         DirectX::TexMetadata metadata{};
+        bool succeeded = false;
     };
 
     struct AsyncTextureRequest {

@@ -8,6 +8,7 @@ using namespace DirectX;
 namespace {
 constexpr float kMinVectorLength = 0.0001f;
 constexpr float kPlayerDamageTint[3]{0.92f, 0.02f, 0.015f};
+constexpr float kMistimedCounterTint[3]{1.0f, 0.03f, 0.015f};
 constexpr float kCounterTint[3]{0.08f, 0.62f, 1.0f};
 
 float Clamp01(float value) {
@@ -167,10 +168,17 @@ void CombatFeedbackDirector::PushEvent(const CombatFeedbackEvent &event) {
                      kPlayerDamageTint);
         fovKickDeg_ = (std::max)(fovKickDeg_, 2.6f);
         break;
+    case CombatFeedbackEventType::MistimedCounterSlash:
+        AddHitStop(0.165f, 0.22f);
+        AddCameraShake(0.20f, 0.034f, 0.020f);
+        AddPostFlash(0.26f, 0.060f, 0.052f, 0.10f, 0.82f,
+                     kMistimedCounterTint);
+        fovKickDeg_ = (std::max)(fovKickDeg_, 3.4f);
+        break;
     case CombatFeedbackEventType::CounterSuccess:
         AddHitStop(0.285f, 0.012f);
         AddCameraShake(0.42f, 0.082f, 0.052f);
-        AddPostFlash(0.48f, 0.22f, 0.13f, 0.18f, 0.0f, nullptr, 0.94f,
+        AddPostFlash(0.32f, 0.16f, 0.09f, 0.11f, 0.0f, nullptr, 0.65f,
                      kCounterTint);
         fovKickDeg_ = (std::max)(fovKickDeg_, 7.0f);
         break;

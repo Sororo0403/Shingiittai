@@ -68,10 +68,10 @@ struct WarpContext {
     bool hasTargetYaw = false;
 };
 
-struct WarpTrailGhost {
-    DirectX::XMFLOAT3 position = {0.0f, 0.0f, 0.0f};
+struct EnemyAfterimageGhost {
+    Transform visual{};
     float life = 0.0f;
-    float scale = 1.0f;
+    float maxLife = 0.0f;
     bool isActive = false;
 };
 
@@ -216,8 +216,8 @@ struct EnemyRuntimeState {
     WarpContext warp{};
     bool isVisible = true;
     float warpTrailEmitTimer = 0.0f;
-    static constexpr int kWarpTrailGhostCount = 4;
-    WarpTrailGhost warpTrailGhosts[kWarpTrailGhostCount]{};
+    static constexpr int kAfterimageGhostCount = 8;
+    EnemyAfterimageGhost afterimageGhosts[kAfterimageGhostCount]{};
 
     TacticState tactic = TacticState::Chase;
     BossPhase phase = BossPhase::Phase1;
@@ -247,6 +247,10 @@ struct EnemyRuntimeState {
     uint32_t attackCueSequence = 0;
 
     bool hasTrackingLocked = false;
+    DirectX::XMFLOAT3 farSlashLungeStartPos = {0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT3 farSlashLungeTargetPos = {0.0f, 0.0f, 0.0f};
+    float farSlashLungeDuration = 0.0f;
+    bool hasFarSlashLungeTarget = false;
 
 };
 
@@ -322,6 +326,10 @@ class Enemy {
     bool IsAttackActive() const { return runtime_.isAttackActive; }
     OBB GetAttackOBB() const;
     bool IsFarWarpSlashActive() const { return runtime_.farSlashActive; }
+    float GetFarWarpSlashStanceHoldDuration() const {
+        return runtime_.farSlashActive ? 0.50f + runtime_.farSlashLungeDuration
+                                       : 0.0f;
+    }
     bool ShouldSuppressRedAttackCue() const {
         return runtime_.quickSlashActive || runtime_.farSlashActive ||
                runtime_.warpFeintImmediate;
@@ -433,6 +441,12 @@ class Enemy {
     bool &warpFeintDecisionMade_ = runtime_.warpFeintDecisionMade;
     bool &directionFeintDecisionMade_ = runtime_.directionFeintDecisionMade;
     bool &attackReleaseCueIssued_ = runtime_.attackReleaseCueIssued;
+    DirectX::XMFLOAT3 &farSlashLungeStartPos_ =
+        runtime_.farSlashLungeStartPos;
+    DirectX::XMFLOAT3 &farSlashLungeTargetPos_ =
+        runtime_.farSlashLungeTargetPos;
+    float &farSlashLungeDuration_ = runtime_.farSlashLungeDuration;
+    bool &hasFarSlashLungeTarget_ = runtime_.hasFarSlashLungeTarget;
     float &phantomWarpCooldown_ = runtime_.phantomWarpCooldown;
     float &phantomFinalLockTimer_ = runtime_.phantomFinalLockTimer;
     float &arcaneLaserCooldown_ = runtime_.arcaneLaserCooldown;
@@ -454,8 +468,8 @@ class Enemy {
     EnemyAttackCueEvent &pendingAttackCue_ = runtime_.pendingAttackCue;
     uint32_t &attackCueSequence_ = runtime_.attackCueSequence;
 
-    float smashTellTime_ = 0.18f;
-    float sweepTellTime_ = 0.16f;
+    float smashTellTime_ = 0.24f;
+    float sweepTellTime_ = 0.22f;
 
     int nearSmashWeight_ = 30;
     int nearSweepWeight_ = 25;
@@ -469,8 +483,8 @@ class Enemy {
     bool &hasTrackingLocked_ = runtime_.hasTrackingLocked;
 
     float quickSlashChance_ = 0.34f;
-    float quickSmashChargeTime_ = 0.72f;
-    float quickSweepChargeTime_ = 0.66f;
+    float quickSmashChargeTime_ = 0.92f;
+    float quickSweepChargeTime_ = 0.86f;
     float directionFeintChance_ = 0.32f;
     float chargeWarpFeintChance_ = 0.34f;
     float farWarpSlashChance_ = 0.74f;
@@ -508,13 +522,13 @@ class Enemy {
     float warpFeintChance_ = 0.26f;
     float warpFeintEndTimeScale_ = 0.55f;
     float warpArrivalPreviewHeight_ = 0.10f;
-    float warpTrailLife_ = 0.06f;
+    float warpTrailLife_ = 0.28f;
     float warpTrailScaleMax_ = 0.88f;
     float &warpTrailEmitTimer_ = runtime_.warpTrailEmitTimer;
-    static constexpr int kWarpTrailGhostCount_ =
-        EnemyRuntimeState::kWarpTrailGhostCount;
-    WarpTrailGhost (&warpTrailGhosts_)[kWarpTrailGhostCount_] =
-        runtime_.warpTrailGhosts;
+    static constexpr int kAfterimageGhostCount_ =
+        EnemyRuntimeState::kAfterimageGhostCount;
+    EnemyAfterimageGhost (&afterimageGhosts_)[kAfterimageGhostCount_] =
+        runtime_.afterimageGhosts;
 
   private:
     void UpdateParts();
@@ -539,6 +553,7 @@ class Enemy {
     bool TryBeginPhantomWarpSkill(float chance);
     bool TryBeginBladeClash(float chance);
     bool TryBeginArcaneLaser(float chance);
+    bool TryBeginLaserReengageWarp(float chance);
     bool TryBeginArcaneLaserSlashFollowup(float chance);
     bool TryBeginCataclysmLaser(float chance);
     void BeginPhantomWarpStep(int viewWarpsRemaining, bool finalBehind,
@@ -575,6 +590,8 @@ class Enemy {
     void UpdateWarpStart(float deltaTime);
     void UpdateWarpMove(float deltaTime);
     void UpdateWarpEnd(float deltaTime);
+    void ConfigureFarSlashLungeTarget();
+    void UpdateFarSlashLunge(float deltaTime);
     void UpdateWarpTrails(float deltaTime);
     void EmitWarpTrailGhost(const DirectX::XMFLOAT3 &position, float scale);
     void ResetWarpTrails();

@@ -9,7 +9,6 @@ cbuffer EmitterParams : register(b1)
 {
     float4 emitterPosition;
     float4 emitterSpawnOffsetScale;
-    float4 emitterSpawnShapeParams;
     float4 emitterBasisRight;
     float4 emitterBasisUp;
     float4 emitterBasisForward;
@@ -22,11 +21,6 @@ cbuffer EmitterParams : register(b1)
     float4 emitterAtlasAndRotation;
     float4 emitterTintColor;
     uint4 emitterConfig;
-};
-
-cbuffer ParticleDispatchParams : register(b2)
-{
-    uint updatePhase;
 };
 
 RWStructuredBuffer<Particle> gParticles : register(u0);
@@ -139,7 +133,8 @@ void Respawn(uint index, inout Particle particle)
 
     uint spawnShape = emitterConfig.y;
     float3 offset =
-        MakeSpawnOffset(spawnShape, r0, r1, r2, emitterSpawnShapeParams);
+        MakeSpawnOffset(spawnShape, r0, r1, r2,
+                        float4(emitterSpawnOffsetScale.w, 0.0f, 0.0f, 0.0f));
     float3 scaledOffset = offset * emitterSpawnOffsetScale.xyz;
     float3 worldOffset = emitterBasisRight.xyz * scaledOffset.x +
                          emitterBasisUp.xyz * scaledOffset.y +
@@ -189,6 +184,11 @@ void Respawn(uint index, inout Particle particle)
                             : 0.0f;
     particle.params1 = float4(max(0.01f, emitterMotion.y),
                               max(0.0f, emitterScale.w), r4, initialRoll);
+    particle.params2 = float4(emitterAccelerationAndTurbulence.w,
+                              max(0.0f, emitterMotion.x), emitterTintColor.a,
+                              max(1.0f, emitterMotion.z));
+    particle.params3 =
+        float4(emitterAccelerationAndTurbulence.xyz, max(1.0f, emitterMotion.w));
     particle.isActive = 1;
 }
 
@@ -219,7 +219,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 
     Particle particle = gParticles[index];
 
-    if (updatePhase == 0u)
+    if (emitterConfig.w == 0u)
     {
         if (particle.isActive != 0)
         {
@@ -244,16 +244,16 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
             } else
             {
                 float deltaTime = time.y;
-                float turbulence = emitterAccelerationAndTurbulence.w;
+                float turbulence = particle.params2.x;
                 float3 wander =
                     MakeTurbulence(particle.seed, particle.currentTime) * turbulence;
-                float damping = pow(max(emitterMotion.x, 0.0f), deltaTime * 60.0f);
+                float damping = pow(max(particle.params2.y, 0.0f), deltaTime * 60.0f);
                 particle.velocity +=
-                    (emitterAccelerationAndTurbulence.xyz + wander) * deltaTime;
+                    (particle.params3.xyz + wander) * deltaTime;
                 particle.velocity *= damping;
                 particle.translate += particle.velocity * deltaTime;
 
-                float alpha = emitterTintColor.a;
+                float alpha = particle.params2.z;
                 float fadeInTime = particle.params0.z;
                 if (fadeInTime > 0.0f)
                 {
@@ -267,7 +267,6 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
                     float fade = saturate(remaining / fadeOutTime);
                     alpha *= pow(fade, particle.params1.x);
                 }
-                particle.color = emitterTintColor;
                 particle.color.a = alpha;
                 gParticles[index] = particle;
                 AppendActiveParticle(index, particleCount, particle);

@@ -57,9 +57,9 @@ void Enemy::SetDifficulty(float difficulty) {
 
     config_ = EnemyConfig{};
     config_.core.maxHp *= 0.58f + 0.095f * effectiveDifficulty;
-    config_.core.maxHp *= 1.22f;
-    config_.core.phase2HealthRatioThreshold = 0.62f + 0.18f * t;
-    config_.core.phase3HealthRatioThreshold = 0.25f + 0.20f * t;
+    config_.core.maxHp *= 1.45f;
+    config_.core.phase2HealthRatioThreshold = 0.80f + 0.15f * t;
+    config_.core.phase3HealthRatioThreshold = 0.35f + 0.20f * t;
     config_.core.nearAttackDistance = 3.35f + 1.20f * t;
 
     const float damageScale = 0.62f + 0.075f * effectiveDifficulty;
@@ -124,30 +124,30 @@ void Enemy::SetDifficulty(float difficulty) {
     recoveryTurnSpeed_ = 1.3f + 2.9f * t;
     idleTurnSpeed_ = 5.0f + 5.0f * t;
 
-    quickSlashChance_ = 0.34f;
+    quickSlashChance_ = 0.20f;
     quickSmashChargeTime_ = 0.82f - 0.34f * t;
     quickSweepChargeTime_ = 0.76f - 0.30f * t;
     directionFeintChance_ = 0.36f;
     chargeWarpFeintChance_ = 0.38f;
-    farWarpSlashChance_ = 0.62f;
-    farWarpSlashDistance_ = 9.8f - 1.1f * t;
-    farSlashLungeSpeed_ = 54.0f + 34.0f * t;
-    farSlashSmashChargeTime_ = 0.34f - 0.08f * t;
-    farSlashSweepChargeTime_ = 0.31f - 0.07f * t;
-    phantomWarpChance_ = 0.28f;
-    phantomWarpCooldownDuration_ = 8.2f - 4.4f * t;
+    farWarpSlashChance_ = 0.76f;
+    farWarpSlashDistance_ = 10.6f - 1.2f * t;
+    farSlashLungeSpeed_ = 58.0f + 18.0f * t;
+    farSlashSmashChargeTime_ = 1.12f - 0.22f * t;
+    farSlashSweepChargeTime_ = 1.04f - 0.20f * t;
+    phantomWarpChance_ = 0.38f;
+    phantomWarpCooldownDuration_ = 6.8f - 3.6f * t;
     phantomFinalLockDuration_ = 0.38f - 0.16f * t;
     bladeClashChance_ = 0.30f;
-    arcaneLaserChance_ = 0.26f + 0.16f * t;
-    arcaneLaserSlashFollowupChance_ = 0.34f + 0.22f * t;
-    arcaneLaserCooldownDuration_ = 8.6f - 3.0f * t;
-    arcaneLaserMinDistance_ = 7.0f - 0.9f * t;
-    arcaneLaserWarpDistance_ = 25.0f + 4.5f * t;
-    arcaneLaserSlashMinDistance_ = 10.5f - 2.0f * t;
-    cataclysmLaserChance_ = 0.18f + 0.20f * t;
-    cataclysmLaserCooldownDuration_ = 15.5f - 4.0f * t;
-    cataclysmLaserMinDistance_ = 12.0f - 1.4f * t;
-    cataclysmLaserWarpDistance_ = 34.0f + 7.0f * t;
+    arcaneLaserChance_ = 0.38f + 0.22f * t;
+    arcaneLaserSlashFollowupChance_ = 0.52f + 0.24f * t;
+    arcaneLaserCooldownDuration_ = 6.6f - 2.4f * t;
+    arcaneLaserMinDistance_ = 5.8f - 1.2f * t;
+    arcaneLaserWarpDistance_ = 28.0f + 5.5f * t;
+    arcaneLaserSlashMinDistance_ = 8.8f - 2.4f * t;
+    cataclysmLaserChance_ = 0.28f + 0.26f * t;
+    cataclysmLaserCooldownDuration_ = 12.8f - 4.2f * t;
+    cataclysmLaserMinDistance_ = 10.2f - 1.8f * t;
+    cataclysmLaserWarpDistance_ = 38.0f + 8.5f * t;
     config_.attacks.arcaneLaser.range = 28.0f + 5.0f * t;
     config_.attacks.arcaneLaser.radius = 0.44f + 0.10f * t;
     config_.attacks.arcaneLaser.profile.chargeTime = 1.16f - 0.24f * t;
@@ -183,14 +183,14 @@ void Enemy::SetDifficulty(float difficulty) {
     stalkPounceChance_ = 0.52f;
     warpApproachFrontDistance_ = 2.95f - 0.62f * t;
     warpApproachBackDistance_ = 2.72f - 0.55f * t;
-    warpNearChance_ = 0.24f;
-    warpFarChance_ = 0.56f;
-    warpCutInDistance_ = 7.4f - 2.0f * t;
-    warpCutInChance_ = 0.78f;
+    warpNearChance_ = 0.18f;
+    warpFarChance_ = 0.70f;
+    warpCutInDistance_ = 6.1f - 2.2f * t;
+    warpCutInChance_ = 0.92f;
     warpFeintChance_ = 0.34f;
     warpFeintEndTimeScale_ = 0.78f - 0.34f * t;
-    warpTrailLife_ = 0.04f + 0.04f * t;
-    warpTrailScaleMax_ = 0.68f + 0.38f * t;
+    warpTrailLife_ = 0.28f + 0.10f * t;
+    warpTrailScaleMax_ = 0.84f + 0.48f * t;
     hitReactionDuration_ = 0.16f - 0.06f * highPressure;
     counterRecoilDuration_ = 0.62f - 0.22f * highPressure;
 
@@ -259,7 +259,9 @@ float Enemy::GetReleaseAnticipationRatio() const {
     } else {
         return 0.0f;
     }
-    cueWindow *= 1.0f - 0.42f * highPressure;
+    const float farSlashCounterWindowScale =
+        farSlashActive_ ? 0.58f : 1.0f;
+    cueWindow *= (1.0f - 0.42f * highPressure) * farSlashCounterWindowScale;
 
     if (releaseTime <= 0.0f) {
         return 0.0f;

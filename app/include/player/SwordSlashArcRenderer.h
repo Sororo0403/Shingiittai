@@ -10,6 +10,11 @@
 
 class DirectXCommon;
 
+enum class SwordSlashHitLineStyle {
+    Normal,
+    RedPunish,
+};
+
 class SwordSlashArcRenderer {
   public:
     void Initialize(DirectXCommon *dxCommon);
@@ -23,7 +28,8 @@ class SwordSlashArcRenderer {
                      const DirectX::XMFLOAT3 &direction, const Camera &camera,
                      float power,
                      const DirectX::XMFLOAT2 &slashDirection = {0.0f, 0.0f},
-                     bool isCounter = false);
+                     SwordSlashHitLineStyle style =
+                         SwordSlashHitLineStyle::Normal);
     void EmitParryLine(const DirectX::XMFLOAT3 &position,
                        const DirectX::XMFLOAT3 &direction, const Camera &camera,
                        float power,
@@ -31,6 +37,9 @@ class SwordSlashArcRenderer {
     void EmitCinematicCutLine(const DirectX::XMFLOAT3 &position,
                               const DirectX::XMFLOAT3 &direction,
                               const Camera &camera, float power);
+    void EmitEnemyWindSlash(const DirectX::XMFLOAT3 &position, float yaw,
+                            const Camera &camera, bool horizontal,
+                            float power);
     void EmitDirectionCueLine(const DirectX::XMFLOAT3 &position,
                               const DirectX::XMFLOAT2 &direction,
                               const Camera &camera,
@@ -77,8 +86,8 @@ class SwordSlashArcRenderer {
     ArcInstance &AcquireTransientArc();
 
   private:
-    static constexpr size_t kDirectionCueArcCount = 4;
-    static constexpr size_t kMaxArcs = 36;
+    static constexpr size_t kDirectionCueArcCount = 24;
+    static constexpr size_t kMaxArcs = 56;
     static constexpr uint32_t kSegments = 28;
     static constexpr uint32_t kInitialMaxVertices = kMaxArcs * kSegments * 6;
 
@@ -94,6 +103,7 @@ class SwordSlashArcRenderer {
     ViewProjectionConstBufferData *mappedViewProjection_ = nullptr;
     uint32_t vertexCapacity_ = 0;
     uint32_t vertexCount_ = 0;
+    size_t nextDirectionCueArc_ = 0;
     size_t nextArc_ = 0;
 
     std::array<ArcInstance, kMaxArcs> arcs_{};

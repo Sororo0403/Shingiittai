@@ -16,8 +16,6 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
-#include <filesystem>
-#include <iomanip>
 #include <memory>
 
 #ifdef DrawText
@@ -150,7 +148,6 @@ void CameraAccuracyDebugScene::Initialize(const SceneContext &ctx) {
         ctx_->rendering.model->Load(L"app/resources/models/player/player.gltf");
     gamePreviewPlayer_.Initialize(playerModelId_, swordModelId_);
     gamePreviewPlayer_.SetInputCalibration(calibration_);
-    OpenHandDebugLog();
 }
 
 void CameraAccuracyDebugScene::Update() {
@@ -163,15 +160,12 @@ void CameraAccuracyDebugScene::Update() {
 
     Input *input = ctx_->systems.input;
     if (input == nullptr) {
-        WriteHandDebugLog(ctx_->frame.deltaTime);
         return;
     }
     if (input->IsKeyTrigger(DIK_ESCAPE)) {
-        WriteHandDebugLog(ctx_->frame.deltaTime);
         sceneManager_->ChangeScene(std::make_unique<TitleScene>());
         return;
     }
-    WriteHandDebugLog(ctx_->frame.deltaTime);
 }
 
 void CameraAccuracyDebugScene::Draw() {
@@ -255,78 +249,6 @@ void CameraAccuracyDebugScene::UpdateGamePreview(float deltaTime) {
 
     gamePreviewPlayer_.UpdateDebugSwordPoses(leftPose, rightPose, deltaTime,
                                              {0.0f, 0.0f, 0.0f}, 0.0f);
-}
-
-void CameraAccuracyDebugScene::OpenHandDebugLog() {
-    try {
-        const auto path =
-            std::filesystem::temp_directory_path() /
-            "shingiittai_hand_debug_game.csv";
-        handDebugLogPath_ = path.string();
-        handDebugLog_.open(path, std::ios::out | std::ios::trunc);
-        if (!handDebugLog_) {
-            handDebugLogPath_.clear();
-            return;
-        }
-        handDebugLog_
-            << "frame,sceneTime,dt,marker,hand,packetChanged,packetSeq,"
-               "packetFrame,packetTimestampMs,packetHandCount,bodyTracked,"
-               "bodyCorrected,fresh,active,lost,reacquired,slash,slashStart,"
-               "rawX,rawY,neutralX,neutralY,calX,calY,"
-               "dirX,dirY,motionSpeed,packetDtMs,packetDx,packetDy,"
-               "packetMotionSpeed,nearEdge,sourceLabel,sourceScore,"
-               "staleTimer,orientX,orientY,orientZ,orientW,"
-               "neutralCaptured\n";
-        handDebugLog_ << std::fixed << std::setprecision(6);
-    } catch (...) {
-        handDebugLogPath_.clear();
-    }
-}
-
-void CameraAccuracyDebugScene::WriteHandDebugLog(float deltaTime) {
-    if (!handDebugLog_) {
-        return;
-    }
-
-    for (size_t i = 0; i < 2; ++i) {
-        const auto sample = controller_.GetDebugHandState(i);
-        const bool lost = previousLogActive_[i] && !sample.active;
-        const bool reacquired = !previousLogActive_[i] && sample.active;
-        const bool slashStart = !previousLogSlash_[i] && sample.isSlashMode;
-
-        handDebugLog_
-            << handDebugLogFrame_ << ',' << sceneTime_ << ',' << deltaTime
-            << ',' << pendingLogMarker_ << ',' << i << ','
-            << (sample.packetChanged ? 1 : 0) << ',' << sample.packetSequence
-            << ',' << sample.packetFrame << ',' << sample.packetTimestampMs
-            << ',' << sample.handCount << ',' << (sample.bodyTracked ? 1 : 0)
-            << ',' << (sample.bodyCorrected ? 1 : 0) << ','
-            << (sample.fresh ? 1 : 0) << ','
-            << (sample.active ? 1 : 0) << ',' << (lost ? 1 : 0) << ','
-            << (reacquired ? 1 : 0) << ',' << (sample.isSlashMode ? 1 : 0)
-            << ',' << (slashStart ? 1 : 0) << ',' << sample.rawPalm.x << ','
-            << sample.rawPalm.y << ',' << sample.neutral.x << ','
-            << sample.neutral.y << ',' << sample.calibratedPalm.x << ','
-            << sample.calibratedPalm.y << ',' << sample.slashDir.x << ','
-            << sample.slashDir.y << ',' << sample.motionSpeed << ','
-            << sample.packetDeltaMs << ',' << sample.packetDeltaPalm.x << ','
-            << sample.packetDeltaPalm.y << ',' << sample.packetMotionSpeed
-            << ',' << (sample.nearEdge ? 1 : 0) << ','
-            << sample.sourceLabel << ',' << sample.sourceScore << ','
-            << sample.staleTimer << ',' << sample.orientation.x << ','
-            << sample.orientation.y << ',' << sample.orientation.z << ','
-            << sample.orientation.w << ','
-            << (neutralCapturedThisScene_ ? 1 : 0) << '\n';
-
-        previousLogActive_[i] = sample.active;
-        previousLogSlash_[i] = sample.isSlashMode;
-    }
-    ++handDebugLogFrame_;
-    pendingLogMarker_.clear();
-
-    if ((handDebugLogFrame_ % 30) == 0) {
-        handDebugLog_.flush();
-    }
 }
 
 SwordPose
@@ -422,10 +344,6 @@ void CameraAccuracyDebugScene::DrawOverlay(float screenWidth,
              Color(0.78f, 0.90f, 1.0f, 0.92f));
     DrawText("ESC TITLE  C CALIB  R RESET  1 MISS  2 FALSE  3 GOOD", 312.0f,
              12.0f, 1.4f, Color(0.82f, 0.78f, 0.62f, 0.88f));
-    DrawText("LOG GAME CSV: TEMP/SHINGIITTAI_HAND_DEBUG_GAME.CSV", 18.0f,
-             38.0f, 1.15f, Color(0.66f, 0.76f, 0.86f, 0.76f));
-    DrawText("LOG RAW JSONL: TEMP/SHINGIITTAI_HAND_RAW.JSONL", 18.0f,
-             54.0f, 1.15f, Color(0.66f, 0.76f, 0.86f, 0.76f));
 
     DrawText("RAW SWORD", screenWidth * 0.5f - 232.0f,
              screenHeight * 0.50f - 158.0f, 2.0f,

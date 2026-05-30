@@ -1,6 +1,5 @@
 #pragma once
 #include "core/AssetManager.h"
-#include "debug/DebugLog.h"
 #include "graphics/DxUtils.h"
 #include <dxcapi.h>
 #include <Windows.h>
@@ -110,13 +109,6 @@ Compile(const std::wstring &path, const std::string &entry,
     const std::string errorMessage = BlobToString(errors.Get());
     if (!errorMessage.empty()) {
         OutputDebugStringA(errorMessage.c_str());
-#ifdef _DEBUG
-        DebugLog::Get().Write(
-            "Graphics", "ShaderCompiler", "compile_message", errorMessage,
-            {{"path", std::filesystem::path(resolvedPath).generic_string()},
-             {"entry", entry},
-             {"target", NarrowAscii(normalizedTarget)}});
-#endif
     }
 
     HRESULT status = S_OK;

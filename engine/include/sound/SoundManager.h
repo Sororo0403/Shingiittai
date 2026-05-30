@@ -37,6 +37,7 @@ class SoundManager {
     /// Media Foundation、COM、XAudio2エンジンとマスターボイスを初期化する
     /// </summary>
     void Initialize();
+    bool IsInitialized() const { return xAudio2_ != nullptr && masterVoice_ != nullptr; }
 
     /// <summary>
     /// 音声ファイルを読み込み、再利用できる音声IDとして登録する
@@ -71,6 +72,12 @@ class SoundManager {
     /// <param name="loop">末尾まで到達したら先頭へ戻すか</param>
     /// <returns>再生中のボイスを操作するためのハンドル</returns>
     uint32_t Play(uint32_t soundId, float volume = 1.0f, bool loop = false);
+
+    /// <summary>
+    /// 登録済み音声IDのデコード済みデータを指定秒から再生する
+    /// </summary>
+    uint32_t PlayFrom(uint32_t soundId, float startSeconds,
+                      float volume = 1.0f, bool loop = false);
 
     /// <summary>
     /// 3D位置をもつ音声として再生する
@@ -114,6 +121,16 @@ class SoundManager {
     /// 指定した再生中ボイスの再生位置を秒単位で取得する
     /// </summary>
     float GetPlaybackPosition(uint32_t voiceHandle) const;
+
+    /// <summary>
+    /// 指定した再生中ボイスの周波数比率（ピッチ）を設定する
+    /// </summary>
+    void SetVoiceFrequencyRatio(uint32_t voiceHandle, float frequencyRatio);
+
+    /// <summary>
+    /// 指定した再生中ボイスの周波数比率（ピッチ）を取得する
+    /// </summary>
+    float GetVoiceFrequencyRatio(uint32_t voiceHandle) const;
 
     /// <summary>
     /// 3Dサウンドのリスナー位置と向きを設定する
@@ -188,6 +205,7 @@ class SoundManager {
         uint32_t handle = kInvalidVoiceHandle;
         uint32_t soundId = 0;
         float volume = 1.0f;
+        float frequencyRatio = XAUDIO2_DEFAULT_FREQ_RATIO;
         bool loop = false;
         bool is3D = false;
         bool isStreaming = false;
@@ -200,7 +218,8 @@ class SoundManager {
         float maxDistance = 30.0f;
     };
 
-    uint32_t CreateSourceVoice(uint32_t soundId, float volume, bool loop);
+    uint32_t CreateSourceVoice(uint32_t soundId, float volume, bool loop,
+                               float startSeconds = 0.0f);
     uint32_t CreateStreamingVoice(const std::wstring &path, float volume,
                                   bool loop);
     bool SubmitNextStreamBuffer(PlayingVoice &playingVoice);

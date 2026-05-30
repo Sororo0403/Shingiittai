@@ -26,6 +26,8 @@ float HighDifficultyPressure(float difficulty) {
 float RecoveryPadding(float basePadding, float difficulty) {
     return basePadding * (1.0f - 0.55f * HighDifficultyPressure(difficulty));
 }
+
+constexpr float kFarSlashCounterFlashDuration = 0.50f;
 } // namespace
 
 void Enemy::UpdateSmashByStep(float deltaTime) {
@@ -198,15 +200,21 @@ void Enemy::UpdateSmashAttack(float deltaTime) {
     }
 
     if (farSlashActive_) {
-        const float forwardX = std::sin(lockedAttackYaw_);
-        const float forwardZ = std::cos(lockedAttackYaw_);
-        tf_.position.x += forwardX * farSlashLungeSpeed_ * deltaTime;
-        tf_.position.z += forwardZ * farSlashLungeSpeed_ * deltaTime;
+        UpdateFarSlashLunge(deltaTime);
     }
 
-    isAttackActive_ = stateTimer_ >= timing->activeStartTime &&
-                      stateTimer_ <= timing->activeEndTime;
-    if (stateTimer_ >= timing->activeEndTime) {
+    const float attackStartTime =
+        farSlashActive_ ? kFarSlashCounterFlashDuration
+                        : timing->activeStartTime;
+    const float attackEndTime =
+        farSlashActive_ && farSlashLungeDuration_ > 0.0001f
+            ? std::max(timing->activeEndTime,
+                       kFarSlashCounterFlashDuration + farSlashLungeDuration_)
+            : timing->activeEndTime;
+
+    isAttackActive_ = stateTimer_ >= attackStartTime &&
+                      stateTimer_ <= attackEndTime;
+    if (stateTimer_ >= attackEndTime) {
         ChangeActionStep(ActionStep::Recovery);
     }
 }
@@ -310,15 +318,21 @@ void Enemy::UpdateSweepAttack(float deltaTime) {
     }
 
     if (farSlashActive_) {
-        const float forwardX = std::sin(lockedAttackYaw_);
-        const float forwardZ = std::cos(lockedAttackYaw_);
-        tf_.position.x += forwardX * farSlashLungeSpeed_ * 0.92f * deltaTime;
-        tf_.position.z += forwardZ * farSlashLungeSpeed_ * 0.92f * deltaTime;
+        UpdateFarSlashLunge(deltaTime);
     }
 
-    isAttackActive_ = stateTimer_ >= timing->activeStartTime &&
-                      stateTimer_ <= timing->activeEndTime;
-    if (stateTimer_ >= timing->activeEndTime) {
+    const float attackStartTime =
+        farSlashActive_ ? kFarSlashCounterFlashDuration
+                        : timing->activeStartTime;
+    const float attackEndTime =
+        farSlashActive_ && farSlashLungeDuration_ > 0.0001f
+            ? std::max(timing->activeEndTime,
+                       kFarSlashCounterFlashDuration + farSlashLungeDuration_)
+            : timing->activeEndTime;
+
+    isAttackActive_ = stateTimer_ >= attackStartTime &&
+                      stateTimer_ <= attackEndTime;
+    if (stateTimer_ >= attackEndTime) {
         ChangeActionStep(ActionStep::Recovery);
     }
 }
@@ -382,23 +396,15 @@ void Enemy::UpdateBladeClashRecovery(float deltaTime) {
 
 void Enemy::UpdateArcaneLaserCharge(float deltaTime) {
     const auto &profile = config_.attacks.arcaneLaser.profile;
-    const float trackingEnd =
-        std::clamp(profile.timing.trackingEndTime, 0.0f, profile.chargeTime);
-
-    if (stateTimer_ < trackingEnd) {
-        UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_ * 0.44f);
-    } else if (!hasTrackingLocked_) {
-        LockCurrentFacing();
-        hasTrackingLocked_ = true;
-        arcaneLaserDirection_ = {std::sin(lockedAttackYaw_), 0.0f,
-                                 std::cos(lockedAttackYaw_)};
-    }
+    UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_ * 0.44f);
+    const float forwardX = std::sin(facingYaw_);
+    const float forwardZ = std::cos(facingYaw_);
+    tf_.position.x += forwardX * stalkMoveSpeed_ * 1.12f * deltaTime;
+    tf_.position.z += forwardZ * stalkMoveSpeed_ * 1.12f * deltaTime;
 
     if (stateTimer_ >= profile.chargeTime) {
-        if (!hasTrackingLocked_) {
-            LockCurrentFacing();
-            hasTrackingLocked_ = true;
-        }
+        LockCurrentFacing();
+        hasTrackingLocked_ = true;
         arcaneLaserDirection_ = {std::sin(lockedAttackYaw_), 0.0f,
                                  std::cos(lockedAttackYaw_)};
         ChangeActionStep(ActionStep::Active);
@@ -418,6 +424,9 @@ void Enemy::UpdateArcaneLaserRecovery(float deltaTime) {
     UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_ * 0.20f);
 
     if (stateTimer_ >= config_.attacks.arcaneLaser.recoveryDuration) {
+        if (TryBeginLaserReengageWarp(1.0f)) {
+            return;
+        }
         if (TryBeginArcaneLaserSlashFollowup(
                 arcaneLaserSlashFollowupChance_)) {
             return;
@@ -428,23 +437,15 @@ void Enemy::UpdateArcaneLaserRecovery(float deltaTime) {
 
 void Enemy::UpdateCataclysmLaserCharge(float deltaTime) {
     const auto &profile = config_.attacks.cataclysmLaser.profile;
-    const float trackingEnd =
-        std::clamp(profile.timing.trackingEndTime, 0.0f, profile.chargeTime);
-
-    if (stateTimer_ < trackingEnd) {
-        UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_ * 0.30f);
-    } else if (!hasTrackingLocked_) {
-        LockCurrentFacing();
-        hasTrackingLocked_ = true;
-        cataclysmLaserDirection_ = {std::sin(lockedAttackYaw_), 0.0f,
-                                    std::cos(lockedAttackYaw_)};
-    }
+    UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_ * 0.30f);
+    const float forwardX = std::sin(facingYaw_);
+    const float forwardZ = std::cos(facingYaw_);
+    tf_.position.x += forwardX * stalkMoveSpeed_ * 1.02f * deltaTime;
+    tf_.position.z += forwardZ * stalkMoveSpeed_ * 1.02f * deltaTime;
 
     if (stateTimer_ >= profile.chargeTime) {
-        if (!hasTrackingLocked_) {
-            LockCurrentFacing();
-            hasTrackingLocked_ = true;
-        }
+        LockCurrentFacing();
+        hasTrackingLocked_ = true;
         cataclysmLaserDirection_ = {std::sin(lockedAttackYaw_), 0.0f,
                                     std::cos(lockedAttackYaw_)};
         ChangeActionStep(ActionStep::Active);
@@ -464,6 +465,9 @@ void Enemy::UpdateCataclysmLaserRecovery(float deltaTime) {
     UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_ * 0.12f);
 
     if (stateTimer_ >= config_.attacks.cataclysmLaser.recoveryDuration) {
+        if (TryBeginLaserReengageWarp(1.0f)) {
+            return;
+        }
         EndAttack();
     }
 }

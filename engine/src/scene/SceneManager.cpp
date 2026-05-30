@@ -4,6 +4,35 @@
 #include "texture/TextureManager.h"
 #include <stdexcept>
 
+namespace {
+
+class UploadPassScope {
+  public:
+    UploadPassScope(DirectXCommon *dxCommon, TextureManager *textureManager,
+                    bool active)
+        : dxCommon_(dxCommon), textureManager_(textureManager), active_(active) {}
+
+    ~UploadPassScope() { Finish(); }
+
+    void Finish() {
+        if (!active_) {
+            return;
+        }
+        dxCommon_->EndUpload();
+        if (textureManager_ != nullptr) {
+            textureManager_->ReleaseUploadBuffers();
+        }
+        active_ = false;
+    }
+
+  private:
+    DirectXCommon *dxCommon_ = nullptr;
+    TextureManager *textureManager_ = nullptr;
+    bool active_ = false;
+};
+
+} // namespace
+
 void SceneManager::Initialize(const SceneContext &ctx) { ctx_ = &ctx; }
 
 void SceneManager::SetSceneFactory(AbstractSceneFactory *sceneFactory) {
@@ -63,24 +92,10 @@ void SceneManager::ApplySceneChange(std::unique_ptr<BaseScene> nextScene) {
         dxCommon->BeginUpload();
     }
 
-    try {
-        currentScene_->Initialize(*ctx_);
-    } catch (...) {
-        if (ownsUploadPass) {
-            dxCommon->EndUpload();
-            if (textureManager != nullptr) {
-                textureManager->ReleaseUploadBuffers();
-            }
-        }
-        throw;
-    }
+    UploadPassScope uploadPass(dxCommon, textureManager, ownsUploadPass);
+    currentScene_->Initialize(*ctx_);
 
-    if (ownsUploadPass) {
-        dxCommon->EndUpload();
-        if (textureManager != nullptr) {
-            textureManager->ReleaseUploadBuffers();
-        }
-    }
+    uploadPass.Finish();
 }
 
 void SceneManager::Update() {

@@ -28,6 +28,31 @@ static std::wstring NormalizePathKey(const std::filesystem::path &path) {
     return key;
 }
 
+class UploadPassScope {
+  public:
+    UploadPassScope(DirectXCommon *dxCommon, TextureManager *textureManager,
+                    bool active)
+        : dxCommon_(dxCommon), textureManager_(textureManager), active_(active) {}
+
+    ~UploadPassScope() { Finish(); }
+
+    void Finish() {
+        if (!active_) {
+            return;
+        }
+        dxCommon_->EndUpload();
+        if (textureManager_ != nullptr) {
+            textureManager_->ReleaseUploadBuffers();
+        }
+        active_ = false;
+    }
+
+  private:
+    DirectXCommon *dxCommon_ = nullptr;
+    TextureManager *textureManager_ = nullptr;
+    bool active_ = false;
+};
+
 static TextureManager::DecodedTexture DecodeTextureFileForAsync(
     const std::wstring &filePath) {
     const std::filesystem::path resolvedPath = ResolveTexturePath(filePath);
@@ -194,6 +219,7 @@ uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
     if (ownsUploadPass) {
         dxCommon_->BeginUpload();
     }
+    UploadPassScope uploadPass(dxCommon_, this, ownsUploadPass);
 
     Texture texture;
 
@@ -286,10 +312,7 @@ uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
 
     uint32_t textureId = static_cast<uint32_t>(textures_.size() - 1);
 
-    if (ownsUploadPass) {
-        dxCommon_->EndUpload();
-        ReleaseUploadBuffers();
-    }
+    uploadPass.Finish();
 
     return textureId;
 }

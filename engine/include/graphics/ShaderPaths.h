@@ -55,7 +55,5 @@ inline constexpr const wchar_t *ParticleVS =
     L"engine/resources/shaders/particle/GPUParticleVS.hlsl";
 inline constexpr const wchar_t *ParticlePS =
     L"engine/resources/shaders/particle/GPUParticlePS.hlsl";
-inline constexpr const wchar_t *ParticleSmokePS =
-    L"engine/resources/shaders/particle/GPUParticleSmokePS.hlsl";
 
 } // namespace ShaderPaths

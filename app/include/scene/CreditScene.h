@@ -34,7 +34,10 @@ class CreditScene : public BaseScene {
     void BeginReturnToTitle();
     void DrawOverlay(float screenWidth, float screenHeight);
     void DrawCredits(float screenWidth, float screenHeight);
+    void DrawControlsPrompt(float screenWidth, float screenHeight);
     void DrawTransition(float screenWidth, float screenHeight);
+    float CalculateLogoStopDistance(float screenWidth, float screenHeight) const;
+    bool IsLogoStopped(float screenWidth, float screenHeight) const;
     void DrawRect(float x, float y, float w, float h,
                   const DirectX::XMFLOAT4 &color);
     void DrawFrame(float x, float y, float w, float h, float thickness,
@@ -52,6 +55,7 @@ class CreditScene : public BaseScene {
     Image taroSignatureImage_{};
     Image aotoMoriSignatureImage_{};
     Image tsunaguSignatureImage_{};
+    Image controlsImage_{};
     struct CreditLine {
         Image image{};
         float centerY = 0.0f;

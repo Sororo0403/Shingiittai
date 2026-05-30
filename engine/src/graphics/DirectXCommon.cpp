@@ -3,161 +3,11 @@
 #include "graphics/DxUtils.h"
 #include "graphics/SrvManager.h"
 #include <algorithm>
-#include <filesystem>
-#include <fstream>
-#include <iomanip>
 #include <stdexcept>
-#include <sstream>
-#include <string>
 
 using namespace DxUtils;
 
 namespace {
-std::filesystem::path GetDeviceRemovedLogPath() {
-    wchar_t modulePath[MAX_PATH]{};
-    const DWORD length =
-        GetModuleFileNameW(nullptr, modulePath, static_cast<DWORD>(_countof(modulePath)));
-    if (length == 0 || length >= _countof(modulePath)) {
-        return std::filesystem::path(L"shingiittai_d3d12_device_removed.log");
-    }
-
-    std::filesystem::path path(modulePath);
-    return path.parent_path() / L"shingiittai_d3d12_device_removed.log";
-}
-
-std::string HrToString(HRESULT hr) {
-    std::ostringstream stream;
-    stream << "0x" << std::uppercase << std::hex << std::setw(8)
-           << std::setfill('0') << static_cast<uint32_t>(hr);
-    return stream.str();
-}
-
-std::string WideToUtf8(const wchar_t *text) {
-    if (!text) {
-        return {};
-    }
-
-    const int size =
-        WideCharToMultiByte(CP_UTF8, 0, text, -1, nullptr, 0, nullptr, nullptr);
-    if (size <= 1) {
-        return {};
-    }
-
-    std::string result(static_cast<size_t>(size - 1), '\0');
-    WideCharToMultiByte(CP_UTF8, 0, text, -1, result.data(), size, nullptr,
-                        nullptr);
-    return result;
-}
-
-std::string PickDebugName(const char *nameA, const wchar_t *nameW) {
-    if (nameA && nameA[0] != '\0') {
-        return nameA;
-    }
-    return WideToUtf8(nameW);
-}
-
-void WriteDredAllocationList(std::ofstream &log, const char *label,
-                             const D3D12_DRED_ALLOCATION_NODE *node) {
-    log << label << ":\n";
-    if (!node) {
-        log << "  (none)\n";
-        return;
-    }
-
-    uint32_t count = 0;
-    while (node && count < 32) {
-        const std::string name = PickDebugName(node->ObjectNameA, node->ObjectNameW);
-        log << "  [" << count << "] type="
-            << static_cast<uint32_t>(node->AllocationType) << " name="
-            << (name.empty() ? "(unnamed)" : name) << "\n";
-        node = node->pNext;
-        ++count;
-    }
-    if (node) {
-        log << "  ... truncated ...\n";
-    }
-}
-
-void WriteDredData(std::ofstream &log, ID3D12Device *device) {
-    if (!device) {
-        log << "DRED: device is null\n";
-        return;
-    }
-
-    Microsoft::WRL::ComPtr<ID3D12DeviceRemovedExtendedData> dred;
-    if (FAILED(device->QueryInterface(IID_PPV_ARGS(&dred)))) {
-        log << "DRED: ID3D12DeviceRemovedExtendedData unavailable\n";
-        return;
-    }
-
-    D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT breadcrumbs{};
-    if (SUCCEEDED(dred->GetAutoBreadcrumbsOutput(&breadcrumbs))) {
-        log << "DRED breadcrumbs:\n";
-        const D3D12_AUTO_BREADCRUMB_NODE *node =
-            breadcrumbs.pHeadAutoBreadcrumbNode;
-        uint32_t nodeIndex = 0;
-        while (node && nodeIndex < 32) {
-            const std::string listName = PickDebugName(
-                node->pCommandListDebugNameA, node->pCommandListDebugNameW);
-            const std::string queueName = PickDebugName(
-                node->pCommandQueueDebugNameA, node->pCommandQueueDebugNameW);
-            const UINT32 last =
-                node->pLastBreadcrumbValue ? *node->pLastBreadcrumbValue : 0;
-
-            log << "  node[" << nodeIndex << "] list="
-                << (listName.empty() ? "(unnamed)" : listName)
-                << " queue=" << (queueName.empty() ? "(unnamed)" : queueName)
-                << " count=" << node->BreadcrumbCount
-                << " lastCompleted=" << last << "\n";
-
-            if (node->pCommandHistory && node->BreadcrumbCount > 0) {
-                UINT32 start = 0;
-                if (last > 12) {
-                    start = last - 12;
-                    if (start > node->BreadcrumbCount) {
-                        start = node->BreadcrumbCount;
-                    }
-                }
-                UINT32 end = last + 4;
-                if (end < start) {
-                    end = start;
-                }
-                if (end > node->BreadcrumbCount) {
-                    end = node->BreadcrumbCount;
-                }
-                for (UINT32 i = start; i < end; ++i) {
-                    log << "    op[" << i << "]="
-                        << static_cast<uint32_t>(node->pCommandHistory[i]);
-                    if (i == last) {
-                        log << " <- last completed";
-                    }
-                    log << "\n";
-                }
-            }
-
-            node = node->pNext;
-            ++nodeIndex;
-        }
-        if (node) {
-            log << "  ... breadcrumb nodes truncated ...\n";
-        }
-    } else {
-        log << "DRED breadcrumbs: unavailable\n";
-    }
-
-    D3D12_DRED_PAGE_FAULT_OUTPUT pageFault{};
-    if (SUCCEEDED(dred->GetPageFaultAllocationOutput(&pageFault))) {
-        log << "DRED page fault VA=0x" << std::uppercase << std::hex
-            << pageFault.PageFaultVA << std::dec << "\n";
-        WriteDredAllocationList(log, "DRED existing allocations",
-                                pageFault.pHeadExistingAllocationNode);
-        WriteDredAllocationList(log, "DRED recently freed allocations",
-                                pageFault.pHeadRecentFreedAllocationNode);
-    } else {
-        log << "DRED page fault: unavailable\n";
-    }
-}
-
 Microsoft::WRL::ComPtr<IDXGIAdapter1>
 PickHighPerformanceAdapter(IDXGIFactory7 *factory) {
     Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
@@ -292,9 +142,10 @@ void DirectXCommon::EndFrame() {
     TrackGpuPhase("EndFrame.Present");
     HRESULT presentResult = swapChain_->Present(1, 0);
     if (FAILED(presentResult)) {
+        OutputDebugStringA("DirectXCommon: swapChain_->Present failed\n");
         HRESULT removedReason = device_->GetDeviceRemovedReason();
-        WriteDeviceRemovedLog(presentResult, removedReason);
         if (FAILED(removedReason)) {
+            OutputDebugStringA("DirectXCommon: D3D12 device removed\n");
             ThrowIfFailed(removedReason, "D3D12 device removed");
         }
         ThrowIfFailed(presentResult, "swapChain_->Present failed");
@@ -821,56 +672,4 @@ void DirectXCommon::TrackGpuPhase(const char *phase) {
     if (recentGpuPhaseSize_ < kRecentGpuPhaseCount) {
         ++recentGpuPhaseSize_;
     }
-}
-
-void DirectXCommon::WriteDeviceRemovedLog(HRESULT presentResult,
-                                          HRESULT removedReason) const {
-    std::ofstream log(GetDeviceRemovedLogPath(), std::ios::app);
-    if (!log) {
-        return;
-    }
-
-    SYSTEMTIME now{};
-    GetLocalTime(&now);
-    log << "============================================================\n";
-    log << "D3D12 device removed at " << now.wYear << "-"
-        << std::setw(2) << std::setfill('0') << now.wMonth << "-"
-        << std::setw(2) << std::setfill('0') << now.wDay << " "
-        << std::setw(2) << std::setfill('0') << now.wHour << ":"
-        << std::setw(2) << std::setfill('0') << now.wMinute << ":"
-        << std::setw(2) << std::setfill('0') << now.wSecond << "."
-        << std::setw(3) << std::setfill('0') << now.wMilliseconds
-        << std::setfill(' ') << "\n";
-    log << "presentResult=" << HrToString(presentResult)
-        << " removedReason=" << HrToString(removedReason) << "\n";
-    log << "diagnosticFrameId=" << diagnosticFrameId_
-        << " backBufferIndex=" << backBufferIndex_
-        << " fenceValue=" << fenceValue_
-        << " completedFence="
-        << (fence_ ? fence_->GetCompletedValue() : 0)
-        << " recording=" << (isCommandListRecording_ ? "true" : "false")
-        << " uploadActive=" << (uploadPassActive_ ? "true" : "false")
-        << " uploadDepth=" << uploadPassDepth_ << "\n";
-
-    for (UINT i = 0; i < kSwapChainBufferCount; ++i) {
-        log << "frameFenceValues[" << i << "]=" << frameFenceValues_[i]
-            << " backBufferState[" << i << "]="
-            << static_cast<uint32_t>(backBufferStates_[i]) << "\n";
-    }
-    log << "sceneColorState=" << static_cast<uint32_t>(sceneColorState_)
-        << " depthState=" << static_cast<uint32_t>(depthState_) << "\n";
-
-    log << "recent gpu phases (oldest -> newest):\n";
-    const uint32_t start =
-        (recentGpuPhaseCursor_ + kRecentGpuPhaseCount - recentGpuPhaseSize_) %
-        kRecentGpuPhaseCount;
-    for (uint32_t i = 0; i < recentGpuPhaseSize_; ++i) {
-        const uint32_t index = (start + i) % kRecentGpuPhaseCount;
-        log << "  [" << i << "] "
-            << (recentGpuPhases_[index] ? recentGpuPhases_[index] : "(null)")
-            << "\n";
-    }
-
-    WriteDredData(log, device_.Get());
-    log << "\n";
 }

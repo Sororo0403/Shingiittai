@@ -1,5 +1,4 @@
 #include "input/Input.h"
-#include "debug/DebugLog.h"
 
 #include <algorithm>
 #include <array>
@@ -10,6 +9,8 @@
 #include <iomanip>
 #include <sstream>
 #include <string>
+#include <system_error>
+#include <type_traits>
 
 #pragma warning(push, 0)
 #include "nlohmann/json.hpp"
@@ -53,31 +54,40 @@ std::array<BYTE, 256> DecodeKeys(const std::string &encoded) {
     return keys;
 }
 
-std::string NarrowPath(const std::wstring &path) {
-    return std::filesystem::path(path).generic_string();
-}
-
-std::string ReplayModeName(Input::ReplayMode mode) {
-    switch (mode) {
-    case Input::ReplayMode::Live:
-        return "Live";
-    case Input::ReplayMode::Record:
-        return "Record";
-    case Input::ReplayMode::Replay:
-        return "Replay";
+template <typename T>
+T JsonValueOr(const nlohmann::json &object, const char *key, T fallback) {
+    const auto it = object.find(key);
+    if (it == object.end() || it->is_null()) {
+        return fallback;
     }
-    return "Unknown";
+    if constexpr (std::is_same_v<T, std::string>) {
+        const std::string *value = it->get_ptr<const std::string *>();
+        return value != nullptr ? *value : fallback;
+    } else if constexpr (std::is_same_v<T, bool>) {
+        const bool *value = it->get_ptr<const bool *>();
+        return value != nullptr ? *value : fallback;
+    } else if constexpr (std::is_floating_point_v<T>) {
+        if (it->is_number()) {
+            return static_cast<T>(it->get<double>());
+        }
+        return fallback;
+    } else if constexpr (std::is_integral_v<T>) {
+        if (it->is_number_unsigned()) {
+            return static_cast<T>(it->get<uint64_t>());
+        }
+        if (it->is_number_integer()) {
+            return static_cast<T>(it->get<int64_t>());
+        }
+        return fallback;
+    } else {
+        return fallback;
+    }
 }
 
 } // namespace
 
 bool Input::StartRecording(const std::wstring &path, float fixedDeltaTime) {
     if (path.empty() || replayMode_ == ReplayMode::Replay) {
-        DebugLog::Get().Write(
-            "Input", "ReplayRecorder", "start_recording", "failed",
-            {{"reason", replayMode_ == ReplayMode::Replay
-                            ? "replay_mode_active"
-                            : "empty_path"}});
         return false;
     }
 
@@ -86,27 +96,15 @@ bool Input::StartRecording(const std::wstring &path, float fixedDeltaTime) {
     recordedFrames_.clear();
     recordingDirty_ = true;
     replayMode_ = ReplayMode::Record;
-    const std::string narrowPath = NarrowPath(replayPath_);
-    DebugLog::Get().Write(
-        "Input", "ReplayRecorder", "start_recording", "ok",
-        {{"path", narrowPath}, {"fixedDeltaTime", std::to_string(fixedDeltaTime)}});
     return true;
 }
 
 bool Input::StartReplay(const std::wstring &path) {
     if (path.empty() || replayMode_ == ReplayMode::Record) {
-        DebugLog::Get().Write(
-            "Input", "ReplayPlayer", "start_replay", "failed",
-            {{"reason", replayMode_ == ReplayMode::Record
-                            ? "record_mode_active"
-                            : "empty_path"}});
         return false;
     }
 
     if (!LoadReplay(path)) {
-        const std::string narrowPath = NarrowPath(path);
-        DebugLog::Get().Write("Input", "ReplayPlayer", "load_replay",
-                              "failed", {{"path", narrowPath}});
         return false;
     }
 
@@ -114,10 +112,6 @@ bool Input::StartReplay(const std::wstring &path) {
     replayFrameIndex_ = 0;
     replayFinished_ = replayFrames_.empty();
     replayMode_ = ReplayMode::Replay;
-    const std::string narrowPath = NarrowPath(replayPath_);
-    DebugLog::Get().Write(
-        "Input", "ReplayPlayer", "start_replay", "ok",
-        {{"path", narrowPath}, {"frames", std::to_string(replayFrames_.size())}});
     return true;
 }
 
@@ -129,8 +123,6 @@ bool Input::StopRecording() {
     const bool saved = FinishRecording();
     if (saved) {
         replayMode_ = ReplayMode::Live;
-        DebugLog::Get().Write("Input", "ReplayRecorder", "stop_recording",
-                              "ok");
     }
     return saved;
 }
@@ -143,15 +135,6 @@ bool Input::FinishRecording() {
     const bool saved = SaveRecording();
     if (saved) {
         recordingDirty_ = false;
-        const std::string narrowPath = NarrowPath(replayPath_);
-        DebugLog::Get().Write(
-            "Input", "ReplayRecorder", "save_recording", "ok",
-            {{"path", narrowPath},
-             {"frames", std::to_string(recordedFrames_.size())}});
-    } else {
-        const std::string narrowPath = NarrowPath(replayPath_);
-        DebugLog::Get().Write("Input", "ReplayRecorder", "save_recording",
-                              "failed", {{"path", narrowPath}});
     }
     return saved;
 }
@@ -244,11 +227,14 @@ std::wstring Input::MakeAutoReplayPath() const {
 }
 
 bool Input::SaveRecording() const {
-    try {
-        const std::filesystem::path path(replayPath_);
-        if (path.has_parent_path()) {
-            std::filesystem::create_directories(path.parent_path());
+    const std::filesystem::path path(replayPath_);
+    if (path.has_parent_path()) {
+        std::error_code error;
+        std::filesystem::create_directories(path.parent_path(), error);
+        if (error) {
+            return false;
         }
+    }
 
         nlohmann::json root;
         root["version"] = 1;
@@ -289,53 +275,60 @@ bool Input::SaveRecording() const {
 
         file << std::setw(2) << root << '\n';
         return true;
-    } catch (...) {
-        return false;
-    }
 }
 
 bool Input::LoadReplay(const std::wstring &path) {
-    try {
         std::ifstream file(std::filesystem::path(path), std::ios::binary);
         if (!file) {
             return false;
         }
 
         replayFrames_.clear();
-        const nlohmann::json root = nlohmann::json::parse(file);
+        const nlohmann::json root = nlohmann::json::parse(file, nullptr, false);
+        if (root.is_discarded()) {
+            return false;
+        }
         if (!root.contains("frames") || !root["frames"].is_array()) {
             return false;
         }
 
         for (const nlohmann::json &jsonFrame : root["frames"]) {
+            if (!jsonFrame.is_object()) {
+                replayFrames_.clear();
+                return false;
+            }
             InputFrame frame{};
-            frame.keys = DecodeKeys(jsonFrame.value("keys", std::string{}));
+            frame.keys = DecodeKeys(JsonValueOr<std::string>(
+                jsonFrame, "keys", std::string{}));
 
             const unsigned int mouseButtons =
-                jsonFrame.value("mouseButtons", 0u);
+                JsonValueOr<unsigned int>(jsonFrame, "mouseButtons", 0u);
             for (size_t button = 0; button < 4; ++button) {
                 frame.mouse.rgbButtons[button] =
                     (mouseButtons & (1u << button)) != 0 ? 0x80 : 0;
             }
-            frame.mouse.lX = jsonFrame.value("mouseDX", 0L);
-            frame.mouse.lY = jsonFrame.value("mouseDY", 0L);
-            frame.mouse.lZ = jsonFrame.value("mouseWheel", 0L);
+            frame.mouse.lX = JsonValueOr<LONG>(jsonFrame, "mouseDX", 0L);
+            frame.mouse.lY = JsonValueOr<LONG>(jsonFrame, "mouseDY", 0L);
+            frame.mouse.lZ = JsonValueOr<LONG>(jsonFrame, "mouseWheel", 0L);
             frame.gamepadConnected =
-                jsonFrame.value("gamepadConnected", false);
+                JsonValueOr<bool>(jsonFrame, "gamepadConnected", false);
             frame.gamepadButtons =
-                static_cast<WORD>(jsonFrame.value("gamepadButtons", 0u));
-            frame.gamepadLeftStickX = jsonFrame.value("leftStickX", 0.0f);
-            frame.gamepadLeftStickY = jsonFrame.value("leftStickY", 0.0f);
-            frame.gamepadRightStickX = jsonFrame.value("rightStickX", 0.0f);
-            frame.gamepadRightStickY = jsonFrame.value("rightStickY", 0.0f);
-            frame.gamepadLeftTrigger = jsonFrame.value("leftTrigger", 0.0f);
-            frame.gamepadRightTrigger = jsonFrame.value("rightTrigger", 0.0f);
+                static_cast<WORD>(JsonValueOr<unsigned int>(
+                    jsonFrame, "gamepadButtons", 0u));
+            frame.gamepadLeftStickX =
+                JsonValueOr<float>(jsonFrame, "leftStickX", 0.0f);
+            frame.gamepadLeftStickY =
+                JsonValueOr<float>(jsonFrame, "leftStickY", 0.0f);
+            frame.gamepadRightStickX =
+                JsonValueOr<float>(jsonFrame, "rightStickX", 0.0f);
+            frame.gamepadRightStickY =
+                JsonValueOr<float>(jsonFrame, "rightStickY", 0.0f);
+            frame.gamepadLeftTrigger =
+                JsonValueOr<float>(jsonFrame, "leftTrigger", 0.0f);
+            frame.gamepadRightTrigger =
+                JsonValueOr<float>(jsonFrame, "rightTrigger", 0.0f);
             replayFrames_.push_back(frame);
         }
 
         return !replayFrames_.empty();
-    } catch (...) {
-        replayFrames_.clear();
-        return false;
-    }
 }

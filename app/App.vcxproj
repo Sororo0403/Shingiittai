@@ -111,6 +111,7 @@
     <ClCompile Include="src\scene\OptionScene.cpp" />
     <ClCompile Include="src\scene\RankingScene.cpp" />
     <ClCompile Include="src\scene\SoundTestScene.cpp" />
+    <ClCompile Include="src\effect\EffectManager.cpp" />
     <ClCompile Include="src\player\SwordSlashArcRenderer.cpp" />
     <ClCompile Include="src\player\SwordTrailRenderer.cpp" />
     <ClCompile Include="src\scene\BattleResultScene.cpp" />
@@ -154,6 +155,8 @@
     <ClInclude Include="include\scene\RankingScene.h" />
     <ClInclude Include="include\scene\SoundTestScene.h" />
     <ClInclude Include="include\player\SwordSlashArcRenderer.h" />
+    <ClInclude Include="include\effect\EffectAsset.h" />
+    <ClInclude Include="include\effect\EffectManager.h" />
     <ClInclude Include="include\player\SwordTrailRenderer.h" />
     <ClInclude Include="include\player\InputControlType.h" />
     <ClInclude Include="include\compat\EngineCompat.h" />
@@ -197,6 +200,7 @@
     <None Include="resources\audio\bgm\bgm_MenuTheme.wav" />
     <None Include="resources\audio\bgm\bgm_TitleTheme.wav" />
     <None Include="resources\audio\bgm\bgm_TutorialTheme.wav" />
+    <None Include="resources\audio\se\剣で斬る2.mp3" />
     <None Include="resources\audio\sfx\counter_burst.wav" />
     <None Include="resources\audio\sfx\damage_heavy.wav" />
     <None Include="resources\audio\sfx\enemy_release_snap.wav" />
@@ -217,6 +221,7 @@
     <None Include="resources\models\player\sword.glb" />
     <None Include="resources\shaders\sword_arc\SwordArcPS.hlsl" />
     <None Include="resources\shaders\sword_arc\SwordArcVS.hlsl" />
+    <None Include="resources\shaders\particle\GPUParticleSmokePS.hlsl" />
     <None Include="resources\shaders\sword_trail\SwordTrailPS.hlsl" />
     <None Include="resources\shaders\sword_trail\SwordTrailVS.hlsl" />
     <None Include="resources\ui\result\game_over_title.png" />
@@ -305,9 +310,9 @@
     <None Include="resources\ui\weapon_select\weapon_select_bg.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <Target Name="BuildHandTrackingHelper" BeforeTargets="CopyRuntimeDlls" Condition="'$(Configuration)' == 'Release' and '$(BundleHandTrackingHelper)' == 'true'" Inputs="$(SolutionDir)tools\hand_tracking\build-hand-udp-exe.ps1;$(SolutionDir)tools\hand_tracking\hand_udp_sender.py;$(SolutionDir)tools\hand_tracking\requirements-hand-udp.txt;$(SolutionDir)tools\hand_tracking\models\hand_landmarker.task" Outputs="$(SolutionDir)tools\hand_tracking\dist\hand_udp_sender\hand_udp_sender.exe">
+  <Target Name="BuildHandTrackingHelper" BeforeTargets="CopyRuntimeDlls" Condition="'$(Configuration)' == 'Release' and '$(BundleHandTrackingHelper)' == 'true'" Inputs="$(SolutionDir)hand_tracking\scripts\build-hand-udp-exe.ps1;$(SolutionDir)hand_tracking\src\hand_udp_sender.py;$(SolutionDir)hand_tracking\requirements\hand-udp.txt;$(SolutionDir)hand_tracking\models\hand_landmarker.task" Outputs="$(SolutionDir)generated\outputs\$(Platform)\$(Configuration)\HandUdpSender\hand_udp_sender\hand_udp_sender.exe">
     <Message Text="Building hand tracking helper for Release output." Importance="High" />
-    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(SolutionDir)tools\hand_tracking\build-hand-udp-exe.ps1&quot;" />
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(SolutionDir)hand_tracking\scripts\build-hand-udp-exe.ps1&quot; -Platform &quot;$(Platform)&quot; -Configuration &quot;$(Configuration)&quot;" />
   </Target>
   <Target Name="CopyRuntimeDlls" AfterTargets="Build">
     <ItemGroup>
@@ -316,18 +321,17 @@
       <RuntimeDll Include="$(WindowsSdkDir)Redist\D3D\x64\dxil.dll" Condition="Exists('$(WindowsSdkDir)Redist\D3D\x64\dxil.dll')" />
       <AppResource Include="$(ProjectDir)resources\**\*" />
       <EngineResource Include="$(ProjectDir)..\engine\resources\**\*" />
-      <HandTrackingScript Include="$(SolutionDir)tools\hand_tracking\hand_udp_sender.py" />
-      <HandTrackingScript Include="$(SolutionDir)tools\hand_tracking\build-hand-udp-exe.ps1" />
-      <HandTrackingScript Include="$(SolutionDir)tools\hand_tracking\requirements-hand-udp.txt" />
-      <HandTrackingScript Include="$(SolutionDir)tools\hand_tracking\setup-hand-udp.ps1" />
-      <HandTrackingModel Include="$(SolutionDir)tools\hand_tracking\models\**\*" />
-      <HandTrackingDist Include="$(SolutionDir)tools\hand_tracking\dist\hand_udp_sender\**\*" Condition="'$(BundleHandTrackingHelper)' == 'true' and Exists('$(SolutionDir)tools\hand_tracking\dist\hand_udp_sender')" />
+      <HandTrackingSource Include="$(SolutionDir)hand_tracking\src\**\*" />
+      <HandTrackingScript Include="$(SolutionDir)hand_tracking\scripts\**\*" />
+      <HandTrackingRequirement Include="$(SolutionDir)hand_tracking\requirements\**\*" />
+      <HandTrackingModel Include="$(SolutionDir)hand_tracking\models\**\*" />
+      <HandTrackingDist Include="$(SolutionDir)generated\outputs\$(Platform)\$(Configuration)\HandUdpSender\hand_udp_sender\**\*" Condition="'$(BundleHandTrackingHelper)' == 'true' and Exists('$(SolutionDir)generated\outputs\$(Platform)\$(Configuration)\HandUdpSender\hand_udp_sender')" />
       <RuntimeResourceDir Include="$(TargetDir)app\resources" Condition="Exists('$(TargetDir)app\resources')" />
       <RuntimeResourceDir Include="$(TargetDir)engine\resources" Condition="Exists('$(TargetDir)engine\resources')" />
       <ReleasePdb Include="$(TargetDir)*.pdb" Condition="'$(Configuration)' == 'Release' and '$(IncludeReleasePdb)' != 'true'" />
       <StaleRuntimeDir Include="$(TargetDir)resources\app" Condition="Exists('$(TargetDir)resources\app')" />
       <StaleRuntimeDir Include="$(TargetDir)resources\engine" Condition="Exists('$(TargetDir)resources\engine')" />
-      <StaleRuntimeDir Include="$(TargetDir)tools\hand_tracking\hand_udp_sender" Condition="Exists('$(TargetDir)tools\hand_tracking\hand_udp_sender')" />
+      <StaleRuntimeDir Include="$(TargetDir)hand_tracking" Condition="Exists('$(TargetDir)hand_tracking')" />
     </ItemGroup>
     <RemoveDir Directories="@(StaleRuntimeDir)" Condition="'@(StaleRuntimeDir)' != ''" />
     <RemoveDir Directories="@(RuntimeResourceDir)" Condition="'@(RuntimeResourceDir)' != ''" />
@@ -335,9 +339,11 @@
     <Copy SourceFiles="@(RuntimeDll)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" Condition="'@(RuntimeDll)' != ''" />
     <Copy SourceFiles="@(AppResource)" DestinationFiles="@(AppResource->'$(TargetDir)app\resources\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" Condition="'@(AppResource)' != ''" />
     <Copy SourceFiles="@(EngineResource)" DestinationFiles="@(EngineResource->'$(TargetDir)engine\resources\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" Condition="'@(EngineResource)' != ''" />
-    <Copy SourceFiles="@(HandTrackingScript)" DestinationFolder="$(TargetDir)tools\hand_tracking\" SkipUnchangedFiles="true" Condition="'@(HandTrackingScript)' != ''" />
-    <Copy SourceFiles="@(HandTrackingModel)" DestinationFiles="@(HandTrackingModel->'$(TargetDir)tools\hand_tracking\models\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" Condition="'@(HandTrackingModel)' != ''" />
-    <Copy SourceFiles="@(HandTrackingDist)" DestinationFiles="@(HandTrackingDist->'$(TargetDir)tools\hand_tracking\hand_udp_sender\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" Condition="'@(HandTrackingDist)' != ''" />
+    <Copy SourceFiles="@(HandTrackingSource)" DestinationFiles="@(HandTrackingSource->'$(TargetDir)hand_tracking\src\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" Condition="'@(HandTrackingSource)' != ''" />
+    <Copy SourceFiles="@(HandTrackingScript)" DestinationFiles="@(HandTrackingScript->'$(TargetDir)hand_tracking\scripts\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" Condition="'@(HandTrackingScript)' != ''" />
+    <Copy SourceFiles="@(HandTrackingRequirement)" DestinationFiles="@(HandTrackingRequirement->'$(TargetDir)hand_tracking\requirements\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" Condition="'@(HandTrackingRequirement)' != ''" />
+    <Copy SourceFiles="@(HandTrackingModel)" DestinationFiles="@(HandTrackingModel->'$(TargetDir)hand_tracking\models\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" Condition="'@(HandTrackingModel)' != ''" />
+    <Copy SourceFiles="@(HandTrackingDist)" DestinationFiles="@(HandTrackingDist->'$(TargetDir)hand_tracking\hand_udp_sender\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" Condition="'@(HandTrackingDist)' != ''" />
   </Target>
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

@@ -321,6 +321,10 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     currentHoldDuration_ = 0.0f;
     quickSlashActive_ = false;
     farSlashActive_ = false;
+    farSlashLungeDuration_ = 0.0f;
+    hasFarSlashLungeTarget_ = false;
+    farSlashLungeStartPos_ = {0.0f, 0.0f, 0.0f};
+    farSlashLungeTargetPos_ = {0.0f, 0.0f, 0.0f};
     warpFeintFollowupLocked_ = false;
     warpFeintImmediate_ = false;
     warpFeintDecisionMade_ = false;
@@ -413,6 +417,10 @@ void Enemy::EndAttack() {
     currentHoldDuration_ = 0.0f;
     quickSlashActive_ = false;
     farSlashActive_ = false;
+    farSlashLungeDuration_ = 0.0f;
+    hasFarSlashLungeTarget_ = false;
+    farSlashLungeStartPos_ = {0.0f, 0.0f, 0.0f};
+    farSlashLungeTargetPos_ = {0.0f, 0.0f, 0.0f};
     warpFeintFollowupLocked_ = false;
     warpFeintImmediate_ = false;
     warpFeintDecisionMade_ = false;

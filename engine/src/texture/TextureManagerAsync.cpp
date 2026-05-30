@@ -31,34 +31,33 @@ static std::wstring NormalizePathKey(const std::filesystem::path &path) {
 static TextureManager::DecodedTexture DecodeTextureFileForAsync(
     const std::wstring &filePath) {
     const std::filesystem::path resolvedPath = ResolveTexturePath(filePath);
+    TextureManager::DecodedTexture decoded{};
     if (!std::filesystem::exists(resolvedPath)) {
-        throw std::runtime_error("Texture file not found. requested=" +
-                                 std::filesystem::path(filePath).string() +
-                                 " resolved=" + resolvedPath.string());
+        return decoded;
     }
 
-    TextureManager::DecodedTexture decoded{};
     decoded.pathKey = NormalizePathKey(resolvedPath);
     const std::wstring ext = resolvedPath.extension().wstring();
 
     if (_wcsicmp(ext.c_str(), L".dds") == 0) {
-        const std::string message =
-            "LoadFromDDSFile failed: " + resolvedPath.string();
-        DxUtils::ThrowIfFailed(
-            DirectX::LoadFromDDSFile(resolvedPath.c_str(),
-                                      DirectX::DDS_FLAGS_NONE,
-                                      &decoded.metadata, decoded.scratch),
-            message.c_str());
+        if (FAILED(DirectX::LoadFromDDSFile(resolvedPath.c_str(),
+                                            DirectX::DDS_FLAGS_NONE,
+                                            &decoded.metadata,
+                                            decoded.scratch))) {
+            return {};
+        }
     } else {
-        const std::string message =
-            "LoadFromWICFile failed: " + resolvedPath.string();
-        DxUtils::ThrowIfFailed(
-            DirectX::LoadFromWICFile(resolvedPath.c_str(),
-                                      DirectX::WIC_FLAGS_IGNORE_SRGB,
-                                      &decoded.metadata, decoded.scratch),
-            message.c_str());
+        if (FAILED(DirectX::LoadFromWICFile(resolvedPath.c_str(),
+                                            DirectX::WIC_FLAGS_IGNORE_SRGB,
+                                            &decoded.metadata,
+                                            decoded.scratch))) {
+            return {};
+        }
     }
 
+    decoded.succeeded =
+        decoded.scratch.GetImages() != nullptr &&
+        decoded.scratch.GetImageCount() > 0 && !decoded.pathKey.empty();
     return decoded;
 }
 
@@ -114,21 +113,21 @@ void TextureManager::UpdateAsyncLoads() {
             continue;
         }
 
-        try {
-            DecodedTexture decoded = request.future.get();
-            auto cached = filePathToTextureId_.find(decoded.pathKey);
-            if (cached != filePathToTextureId_.end()) {
-                request.textureId = cached->second;
-            } else {
-                request.textureId = CreateTexture(
-                    decoded.scratch.GetImages(), decoded.scratch.GetImageCount(),
-                    decoded.metadata);
-                filePathToTextureId_[decoded.pathKey] = request.textureId;
-            }
-            request.completed = true;
-        } catch (...) {
+        DecodedTexture decoded = request.future.get();
+        if (!decoded.succeeded) {
             request.failed = true;
+            continue;
         }
+        auto cached = filePathToTextureId_.find(decoded.pathKey);
+        if (cached != filePathToTextureId_.end()) {
+            request.textureId = cached->second;
+        } else {
+            request.textureId = CreateTexture(
+                decoded.scratch.GetImages(), decoded.scratch.GetImageCount(),
+                decoded.metadata);
+            filePathToTextureId_[decoded.pathKey] = request.textureId;
+        }
+        request.completed = true;
     }
 }
 

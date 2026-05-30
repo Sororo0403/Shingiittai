@@ -8,10 +8,10 @@
 #include "ParticleEmitterSettings.h"
 #include "PostEffectManager.h"
 #include "SceneManager.h"
-#include "ShaderPaths.h"
 #include "SoundManager.h"
 #include "SpriteManager.h"
 #include "TextureManager.h"
+#include "CreditScene.h"
 #include "TitleScene.h"
 #include "WinApp.h"
 #include <Xinput.h>
@@ -25,12 +25,15 @@
 using namespace DirectX;
 
 namespace {
+constexpr const wchar_t *kVictorySmokePixelShader =
+    L"app/resources/shaders/particle/GPUParticleSmokePS.hlsl";
+
 constexpr float kPi = 3.14159265f;
-constexpr float kImpactTime = 1.48f;
-constexpr float kExplosionFreezeTime = 3.85f;
+constexpr float kImpactTime = 2.20f;  // Extended for slower animation
+constexpr float kExplosionFreezeTime = 4.80f;  // Extended
 constexpr float kDuration = kExplosionFreezeTime;
-constexpr float kPierceAnimDuration = 0.46f;
-constexpr float kPlayerRevealDelay = 0.18f;
+constexpr float kPierceAnimDuration = 1.10f;  // Much longer pierce animation
+constexpr float kPlayerRevealDelay = 0.30f;
 constexpr float kExplosionSpeedBoost = 1.25f;
 constexpr float kExplosionSizeBoost = 1.65f;
 constexpr float kExplosionFlashDuration = 0.06f;
@@ -43,11 +46,14 @@ constexpr float kResultBlurDelay = 0.0f;
 constexpr float kResultBlurDuration = 0.22f;
 constexpr float kResultTextDelay = 0.0f;
 constexpr float kResultExitFadeDuration = 0.35f;
-constexpr float kPreImpactStartTime = 0.76f;
-constexpr float kPreImpactBurstTime = 1.04f;
-constexpr float kConfettiGravity = 168.0f;
-constexpr float kConfettiWind = 58.0f;
-constexpr float kConfettiSideStreamDelay = 0.42f;
+constexpr float kPreImpactStartTime = 1.20f;
+constexpr float kPreImpactBurstTime = 1.65f;
+constexpr float kSlashSound1Time = 1.80f;
+constexpr float kSlashSound2Time = 1.90f;
+constexpr float kSlashSound3Time = 2.00f;
+constexpr float kShardGravity = 96.0f;
+constexpr float kShardWind = 22.0f;
+constexpr float kShardDriftDelay = 0.34f;
 constexpr XMFLOAT3 kPlayerPierceSpawnOffset{0.0f, 0.12f, 0.12f};
 constexpr XMFLOAT3 kPlayerAfterPos{0.0f, 0.0f, -1.32f};
 constexpr XMFLOAT3 kEnemyStartPos{0.0f, 0.0f, 0.0f};
@@ -271,6 +277,13 @@ void GameVictoryScene::Initialize(const SceneContext &ctx) {
     exitTargetIndex_ = 1;
     actionButtonIndex_ = 1;
     explosionSoundId_ = SoundManager::kInvalidSoundId;
+    slashSoundId_ = SoundManager::kInvalidSoundId;
+    slashSound1VoiceHandle_ = SoundManager::kInvalidVoiceHandle;
+    slashSound2VoiceHandle_ = SoundManager::kInvalidVoiceHandle;
+    slashSound3VoiceHandle_ = SoundManager::kInvalidVoiceHandle;
+    slashSound1Played_ = false;
+    slashSound2Played_ = false;
+    slashSound3Played_ = false;
     resultCrowdIntroSoundId_ = SoundManager::kInvalidSoundId;
     resultCrowdIntroVoiceHandle_ = SoundManager::kInvalidVoiceHandle;
 
@@ -312,6 +325,8 @@ void GameVictoryScene::Initialize(const SceneContext &ctx) {
     if (ctx_->systems.sound != nullptr) {
         ctx_->systems.sound->TryLoad(L"app/resources/audio/se/爆発4.mp3",
                                      explosionSoundId_);
+        ctx_->systems.sound->TryLoad(L"app/resources/audio/se/剣で斬る2.mp3",
+                                     slashSoundId_);
         ctx_->systems.sound->TryLoad(
             L"app/resources/audio/se/歓声と拍手1.mp3",
             resultCrowdIntroSoundId_);
@@ -351,7 +366,7 @@ void GameVictoryScene::Initialize(const SceneContext &ctx) {
                                     darkSmokeMaterialColor));
         if (ctx_->rendering.dxCommon != nullptr && ctx_->rendering.srv != nullptr) {
             GPUParticleMaterialSettings smokeMaterial{};
-            smokeMaterial.pixelShaderPath = ShaderPaths::ParticleSmokePS;
+            smokeMaterial.pixelShaderPath = kVictorySmokePixelShader;
             smokeParticles_.SetMaterialSettings(smokeMaterial);
             darkSmokeParticles_.SetMaterialSettings(smokeMaterial);
 
@@ -401,6 +416,34 @@ void GameVictoryScene::Initialize(const SceneContext &ctx) {
         LoadTextureImage(L"app/resources/ui/result/mplus/glyphs/char_dash.png");
     secondImage_ =
         LoadTextureImage(L"app/resources/ui/result/mplus/glyphs/char_s.png");
+
+    // Play resonant slash sounds immediately upon scene initialization
+    if (ctx_->systems.sound != nullptr &&
+        slashSoundId_ != SoundManager::kInvalidSoundId) {
+        // First layer - very deep, slow resonance
+        slashSound1VoiceHandle_ =
+            ctx_->systems.sound->Play(slashSoundId_, 1.0f, false);
+        if (slashSound1VoiceHandle_ != SoundManager::kInvalidVoiceHandle) {
+            ctx_->systems.sound->SetVoiceFrequencyRatio(
+                slashSound1VoiceHandle_, 0.35f);  // Very slow and deep
+        }
+
+        // Second layer - medium resonance
+        slashSound2VoiceHandle_ =
+            ctx_->systems.sound->Play(slashSoundId_, 0.8f, false);
+        if (slashSound2VoiceHandle_ != SoundManager::kInvalidVoiceHandle) {
+            ctx_->systems.sound->SetVoiceFrequencyRatio(
+                slashSound2VoiceHandle_, 0.45f);  // Slower mid-resonance
+        }
+
+        // Third layer - brightest resonance
+        slashSound3VoiceHandle_ =
+            ctx_->systems.sound->Play(slashSoundId_, 0.6f, false);
+        if (slashSound3VoiceHandle_ != SoundManager::kInvalidVoiceHandle) {
+            ctx_->systems.sound->SetVoiceFrequencyRatio(
+                slashSound3VoiceHandle_, 0.55f);  // Still slow but brighter
+        }
+    }
 }
 
 void GameVictoryScene::Update() {
@@ -421,14 +464,16 @@ void GameVictoryScene::Update() {
                     sceneManager_->ChangeScene(std::make_unique<GameScene>(
                         inputCalibration_, combatDifficulty_));
                 } else {
-                    sceneManager_->ChangeScene(std::make_unique<TitleScene>());
+                    sceneManager_->ChangeScene(
+                        std::make_unique<CreditScene>(
+                            CreditScene::ReturnTarget::Title));
                 }
                 return;
             }
         }
         const float w = static_cast<float>(ctx_->systems.winApp->GetWidth());
         const float h = static_cast<float>(ctx_->systems.winApp->GetHeight());
-        UpdateConfetti(deltaTime, w, h);
+        UpdateVictoryShards(deltaTime, w, h);
         UpdateResultPostProcess();
         UpdateResultInput();
         return;
@@ -438,8 +483,8 @@ void GameVictoryScene::Update() {
     const float explosionAge = sceneTime_ - kImpactTime;
     const float timeScale =
         explosionAge < 0.0f
-            ? 1.12f
-            : (explosionAge < 0.55f ? 0.90f : 1.05f);
+            ? 0.65f  // Much slower before impact (strongest slow-motion)
+            : (explosionAge < 1.0f ? 0.75f : 1.05f);  // Extended slow-motion period
     sceneTime_ += deltaTime * timeScale;
     if (!impactEmitted_ && sceneTime_ > kImpactTime) {
         sceneTime_ = kImpactTime;
@@ -592,134 +637,153 @@ void GameVictoryScene::UpdateCinematic(float deltaTime) {
     }
 }
 
-void GameVictoryScene::ResetConfetti(float screenWidth, float screenHeight) {
-    for (size_t i = 0; i < confettiPieces_.size(); ++i) {
-        RespawnConfettiPiece(confettiPieces_[i], screenWidth, screenHeight, i,
-                             true);
+void GameVictoryScene::ResetVictoryShards(float screenWidth,
+                                          float screenHeight) {
+    for (size_t i = 0; i < victoryShards_.size(); ++i) {
+        RespawnVictoryShard(victoryShards_[i], screenWidth, screenHeight, i,
+                            true);
     }
 }
 
-void GameVictoryScene::RespawnConfettiPiece(ConfettiPiece &piece,
-                                            float screenWidth,
-                                            float screenHeight, size_t index,
-                                            bool initial) {
+void GameVictoryScene::RespawnVictoryShard(VictoryShard &shard,
+                                           float screenWidth,
+                                           float screenHeight, size_t index,
+                                           bool initial) {
     const uint32_t seed = static_cast<uint32_t>(index * 977u + 31u);
-    const bool fromLeft = (index % 2u) == 0u;
+    const float side = Hash01(seed + 5u) < 0.5f ? -1.0f : 1.0f;
     const float burstT = Hash01(seed + (initial ? 11u : 13u));
-    const float inward = fromLeft ? 1.0f : -1.0f;
-    if (initial && index < confettiPieces_.size() * 2u / 3u) {
-        const float launcherSpread = Hash01(seed + 3u) * 30.0f;
-        piece.position.x =
-            fromLeft ? (screenWidth * 0.11f + launcherSpread)
-                     : (screenWidth * 0.89f - launcherSpread);
-        piece.position.y =
-            screenHeight * (0.83f + Hash01(seed + 7u) * 0.08f);
+    if (initial && index < victoryShards_.size() * 3u / 4u) {
+        const float spread = (Hash01(seed + 3u) - 0.5f) * screenWidth * 0.48f;
+        const float heightBand = Hash01(seed + 7u);
+        shard.position.x = screenWidth * 0.5f + spread;
+        shard.position.y = screenHeight * (0.25f + heightBand * 0.22f);
 
-        const float fan = -1.18f + Hash01(seed + 17u) * 0.88f;
-        const float speed = 780.0f + Hash01(seed + 23u) * 620.0f;
-        const float lift = 0.92f + Hash01(seed + 29u) * 0.48f;
-        piece.velocity.x = inward * std::cos(fan) * speed +
-                           (Hash01(seed + 31u) - 0.5f) * 180.0f;
-        piece.velocity.y = std::sin(fan) * speed * lift -
-                           (180.0f + burstT * 260.0f);
-        piece.startTime = Hash01(seed + 19u) * 0.045f;
+        const float speed = 72.0f + Hash01(seed + 23u) * 210.0f;
+        shard.velocity.x =
+            side * speed + (Hash01(seed + 31u) - 0.5f) * 92.0f;
+        shard.velocity.y = -(34.0f + burstT * 122.0f);
+        shard.startTime = Hash01(seed + 19u) * 0.12f;
     } else {
-        piece.position.x =
-            fromLeft ? (-screenWidth * (0.08f + Hash01(seed + 3u) * 0.13f))
-                     : (screenWidth * (1.08f + Hash01(seed + 5u) * 0.13f));
-        piece.position.y =
-            -screenHeight * (0.10f + Hash01(seed + 7u) * 0.24f);
-        piece.velocity.x =
-            inward * (210.0f + Hash01(seed + 23u) * 280.0f);
-        piece.velocity.y = 42.0f + Hash01(seed + 29u) * 116.0f;
-        piece.startTime = resultTimer_ + (initial ? kConfettiSideStreamDelay : 0.10f) +
-                          Hash01(seed + 19u) * (initial ? 0.88f : 0.55f);
+        shard.position.x = screenWidth * (0.12f + Hash01(seed + 3u) * 0.76f);
+        shard.position.y =
+            -screenHeight * (0.08f + Hash01(seed + 7u) * 0.20f);
+        shard.velocity.x =
+            (Hash01(seed + 23u) - 0.5f) * (54.0f + Hash01(seed + 29u) * 70.0f);
+        shard.velocity.y = 18.0f + Hash01(seed + 31u) * 58.0f;
+        shard.startTime =
+            resultTimer_ + (initial ? kShardDriftDelay : 0.14f) +
+            Hash01(seed + 19u) * (initial ? 1.12f : 0.74f);
     }
-    piece.width = 6.0f + Hash01(seed + 37u) * 7.0f;
-    piece.height = 12.0f + Hash01(seed + 41u) * 12.0f;
-    piece.phase = Hash01(seed + 43u) * kPi * 2.0f;
-    piece.spinSpeed = 5.0f + Hash01(seed + 47u) * 8.0f;
-    piece.resetDelay = Hash01(seed + 53u) * 0.82f;
+    shard.width = 8.0f + Hash01(seed + 37u) * 16.0f;
+    shard.height = 5.0f + Hash01(seed + 41u) * 18.0f;
+    if ((index % 5u) == 0u) {
+        std::swap(shard.width, shard.height);
+    }
+    shard.phase = Hash01(seed + 43u) * kPi * 2.0f;
+    shard.spinSpeed = 1.4f + Hash01(seed + 47u) * 4.2f;
+    shard.resetDelay = Hash01(seed + 53u) * 0.90f;
+    shard.glint = 0.28f + Hash01(seed + 59u) * 0.62f;
 
-    static const std::array<XMFLOAT4, 7> kColors{
-        Color(1.00f, 0.82f, 0.18f, 1.0f), Color(0.92f, 0.18f, 0.28f, 1.0f),
-        Color(0.18f, 0.78f, 1.00f, 1.0f), Color(0.22f, 0.95f, 0.42f, 1.0f),
-        Color(0.98f, 0.48f, 0.92f, 1.0f), Color(1.00f, 1.00f, 1.00f, 1.0f),
-        Color(0.48f, 0.34f, 1.00f, 1.0f)};
-    piece.color = kColors[index % kColors.size()];
+    static const std::array<XMFLOAT4, 6> kArmorColors{
+        Color(0.030f, 0.034f, 0.046f, 1.0f),
+        Color(0.050f, 0.045f, 0.064f, 1.0f),
+        Color(0.075f, 0.066f, 0.080f, 1.0f),
+        Color(0.105f, 0.092f, 0.096f, 1.0f),
+        Color(0.035f, 0.050f, 0.075f, 1.0f),
+        Color(0.085f, 0.076f, 0.058f, 1.0f)};
+    const XMFLOAT4 base = kArmorColors[index % kArmorColors.size()];
+    const XMFLOAT4 heat = HeatColorForDifficulty(combatDifficulty_, 1.0f);
+    const float heatMix = 0.18f + Hash01(seed + 61u) * 0.28f;
+    shard.color = LerpColor(base, heat, heatMix);
+    shard.edgeColor = BrightHeatColorForDifficulty(combatDifficulty_, 1.0f,
+                                                   0.18f + shard.glint * 0.18f);
 }
 
-void GameVictoryScene::UpdateConfetti(float deltaTime, float screenWidth,
-                                      float screenHeight) {
+void GameVictoryScene::UpdateVictoryShards(float deltaTime, float screenWidth,
+                                           float screenHeight) {
     const float burstGate =
-        std::clamp(resultTimer_ / 0.08f, 0.0f, 1.0f);
+        std::clamp(resultTimer_ / 0.18f, 0.0f, 1.0f);
     const float gust =
-        std::sinf(resultTimer_ * 1.15f) * kConfettiWind +
-        std::sinf(resultTimer_ * 2.35f + 1.4f) * (kConfettiWind * 0.58f) +
-        std::sinf(resultTimer_ * 0.42f + 2.2f) * (kConfettiWind * 0.36f);
-    for (size_t i = 0; i < confettiPieces_.size(); ++i) {
-        ConfettiPiece &piece = confettiPieces_[i];
-        if (resultTimer_ < piece.startTime) {
+        std::sinf(resultTimer_ * 0.82f) * kShardWind +
+        std::sinf(resultTimer_ * 1.74f + 1.4f) * (kShardWind * 0.46f);
+    for (size_t i = 0; i < victoryShards_.size(); ++i) {
+        VictoryShard &shard = victoryShards_[i];
+        if (resultTimer_ < shard.startTime) {
             continue;
         }
         const float flutter =
-            std::sinf((resultTimer_ - piece.startTime) * piece.spinSpeed +
-                      piece.phase);
-        piece.velocity.y =
-            (std::min)(piece.velocity.y + kConfettiGravity * deltaTime,
-                       176.0f + piece.resetDelay * 70.0f);
-        piece.position.x +=
-            ((piece.velocity.x * burstGate) + gust + flutter * 78.0f) *
+            std::sinf((resultTimer_ - shard.startTime) * shard.spinSpeed +
+                      shard.phase);
+        shard.velocity.y =
+            (std::min)(shard.velocity.y + kShardGravity * deltaTime,
+                       112.0f + shard.resetDelay * 58.0f);
+        shard.position.x +=
+            ((shard.velocity.x * burstGate) + gust + flutter * 24.0f) *
             deltaTime;
-        piece.position.y +=
-            (piece.velocity.y +
-             std::sinf(resultTimer_ * (piece.spinSpeed * 0.72f) +
-                       piece.phase * 1.7f) *
-                 20.0f) *
+        shard.position.y +=
+            (shard.velocity.y +
+             std::sinf(resultTimer_ * (shard.spinSpeed * 0.55f) +
+                       shard.phase * 1.7f) *
+                 7.0f) *
             deltaTime;
 
-        if (piece.position.x < -screenWidth * 0.06f) {
-            piece.position.x += screenWidth * 1.12f;
-        } else if (piece.position.x > screenWidth * 1.06f) {
-            piece.position.x -= screenWidth * 1.12f;
+        if (shard.position.x < -screenWidth * 0.08f) {
+            shard.position.x += screenWidth * 1.16f;
+        } else if (shard.position.x > screenWidth * 1.08f) {
+            shard.position.x -= screenWidth * 1.16f;
         }
 
-        if (piece.position.y > screenHeight + 52.0f + piece.resetDelay * 220.0f) {
-            RespawnConfettiPiece(piece, screenWidth, screenHeight, i, false);
+        if (shard.position.y >
+            screenHeight + 52.0f + shard.resetDelay * 220.0f) {
+            RespawnVictoryShard(shard, screenWidth, screenHeight, i, false);
         }
     }
 }
 
-void GameVictoryScene::DrawConfetti(float screenWidth, float screenHeight,
-                                    float alpha) {
+void GameVictoryScene::DrawVictoryShards(float screenWidth, float screenHeight,
+                                         float alpha) {
     if (alpha <= 0.001f) {
         return;
     }
 
-    for (const ConfettiPiece &piece : confettiPieces_) {
-        if (resultTimer_ < piece.startTime) {
+    for (const VictoryShard &shard : victoryShards_) {
+        if (resultTimer_ < shard.startTime) {
             continue;
         }
-        if (piece.position.y < -48.0f || piece.position.y > screenHeight + 48.0f) {
+        if (shard.position.y < -48.0f ||
+            shard.position.y > screenHeight + 48.0f) {
             continue;
         }
         const float flutter =
-            std::sinf((resultTimer_ - piece.startTime) * piece.spinSpeed +
-                      piece.phase);
-        const float face = 0.16f + 0.84f * std::fabs(flutter);
+            std::sinf((resultTimer_ - shard.startTime) * shard.spinSpeed +
+                      shard.phase);
+        const float face = 0.22f + 0.78f * std::fabs(flutter);
         const float sway =
-            std::sinf((resultTimer_ - piece.startTime) * 2.2f + piece.phase) *
-                8.0f +
-            std::sinf((resultTimer_ - piece.startTime) * 5.4f +
-                      piece.phase * 0.7f) *
-                3.0f;
-        XMFLOAT4 color = piece.color;
-        color.w = alpha * (0.58f + 0.34f * face);
+            std::sinf((resultTimer_ - shard.startTime) * 1.35f + shard.phase) *
+                5.0f;
+        XMFLOAT4 body = shard.color;
+        body.w = alpha * (0.46f + 0.30f * face);
+        XMFLOAT4 edge = shard.edgeColor;
+        edge.w = alpha * shard.glint * (0.28f + 0.58f * face);
 
-        const float drawW = piece.width * (0.18f + face * 0.82f);
-        const float drawH = piece.height * (1.0f + (1.0f - face) * 0.18f);
-        DrawRect(std::clamp(piece.position.x + sway, -32.0f, screenWidth + 32.0f),
-                 piece.position.y, drawW, drawH, color);
+        const float drawW = shard.width * (0.42f + face * 0.58f);
+        const float drawH = shard.height * (0.82f + (1.0f - face) * 0.38f);
+        const float x =
+            std::clamp(shard.position.x + sway, -32.0f, screenWidth + 32.0f);
+        const float y = shard.position.y;
+        DrawRect(x, y, drawW, drawH, body);
+
+        const float edgeH = (std::max)(1.0f, drawH * 0.16f);
+        DrawRect(x + drawW * 0.10f, y + drawH * 0.10f, drawW * 0.78f, edgeH,
+                 edge);
+
+        if (face > 0.62f) {
+            XMFLOAT4 core = edge;
+            core.w *= 0.52f;
+            DrawRect(x + drawW * 0.62f, y + drawH * 0.42f,
+                     (std::max)(1.4f, drawW * 0.20f),
+                     (std::max)(1.2f, drawH * 0.18f), core);
+        }
     }
 }
 
@@ -1645,7 +1709,7 @@ void GameVictoryScene::BeginResult() {
     resultTimer_ = 0.0f;
     const float w = static_cast<float>(ctx_->systems.winApp->GetWidth());
     const float h = static_cast<float>(ctx_->systems.winApp->GetHeight());
-    ResetConfetti(w, h);
+    ResetVictoryShards(w, h);
     StartResultCrowdAudio();
     UpdateResultPostProcess();
 }
@@ -1708,7 +1772,7 @@ void GameVictoryScene::DrawResultOverlay(float screenWidth, float screenHeight) 
         SmoothStep01((resultTimer_ - kResultTextDelay) / 0.14f);
     DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
              Color(0.0f, 0.0f, 0.0f, 0.46f * fade));
-    DrawConfetti(screenWidth, screenHeight, fade);
+    DrawVictoryShards(screenWidth, screenHeight, fade);
 
     const float titleScale =
         std::clamp(screenWidth * 0.58f /

@@ -15,13 +15,9 @@ namespace {
 constexpr char kRawMagic[] = "HAND_RAW ";
 constexpr float kSingleHandLeftThreshold = 0.45f;
 constexpr float kSingleHandRightThreshold = 0.55f;
-constexpr float kSlowPalmSmoothingAlpha = 0.24f;
-constexpr float kFastPalmSmoothingAlpha = 0.72f;
-constexpr float kFastPalmSpeed = 2.0f;
 
 struct HandSample {
     DirectX::XMFLOAT2 palm{0.5f, 0.5f};
-    bool bodyCorrected = false;
     std::string label{};
     float score = 0.0f;
 };
@@ -44,12 +40,6 @@ bool ReadPoint01(const nlohmann::json &object, const char *key,
 
 float Length(const DirectX::XMFLOAT2 &value) {
     return std::sqrt(value.x * value.x + value.y * value.y);
-}
-
-DirectX::XMFLOAT2 LerpPoint(const DirectX::XMFLOAT2 &from,
-                            const DirectX::XMFLOAT2 &to, float alpha) {
-    return {from.x + (to.x - from.x) * alpha,
-            from.y + (to.y - from.y) * alpha};
 }
 
 }
@@ -92,9 +82,6 @@ void SwordUdpController::SetCalibration(
     previousCalibratedPalm_ = {DirectX::XMFLOAT2{0.5f, 0.5f},
                                DirectX::XMFLOAT2{0.5f, 0.5f}};
     hasPreviousCalibratedPalm_ = {false, false};
-    filteredCalibratedPalm_ = {DirectX::XMFLOAT2{0.5f, 0.5f},
-                               DirectX::XMFLOAT2{0.5f, 0.5f}};
-    hasFilteredCalibratedPalm_ = {false, false};
     hasPreviousPacketPalm_ = {false, false};
     packetDeltaPalm_ = {DirectX::XMFLOAT2{0.0f, 0.0f},
                         DirectX::XMFLOAT2{0.0f, 0.0f}};
@@ -120,7 +107,6 @@ void SwordUdpController::Update(float dt) {
         rawInput_.active = {false, false};
         swordStates_ = {};
         hasPreviousCalibratedPalm_ = {false, false};
-        hasFilteredCalibratedPalm_ = {false, false};
         packetChangedThisUpdate_ = false;
         motionSpeed_ = {0.0f, 0.0f};
         packetDeltaPalm_ = {DirectX::XMFLOAT2{0.0f, 0.0f},
@@ -142,9 +128,7 @@ SwordUdpController::GetDebugHandState(size_t handIndex) const {
 
     debug.active = debug.fresh && rawInput_.active[handIndex];
     debug.rawPalm = rawInput_.palm[handIndex];
-    debug.neutral = calibration_.hasHandNeutral
-                        ? calibration_.handNeutral[handIndex]
-                        : DirectX::XMFLOAT2{0.5f, 0.5f};
+    debug.neutral = DirectX::XMFLOAT2{0.5f, 0.5f};
     debug.calibratedPalm = calibratedPalm_[handIndex];
     debug.slashDir = swordStates_[handIndex].slashDir;
     debug.orientation = swordStates_[handIndex].orientation;
@@ -237,9 +221,11 @@ void SwordUdpController::ReceivePackets() {
             continue;
         }
 
-        try {
-            const nlohmann::json packet =
-                nlohmann::json::parse(buffer + rawMagicSize);
+        const nlohmann::json packet =
+            nlohmann::json::parse(buffer + rawMagicSize, nullptr, false);
+        if (packet.is_discarded()) {
+            continue;
+        }
             const auto handsIt = packet.find("hands");
             if (handsIt == packet.end() || !handsIt->is_array()) {
                 continue;
@@ -250,19 +236,10 @@ void SwordUdpController::ReceivePackets() {
             for (size_t i = 0; i < handsIt->size() && i < rawInput_.palm.size();
                  ++i) {
                 DirectX::XMFLOAT2 palm{};
-                const bool hasBodyCorrected =
-                    ReadPoint01((*handsIt)[i], "bodyCorrectedMirroredGrip01",
-                                palm) ||
-                    ReadPoint01((*handsIt)[i], "bodyCorrectedMirroredPalm01",
-                                palm);
-                if (hasBodyCorrected ||
-                    ReadPoint01((*handsIt)[i], "mirroredGrip01", palm) ||
-                    ReadPoint01((*handsIt)[i], "mirroredPalm01", palm) ||
-                    ReadPoint01((*handsIt)[i], "grip01", palm) ||
+                if (ReadPoint01((*handsIt)[i], "grip01", palm) ||
                     ReadPoint01((*handsIt)[i], "palm01", palm)) {
                     HandSample sample{};
                     sample.palm = palm;
-                    sample.bodyCorrected = hasBodyCorrected;
                     sample.label = (*handsIt)[i].value("label", "");
                     sample.score = (*handsIt)[i].value("score", 0.0f);
                     hands.push_back(sample);
@@ -292,8 +269,6 @@ void SwordUdpController::ReceivePackets() {
                           });
                 rawInput_.palm[0] = hands[0].palm;
                 rawInput_.palm[1] = hands[1].palm;
-                rawInput_.bodyCorrected[0] = hands[0].bodyCorrected;
-                rawInput_.bodyCorrected[1] = hands[1].bodyCorrected;
                 rawInput_.sourceLabel[0] = hands[0].label;
                 rawInput_.sourceLabel[1] = hands[1].label;
                 rawInput_.sourceScore[0] = hands[0].score;
@@ -303,16 +278,12 @@ void SwordUdpController::ReceivePackets() {
                 const size_t slot = ChooseSingleHandSlot(hands[0].palm);
                 rawInput_.palm[slot] = hands[0].palm;
                 rawInput_.active[slot] = true;
-                rawInput_.bodyCorrected[slot] = hands[0].bodyCorrected;
                 rawInput_.sourceLabel[slot] = hands[0].label;
                 rawInput_.sourceScore[slot] = hands[0].score;
             }
             rawInput_.hasPacket = true;
             ++rawInput_.sequence;
             rawInput_.staleTimer = 0.0f;
-        } catch (...) {
-            continue;
-        }
     }
 }
 
@@ -322,7 +293,6 @@ void SwordUdpController::ApplyRawInput(float dt) {
         if (!rawInput_.active[i]) {
             state = {};
             hasPreviousCalibratedPalm_[i] = false;
-            hasFilteredCalibratedPalm_[i] = false;
             hasPreviousPacketPalm_[i] = false;
             motionSpeed_[i] = 0.0f;
             packetDeltaPalm_[i] = {0.0f, 0.0f};
@@ -330,29 +300,7 @@ void SwordUdpController::ApplyRawInput(float dt) {
             continue;
         }
 
-        const DirectX::XMFLOAT2 &palm = rawInput_.palm[i];
-        const DirectX::XMFLOAT2 neutral =
-            calibration_.hasHandNeutral ? calibration_.handNeutral[i]
-                                        : DirectX::XMFLOAT2{0.5f, 0.5f};
-        DirectX::XMFLOAT2 corrected{
-            std::clamp(palm.x - neutral.x + 0.5f, 0.0f, 1.0f),
-            std::clamp(palm.y - neutral.y + 0.5f, 0.0f, 1.0f)};
-        if (hasFilteredCalibratedPalm_[i]) {
-            const DirectX::XMFLOAT2 delta{
-                corrected.x - filteredCalibratedPalm_[i].x,
-                corrected.y - filteredCalibratedPalm_[i].y};
-            const float speed = dt > 0.0001f ? Length(delta) / dt : 0.0f;
-            const float speedRatio =
-                std::clamp(speed / kFastPalmSpeed, 0.0f, 1.0f);
-            const float alpha =
-                kSlowPalmSmoothingAlpha +
-                (kFastPalmSmoothingAlpha - kSlowPalmSmoothingAlpha) *
-                    speedRatio;
-            corrected = LerpPoint(filteredCalibratedPalm_[i], corrected, alpha);
-        } else {
-            hasFilteredCalibratedPalm_[i] = true;
-        }
-        filteredCalibratedPalm_[i] = corrected;
+        DirectX::XMFLOAT2 corrected = rawInput_.palm[i];
         calibratedPalm_[i] = corrected;
 
         if (hasPreviousCalibratedPalm_[i] && dt > 0.0001f) {

@@ -69,8 +69,8 @@ ParticleVSOutput main(uint vertexId : SV_VertexID, uint instanceId : SV_Instance
 
     ParticleVSOutput output;
     output.position = mul(float4(worldPosition, 1.0f), viewProjection);
-    uint atlasColumns = max(1u, (uint) round(atlasInfo.x));
-    uint atlasRows = max(1u, (uint) round(atlasInfo.y));
+    uint atlasColumns = max(1u, (uint) round(particle.params2.w));
+    uint atlasRows = max(1u, (uint) round(particle.params3.w));
     uint atlasFrameCount = atlasColumns * atlasRows;
     uint frameIndex =
         atlasFrameCount > 0u

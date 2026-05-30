@@ -3,7 +3,6 @@
 #include "camera/CameraManager.h"
 #include "core/FrameTimer.h"
 #include "core/WinApp.h"
-#include "debug/DebugLog.h"
 #include "graphics/DirectXCommon.h"
 #include "graphics/PostEffectManager.h"
 #include "graphics/PostProcessSystem.h"
@@ -26,7 +25,6 @@
 #endif
 
 #include <algorithm>
-#include <exception>
 
 struct EngineRuntime::Systems {
     WinApp winApp;
@@ -109,14 +107,6 @@ void EngineRuntime::Initialize(HINSTANCE instance, int showCommand,
     currentWidth_ = systems_->winApp.GetWidth();
     currentHeight_ = systems_->winApp.GetHeight();
 
-#ifdef _DEBUG
-    DebugLog::Get().OpenDefault();
-    DebugLog::Get().Write(
-        "Engine", "EngineRuntime", "initialize", "start",
-        {{"width", std::to_string(currentWidth_)},
-         {"height", std::to_string(currentHeight_)}});
-#endif
-
     systems_->dxCommon.Initialize(systems_->winApp.GetHwnd(), currentWidth_, currentHeight_);
     systems_->srvManager.Initialize(&systems_->dxCommon);
     systems_->dxCommon.CreateDepthStencilSrv(&systems_->srvManager);
@@ -132,18 +122,10 @@ void EngineRuntime::Initialize(HINSTANCE instance, int showCommand,
     systems_->shadowMapRenderer.Initialize(&systems_->dxCommon, &systems_->srvManager);
     systems_->renderPassController.Initialize(&systems_->dxCommon, &systems_->srvManager);
     systems_->input.Initialize(instance, systems_->winApp.GetHwnd());
-    try {
-        SoundManager::GetInstance().Initialize();
-        systems_->sceneContext.systems.sound = &SoundManager::GetInstance();
-    } catch (const std::exception &e) {
-        DebugLog::Get().Write("Sound", "EngineRuntime", "initialize_failed",
-                              e.what());
-        systems_->sceneContext.systems.sound = nullptr;
-    } catch (...) {
-        DebugLog::Get().Write("Sound", "EngineRuntime", "initialize_failed",
-                              "unknown error");
-        systems_->sceneContext.systems.sound = nullptr;
-    }
+    SoundManager::GetInstance().Initialize();
+    systems_->sceneContext.systems.sound =
+        SoundManager::GetInstance().IsInitialized() ? &SoundManager::GetInstance()
+                                                    : nullptr;
 
 #ifdef _DEBUG
     systems_->imguiManager.Initialize(&systems_->winApp, &systems_->dxCommon, &systems_->srvManager);
@@ -175,10 +157,6 @@ void EngineRuntime::UpdateFrameContext() {
     systems_->sceneContext.frame.frameTime = frameTime;
     systems_->sceneContext.frame.deltaTime =
         static_cast<float>((std::min)(frameTime.deltaTime, 1.0 / 15.0));
-#ifdef _DEBUG
-    DebugLog::Get().SetFrame(frameTime.frameCount,
-                             systems_->sceneContext.frame.deltaTime);
-#endif
 }
 
 void EngineRuntime::ResizeIfNeeded() {

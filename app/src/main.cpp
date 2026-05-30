@@ -3,7 +3,6 @@
 #include "Input.h"
 #include "AppSceneServices.h"
 #include "core/AssetManager.h"
-#include "debug/DebugLog.h"
 #include "Lighting.h"
 #include "ModelManager.h"
 #include "RenderPassController.h"
@@ -18,11 +17,8 @@
 #include "TitleScene.h"
 #include "WinApp.h"
 #include <Windows.h>
-#include <exception>
 #include <filesystem>
-#include <fstream>
 #include <memory>
-#include <sstream>
 #include <string>
 
 namespace {
@@ -39,18 +35,6 @@ std::filesystem::path ResolveExecutableDirectory() {
     return std::filesystem::path(path).parent_path();
 }
 
-std::filesystem::path ResolveHandTrackingLogPath() {
-    std::wstring tempPath(MAX_PATH, L'\0');
-    const DWORD length =
-        GetTempPathW(static_cast<DWORD>(tempPath.size()), tempPath.data());
-    if (length > 0 && length < tempPath.size()) {
-        tempPath.resize(length);
-        return std::filesystem::path(tempPath) /
-               L"shingiittai_hand_udp_sender.log";
-    }
-    return ResolveExecutableDirectory() / L"shingiittai_hand_udp_sender.log";
-}
-
 class HandUdpSenderProcess {
   public:
     ~HandUdpSenderProcess() { Stop(); }
@@ -61,14 +45,12 @@ class HandUdpSenderProcess {
         }
 
         const std::filesystem::path runtimeRoot = ResolveRuntimeRoot();
+        const std::filesystem::path sourceDir = HandTrackingSourceDir(runtimeRoot);
         const std::filesystem::path modelPath =
-            runtimeRoot / L"tools" / L"hand_tracking" / L"models" /
-            L"hand_landmarker.task";
-        const std::filesystem::path packagedExe =
-            runtimeRoot / L"tools" / L"hand_tracking" / L"hand_udp_sender" /
-            L"hand_udp_sender.exe";
+            sourceDir / L"models" / L"hand_landmarker.task";
+        const std::filesystem::path packagedExe = PackagedExePath(runtimeRoot);
         const std::filesystem::path scriptPath =
-            runtimeRoot / L"tools" / L"hand_tracking" / L"hand_udp_sender.py";
+            sourceDir / L"src" / L"hand_udp_sender.py";
         return std::filesystem::exists(modelPath) &&
                (std::filesystem::exists(packagedExe) ||
                 std::filesystem::exists(scriptPath));
@@ -108,21 +90,17 @@ class HandUdpSenderProcess {
         }
 
         const std::filesystem::path runtimeRoot = ResolveRuntimeRoot();
+        const std::filesystem::path sourceDir = HandTrackingSourceDir(runtimeRoot);
         const std::filesystem::path modelPath =
-            runtimeRoot / L"tools" / L"hand_tracking" / L"models" /
-            L"hand_landmarker.task";
+            sourceDir / L"models" / L"hand_landmarker.task";
         if (!std::filesystem::exists(modelPath)) {
             return false;
         }
 
-        const std::filesystem::path packagedExe =
-            runtimeRoot / L"tools" / L"hand_tracking" / L"hand_udp_sender" /
-            L"hand_udp_sender.exe";
+        const std::filesystem::path packagedExe = PackagedExePath(runtimeRoot);
         const std::filesystem::path scriptPath =
-            runtimeRoot / L"tools" / L"hand_tracking" / L"hand_udp_sender.py";
-        const std::filesystem::path venvPython =
-            runtimeRoot / L"tools" / L"hand_tracking" / L".venv" / L"Scripts" /
-            L"python.exe";
+            sourceDir / L"src" / L"hand_udp_sender.py";
+        const std::filesystem::path venvPython = VenvPythonPath(runtimeRoot);
         const auto appendCameraArg = [](std::wstring& command,
                                         const wchar_t* envName,
                                         const wchar_t* argName) {
@@ -189,30 +167,11 @@ class HandUdpSenderProcess {
 
         STARTUPINFOW startupInfo{};
         startupInfo.cb = sizeof(startupInfo);
-        startupInfo.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+        startupInfo.dwFlags = STARTF_USESHOWWINDOW;
         startupInfo.wShowWindow = SW_HIDE;
-        const std::filesystem::path logPath = ResolveHandTrackingLogPath();
-        SECURITY_ATTRIBUTES securityAttributes{};
-        securityAttributes.nLength = sizeof(securityAttributes);
-        securityAttributes.bInheritHandle = TRUE;
-        HANDLE logHandle = CreateFileW(
-            logPath.wstring().c_str(), FILE_APPEND_DATA,
-            FILE_SHARE_READ | FILE_SHARE_WRITE, &securityAttributes, OPEN_ALWAYS,
-            FILE_ATTRIBUTE_NORMAL, nullptr);
-        if (logHandle != INVALID_HANDLE_VALUE) {
-            startupInfo.hStdOutput = logHandle;
-            startupInfo.hStdError = logHandle;
-            startupInfo.hStdInput = nullptr;
-            std::ofstream log(logPath, std::ios::app);
-            log << "\n=== hand_udp_sender start ===\n";
-        } else {
-            startupInfo.dwFlags = STARTF_USESHOWWINDOW;
-        }
-        const BOOL inheritHandles =
-            logHandle != INVALID_HANDLE_VALUE ? TRUE : FALSE;
         PROCESS_INFORMATION processInfo{};
         const BOOL started = CreateProcessW(
-            nullptr, command.data(), nullptr, nullptr, inheritHandles,
+            nullptr, command.data(), nullptr, nullptr, FALSE,
             CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr,
             runtimeRoot.wstring().c_str(),
             &startupInfo, &processInfo);
@@ -220,13 +179,7 @@ class HandUdpSenderProcess {
             if (jobHandle != nullptr) {
                 CloseHandle(jobHandle);
             }
-            if (logHandle != INVALID_HANDLE_VALUE) {
-                CloseHandle(logHandle);
-            }
             return false;
-        }
-        if (logHandle != INVALID_HANDLE_VALUE) {
-            CloseHandle(logHandle);
         }
 
         if (jobHandle != nullptr &&
@@ -291,20 +244,42 @@ class HandUdpSenderProcess {
         return sourcePath.parent_path().parent_path().parent_path();
     }
 
+    static std::filesystem::path HandTrackingSourceDir(
+        const std::filesystem::path &root) {
+        return root / L"hand_tracking";
+    }
+
+    static std::filesystem::path VenvPythonPath(
+        const std::filesystem::path &root) {
+        return root / L"generated" / L"intermediate" / L"HandUdpSender" /
+               L".venv" / L"Scripts" / L"python.exe";
+    }
+
+    static std::filesystem::path PackagedExePath(
+        const std::filesystem::path &root) {
+        const std::filesystem::path runtimePackagedExe =
+            HandTrackingSourceDir(root) / L"hand_udp_sender" /
+            L"hand_udp_sender.exe";
+        if (std::filesystem::exists(runtimePackagedExe)) {
+            return runtimePackagedExe;
+        }
+
+        return root / L"generated" / L"outputs" / L"x64" / L"Release" /
+               L"HandUdpSender" / L"hand_udp_sender" / L"hand_udp_sender.exe";
+    }
+
     static std::filesystem::path ResolveRuntimeRoot() {
         const std::filesystem::path executableDir = ResolveExecutableDirectory();
         const std::filesystem::path repoRoot = ResolveRepoRoot();
         const auto hasSender = [](const std::filesystem::path &root) {
-            return std::filesystem::exists(root / L"tools" / L"hand_tracking" /
+            const std::filesystem::path sourceDir = HandTrackingSourceDir(root);
+            return std::filesystem::exists(sourceDir / L"src" /
                                            L"hand_udp_sender.py") &&
-                   std::filesystem::exists(root / L"tools" / L"hand_tracking" /
-                                           L"models" /
+                   std::filesystem::exists(sourceDir / L"models" /
                                            L"hand_landmarker.task");
         };
         const auto hasVenv = [](const std::filesystem::path &root) {
-            return std::filesystem::exists(root / L"tools" / L"hand_tracking" /
-                                           L".venv" / L"Scripts" /
-                                           L"python.exe");
+            return std::filesystem::exists(VenvPythonPath(root));
         };
         const std::filesystem::path siblingRepo =
             executableDir.parent_path()
@@ -365,78 +340,51 @@ class HandUdpSenderProcess {
     DWORD lastStartAttemptTick_ = 0;
 };
 
-void WriteCrashLog(const std::string &message) {
-    std::ofstream log(ResolveExecutableDirectory() / L"shingiittai_crash.log",
-                      std::ios::app);
-    log << message << '\n';
-}
 }
 
 int RunApp(HINSTANCE hInstance, int nCmdShow) {
     const std::filesystem::path executableDirectory = ResolveExecutableDirectory();
     SetCurrentDirectoryW(executableDirectory.wstring().c_str());
     AssetManager::SetAssetRoot(executableDirectory);
-    DebugLog::Get().OpenDefault();
-    DebugLog::Get().Write("App", "RunApp", "phase", "start");
 
     HandUdpSenderProcess handUdpSenderProcess;
     const bool handTrackingRuntimeAvailable =
         HandUdpSenderProcess::IsRuntimeAvailable();
-    DebugLog::Get().Write(
-        "App", "HandTracking", "runtime_available",
-        handTrackingRuntimeAvailable ? "true" : "false");
 
     // WinApp初期化
-    DebugLog::Get().Write("App", "WinApp", "phase", "initialize_begin");
     WinApp winApp;
     winApp.Initialize(hInstance, nCmdShow, 1280, 720, L"3145_身技一体", true);
     winApp.SetCursorVisible(false);
-    DebugLog::Get().Write("App", "WinApp", "phase", "initialize_end");
 
     // クライアント領域の幅と高さ
     int width = winApp.GetWidth();
     int height = winApp.GetHeight();
 
     // DirectX
-    DebugLog::Get().Write("App", "DirectXCommon", "phase", "initialize_begin");
     DirectXCommon dxCommon;
     dxCommon.Initialize(winApp.GetHwnd(), width, height);
-    DebugLog::Get().Write("App", "DirectXCommon", "phase", "initialize_end",
-                          {{"width", std::to_string(width)},
-                           {"height", std::to_string(height)}});
 
     // SrvManager
-    DebugLog::Get().Write("App", "SrvManager", "phase", "initialize_begin");
     SrvManager srvManager;
     srvManager.Initialize(&dxCommon, 4096);
     dxCommon.RegisterSceneColorSRV(&srvManager);
     dxCommon.CreateDepthStencilSrv(&srvManager);
-    DebugLog::Get().Write("App", "SrvManager", "phase", "initialize_end");
 
-    DebugLog::Get().Write("App", "PostProcessSystem", "phase",
-                          "initialize_begin");
     PostProcessSystem postProcessSystem;
     postProcessSystem.Initialize(&dxCommon, &srvManager, width, height);
     PostEffectManager postEffectManager;
     postEffectManager.Initialize(&postProcessSystem);
     postEffectManager.SetBaseProfile(PostProcessProfile{});
-    DebugLog::Get().Write("App", "PostProcessSystem", "phase",
-                          "initialize_end");
 
     // Input
-    DebugLog::Get().Write("App", "Input", "phase", "initialize_begin");
     Input input;
     input.Initialize(hInstance, winApp.GetHwnd());
-    DebugLog::Get().Write("App", "Input", "phase", "initialize_end");
 
     // SoundManager
-    DebugLog::Get().Write("App", "SoundManager", "phase", "initialize_begin");
     SoundManager soundManager;
     soundManager.Initialize();
-    DebugLog::Get().Write("App", "SoundManager", "phase", "initialize_end");
 
     // TextureManager
-    DebugLog::Get().Write("App", "TextureManager", "phase", "initialize_begin");
     TextureManager textureManager;
     textureManager.Initialize(&dxCommon, &srvManager);
     const float dummyShadowDepth = 1.0f;
@@ -444,10 +392,8 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
         1, 1, DXGI_FORMAT_R32_FLOAT,
         reinterpret_cast<const uint8_t *>(&dummyShadowDepth),
         sizeof(dummyShadowDepth));
-    DebugLog::Get().Write("App", "TextureManager", "phase", "initialize_end");
 
     // ModelManager
-    DebugLog::Get().Write("App", "ModelManager", "phase", "initialize_begin");
     ModelManager modelManager;
     modelManager.Initialize(&dxCommon, &srvManager, &textureManager);
     DirectX::XMFLOAT4X4 identityLightViewProjection{
@@ -462,14 +408,11 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
         identityLightViewProjection, noShadow);
     modelManager.GetRenderer()->SetEnvironmentTexture(
         textureManager.GetWhiteCubeTextureId());
-    DebugLog::Get().Write("App", "ModelManager", "phase", "initialize_end");
 
     // SpriteManager
-    DebugLog::Get().Write("App", "SpriteManager", "phase", "initialize_begin");
     SpriteManager &spriteManager = SpriteManager::GetInstance();
     spriteManager.Initialize(&dxCommon, &textureManager, &srvManager, width,
                              height);
-    DebugLog::Get().Write("App", "SpriteManager", "phase", "initialize_end");
 
     SceneContext sceneCtx{};
     sceneCtx.systems.input = &input;
@@ -502,12 +445,9 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
         });
 
     // SceneManager
-    DebugLog::Get().Write("App", "SceneManager", "phase", "initialize_begin");
     SceneManager sceneManager;
     sceneManager.Initialize(sceneCtx);
-    DebugLog::Get().Write("App", "SceneManager", "phase", "change_title_begin");
     sceneManager.ChangeScene(std::make_unique<TitleScene>());
-    DebugLog::Get().Write("App", "SceneManager", "phase", "change_title_end");
 
     // 高精細タイマの周波数を取得
     LARGE_INTEGER freq;
@@ -515,7 +455,6 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
 
     LARGE_INTEGER prevTime;
     QueryPerformanceCounter(&prevTime);
-    uint64_t debugFrame = 0;
 
     // メインループ
     while (winApp.ProcessMessage()) {
@@ -530,7 +469,6 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
         prevTime = currentTime;
 
         sceneCtx.frame.deltaTime = deltaTime;
-        DebugLog::Get().SetFrame(debugFrame++, deltaTime);
         handUdpSenderProcess.Update();
 
         // 入力更新
@@ -579,15 +517,5 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
-    try {
-        return RunApp(hInstance, nCmdShow);
-    } catch (const std::exception &e) {
-        WriteCrashLog(std::string("Unhandled exception: ") + e.what());
-        MessageBoxA(nullptr, e.what(), "Shingiittai runtime error", MB_OK | MB_ICONERROR);
-    } catch (...) {
-        WriteCrashLog("Unhandled unknown exception");
-        MessageBoxA(nullptr, "Unknown error", "Shingiittai runtime error",
-                    MB_OK | MB_ICONERROR);
-    }
-    return 1;
+    return RunApp(hInstance, nCmdShow);
 }

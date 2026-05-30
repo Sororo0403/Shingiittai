@@ -369,13 +369,16 @@ bool Enemy::TryBeginQuickSlash(float chance) {
 
     if (lastActionKind_ == ActionKind::Smash ||
         lastActionKind_ == ActionKind::Sweep) {
-        chance *= 0.62f;
+        chance *= 0.45f;
     }
     if (phase_ != BossPhase::Phase1) {
-        chance += 0.08f;
+        chance *= 0.72f;
+    }
+    if (phase_ == BossPhase::Phase3) {
+        chance *= 0.68f;
     }
     chance *= unlock;
-    chance = std::clamp(chance, 0.0f, 0.78f);
+    chance = std::clamp(chance, 0.0f, 0.42f);
 
     const float roll =
         static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
@@ -396,13 +399,13 @@ bool Enemy::TryBeginFarWarpSlash(float chance) {
         return false;
     }
     if (lastActionKind_ == ActionKind::Warp) {
-        chance *= 0.58f;
+        chance *= 0.72f;
     }
     if (phase_ == BossPhase::Phase3) {
-        chance += 0.08f;
+        chance += 0.16f;
     }
     chance *= unlock;
-    chance = std::clamp(chance, 0.0f, 0.86f);
+    chance = std::clamp(chance, 0.0f, 0.94f);
 
     const float roll =
         static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
@@ -505,21 +508,16 @@ bool Enemy::TryBeginArcaneLaser(float chance) {
         return false;
     }
 
-    const float distance = GetDistanceToPlayer();
-    if (distance < arcaneLaserMinDistance_) {
-        return false;
-    }
-
     if (lastActionKind_ == ActionKind::ArcaneLaser) {
         chance *= 0.42f;
     } else if (lastActionKind_ == ActionKind::Warp) {
-        chance *= 0.68f;
+        chance *= 0.82f;
     }
     if (phase_ == BossPhase::Phase3) {
-        chance += 0.18f;
+        chance += 0.24f;
     }
     chance *= unlock;
-    chance = std::clamp(chance, 0.0f, 0.82f);
+    chance = std::clamp(chance, 0.0f, 0.90f);
 
     const float roll =
         static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
@@ -584,6 +582,33 @@ bool Enemy::TryBeginArcaneLaserSlashFollowup(float chance) {
     return true;
 }
 
+bool Enemy::TryBeginLaserReengageWarp(float chance) {
+    if (deathFinished_ || isDying_ || phaseTransitionActive_) {
+        return false;
+    }
+
+    chance = std::clamp(chance, 0.0f, 1.0f);
+    const float roll =
+        static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+    if (roll >= chance) {
+        return false;
+    }
+
+    ResetWarpContext();
+    warp_.approachSlot = WarpApproachSlot::Front;
+    if (!DecideWarpTargetNearPlayer(warp_.targetPos)) {
+        ResetWarpContext();
+        return false;
+    }
+
+    warp_.hasValidTarget = true;
+    warp_.followupKind = ActionKind::None;
+    warp_.followupStep = ActionStep::None;
+    warp_.faceLivePlayerOnEnd = true;
+    BeginAction(ActionKind::Warp, ActionStep::Start);
+    return true;
+}
+
 bool Enemy::TryBeginCataclysmLaser(float chance) {
     const float unlock = TechniqueUnlock(BossPhase::Phase3);
     if (unlock <= 0.0f || cataclysmLaserCooldown_ > 0.0f ||
@@ -592,18 +617,16 @@ bool Enemy::TryBeginCataclysmLaser(float chance) {
         return false;
     }
 
-    const float distance = GetDistanceToPlayer();
-    if (distance < cataclysmLaserMinDistance_) {
-        return false;
-    }
-
     if (lastActionKind_ == ActionKind::CataclysmLaser) {
         chance *= 0.30f;
     } else if (lastActionKind_ == ActionKind::ArcaneLaser) {
         chance *= 0.58f;
     }
+    if (phase_ == BossPhase::Phase3) {
+        chance += 0.08f;
+    }
     chance *= unlock;
-    chance = std::clamp(chance, 0.0f, 0.68f);
+    chance = std::clamp(chance, 0.0f, 0.78f);
 
     const float roll =
         static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
@@ -671,30 +694,45 @@ void Enemy::BeginPressureAction() {
     const bool canQuickSlash = phase2Unlocked;
     const bool canBladeClash = false;
     const bool canWarp = phase2Unlocked;
+    const bool canFarWarpSlash = phase2Unlocked;
     const bool canPhantomWarp =
         phase3Unlocked && phantomWarpCooldown_ <= 0.0f && !deathFinished_ &&
         !isDying_ && !phaseTransitionActive_ && distance >= 1.65f &&
         distance <= 9.8f;
+    const bool canArcaneLaser =
+        phase2Unlocked && arcaneLaserCooldown_ <= 0.0f &&
+        !rangedReengagePending_;
+    const bool canCataclysmLaser =
+        phase3Unlocked && cataclysmLaserCooldown_ <= 0.0f &&
+        !rangedReengagePending_;
     int smashWeight = 55;
     int sweepWeight = 45;
     int quickSlashWeight = 0;
     int bladeClashWeight = 0;
     int warpWeight = 0;
+    int farWarpSlashWeight = 0;
     int phantomWarpWeight = 0;
+    int arcaneLaserWeight = 0;
+    int cataclysmLaserWeight = 0;
 
     if (phase3Unlocked) {
-        smashWeight = 22;
-        sweepWeight = 22;
-        quickSlashWeight = 14;
+        smashWeight = 12;
+        sweepWeight = 12;
+        quickSlashWeight = 5;
         bladeClashWeight = 0;
         warpWeight = 10;
-        phantomWarpWeight = 20;
+        farWarpSlashWeight = 30;
+        phantomWarpWeight = 26;
+        arcaneLaserWeight = 26;
+        cataclysmLaserWeight = 16;
     } else if (phase2Unlocked) {
-        smashWeight = 30;
-        sweepWeight = 30;
-        quickSlashWeight = 15;
+        smashWeight = 18;
+        sweepWeight = 18;
+        quickSlashWeight = 6;
         bladeClashWeight = 0;
-        warpWeight = 15;
+        warpWeight = 16;
+        farWarpSlashWeight = 24;
+        arcaneLaserWeight = 28;
     }
 
     const BossDecisionAction selected = PickWeightedAction(
@@ -705,8 +743,14 @@ void Enemy::BeginPressureAction() {
          {BossDecisionAction::BladeClash,
           canBladeClash ? bladeClashWeight : 0},
          {BossDecisionAction::Warp, canWarp ? warpWeight : 0},
+         {BossDecisionAction::FarWarpSlash,
+          canFarWarpSlash ? farWarpSlashWeight : 0},
          {BossDecisionAction::PhantomWarp,
-          canPhantomWarp ? phantomWarpWeight : 0}},
+          canPhantomWarp ? phantomWarpWeight : 0},
+         {BossDecisionAction::ArcaneLaser,
+          canArcaneLaser ? arcaneLaserWeight : 0},
+         {BossDecisionAction::CataclysmLaser,
+          canCataclysmLaser ? cataclysmLaserWeight : 0}},
         BossDecisionAction::Smash);
 
     auto beginDefaultMelee = [&]() {
@@ -736,9 +780,27 @@ void Enemy::BeginPressureAction() {
         }
         beginDefaultMelee();
         return;
+    case BossDecisionAction::FarWarpSlash:
+        if (TryBeginFarWarpSlash(1.0f)) {
+            return;
+        }
+        beginDefaultMelee();
+        return;
     case BossDecisionAction::PhantomWarp:
         BeginPhantomWarpStep(2, false, ActionKind::None);
         phantomWarpCooldown_ = phantomWarpCooldownDuration_;
+        return;
+    case BossDecisionAction::ArcaneLaser:
+        if (TryBeginArcaneLaser(1.0f)) {
+            return;
+        }
+        beginDefaultMelee();
+        return;
+    case BossDecisionAction::CataclysmLaser:
+        if (TryBeginCataclysmLaser(1.0f)) {
+            return;
+        }
+        beginDefaultMelee();
         return;
     default:
         beginDefaultMelee();
@@ -769,10 +831,10 @@ void Enemy::BeginChaseAction() {
         distance > config_.core.nearAttackDistance + 0.75f;
     const bool canArcaneLaser =
         phase2Unlocked && arcaneLaserCooldown_ <= 0.0f &&
-        !mustReengageAfterRanged && distance >= arcaneLaserMinDistance_;
+        !mustReengageAfterRanged;
     const bool canCataclysmLaser =
         phase3Unlocked && cataclysmLaserCooldown_ <= 0.0f &&
-        !mustReengageAfterRanged && distance >= cataclysmLaserMinDistance_;
+        !mustReengageAfterRanged;
     int stalkWeight = 100;
     int warpWeight = 0;
     int farWarpSlashWeight = 0;
@@ -781,23 +843,23 @@ void Enemy::BeginChaseAction() {
     int cataclysmLaserWeight = 0;
 
     if (phase3Unlocked) {
-        stalkWeight = 10;
-        warpWeight = 14;
-        farWarpSlashWeight = 26;
-        phantomWarpWeight = 25;
-        arcaneLaserWeight = 34;
-        cataclysmLaserWeight = 24;
-    } else if (phase2Unlocked) {
-        stalkWeight = 24;
-        warpWeight = 18;
-        farWarpSlashWeight = 18;
+        stalkWeight = 5;
+        warpWeight = 12;
+        farWarpSlashWeight = 34;
+        phantomWarpWeight = 28;
         arcaneLaserWeight = 40;
+        cataclysmLaserWeight = 30;
+    } else if (phase2Unlocked) {
+        stalkWeight = 14;
+        warpWeight = 18;
+        farWarpSlashWeight = 30;
+        arcaneLaserWeight = 46;
     }
 
     if (mustReengageAfterRanged) {
-        stalkWeight = 20;
-        warpWeight = phase2Unlocked ? 18 : 0;
-        farWarpSlashWeight = phase2Unlocked ? 54 : 0;
+        stalkWeight = 10;
+        warpWeight = phase2Unlocked ? 14 : 0;
+        farWarpSlashWeight = phase2Unlocked ? 66 : 0;
         phantomWarpWeight = 0;
         arcaneLaserWeight = 0;
         cataclysmLaserWeight = 0;

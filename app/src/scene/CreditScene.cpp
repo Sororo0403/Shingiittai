@@ -32,6 +32,7 @@ constexpr float kLogoStartAfterTextPadding = 80.0f;
 constexpr float kLogoStartBelowScreenPadding = 150.0f;
 constexpr float kSignatureColumnCenterRatio = 0.78f;
 constexpr float kSignatureMaxScale = 0.84f;
+constexpr float kControlsPadding = 28.0f;
 
 struct CreditLineSpec {
     const wchar_t *path;
@@ -93,6 +94,8 @@ void CreditScene::Initialize(const SceneContext &ctx) {
         LoadTextureImage(L"app/resources/ui/credits/name_AotoMori.png");
     tsunaguSignatureImage_ =
         LoadTextureImage(L"app/resources/ui/credits/tsunagu_sign.png");
+    controlsImage_ =
+        LoadTextureImage(L"app/resources/ui/credits/credits_controls.png");
 
     StartCreditBgm();
 }
@@ -107,12 +110,23 @@ void CreditScene::Update() {
     }
 
     Input *input = ctx_->systems.input;
+    const float screenWidth =
+        static_cast<float>(ctx_->systems.winApp->GetWidth());
+    const float screenHeight =
+        static_cast<float>(ctx_->systems.winApp->GetHeight());
+    const float logoStopDistance =
+        CalculateLogoStopDistance(screenWidth, screenHeight);
     if (!returnRequested_ && sceneTime_ >= kCreditRollDelay) {
         const float rollSpeed =
             input != nullptr && input->IsKeyPress(DIK_SPACE)
                 ? kCreditRollFastSpeed
                 : kCreditRollSpeed;
-        creditRollDistance_ += deltaTime * rollSpeed;
+        creditRollDistance_ = (std::min)(
+            creditRollDistance_ + deltaTime * rollSpeed, logoStopDistance);
+        if (logoStopDistance > 0.0f && IsLogoStopped(screenWidth, screenHeight) &&
+            input != nullptr && input->IsKeyTrigger(DIK_SPACE)) {
+            BeginReturnToTitle();
+        }
     }
 
     if (returnRequested_) {
@@ -142,6 +156,7 @@ void CreditScene::Draw() {
     ctx_->rendering.sprite->PreDraw();
     DrawOverlay(screenWidth, screenHeight);
     DrawCredits(screenWidth, screenHeight);
+    DrawControlsPrompt(screenWidth, screenHeight);
     DrawTransition(screenWidth, screenHeight);
     ctx_->rendering.sprite->PostDraw();
 }
@@ -154,6 +169,31 @@ CreditScene::Image CreditScene::LoadTextureImage(const std::wstring &path) {
     image.height =
         static_cast<float>(ctx_->rendering.texture->GetHeight(image.textureId));
     return image;
+}
+
+float CreditScene::CalculateLogoStopDistance(float screenWidth,
+                                            float screenHeight) const {
+    const float bodyScale =
+        std::clamp(screenWidth * 0.42f / kCreditVirtualWidth, 0.54f, 0.86f);
+    float lastTextBottom = 0.0f;
+    for (const CreditLine &line : creditLines_) {
+        lastTextBottom = (std::max)(
+            lastTextBottom,
+            (line.centerY + line.image.height * line.scale * 0.5f) *
+                bodyScale);
+    }
+    const float logoDelayDistance =
+        (screenHeight + 42.0f) + lastTextBottom + kLogoStartAfterTextPadding;
+    const float logoCenterStopDistance =
+        (std::max)(0.0f,
+                   screenHeight + kLogoStartBelowScreenPadding -
+                       (screenHeight * 0.5f));
+    return logoDelayDistance + logoCenterStopDistance;
+}
+
+bool CreditScene::IsLogoStopped(float screenWidth, float screenHeight) const {
+    return creditRollDistance_ >=
+           CalculateLogoStopDistance(screenWidth, screenHeight);
 }
 
 void CreditScene::LoadCreditLineImages() {
@@ -264,6 +304,22 @@ void CreditScene::DrawCredits(float screenWidth, float screenHeight) {
                       messageY, messageScale, intro);
         }
     }
+}
+
+void CreditScene::DrawControlsPrompt(float screenWidth, float screenHeight) {
+    if (controlsImage_.width <= 0.0f || controlsImage_.height <= 0.0f) {
+        return;
+    }
+
+    const float intro =
+        Smooth01((introTimer_ - kIntroDuration * 0.6f) / (kIntroDuration * 0.5f));
+    const float promptScale = (std::min)(
+        1.0f,
+        (screenWidth * 0.48f) / (std::max)(controlsImage_.width, 1.0f));
+    DrawImage(controlsImage_, kControlsPadding,
+              screenHeight - (controlsImage_.height - 18.0f) * promptScale -
+                  kControlsPadding,
+              promptScale, 0.62f * intro);
 }
 
 void CreditScene::DrawTransition(float screenWidth, float screenHeight) {
