@@ -451,19 +451,25 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
         return;
     }
 
-    float hitFlash = 0.0f;
+    float hitReactionFlash = 0.0f;
     if (hitReactionDuration_ > 0.0001f) {
-        hitFlash =
+        hitReactionFlash =
             std::clamp(runtime_.hitReactionTimer / hitReactionDuration_, 0.0f, 1.0f);
     }
+    const float damageFlash =
+        damageFlashDuration_ > 0.0001f
+            ? std::clamp(runtime_.damageFlashTimer / damageFlashDuration_, 0.0f,
+                         1.0f)
+            : 0.0f;
+    const float hitFlash = (std::max)(hitReactionFlash, damageFlash * 0.48f);
     const bool isHitFlashing = hitFlash > 0.0f;
     const float actionPulse =
         0.5f + 0.5f * std::sin(runtime_.stateTimer * 12.0f);
     const DirectX::XMFLOAT4 phaseTint =
         phase_ == BossPhase::Phase3
-            ? DirectX::XMFLOAT4{0.96f, 0.78f, 0.32f, 0.22f}
+            ? DirectX::XMFLOAT4{0.72f, 0.50f, 0.16f, 0.20f}
             : phase_ == BossPhase::Phase2
-                  ? DirectX::XMFLOAT4{0.78f, 0.58f, 0.42f, 0.18f}
+                  ? DirectX::XMFLOAT4{0.56f, 0.50f, 0.42f, 0.16f}
                   : DirectX::XMFLOAT4{0.72f, 0.76f, 0.72f, 0.12f};
     DirectX::XMFLOAT4 actionTint = phaseTint;
     float actionIntensity = 0.025f + 0.010f * actionPulse;
@@ -532,8 +538,8 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
         const float phaseRatio = GetPhaseTransitionRatio();
         const DirectX::XMFLOAT4 transitionTint =
             phase_ == BossPhase::Phase3
-                ? DirectX::XMFLOAT4{0.96f, 0.78f, 0.30f, 0.28f}
-                : DirectX::XMFLOAT4{0.86f, 0.58f, 0.32f, 0.28f};
+                ? DirectX::XMFLOAT4{0.76f, 0.52f, 0.18f, 0.24f}
+                : DirectX::XMFLOAT4{0.62f, 0.52f, 0.38f, 0.24f};
         actionTint = LerpColor(actionTint, transitionTint, phaseRatio);
         actionIntensity += 0.12f * phaseRatio;
         actionNoise += 0.06f * phaseRatio;
@@ -541,15 +547,33 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
 
     ModelDrawEffect hitEffect{};
     if (isHitFlashing) {
-        hitEffect.enabled = false;
+        const bool hasHitReactionFlash = hitReactionFlash > 0.0f;
+        const float flashElapsed =
+            hasHitReactionFlash ? hitReactionDuration_ - runtime_.hitReactionTimer
+                                : damageFlashDuration_ - runtime_.damageFlashTimer;
+        const float hitStrobe =
+            std::sinf(flashElapsed * 110.0f) > -0.25f
+                ? 1.0f
+                : 0.0f;
+        const float hitFlashAmount = hitFlash * hitStrobe;
+        hitEffect.enabled = hitFlashAmount > 0.0f;
         hitEffect.additiveBlend = false;
-        hitEffect.color = LerpColor({1.0f, 0.30f, 0.08f, 0.78f},
-                                    {1.0f, 0.78f, 0.28f, 0.86f},
-                                    actionPulse);
-        hitEffect.intensity = 0.42f + 0.72f * hitFlash;
+        hitEffect.color =
+            hasHitReactionFlash
+                ? LerpColor({1.0f, 0.94f, 0.78f, 0.92f},
+                            {1.0f, 1.0f, 1.0f, 0.98f}, hitFlash)
+                : LerpColor({1.0f, 0.82f, 0.50f, 0.42f},
+                            {1.0f, 0.95f, 0.74f, 0.52f}, damageFlash);
+        hitEffect.intensity =
+            hasHitReactionFlash ? 0.65f + 0.82f * hitFlashAmount
+                                : 0.18f + 0.28f * hitFlashAmount;
         hitEffect.fresnelPower = 1.8f;
-        hitEffect.noiseAmount = 0.30f;
-        hitEffect.time = runtime_.stateTimer;
+        hitEffect.noiseAmount = 0.08f;
+        hitEffect.time = flashElapsed;
+        hitEffect.surfaceTint =
+            hasHitReactionFlash ? 0.52f + 0.38f * hitFlashAmount
+                                : 0.10f + 0.18f * hitFlashAmount;
+        hitEffect.alphaBoost = hasHitReactionFlash ? 0.82f : 0.42f;
     }
 
     if (isHitFlashing) {

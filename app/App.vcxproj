@@ -255,6 +255,7 @@
     <None Include="resources\ui\title\exit_confirm_message.png" />
     <None Include="resources\ui\title\exit_confirm_no.png" />
     <None Include="resources\ui\title\exit_confirm_yes.png" />
+    <None Include="resources\ui\title\esc_exit.png" />
     <None Include="resources\ui\title\gamelogo.png" />
     <None Include="resources\ui\title\press_any_button.png" />
     <None Include="resources\ui\title\tab_credit.png" />

@@ -72,6 +72,8 @@ class GameScene : public BaseScene {
     void SetReadyPreviewHeat(float heat);
 
   private:
+    struct ArcaneProjectileState;
+
     void UpdateCamera(Input *input);
     void UpdateBattleCamera();
     void UpdateTutorial(float deltaTime);
@@ -146,6 +148,8 @@ class GameScene : public BaseScene {
     void ResetArcaneProjectile();
     void UpdateArcaneProjectile(float deltaTime);
     void ReflectArcaneProjectile(size_t swordIndex);
+    void ReflectArcaneProjectile(ArcaneProjectileState &projectile,
+                                 size_t swordIndex);
     bool IsArcaneProjectileInDeflectRange() const;
     bool IsArcaneProjectileSlashAligned(const Sword &sword) const;
     DirectX::XMFLOAT2 GetArcaneProjectileCueDirection() const;
@@ -196,8 +200,10 @@ class GameScene : public BaseScene {
     struct ArcaneProjectileState {
         bool active = false;
         bool reflected = false;
+        bool cataclysm = false;
         DirectX::XMFLOAT3 position = {0.0f, 0.0f, 0.0f};
         DirectX::XMFLOAT3 velocity = {0.0f, 0.0f, 0.0f};
+        float age = 0.0f;
         float life = 0.0f;
         float damage = 0.0f;
         float knockback = 0.0f;
@@ -206,7 +212,11 @@ class GameScene : public BaseScene {
         size_t reflectedBySwordIndex = 0;
     };
     ArcaneProjectileState arcaneProjectile_{};
+    static constexpr int kCataclysmProjectileCapacity_ = 5;
+    std::array<ArcaneProjectileState, kCataclysmProjectileCapacity_>
+        cataclysmProjectiles_{};
     bool arcaneProjectileVolleyActive_ = false;
+    bool arcaneProjectileVolleyCataclysm_ = false;
     int arcaneProjectileVolleyShotsFired_ = 0;
     int arcaneProjectileVolleyReflectedHits_ = 0;
     float arcaneProjectileVolleyTimer_ = 0.0f;

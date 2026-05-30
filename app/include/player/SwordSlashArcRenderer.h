@@ -35,7 +35,8 @@ class SwordSlashArcRenderer {
                               const DirectX::XMFLOAT2 &direction,
                               const Camera &camera,
                               const DirectX::XMFLOAT4 &color,
-                              bool releaseCounterCueVisible);
+                              bool releaseCounterCueVisible,
+                              float sizeScale = 1.0f);
     void ClearDirectionCueLines();
     void Update(float deltaTime);
     void Draw(const Camera &camera);

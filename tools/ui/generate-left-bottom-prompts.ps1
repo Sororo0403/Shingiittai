@@ -267,6 +267,7 @@ New-PromptImage -Items $tabRanking -Path "app\resources\ui\common\tab_ranking.pn
 New-PromptImage -Items $tabSelect -Path "app\resources\ui\common\tab_select.png"
 New-PromptImage -Items $tabMenu -Path "app\resources\ui\common\tab_menu.png"
 New-PromptImage -Items $tabCredit -Path "app\resources\ui\title\tab_credit.png"
+New-PromptImage -Items $tutorialExit -Path "app\resources\ui\title\esc_exit.png"
 New-PromptImage -Items $tabTitle -Path "app\resources\ui\credits\credits_controls.png"
 New-PromptImage -Items $tutorialExit -Path "app\resources\ui\tutorial_dynamic\exit.png"
 New-PromptImage -Items @(@{ Key = ""; Label = "メニュー" }) -Path "app\resources\ui\menu\menu_title.png" -CanvasWidth 160

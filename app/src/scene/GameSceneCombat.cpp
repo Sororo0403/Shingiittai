@@ -18,7 +18,10 @@ constexpr CollisionManager::LayerMask kLayerPlayerAttack = 1u << 2;
 constexpr CollisionManager::LayerMask kLayerEnemyAttack = 1u << 3;
 constexpr float kArcaneProjectilePlayerHitRange = 0.82f;
 constexpr float kArcaneProjectileEnemyHitRange = 1.45f;
+constexpr float kArcaneProjectileDeflectRange = 5.80f;
+constexpr float kArcaneProjectileSlashDot = 0.55f;
 constexpr int kArcaneProjectileVolleyRequiredHits = 1;
+constexpr int kCataclysmProjectileVolleyRequiredHits = 5;
 constexpr float kNormalSlashRearmDelay = 0.10f;
 
 CollisionManager::BodyId AddCollisionBody(
@@ -484,13 +487,9 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
 
     collisionManager_.Clear();
 
-    const auto playerBox = player_.GetOBB();
     const auto enemyBodyBox = enemy_.GetBodyOBB();
     const auto enemyLeftHandBox = enemy_.GetLeftHandOBB();
     const auto enemyRightHandBox = enemy_.GetRightHandOBB();
-    const CollisionManager::BodyId playerBody =
-        AddCollisionBody(collisionManager_, playerBox, kLayerPlayer,
-                         kLayerEnemyAttack);
     const bool enemyCollisionDisabled = enemy_.IsWarpCollisionDisabled();
     const CollisionManager::BodyId enemyBody =
         enemyCollisionDisabled
@@ -562,6 +561,35 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         }
         return false;
     };
+    auto isProjectileInDeflectRange =
+        [&](const ArcaneProjectileState &projectile) {
+            return projectile.active && !projectile.reflected &&
+                   DistanceSqXZ(projectile.position,
+                                player_.GetTransform().position) <=
+                       kArcaneProjectileDeflectRange *
+                           kArcaneProjectileDeflectRange;
+        };
+    auto isProjectileSlashAligned =
+        [&](const ArcaneProjectileState &projectile, const Sword &sword) {
+            if (!sword.CanSlashCounter()) {
+                return false;
+            }
+
+            const XMFLOAT2 slashDir = sword.GetSlashDirection();
+            const XMFLOAT2 cueDir = projectile.cueDirection;
+            const float slashLenSq =
+                slashDir.x * slashDir.x + slashDir.y * slashDir.y;
+            if (slashLenSq < 0.010f) {
+                return false;
+            }
+
+            const float invSlashLen = 1.0f / std::sqrt(slashLenSq);
+            const float dot = (slashDir.x * invSlashLen) * cueDir.x +
+                              (slashDir.y * invSlashLen) * cueDir.y;
+            return projectile.cataclysm
+                       ? dot >= kArcaneProjectileSlashDot
+                       : std::fabs(dot) >= kArcaneProjectileSlashDot;
+        };
 
     TickCooldown(enemyHitCooldown_, gameplayDeltaTime);
     TickCooldown(playerHitCooldown_, gameplayDeltaTime);
@@ -595,15 +623,9 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         isEnemySmashCommitted || isEnemySweepCommitted ||
         isEnemyBladeClashCommitted;
     const bool isEnemyLaserCommitted =
-        (enemyActionKind == ActionKind::ArcaneLaser ||
-         enemyActionKind == ActionKind::CataclysmLaser) &&
+        enemyActionKind == ActionKind::ArcaneLaser &&
         enemyActionStep == ActionStep::Active;
-    const bool isEnemyBeamActive =
-        enemyActionKind == ActionKind::CataclysmLaser &&
-        enemyActionStep == ActionStep::Active && enemy_.IsAttackActive();
-    if (!isEnemyBeamActive) {
-        enemyLaserHitConsumed_ = false;
-    }
+    enemyLaserHitConsumed_ = false;
     if (enemyRedPunishUncounterable_ &&
         (!(enemyActionKind == ActionKind::Smash ||
            enemyActionKind == ActionKind::Sweep) ||
@@ -649,13 +671,6 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                  GetReadableMeleeRadius(enemyAttackBox)) &&
         playerHitCooldown_ <= 0.0f && !enemyMeleeHitConsumed_ &&
         !enemyRedPunishUncounterable_;
-    const bool enemyLaserDamagePending =
-        isEnemyBeamActive &&
-        enemyAttackBody != CollisionManager::kInvalidBodyId &&
-        playerBody != CollisionManager::kInvalidBodyId &&
-        collisionManager_.Test(enemyAttackBody, playerBody) &&
-        playerHitCooldown_ <= 0.0f && !enemyLaserHitConsumed_;
-
     const bool isEnemyMeleePreparation =
         (enemyActionKind == ActionKind::Smash ||
          enemyActionKind == ActionKind::Sweep) &&
@@ -760,12 +775,27 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         const bool canReflectArcaneProjectile =
             arcaneProjectile_.active && !arcaneProjectile_.reflected &&
             projectileSlashStarted && playerHitCooldown_ <= 0.0f &&
-            IsArcaneProjectileInDeflectRange() &&
-            IsArcaneProjectileSlashAligned(*sword);
+            isProjectileInDeflectRange(arcaneProjectile_) &&
+            isProjectileSlashAligned(arcaneProjectile_, *sword);
         if (canReflectArcaneProjectile) {
-            ReflectArcaneProjectile(i);
+            ReflectArcaneProjectile(arcaneProjectile_, i);
             playerHitCooldown_ = 0.14f;
             arcaneProjectileReflectedThisFrame = true;
+            break;
+        }
+        bool reflectedCataclysmProjectile = false;
+        for (ArcaneProjectileState &projectile : cataclysmProjectiles_) {
+            if (projectileSlashStarted && playerHitCooldown_ <= 0.0f &&
+                isProjectileInDeflectRange(projectile) &&
+                isProjectileSlashAligned(projectile, *sword)) {
+                ReflectArcaneProjectile(projectile, i);
+                playerHitCooldown_ = 0.14f;
+                arcaneProjectileReflectedThisFrame = true;
+                reflectedCataclysmProjectile = true;
+                break;
+            }
+        }
+        if (reflectedCataclysmProjectile) {
             break;
         }
 
@@ -799,21 +829,29 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         }
     }
 
-    if (arcaneProjectile_.active && arcaneProjectile_.reflected &&
-        enemyHitCooldown_ <= 0.0f) {
+    auto processReflectedProjectileHit =
+        [&](ArcaneProjectileState &projectile) {
+            if (!projectile.active || !projectile.reflected ||
+                enemyHitCooldown_ > 0.0f) {
+                return false;
+            }
         const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
-        if (DistanceSqXZ(arcaneProjectile_.position, enemyPos) <=
+        if (DistanceSqXZ(projectile.position, enemyPos) <=
             kArcaneProjectileEnemyHitRange * kArcaneProjectileEnemyHitRange) {
-            const XMFLOAT3 impact = arcaneProjectile_.position;
-            const size_t swordIndex = arcaneProjectile_.reflectedBySwordIndex;
-            const float damage = arcaneProjectile_.damage;
+            const XMFLOAT3 impact = projectile.position;
+            const size_t swordIndex = projectile.reflectedBySwordIndex;
+            const float damage = projectile.damage;
             ++arcaneProjectileVolleyReflectedHits_;
+            const int requiredHits = arcaneProjectileVolleyCataclysm_
+                                         ? kCataclysmProjectileVolleyRequiredHits
+                                         : kArcaneProjectileVolleyRequiredHits;
             const bool volleyComplete = arcaneProjectileVolleyReflectedHits_ >=
-                                        kArcaneProjectileVolleyRequiredHits;
-            ResetArcaneProjectile();
+                                        requiredHits;
+            projectile = {};
             if (volleyComplete) {
                 triggerSuccessfulCounter(swordIndex, damage * 1.45f, 0.22f);
                 arcaneProjectileVolleyActive_ = false;
+                arcaneProjectileVolleyCataclysm_ = false;
                 counterTriggeredThisFrame = true;
             } else {
                 const float appliedDamage =
@@ -835,21 +873,34 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                               DirectionFromTo(impact,
                                               enemy_.GetTransform().position),
                               2.65f);
+            return true;
+        }
+        return false;
+    };
+
+    processReflectedProjectileHit(arcaneProjectile_);
+    for (ArcaneProjectileState &projectile : cataclysmProjectiles_) {
+        if (processReflectedProjectileHit(projectile)) {
+            break;
         }
     }
 
-    if (arcaneProjectile_.active && !arcaneProjectile_.reflected &&
-        !arcaneProjectileReflectedThisFrame &&
-        playerHitCooldown_ <= 0.0f) {
+    auto processHostileProjectileHit =
+        [&](ArcaneProjectileState &projectile) {
+            if (!projectile.active || projectile.reflected ||
+                arcaneProjectileReflectedThisFrame ||
+                playerHitCooldown_ > 0.0f) {
+                return false;
+            }
         const bool playerHitByProjectile =
             DistanceSqXZ(player_.GetTransform().position,
-                         arcaneProjectile_.position) <=
+                         projectile.position) <=
             kArcaneProjectilePlayerHitRange * kArcaneProjectilePlayerHitRange;
         if (playerHitByProjectile) {
-            const XMFLOAT3 projectileVelocity = arcaneProjectile_.velocity;
-            const float projectileDamage = arcaneProjectile_.damage;
-            const float projectileKnockback = arcaneProjectile_.knockback;
-            ResetArcaneProjectile();
+            const XMFLOAT3 projectileVelocity = projectile.velocity;
+            const float projectileDamage = projectile.damage;
+            const float projectileKnockback = projectile.knockback;
+            projectile = {};
             const XMFLOAT2 knockbackDir =
                 NormalizeXZ(projectileVelocity.x, projectileVelocity.z);
             player_.AddKnockback({knockbackDir.x * projectileKnockback, 0.0f,
@@ -865,6 +916,15 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                                         projectileDamage / 8.0f);
             DispatchCombatFeedback(feedback);
             playerHitCooldown_ = 0.52f;
+            return true;
+        }
+        return false;
+    };
+
+    processHostileProjectileHit(arcaneProjectile_);
+    for (ArcaneProjectileState &projectile : cataclysmProjectiles_) {
+        if (processHostileProjectileHit(projectile)) {
+            break;
         }
     }
 
@@ -893,25 +953,6 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             DispatchCombatFeedback(feedback);
             playerHitCooldown_ = 0.4f;
         }
-    }
-
-    if (enemyLaserDamagePending && !counterTriggeredThisFrame) {
-        enemyLaserHitConsumed_ = true;
-        const XMFLOAT3 beamDir = enemy_.GetCataclysmLaserDirection();
-        const XMFLOAT2 knockbackDir = NormalizeXZ(beamDir.x, beamDir.z);
-        player_.AddKnockback(
-            {knockbackDir.x * enemyAttackKnockback, 0.0f,
-             knockbackDir.y * enemyAttackKnockback});
-        const float appliedDamage = ApplyPlayerDamage(enemyAttackDamage);
-        CombatFeedbackEvent feedback{};
-        feedback.type = CombatFeedbackEventType::PlayerDamaged;
-        feedback.position = player_.GetTransform().position;
-        feedback.position.y += 1.0f;
-        feedback.direction = beamDir;
-        feedback.power =
-            (std::max)(appliedDamage / 8.0f, enemyAttackDamage / 7.0f);
-        DispatchCombatFeedback(feedback);
-        playerHitCooldown_ = 0.72f;
     }
 
     previousCombatSlashStates_ = swordSlashStates;

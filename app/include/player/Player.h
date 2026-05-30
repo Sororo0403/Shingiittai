@@ -21,6 +21,9 @@ class Player {
     void SetCameraSwordSlashSuppressed(bool suppressed) {
         suppressCameraSwordSlash_ = suppressed;
     }
+    void SetMovementSpeedMultiplier(float multiplier) {
+        movementSpeedMultiplier_ = multiplier;
+    }
 
     void Update(Input *input, float deltaTime,
                 const DirectX::XMFLOAT3 &lookTarget, float cameraYaw,
@@ -112,6 +115,7 @@ class Player {
     bool rightSwordVisible_ = false;
     float autoMoveOrbitDir_ = 1.0f;
     float autoMoveOrbitTimer_ = 0.0f;
+    float movementSpeedMultiplier_ = 1.0f;
     static constexpr float kAutoMoveIdealDistance = 2.45f;
     static constexpr float kAutoMoveNearDistance = 1.75f;
     static constexpr float kAutoMoveFarDistance = 3.05f;
@@ -128,6 +132,8 @@ class Player {
     float minTargetDistance_ = 2.7f;
 
     float hp_ = 100.0f;
+    float damageFlashTimer_ = 0.0f;
+    float damageFlashDuration_ = 0.32f;
     DirectX::XMFLOAT3 knockbackVelocity_ = {0.0f, 0.0f, 0.0f};
     float yaw_ = 0.0f;
     DirectX::XMFLOAT3 velocity_ = {0.0f, 0.0f, 0.0f};

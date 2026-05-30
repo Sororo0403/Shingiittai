@@ -39,6 +39,7 @@ class TitleScene : public BaseScene {
 
     Image logoImage_;
     Image pressAnyButtonImage_;
+    Image exitPromptImage_;
     Image exitConfirmMessageImage_;
     Image exitConfirmYesImage_;
     Image exitConfirmNoImage_;

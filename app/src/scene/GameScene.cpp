@@ -39,12 +39,19 @@ constexpr float kCounterSoundVolume = 0.72f;
 constexpr float kDamageSoundVolume = 0.74f;
 constexpr float kExplosionSoundVolume = 0.68f;
 constexpr float kArcaneProjectileHostileSpeed = 11.8f;
+constexpr float kCataclysmProjectileHostileSpeed = 8.8f;
 constexpr float kArcaneProjectileReflectedSpeed = 18.5f;
+constexpr float kCataclysmProjectileReflectedSpeed = 42.0f;
+constexpr float kCataclysmProjectileHomingDelay = 0.34f;
+constexpr float kCataclysmProjectileHomingStrength = 5.6f;
 constexpr float kArcaneProjectileDeflectRange = 5.80f;
 constexpr float kArcaneProjectileSlashDot = 0.55f;
 constexpr int kArcaneProjectileVolleyShotCount = 1;
+constexpr int kCataclysmProjectileVolleyShotCount = 5;
 constexpr float kArcaneProjectileVolleyInterval = 0.62f;
+constexpr float kCataclysmProjectileVolleyInterval = 1.10f;
 constexpr float kArcaneProjectileVisualScaleMultiplier = 5.0f;
+constexpr float kRangedAttackPlayerMoveMultiplier = 0.34f;
 constexpr int kTutorialTextLeftRight = 0;
 constexpr int kTutorialTextRightSword = 1;
 constexpr int kTutorialTextWait = 2;
@@ -73,9 +80,6 @@ constexpr float kPauseExitFadeDuration = 0.42f;
 constexpr float kBattleBgmBaseVolume = 0.24f;
 constexpr uint16_t kHandCameraPreviewPort = 5006;
 constexpr float kHandCameraPreviewStaleSeconds = 0.75f;
-#ifdef _DEBUG
-constexpr int kDebugClearSceneKey = DIK_F9;
-#endif
 
 PostProcessProfile GetPostProcessProfile(const SceneContext *ctx) {
     if (ctx == nullptr || ctx->rendering.postEffectManager == nullptr) {
@@ -381,6 +385,13 @@ XMFLOAT4 Lerp(const XMFLOAT4 &a, const XMFLOAT4 &b, float t) {
     t = std::clamp(t, 0.0f, 1.0f);
     return {a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t,
             a.z + (b.z - a.z) * t, a.w + (b.w - a.w) * t};
+}
+
+XMFLOAT3 RotateXZ(const XMFLOAT3 &direction, float radians) {
+    const float c = std::cosf(radians);
+    const float s = std::sinf(radians);
+    return {direction.x * c + direction.z * s, direction.y,
+            -direction.x * s + direction.z * c};
 }
 
 float SmoothStep01(float value) {
@@ -1010,13 +1021,6 @@ void GameScene::Update() {
         UpdateTutorial(baseDeltaTime);
         return;
     }
-#ifdef _DEBUG
-    if (input != nullptr && input->IsKeyTrigger(kDebugClearSceneKey)) {
-        sceneManager_->ChangeScene(std::make_unique<GameVictoryScene>(
-            battleElapsedTime_, inputCalibration_, combatDifficulty_));
-        return;
-    }
-#endif
     if (paused_) {
         UpdatePauseMenu(input);
         return;
@@ -1132,10 +1136,18 @@ void GameScene::Update() {
     ctx_->rendering.model->UpdateAnimation(playerModelId_, playerDeltaTime);
 
     if (titleDemoMode_) {
+        player_.SetMovementSpeedMultiplier(1.0f);
         player_.UpdateDemo(playerDeltaTime, enemy_.GetTransform().position);
     } else {
         const bool lockPlayerForFarWarpSlash =
             enemy_.ShouldLockPlayerForFarWarpSlash();
+        const ActionKind playerMoveEnemyAction = enemy_.GetActionKind();
+        const bool slowPlayerForRangedAttack =
+            playerMoveEnemyAction == ActionKind::ArcaneLaser ||
+            playerMoveEnemyAction == ActionKind::CataclysmLaser;
+        player_.SetMovementSpeedMultiplier(
+            slowPlayerForRangedAttack ? kRangedAttackPlayerMoveMultiplier
+                                      : 1.0f);
         player_.Update(input, playerDeltaTime, enemy_.GetTransform().position,
                        cameraYaw_, baseDeltaTime, false,
                        lockPlayerForFarWarpSlash);
@@ -1185,7 +1197,8 @@ void GameScene::Update() {
                     kEnemyReleaseSoundVolume *
                         AppSceneServices::GetSeVolume());
             }
-            if (currentEnemyActionKind == ActionKind::ArcaneLaser) {
+            if (currentEnemyActionKind == ActionKind::ArcaneLaser ||
+                currentEnemyActionKind == ActionKind::CataclysmLaser) {
                 BeginArcaneProjectileVolley();
             }
         }
@@ -2280,7 +2293,12 @@ void GameScene::UpdateSwordVfx(float deltaTime) {
 
 void GameScene::BeginArcaneProjectileVolley() {
     ResetArcaneProjectile();
+    for (ArcaneProjectileState &projectile : cataclysmProjectiles_) {
+        projectile = {};
+    }
     arcaneProjectileVolleyActive_ = true;
+    arcaneProjectileVolleyCataclysm_ =
+        enemy_.GetActionKind() == ActionKind::CataclysmLaser;
     arcaneProjectileVolleyShotsFired_ = 0;
     arcaneProjectileVolleyReflectedHits_ = 0;
     arcaneProjectileVolleyTimer_ = 0.0f;
@@ -2291,18 +2309,26 @@ void GameScene::UpdateArcaneProjectileVolley(float deltaTime) {
         return;
     }
 
-    const bool enemyStillFiring =
-        enemy_.GetActionKind() == ActionKind::ArcaneLaser &&
-        enemy_.GetActionStep() == ActionStep::Active;
+    const ActionKind firingKind = arcaneProjectileVolleyCataclysm_
+                                      ? ActionKind::CataclysmLaser
+                                      : ActionKind::ArcaneLaser;
+    const bool enemyStillFiring = enemy_.GetActionKind() == firingKind &&
+                                  enemy_.GetActionStep() == ActionStep::Active;
     if (!enemyStillFiring) {
         arcaneProjectileVolleyActive_ = false;
         arcaneProjectileVolleyTimer_ = 0.0f;
         return;
     }
 
-    if (arcaneProjectileVolleyShotsFired_ >=
-        kArcaneProjectileVolleyShotCount) {
-        if (!arcaneProjectile_.active) {
+    const int shotCount = arcaneProjectileVolleyCataclysm_
+                              ? kCataclysmProjectileVolleyShotCount
+                              : kArcaneProjectileVolleyShotCount;
+    if (arcaneProjectileVolleyShotsFired_ >= shotCount) {
+        bool anyProjectileActive = arcaneProjectile_.active;
+        for (const ArcaneProjectileState &projectile : cataclysmProjectiles_) {
+            anyProjectileActive = anyProjectileActive || projectile.active;
+        }
+        if (!anyProjectileActive) {
             arcaneProjectileVolleyActive_ = false;
         }
         return;
@@ -2310,13 +2336,17 @@ void GameScene::UpdateArcaneProjectileVolley(float deltaTime) {
 
     arcaneProjectileVolleyTimer_ =
         (std::max)(0.0f, arcaneProjectileVolleyTimer_ - deltaTime);
-    if (arcaneProjectileVolleyTimer_ > 0.0f || arcaneProjectile_.active) {
+    const bool waitForCurrentProjectile =
+        !arcaneProjectileVolleyCataclysm_ && arcaneProjectile_.active;
+    if (arcaneProjectileVolleyTimer_ > 0.0f || waitForCurrentProjectile) {
         return;
     }
 
     SpawnArcaneProjectile();
     ++arcaneProjectileVolleyShotsFired_;
-    arcaneProjectileVolleyTimer_ = kArcaneProjectileVolleyInterval;
+    arcaneProjectileVolleyTimer_ = arcaneProjectileVolleyCataclysm_
+                                       ? kCataclysmProjectileVolleyInterval
+                                       : kArcaneProjectileVolleyInterval;
     if (soundsLoaded_ && ctx_ != nullptr && ctx_->systems.sound != nullptr &&
         arcaneProjectileVolleyShotsFired_ > 1) {
         ctx_->systems.sound->Play(
@@ -2326,54 +2356,105 @@ void GameScene::UpdateArcaneProjectileVolley(float deltaTime) {
 }
 
 void GameScene::SpawnArcaneProjectile() {
-    const XMFLOAT3 muzzle = enemy_.GetArcaneLaserMuzzlePosition();
+    const bool cataclysmShot = arcaneProjectileVolleyCataclysm_;
+    const XMFLOAT3 muzzle = cataclysmShot ? enemy_.GetCataclysmLaserMuzzlePosition()
+                                          : enemy_.GetArcaneLaserMuzzlePosition();
     XMFLOAT3 direction =
-        NormalizeParticleCompatVec3(enemy_.GetArcaneLaserDirection(),
+        NormalizeParticleCompatVec3(cataclysmShot
+                                        ? enemy_.GetCataclysmLaserDirection()
+                                        : enemy_.GetArcaneLaserDirection(),
                                     {0.0f, 0.0f, -1.0f});
     direction.y = 0.0f;
     direction = NormalizeParticleCompatVec3(direction, {0.0f, 0.0f, -1.0f});
+    if (cataclysmShot) {
+        constexpr float kSpreadAngles[kCataclysmProjectileVolleyShotCount] = {
+            -24.0f, 18.0f, -10.0f, 28.0f, 0.0f,
+        };
+        const int spreadIndex =
+            std::clamp(arcaneProjectileVolleyShotsFired_, 0,
+                       kCataclysmProjectileVolleyShotCount - 1);
+        direction = NormalizeParticleCompatVec3(
+            RotateXZ(direction, kSpreadAngles[spreadIndex] * kPi / 180.0f),
+            direction);
+    }
 
-    arcaneProjectile_.active = true;
-    arcaneProjectile_.reflected = false;
-    arcaneProjectile_.position = muzzle;
-    arcaneProjectile_.velocity = {direction.x * kArcaneProjectileHostileSpeed,
-                                  0.0f,
-                                  direction.z * kArcaneProjectileHostileSpeed};
-    arcaneProjectile_.life = 4.2f;
-    arcaneProjectile_.damage = enemy_.GetCurrentAttackDamage();
-    arcaneProjectile_.knockback = enemy_.GetCurrentAttackKnockback();
-    arcaneProjectile_.textureId = GetCurrentEnemyTextureId();
-    arcaneProjectile_.cueDirection =
-        ProjectWorldDirectionToCueDirection(
-            {-direction.x, -direction.y, -direction.z});
-    arcaneProjectile_.reflectedBySwordIndex = 0;
-    ApplyBulletTextureToModel(arcaneProjectile_.textureId);
+    ArcaneProjectileState *projectile = &arcaneProjectile_;
+    if (cataclysmShot) {
+        projectile = nullptr;
+        for (ArcaneProjectileState &candidate : cataclysmProjectiles_) {
+            if (!candidate.active) {
+                projectile = &candidate;
+                break;
+            }
+        }
+        if (projectile == nullptr) {
+            return;
+        }
+    }
+
+    const float hostileSpeed = cataclysmShot ? kCataclysmProjectileHostileSpeed
+                                             : kArcaneProjectileHostileSpeed;
+    projectile->active = true;
+    projectile->reflected = false;
+    projectile->cataclysm = cataclysmShot;
+    projectile->position = muzzle;
+    projectile->velocity = {direction.x * hostileSpeed, 0.0f,
+                            direction.z * hostileSpeed};
+    projectile->age = 0.0f;
+    projectile->life = cataclysmShot ? 5.6f : 4.2f;
+    projectile->damage = enemy_.GetCurrentAttackDamage();
+    projectile->knockback = enemy_.GetCurrentAttackKnockback();
+    projectile->textureId = GetCurrentEnemyTextureId();
+    if (cataclysmShot) {
+        constexpr XMFLOAT2 kCueDirections[kCataclysmProjectileVolleyShotCount] = {
+            {0.0f, 1.0f},
+            {1.0f, 0.0f},
+            {0.7071f, 0.7071f},
+            {-0.7071f, 0.7071f},
+            {0.7071f, -0.7071f},
+        };
+        const int cueIndex = std::clamp(arcaneProjectileVolleyShotsFired_, 0,
+                                        kCataclysmProjectileVolleyShotCount - 1);
+        projectile->cueDirection = kCueDirections[cueIndex];
+    } else {
+        projectile->cueDirection =
+            ProjectWorldDirectionToCueDirection(
+                {-direction.x, -direction.y, -direction.z});
+    }
+    projectile->reflectedBySwordIndex = 0;
+    ApplyBulletTextureToModel(projectile->textureId);
 
     EmitParticleBurst(swordFlashParticles_, muzzle, 58, 0.28f,
                       AppParticleBurstStyle::Flash,
-                      {0.24f, 1.0f, 0.78f, 0.96f}, direction, 0.90f);
+                      cataclysmShot ? XMFLOAT4{0.18f, 0.90f, 1.0f, 0.98f}
+                                    : XMFLOAT4{0.24f, 1.0f, 0.78f, 0.96f},
+                      direction, cataclysmShot ? 1.35f : 0.90f);
     EmitParticleBurst(sparkParticles_, muzzle, 96, 0.32f,
                       AppParticleBurstStyle::Sparks,
-                      {0.30f, 1.0f, 0.86f, 0.82f}, direction, 1.80f);
+                      cataclysmShot ? XMFLOAT4{0.20f, 0.96f, 1.0f, 0.88f}
+                                    : XMFLOAT4{0.30f, 1.0f, 0.86f, 0.82f},
+                      direction, cataclysmShot ? 2.35f : 1.80f);
 }
 
 void GameScene::ResetArcaneProjectile() { arcaneProjectile_ = {}; }
 
 void GameScene::UpdateArcaneProjectile(float deltaTime) {
-    if (!arcaneProjectile_.active) {
-        return;
-    }
+    auto updateProjectile = [&](ArcaneProjectileState &projectile) {
+        if (!projectile.active) {
+            return;
+        }
+        projectile.age += deltaTime;
 
-    if (arcaneProjectile_.reflected) {
+        if (projectile.reflected) {
         XMFLOAT3 target = enemy_.GetTransform().position;
         target.y += 1.08f;
-        XMFLOAT3 toEnemy{target.x - arcaneProjectile_.position.x,
-                         target.y - arcaneProjectile_.position.y,
-                         target.z - arcaneProjectile_.position.z};
+        XMFLOAT3 toEnemy{target.x - projectile.position.x,
+                         target.y - projectile.position.y,
+                         target.z - projectile.position.z};
         const XMFLOAT3 desired =
             NormalizeParticleCompatVec3(toEnemy, {0.0f, 0.0f, 1.0f});
         const XMFLOAT3 current =
-            NormalizeParticleCompatVec3(arcaneProjectile_.velocity, desired);
+            NormalizeParticleCompatVec3(projectile.velocity, desired);
         const float steer = std::clamp(deltaTime * 8.0f, 0.0f, 1.0f);
         const XMFLOAT3 blended{
             current.x + (desired.x - current.x) * steer,
@@ -2381,57 +2462,95 @@ void GameScene::UpdateArcaneProjectile(float deltaTime) {
             current.z + (desired.z - current.z) * steer};
         const XMFLOAT3 reflectedDir =
             NormalizeParticleCompatVec3(blended, desired);
-        arcaneProjectile_.velocity = {
-            reflectedDir.x * kArcaneProjectileReflectedSpeed,
-            reflectedDir.y * kArcaneProjectileReflectedSpeed,
-            reflectedDir.z * kArcaneProjectileReflectedSpeed};
-    }
+        const float reflectedSpeed = projectile.cataclysm
+                                         ? kCataclysmProjectileReflectedSpeed
+                                         : kArcaneProjectileReflectedSpeed;
+        projectile.velocity = {
+            reflectedDir.x * reflectedSpeed,
+            reflectedDir.y * reflectedSpeed,
+            reflectedDir.z * reflectedSpeed};
+        } else if (projectile.cataclysm &&
+                   projectile.age >= kCataclysmProjectileHomingDelay) {
+            XMFLOAT3 target = player_.GetTransform().position;
+            target.y = projectile.position.y;
+            const XMFLOAT3 toPlayer{target.x - projectile.position.x, 0.0f,
+                                    target.z - projectile.position.z};
+            const XMFLOAT3 desired =
+                NormalizeParticleCompatVec3(toPlayer, projectile.velocity);
+            const XMFLOAT3 current =
+                NormalizeParticleCompatVec3(projectile.velocity, desired);
+            const float steer = std::clamp(
+                deltaTime * kCataclysmProjectileHomingStrength, 0.0f, 1.0f);
+            const XMFLOAT3 blended{
+                current.x + (desired.x - current.x) * steer,
+                0.0f,
+                current.z + (desired.z - current.z) * steer};
+            const XMFLOAT3 homingDir =
+                NormalizeParticleCompatVec3(blended, desired);
+            projectile.velocity = {
+                homingDir.x * kCataclysmProjectileHostileSpeed, 0.0f,
+                homingDir.z * kCataclysmProjectileHostileSpeed};
+        }
 
-    arcaneProjectile_.position.x += arcaneProjectile_.velocity.x * deltaTime;
-    arcaneProjectile_.position.y += arcaneProjectile_.velocity.y * deltaTime;
-    arcaneProjectile_.position.z += arcaneProjectile_.velocity.z * deltaTime;
-    arcaneProjectile_.life -= deltaTime;
+        projectile.position.x += projectile.velocity.x * deltaTime;
+        projectile.position.y += projectile.velocity.y * deltaTime;
+        projectile.position.z += projectile.velocity.z * deltaTime;
+        projectile.life -= deltaTime;
 
-    const XMFLOAT3 playerPos = player_.GetTransform().position;
-    if (arcaneProjectile_.life <= 0.0f ||
-        DistanceSq(arcaneProjectile_.position, playerPos) > 70.0f * 70.0f) {
-        ResetArcaneProjectile();
+        const XMFLOAT3 playerPos = player_.GetTransform().position;
+        if (projectile.life <= 0.0f ||
+            DistanceSq(projectile.position, playerPos) > 70.0f * 70.0f) {
+            projectile = {};
+        }
+    };
+
+    updateProjectile(arcaneProjectile_);
+    for (ArcaneProjectileState &projectile : cataclysmProjectiles_) {
+        updateProjectile(projectile);
     }
 }
 
 void GameScene::ReflectArcaneProjectile(size_t swordIndex) {
-    if (!arcaneProjectile_.active || arcaneProjectile_.reflected) {
+    ReflectArcaneProjectile(arcaneProjectile_, swordIndex);
+}
+
+void GameScene::ReflectArcaneProjectile(ArcaneProjectileState &projectile,
+                                        size_t swordIndex) {
+    if (!projectile.active || projectile.reflected) {
         return;
     }
 
     XMFLOAT3 target = enemy_.GetTransform().position;
     target.y += 1.08f;
     const XMFLOAT3 toEnemy{
-        target.x - arcaneProjectile_.position.x,
-        target.y - arcaneProjectile_.position.y,
-        target.z - arcaneProjectile_.position.z};
+        target.x - projectile.position.x,
+        target.y - projectile.position.y,
+        target.z - projectile.position.z};
     const XMFLOAT3 direction =
         NormalizeParticleCompatVec3(toEnemy, {0.0f, 0.0f, 1.0f});
-    arcaneProjectile_.reflected = true;
-    arcaneProjectile_.reflectedBySwordIndex = swordIndex;
-    arcaneProjectile_.velocity = {
-        direction.x * kArcaneProjectileReflectedSpeed,
-        direction.y * kArcaneProjectileReflectedSpeed,
-        direction.z * kArcaneProjectileReflectedSpeed};
-    arcaneProjectile_.life = 1.8f;
+    projectile.reflected = true;
+    projectile.reflectedBySwordIndex = swordIndex;
+    const float reflectedSpeed = projectile.cataclysm
+                                     ? kCataclysmProjectileReflectedSpeed
+                                     : kArcaneProjectileReflectedSpeed;
+    projectile.velocity = {
+        direction.x * reflectedSpeed,
+        direction.y * reflectedSpeed,
+        direction.z * reflectedSpeed};
+    projectile.life = projectile.cataclysm ? 0.75f : 1.8f;
 
     CombatFeedbackEvent feedback{};
     feedback.type = CombatFeedbackEventType::CounterSuccess;
-    feedback.position = arcaneProjectile_.position;
+    feedback.position = projectile.position;
     feedback.direction = direction;
     feedback.power = 5.8f;
     feedback.swordIndex = swordIndex;
     DispatchCombatFeedback(feedback);
 
-    EmitParticleBurst(swordFlashParticles_, arcaneProjectile_.position, 52,
+    EmitParticleBurst(swordFlashParticles_, projectile.position, 52,
                       0.34f, AppParticleBurstStyle::Flash,
                       {0.28f, 1.0f, 0.78f, 0.98f}, direction, 1.20f);
-    EmitParticleBurst(explosionParticles_, arcaneProjectile_.position, 120,
+    EmitParticleBurst(explosionParticles_, projectile.position, 120,
                       0.34f, AppParticleBurstStyle::SlashLine,
                       {0.20f, 1.0f, 0.88f, 0.90f}, direction, 2.10f);
 }
@@ -2469,11 +2588,22 @@ void GameScene::ApplyBulletTextureToModel(uint32_t textureId) {
         return;
     }
 
+    const Model *enemyModel =
+        enemyModelId_ != 0 ? ctx_->rendering.model->GetModel(enemyModelId_)
+                           : nullptr;
+
     bulletModel->textureId = textureId;
-    for (ModelSubMesh &subMesh : bulletModel->subMeshes) {
+    for (size_t i = 0; i < bulletModel->subMeshes.size(); ++i) {
+        ModelSubMesh &subMesh = bulletModel->subMeshes[i];
         subMesh.textureId = textureId;
         Material material =
             ctx_->rendering.model->GetMaterial(subMesh.materialId);
+        if (enemyModel != nullptr && !enemyModel->subMeshes.empty()) {
+            const ModelSubMesh &enemySubMesh =
+                enemyModel->subMeshes[i % enemyModel->subMeshes.size()];
+            material =
+                ctx_->rendering.model->GetMaterial(enemySubMesh.materialId);
+        }
         material.enableTexture = 1;
         material.baseColorTextureId = textureId;
         ctx_->rendering.model->SetMaterial(subMesh.materialId, material);
@@ -2525,63 +2655,75 @@ bool GameScene::IsArcaneProjectileSlashAligned(const Sword &sword) const {
     const float invSlashLen = 1.0f / std::sqrt(slashLenSq);
     const float dot = (slashDir.x * invSlashLen) * cueDir.x +
                       (slashDir.y * invSlashLen) * cueDir.y;
-    return std::fabs(dot) >= kArcaneProjectileSlashDot;
+    return arcaneProjectile_.cataclysm ? dot >= kArcaneProjectileSlashDot
+                                       : std::fabs(dot) >=
+                                             kArcaneProjectileSlashDot;
 }
 
 void GameScene::DrawArcaneProjectile() {
-    if (!arcaneProjectile_.active || ctx_ == nullptr ||
-        ctx_->rendering.model == nullptr || bulletModelId_ == 0) {
+    if (ctx_ == nullptr || ctx_->rendering.model == nullptr ||
+        bulletModelId_ == 0) {
         return;
     }
 
-    const uint32_t bulletTextureId =
-        arcaneProjectile_.textureId != 0 ? arcaneProjectile_.textureId
-                                         : GetCurrentEnemyTextureId();
-    ApplyBulletTextureToModel(bulletTextureId);
+    auto drawProjectile = [&](const ArcaneProjectileState &state) {
+        if (!state.active) {
+            return;
+        }
 
-    ModelDrawEffect effect{};
-    effect.enabled = true;
-    effect.additiveBlend = false;
-    effect.disableCulling = true;
-    effect.blendOverride = ModelDrawEffectBlendOverride::Opaque;
-    effect.color = arcaneProjectile_.reflected
-                       ? XMFLOAT4{0.38f, 1.0f, 0.58f, 0.42f}
-                       : XMFLOAT4{0.25f, 0.96f, 1.0f, 0.34f};
-    effect.intensity = arcaneProjectile_.reflected ? 0.18f : 0.14f;
-    effect.fresnelPower = 0.72f;
-    effect.surfaceTint = 0.18f;
-    effect.time = sceneLightTime_;
-    ctx_->rendering.model->SetDrawEffect(effect);
+        ApplyBulletTextureToModel(GetCurrentEnemyTextureId());
 
-    const float pulse = 0.5f + 0.5f * std::sinf(sceneLightTime_ * 15.0f);
-    const float scale = ((arcaneProjectile_.reflected ? 0.72f : 0.62f) +
-                         pulse * 0.07f) *
-                        kArcaneProjectileVisualScaleMultiplier;
-    const XMFLOAT3 direction =
-        NormalizeParticleCompatVec3(arcaneProjectile_.velocity,
-                                    {0.0f, 0.0f, 1.0f});
-    Transform projectile{};
-    projectile.position = arcaneProjectile_.position;
-    const XMVECTOR modelAxis = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-    const XMVECTOR moveAxis =
-        XMVector3Normalize(XMLoadFloat3(&direction));
-    XMVECTOR rotationAxis = XMVector3Cross(modelAxis, moveAxis);
-    float axisLength = XMVectorGetX(XMVector3Length(rotationAxis));
-    const float dot = std::clamp(XMVectorGetX(XMVector3Dot(modelAxis, moveAxis)),
-                                 -1.0f, 1.0f);
-    XMVECTOR rotation{};
-    if (axisLength < 0.0001f) {
-        rotation = dot < 0.0f
-                       ? XMQuaternionRotationAxis(
-                             XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f), kPi)
-                       : XMQuaternionIdentity();
-    } else {
-        rotationAxis = XMVectorScale(rotationAxis, 1.0f / axisLength);
-        rotation = XMQuaternionRotationAxis(rotationAxis, std::acos(dot));
+        ModelDrawEffect effect{};
+        effect.enabled = true;
+        effect.additiveBlend = false;
+        effect.disableCulling = true;
+        effect.blendOverride = ModelDrawEffectBlendOverride::Opaque;
+        effect.color = state.reflected
+                           ? XMFLOAT4{0.38f, 1.0f, 0.58f, 0.42f}
+                           : XMFLOAT4{0.25f, 0.96f, 1.0f, 0.34f};
+        effect.intensity = state.reflected ? 0.18f : 0.14f;
+        effect.fresnelPower = 0.72f;
+        effect.surfaceTint = 0.18f;
+        effect.time = sceneLightTime_;
+        ctx_->rendering.model->SetDrawEffect(effect);
+
+        const float pulse = 0.5f + 0.5f * std::sinf(sceneLightTime_ * 15.0f);
+        const float baseScale = state.cataclysm ? 0.74f : 0.62f;
+        const float reflectedScale = state.cataclysm ? 0.86f : 0.72f;
+        const float scale = ((state.reflected ? reflectedScale : baseScale) +
+                             pulse * 0.07f) *
+                            kArcaneProjectileVisualScaleMultiplier;
+        const XMFLOAT3 direction =
+            NormalizeParticleCompatVec3(state.velocity, {0.0f, 0.0f, 1.0f});
+        Transform projectile{};
+        projectile.position = state.position;
+        const XMVECTOR modelAxis = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+        const XMVECTOR moveAxis =
+            XMVector3Normalize(XMLoadFloat3(&direction));
+        XMVECTOR rotationAxis = XMVector3Cross(modelAxis, moveAxis);
+        float axisLength = XMVectorGetX(XMVector3Length(rotationAxis));
+        const float dot =
+            std::clamp(XMVectorGetX(XMVector3Dot(modelAxis, moveAxis)),
+                       -1.0f, 1.0f);
+        XMVECTOR rotation{};
+        if (axisLength < 0.0001f) {
+            rotation = dot < 0.0f
+                           ? XMQuaternionRotationAxis(
+                                 XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f), kPi)
+                           : XMQuaternionIdentity();
+        } else {
+            rotationAxis = XMVectorScale(rotationAxis, 1.0f / axisLength);
+            rotation = XMQuaternionRotationAxis(rotationAxis, std::acos(dot));
+        }
+        XMStoreFloat4(&projectile.rotation, rotation);
+        projectile.scale = {scale, scale, scale};
+        ctx_->rendering.model->Draw(bulletModelId_, projectile, camera_);
+    };
+
+    drawProjectile(arcaneProjectile_);
+    for (const ArcaneProjectileState &projectile : cataclysmProjectiles_) {
+        drawProjectile(projectile);
     }
-    XMStoreFloat4(&projectile.rotation, rotation);
-    projectile.scale = {scale, scale, scale};
-    ctx_->rendering.model->Draw(bulletModelId_, projectile, camera_);
     ctx_->rendering.model->ClearDrawEffect();
 }
 
@@ -2853,9 +2995,13 @@ void GameScene::EmitEnemyActionParticles(ActionKind kind, ActionStep step) {
 void GameScene::EmitArcaneLaserParticles(float deltaTime) {
     const bool isCataclysmLaser =
         enemy_.GetActionKind() == ActionKind::CataclysmLaser;
+    bool anyProjectileActive = arcaneProjectile_.active;
+    for (const ArcaneProjectileState &projectile : cataclysmProjectiles_) {
+        anyProjectileActive = anyProjectileActive || projectile.active;
+    }
     if (enemy_.GetActionKind() != ActionKind::ArcaneLaser &&
         !isCataclysmLaser &&
-        !arcaneProjectile_.active) {
+        !anyProjectileActive) {
         arcaneLaserParticleTimer_ = 0.0f;
         return;
     }
@@ -2926,30 +3072,7 @@ void GameScene::EmitArcaneLaserParticles(float deltaTime) {
         return;
     }
 
-    if (isCataclysmLaser && step == ActionStep::Active) {
-        arcaneLaserParticleTimer_ = 0.020f;
-        const float range = enemy_.GetCataclysmLaserRange();
-        const float pulse = 0.5f + 0.5f * std::sinf(sceneLightTime_ * 32.0f);
-        for (int i = 0; i < 7; ++i) {
-            const float lane = (static_cast<float>(i) + 0.5f) / 7.0f;
-            XMFLOAT3 beamPos{muzzle.x + direction.x * range * lane,
-                             muzzle.y + 0.10f * std::sinf(sceneLightTime_ * 9.0f + i),
-                             muzzle.z + direction.z * range * lane};
-            EmitParticleBurst(swordFlashParticles_, beamPos, 24, 0.16f,
-                              AppParticleBurstStyle::Flash, laserColor,
-                              direction,
-                              radius * (0.58f + 0.22f * pulse));
-            EmitParticleBurst(explosionParticles_, beamPos, 34, 0.26f,
-                              AppParticleBurstStyle::SpiritSparkle,
-                              {laserColor.x, laserColor.y, laserColor.z,
-                               0.72f},
-                              {direction.x, 0.10f, direction.z},
-                              radius * (0.68f + 0.18f * pulse));
-        }
-        return;
-    }
-
-    if (step != ActionStep::Active && !arcaneProjectile_.active) {
+    if (step != ActionStep::Active && !anyProjectileActive) {
         arcaneLaserParticleTimer_ = 0.13f;
         EmitParticleBurst(smokeParticles_, circlePos, 18, 0.38f,
                           AppParticleBurstStyle::Flash,
@@ -2957,31 +3080,44 @@ void GameScene::EmitArcaneLaserParticles(float deltaTime) {
         return;
     }
 
-    if (!arcaneProjectile_.active) {
+    if (!anyProjectileActive) {
         return;
     }
 
     arcaneLaserParticleTimer_ = arcaneProjectile_.reflected ? 0.026f : 0.034f;
-    const XMFLOAT3 projectileDir =
-        NormalizeParticleCompatVec3(arcaneProjectile_.velocity, direction);
-    const XMFLOAT4 projectileColor =
-        arcaneProjectile_.reflected ? XMFLOAT4{0.32f, 1.0f, 0.54f, 0.88f}
-                                    : XMFLOAT4{0.20f, 0.96f, 1.0f, 0.86f};
+    auto emitProjectileTrail = [&](const ArcaneProjectileState &projectile) {
+        if (!projectile.active) {
+            return;
+        }
+        const XMFLOAT3 projectileDir =
+            NormalizeParticleCompatVec3(projectile.velocity, direction);
+        const XMFLOAT4 projectileColor =
+            projectile.reflected ? XMFLOAT4{0.32f, 1.0f, 0.54f, 0.88f}
+                                 : XMFLOAT4{0.20f, 0.96f, 1.0f, 0.86f};
 
-    EmitParticleBurst(swordFlashParticles_, arcaneProjectile_.position, 10,
-                      0.14f, AppParticleBurstStyle::Flash, projectileColor,
-                      projectileDir, 0.34f);
-    EmitParticleBurst(explosionParticles_, arcaneProjectile_.position,
-                      arcaneProjectile_.reflected ? 34 : 26, 0.26f,
-                      AppParticleBurstStyle::SpiritSparkle, projectileColor,
-                      {-projectileDir.x, -projectileDir.y, -projectileDir.z},
-                      arcaneProjectile_.reflected ? 1.75f : 1.05f);
-    EmitParticleBurst(smokeParticles_, arcaneProjectile_.position, 8, 0.28f,
-                      AppParticleBurstStyle::Smoke,
-                      {projectileColor.x, projectileColor.y, projectileColor.z,
-                       0.22f},
-                      {-projectileDir.x, -projectileDir.y, -projectileDir.z},
-                      0.38f);
+        EmitParticleBurst(swordFlashParticles_, projectile.position, 10, 0.14f,
+                          AppParticleBurstStyle::Flash, projectileColor,
+                          projectileDir, projectile.cataclysm ? 0.48f : 0.34f);
+        EmitParticleBurst(explosionParticles_, projectile.position,
+                          projectile.reflected ? 34 : 26, 0.26f,
+                          AppParticleBurstStyle::SpiritSparkle,
+                          projectileColor,
+                          {-projectileDir.x, -projectileDir.y,
+                           -projectileDir.z},
+                          projectile.reflected ? 1.75f : 1.05f);
+        EmitParticleBurst(smokeParticles_, projectile.position, 8, 0.28f,
+                          AppParticleBurstStyle::Smoke,
+                          {projectileColor.x, projectileColor.y,
+                           projectileColor.z, 0.22f},
+                          {-projectileDir.x, -projectileDir.y,
+                           -projectileDir.z},
+                          0.38f);
+    };
+
+    emitProjectileTrail(arcaneProjectile_);
+    for (const ArcaneProjectileState &projectile : cataclysmProjectiles_) {
+        emitProjectileTrail(projectile);
+    }
 }
 
 void GameScene::EmitEnemyCueParticles(float deltaTime) {
@@ -3000,16 +3136,33 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
 
     const ActionKind kind = enemy_.GetActionKind();
     const ActionStep step = enemy_.GetActionStep();
+    const ArcaneProjectileState *cueProjectile = nullptr;
     if (arcaneProjectile_.active && !arcaneProjectile_.reflected) {
-        const bool canDeflect = IsArcaneProjectileInDeflectRange();
+        cueProjectile = &arcaneProjectile_;
+    }
+    for (const ArcaneProjectileState &projectile : cataclysmProjectiles_) {
+        if (!projectile.active || projectile.reflected) {
+            continue;
+        }
+        if (cueProjectile == nullptr ||
+            DistanceSq(projectile.position, player_.GetTransform().position) <
+                DistanceSq(cueProjectile->position,
+                           player_.GetTransform().position)) {
+            cueProjectile = &projectile;
+        }
+    }
+    if (cueProjectile != nullptr) {
+        const bool canDeflect =
+            DistanceSq(cueProjectile->position, player_.GetTransform().position) <=
+            kArcaneProjectileDeflectRange * kArcaneProjectileDeflectRange;
         const XMFLOAT4 lineColor =
             canDeflect ? XMFLOAT4{0.20f, 1.0f, 0.32f, 1.0f}
                        : XMFLOAT4{1.0f, 0.06f, 0.06f, 1.0f};
-        XMFLOAT3 cuePos = arcaneProjectile_.position;
+        XMFLOAT3 cuePos = cueProjectile->position;
         cuePos.y += 0.08f;
         swordSlashArcRenderer_.EmitDirectionCueLine(
-            cuePos, GetArcaneProjectileCueDirection(), camera_, lineColor,
-            canDeflect);
+            cuePos, cueProjectile->cueDirection, camera_, lineColor,
+            canDeflect, 1.55f);
         return;
     }
 

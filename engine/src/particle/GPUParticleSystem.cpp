@@ -20,6 +20,7 @@ namespace {
 
 constexpr uint32_t kParticleThreadCount = 256u;
 constexpr uint32_t kMaxParticleArgsJobs = 16u;
+constexpr float kBurstParticleDensityScale = 0.55f;
 
 ID3D12Device *gCachedParticleDrawDevice = nullptr;
 ComPtr<ID3D12RootSignature> gCachedParticleDrawRootSignature;
@@ -60,6 +61,12 @@ NormalizeParticleEmitterSettings(ParticleEmitterSettings settings) {
     settings.maxParticles = (std::max)(1u, settings.maxParticles);
     settings.emitRate = (std::max)(0.0f, settings.emitRate);
     settings.burstCount = (std::max)(1u, settings.burstCount);
+    if (settings.emissionType == ParticleEmissionType::Burst) {
+        settings.burstCount = (std::max)(
+            1u, static_cast<uint32_t>(std::round(
+                    static_cast<float>(settings.burstCount) *
+                    kBurstParticleDensityScale)));
+    }
     settings.position = SanitizeFinite(settings.position, {0.0f, 0.0f, 0.0f});
     settings.spawnOffsetScale =
         SanitizeFinite(settings.spawnOffsetScale, {0.0f, 0.0f, 0.0f});

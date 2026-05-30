@@ -256,7 +256,7 @@ void SwordSlashArcRenderer::EmitHitLine(const XMFLOAT3 &position,
 
 void SwordSlashArcRenderer::EmitDirectionCueLine(
     const XMFLOAT3 &position, const XMFLOAT2 &direction, const Camera &camera,
-    const XMFLOAT4 &color, bool releaseCounterCueVisible) {
+    const XMFLOAT4 &color, bool releaseCounterCueVisible, float sizeScale) {
     const XMFLOAT3 cameraForward =
         NormalizeSafe(AppCameraForward(camera), {0.0f, 0.0f, 1.0f});
     const XMFLOAT3 worldUp{0.0f, 1.0f, 0.0f};
@@ -280,6 +280,7 @@ void SwordSlashArcRenderer::EmitDirectionCueLine(
         NormalizeSafe(Cross(cameraForward, lineDir), cameraUp);
     XMFLOAT3 visualPosition = Add(position, Scale(cameraForward, -0.10f));
     visualPosition.y += 0.03f;
+    const float cueScale = std::clamp(sizeScale, 0.50f, 2.50f);
 
     size_t cueArcIndex = 0;
     auto emitStroke = [&](float halfLength, float thickness,
@@ -293,8 +294,8 @@ void SwordSlashArcRenderer::EmitDirectionCueLine(
         arc.center = Add(arc.center, Scale(lineNormal, normalOffset));
         arc.axisA = lineDir;
         arc.axisB = lineNormal;
-        arc.radius = halfLength;
-        arc.thickness = thickness;
+        arc.radius = halfLength * cueScale;
+        arc.thickness = thickness * cueScale;
         arc.life = 1.0f;
         arc.age = 1.0f;
         arc.color = strokeColor;

@@ -528,6 +528,9 @@
     <None Include="resources\ui\title\exit_confirm_yes.png">
       <Filter>Resources\UI\title</Filter>
     </None>
+    <None Include="resources\ui\title\esc_exit.png">
+      <Filter>Resources\UI\title</Filter>
+    </None>
     <None Include="resources\ui\title\press_any_button.png">
       <Filter>Resources\UI\title</Filter>
     </None>

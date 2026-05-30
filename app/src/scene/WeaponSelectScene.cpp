@@ -53,7 +53,7 @@ constexpr std::array<ImageContentBounds, 3> kModeNameContentBounds = {{
 
 constexpr std::array<ImageContentBounds, 3> kButtonIllustrationBounds = {{
     {-148.0f, 42.0f, 126.0f, 150.0f},
-    {-92.0f, 38.0f, 140.0f, 137.0f},
+    {-96.0f, 38.0f, 120.0f, 137.0f},
     {-82.0f, 46.0f, 82.0f, 162.0f},
 }};
 
@@ -611,7 +611,6 @@ void WeaponSelectScene::DrawButtonIllustration(int index,
     const XMFLOAT4 fill = selected
                               ? MakeColor(0.16f, 0.12f, 0.070f, 0.54f * alpha)
                               : MakeColor(0.10f, 0.11f, 0.13f, 0.44f * alpha);
-    const XMFLOAT4 dim = MakeColor(0.0f, 0.0f, 0.0f, 0.22f * alpha);
     auto sx = [&](float value) {
         return centerX + (value - bounds.CenterX()) * scale;
     };
@@ -694,42 +693,40 @@ void WeaponSelectScene::DrawButtonIllustration(int index,
         return;
     }
 
-    const float handX = -112.0f;
-    const float handY = 38.0f;
-    const float palmBuild = part(0.17f);
-    rectAt(handX + 48.0f, handY + 35.0f, 72.0f, 64.0f * palmBuild,
-           ScaleAlpha(fill, palmBuild));
-    frameAt(handX + 48.0f, handY + 35.0f, 72.0f, 64.0f * palmBuild, 4.0f,
-            ScaleAlpha(line, palmBuild));
-    for (int i = 0; i < 4; ++i) {
-        const float fingerBuild =
-            part(0.22f + static_cast<float>(i) * 0.025f);
-        if (fingerBuild <= 0.0f) {
-            continue;
+    auto drawHand = [&](float handX, float delay, bool thumbRight) {
+        const float handY = 38.0f;
+        const float palmBuild = part(delay);
+        if (palmBuild > 0.0f) {
+            const float palmX = thumbRight ? handX + 20.0f : handX + 48.0f;
+            rectAt(palmX, handY + 35.0f, 72.0f, 64.0f * palmBuild,
+                   ScaleAlpha(fill, palmBuild));
+            frameAt(palmX, handY + 35.0f, 72.0f, 64.0f * palmBuild, 4.0f,
+                    ScaleAlpha(line, palmBuild));
         }
-        rectAt(handX + 44.0f + static_cast<float>(i) * 20.0f,
-               handY + static_cast<float>(i % 2) * 7.0f, 14.0f,
-               52.0f * fingerBuild, ScaleAlpha(line, fingerBuild));
-    }
-    const float thumbBuild = part(0.30f);
-    rectAt(handX + 20.0f, handY + 58.0f, 36.0f * thumbBuild, 18.0f,
-           ScaleAlpha(line, thumbBuild));
 
-    const float camX = 58.0f;
-    const float camY = 46.0f;
-    const float cameraBuild = part(0.20f);
-    rectAt(camX, camY, 82.0f * cameraBuild, 64.0f,
-           ScaleAlpha(fill, cameraBuild));
-    frameAt(camX, camY, 82.0f * cameraBuild, 64.0f, 4.0f,
-            ScaleAlpha(line, cameraBuild));
-    const float lensBuild = part(0.29f);
-    rectAt(camX + 29.0f, camY + 20.0f, 24.0f * lensBuild, 24.0f,
-           ScaleAlpha(line, lensBuild));
-    rectAt(camX + 37.0f, camY + 28.0f, 8.0f * lensBuild, 8.0f,
-           ScaleAlpha(dim, lensBuild));
-    const float standBuild = part(0.33f);
-    rectAt(camX + 24.0f, camY + 76.0f, 34.0f * standBuild, 6.0f,
-           ScaleAlpha(line, standBuild));
+        for (int i = 0; i < 4; ++i) {
+            const float fingerBuild =
+                part(delay + 0.05f + static_cast<float>(i) * 0.025f);
+            if (fingerBuild <= 0.0f) {
+                continue;
+            }
+            const float fingerX = thumbRight
+                                      ? handX + 22.0f +
+                                            static_cast<float>(i) * 20.0f
+                                      : handX + 44.0f +
+                                            static_cast<float>(i) * 20.0f;
+            rectAt(fingerX, handY + static_cast<float>(i % 2) * 7.0f, 14.0f,
+                   52.0f * fingerBuild, ScaleAlpha(line, fingerBuild));
+        }
+
+        const float thumbBuild = part(delay + 0.13f);
+        const float thumbX = thumbRight ? handX + 84.0f : handX + 20.0f;
+        rectAt(thumbX, handY + 58.0f, 36.0f * thumbBuild, 18.0f,
+               ScaleAlpha(line, thumbBuild));
+    };
+
+    drawHand(-116.0f, 0.17f, false);
+    drawHand(-8.0f, 0.20f, true);
 }
 
 void WeaponSelectScene::DrawLabels(float screenWidth, float screenHeight) {

@@ -32,7 +32,6 @@ constexpr DirectX::XMFLOAT3 kDefeatSpotlightTarget{
     kPlayerDefeatPosition.y + 0.10f,
     kPlayerDefeatPosition.z,
 };
-constexpr size_t kSpotlightDustCount = 150;
 constexpr float kRetryRiseAnimDuration = 0.78f;
 constexpr float kRetryRunStart = 0.84f;
 constexpr float kRetryRunEndZ = 11.6f;
@@ -92,60 +91,10 @@ float EaseInQuad(float t) {
     return t * t;
 }
 
-XMFLOAT4 RotationFromZAxisTo(const XMFLOAT3 &direction) {
-    XMVECTOR to = XMVector3Normalize(XMLoadFloat3(&direction));
-    XMVECTOR from = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
-    float dot = XMVectorGetX(XMVector3Dot(from, to));
-    dot = std::clamp(dot, -1.0f, 1.0f);
-
-    if (dot > 0.9995f) {
-        return {0.0f, 0.0f, 0.0f, 1.0f};
-    }
-    if (dot < -0.9995f) {
-        XMFLOAT4 rotation{};
-        XMStoreFloat4(&rotation,
-                      XMQuaternionRotationAxis(XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f),
-                                               XM_PI));
-        return rotation;
-    }
-
-    XMVECTOR axis = XMVector3Cross(from, to);
-    XMVECTOR rotation = XMVectorSet(XMVectorGetX(axis), XMVectorGetY(axis),
-                                   XMVectorGetZ(axis), 1.0f + dot);
-    XMFLOAT4 result{};
-    XMStoreFloat4(&result, XMQuaternionNormalize(rotation));
-    return result;
-}
-
 XMFLOAT4 MakeQuat(float pitch, float yaw, float roll) {
     XMFLOAT4 result{};
     XMStoreFloat4(&result, XMQuaternionRotationRollPitchYaw(pitch, yaw, roll));
     return result;
-}
-
-float Hash01(uint32_t value) {
-    value ^= value >> 16u;
-    value *= 0x7feb352du;
-    value ^= value >> 15u;
-    value *= 0x846ca68bu;
-    value ^= value >> 16u;
-    return static_cast<float>(value & 0x00ffffffu) /
-           static_cast<float>(0x00ffffffu);
-}
-
-XMFLOAT3 NormalizeVec3(const XMFLOAT3 &value, const XMFLOAT3 &fallback) {
-    const float len =
-        std::sqrtf(value.x * value.x + value.y * value.y + value.z * value.z);
-    if (len <= 0.0001f) {
-        return fallback;
-    }
-    return {value.x / len, value.y / len, value.z / len};
-}
-
-XMFLOAT3 CrossVec3(const XMFLOAT3 &a, const XMFLOAT3 &b) {
-    return {a.y * b.z - a.z * b.y,
-            a.z * b.x - a.x * b.z,
-            a.x * b.y - a.y * b.x};
 }
 
 uint32_t CreateDustTexture(TextureManager *texture) {
@@ -239,21 +188,6 @@ void GameOverScene::Initialize(const SceneContext &ctx) {
     poolMaterial.depthWrite = 0;
     poolMaterial.roughness = 1.0f;
     spotlightPoolModelId_ = model->CreatePlane(spotlightDustTextureId_, poolMaterial);
-
-    Material dustMaterial{};
-    dustMaterial.color = {2.8f, 2.18f, 1.12f, 0.32f};
-    dustMaterial.enableTexture = 1;
-    dustMaterial.baseColorTextureId = spotlightDustTextureId_;
-    dustMaterial.reflectionStrength = 0.0f;
-    dustMaterial.reflectionFresnelStrength = 0.0f;
-    dustMaterial.blendMode = static_cast<int32_t>(BlendMode::Transparent);
-    dustMaterial.cullMode = static_cast<int32_t>(MaterialCullMode::None);
-    dustMaterial.depthWrite = 0;
-    dustMaterial.roughness = 1.0f;
-    dustMaterial.metallic = 0.0f;
-    spotlightDustModelId_ =
-        model->CreatePlane(spotlightDustTextureId_, dustMaterial);
-    InitializeSpotlightDust();
 
     CreateTextImages();
 }
@@ -525,114 +459,7 @@ void GameOverScene::DrawWorld() {
         model->Draw(spotlightPoolModelId_, pool, camera_);
     }
     player_.Draw(model, camera_, true, true, 0.92f);
-    if (!retrySpotlightOff) {
-        DrawSpotlightDust();
-    }
     model->PostDraw();
-}
-
-void GameOverScene::InitializeSpotlightDust() {
-    spotlightDust_.clear();
-    spotlightDust_.reserve(kSpotlightDustCount);
-
-    for (size_t i = 0; i < kSpotlightDustCount; ++i) {
-        const uint32_t seed = static_cast<uint32_t>(i) * 977u + 0x6d2bu;
-        SpotlightDust dust{};
-        dust.path = 0.08f + Hash01(seed + 1u) * 0.84f;
-        dust.radius = std::sqrtf(Hash01(seed + 2u));
-        dust.angle = Hash01(seed + 3u) * XM_2PI;
-        dust.phase = Hash01(seed + 4u) * XM_2PI;
-        dust.driftSpeed = 0.010f + Hash01(seed + 5u) * 0.024f;
-        dust.size = 0.026f + Hash01(seed + 6u) * 0.068f;
-        dust.alpha = 0.30f + Hash01(seed + 7u) * 0.55f;
-        spotlightDust_.push_back(dust);
-    }
-}
-
-void GameOverScene::DrawSpotlightDust() {
-    ModelManager *model = ctx_->rendering.model;
-    if (model == nullptr || spotlightDustModelId_ == 0 ||
-        spotlightDust_.empty()) {
-        return;
-    }
-
-    Model *dustModel = model->GetModel(spotlightDustModelId_);
-    if (dustModel == nullptr || dustModel->subMeshes.empty()) {
-        return;
-    }
-
-    const uint32_t materialId = dustModel->subMeshes.front().materialId;
-    Material dustMaterial = model->GetMaterial(materialId);
-
-    const XMFLOAT3 lightToTarget{
-        kDefeatSpotlightTarget.x - kDefeatSpotlightPosition.x,
-        kDefeatSpotlightTarget.y - kDefeatSpotlightPosition.y,
-        kDefeatSpotlightTarget.z - kDefeatSpotlightPosition.z,
-    };
-    const float beamLength =
-        std::sqrtf(lightToTarget.x * lightToTarget.x +
-                   lightToTarget.y * lightToTarget.y +
-                   lightToTarget.z * lightToTarget.z);
-    if (beamLength <= 0.001f) {
-        return;
-    }
-
-    const XMFLOAT3 beamDir = NormalizeVec3(lightToTarget, {0.0f, -1.0f, 0.0f});
-    XMFLOAT3 beamRight =
-        NormalizeVec3(CrossVec3({0.0f, 1.0f, 0.0f}, beamDir),
-                      {1.0f, 0.0f, 0.0f});
-    XMFLOAT3 beamUp = NormalizeVec3(CrossVec3(beamDir, beamRight),
-                                    {0.0f, 0.0f, 1.0f});
-    const XMFLOAT3 cameraPosition = camera_.GetPosition();
-
-    for (const SpotlightDust &dust : spotlightDust_) {
-        float path = dust.path + sceneTime_ * dust.driftSpeed;
-        path -= std::floor(path);
-        path = 0.07f + path * 0.86f;
-
-        const float coneRadius = 0.025f + path * 0.66f;
-        const float angle = dust.angle + std::sinf(sceneTime_ * 0.29f + dust.phase) * 0.34f;
-        const float radial = coneRadius * dust.radius;
-        XMFLOAT3 position{
-            kDefeatSpotlightPosition.x + beamDir.x * beamLength * path +
-                beamRight.x * std::cosf(angle) * radial +
-                beamUp.x * std::sinf(angle) * radial,
-            kDefeatSpotlightPosition.y + beamDir.y * beamLength * path +
-                beamRight.y * std::cosf(angle) * radial +
-                beamUp.y * std::sinf(angle) * radial,
-            kDefeatSpotlightPosition.z + beamDir.z * beamLength * path +
-                beamRight.z * std::cosf(angle) * radial +
-                beamUp.z * std::sinf(angle) * radial,
-        };
-        position.x += std::sinf(sceneTime_ * 0.41f + dust.phase * 1.7f) * 0.020f;
-        position.y += std::sinf(sceneTime_ * 0.35f + dust.phase) * 0.026f;
-        position.z += std::cosf(sceneTime_ * 0.38f + dust.phase * 1.3f) * 0.020f;
-
-        const float radialFade = 1.0f - SmoothStep01(dust.radius * 0.74f);
-        const float endFade = SmoothStep01((path - 0.08f) / 0.18f) *
-                              (1.0f - SmoothStep01((path - 0.76f) / 0.18f));
-        const float twinkle = 0.72f + 0.28f * std::sinf(sceneTime_ * 1.7f + dust.phase);
-        const float alpha = dust.alpha * radialFade * endFade * twinkle;
-        if (alpha <= 0.012f) {
-            continue;
-        }
-
-        const XMFLOAT3 toCamera{
-            cameraPosition.x - position.x,
-            cameraPosition.y - position.y,
-            cameraPosition.z - position.z,
-        };
-
-        dustMaterial.color = {3.8f, 3.0f, 1.45f, alpha};
-        model->SetMaterial(materialId, dustMaterial);
-
-        Transform dustTransform{};
-        dustTransform.position = position;
-        dustTransform.rotation = RotationFromZAxisTo(toCamera);
-        const float size = dust.size * (0.72f + path * 0.52f);
-        dustTransform.scale = {size, size, 1.0f};
-        model->Draw(spotlightDustModelId_, dustTransform, camera_);
-    }
 }
 
 void GameOverScene::DrawOverlay(float screenWidth, float screenHeight) {

@@ -1,8 +1,6 @@
 #include "TitleScene.h"
 #include "AppSceneServices.h"
 #include "GameOverScene.h"
-#include "GameVictoryScene.h"
-#include "HandTrackingTestScene.h"
 #include "Input.h"
 #include "PostEffectManager.h"
 #include "SceneManager.h"
@@ -22,10 +20,9 @@ using namespace DirectX;
 namespace {
 constexpr float kFadeDuration = 0.48f;
 constexpr float kFrameIntroDuration = 1.12f;
+constexpr float kControlsPadding = 32.0f;
+constexpr float kControlsImageBottomTransparentPixels = 18.0f;
 constexpr float kPi = 3.14159265f;
-#ifdef _DEBUG
-constexpr int kDebugVictorySceneKey = DIK_F9;
-#endif
 
 XMFLOAT4 MakeColor(float r, float g, float b, float a = 1.0f) {
     return {r, g, b, a};
@@ -54,6 +51,7 @@ void TitleScene::Initialize(const SceneContext &ctx) {
     logoImage_ = LoadTitleImage(L"app/resources/ui/title/gamelogo.png");
     pressAnyButtonImage_ =
         LoadTitleImage(L"app/resources/ui/title/press_any_button.png");
+    exitPromptImage_ = LoadTitleImage(L"app/resources/ui/title/esc_exit.png");
     exitConfirmMessageImage_ =
         LoadTitleImage(L"app/resources/ui/title/exit_confirm_message.png");
     exitConfirmYesImage_ =
@@ -98,25 +96,6 @@ void TitleScene::Update() {
         AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
         return;
     }
-
-#ifdef _DEBUG
-    if (ctx_->systems.input->IsKeyTrigger(DIK_F2)) {
-        if (ctx_->rendering.postEffectManager != nullptr) {
-            ctx_->rendering.postEffectManager->SetBaseProfile(PostProcessProfile{});
-        }
-        sceneManager_->ChangeScene(std::make_unique<HandTrackingTestScene>());
-        return;
-    }
-
-    if (ctx_->systems.input->IsKeyTrigger(kDebugVictorySceneKey)) {
-        if (ctx_->rendering.postEffectManager != nullptr) {
-            ctx_->rendering.postEffectManager->SetBaseProfile(PostProcessProfile{});
-        }
-        sceneManager_->ChangeScene(std::make_unique<GameVictoryScene>(
-            0.0f, SwordInputCalibration{}, 5.0f));
-        return;
-    }
-#endif
 
     if (IsAnyButtonTriggered(*ctx_->systems.input)) {
         startRequested_ = true;
@@ -225,6 +204,17 @@ void TitleScene::DrawTitleOverlay(float screenWidth, float screenHeight) {
     const float pressAlpha =
         idle * (0.48f + 0.18f * (0.5f + 0.5f * std::sinf(sceneTime_ * 3.0f)));
     DrawImage(pressAnyButtonImage_, pressX, pressY, pressAlpha, pressScale);
+
+    const float exitPromptScale =
+        (std::min)(0.80f, (screenWidth * 0.31f) /
+                              (std::max)(exitPromptImage_.width, 1.0f));
+    const float exitPromptY =
+        screenHeight -
+        (exitPromptImage_.height - kControlsImageBottomTransparentPixels) *
+            exitPromptScale -
+        kControlsPadding;
+    DrawImage(exitPromptImage_, kControlsPadding, exitPromptY, idle * 0.58f,
+              exitPromptScale);
 
     if (startRequested_) {
         const float fadeT =
@@ -440,7 +430,7 @@ void TitleScene::DrawImage(const Image &image, float x, float y, float alpha,
 
 bool TitleScene::IsAnyButtonTriggered(const Input &input) const {
     for (int key = 0; key < 256; ++key) {
-        if (key == DIK_ESCAPE || key == DIK_F2) {
+        if (key == DIK_ESCAPE) {
             continue;
         }
         if (input.IsKeyTrigger(key)) {

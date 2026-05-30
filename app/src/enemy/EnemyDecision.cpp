@@ -500,6 +500,7 @@ bool Enemy::TryBeginBladeClash(float chance) {
 bool Enemy::TryBeginArcaneLaser(float chance) {
     const float unlock = TechniqueUnlock(BossPhase::Phase2);
     if (unlock <= 0.0f || arcaneLaserCooldown_ > 0.0f ||
+        rangedReengagePending_ ||
         deathFinished_ || isDying_ || phaseTransitionActive_) {
         return false;
     }
@@ -527,6 +528,7 @@ bool Enemy::TryBeginArcaneLaser(float chance) {
     }
 
     arcaneLaserCooldown_ = arcaneLaserCooldownDuration_;
+    rangedReengagePending_ = true;
     ResetWarpContext();
     warp_.isCutIn = true;
     warp_.followupKind = ActionKind::ArcaneLaser;
@@ -585,6 +587,7 @@ bool Enemy::TryBeginArcaneLaserSlashFollowup(float chance) {
 bool Enemy::TryBeginCataclysmLaser(float chance) {
     const float unlock = TechniqueUnlock(BossPhase::Phase3);
     if (unlock <= 0.0f || cataclysmLaserCooldown_ > 0.0f ||
+        rangedReengagePending_ ||
         deathFinished_ || isDying_ || phaseTransitionActive_) {
         return false;
     }
@@ -609,6 +612,7 @@ bool Enemy::TryBeginCataclysmLaser(float chance) {
     }
 
     cataclysmLaserCooldown_ = cataclysmLaserCooldownDuration_;
+    rangedReengagePending_ = true;
     ResetWarpContext();
     warp_.isCutIn = true;
     warp_.followupKind = ActionKind::CataclysmLaser;
@@ -746,6 +750,7 @@ void Enemy::BeginChaseAction() {
     const float distance = GetDistanceToPlayer();
 
     if (IsPlayerInMeleeFront()) {
+        rangedReengagePending_ = false;
         BeginPressureAction();
         return;
     }
@@ -759,12 +764,15 @@ void Enemy::BeginChaseAction() {
         phase3Unlocked && phantomWarpCooldown_ <= 0.0f && !deathFinished_ &&
         !isDying_ && !phaseTransitionActive_ && distance >= 1.65f &&
         distance <= 9.8f;
+    const bool mustReengageAfterRanged =
+        rangedReengagePending_ &&
+        distance > config_.core.nearAttackDistance + 0.75f;
     const bool canArcaneLaser =
         phase2Unlocked && arcaneLaserCooldown_ <= 0.0f &&
-        distance >= arcaneLaserMinDistance_;
+        !mustReengageAfterRanged && distance >= arcaneLaserMinDistance_;
     const bool canCataclysmLaser =
         phase3Unlocked && cataclysmLaserCooldown_ <= 0.0f &&
-        distance >= cataclysmLaserMinDistance_;
+        !mustReengageAfterRanged && distance >= cataclysmLaserMinDistance_;
     int stalkWeight = 100;
     int warpWeight = 0;
     int farWarpSlashWeight = 0;
@@ -784,6 +792,15 @@ void Enemy::BeginChaseAction() {
         warpWeight = 18;
         farWarpSlashWeight = 18;
         arcaneLaserWeight = 40;
+    }
+
+    if (mustReengageAfterRanged) {
+        stalkWeight = 20;
+        warpWeight = phase2Unlocked ? 18 : 0;
+        farWarpSlashWeight = phase2Unlocked ? 54 : 0;
+        phantomWarpWeight = 0;
+        arcaneLaserWeight = 0;
+        cataclysmLaserWeight = 0;
     }
 
     const BossDecisionAction selected = PickWeightedAction(

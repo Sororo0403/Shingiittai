@@ -17,6 +17,7 @@ void Enemy::Initialize(uint32_t modelId) {
     runtime_.arcaneLaserDirection = {0.0f, 0.0f, 1.0f};
     runtime_.cataclysmLaserCooldown = 0.0f;
     runtime_.cataclysmLaserDirection = {0.0f, 0.0f, 1.0f};
+    runtime_.rangedReengagePending = false;
     tf_.position = {0.0f, 0.0f, 10.0f};
     tf_.scale = {1.0f, 1.0f, 1.0f};
     tf_.rotation = {0.0f, 0.0f, 0.0f, 1.0f};
@@ -66,6 +67,9 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
             counterRecoilTimer_ = 0.0f;
         }
     }
+    if (damageFlashTimer_ > 0.0f) {
+        damageFlashTimer_ = (std::max)(0.0f, damageFlashTimer_ - deltaTime);
+    }
 
     if (isDying_) {
         deathTimer_ += deltaTime;
@@ -100,7 +104,7 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
             SetIsPhaseChanging(false);
             stateTimer_ = 0.0f;
             if (phase_ == BossPhase::Phase2 &&
-                runtime_.phase2BladeClashPending) {
+                runtime_.phase2BladeClashPending && difficulty_ > 2.0f) {
                 runtime_.phase2BladeClashPending = false;
                 hitReactionTimer_ = 0.0f;
                 counterRecoilTimer_ = 0.0f;
@@ -108,6 +112,8 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
                 BeginAction(ActionKind::BladeClash, ActionStep::Charge);
                 LockCurrentFacing();
                 UpdateParts();
+            } else {
+                runtime_.phase2BladeClashPending = false;
             }
         }
         return;
@@ -154,6 +160,9 @@ void Enemy::UpdateTutorial(const PlayerCombatObservation &playerObs,
         if (counterRecoilTimer_ < 0.0f) {
             counterRecoilTimer_ = 0.0f;
         }
+    }
+    if (damageFlashTimer_ > 0.0f) {
+        damageFlashTimer_ = (std::max)(0.0f, damageFlashTimer_ - deltaTime);
     }
 
     if (action_.kind == ActionKind::None) {
@@ -223,6 +232,7 @@ void Enemy::ResetTutorialState() {
     runtime_.cataclysmLaserCooldown = 0.0f;
     runtime_.cataclysmLaserDirection = {0.0f, 0.0f, 1.0f};
     runtime_.hitReactionTimer = 0.0f;
+    runtime_.damageFlashTimer = 0.0f;
     runtime_.counterRecoilTimer = 0.0f;
     runtime_.isDying = false;
     runtime_.deathFinished = false;
@@ -291,6 +301,11 @@ void Enemy::UpdateByAction(float deltaTime) {
 
 void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     lastActionKind_ = kind;
+
+    if (kind == ActionKind::Smash || kind == ActionKind::Sweep ||
+        kind == ActionKind::BladeClash) {
+        rangedReengagePending_ = false;
+    }
 
     if (kind == ActionKind::Warp) {
         ResetWarpTrails();
@@ -496,7 +511,7 @@ void Enemy::UpdateBossPhase() {
         phase_ = nextPhase;
         phaseTransitionActive_ = true;
         phaseTransitionTimer_ = 0.0f;
-        if (nextPhase == BossPhase::Phase2) {
+        if (nextPhase == BossPhase::Phase2 && difficulty_ > 2.0f) {
             runtime_.phase2BladeClashPending = true;
         }
         stateTimer_ = 0.0f;

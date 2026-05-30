@@ -336,6 +336,7 @@ float Enemy::TakeDamageDeferTransitions(float damage) {
 
     if (hp_ > 0.0f) {
         hitReactionTimer_ = (std::max)(hitReactionTimer_, hitReactionDuration_);
+        damageFlashTimer_ = (std::max)(damageFlashTimer_, hitReactionDuration_);
     }
     return appliedDamage;
 }
@@ -345,6 +346,9 @@ float Enemy::TakeDamageDeferTransitionsNoReaction(float damage) {
     const float appliedDamage = TakeDamageDeferTransitions(damage);
     if (!deathFinished_ && !isDying_ && hp_ > 0.0f) {
         hitReactionTimer_ = previousHitReactionTimer;
+        if (appliedDamage > 0.0f) {
+            damageFlashTimer_ = damageFlashDuration_;
+        }
     }
     return appliedDamage;
 }

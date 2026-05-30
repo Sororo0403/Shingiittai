@@ -141,14 +141,14 @@ void Enemy::SetDifficulty(float difficulty) {
     arcaneLaserChance_ = 0.26f + 0.16f * t;
     arcaneLaserSlashFollowupChance_ = 0.34f + 0.22f * t;
     arcaneLaserCooldownDuration_ = 8.6f - 3.0f * t;
-    arcaneLaserMinDistance_ = 4.8f - 0.8f * t;
-    arcaneLaserWarpDistance_ = 18.5f + 3.5f * t;
-    arcaneLaserSlashMinDistance_ = 8.8f - 2.0f * t;
+    arcaneLaserMinDistance_ = 7.0f - 0.9f * t;
+    arcaneLaserWarpDistance_ = 25.0f + 4.5f * t;
+    arcaneLaserSlashMinDistance_ = 10.5f - 2.0f * t;
     cataclysmLaserChance_ = 0.18f + 0.20f * t;
     cataclysmLaserCooldownDuration_ = 15.5f - 4.0f * t;
-    cataclysmLaserMinDistance_ = 9.6f - 1.4f * t;
-    cataclysmLaserWarpDistance_ = 23.0f + 5.5f * t;
-    config_.attacks.arcaneLaser.range = 13.5f + 4.0f * t;
+    cataclysmLaserMinDistance_ = 12.0f - 1.4f * t;
+    cataclysmLaserWarpDistance_ = 34.0f + 7.0f * t;
+    config_.attacks.arcaneLaser.range = 28.0f + 5.0f * t;
     config_.attacks.arcaneLaser.radius = 0.44f + 0.10f * t;
     config_.attacks.arcaneLaser.profile.chargeTime = 1.16f - 0.24f * t;
     config_.attacks.arcaneLaser.profile.timing.trackingEndTime =
@@ -161,14 +161,14 @@ void Enemy::SetDifficulty(float difficulty) {
     config_.attacks.arcaneLaser.profile.timing.totalTime =
         config_.attacks.arcaneLaser.profile.timing.activeEndTime +
         config_.attacks.arcaneLaser.recoveryDuration;
-    config_.attacks.cataclysmLaser.range = 24.0f + 7.5f * t;
+    config_.attacks.cataclysmLaser.range = 39.0f + 9.0f * t;
     config_.attacks.cataclysmLaser.radius = 1.85f + 0.70f * t;
     config_.attacks.cataclysmLaser.profile.chargeTime = 1.78f - 0.28f * t;
     config_.attacks.cataclysmLaser.profile.timing.trackingEndTime =
         0.95f - 0.18f * t;
     config_.attacks.cataclysmLaser.profile.timing.activeStartTime = 0.0f;
     config_.attacks.cataclysmLaser.profile.timing.activeEndTime =
-        1.42f - 0.22f * t;
+        4.70f - 0.28f * t;
     config_.attacks.cataclysmLaser.profile.timing.recoveryStartTime =
         config_.attacks.cataclysmLaser.profile.timing.activeEndTime;
     config_.attacks.cataclysmLaser.profile.timing.totalTime =

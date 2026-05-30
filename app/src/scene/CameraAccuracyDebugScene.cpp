@@ -171,23 +171,6 @@ void CameraAccuracyDebugScene::Update() {
         sceneManager_->ChangeScene(std::make_unique<TitleScene>());
         return;
     }
-    if (input->IsKeyTrigger(DIK_1)) {
-        pendingLogMarker_ = "MISS";
-    }
-    if (input->IsKeyTrigger(DIK_2)) {
-        pendingLogMarker_ = "FALSE_HIT";
-    }
-    if (input->IsKeyTrigger(DIK_3)) {
-        pendingLogMarker_ = "GOOD";
-    }
-    if (input->IsKeyTrigger(DIK_C)) {
-        CaptureNeutral();
-        pendingLogMarker_ = "CALIBRATE";
-    }
-    if (input->IsKeyTrigger(DIK_R)) {
-        ResetNeutral();
-        pendingLogMarker_ = "RESET";
-    }
     WriteHandDebugLog(ctx_->frame.deltaTime);
 }
 

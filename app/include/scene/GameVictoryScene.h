@@ -9,6 +9,7 @@
 #include "SwordInputCalibration.h"
 #include <DirectXMath.h>
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 
@@ -17,6 +18,7 @@ class GameVictoryScene : public BaseScene {
     GameVictoryScene(float clearTime,
                      const SwordInputCalibration &inputCalibration = {},
                      float combatDifficulty = 5.0f);
+    ~GameVictoryScene() override;
 
     void Initialize(const SceneContext &ctx) override;
     void Update() override;
@@ -33,8 +35,28 @@ class GameVictoryScene : public BaseScene {
         float height = 0.0f;
     };
 
+    struct ConfettiPiece {
+        DirectX::XMFLOAT2 position{0.0f, 0.0f};
+        DirectX::XMFLOAT2 velocity{0.0f, 0.0f};
+        DirectX::XMFLOAT4 color{1.0f, 1.0f, 1.0f, 1.0f};
+        float width = 0.0f;
+        float height = 0.0f;
+        float phase = 0.0f;
+        float spinSpeed = 0.0f;
+        float resetDelay = 0.0f;
+        float startTime = 0.0f;
+    };
+
     void UpdateCamera(float screenWidth, float screenHeight);
     void UpdateCinematic(float deltaTime);
+    void ResetConfetti(float screenWidth, float screenHeight);
+    void RespawnConfettiPiece(ConfettiPiece &piece, float screenWidth,
+                              float screenHeight, size_t index,
+                              bool initial);
+    void UpdateConfetti(float deltaTime, float screenWidth, float screenHeight);
+    void DrawConfetti(float screenWidth, float screenHeight, float alpha);
+    void StartResultCrowdAudio();
+    void StopResultCrowdAudio();
     void EmitPreImpactBurst();
     void EmitImpactBurst();
     void DrawWorld();
@@ -84,9 +106,12 @@ class GameVictoryScene : public BaseScene {
     float sceneTime_ = 0.0f;
     float realSceneTime_ = 0.0f;
     float resultTimer_ = 0.0f;
+    float exitTimer_ = 0.0f;
     bool preImpactEmitted_ = false;
     bool impactEmitted_ = false;
     bool resultMode_ = false;
+    bool exitRequested_ = false;
+    int exitTargetIndex_ = 1;
     Transform explosionEnemyTransform_{};
 
     Camera camera_;
@@ -106,6 +131,8 @@ class GameVictoryScene : public BaseScene {
     uint32_t smokeBillboardModelId_ = 0;
     uint32_t darkSmokeBillboardModelId_ = 0;
     uint32_t explosionSoundId_ = UINT32_MAX;
+    uint32_t resultCrowdIntroSoundId_ = UINT32_MAX;
+    uint32_t resultCrowdIntroVoiceHandle_ = UINT32_MAX;
     bool particlesReady_ = false;
     GPUParticleSystem impactParticles_;
     GPUParticleSystem shockParticles_;
@@ -113,6 +140,7 @@ class GameVictoryScene : public BaseScene {
     GPUParticleSystem fireCloudParticles_;
     GPUParticleSystem darkSmokeParticles_;
     GPUParticleSystem smokeParticles_;
+    std::array<ConfettiPiece, 180> confettiPieces_{};
 
     Image missionCompleteLabel_{};
     Image clearTimeLabel_{};

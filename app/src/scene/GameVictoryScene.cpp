@@ -26,20 +26,34 @@ using namespace DirectX;
 
 namespace {
 constexpr float kPi = 3.14159265f;
-constexpr float kImpactTime = 2.05f;
-constexpr float kExplosionFreezeTime = 3.45f;
+constexpr float kImpactTime = 1.48f;
+constexpr float kExplosionFreezeTime = 3.85f;
 constexpr float kDuration = kExplosionFreezeTime;
-constexpr float kPierceAnimDuration = 2.46f;
+constexpr float kPierceAnimDuration = 0.46f;
+constexpr float kPlayerRevealDelay = 0.18f;
+constexpr float kExplosionSpeedBoost = 1.25f;
+constexpr float kExplosionSizeBoost = 1.65f;
+constexpr float kExplosionFlashDuration = 0.06f;
+constexpr float kExplosionCoreDuration = 0.10f;
+constexpr float kExplosionBillboardStart = 0.05f;
+constexpr float kExplosionBillboardRise = 0.32f;
+constexpr float kExplosionBillboardFadeStart = 1.05f;
+constexpr float kExplosionBillboardFadeDuration = 0.70f;
 constexpr float kResultBlurDelay = 0.0f;
 constexpr float kResultBlurDuration = 0.22f;
 constexpr float kResultTextDelay = 0.0f;
-constexpr float kPreImpactStartTime = 0.86f;
-constexpr float kPreImpactBurstTime = 1.34f;
-constexpr XMFLOAT3 kPlayerPierceStartPos{0.0f, 0.0f, 2.42f};
+constexpr float kResultExitFadeDuration = 0.35f;
+constexpr float kPreImpactStartTime = 0.76f;
+constexpr float kPreImpactBurstTime = 1.04f;
+constexpr float kConfettiGravity = 168.0f;
+constexpr float kConfettiWind = 58.0f;
+constexpr float kConfettiSideStreamDelay = 0.42f;
+constexpr XMFLOAT3 kPlayerPierceSpawnOffset{0.0f, 0.12f, 0.12f};
 constexpr XMFLOAT3 kPlayerAfterPos{0.0f, 0.0f, -1.32f};
 constexpr XMFLOAT3 kEnemyStartPos{0.0f, 0.0f, 0.0f};
-constexpr XMFLOAT3 kEnemyFallenBasePos{0.0f, 0.0f, 1.36f};
-constexpr float kFreezeEnemyDefeatRatio = 1.0f;
+constexpr XMFLOAT3 kEnemyFallenPoseBasePos{0.0f, 0.30f, 16.00f};
+constexpr XMFLOAT3 kEnemyFallenPoseReferencePos{0.0f, 0.0f, 10.0f};
+constexpr float kEnemyFallenPoseRatio = 1.0f;
 constexpr float kPlayerModelScaleMultiplier = 1.45f;
 constexpr float kVictoryPlayerVisualScale = 0.68f;
 constexpr float kVictoryEnemyVisualScale = 1.86f;
@@ -70,6 +84,16 @@ float DifficultyRatio(float difficulty) {
     return std::clamp(difficulty, 0.0f, 9.0f) / 9.0f;
 }
 
+float Hash01(uint32_t value) {
+    value ^= value >> 16;
+    value *= 0x7feb352du;
+    value ^= value >> 15;
+    value *= 0x846ca68bu;
+    value ^= value >> 16;
+    return static_cast<float>(value & 0x00ffffffu) /
+           static_cast<float>(0x01000000u);
+}
+
 XMFLOAT4 GaugeHeatColor(float t, float alpha) {
     t = std::clamp(t, 0.0f, 1.0f);
     const XMFLOAT4 blue = Color(0.015f, 0.075f, 0.50f, alpha);
@@ -95,14 +119,14 @@ XMFLOAT4 BrightHeatColorForDifficulty(float difficulty, float alpha,
 
 XMFLOAT4 SmokeHeatColorForDifficulty(float difficulty, float alpha) {
     const XMFLOAT4 heat = HeatColorForDifficulty(difficulty, alpha);
-    return {0.16f + heat.x * 0.68f, 0.12f + heat.y * 0.58f,
-            0.14f + heat.z * 0.72f, alpha};
+    return {0.070f + heat.x * 0.62f, 0.066f + heat.y * 0.54f,
+            0.072f + heat.z * 0.66f, alpha};
 }
 
 XMFLOAT4 DarkSmokeHeatColorForDifficulty(float difficulty, float alpha) {
     const XMFLOAT4 heat = HeatColorForDifficulty(difficulty, alpha);
-    return {0.018f + heat.x * 0.10f, 0.018f + heat.y * 0.10f,
-            0.028f + heat.z * 0.16f, alpha};
+    return {0.014f + heat.x * 0.24f, 0.013f + heat.y * 0.20f,
+            0.016f + heat.z * 0.28f, alpha};
 }
 
 XMFLOAT4 MakeQuat(float pitch, float yaw, float roll) {
@@ -125,6 +149,15 @@ XMFLOAT3 Lerp3(const XMFLOAT3 &a, const XMFLOAT3 &b, float t) {
     return {a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t,
             a.z + (b.z - a.z) * t};
 }
+
+float PierceRawT(float sceneTime) {
+    return std::clamp((sceneTime - kPlayerRevealDelay) / kPierceAnimDuration,
+                      0.0f, 1.0f);
+}
+
+float PierceT(float sceneTime) { return EaseOutCubic(PierceRawT(sceneTime)); }
+
+bool IsPlayerRevealed(float sceneTime) { return sceneTime >= kPlayerRevealDelay; }
 
 uint32_t CreateSlashTexture(TextureManager *texture) {
     constexpr uint32_t kWidth = 512;
@@ -190,7 +223,9 @@ Material MakeOpaqueColorMaterial(const XMFLOAT4 &color) {
 PostProcessProfile MakeVictoryPostProcessProfile(float stylizeStrength,
                                                  bool enableToon) {
     PostProcessProfile profile{};
-    profile.filter.mode = PostProcessFilterMode::None;
+    profile.filter.mode = stylizeStrength > 0.12f
+                              ? PostProcessFilterMode::GaussianBlur7x7
+                              : PostProcessFilterMode::None;
     const float punch = std::clamp(stylizeStrength / 0.18f, 0.0f, 1.0f);
     profile.vignette.enabled = true;
     profile.vignette.strength = 0.68f + 0.22f * punch;
@@ -220,17 +255,24 @@ GameVictoryScene::GameVictoryScene(
       combatDifficulty_(std::clamp(combatDifficulty, 0.0f, 9.0f)),
       clearTime_((std::max)(0.0f, clearTime)) {}
 
+GameVictoryScene::~GameVictoryScene() { StopResultCrowdAudio(); }
+
 void GameVictoryScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
     sceneTime_ = 0.0f;
     realSceneTime_ = 0.0f;
     resultTimer_ = 0.0f;
+    exitTimer_ = 0.0f;
     currentScore_ = ComputeScore(clearTime_, combatDifficulty_);
     preImpactEmitted_ = false;
     impactEmitted_ = false;
     resultMode_ = false;
+    exitRequested_ = false;
+    exitTargetIndex_ = 1;
     actionButtonIndex_ = 1;
     explosionSoundId_ = SoundManager::kInvalidSoundId;
+    resultCrowdIntroSoundId_ = SoundManager::kInvalidSoundId;
+    resultCrowdIntroVoiceHandle_ = SoundManager::kInvalidVoiceHandle;
 
     const float aspect = static_cast<float>(ctx_->systems.winApp->GetWidth()) /
                          static_cast<float>(ctx_->systems.winApp->GetHeight());
@@ -257,17 +299,22 @@ void GameVictoryScene::Initialize(const SceneContext &ctx) {
     player_.Initialize(playerModelId_, swordModelId_);
     player_.SetInputCalibration(inputCalibration_);
     player_.SetCinematicBladeClashPose(kPlayerAfterPos, kPi, 1.0f, true);
+
     explosionEnemyTransform_ = Transform{};
 
     enemy_.SetDifficulty(combatDifficulty_);
     enemy_.Initialize(enemyModelId_);
     enemy_.SetBossPhaseForPresentation(BossPhase::Phase3);
-    enemy_.ApplyVictoryDefeatPose(kFreezeEnemyDefeatRatio, kEnemyFallenBasePos,
-                                  kPlayerAfterPos);
+    enemy_.ApplyVictoryDefeatPose(kEnemyFallenPoseRatio,
+                                  kEnemyFallenPoseBasePos,
+                                  kEnemyFallenPoseReferencePos);
 
     if (ctx_->systems.sound != nullptr) {
         ctx_->systems.sound->TryLoad(L"app/resources/audio/se/爆発4.mp3",
                                      explosionSoundId_);
+        ctx_->systems.sound->TryLoad(
+            L"app/resources/audio/se/歓声と拍手1.mp3",
+            resultCrowdIntroSoundId_);
     }
 
     slashTextureId_ = CreateSlashTexture(ctx_->rendering.texture);
@@ -289,9 +336,9 @@ void GameVictoryScene::Initialize(const SceneContext &ctx) {
         const XMFLOAT4 fireMaterialColor =
             BrightHeatColorForDifficulty(combatDifficulty_, 0.82f, 0.12f);
         const XMFLOAT4 smokeMaterialColor =
-            SmokeHeatColorForDifficulty(combatDifficulty_, 0.74f);
+            SmokeHeatColorForDifficulty(combatDifficulty_, 0.86f);
         const XMFLOAT4 darkSmokeMaterialColor =
-            DarkSmokeHeatColorForDifficulty(combatDifficulty_, 0.86f);
+            DarkSmokeHeatColorForDifficulty(combatDifficulty_, 0.94f);
         fireBillboardModelId_ = model->CreatePlane(
             particleTextureId_,
             MakeTransparentMaterial(particleTextureId_, fireMaterialColor));
@@ -366,6 +413,22 @@ void GameVictoryScene::Update() {
           input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_A)));
     if (resultMode_) {
         resultTimer_ += deltaTime;
+        if (exitRequested_) {
+            exitTimer_ += deltaTime;
+            if (exitTimer_ >= kResultExitFadeDuration && sceneManager_ != nullptr) {
+                StopResultCrowdAudio();
+                if (exitTargetIndex_ == 0) {
+                    sceneManager_->ChangeScene(std::make_unique<GameScene>(
+                        inputCalibration_, combatDifficulty_));
+                } else {
+                    sceneManager_->ChangeScene(std::make_unique<TitleScene>());
+                }
+                return;
+            }
+        }
+        const float w = static_cast<float>(ctx_->systems.winApp->GetWidth());
+        const float h = static_cast<float>(ctx_->systems.winApp->GetHeight());
+        UpdateConfetti(deltaTime, w, h);
         UpdateResultPostProcess();
         UpdateResultInput();
         return;
@@ -376,7 +439,7 @@ void GameVictoryScene::Update() {
     const float timeScale =
         explosionAge < 0.0f
             ? 1.12f
-            : (explosionAge < 0.90f ? 0.48f : 0.82f);
+            : (explosionAge < 0.55f ? 0.90f : 1.05f);
     sceneTime_ += deltaTime * timeScale;
     if (!impactEmitted_ && sceneTime_ > kImpactTime) {
         sceneTime_ = kImpactTime;
@@ -421,12 +484,13 @@ void GameVictoryScene::DrawForeground3D() {
     model->PreDraw();
     DrawExplosionFlash();
     DrawExplosionCore();
+    DrawExplosionBillboards();
     DrawForegroundEnemy();
     model->PostDraw();
 }
 
 void GameVictoryScene::DrawTransparent() {
-    if (!particlesReady_ || resultMode_) {
+    if (!particlesReady_) {
         return;
     }
 
@@ -459,17 +523,21 @@ void GameVictoryScene::DrawPostProcessOverlay() {
 }
 
 void GameVictoryScene::UpdateCinematic(float deltaTime) {
-    const float rawPierceT =
-        std::clamp(sceneTime_ / kPierceAnimDuration, 0.0f, 1.0f);
-    const float pierceT = SmoothStep01(rawPierceT);
+    const float rawPierceT = PierceRawT(sceneTime_);
+    const float pierceT = EaseOutCubic(rawPierceT);
     const float thrustPulse =
         std::sinf(rawPierceT * kPi) *
         (0.35f + 0.65f * (1.0f - SmoothStep01(rawPierceT)));
-    const XMFLOAT3 playerPos =
-        Lerp3(kPlayerPierceStartPos, kPlayerAfterPos, pierceT);
+    const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
+    const XMFLOAT3 playerStartPos{enemyPos.x + kPlayerPierceSpawnOffset.x,
+                                  enemyPos.y + kPlayerPierceSpawnOffset.y,
+                                  enemyPos.z + kPlayerPierceSpawnOffset.z};
+    const XMFLOAT3 playerPos = Lerp3(playerStartPos, kPlayerAfterPos, pierceT);
     const float playerYaw = kPi + 0.08f * thrustPulse;
     const float poseRatio = 0.38f + 0.62f * pierceT;
-    player_.SetCinematicBladeClashPose(playerPos, playerYaw, poseRatio, true);
+    if (IsPlayerRevealed(sceneTime_)) {
+        player_.SetCinematicBladeClashPose(playerPos, playerYaw, poseRatio, true);
+    }
 
     if (!preImpactEmitted_ && sceneTime_ >= kPreImpactBurstTime) {
         preImpactEmitted_ = true;
@@ -490,16 +558,19 @@ void GameVictoryScene::UpdateCinematic(float deltaTime) {
     if (particlesReady_ &&
         (emittedImpactThisFrame || !impactEmitted_ ||
          sceneTime_ < kExplosionFreezeTime)) {
-        impactParticles_.Update(deltaTime);
-        shockParticles_.Update(deltaTime);
-        pierceParticles_.Update(deltaTime);
-        fireCloudParticles_.Update(deltaTime);
-        darkSmokeParticles_.Update(deltaTime);
-        smokeParticles_.Update(deltaTime);
+        const float particleDt =
+            deltaTime * (impactEmitted_ ? kExplosionSpeedBoost : 1.0f);
+        impactParticles_.Update(particleDt);
+        shockParticles_.Update(particleDt);
+        pierceParticles_.Update(particleDt);
+        fireCloudParticles_.Update(particleDt);
+        darkSmokeParticles_.Update(particleDt);
+        smokeParticles_.Update(particleDt);
     }
 
-    enemy_.ApplyVictoryDefeatPose(kFreezeEnemyDefeatRatio, kEnemyFallenBasePos,
-                                  playerPos);
+    enemy_.ApplyVictoryDefeatPose(kEnemyFallenPoseRatio,
+                                  kEnemyFallenPoseBasePos,
+                                  kEnemyFallenPoseReferencePos);
 
     if (ctx_ != nullptr && ctx_->rendering.postEffectManager != nullptr) {
         const float charge =
@@ -521,13 +592,167 @@ void GameVictoryScene::UpdateCinematic(float deltaTime) {
     }
 }
 
+void GameVictoryScene::ResetConfetti(float screenWidth, float screenHeight) {
+    for (size_t i = 0; i < confettiPieces_.size(); ++i) {
+        RespawnConfettiPiece(confettiPieces_[i], screenWidth, screenHeight, i,
+                             true);
+    }
+}
+
+void GameVictoryScene::RespawnConfettiPiece(ConfettiPiece &piece,
+                                            float screenWidth,
+                                            float screenHeight, size_t index,
+                                            bool initial) {
+    const uint32_t seed = static_cast<uint32_t>(index * 977u + 31u);
+    const bool fromLeft = (index % 2u) == 0u;
+    const float burstT = Hash01(seed + (initial ? 11u : 13u));
+    const float inward = fromLeft ? 1.0f : -1.0f;
+    if (initial && index < confettiPieces_.size() * 2u / 3u) {
+        const float launcherSpread = Hash01(seed + 3u) * 30.0f;
+        piece.position.x =
+            fromLeft ? (screenWidth * 0.11f + launcherSpread)
+                     : (screenWidth * 0.89f - launcherSpread);
+        piece.position.y =
+            screenHeight * (0.83f + Hash01(seed + 7u) * 0.08f);
+
+        const float fan = -1.18f + Hash01(seed + 17u) * 0.88f;
+        const float speed = 780.0f + Hash01(seed + 23u) * 620.0f;
+        const float lift = 0.92f + Hash01(seed + 29u) * 0.48f;
+        piece.velocity.x = inward * std::cos(fan) * speed +
+                           (Hash01(seed + 31u) - 0.5f) * 180.0f;
+        piece.velocity.y = std::sin(fan) * speed * lift -
+                           (180.0f + burstT * 260.0f);
+        piece.startTime = Hash01(seed + 19u) * 0.045f;
+    } else {
+        piece.position.x =
+            fromLeft ? (-screenWidth * (0.08f + Hash01(seed + 3u) * 0.13f))
+                     : (screenWidth * (1.08f + Hash01(seed + 5u) * 0.13f));
+        piece.position.y =
+            -screenHeight * (0.10f + Hash01(seed + 7u) * 0.24f);
+        piece.velocity.x =
+            inward * (210.0f + Hash01(seed + 23u) * 280.0f);
+        piece.velocity.y = 42.0f + Hash01(seed + 29u) * 116.0f;
+        piece.startTime = resultTimer_ + (initial ? kConfettiSideStreamDelay : 0.10f) +
+                          Hash01(seed + 19u) * (initial ? 0.88f : 0.55f);
+    }
+    piece.width = 6.0f + Hash01(seed + 37u) * 7.0f;
+    piece.height = 12.0f + Hash01(seed + 41u) * 12.0f;
+    piece.phase = Hash01(seed + 43u) * kPi * 2.0f;
+    piece.spinSpeed = 5.0f + Hash01(seed + 47u) * 8.0f;
+    piece.resetDelay = Hash01(seed + 53u) * 0.82f;
+
+    static const std::array<XMFLOAT4, 7> kColors{
+        Color(1.00f, 0.82f, 0.18f, 1.0f), Color(0.92f, 0.18f, 0.28f, 1.0f),
+        Color(0.18f, 0.78f, 1.00f, 1.0f), Color(0.22f, 0.95f, 0.42f, 1.0f),
+        Color(0.98f, 0.48f, 0.92f, 1.0f), Color(1.00f, 1.00f, 1.00f, 1.0f),
+        Color(0.48f, 0.34f, 1.00f, 1.0f)};
+    piece.color = kColors[index % kColors.size()];
+}
+
+void GameVictoryScene::UpdateConfetti(float deltaTime, float screenWidth,
+                                      float screenHeight) {
+    const float burstGate =
+        std::clamp(resultTimer_ / 0.08f, 0.0f, 1.0f);
+    const float gust =
+        std::sinf(resultTimer_ * 1.15f) * kConfettiWind +
+        std::sinf(resultTimer_ * 2.35f + 1.4f) * (kConfettiWind * 0.58f) +
+        std::sinf(resultTimer_ * 0.42f + 2.2f) * (kConfettiWind * 0.36f);
+    for (size_t i = 0; i < confettiPieces_.size(); ++i) {
+        ConfettiPiece &piece = confettiPieces_[i];
+        if (resultTimer_ < piece.startTime) {
+            continue;
+        }
+        const float flutter =
+            std::sinf((resultTimer_ - piece.startTime) * piece.spinSpeed +
+                      piece.phase);
+        piece.velocity.y =
+            (std::min)(piece.velocity.y + kConfettiGravity * deltaTime,
+                       176.0f + piece.resetDelay * 70.0f);
+        piece.position.x +=
+            ((piece.velocity.x * burstGate) + gust + flutter * 78.0f) *
+            deltaTime;
+        piece.position.y +=
+            (piece.velocity.y +
+             std::sinf(resultTimer_ * (piece.spinSpeed * 0.72f) +
+                       piece.phase * 1.7f) *
+                 20.0f) *
+            deltaTime;
+
+        if (piece.position.x < -screenWidth * 0.06f) {
+            piece.position.x += screenWidth * 1.12f;
+        } else if (piece.position.x > screenWidth * 1.06f) {
+            piece.position.x -= screenWidth * 1.12f;
+        }
+
+        if (piece.position.y > screenHeight + 52.0f + piece.resetDelay * 220.0f) {
+            RespawnConfettiPiece(piece, screenWidth, screenHeight, i, false);
+        }
+    }
+}
+
+void GameVictoryScene::DrawConfetti(float screenWidth, float screenHeight,
+                                    float alpha) {
+    if (alpha <= 0.001f) {
+        return;
+    }
+
+    for (const ConfettiPiece &piece : confettiPieces_) {
+        if (resultTimer_ < piece.startTime) {
+            continue;
+        }
+        if (piece.position.y < -48.0f || piece.position.y > screenHeight + 48.0f) {
+            continue;
+        }
+        const float flutter =
+            std::sinf((resultTimer_ - piece.startTime) * piece.spinSpeed +
+                      piece.phase);
+        const float face = 0.16f + 0.84f * std::fabs(flutter);
+        const float sway =
+            std::sinf((resultTimer_ - piece.startTime) * 2.2f + piece.phase) *
+                8.0f +
+            std::sinf((resultTimer_ - piece.startTime) * 5.4f +
+                      piece.phase * 0.7f) *
+                3.0f;
+        XMFLOAT4 color = piece.color;
+        color.w = alpha * (0.58f + 0.34f * face);
+
+        const float drawW = piece.width * (0.18f + face * 0.82f);
+        const float drawH = piece.height * (1.0f + (1.0f - face) * 0.18f);
+        DrawRect(std::clamp(piece.position.x + sway, -32.0f, screenWidth + 32.0f),
+                 piece.position.y, drawW, drawH, color);
+    }
+}
+
+void GameVictoryScene::StartResultCrowdAudio() {
+    if (ctx_ == nullptr || ctx_->systems.sound == nullptr ||
+        resultCrowdIntroSoundId_ == SoundManager::kInvalidSoundId ||
+        resultCrowdIntroVoiceHandle_ != SoundManager::kInvalidVoiceHandle) {
+        return;
+    }
+
+    resultCrowdIntroVoiceHandle_ =
+        ctx_->systems.sound->Play(resultCrowdIntroSoundId_, 0.86f, false);
+}
+
+void GameVictoryScene::StopResultCrowdAudio() {
+    if (ctx_ == nullptr || ctx_->systems.sound == nullptr) {
+        return;
+    }
+
+    if (resultCrowdIntroVoiceHandle_ != SoundManager::kInvalidVoiceHandle) {
+        ctx_->systems.sound->Stop(resultCrowdIntroVoiceHandle_);
+        resultCrowdIntroVoiceHandle_ = SoundManager::kInvalidVoiceHandle;
+    }
+}
+
 void GameVictoryScene::EmitPreImpactBurst() {
     if (!particlesReady_) {
         return;
     }
 
-    const XMFLOAT3 center{kEnemyStartPos.x, kEnemyStartPos.y + 1.05f,
-                          kEnemyStartPos.z + 0.06f};
+    const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
+    const XMFLOAT3 center{enemyPos.x, enemyPos.y + 1.05f,
+                          enemyPos.z + 0.06f};
     const float difficultyT = DifficultyRatio(combatDifficulty_);
     const float burstAmount = 0.42f + 1.18f * difficultyT;
     const float burstSize = 0.55f + 1.15f * difficultyT;
@@ -603,37 +828,49 @@ void GameVictoryScene::EmitImpactBurst() {
         return;
     }
 
-    const XMFLOAT3 center{kEnemyStartPos.x, kEnemyStartPos.y + 1.08f,
-                          kEnemyStartPos.z - 0.02f};
+    const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
+    const XMFLOAT3 center{enemyPos.x, enemyPos.y + 1.08f,
+                          enemyPos.z - 0.02f};
     const float difficultyT = DifficultyRatio(combatDifficulty_);
     const XMFLOAT4 brightHeat =
         BrightHeatColorForDifficulty(combatDifficulty_, 0.94f, 0.18f);
     const XMFLOAT4 smokeHeat =
-        SmokeHeatColorForDifficulty(combatDifficulty_, 0.62f);
+        SmokeHeatColorForDifficulty(combatDifficulty_, 0.78f);
+    const XMFLOAT4 darkSmokeHeat =
+        DarkSmokeHeatColorForDifficulty(combatDifficulty_, 0.92f);
 
-    auto emit = [&](GPUParticleSystem &particles,
-                    ParticleEmitterSettings settings) {
-        settings.position = center;
+    auto emitAt = [&](GPUParticleSystem &particles,
+                      const XMFLOAT3 &position,
+                      ParticleEmitterSettings settings) {
+        settings.position = position;
         settings.emissionType = ParticleEmissionType::Burst;
         settings.maxParticles = settings.burstCount;
         particles.EmitOnce(settings);
     };
+    auto emit = [&](GPUParticleSystem &particles,
+                    ParticleEmitterSettings settings) {
+        emitAt(particles, center, settings);
+    };
 
     ParticleEmitterSettings shock{};
     shock.spawnShape = ParticleSpawnShape::Ring;
-    shock.burstCount = static_cast<uint32_t>(26.0f + 24.0f * difficultyT);
-    shock.spawnOffsetScale = {0.22f, 0.08f, 0.22f};
+    shock.burstCount =
+        static_cast<uint32_t>((56.0f + 58.0f * difficultyT) * kExplosionSizeBoost);
+    shock.spawnOffsetScale = {0.40f * kExplosionSizeBoost,
+                              0.12f * kExplosionSizeBoost,
+                              0.40f * kExplosionSizeBoost};
     shock.tintColor = brightHeat;
     shock.direction = {0.0f, 0.06f, -1.0f};
     shock.velocityBias = {0.0f, 0.02f, -0.10f};
-    shock.directionalVelocity = 1.20f + 0.72f * difficultyT;
-    shock.radialVelocity = 8.8f + 7.2f * difficultyT;
-    shock.baseLifeTime = 0.18f;
-    shock.lifeTimeRandom = 0.10f;
-    shock.startScale = 0.075f;
-    shock.endScale = 0.018f;
-    shock.scaleRandom = 0.06f;
-    shock.stretch = 10.4f;
+    shock.directionalVelocity =
+        (1.55f + 0.90f * difficultyT) * kExplosionSpeedBoost;
+    shock.radialVelocity = (13.6f + 9.8f * difficultyT) * kExplosionSpeedBoost;
+    shock.baseLifeTime = 0.24f;
+    shock.lifeTimeRandom = 0.14f;
+    shock.startScale = 0.105f;
+    shock.endScale = 0.022f;
+    shock.scaleRandom = 0.08f;
+    shock.stretch = 13.8f;
     shock.turbulence = 0.08f;
     shock.damping = 0.955f;
     shock.fadeInTime = 0.0f;
@@ -642,50 +879,133 @@ void GameVictoryScene::EmitImpactBurst() {
 
     ParticleEmitterSettings sparks = shock;
     sparks.spawnShape = ParticleSpawnShape::Sphere;
-    sparks.burstCount = static_cast<uint32_t>(12.0f + 18.0f * difficultyT);
-    sparks.spawnOffsetScale = {0.18f, 0.16f, 0.18f};
+    sparks.burstCount =
+        static_cast<uint32_t>((48.0f + 66.0f * difficultyT) * kExplosionSizeBoost);
+    sparks.spawnOffsetScale = {0.40f * kExplosionSizeBoost,
+                               0.28f * kExplosionSizeBoost,
+                               0.40f * kExplosionSizeBoost};
     sparks.direction = {0.0f, 0.12f, -0.35f};
     sparks.velocityBias = {0.0f, 0.06f, -0.18f};
-    sparks.directionalVelocity = 4.2f + 2.4f * difficultyT;
-    sparks.radialVelocity = 7.4f + 6.2f * difficultyT;
-    sparks.baseLifeTime = 0.20f + 0.07f * difficultyT;
-    sparks.lifeTimeRandom = 0.08f;
-    sparks.startScale = 0.055f;
-    sparks.endScale = 0.018f;
-    sparks.scaleRandom = 0.04f;
-    sparks.stretch = 12.4f;
+    sparks.directionalVelocity =
+        (6.2f + 3.6f * difficultyT) * kExplosionSpeedBoost;
+    sparks.radialVelocity = (10.8f + 8.4f * difficultyT) * kExplosionSpeedBoost;
+    sparks.baseLifeTime = 0.30f + 0.10f * difficultyT;
+    sparks.lifeTimeRandom = 0.12f;
+    sparks.startScale = 0.070f;
+    sparks.endScale = 0.020f;
+    sparks.scaleRandom = 0.06f;
+    sparks.stretch = 15.4f;
     sparks.turbulence = 0.05f;
     sparks.fadeOutTime = 0.18f;
     emit(pierceParticles_, sparks);
 
     ParticleEmitterSettings smoke{};
     smoke.spawnShape = ParticleSpawnShape::Sphere;
-    smoke.burstCount = static_cast<uint32_t>(16.0f + 16.0f * difficultyT);
-    smoke.spawnOffsetScale = {0.52f, 0.30f, 0.40f};
+    smoke.burstCount =
+        static_cast<uint32_t>((310.0f + 340.0f * difficultyT) * kExplosionSizeBoost);
+    smoke.spawnOffsetScale = {1.46f * kExplosionSizeBoost,
+                              0.72f * kExplosionSizeBoost,
+                              1.10f * kExplosionSizeBoost};
     smoke.tintColor = smokeHeat;
-    smoke.direction = {0.0f, 0.52f, -0.08f};
-    smoke.velocityBias = {0.0f, 0.18f, 0.00f};
-    smoke.directionalVelocity = 0.42f + 0.22f * difficultyT;
-    smoke.radialVelocity = 0.94f + 0.58f * difficultyT;
-    smoke.baseLifeTime = 1.08f;
-    smoke.lifeTimeRandom = 0.28f;
-    smoke.startScale = 0.22f;
-    smoke.endScale = 0.76f + 0.24f * difficultyT;
-    smoke.scaleRandom = 0.20f;
-    smoke.stretch = 1.08f;
-    smoke.acceleration = {0.0f, 0.08f, 0.0f};
-    smoke.turbulence = 0.18f;
-    smoke.damping = 0.942f;
-    smoke.fadeInTime = 0.06f;
-    smoke.fadeOutTime = 0.62f;
-    smoke.fadeOutPower = 1.08f;
+    smoke.direction = {0.0f, 0.42f, -0.18f};
+    smoke.velocityBias = {0.0f, 0.12f, -0.04f};
+    smoke.directionalVelocity =
+        (0.34f + 0.18f * difficultyT) * kExplosionSpeedBoost;
+    smoke.radialVelocity = (1.02f + 0.72f * difficultyT) * kExplosionSpeedBoost;
+    smoke.baseLifeTime = 4.10f;
+    smoke.lifeTimeRandom = 1.28f;
+    smoke.startScale = 0.56f * kExplosionSizeBoost;
+    smoke.endScale =
+        (2.86f + 1.04f * difficultyT) * kExplosionSizeBoost;
+    smoke.scaleRandom = 0.50f * kExplosionSizeBoost;
+    smoke.stretch = 1.18f;
+    smoke.acceleration = {0.0f, 0.030f, -0.028f};
+    smoke.turbulence = 0.96f;
+    smoke.damping = 0.982f;
+    smoke.fadeInTime = 0.18f;
+    smoke.fadeOutTime = 2.10f;
+    smoke.fadeOutPower = 1.42f;
     emit(smokeParticles_, smoke);
+
+    ParticleEmitterSettings darkSmoke = smoke;
+    darkSmoke.burstCount = static_cast<uint32_t>(
+        (620.0f + 480.0f * difficultyT) * kExplosionSizeBoost);
+    darkSmoke.spawnOffsetScale = {2.18f * kExplosionSizeBoost,
+                                  1.02f * kExplosionSizeBoost,
+                                  1.62f * kExplosionSizeBoost};
+    darkSmoke.tintColor = darkSmokeHeat;
+    darkSmoke.direction = {0.0f, 0.46f, -0.18f};
+    darkSmoke.velocityBias = {0.0f, 0.08f, -0.10f};
+    darkSmoke.directionalVelocity =
+        (0.14f + 0.10f * difficultyT) * kExplosionSpeedBoost;
+    darkSmoke.radialVelocity =
+        (0.68f + 0.52f * difficultyT) * kExplosionSpeedBoost;
+    darkSmoke.baseLifeTime = 4.95f;
+    darkSmoke.lifeTimeRandom = 1.62f;
+    darkSmoke.startScale = 0.78f * kExplosionSizeBoost;
+    darkSmoke.endScale =
+        (4.18f + 1.30f * difficultyT) * kExplosionSizeBoost;
+    darkSmoke.scaleRandom = 0.68f * kExplosionSizeBoost;
+    darkSmoke.stretch = 1.22f;
+    darkSmoke.acceleration = {0.0f, 0.020f, -0.052f};
+    darkSmoke.turbulence = 1.08f;
+    darkSmoke.damping = 0.986f;
+    darkSmoke.fadeInTime = 0.28f;
+    darkSmoke.fadeOutTime = 2.46f;
+    darkSmoke.fadeOutPower = 1.66f;
+    emit(darkSmokeParticles_, darkSmoke);
+
+    ParticleEmitterSettings rollingSmoke = darkSmoke;
+    rollingSmoke.burstCount = static_cast<uint32_t>(
+        (310.0f + 280.0f * difficultyT) * kExplosionSizeBoost);
+    rollingSmoke.spawnOffsetScale = {1.20f * kExplosionSizeBoost,
+                                     0.32f * kExplosionSizeBoost,
+                                     1.02f * kExplosionSizeBoost};
+    rollingSmoke.direction = {0.0f, 0.12f, -0.40f};
+    rollingSmoke.velocityBias = {0.0f, 0.00f, -0.16f};
+    rollingSmoke.directionalVelocity =
+        (0.08f + 0.06f * difficultyT) * kExplosionSpeedBoost;
+    rollingSmoke.radialVelocity =
+        (0.28f + 0.22f * difficultyT) * kExplosionSpeedBoost;
+    rollingSmoke.baseLifeTime = 4.80f;
+    rollingSmoke.lifeTimeRandom = 1.70f;
+    rollingSmoke.startScale = 0.58f;
+    rollingSmoke.endScale = 3.52f + 1.02f * difficultyT;
+    rollingSmoke.acceleration = {0.0f, 0.012f, -0.040f};
+    rollingSmoke.turbulence = 1.12f;
+    rollingSmoke.fadeInTime = 0.34f;
+    rollingSmoke.fadeOutTime = 2.60f;
+    emitAt(darkSmokeParticles_,
+           {center.x - 0.34f, center.y - 0.32f, center.z + 0.08f},
+           rollingSmoke);
+    emitAt(darkSmokeParticles_,
+           {center.x + 0.32f, center.y - 0.28f, center.z + 0.02f},
+           rollingSmoke);
+
+    ParticleEmitterSettings heatTintSmoke = smoke;
+    heatTintSmoke.burstCount = static_cast<uint32_t>(
+        (190.0f + 220.0f * difficultyT) * kExplosionSizeBoost);
+    heatTintSmoke.spawnOffsetScale = {1.18f * kExplosionSizeBoost,
+                                      0.54f * kExplosionSizeBoost,
+                                      0.88f * kExplosionSizeBoost};
+    heatTintSmoke.tintColor = SmokeHeatColorForDifficulty(combatDifficulty_, 0.72f);
+    heatTintSmoke.directionalVelocity =
+        (0.46f + 0.26f * difficultyT) * kExplosionSpeedBoost;
+    heatTintSmoke.radialVelocity =
+        (0.96f + 0.62f * difficultyT) * kExplosionSpeedBoost;
+    heatTintSmoke.baseLifeTime = 2.82f;
+    heatTintSmoke.lifeTimeRandom = 0.90f;
+    heatTintSmoke.startScale = 0.32f * kExplosionSizeBoost;
+    heatTintSmoke.endScale =
+        (2.38f + 0.78f * difficultyT) * kExplosionSizeBoost;
+    heatTintSmoke.fadeInTime = 0.12f;
+    heatTintSmoke.fadeOutTime = 1.58f;
+    emit(smokeParticles_, heatTintSmoke);
 }
 
 void GameVictoryScene::UpdateCamera(float screenWidth, float screenHeight) {
     camera_.SetAspect(screenWidth / (std::max)(screenHeight, 1.0f));
-    const float slowT =
-        SmoothStep01(std::clamp(sceneTime_ / kPierceAnimDuration, 0.0f, 1.0f));
+    const float slowT = PierceT(sceneTime_);
     const XMFLOAT3 target{0.04f, 1.18f, 0.12f - 0.16f * slowT};
     XMFLOAT3 eye{-0.66f + 0.08f * slowT, 1.18f,
                  -4.16f + 0.16f * slowT};
@@ -774,8 +1094,10 @@ void GameVictoryScene::DrawWorld() {
     if (!impactEmitted_) {
         DrawPreExplosionCharge();
     }
-    player_.Draw(model, camera_, true, true, kVictoryPlayerVisualScale);
-    DrawSlash();
+    if (IsPlayerRevealed(sceneTime_)) {
+        player_.Draw(model, camera_, true, true, kVictoryPlayerVisualScale);
+        DrawSlash();
+    }
     model->PostDraw();
 }
 
@@ -796,8 +1118,9 @@ void GameVictoryScene::DrawPreExplosionCharge() {
                      (kImpactTime - kPreImpactStartTime));
     const float alpha = start * charge;
 
-    const XMFLOAT3 center{kEnemyFallenBasePos.x, kEnemyFallenBasePos.y + 0.74f,
-                          kEnemyFallenBasePos.z - 0.24f};
+    const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
+    const XMFLOAT3 center{enemyPos.x, enemyPos.y + 0.74f,
+                          enemyPos.z - 0.24f};
     const XMFLOAT3 cameraPos = camera_.GetPosition();
     const float yaw = std::atan2f(cameraPos.x - center.x, cameraPos.z - center.z);
     const float pulse = 0.5f + 0.5f * std::sinf(sceneTime_ * 34.0f);
@@ -935,14 +1258,16 @@ void GameVictoryScene::DrawExplosionFlash() {
     }
 
     const float age = (std::max)(0.0f, sceneTime_ - kImpactTime);
-    const float flash = 1.0f - SmoothStep01(age / 0.085f);
+    const float flash = 1.0f - SmoothStep01(age / kExplosionFlashDuration);
     if (flash <= 0.001f) {
         return;
     }
 
     const float difficultyT = DifficultyRatio(combatDifficulty_);
-    const float scale = 0.70f + 0.42f * difficultyT;
-    const XMFLOAT3 center{0.02f, 1.10f, -0.42f};
+    const float scale = (0.98f + 0.62f * difficultyT) * kExplosionSizeBoost;
+    const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
+    const XMFLOAT3 center{enemyPos.x + 0.02f, enemyPos.y + 1.10f,
+                          enemyPos.z - 0.42f};
     const XMFLOAT3 cameraPos = camera_.GetPosition();
     const float yaw = std::atan2f(cameraPos.x - center.x, cameraPos.z - center.z);
     const XMFLOAT4 heat = HeatColorForDifficulty(combatDifficulty_, 1.0f);
@@ -956,7 +1281,7 @@ void GameVictoryScene::DrawExplosionFlash() {
                     std::clamp(0.84f + heat.y * 0.18f, 0.0f, 1.0f),
                     std::clamp(0.56f + heat.z * 0.16f, 0.0f, 1.0f),
                     0.82f * flash};
-    effect.intensity = 1.7f * flash;
+    effect.intensity = 2.35f * flash;
     effect.fresnelPower = 0.32f;
     effect.alphaBoost = 1.0f;
     effect.surfaceTint = 0.92f;
@@ -966,7 +1291,7 @@ void GameVictoryScene::DrawExplosionFlash() {
     Transform flashTransform{};
     flashTransform.position = center;
     flashTransform.rotation = MakeQuat(0.0f, yaw, 0.0f);
-    flashTransform.scale = {scale * 1.25f, scale * 0.92f, 1.0f};
+    flashTransform.scale = {scale * 1.48f, scale * 1.08f, 1.0f};
     model->Draw(explosionFlashModelId_, flashTransform, camera_);
     model->ClearDrawEffect();
 }
@@ -978,14 +1303,17 @@ void GameVictoryScene::DrawExplosionCore() {
     }
 
     const float age = (std::max)(0.0f, sceneTime_ - kImpactTime);
-    const float fade = 1.0f - SmoothStep01(age / 0.14f);
+    const float fade = 1.0f - SmoothStep01(age / kExplosionCoreDuration);
     if (fade <= 0.001f) {
         return;
     }
 
     const float difficultyT = DifficultyRatio(combatDifficulty_);
-    const float coreScale = 0.10f + 0.12f * difficultyT;
-    const XMFLOAT3 center{0.02f, 1.10f, -0.42f};
+    const float coreScale =
+        (0.16f + 0.18f * difficultyT) * kExplosionSizeBoost;
+    const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
+    const XMFLOAT3 center{enemyPos.x + 0.02f, enemyPos.y + 1.10f,
+                          enemyPos.z - 0.42f};
     const XMFLOAT4 heat = HeatColorForDifficulty(combatDifficulty_, 1.0f);
 
     ModelDrawEffect effect{};
@@ -995,7 +1323,7 @@ void GameVictoryScene::DrawExplosionCore() {
     effect.color = {std::clamp(0.96f + heat.x * 0.08f, 0.0f, 1.0f),
                     std::clamp(0.82f + heat.y * 0.12f, 0.0f, 1.0f),
                     std::clamp(0.38f + heat.z * 0.10f, 0.0f, 1.0f), 1.0f};
-    effect.intensity = 0.55f * fade;
+    effect.intensity = 0.78f * fade;
     effect.fresnelPower = 0.54f;
     effect.noiseAmount = 0.12f;
     effect.surfaceTint = 0.60f;
@@ -1018,21 +1346,31 @@ void GameVictoryScene::DrawExplosionBillboards() {
     }
 
     const float age = (std::max)(0.0f, sceneTime_ - kImpactTime);
-    if (age < 0.16f || age > 1.18f) {
+    if (age < kExplosionBillboardStart ||
+        age > (kExplosionBillboardFadeStart + kExplosionBillboardFadeDuration)) {
         return;
     }
 
     const float difficultyT = DifficultyRatio(combatDifficulty_);
-    const float smokeT = SmoothStep01((age - 0.16f) / 0.18f);
-    const float fade = 1.0f - SmoothStep01((age - 0.72f) / 0.58f);
-    const float alpha = smokeT * fade * (0.50f + 0.20f * difficultyT);
+    const float smokeT =
+        SmoothStep01((age - kExplosionBillboardStart) / kExplosionBillboardRise);
+    const float fade =
+        1.0f -
+        SmoothStep01((age - kExplosionBillboardFadeStart) /
+                     kExplosionBillboardFadeDuration);
+    const float alpha =
+        smokeT * fade * (1.28f + 0.30f * difficultyT) * kExplosionSizeBoost;
     if (alpha <= 0.001f) {
         return;
     }
 
     const XMFLOAT4 smokeHeat =
         SmokeHeatColorForDifficulty(combatDifficulty_, 1.0f);
-    const XMFLOAT3 center{0.02f, 1.10f, -0.42f};
+    const XMFLOAT4 sootHeat =
+        DarkSmokeHeatColorForDifficulty(combatDifficulty_, 1.0f);
+    const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
+    const XMFLOAT3 center{enemyPos.x + 0.02f, enemyPos.y + 1.10f,
+                          enemyPos.z - 0.42f};
     const XMFLOAT3 cameraPos = camera_.GetPosition();
     const float yaw = std::atan2f(cameraPos.x - center.x, cameraPos.z - center.z);
 
@@ -1044,22 +1382,33 @@ void GameVictoryScene::DrawExplosionBillboards() {
     };
 
     const SmokePatch patches[] = {
-        {{0.00f, 0.08f, -0.04f}, {1.22f, 0.62f}, 0.06f, 0.00f},
-        {{-0.30f, 0.15f, -0.03f}, {0.92f, 0.48f}, -0.24f, 0.03f},
-        {{0.30f, 0.21f, -0.02f}, {0.88f, 0.46f}, 0.28f, 0.05f},
-        {{0.04f, 0.40f, -0.04f}, {0.78f, 0.54f}, -0.12f, 0.08f},
-        {{-0.10f, -0.08f, -0.02f}, {0.98f, 0.40f}, 0.18f, 0.10f},
-        {{0.20f, 0.02f, -0.03f}, {0.78f, 0.38f}, -0.34f, 0.12f},
-        {{-0.42f, 0.30f, -0.02f}, {0.58f, 0.34f}, 0.42f, 0.15f},
-        {{0.42f, 0.34f, -0.03f}, {0.54f, 0.32f}, -0.46f, 0.18f},
+        {{0.00f, 0.08f, -0.04f}, {2.10f, 1.02f}, 0.06f, 0.00f},
+        {{-0.46f, 0.15f, -0.03f}, {1.66f, 0.80f}, -0.24f, 0.06f},
+        {{0.46f, 0.21f, -0.02f}, {1.60f, 0.78f}, 0.28f, 0.11f},
+        {{0.04f, 0.52f, -0.04f}, {1.46f, 0.98f}, -0.12f, 0.17f},
+        {{-0.18f, -0.14f, -0.02f}, {1.74f, 0.70f}, 0.18f, 0.21f},
+        {{0.28f, 0.02f, -0.03f}, {1.50f, 0.68f}, -0.34f, 0.26f},
+        {{-0.66f, 0.34f, -0.02f}, {1.14f, 0.62f}, 0.42f, 0.33f},
+        {{0.66f, 0.38f, -0.03f}, {1.10f, 0.60f}, -0.46f, 0.39f},
+        {{-0.02f, 0.82f, -0.05f}, {1.14f, 0.88f}, 0.72f, 0.48f},
+        {{0.02f, -0.34f, -0.02f}, {1.58f, 0.52f}, -0.66f, 0.53f},
+        {{-0.38f, -0.40f, -0.01f}, {1.12f, 0.40f}, 0.36f, 0.62f},
+        {{0.40f, -0.36f, -0.01f}, {1.08f, 0.40f}, -0.40f, 0.70f},
+        {{-0.70f, -0.02f, -0.02f}, {0.90f, 0.54f}, 0.12f, 0.78f},
+        {{0.72f, 0.02f, -0.02f}, {0.86f, 0.52f}, -0.16f, 0.88f},
     };
 
-    if (smokeBillboardModelId_ == 0) {
+    const uint32_t smokeModelId =
+        darkSmokeBillboardModelId_ != 0 ? darkSmokeBillboardModelId_
+                                        : smokeBillboardModelId_;
+    if (smokeModelId == 0) {
         return;
     }
 
     for (const SmokePatch &patch : patches) {
-        const float local = SmoothStep01((age - 0.16f - patch.delay) / 0.18f);
+        const float local = SmoothStep01((age - kExplosionBillboardStart -
+                                          patch.delay * 0.75f) /
+                                         kExplosionBillboardRise);
         if (local <= 0.001f) {
             continue;
         }
@@ -1069,30 +1418,36 @@ void GameVictoryScene::DrawExplosionBillboards() {
         effect.additiveBlend = false;
         effect.disableCulling = true;
         effect.blendOverride = ModelDrawEffectBlendOverride::Alpha;
-        effect.color = smokeHeat;
+        const float tintAmount =
+            0.46f + 0.26f * difficultyT +
+            0.10f * std::sinf(sceneTime_ * 1.35f + patch.delay * 11.0f);
+        effect.color = LerpColor(sootHeat, smokeHeat, tintAmount);
         effect.color.w = alpha * local;
-        effect.intensity = 0.30f + 0.22f * difficultyT;
-        effect.fresnelPower = 0.58f;
-        effect.noiseAmount = 0.34f;
-        effect.baseDim = 0.02f;
-        effect.alphaBoost = 1.18f;
-        effect.surfaceTint = 0.78f;
-        effect.time = sceneTime_ * 1.3f + patch.delay * 7.0f;
+        effect.intensity = 0.16f + 0.18f * difficultyT;
+        effect.fresnelPower = 0.78f;
+        effect.noiseAmount = 0.96f;
+        effect.baseDim = 0.0f;
+        effect.alphaBoost = 2.12f;
+        effect.surfaceTint = 0.48f;
+        effect.time = sceneTime_ * 0.38f + patch.delay * 7.0f;
         model->SetDrawEffect(effect);
 
         Transform billboard{};
-        const float drift = SmoothStep01((age - 0.16f) / 1.02f);
-        const float size = (0.72f + 0.28f * difficultyT) * (1.0f + 0.56f * drift);
+        const float drift =
+            SmoothStep01((age - kExplosionBillboardStart) / 1.65f);
+        const float size =
+            (1.48f + 0.56f * difficultyT) * (1.0f + 1.46f * drift) *
+            kExplosionSizeBoost;
         billboard.position = {center.x + patch.offset.x * (1.0f + 0.50f * drift),
                               center.y + patch.offset.y * (1.0f + 0.42f * drift),
                               center.z + patch.offset.z};
         billboard.rotation = MakeQuat(0.0f, yaw, patch.roll);
         const float pulse =
             1.0f +
-            0.07f * std::sinf(sceneTime_ * 9.0f + patch.delay * 13.0f);
+            0.035f * std::sinf(sceneTime_ * 2.4f + patch.delay * 13.0f);
         billboard.scale = {patch.scale.x * size * pulse,
                            patch.scale.y * size * pulse, 1.0f};
-        model->Draw(smokeBillboardModelId_, billboard, camera_);
+        model->Draw(smokeModelId, billboard, camera_);
     }
 
     model->ClearDrawEffect();
@@ -1106,9 +1461,8 @@ void GameVictoryScene::DrawForegroundEnemy() {
 
     model->ClearDrawEffect();
 
-    const float rawPierceT =
-        std::clamp(sceneTime_ / kPierceAnimDuration, 0.0f, 1.0f);
-    const float poseRatio = 0.38f + 0.62f * SmoothStep01(rawPierceT);
+    const float rawPierceT = PierceRawT(sceneTime_);
+    const float poseRatio = 0.38f + 0.62f * EaseOutCubic(rawPierceT);
     const float thrustPulse =
         std::sinf(rawPierceT * kPi) *
         (0.35f + 0.65f * (1.0f - SmoothStep01(rawPierceT)));
@@ -1147,6 +1501,10 @@ void GameVictoryScene::DrawForegroundEnemy() {
     halo.alphaBoost = 1.0f;
     halo.surfaceTint = 0.76f;
     halo.time = sceneTime_ * 5.0f;
+    if (!IsPlayerRevealed(sceneTime_)) {
+        return;
+    }
+
     model->SetDrawEffect(halo);
     model->Draw(playerModelId_, makePlayerVisual(1.15f), camera_);
     model->ClearDrawEffect();
@@ -1192,15 +1550,14 @@ void GameVictoryScene::DrawForegroundEnemy() {
 }
 
 void GameVictoryScene::DrawSlash() {
-    const float rawPierceT =
-        std::clamp(sceneTime_ / kPierceAnimDuration, 0.0f, 1.0f);
-    const float pierceT = SmoothStep01(rawPierceT);
+    const float rawPierceT = PierceRawT(sceneTime_);
+    const float pierceT = EaseOutCubic(rawPierceT);
     const float life = 1.0f - SmoothStep01((sceneTime_ - 1.70f) / 2.20f);
     const float speedStress = std::sinf(rawPierceT * kPi);
     const float difficultyScale = 0.72f + 0.86f * DifficultyRatio(combatDifficulty_);
     const float alpha =
         std::clamp((0.32f + 0.34f * speedStress) * life, 0.0f, 0.62f);
-    if (alpha <= 0.01f || slashModelId_ == 0) {
+    if (!IsPlayerRevealed(sceneTime_) || alpha <= 0.01f || slashModelId_ == 0) {
         return;
     }
 
@@ -1248,15 +1605,18 @@ void GameVictoryScene::DrawOverlay(float screenWidth, float screenHeight) {
         sceneTime_ >= kImpactTime
             ? 1.0f - SmoothStep01((sceneTime_ - kImpactTime) / 0.25f)
             : 0.0f;
-    const float opening = 1.0f - SmoothStep01(sceneTime_ / 0.36f);
+    const float opening = 1.0f - SmoothStep01(sceneTime_ / 0.40f);
+    const float fadeIn = SmoothStep01(sceneTime_ / 1.10f);
     DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
-             Color(0.0f, 0.0f, 0.0f, 0.30f * opening));
+             Color(0.0f, 0.0f, 0.0f, 1.0f - fadeIn));
+    DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
+             Color(0.0f, 0.0f, 0.0f, 0.30f * opening * fadeIn));
     const XMFLOAT4 heatColor = HeatColorForDifficulty(combatDifficulty_, 1.0f);
     if (impactFlash > 0.01f) {
         XMFLOAT4 flashColor{std::clamp(heatColor.x + 0.24f, 0.0f, 1.0f),
                             std::clamp(heatColor.y + 0.24f, 0.0f, 1.0f),
                             std::clamp(heatColor.z + 0.24f, 0.0f, 1.0f),
-                            (0.28f + 0.22f * difficultyT) * impactFlash};
+                            (0.40f + 0.28f * difficultyT) * impactFlash};
         DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
                  flashColor);
     }
@@ -1283,6 +1643,10 @@ void GameVictoryScene::BeginResult() {
     }
     resultMode_ = true;
     resultTimer_ = 0.0f;
+    const float w = static_cast<float>(ctx_->systems.winApp->GetWidth());
+    const float h = static_cast<float>(ctx_->systems.winApp->GetHeight());
+    ResetConfetti(w, h);
+    StartResultCrowdAudio();
     UpdateResultPostProcess();
 }
 
@@ -1290,7 +1654,7 @@ void GameVictoryScene::UpdateResultPostProcess() {
     if (ctx_ != nullptr && ctx_->rendering.postEffectManager != nullptr) {
         const float blurT =
             SmoothStep01((resultTimer_ - kResultBlurDelay) / kResultBlurDuration);
-        const float toonPunch = 0.075f + 0.050f * blurT;
+        const float toonPunch = 0.16f + 0.18f * blurT;
         ctx_->rendering.postEffectManager->SetBaseProfile(
             MakeVictoryPostProcessProfile(toonPunch, true));
     }
@@ -1329,22 +1693,22 @@ void GameVictoryScene::UpdateResultInput() {
         input.IsKeyTrigger(DIK_RETURN) || input.IsKeyTrigger(DIK_SPACE) ||
         (input.IsGamepadConnected() &&
          input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_A));
-    if (!confirm || sceneManager_ == nullptr) {
+    if (!confirm || exitRequested_) {
         return;
     }
 
     AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Selected);
-    if (actionButtonIndex_ == 0) {
-        sceneManager_->ChangeScene(
-            std::make_unique<GameScene>(inputCalibration_, combatDifficulty_));
-    } else {
-        sceneManager_->ChangeScene(std::make_unique<TitleScene>());
-    }
+    exitRequested_ = true;
+    exitTimer_ = 0.0f;
+    exitTargetIndex_ = actionButtonIndex_;
 }
 
 void GameVictoryScene::DrawResultOverlay(float screenWidth, float screenHeight) {
     const float fade =
         SmoothStep01((resultTimer_ - kResultTextDelay) / 0.14f);
+    DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
+             Color(0.0f, 0.0f, 0.0f, 0.46f * fade));
+    DrawConfetti(screenWidth, screenHeight, fade);
 
     const float titleScale =
         std::clamp(screenWidth * 0.58f /
@@ -1422,6 +1786,13 @@ void GameVictoryScene::DrawResultOverlay(float screenWidth, float screenHeight) 
                      rowTextColor);
 
     DrawActionButtons(screenWidth, screenHeight, panelT);
+
+    if (exitRequested_) {
+        const float exitFade =
+            SmoothStep01(exitTimer_ / kResultExitFadeDuration);
+        DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
+                 Color(0.0f, 0.0f, 0.0f, exitFade));
+    }
 }
 
 void GameVictoryScene::DrawActionButtons(float screenWidth, float screenHeight,

@@ -96,17 +96,6 @@ void HandTrackingTestScene::Update() {
         sceneManager_->ChangeScene(std::make_unique<TitleScene>());
         return;
     }
-    if (ctx_->systems.input->IsKeyTrigger(DIK_F1)) {
-        cameraRequestTimer_ = 999.0f;
-        handTrackingStartRequested_ = false;
-        RequestHandTrackingStartOnce();
-    }
-    if (ctx_->systems.input->IsKeyTrigger(DIK_C)) {
-        CalibrateNeutralFromCurrentHands();
-    }
-    if (ctx_->systems.input->IsKeyTrigger(DIK_R)) {
-        ResetCalibration();
-    }
 }
 
 void HandTrackingTestScene::Draw() {

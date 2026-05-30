@@ -157,7 +157,7 @@ struct EnemyArcaneLaserConfig {
 struct EnemyCataclysmLaserConfig {
     EnemyAttackProfile profile = {
         {26.0f, 7.2f, {5.6f, 4.2f, 25.0f}},
-        {4.25f, 1.72f, 0.0f, 1.35f, 1.35f},
+        {6.85f, 1.72f, 0.0f, 3.95f, 3.95f},
         1.72f};
     float range = 25.0f;
     float radius = 2.45f;
@@ -197,6 +197,7 @@ struct EnemyRuntimeState {
     bool isDying = false;
     bool deathFinished = false;
     float hitReactionTimer = 0.0f;
+    float damageFlashTimer = 0.0f;
     float counterRecoilTimer = 0.0f;
     float deathTimer = 0.0f;
     float deathStartY = 0.0f;
@@ -238,6 +239,7 @@ struct EnemyRuntimeState {
     DirectX::XMFLOAT3 arcaneLaserDirection = {0.0f, 0.0f, 1.0f};
     float cataclysmLaserCooldown = 0.0f;
     DirectX::XMFLOAT3 cataclysmLaserDirection = {0.0f, 0.0f, 1.0f};
+    bool rangedReengagePending = false;
 
     bool tellActive = false;
     float tellDuration = 0.0f;
@@ -388,6 +390,8 @@ class Enemy {
     bool &deathFinished_ = runtime_.deathFinished;
     float &hitReactionTimer_ = runtime_.hitReactionTimer;
     float hitReactionDuration_ = 0.16f;
+    float &damageFlashTimer_ = runtime_.damageFlashTimer;
+    float damageFlashDuration_ = 0.11f;
     float &counterRecoilTimer_ = runtime_.counterRecoilTimer;
     float counterRecoilDuration_ = 0.62f;
     float counterRecoilPitchRad_ = 0.14f;
@@ -437,6 +441,7 @@ class Enemy {
     float &cataclysmLaserCooldown_ = runtime_.cataclysmLaserCooldown;
     DirectX::XMFLOAT3 &cataclysmLaserDirection_ =
         runtime_.cataclysmLaserDirection;
+    bool &rangedReengagePending_ = runtime_.rangedReengagePending;
 
     bool isPhaseChanging_ = false;
 

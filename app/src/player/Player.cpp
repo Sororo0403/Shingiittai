@@ -22,6 +22,7 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
     leftSword_.Initialize(swordModelId);
     rightSword_.Initialize(swordModelId);
     hp_ = 100.0f;
+    damageFlashTimer_ = 0.0f;
     velocity_ = {0.0f, 0.0f, 0.0f};
     leftSwordAttackDamage_ = kBaseSwordAttackDamage;
     rightSwordAttackDamage_ = kBaseSwordAttackDamage;
@@ -64,6 +65,9 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     }
     if (!suppressLookAt) {
         LookAt(lookTarget);
+    }
+    if (damageFlashTimer_ > 0.0f) {
+        damageFlashTimer_ = (std::max)(0.0f, damageFlashTimer_ - deltaTime);
     }
 
     const InputControlType controlType = inputCalibration_.controlType;
@@ -182,6 +186,33 @@ void Player::UpdateDemo(float deltaTime, const XMFLOAT3 &lookTarget) {
 
 void Player::Draw(ModelManager *modelManager, const Camera &camera,
                   bool drawBody, bool forceOpaque, float visualScale) {
+    const float flashRatio =
+        damageFlashDuration_ > 0.0001f
+            ? std::clamp(damageFlashTimer_ / damageFlashDuration_, 0.0f, 1.0f)
+            : 0.0f;
+    const float flashGate =
+        flashRatio > 0.0f
+            ? (std::sinf((damageFlashDuration_ - damageFlashTimer_) * 92.0f) >
+                       -0.18f
+                   ? 1.0f
+                   : 0.0f)
+            : 0.0f;
+    const bool isDamageFlashing = flashGate > 0.0f;
+
+    auto makeFlashEffect = [&]() {
+        ModelDrawEffect effect{};
+        effect.enabled = true;
+        effect.forceOpaqueMaterial = forceOpaque;
+        effect.color = {1.0f, 0.96f, 0.82f, 0.92f};
+        effect.intensity = 0.72f + 0.42f * flashRatio;
+        effect.fresnelPower = 1.45f;
+        effect.noiseAmount = 0.06f;
+        effect.time = damageFlashDuration_ - damageFlashTimer_;
+        effect.surfaceTint = 0.66f + 0.28f * flashRatio;
+        effect.alphaBoost = 0.80f;
+        return effect;
+    };
+
     Transform playerVisual = tf_;
     playerVisual.scale.x *= kPlayerVisualScaleMultiplier * visualScale;
     playerVisual.scale.y *= kPlayerVisualScaleMultiplier * visualScale;
@@ -219,7 +250,9 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
     }
 
     if (drawBody) {
-        if (forceOpaque) {
+        if (isDamageFlashing) {
+            modelManager->SetDrawEffect(makeFlashEffect());
+        } else if (forceOpaque) {
             ModelDrawEffect opaqueEffect{};
             opaqueEffect.enabled = true;
             opaqueEffect.forceOpaqueMaterial = true;
@@ -230,14 +263,16 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
     }
 
     auto drawSword = [&](Sword &sword) {
-        if (forceOpaque) {
+        if (isDamageFlashing) {
+            modelManager->SetDrawEffect(makeFlashEffect());
+        } else if (forceOpaque) {
             ModelDrawEffect opaqueEffect{};
             opaqueEffect.enabled = true;
             opaqueEffect.forceOpaqueMaterial = true;
             modelManager->SetDrawEffect(opaqueEffect);
         }
         sword.Draw(modelManager, camera, visualScale);
-        if (forceOpaque) {
+        if (isDamageFlashing || forceOpaque) {
             modelManager->ClearDrawEffect();
         }
     };
@@ -401,11 +436,13 @@ void Player::UpdateMovement(float deltaTime, const XMFLOAT3 &lookTarget) {
             : 1.0f;
 
     const float worldMoveX =
-        rightX * autoMoveOrbitDir_ * kAutoMoveOrbitSpeed * orbitScale +
-        towardX * distancePush * kAutoMoveDistanceSpeed;
+        (rightX * autoMoveOrbitDir_ * kAutoMoveOrbitSpeed * orbitScale +
+         towardX * distancePush * kAutoMoveDistanceSpeed) *
+        movementSpeedMultiplier_;
     const float worldMoveZ =
-        rightZ * autoMoveOrbitDir_ * kAutoMoveOrbitSpeed * orbitScale +
-        towardZ * distancePush * kAutoMoveDistanceSpeed;
+        (rightZ * autoMoveOrbitDir_ * kAutoMoveOrbitSpeed * orbitScale +
+         towardZ * distancePush * kAutoMoveDistanceSpeed) *
+        movementSpeedMultiplier_;
 
     velocity_.x = worldMoveX;
     velocity_.y = 0.0f;
@@ -452,7 +489,11 @@ float Player::TakeDamage(float damage) {
 
     const float previousHp = hp_;
     hp_ = (std::max)(0.0f, hp_ - damage);
-    return previousHp - hp_;
+    const float appliedDamage = previousHp - hp_;
+    if (appliedDamage > 0.0f) {
+        damageFlashTimer_ = damageFlashDuration_;
+    }
+    return appliedDamage;
 }
 
 Transform Player::BuildSwordTransform(const SwordPose &pose, bool isLeft) const {

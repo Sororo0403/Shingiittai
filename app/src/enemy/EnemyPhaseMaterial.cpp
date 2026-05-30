@@ -223,11 +223,11 @@ void InitializeEnemyPhaseMaterialSet(TextureManager *texture,
                                       {0.70f, 0.30f, 0.12f}, 0x914Au, 0.62f,
                                       true);
     materials.cleanMetalPixels =
-        CreateSmoothMetalTexturePixels(size, size, {0.40f, 0.42f, 0.41f},
-                                       {0.62f, 0.63f, 0.57f});
+        CreateSmoothMetalTexturePixels(size, size, {0.31f, 0.33f, 0.32f},
+                                       {0.50f, 0.51f, 0.46f});
     materials.goldMetalPixels =
-        CreateProceduralTexturePixels(size, size, {0.43f, 0.34f, 0.17f},
-                                      {0.70f, 0.58f, 0.30f}, 0xB05Du, 0.38f,
+        CreateProceduralTexturePixels(size, size, {0.31f, 0.22f, 0.08f},
+                                      {0.56f, 0.41f, 0.16f}, 0xB05Du, 0.38f,
                                       true);
     materials.blendPixels = materials.rustPixels;
 
@@ -276,20 +276,20 @@ void ApplyEnemyPhaseMaterial(ModelManager *modelManager,
         0.94f};
     const EnemyPhaseMaterialProfile cleanMetalProfile{
         materials.cleanMetalTextureId,
-        {{0.62f, 0.64f, 0.62f, 1.0f},
-         {0.38f, 0.41f, 0.41f, 1.0f},
-         {0.78f, 0.76f, 0.68f, 1.0f}},
-        0.44f,
-        0.18f,
-        0.27f};
+        {{0.46f, 0.48f, 0.45f, 1.0f},
+         {0.31f, 0.34f, 0.34f, 1.0f},
+         {0.55f, 0.53f, 0.47f, 1.0f}},
+        0.30f,
+        0.12f,
+        0.38f};
     const EnemyPhaseMaterialProfile goldProfile{
         materials.goldMetalTextureId,
-        {{0.66f, 0.52f, 0.28f, 1.0f},
-         {0.48f, 0.38f, 0.20f, 1.0f},
-         {0.76f, 0.64f, 0.36f, 1.0f}},
-        0.25f,
-        0.11f,
-        0.46f};
+        {{0.50f, 0.36f, 0.13f, 1.0f},
+         {0.34f, 0.24f, 0.09f, 1.0f},
+         {0.62f, 0.46f, 0.18f, 1.0f}},
+        0.20f,
+        0.08f,
+        0.54f};
 
     EnemyPhaseMaterialProfile profile = rustProfile;
     const std::vector<uint8_t> *blendFromPixels = nullptr;
