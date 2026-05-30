@@ -25,6 +25,11 @@ struct GPUParticleMaterialSettings {
 class GPUParticleSystem {
   public:
     /// <summary>
+    /// 共有しているGPUパーティクル描画キャッシュを解放する
+    /// </summary>
+    static void ReleaseSharedResources();
+
+    /// <summary>
     /// GPUパーティクル用リソースを解放する
     /// </summary>
     ~GPUParticleSystem();

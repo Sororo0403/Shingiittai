@@ -38,6 +38,9 @@ class SoundManager {
     /// </summary>
     void Initialize();
     bool IsInitialized() const { return xAudio2_ != nullptr && masterVoice_ != nullptr; }
+    const std::string &GetLastInitializeError() const {
+        return lastInitializeError_;
+    }
 
     /// <summary>
     /// 音声ファイルを読み込み、再利用できる音声IDとして登録する
@@ -239,6 +242,7 @@ class SoundManager {
     float masterVolume_ = 1.0f;
     bool comInitialized_ = false;
     bool mediaFoundationStarted_ = false;
+    std::string lastInitializeError_;
 
     /// <summary>
     /// 読み込み済み音声1件分のデータ

@@ -113,21 +113,25 @@ void TextureManager::UpdateAsyncLoads() {
             continue;
         }
 
-        DecodedTexture decoded = request.future.get();
-        if (!decoded.succeeded) {
+        try {
+            DecodedTexture decoded = request.future.get();
+            if (!decoded.succeeded) {
+                request.failed = true;
+                continue;
+            }
+            auto cached = filePathToTextureId_.find(decoded.pathKey);
+            if (cached != filePathToTextureId_.end()) {
+                request.textureId = cached->second;
+            } else {
+                request.textureId = CreateTexture(
+                    decoded.scratch.GetImages(),
+                    decoded.scratch.GetImageCount(), decoded.metadata);
+                filePathToTextureId_[decoded.pathKey] = request.textureId;
+            }
+            request.completed = true;
+        } catch (...) {
             request.failed = true;
-            continue;
         }
-        auto cached = filePathToTextureId_.find(decoded.pathKey);
-        if (cached != filePathToTextureId_.end()) {
-            request.textureId = cached->second;
-        } else {
-            request.textureId = CreateTexture(
-                decoded.scratch.GetImages(), decoded.scratch.GetImageCount(),
-                decoded.metadata);
-            filePathToTextureId_[decoded.pathKey] = request.textureId;
-        }
-        request.completed = true;
     }
 }
 

@@ -31,9 +31,18 @@ bool HasToon(const PostProcessProfile &profile) {
 }
 } // namespace
 
+PostProcessSystem::~PostProcessSystem() noexcept {
+    try {
+        Finalize();
+    } catch (...) {
+    }
+}
+
 void PostProcessSystem::Initialize(DirectXCommon *dxCommon,
                                     SrvManager *srvManager, int width,
                                     int height) {
+    Finalize();
+
     dxCommon_ = dxCommon;
     srvManager_ = srvManager;
 
@@ -41,6 +50,20 @@ void PostProcessSystem::Initialize(DirectXCommon *dxCommon,
     CreatePipelineState();
     CreateConstantBuffer();
     Resize(width, height);
+}
+
+void PostProcessSystem::Finalize() {
+    if (constBuffer_ && mappedConstBuffer_ != nullptr) {
+        constBuffer_->Unmap(0, nullptr);
+        mappedConstBuffer_ = nullptr;
+    }
+
+    constBuffer_.Reset();
+    pipelineState_.Reset();
+    copyPipelineState_.Reset();
+    rootSignature_.Reset();
+    dxCommon_ = nullptr;
+    srvManager_ = nullptr;
 }
 
 void PostProcessSystem::Resize(int width, int height) {

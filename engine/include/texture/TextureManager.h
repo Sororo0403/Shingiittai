@@ -27,10 +27,17 @@ class TextureManager {
     };
 
   public:
+    ~TextureManager() noexcept;
+
     /// <summary>
     /// TextureManagerの共有インスタンスを取得する
     /// </summary>
     static TextureManager &GetInstance();
+
+    /// <summary>
+    /// 実行中ランタイムのTextureManagerを共有インスタンスとして登録する
+    /// </summary>
+    static void SetActiveInstance(TextureManager *instance);
 
     /// <summary>
     /// テクスチャ管理に必要なDirectXとSRV管理への参照を設定する
@@ -38,6 +45,11 @@ class TextureManager {
     /// <param name="dxCommon">DirectXCommonインスタンス</param>
     /// <param name="srvManager">SrvManagerインスタンス</param>
     void Initialize(DirectXCommon *dxCommon, SrvManager *srvManager);
+
+    /// <summary>
+    /// 管理中のテクスチャとSRV割り当てを解放する
+    /// </summary>
+    void Finalize();
 
     /// <summary>
     /// ファイルからテクスチャをロードしてidを返す

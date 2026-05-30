@@ -63,11 +63,10 @@ class SwordUdpController {
         uint32_t sequence = 0;
         uint64_t packetDeltaMs = 0;
         uint32_t handCount = 0;
-        bool bodyTracked = false;
-        std::array<bool, 2> bodyCorrected = {false, false};
         std::array<bool, 2> active = {false, false};
         std::array<std::string, 2> sourceLabel = {"", ""};
         std::array<float, 2> sourceScore = {0.0f, 0.0f};
+        std::array<float, 2> handScale = {0.095f, 0.095f};
         std::array<DirectX::XMFLOAT2, 2> palm = {
             DirectX::XMFLOAT2{0.5f, 0.5f},
             DirectX::XMFLOAT2{0.5f, 0.5f}};
@@ -91,7 +90,8 @@ class SwordUdpController {
     void ResetMotionHistory(size_t handIndex);
     void AddMotionSample(size_t handIndex, const DirectX::XMFLOAT2 &palm,
                          float dt);
-    StableMotion ComputeStableMotion(size_t handIndex) const;
+    StableMotion ComputeStableMotion(size_t handIndex,
+                                     float minNetDistance) const;
 
     uintptr_t socket_ = UINTPTR_MAX;
     bool socketReady_ = false;
@@ -119,6 +119,7 @@ class SwordUdpController {
     std::array<bool, 2> hasSmoothedPalm_ = {false, false};
     std::array<bool, 2> wasHandActive_ = {false, false};
     std::array<float, 2> reacquireSuppressTimer_ = {0.0f, 0.0f};
+    std::array<float, 2> edgeExitSuppressTimer_ = {0.0f, 0.0f};
     std::array<DirectX::XMFLOAT2, 2> lostPalm_ = {
         DirectX::XMFLOAT2{0.5f, 0.5f}, DirectX::XMFLOAT2{0.5f, 0.5f}};
     std::array<bool, 2> hasLostPalm_ = {false, false};

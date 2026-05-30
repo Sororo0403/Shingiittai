@@ -8,6 +8,13 @@
 
 using namespace DxUtils;
 
+ShadowMapRenderer::~ShadowMapRenderer() noexcept {
+    try {
+        Release();
+    } catch (...) {
+    }
+}
+
 void ShadowMapRenderer::Initialize(DirectXCommon *dxCommon,
                                    SrvManager *srvManager, uint32_t width,
                                    uint32_t height) {
@@ -15,11 +22,27 @@ void ShadowMapRenderer::Initialize(DirectXCommon *dxCommon,
         throw std::runtime_error("ShadowMapRenderer::Initialize null argument");
     }
 
+    Release();
+
     dxCommon_ = dxCommon;
     srvManager_ = srvManager;
     srvIndex_ = srvManager_->Allocate();
     srvGpuHandle_ = srvManager_->GetGpuHandle(srvIndex_);
     Resize(width, height);
+}
+
+void ShadowMapRenderer::Release() {
+    ReleaseDepthResources();
+
+    if (srvManager_ != nullptr && srvIndex_ != UINT32_MAX) {
+        srvManager_->Free(srvIndex_);
+    }
+
+    dxCommon_ = nullptr;
+    srvManager_ = nullptr;
+    srvIndex_ = UINT32_MAX;
+    srvGpuHandle_ = {};
+    state_ = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 }
 
 void ShadowMapRenderer::Resize(uint32_t width, uint32_t height) {
@@ -38,6 +61,7 @@ void ShadowMapRenderer::Resize(uint32_t width, uint32_t height) {
     scissor_.right = static_cast<LONG>(width_);
     scissor_.bottom = static_cast<LONG>(height_);
 
+    ReleaseDepthResources();
     CreateResources();
     UpdateSrv();
 }
@@ -74,6 +98,18 @@ void ShadowMapRenderer::End() {
 
 D3D12_CPU_DESCRIPTOR_HANDLE ShadowMapRenderer::GetDsvHandle() const {
     return dsvHeap_->GetCPUDescriptorHandleForHeapStart();
+}
+
+void ShadowMapRenderer::ReleaseDepthResources() {
+    if (depthTexture_ && dxCommon_ != nullptr &&
+        !dxCommon_->IsDeviceRemoved() &&
+        !dxCommon_->IsCommandListRecording()) {
+        dxCommon_->WaitForGpu();
+    }
+
+    depthTexture_.Reset();
+    dsvHeap_.Reset();
+    state_ = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 }
 
 void ShadowMapRenderer::CreateResources() {

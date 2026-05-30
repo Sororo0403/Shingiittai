@@ -132,7 +132,14 @@ void DirectXCommon::EndFrame() {
     TransitionBackBuffer(backBufferIndex_, D3D12_RESOURCE_STATE_PRESENT);
 
     TrackGpuPhase("EndFrame.CloseCommandList");
-    ThrowIfFailed(commandList_->Close(), "commandList_->Close failed");
+    try {
+        ThrowIfFailed(commandList_->Close(), "commandList_->Close failed");
+    } catch (...) {
+        isCommandListRecording_ = false;
+        uploadPassActive_ = false;
+        uploadPassDepth_ = 0;
+        throw;
+    }
     isCommandListRecording_ = false;
 
     ID3D12CommandList *lists[] = {commandList_.Get()};
@@ -159,6 +166,25 @@ void DirectXCommon::EndFrame() {
     frameFenceValues_[presentedBufferIndex] = fenceValue_;
 
     backBufferIndex_ = swapChain_->GetCurrentBackBufferIndex();
+}
+
+void DirectXCommon::AbortFrame() noexcept {
+    if (!isCommandListRecording_) {
+        uploadPassActive_ = false;
+        uploadPassDepth_ = 0;
+        return;
+    }
+
+    try {
+        if (commandList_) {
+            commandList_->Close();
+        }
+    } catch (...) {
+    }
+
+    isCommandListRecording_ = false;
+    uploadPassActive_ = false;
+    uploadPassDepth_ = 0;
 }
 
 void DirectXCommon::Resize(int width, int height) {
@@ -223,7 +249,14 @@ void DirectXCommon::EndUpload() {
         return;
     }
 
-    ThrowIfFailed(commandList_->Close(), "commandList_->Close failed");
+    try {
+        ThrowIfFailed(commandList_->Close(), "commandList_->Close failed");
+    } catch (...) {
+        isCommandListRecording_ = false;
+        uploadPassActive_ = false;
+        uploadPassDepth_ = 0;
+        throw;
+    }
     isCommandListRecording_ = false;
     uploadPassActive_ = false;
     uploadPassDepth_ = 0;
@@ -236,6 +269,10 @@ void DirectXCommon::EndUpload() {
 }
 
 void DirectXCommon::WaitForGpu() {
+    if (!IsInitialized()) {
+        return;
+    }
+
     TrackGpuPhase("WaitForGpu");
     fenceValue_++;
     ThrowIfFailed(commandQueue_->Signal(fence_.Get(), fenceValue_),
@@ -304,7 +341,9 @@ void DirectXCommon::TransitionBackBuffer(
 
 void DirectXCommon::CreateDepthStencilSrv(SrvManager *srvManager) {
     srvManager_ = srvManager;
-    depthSrvIndex_ = srvManager_->Allocate();
+    if (depthSrvIndex_ == UINT_MAX) {
+        depthSrvIndex_ = srvManager_->Allocate();
+    }
     depthSrvGpuHandle_ = srvManager_->GetGpuHandle(depthSrvIndex_);
     UpdateDepthStencilSrv();
 }
@@ -319,6 +358,27 @@ void DirectXCommon::RegisterSceneColorSRV(SrvManager *srvManager) {
         sceneSrvIndex_ = srvManager_->Allocate();
     }
     UpdateSceneColorSrv();
+}
+
+void DirectXCommon::ReleaseRegisteredSrvs() {
+    if (srvManager_ == nullptr) {
+        depthSrvIndex_ = UINT_MAX;
+        sceneSrvIndex_ = UINT_MAX;
+        depthSrvGpuHandle_ = {};
+        return;
+    }
+
+    if (depthSrvIndex_ != UINT_MAX) {
+        srvManager_->Free(depthSrvIndex_);
+        depthSrvIndex_ = UINT_MAX;
+    }
+    if (sceneSrvIndex_ != UINT_MAX) {
+        srvManager_->Free(sceneSrvIndex_);
+        sceneSrvIndex_ = UINT_MAX;
+    }
+
+    depthSrvGpuHandle_ = {};
+    srvManager_ = nullptr;
 }
 
 void DirectXCommon::TransitionDepthToShaderResource() {

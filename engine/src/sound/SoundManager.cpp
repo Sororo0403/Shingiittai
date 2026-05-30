@@ -217,17 +217,22 @@ SoundManager::~SoundManager() {
 
 void SoundManager::Initialize() {
     if (xAudio2_) {
+        lastInitializeError_.clear();
         return;
     }
+    lastInitializeError_.clear();
 
     const HRESULT coResult = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     if (SUCCEEDED(coResult)) {
         comInitialized_ = true;
     } else if (coResult != RPC_E_CHANGED_MODE) {
+        lastInitializeError_ = MakeHResultMessage(coResult, "CoInitializeEx failed");
         return;
     }
 
-    if (FAILED(MFStartup(MF_VERSION))) {
+    const HRESULT mfResult = MFStartup(MF_VERSION);
+    if (FAILED(mfResult)) {
+        lastInitializeError_ = MakeHResultMessage(mfResult, "MFStartup failed");
         if (comInitialized_) {
             CoUninitialize();
             comInitialized_ = false;
@@ -236,8 +241,13 @@ void SoundManager::Initialize() {
     }
     mediaFoundationStarted_ = true;
 
-    if (FAILED(XAudio2Create(&xAudio2_, 0)) ||
-        FAILED(xAudio2_->CreateMasteringVoice(&masterVoice_))) {
+    HRESULT audioResult = XAudio2Create(&xAudio2_, 0);
+    if (SUCCEEDED(audioResult)) {
+        audioResult = xAudio2_->CreateMasteringVoice(&masterVoice_);
+    }
+    if (FAILED(audioResult)) {
+        lastInitializeError_ =
+            MakeHResultMessage(audioResult, "XAudio2 initialization failed");
         if (masterVoice_) {
             masterVoice_->DestroyVoice();
             masterVoice_ = nullptr;
@@ -253,6 +263,7 @@ void SoundManager::Initialize() {
     }
 
     SetMasterVolume(masterVolume_);
+    lastInitializeError_.clear();
 }
 
 uint32_t SoundManager::Load(const std::wstring &path) {

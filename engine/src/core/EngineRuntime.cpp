@@ -11,13 +11,16 @@
 #include "graphics/SrvManager.h"
 #include "graphics/TransparentRenderQueue.h"
 #include "input/Input.h"
+#include "model/ModelManager.h"
 #include "model/MeshManager.h"
 #include "model/MeshRenderer.h"
+#include "particle/GPUParticleSystem.h"
 #include "scene/AbstractSceneFactory.h"
 #include "scene/BaseScene.h"
 #include "scene/SceneContext.h"
 #include "scene/SceneManager.h"
 #include "sound/SoundManager.h"
+#include "sprite/SpriteManager.h"
 #include "texture/TextureManager.h"
 
 #ifdef _DEBUG
@@ -26,6 +29,36 @@
 
 #include <algorithm>
 
+namespace {
+
+template <typename Func> void TryCleanup(Func &&func) noexcept {
+    try {
+        func();
+    } catch (...) {
+    }
+}
+
+class FrameAbortScope {
+  public:
+    explicit FrameAbortScope(DirectXCommon &dxCommon) : dxCommon_(&dxCommon) {}
+    ~FrameAbortScope() {
+        if (!completed_ && dxCommon_ != nullptr) {
+            dxCommon_->AbortFrame();
+        }
+    }
+
+    FrameAbortScope(const FrameAbortScope &) = delete;
+    FrameAbortScope &operator=(const FrameAbortScope &) = delete;
+
+    void Complete() { completed_ = true; }
+
+  private:
+    DirectXCommon *dxCommon_ = nullptr;
+    bool completed_ = false;
+};
+
+} // namespace
+
 struct EngineRuntime::Systems {
     WinApp winApp;
     DirectXCommon dxCommon;
@@ -33,6 +66,8 @@ struct EngineRuntime::Systems {
     TextureManager textureManager;
     MeshManager meshManager;
     MeshRenderer meshRenderer;
+    ModelManager modelManager;
+    SpriteManager *spriteManager = nullptr;
     PostProcessSystem postProcessSystem;
     PostEffectManager postEffectManager;
     ShadowMapRenderer shadowMapRenderer;
@@ -52,9 +87,19 @@ struct EngineRuntime::Systems {
 EngineRuntime::EngineRuntime() : systems_(std::make_unique<Systems>()) {}
 
 EngineRuntime::~EngineRuntime() {
-    SoundManager::GetInstance().StopAll();
-    systems_->winApp.SetCursorVisible(true);
-    systems_->dxCommon.WaitForGpu();
+    if (!systems_) {
+        return;
+    }
+
+    TryCleanup([] { SoundManager::GetInstance().StopAll(); });
+    TryCleanup([&] { systems_->winApp.SetCursorVisible(true); });
+    TryCleanup([&] { systems_->dxCommon.WaitForGpu(); });
+    TryCleanup([&] { systems_->postProcessSystem.Finalize(); });
+    TryCleanup([&] { systems_->modelManager.Finalize(); });
+    TryCleanup([&] { systems_->textureManager.Finalize(); });
+    TryCleanup([] { GPUParticleSystem::ReleaseSharedResources(); });
+    TryCleanup([] { CameraManager::SetActiveInstance(nullptr); });
+    TryCleanup([&] { systems_->dxCommon.ReleaseRegisteredSrvs(); });
 }
 
 int EngineRuntime::Run(HINSTANCE instance, int showCommand,
@@ -116,12 +161,21 @@ void EngineRuntime::Initialize(HINSTANCE instance, int showCommand,
 
     systems_->meshManager.Initialize(&systems_->dxCommon);
     systems_->meshRenderer.Initialize(&systems_->dxCommon, &systems_->srvManager, &systems_->textureManager);
+    systems_->modelManager.Initialize(&systems_->dxCommon, &systems_->srvManager,
+                                      &systems_->textureManager);
+    systems_->modelManager.GetRenderer()->SetEnvironmentTexture(
+        systems_->textureManager.GetWhiteCubeTextureId());
+    systems_->spriteManager = &SpriteManager::GetInstance();
+    systems_->spriteManager->Initialize(&systems_->dxCommon, &systems_->textureManager,
+                                        &systems_->srvManager, currentWidth_,
+                                        currentHeight_);
     systems_->postProcessSystem.Initialize(&systems_->dxCommon, &systems_->srvManager, currentWidth_,
                                    currentHeight_);
     systems_->postEffectManager.Initialize(&systems_->postProcessSystem);
     systems_->shadowMapRenderer.Initialize(&systems_->dxCommon, &systems_->srvManager);
     systems_->renderPassController.Initialize(&systems_->dxCommon, &systems_->srvManager);
     systems_->input.Initialize(instance, systems_->winApp.GetHwnd());
+    CameraManager::SetActiveInstance(&systems_->cameraManager);
     SoundManager::GetInstance().Initialize();
     systems_->sceneContext.systems.sound =
         SoundManager::GetInstance().IsInitialized() ? &SoundManager::GetInstance()
@@ -137,6 +191,10 @@ void EngineRuntime::Initialize(HINSTANCE instance, int showCommand,
     systems_->sceneContext.systems.cameraManager = &systems_->cameraManager;
     systems_->sceneContext.rendering.mesh = &systems_->meshManager;
     systems_->sceneContext.rendering.meshRenderer = &systems_->meshRenderer;
+    systems_->sceneContext.rendering.model = &systems_->modelManager;
+    systems_->sceneContext.rendering.modelRenderer =
+        systems_->modelManager.GetRenderer();
+    systems_->sceneContext.rendering.sprite = systems_->spriteManager;
     systems_->sceneContext.rendering.texture = &systems_->textureManager;
     systems_->sceneContext.rendering.dxCommon = &systems_->dxCommon;
     systems_->sceneContext.rendering.srv = &systems_->srvManager;
@@ -171,10 +229,19 @@ void EngineRuntime::ResizeIfNeeded() {
     currentHeight_ = height;
     systems_->dxCommon.Resize(currentWidth_, currentHeight_);
     systems_->postProcessSystem.Resize(currentWidth_, currentHeight_);
+    if (systems_->spriteManager != nullptr) {
+        systems_->spriteManager->Resize(currentWidth_, currentHeight_);
+    }
 }
 
 void EngineRuntime::RenderFrame() {
+    FrameAbortScope frameScope(systems_->dxCommon);
+
     systems_->meshRenderer.BeginFrame();
+    systems_->modelManager.BeginFrame();
+    if (systems_->spriteManager != nullptr) {
+        systems_->spriteManager->BeginFrame();
+    }
     systems_->transparentQueue.Clear();
 
     systems_->dxCommon.BeginFrame();
@@ -187,55 +254,77 @@ void EngineRuntime::RenderFrame() {
     systems_->imguiManager.Begin(systems_->dxCommon.GetCommandList());
 #endif
 
-    systems_->renderPassController.BeginPass(RenderPass::Shadow);
-    systems_->shadowMapRenderer.Begin();
-    systems_->meshRenderer.PreDrawShadow();
-    systems_->sceneManager.DrawShadow();
-    systems_->shadowMapRenderer.End();
-    systems_->meshRenderer.SetShadowMap(
-        systems_->shadowMapRenderer.GetGpuHandle(),
-        systems_->shadowMapRenderer.GetLightViewProjection(),
-        SceneShadowSettings{});
-    systems_->renderPassController.EndPass();
-
-    systems_->dxCommon.BeginScenePass();
-    systems_->renderPassController.BeginPass(RenderPass::SceneColor);
-    systems_->meshRenderer.PreDraw();
-    systems_->sceneManager.Draw();
-    systems_->renderPassController.EndPass();
-
-    if (systems_->sceneManager.UsesForeground3DPass()) {
-        systems_->renderPassController.BeginPass(RenderPass::Foreground3D);
-        systems_->dxCommon.ClearDepth();
-        systems_->sceneManager.DrawForeground3D();
-        systems_->renderPassController.EndPass();
+    {
+        auto pass = systems_->renderPassController.ScopedPass(RenderPass::Shadow);
+        (void)pass;
+        systems_->shadowMapRenderer.Begin();
+        systems_->meshRenderer.PreDrawShadow();
+        systems_->sceneManager.DrawShadow();
+        systems_->shadowMapRenderer.End();
+        systems_->meshRenderer.SetShadowMap(
+            systems_->shadowMapRenderer.GetGpuHandle(),
+            systems_->shadowMapRenderer.GetLightViewProjection(),
+            SceneShadowSettings{});
+        systems_->modelManager.GetRenderer()->SetShadowMap(
+            systems_->shadowMapRenderer.GetGpuHandle(),
+            systems_->shadowMapRenderer.GetLightViewProjection(),
+            SceneShadowSettings{});
     }
 
-    systems_->renderPassController.BeginPass(RenderPass::Transparent);
-    systems_->sceneManager.DrawTransparent();
-    systems_->transparentQueue.Flush();
-    systems_->renderPassController.EndPass();
+    systems_->dxCommon.BeginScenePass();
+    {
+        auto pass =
+            systems_->renderPassController.ScopedPass(RenderPass::SceneColor);
+        (void)pass;
+        systems_->meshRenderer.PreDraw();
+        systems_->sceneManager.Draw();
+    }
+
+    if (systems_->sceneManager.UsesForeground3DPass()) {
+        auto pass =
+            systems_->renderPassController.ScopedPass(RenderPass::Foreground3D);
+        (void)pass;
+        systems_->dxCommon.ClearDepth();
+        systems_->sceneManager.DrawForeground3D();
+    }
+
+    {
+        auto pass =
+            systems_->renderPassController.ScopedPass(RenderPass::Transparent);
+        (void)pass;
+        systems_->sceneManager.DrawTransparent();
+        systems_->transparentQueue.Flush();
+    }
 
     systems_->meshRenderer.PostDraw();
     systems_->dxCommon.EndScenePass();
 
     systems_->dxCommon.BeginBackBufferPass(false);
     systems_->dxCommon.TransitionDepthToShaderResource();
-    systems_->renderPassController.BeginPass(RenderPass::PostProcess);
-    systems_->postProcessSystem.Draw(systems_->dxCommon.GetSceneSrvGpuHandle(&systems_->srvManager),
-                             systems_->dxCommon.GetDepthStencilGpuHandle());
-    systems_->renderPassController.EndPass();
+    {
+        auto pass =
+            systems_->renderPassController.ScopedPass(RenderPass::PostProcess);
+        (void)pass;
+        systems_->postProcessSystem.Draw(
+            systems_->dxCommon.GetSceneSrvGpuHandle(&systems_->srvManager),
+            systems_->dxCommon.GetDepthStencilGpuHandle());
+    }
     systems_->dxCommon.TransitionDepthToWrite();
 
-    systems_->renderPassController.BeginPass(RenderPass::UI);
-    systems_->sceneManager.DrawPostProcessOverlay();
-    systems_->renderPassController.EndPass();
+    {
+        auto pass = systems_->renderPassController.ScopedPass(RenderPass::UI);
+        (void)pass;
+        systems_->sceneManager.DrawPostProcessOverlay();
+    }
 
 #ifdef _DEBUG
-    systems_->renderPassController.BeginPass(RenderPass::UI);
-    systems_->imguiManager.End(systems_->dxCommon.GetCommandList());
-    systems_->renderPassController.EndPass();
+    {
+        auto pass = systems_->renderPassController.ScopedPass(RenderPass::UI);
+        (void)pass;
+        systems_->imguiManager.End(systems_->dxCommon.GetCommandList());
+    }
 #endif
 
     systems_->dxCommon.EndFrame();
+    frameScope.Complete();
 }

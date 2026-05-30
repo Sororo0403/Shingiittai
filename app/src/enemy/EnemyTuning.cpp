@@ -125,8 +125,8 @@ void Enemy::SetDifficulty(float difficulty) {
     idleTurnSpeed_ = 5.0f + 5.0f * t;
 
     quickSlashChance_ = 0.20f;
-    quickSmashChargeTime_ = 0.98f - 0.34f * t;
-    quickSweepChargeTime_ = 0.92f - 0.30f * t;
+    quickSmashChargeTime_ = 1.16f - 0.34f * t;
+    quickSweepChargeTime_ = 1.08f - 0.30f * t;
     directionFeintChance_ = 0.36f;
     chargeWarpFeintChance_ = 0.38f;
     farWarpSlashChance_ = 0.76f;

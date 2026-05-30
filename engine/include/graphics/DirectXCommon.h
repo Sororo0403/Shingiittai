@@ -53,6 +53,11 @@ class DirectXCommon {
     void EndFrame();
 
     /// <summary>
+    /// 例外などでフレームを完了できない場合に記録状態を破棄する
+    /// </summary>
+    void AbortFrame() noexcept;
+
+    /// <summary>
     /// シーンカラー用レンダーターゲットへの描画状態に切り替える
     /// </summary>
     void BeginScenePass();
@@ -95,6 +100,11 @@ class DirectXCommon {
     /// シーンカラーをシェーダーから読めるSRVとして登録する
     /// </summary>
     void RegisterSceneColorSRV(SrvManager *srvManager);
+
+    /// <summary>
+    /// DirectXCommonがSrvManagerから確保したSRVを解放する
+    /// </summary>
+    void ReleaseRegisteredSrvs();
 
     /// <summary>
     /// フレーム開始時のクリア色を設定する
@@ -142,6 +152,13 @@ class DirectXCommon {
     /// コマンドキューへFenceを送信し、GPU処理の完了を待機する
     /// </summary>
     void WaitForGpu();
+
+    /// <summary>
+    /// GPU同期に必要なD3D12オブジェクトが初期化済みかを取得する
+    /// </summary>
+    bool IsInitialized() const {
+        return commandQueue_ && fence_ && fenceEvent_ != nullptr;
+    }
 
     /// <summary>
     /// D3D12デバイスを取得する

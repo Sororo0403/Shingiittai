@@ -66,7 +66,7 @@ def log_error(message):
 
 def open_camera(source, width, height):
     parsed = parse_camera(source)
-    attempts = [("DSHOW", cv2.CAP_DSHOW), ("DEFAULT", 0)]
+    attempts = [("MSMF", cv2.CAP_MSMF), ("DEFAULT", 0), ("DSHOW", cv2.CAP_DSHOW)]
     for name, backend in attempts:
         cap = cv2.VideoCapture(parsed, backend) if backend else cv2.VideoCapture(parsed)
         if not cap.isOpened():
@@ -224,7 +224,7 @@ def build_raw_packet(frame_index, timestamp_ms, dt, frame, hands, body, args):
     height, width = frame.shape[:2]
     debug = {
         "handCount": len(hands),
-        "bodyTracked": False,
+        "bodyTracked": body is not None,
         "bodyCorrectedHands": 0,
         "labels": [hand.get("label", "Hand") for hand in hands],
         "scores": [round(float(hand.get("score", 0.0)), 6) for hand in hands],
@@ -339,8 +339,8 @@ def print_startup_log(args, cap, backend, hands_detector):
 def parse_args():
     parser = argparse.ArgumentParser(description="Shingiittai raw hand sender.")
     parser.add_argument("--camera", default="0")
-    parser.add_argument("--width", type=int, default=1920)
-    parser.add_argument("--height", type=int, default=1080)
+    parser.add_argument("--width", type=int, default=1280)
+    parser.add_argument("--height", type=int, default=720)
     parser.add_argument("--udp-host", default="127.0.0.1")
     parser.add_argument("--udp-port", type=int, default=5005)
     parser.add_argument("--preview-host", default="127.0.0.1")
@@ -379,7 +379,7 @@ def parse_args():
     )
     args, _unknown = parser.parse_known_args()
     if args.pose_model:
-        log_warn("--pose-model is accepted for compatibility but not required")
+        log_warn("--pose-model is ignored. Face the camera straight for hand mode.")
     return args
 
 

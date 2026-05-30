@@ -204,6 +204,9 @@
     <ClCompile Include="src\scene\GameSceneLighting.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
+    <ClCompile Include="src\scene\HandLoadingScene.cpp">
+      <Filter>Source Files\scene</Filter>
+    </ClCompile>
     <ClCompile Include="src\scene\HandTrackingTestScene.cpp">
       <Filter>Source Files\scene</Filter>
     </ClCompile>
@@ -307,6 +310,9 @@
       <Filter>Header Files\scene</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\GameScene.h">
+      <Filter>Header Files\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="include\scene\HandLoadingScene.h">
       <Filter>Header Files\scene</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\HandTrackingTestScene.h">

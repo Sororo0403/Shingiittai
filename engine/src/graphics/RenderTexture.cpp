@@ -6,8 +6,17 @@
 
 using namespace DxUtils;
 
+RenderTexture::~RenderTexture() noexcept {
+    try {
+        Release();
+    } catch (...) {
+    }
+}
+
 void RenderTexture::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
                                int width, int height) {
+    Release();
+
     dxCommon_ = dxCommon;
     srvManager_ = srvManager;
     srvIndex_ = srvManager_->Allocate();
@@ -28,6 +37,28 @@ void RenderTexture::Resize(int width, int height) {
     rtvHeap_.Reset();
 
     CreateResources();
+}
+
+void RenderTexture::Release() {
+    if (resource_ && dxCommon_ && !dxCommon_->IsDeviceRemoved() &&
+        !dxCommon_->IsCommandListRecording()) {
+        dxCommon_->WaitForGpu();
+    }
+
+    resource_.Reset();
+    rtvHeap_.Reset();
+    rtvDescriptorSize_ = 0;
+    resourceState_ = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+
+    if (srvManager_ != nullptr && srvIndex_ != UINT_MAX) {
+        srvManager_->Free(srvIndex_);
+        srvIndex_ = UINT_MAX;
+    }
+
+    dxCommon_ = nullptr;
+    srvManager_ = nullptr;
+    width_ = 0;
+    height_ = 0;
 }
 
 void RenderTexture::BeginRender(const DirectX::XMFLOAT4 &clearColor) {

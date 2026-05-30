@@ -97,9 +97,24 @@ using namespace DirectX;
 using namespace DxUtils;
 using Microsoft::WRL::ComPtr;
 
+namespace {
+TextureManager *gActiveTextureManager = nullptr;
+}
+
 TextureManager &TextureManager::GetInstance() {
     static TextureManager instance;
-    return instance;
+    return gActiveTextureManager != nullptr ? *gActiveTextureManager : instance;
+}
+
+void TextureManager::SetActiveInstance(TextureManager *instance) {
+    gActiveTextureManager = instance;
+}
+
+TextureManager::~TextureManager() noexcept {
+    try {
+        Finalize();
+    } catch (...) {
+    }
 }
 
 void TextureManager::Initialize(DirectXCommon *dxCommon,
@@ -107,8 +122,11 @@ void TextureManager::Initialize(DirectXCommon *dxCommon,
     if (!dxCommon || !srvManager) {
         throw std::runtime_error("TextureManager::Initialize null argument");
     }
+    Finalize();
+
     dxCommon_ = dxCommon;
     srvManager_ = srvManager;
+    SetActiveInstance(this);
 
     textures_.clear();
     uploadBuffers_.clear();
@@ -152,6 +170,31 @@ void TextureManager::Initialize(DirectXCommon *dxCommon,
     uint32_t flatNormalPixel = 0xFFFF8080;
     image.pixels = reinterpret_cast<uint8_t *>(&flatNormalPixel);
     defaultNormalTextureId_ = CreateTexture(&image, 1, metadata);
+}
+
+void TextureManager::Finalize() {
+    asyncRequests_.clear();
+    ReleaseUploadBuffers();
+
+    if (srvManager_ != nullptr) {
+        for (const Entry &entry : textures_) {
+            srvManager_->Free(entry.srvIndex);
+        }
+    }
+
+    textures_.clear();
+    uploadBuffers_.clear();
+    frameUploadBuffers_.clear();
+    filePathToTextureId_.clear();
+    dxCommon_ = nullptr;
+    srvManager_ = nullptr;
+    if (gActiveTextureManager == this) {
+        SetActiveInstance(nullptr);
+    }
+    whiteTextureId_ = 0;
+    whiteCubeTextureId_ = 0;
+    defaultNormalTextureId_ = 0;
+    lastDynamicUploadFrameIndex_ = UINT_MAX;
 }
 
 uint32_t TextureManager::Load(const std::wstring &filePath) {

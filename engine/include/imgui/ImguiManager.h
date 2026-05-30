@@ -1,6 +1,7 @@
 #pragma once
 #ifdef _DEBUG
 #include <d3d12.h>
+#include <unordered_map>
 
 class DirectXCommon;
 class SrvManager;
@@ -11,6 +12,8 @@ class WinApp;
 /// </summary>
 class ImguiManager {
   public:
+    ~ImguiManager() noexcept;
+
     /// <summary>
     /// ImGuiのWin32/DX12バックエンドを初期化する
     /// </summary>
@@ -19,6 +22,11 @@ class ImguiManager {
     /// <param name="srvManager">SrvManagerインスタンス</param>
     void Initialize(WinApp *winApp, DirectXCommon *dxCommon,
                     SrvManager *srvManager);
+
+    /// <summary>
+    /// ImGuiバックエンドとSRV割り当てを解放する
+    /// </summary>
+    void Finalize();
 
     /// <summary>
     /// ImGuiの新しいフレームを開始する
@@ -34,6 +42,8 @@ class ImguiManager {
 
   private:
     SrvManager *srvManager_ = nullptr;
+    std::unordered_map<SIZE_T, UINT> allocatedSrvIndices_;
+    bool initialized_ = false;
 };
 
 #endif

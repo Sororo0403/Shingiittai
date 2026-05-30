@@ -3,6 +3,16 @@
 #include "graphics/DirectXCommon.h"
 #include "graphics/SrvManager.h"
 
+RenderPassController::PassScope::PassScope(RenderPassController &controller,
+                                           RenderPass pass)
+    : controller_(&controller), context_(controller.BeginPass(pass)) {}
+
+RenderPassController::PassScope::~PassScope() {
+    if (controller_ != nullptr) {
+        controller_->EndPass();
+    }
+}
+
 void RenderPassController::Initialize(DirectXCommon *dxCommon,
                                       SrvManager *srvManager) {
     dxCommon_ = dxCommon;
@@ -34,6 +44,11 @@ void RenderPassController::BeginFrame(const FrameTime &frameTime,
 const RenderContext &RenderPassController::BeginPass(RenderPass pass) {
     context_.pass = pass;
     return context_;
+}
+
+RenderPassController::PassScope RenderPassController::ScopedPass(
+    RenderPass pass) {
+    return PassScope(*this, pass);
 }
 
 void RenderPassController::EndPass() { context_.pass = RenderPass::None; }

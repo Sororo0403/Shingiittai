@@ -8,11 +8,30 @@ using namespace DirectX;
 using namespace DxUtils;
 using Microsoft::WRL::ComPtr;
 
+MaterialManager::~MaterialManager() noexcept {
+    try {
+        Finalize();
+    } catch (...) {
+    }
+}
+
 void MaterialManager::Initialize(DirectXCommon *dxCommon) {
     if (!dxCommon) {
         throw std::runtime_error("MaterialManager::Initialize null argument");
     }
+    Finalize();
     dxCommon_ = dxCommon;
+}
+
+void MaterialManager::Finalize() {
+    for (MaterialResource &material : materials_) {
+        if (material.resource && material.mappedData != nullptr) {
+            material.resource->Unmap(0, nullptr);
+            material.mappedData = nullptr;
+        }
+    }
+    materials_.clear();
+    dxCommon_ = nullptr;
 }
 
 uint32_t MaterialManager::CreateMaterial(const Material &material) {

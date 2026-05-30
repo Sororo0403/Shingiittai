@@ -9,8 +9,11 @@ class SrvManager;
 
 class ShadowMapRenderer {
   public:
+    ~ShadowMapRenderer() noexcept;
+
     void Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
                     uint32_t width = 2048, uint32_t height = 2048);
+    void Release();
     void Resize(uint32_t width, uint32_t height);
 
     void Begin();
@@ -30,6 +33,7 @@ class ShadowMapRenderer {
     uint32_t GetHeight() const { return height_; }
 
   private:
+    void ReleaseDepthResources();
     void CreateResources();
     void UpdateSrv();
 

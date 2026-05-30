@@ -1,6 +1,7 @@
 #include "DifficultyCauldronScene.h"
 #include "AppSceneServices.h"
 #include "GameScene.h"
+#include "HandLoadingScene.h"
 #include "Input.h"
 #include "PostEffectManager.h"
 #include "SceneManager.h"
@@ -445,6 +446,13 @@ void DifficultyCauldronScene::BeginReturnToWeaponSelect() {
 
 void DifficultyCauldronScene::BeginStartGame() {
     AppSceneServices::StopMenuBgm(ctx_);
+    if (IsHandControl(inputCalibration_.controlType) &&
+        !previewReceiver_.HasFreshFrame(kPreviewStaleSeconds)) {
+        RequestHandTrackingStartOnce();
+        sceneManager_->ChangeScene(std::make_unique<HandLoadingScene>(
+            inputCalibration_, SelectedDifficultyValue()));
+        return;
+    }
     startGameRequested_ = true;
     returnToSelectRequested_ = false;
     transitionTimer_ = 0.0f;

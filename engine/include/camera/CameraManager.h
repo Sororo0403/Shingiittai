@@ -10,6 +10,7 @@
 class CameraManager {
   public:
     static CameraManager &GetInstance();
+    static void SetActiveInstance(CameraManager *instance);
 
     CameraManager() = default;
     CameraManager(const CameraManager &) = delete;

@@ -26,8 +26,10 @@ constexpr float kFieldWidthRatio = 0.72f;
 constexpr float kFieldHeightRatio = 0.62f;
 constexpr float kRawSpeedFull = 2.1f;
 constexpr float kMotionSpeedFull = 2600.0f;
-constexpr float kRangedGestureJoinDistance = 0.18f;
-constexpr float kRangedGestureReleaseDistance = 0.26f;
+constexpr float kRangedGestureJoinDistance = 0.105f;
+constexpr float kRangedGestureReleaseDistance = 0.16f;
+constexpr float kRangedGestureJoinMaxAxisOffset = 0.085f;
+constexpr float kRangedGestureReleaseMaxAxisOffset = 0.13f;
 constexpr float kRangedGestureWindupSeconds = 0.42f;
 constexpr float kRangedGestureChargeSeconds = 1.15f;
 constexpr float kRangedGestureRecoverySeconds = 0.55f;
@@ -39,6 +41,15 @@ XMFLOAT4 Color(float r, float g, float b, float a = 1.0f) {
 
 SOCKET ToSocket(uintptr_t value) {
     return static_cast<SOCKET>(value);
+}
+
+bool IsRangedGesturePose(float dx, float dy, bool alreadyHeld) {
+    const float maxDistance =
+        alreadyHeld ? kRangedGestureReleaseDistance : kRangedGestureJoinDistance;
+    const float maxAxisOffset = alreadyHeld ? kRangedGestureReleaseMaxAxisOffset
+                                            : kRangedGestureJoinMaxAxisOffset;
+    return std::sqrt(dx * dx + dy * dy) < maxDistance &&
+           std::fabs(dx) < maxAxisOffset && std::fabs(dy) < maxAxisOffset;
 }
 } // namespace
 
@@ -354,11 +365,9 @@ void HandTrackingTestScene::UpdateRangedGesture() {
     const bool bothHands = left.hasCenter && right.hasCenter;
     const float dx = left.x - right.x;
     const float dy = left.y - right.y;
-    const float distance = std::sqrt(dx * dx + dy * dy);
     const bool joined =
         bothHands &&
-        (rangedGestureHeld_ ? distance < kRangedGestureReleaseDistance
-                            : distance < kRangedGestureJoinDistance);
+        IsRangedGesturePose(dx, dy, rangedGestureHeld_);
     const bool pressed = joined && !rangedGestureHeld_;
     const bool released = !joined && rangedGestureHeld_;
     rangedGestureHeld_ = joined;

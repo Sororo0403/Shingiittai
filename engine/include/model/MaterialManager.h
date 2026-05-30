@@ -12,11 +12,18 @@ class DirectXCommon;
 /// </summary>
 class MaterialManager {
   public:
+    ~MaterialManager() noexcept;
+
     /// <summary>
     /// マテリアル用GPUリソースを生成できるようDirectX参照を設定する
     /// </summary>
     /// <param name="dxCommon">DirectXCommonインスタンス</param>
     void Initialize(DirectXCommon *dxCommon);
+
+    /// <summary>
+    /// マテリアル定数バッファを明示的に解放する
+    /// </summary>
+    void Finalize();
 
     /// <summary>
     /// マテリアルを作成してIDを返す

@@ -20,10 +20,17 @@ class TextureManager;
 /// </summary>
 class ModelManager {
   public:
+    ~ModelManager() noexcept;
+
     /// <summary>
     /// ModelManagerの共有インスタンスを取得する
     /// </summary>
     static ModelManager &GetInstance();
+
+    /// <summary>
+    /// 実行中ランタイムのModelManagerを共有インスタンスとして登録する
+    /// </summary>
+    static void SetActiveInstance(ModelManager *instance);
 
     /// <summary>
     /// モデル読み込み、マテリアル、メッシュ、描画器を初期化する
@@ -276,6 +283,7 @@ class ModelManager {
 
   private:
     DirectXCommon *dxCommon_ = nullptr;
+    SrvManager *srvManager_ = nullptr;
     TextureManager *textureManager_ = nullptr;
 
     MeshManager meshManager_;

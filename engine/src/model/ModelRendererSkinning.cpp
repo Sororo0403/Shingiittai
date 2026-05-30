@@ -209,6 +209,7 @@ void ModelRenderer::CreateSkinClusters(Model &model) {
                         influenceBufferSize);
 
             const UINT inputVertexSrvIndex = srvManager_->Allocate();
+            skinCluster.inputVertexSrvIndex = inputVertexSrvIndex;
             skinCluster.inputVertexSrvCpuHandle =
                 srvManager_->GetCpuHandle(inputVertexSrvIndex);
             skinCluster.inputVertexSrvGpuHandle =
@@ -228,6 +229,7 @@ void ModelRenderer::CreateSkinClusters(Model &model) {
                 skinCluster.inputVertexSrvCpuHandle);
 
             const UINT influenceSrvIndex = srvManager_->Allocate();
+            skinCluster.influenceSrvIndex = influenceSrvIndex;
             skinCluster.influenceSrvCpuHandle =
                 srvManager_->GetCpuHandle(influenceSrvIndex);
             skinCluster.influenceSrvGpuHandle =
@@ -273,6 +275,7 @@ void ModelRenderer::CreateSkinClusters(Model &model) {
             skinCluster.skinningValid = false;
 
             const UINT skinnedVertexUavIndex = srvManager_->Allocate();
+            skinCluster.skinnedVertexUavIndex = skinnedVertexUavIndex;
             skinCluster.skinnedVertexUavCpuHandle =
                 srvManager_->GetCpuHandle(skinnedVertexUavIndex);
             skinCluster.skinnedVertexUavGpuHandle =
@@ -360,6 +363,7 @@ void ModelRenderer::CreateSkinClusters(Model &model) {
         }
 
         const UINT srvIndex = srvManager_->Allocate();
+        skinCluster.paletteSrvIndex = srvIndex;
         skinCluster.paletteSrvCpuHandle = srvManager_->GetCpuHandle(srvIndex);
         skinCluster.paletteSrvGpuHandle = srvManager_->GetGpuHandle(srvIndex);
 

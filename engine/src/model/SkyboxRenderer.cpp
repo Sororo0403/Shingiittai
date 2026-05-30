@@ -42,8 +42,17 @@ bool IsSameMatrix(const XMFLOAT4X4 &lhs, const XMFLOAT4X4 &rhs) {
 
 } // namespace
 
+SkyboxRenderer::~SkyboxRenderer() noexcept {
+    try {
+        Finalize();
+    } catch (...) {
+    }
+}
+
 void SkyboxRenderer::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
                                 TextureManager *textureManager) {
+    Finalize();
+
     dxCommon_ = dxCommon;
     srvManager_ = srvManager;
     textureManager_ = textureManager;
@@ -52,6 +61,29 @@ void SkyboxRenderer::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
     CreatePipelineState();
     CreateMesh();
     CreateConstantBuffer();
+}
+
+void SkyboxRenderer::Finalize() {
+    if (constBuffer_ && mappedCB_ != nullptr) {
+        constBuffer_->Unmap(0, nullptr);
+        mappedCB_ = nullptr;
+    }
+
+    constBuffer_.Reset();
+    indexBuffer_.Reset();
+    vertexBuffer_.Reset();
+    pipelineState_.Reset();
+    rootSignature_.Reset();
+    vbView_ = {};
+    ibView_ = {};
+    indexCount_ = 0;
+    hasCachedCameraState_ = false;
+    cachedCameraPosition_ = {};
+    cachedView_ = {};
+    cachedProj_ = {};
+    dxCommon_ = nullptr;
+    srvManager_ = nullptr;
+    textureManager_ = nullptr;
 }
 
 void SkyboxRenderer::Draw(uint32_t textureId, const Camera &camera) {

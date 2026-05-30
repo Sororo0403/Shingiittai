@@ -20,6 +20,7 @@ constexpr CollisionManager::LayerMask kLayerEnemyAttack = 1u << 3;
 constexpr float kArcaneProjectilePlayerHitRange = 0.82f;
 constexpr float kArcaneProjectileEnemyHitRange = 1.45f;
 constexpr float kArcaneProjectileDeflectRange = 5.80f;
+constexpr float kCataclysmProjectileDeflectHeight = 7.2f;
 constexpr float kArcaneProjectileSlashDot = 0.55f;
 constexpr int kArcaneProjectileVolleyRequiredHits = 3;
 constexpr int kCataclysmProjectileVolleyRequiredHits = 5;
@@ -607,12 +608,13 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     auto isProjectileInDeflectRange =
         [&](const ArcaneProjectileState &projectile) {
             if (!projectile.active || projectile.reflected ||
-                projectile.waitingToFire) {
+                (projectile.waitingToFire && !projectile.cataclysm)) {
                 return false;
             }
             const XMFLOAT3 playerPos = player_.GetTransform().position;
             if (projectile.fromAbove &&
-                projectile.position.y > playerPos.y + 5.2f) {
+                projectile.position.y >
+                    playerPos.y + kCataclysmProjectileDeflectHeight) {
                 return false;
             }
             return DistanceSqXZ(projectile.position, playerPos) <=

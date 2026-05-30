@@ -102,6 +102,7 @@ class GameScene : public BaseScene {
     void DrawPauseMenu();
     void DrawTutorialOverlay();
     void DrawTutorialEntryFade();
+    void DrawTutorialSlashCounter(float x, float y, float scale, float alpha);
     void UpdateHandCameraPreview(float deltaTime);
     void DrawHandCameraPreview();
     void DrawPauseRect(float x, float y, float w, float h,

@@ -8,8 +8,11 @@ class SrvManager;
 
 class PostProcessSystem {
   public:
+    ~PostProcessSystem() noexcept;
+
     void Initialize(DirectXCommon *dxCommon, SrvManager *srvManager, int width,
                     int height);
+    void Finalize();
 
     void Resize(int width, int height);
 

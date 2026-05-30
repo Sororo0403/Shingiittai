@@ -7,8 +7,17 @@
 #include "imgui_impl_dx12.h"
 #include "imgui_impl_win32.h"
 
+ImguiManager::~ImguiManager() noexcept {
+    try {
+        Finalize();
+    } catch (...) {
+    }
+}
+
 void ImguiManager::Initialize(WinApp *winApp, DirectXCommon *dxCommon,
                               SrvManager *srvManager) {
+    Finalize();
+
     srvManager_ = srvManager;
 
     IMGUI_CHECKVERSION();
@@ -33,13 +42,41 @@ void ImguiManager::Initialize(WinApp *winApp, DirectXCommon *dxCommon,
         uint32_t index = manager->srvManager_->Allocate();
         *out_cpu = manager->srvManager_->GetCpuHandle(index);
         *out_gpu = manager->srvManager_->GetGpuHandle(index);
+        manager->allocatedSrvIndices_[out_cpu->ptr] = index;
     };
 
-    init_info.SrvDescriptorFreeFn = [](ImGui_ImplDX12_InitInfo *,
-                                       D3D12_CPU_DESCRIPTOR_HANDLE,
-                                       D3D12_GPU_DESCRIPTOR_HANDLE) {};
+    init_info.SrvDescriptorFreeFn = [](ImGui_ImplDX12_InitInfo *info,
+                                       D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
+                                       D3D12_GPU_DESCRIPTOR_HANDLE) {
+        auto *manager = static_cast<ImguiManager *>(info->UserData);
+        auto it = manager->allocatedSrvIndices_.find(cpuHandle.ptr);
+        if (it == manager->allocatedSrvIndices_.end()) {
+            return;
+        }
+        manager->srvManager_->Free(it->second);
+        manager->allocatedSrvIndices_.erase(it);
+    };
 
     ImGui_ImplDX12_Init(&init_info);
+    initialized_ = true;
+}
+
+void ImguiManager::Finalize() {
+    if (initialized_) {
+        ImGui_ImplDX12_Shutdown();
+        ImGui_ImplWin32_Shutdown();
+        ImGui::DestroyContext();
+        initialized_ = false;
+    }
+
+    if (srvManager_ != nullptr) {
+        for (const auto &[handlePtr, index] : allocatedSrvIndices_) {
+            (void)handlePtr;
+            srvManager_->Free(index);
+        }
+    }
+    allocatedSrvIndices_.clear();
+    srvManager_ = nullptr;
 }
 
 void ImguiManager::Begin(ID3D12GraphicsCommandList *commandList) {

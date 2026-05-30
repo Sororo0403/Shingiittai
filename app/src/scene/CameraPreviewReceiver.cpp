@@ -75,6 +75,10 @@ void CameraPreviewReceiver::Close() {
     socketReady_ = false;
 }
 
+bool CameraPreviewReceiver::HasFreshFrame(float staleSeconds) const {
+    return frame_.valid && frame_.staleTimer <= staleSeconds;
+}
+
 bool CameraPreviewReceiver::EnsureSocket() {
     if (socketReady_) {
         return true;

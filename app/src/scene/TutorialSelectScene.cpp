@@ -1,6 +1,7 @@
 #include "TutorialSelectScene.h"
 #include "AppSceneServices.h"
 #include "CreditScene.h"
+#include "HandLoadingScene.h"
 #include "Input.h"
 #include "OptionScene.h"
 #include "RankingScene.h"
@@ -178,9 +179,14 @@ void TutorialSelectScene::Update() {
         if (transitionTimer_ >= kTransitionDuration) {
             SwordInputCalibration calibration{};
             calibration.controlType = selectedType;
-            sceneManager_->ChangeScene(
-                std::make_unique<GameScene>(calibration,
-                                            GameScene::Mode::Tutorial));
+            if (selectedType == InputControlType::Hand) {
+                sceneManager_->ChangeScene(std::make_unique<HandLoadingScene>(
+                    calibration, GameScene::Mode::Tutorial));
+            } else {
+                sceneManager_->ChangeScene(
+                    std::make_unique<GameScene>(calibration,
+                                                GameScene::Mode::Tutorial));
+            }
         }
         return;
     }
@@ -331,7 +337,7 @@ void TutorialSelectScene::ContinueHandStart() {
     if (!RequestHandTrackingStartOnce()) {
         return;
     }
-    waitingForHandTrackingReady_ = !IsHandTrackingReady();
+    waitingForHandTrackingReady_ = false;
     startRequested_ = true;
     transitionTimer_ = 0.0f;
 }

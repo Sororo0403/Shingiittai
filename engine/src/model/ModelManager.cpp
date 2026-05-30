@@ -83,9 +83,24 @@ void ResetModelPlayback(Model &model) {
 
 } // namespace
 
+namespace {
+ModelManager *gActiveModelManager = nullptr;
+}
+
 ModelManager &ModelManager::GetInstance() {
     static ModelManager instance;
-    return instance;
+    return gActiveModelManager != nullptr ? *gActiveModelManager : instance;
+}
+
+void ModelManager::SetActiveInstance(ModelManager *instance) {
+    gActiveModelManager = instance;
+}
+
+ModelManager::~ModelManager() noexcept {
+    try {
+        Finalize();
+    } catch (...) {
+    }
 }
 
 void ModelManager::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
@@ -93,7 +108,11 @@ void ModelManager::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
     if (!dxCommon || !srvManager || !textureManager) {
         throw std::runtime_error("ModelManager::Initialize null argument");
     }
+    Finalize();
+
+    SetActiveInstance(this);
     dxCommon_ = dxCommon;
+    srvManager_ = srvManager;
     textureManager_ = textureManager;
 
     meshManager_.Initialize(dxCommon_);
@@ -106,10 +125,54 @@ void ModelManager::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
 }
 
 void ModelManager::Finalize() {
+    if (dxCommon_ && !dxCommon_->IsDeviceRemoved() &&
+        !dxCommon_->IsCommandListRecording()) {
+        dxCommon_->WaitForGpu();
+    }
+
+    if (srvManager_ != nullptr) {
+        for (Model &model : models_) {
+            for (ModelSubMesh &subMesh : model.subMeshes) {
+                SkinCluster &skinCluster = subMesh.skinCluster;
+                if (skinCluster.inputVertexSrvIndex != UINT32_MAX) {
+                    srvManager_->Free(skinCluster.inputVertexSrvIndex);
+                    skinCluster.inputVertexSrvIndex = UINT32_MAX;
+                }
+                if (skinCluster.influenceSrvIndex != UINT32_MAX) {
+                    srvManager_->Free(skinCluster.influenceSrvIndex);
+                    skinCluster.influenceSrvIndex = UINT32_MAX;
+                }
+                if (skinCluster.skinnedVertexUavIndex != UINT32_MAX) {
+                    srvManager_->Free(skinCluster.skinnedVertexUavIndex);
+                    skinCluster.skinnedVertexUavIndex = UINT32_MAX;
+                }
+                if (skinCluster.paletteSrvIndex != UINT32_MAX) {
+                    srvManager_->Free(skinCluster.paletteSrvIndex);
+                    skinCluster.paletteSrvIndex = UINT32_MAX;
+                }
+                if (skinCluster.influenceResource &&
+                    skinCluster.mappedInfluence != nullptr) {
+                    skinCluster.influenceResource->Unmap(0, nullptr);
+                    skinCluster.mappedInfluence = nullptr;
+                }
+                if (skinCluster.paletteResource &&
+                    skinCluster.mappedPalette != nullptr) {
+                    skinCluster.paletteResource->Unmap(0, nullptr);
+                    skinCluster.mappedPalette = nullptr;
+                }
+            }
+        }
+    }
+
     modelPathToId_.clear();
     models_.clear();
+    materialManager_.Finalize();
     dxCommon_ = nullptr;
+    srvManager_ = nullptr;
     textureManager_ = nullptr;
+    if (gActiveModelManager == this) {
+        SetActiveInstance(nullptr);
+    }
 }
 
 uint32_t ModelManager::Load(const std::wstring &path) {

@@ -353,7 +353,7 @@ void WeaponSelectScene::ContinueHandStart() {
     if (!RequestHandTrackingStartOnce()) {
         return;
     }
-    waitingForHandTrackingReady_ = !IsHandTrackingReady();
+    waitingForHandTrackingReady_ = false;
     startRequested_ = true;
     transitionTimer_ = 0.0f;
 }

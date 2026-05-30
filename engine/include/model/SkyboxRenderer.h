@@ -14,6 +14,8 @@ class SrvManager;
 /// </summary>
 class SkyboxRenderer {
   public:
+    ~SkyboxRenderer() noexcept;
+
     /// <summary>
     /// スカイボックス描画に必要なリソースを初期化する
     /// </summary>
@@ -22,6 +24,11 @@ class SkyboxRenderer {
     /// <param name="textureManager">テクスチャ管理</param>
     void Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
                     TextureManager *textureManager);
+
+    /// <summary>
+    /// スカイボックス描画用GPUリソースを解放する
+    /// </summary>
+    void Finalize();
 
     /// <summary>
     /// スカイボックスを描画する

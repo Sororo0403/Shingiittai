@@ -278,6 +278,13 @@ ID3D12CommandSignature *GetSharedParticleDrawCommandSignature(
 
 GPUParticleSystem::~GPUParticleSystem() { ReleaseResources(); }
 
+void GPUParticleSystem::ReleaseSharedResources() {
+    gParticleDrawPsoCache.clear();
+    gCachedParticleDrawCommandSignature.Reset();
+    gCachedParticleDrawRootSignature.Reset();
+    gCachedParticleDrawDevice = nullptr;
+}
+
 void GPUParticleSystem::Initialize(DirectXCommon *dxCommon,
                                    SrvManager *srvManager,
                                    TextureManager *textureManager,
@@ -329,17 +336,22 @@ void GPUParticleSystem::Initialize(DirectXCommon *dxCommon,
         particle.params3 = {};
     }
 
-    CreateRootSignatures();
-    CreatePipelineStates();
-    CreateParticleBuffer(particles);
-    CreateFreeListBuffers();
-    CreateActiveDrawBuffers();
-    CreateConstantBuffers();
+    try {
+        CreateRootSignatures();
+        CreatePipelineStates();
+        CreateParticleBuffer(particles);
+        CreateFreeListBuffers();
+        CreateActiveDrawBuffers();
+        CreateConstantBuffers();
 
-    if (!pendingEmitSettings_.empty() && mappedUpdateCB_) {
-        mappedUpdateCB_->time = {totalTime_, 0.0f,
-                                 static_cast<float>(maxParticles_), 0.0f};
-        updatePending_ = true;
+        if (!pendingEmitSettings_.empty() && mappedUpdateCB_) {
+            mappedUpdateCB_->time = {totalTime_, 0.0f,
+                                     static_cast<float>(maxParticles_), 0.0f};
+            updatePending_ = true;
+        }
+    } catch (...) {
+        ReleaseResources();
+        throw;
     }
 }
 

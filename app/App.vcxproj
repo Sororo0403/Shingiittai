@@ -137,6 +137,7 @@
     <ClCompile Include="src\scene\GameSceneCamera.cpp" />
     <ClCompile Include="src\scene\GameSceneCombat.cpp" />
     <ClCompile Include="src\scene\GameSceneLighting.cpp" />
+    <ClCompile Include="src\scene\HandLoadingScene.cpp" />
     <ClCompile Include="src\scene\HandTrackingTestScene.cpp" />
     <ClCompile Include="src\scene\TitleScene.cpp" />
     <ClCompile Include="src\scene\TutorialScene.cpp" />
@@ -178,6 +179,7 @@
     <ClInclude Include="include\scene\GameOverScene.h" />
     <ClInclude Include="include\scene\GameVictoryScene.h" />
     <ClInclude Include="include\scene\GameScene.h" />
+    <ClInclude Include="include\scene\HandLoadingScene.h" />
     <ClInclude Include="include\scene\HandTrackingTestScene.h" />
     <ClInclude Include="include\scene\TitleScene.h" />
     <ClInclude Include="include\scene\TutorialScene.h" />
@@ -323,7 +325,7 @@
       <HandTrackingSource Include="$(SolutionDir)hand_tracking\src\**\*" />
       <HandTrackingScript Include="$(SolutionDir)hand_tracking\scripts\**\*" />
       <HandTrackingRequirement Include="$(SolutionDir)hand_tracking\requirements\**\*" />
-      <HandTrackingModel Include="$(SolutionDir)hand_tracking\models\**\*" />
+      <HandTrackingModel Include="$(SolutionDir)hand_tracking\models\hand_landmarker.task" />
       <HandTrackingDist Include="$(SolutionDir)generated\outputs\$(Platform)\$(Configuration)\HandUdpSender\hand_udp_sender\**\*" Condition="'$(BundleHandTrackingHelper)' == 'true' and Exists('$(SolutionDir)generated\outputs\$(Platform)\$(Configuration)\HandUdpSender\hand_udp_sender')" />
       <RuntimeResourceDir Include="$(TargetDir)app\resources" Condition="Exists('$(TargetDir)app\resources')" />
       <RuntimeResourceDir Include="$(TargetDir)engine\resources" Condition="Exists('$(TargetDir)engine\resources')" />

@@ -15,6 +15,7 @@ class CameraPreviewReceiver {
                     uint32_t width = 320, uint32_t height = 180);
     void Update(float deltaTime);
     void Close();
+    bool HasFreshFrame(float staleSeconds) const;
     void Draw(SpriteManager *sprite, TextureManager *texture,
               float staleSeconds, bool backBufferTarget = false);
 

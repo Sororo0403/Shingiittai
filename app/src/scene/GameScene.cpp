@@ -55,6 +55,7 @@ constexpr float kArcaneProjectileReflectedSteerStrength = 18.0f;
 constexpr float kCataclysmProjectileHomingDelay = 0.34f;
 constexpr float kCataclysmProjectileHomingStrength = 5.6f;
 constexpr float kArcaneProjectileDeflectRange = 5.80f;
+constexpr float kCataclysmProjectileDeflectHeight = 7.2f;
 constexpr float kArcaneProjectileSlashDot = 0.55f;
 constexpr int kArcaneProjectileVolleyShotCount = 3;
 constexpr int kCataclysmProjectileVolleyShotCount = 5;
@@ -907,7 +908,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
     enemy_.Initialize(enemyModel);
     enemyModelId_ = enemyModel;
     ApplyBulletTextureToModel(GetCurrentEnemyTextureId());
-    if (ctx_->systems.sound != nullptr) {
+    if (!titleDemoMode_ && ctx_->systems.sound != nullptr) {
         slashSoundId_ = ctx_->systems.sound->Load(
             L"app/resources/audio/se/剣で斬る2.mp3");
         normalHitSlashSoundId_ = ctx_->systems.sound->Load(
@@ -2270,6 +2271,79 @@ void GameScene::DrawPauseImage(uint32_t textureId, float textureWidth,
     ctx_->rendering.sprite->DrawSprite(sprite);
 }
 
+void GameScene::DrawTutorialSlashCounter(float x, float y, float scale,
+                                         float alpha) {
+    auto drawRect = [&](float rx, float ry, float rw, float rh,
+                        const XMFLOAT4 &color) {
+        DrawPauseRect(x + rx * scale, y + ry * scale, rw * scale, rh * scale,
+                      color);
+    };
+    auto drawDigit = [&](int digit, float dx, const XMFLOAT4 &color) {
+        static constexpr bool kSegments[10][7] = {
+            {true, true, true, true, true, true, false},
+            {false, true, true, false, false, false, false},
+            {true, true, false, true, true, false, true},
+            {true, true, true, true, false, false, true},
+            {false, true, true, false, false, true, true},
+            {true, false, true, true, false, true, true},
+            {true, false, true, true, true, true, true},
+            {true, true, true, false, false, false, false},
+            {true, true, true, true, true, true, true},
+            {true, true, true, true, false, true, true},
+        };
+        const int clampedDigit = std::clamp(digit, 0, 9);
+        const auto &segments = kSegments[clampedDigit];
+        if (segments[0]) {
+            drawRect(dx + 5.0f, 0.0f, 28.0f, 5.0f, color);
+        }
+        if (segments[1]) {
+            drawRect(dx + 33.0f, 5.0f, 5.0f, 25.0f, color);
+        }
+        if (segments[2]) {
+            drawRect(dx + 33.0f, 36.0f, 5.0f, 25.0f, color);
+        }
+        if (segments[3]) {
+            drawRect(dx + 5.0f, 61.0f, 28.0f, 5.0f, color);
+        }
+        if (segments[4]) {
+            drawRect(dx + 0.0f, 36.0f, 5.0f, 25.0f, color);
+        }
+        if (segments[5]) {
+            drawRect(dx + 0.0f, 5.0f, 5.0f, 25.0f, color);
+        }
+        if (segments[6]) {
+            drawRect(dx + 5.0f, 30.0f, 28.0f, 5.0f, color);
+        }
+    };
+
+    const int count =
+        std::clamp(tutorialOperationSlashCount_, 0,
+                   kTutorialOperationRequiredSlashes);
+    const XMFLOAT4 shadow{0.0f, 0.0f, 0.0f, 0.46f * alpha};
+    const XMFLOAT4 numberColor{1.0f, 0.96f, 0.78f, 0.98f * alpha};
+    const XMFLOAT4 slashColor{0.55f, 0.98f, 0.93f, 0.86f * alpha};
+
+    DrawPauseRect(x - 16.0f * scale, y - 12.0f * scale, 148.0f * scale,
+                  90.0f * scale, {0.0f, 0.0f, 0.0f, 0.38f * alpha});
+    DrawPauseRect(x - 16.0f * scale, y - 12.0f * scale, 148.0f * scale,
+                  4.0f * scale, {0.02f, 0.95f, 0.84f, 0.74f * alpha});
+
+    drawDigit(count, 0.0f, shadow);
+    drawDigit(kTutorialOperationRequiredSlashes, 86.0f, shadow);
+    for (int i = 0; i < 5; ++i) {
+        drawRect(63.0f - static_cast<float>(i) * 3.0f,
+                 12.0f + static_cast<float>(i) * 10.0f, 6.0f, 8.0f, shadow);
+    }
+
+    drawDigit(count, -2.0f, numberColor);
+    drawDigit(kTutorialOperationRequiredSlashes, 84.0f, numberColor);
+    for (int i = 0; i < 5; ++i) {
+        drawRect(61.0f - static_cast<float>(i) * 3.0f,
+                 10.0f + static_cast<float>(i) * 10.0f, 6.0f, 8.0f,
+                 slashColor);
+    }
+}
+
 void GameScene::DrawTutorialOverlay() {
     if (!tutorialMode_ || ctx_ == nullptr || ctx_->rendering.sprite == nullptr ||
         ctx_->systems.winApp == nullptr) {
@@ -2345,6 +2419,13 @@ void GameScene::DrawTutorialOverlay() {
         DrawPauseImage(tutorialTextureIds_[messageIndex], textW, textH,
                        panelX + (panelW - textW * scale) * 0.5f,
                        panelY + (panelH - textH * scale) * 0.5f, scale, 1.0f);
+
+        if (tutorialStep_ < kTutorialStepRedSmash) {
+            const float counterScale = std::clamp(w / 1600.0f, 0.76f, 1.0f);
+            DrawTutorialSlashCounter(panelX + panelW - 150.0f * counterScale,
+                                     panelY - 82.0f * counterScale,
+                                     counterScale, 1.0f);
+        }
 
         if (tutorialStep_ >= kTutorialStepPractice) {
             const float exitW = tutorialTextureWidths_[kTutorialTextExit];
@@ -2921,6 +3002,7 @@ void GameScene::ReflectArcaneProjectile(ArcaneProjectileState &projectile,
     const XMFLOAT3 direction =
         NormalizeParticleCompatVec3(toEnemy, {0.0f, 0.0f, 1.0f});
     projectile.reflected = true;
+    projectile.waitingToFire = false;
     projectile.reflectedBySwordIndex = swordIndex;
     const float reflectedSpeed = projectile.cataclysm
                                      ? kCataclysmProjectileReflectedSpeed
@@ -3679,9 +3761,16 @@ void GameScene::EmitEnemyCueParticles(float deltaTime) {
         if (!projectile.active || projectile.reflected) {
             return;
         }
+        const XMFLOAT3 playerPos = player_.GetTransform().position;
+        const float dx = projectile.position.x - playerPos.x;
+        const float dz = projectile.position.z - playerPos.z;
         const bool canDeflect =
-            DistanceSq(projectile.position, player_.GetTransform().position) <=
-            kArcaneProjectileDeflectRange * kArcaneProjectileDeflectRange;
+            (!projectile.waitingToFire || projectile.cataclysm) &&
+            (!projectile.fromAbove ||
+             projectile.position.y <=
+                 playerPos.y + kCataclysmProjectileDeflectHeight) &&
+            dx * dx + dz * dz <=
+                kArcaneProjectileDeflectRange * kArcaneProjectileDeflectRange;
         const XMFLOAT4 lineColor =
             canDeflect ? XMFLOAT4{0.20f, 1.0f, 0.32f, 1.0f}
                        : XMFLOAT4{1.0f, 0.06f, 0.06f, 1.0f};

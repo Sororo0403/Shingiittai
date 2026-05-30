@@ -11,6 +11,8 @@ class SrvManager;
 /// </summary>
 class RenderTexture {
   public:
+    ~RenderTexture() noexcept;
+
     /// <summary>
     /// RenderTextureを生成する
     /// </summary>
@@ -21,6 +23,11 @@ class RenderTexture {
     /// サイズ変更に合わせて内部リソースを再生成する
     /// </summary>
     void Resize(int width, int height);
+
+    /// <summary>
+    /// 内部リソースとSRV割り当てを解放する
+    /// </summary>
+    void Release();
 
     /// <summary>
     /// RenderTextureへの描画を開始する
@@ -59,7 +66,7 @@ class RenderTexture {
     Microsoft::WRL::ComPtr<ID3D12Resource> resource_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtvHeap_;
     UINT rtvDescriptorSize_ = 0;
-    UINT srvIndex_ = 0;
+    UINT srvIndex_ = UINT_MAX;
     int width_ = 0;
     int height_ = 0;
     D3D12_RESOURCE_STATES resourceState_ =
