@@ -64,6 +64,7 @@ class SwordSlashArcRenderer {
         float life = 0.16f;
         bool isLine = false;
         bool isDirectionCue = false;
+        bool instantLineReveal = false;
         bool active = false;
     };
 

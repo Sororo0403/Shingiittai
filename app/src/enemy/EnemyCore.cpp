@@ -13,11 +13,19 @@ void Enemy::Initialize(uint32_t modelId) {
     runtime_.phase2BladeClashPending = false;
     runtime_.pendingAttackCue = {};
     runtime_.attackCueSequence = 0;
+    runtime_.tripleIaiSlashCooldown = 0.0f;
+    runtime_.tripleIaiSlashActive = false;
+    runtime_.tripleIaiSlashesRemaining = 0;
+    runtime_.tripleIaiSlashIndex = 0;
+    ResetTripleIaiSlashClones();
     runtime_.arcaneLaserCooldown = 0.0f;
     runtime_.arcaneLaserDirection = {0.0f, 0.0f, 1.0f};
     runtime_.cataclysmLaserCooldown = 0.0f;
     runtime_.cataclysmLaserDirection = {0.0f, 0.0f, 1.0f};
     runtime_.rangedReengagePending = false;
+    runtime_.sharedRangedAttackCooldown = 0.0f;
+    runtime_.rangedAttackLockoutTimer = 0.0f;
+    runtime_.consecutiveRangedAttackCount = 0;
     tf_.position = {0.0f, 0.0f, 10.0f};
     tf_.scale = {1.0f, 1.0f, 1.0f};
     tf_.rotation = {0.0f, 0.0f, 0.0f, 1.0f};
@@ -42,6 +50,12 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
             phantomWarpCooldown_ = 0.0f;
         }
     }
+    if (tripleIaiSlashCooldown_ > 0.0f) {
+        tripleIaiSlashCooldown_ -= deltaTime;
+        if (tripleIaiSlashCooldown_ < 0.0f) {
+            tripleIaiSlashCooldown_ = 0.0f;
+        }
+    }
     if (phantomFinalLockTimer_ > 0.0f) {
         phantomFinalLockTimer_ -= deltaTime;
         if (phantomFinalLockTimer_ < 0.0f) {
@@ -58,6 +72,18 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
         cataclysmLaserCooldown_ -= deltaTime;
         if (cataclysmLaserCooldown_ < 0.0f) {
             cataclysmLaserCooldown_ = 0.0f;
+        }
+    }
+    if (sharedRangedAttackCooldown_ > 0.0f) {
+        sharedRangedAttackCooldown_ -= deltaTime;
+        if (sharedRangedAttackCooldown_ < 0.0f) {
+            sharedRangedAttackCooldown_ = 0.0f;
+        }
+    }
+    if (rangedAttackLockoutTimer_ > 0.0f) {
+        rangedAttackLockoutTimer_ -= deltaTime;
+        if (rangedAttackLockoutTimer_ < 0.0f) {
+            rangedAttackLockoutTimer_ = 0.0f;
         }
     }
 
@@ -228,9 +254,17 @@ void Enemy::ResetTutorialState() {
     runtime_.phaseTransitionTimer = 0.0f;
     runtime_.phase2BladeClashPending = false;
     runtime_.arcaneLaserCooldown = 0.0f;
+    runtime_.tripleIaiSlashCooldown = 0.0f;
+    runtime_.tripleIaiSlashActive = false;
+    runtime_.tripleIaiSlashesRemaining = 0;
+    runtime_.tripleIaiSlashIndex = 0;
+    ResetTripleIaiSlashClones();
     runtime_.arcaneLaserDirection = {0.0f, 0.0f, 1.0f};
     runtime_.cataclysmLaserCooldown = 0.0f;
     runtime_.cataclysmLaserDirection = {0.0f, 0.0f, 1.0f};
+    runtime_.sharedRangedAttackCooldown = 0.0f;
+    runtime_.rangedAttackLockoutTimer = 0.0f;
+    runtime_.consecutiveRangedAttackCount = 0;
     runtime_.hitReactionTimer = 0.0f;
     runtime_.damageFlashTimer = 0.0f;
     runtime_.counterRecoilTimer = 0.0f;
@@ -238,6 +272,46 @@ void Enemy::ResetTutorialState() {
     runtime_.deathFinished = false;
     runtime_.deathTimer = 0.0f;
     ResetWarpTrails();
+    UpdateParts();
+}
+
+void Enemy::DebugForceBossPhase(BossPhase phase, bool playTransition) {
+    if (deathFinished_ || isDying_ || config_.core.maxHp <= 0.0f) {
+        return;
+    }
+
+    EndAttack();
+    tripleIaiSlashActive_ = false;
+    tripleIaiSlashesRemaining_ = 0;
+    tripleIaiSlashIndex_ = 0;
+    ResetTripleIaiSlashClones();
+    hitReactionTimer_ = 0.0f;
+    damageFlashTimer_ = 0.0f;
+    counterRecoilTimer_ = 0.0f;
+
+    float hpRatio = 1.0f;
+    switch (phase) {
+    case BossPhase::Phase1:
+        hpRatio = 1.0f;
+        break;
+    case BossPhase::Phase2:
+        hpRatio = (config_.core.phase2HealthRatioThreshold +
+                   config_.core.phase3HealthRatioThreshold) *
+                  0.5f;
+        break;
+    case BossPhase::Phase3:
+        hpRatio = config_.core.phase3HealthRatioThreshold * 0.5f;
+        break;
+    }
+    hp_ = (std::max)(1.0f, config_.core.maxHp * hpRatio);
+
+    phase_ = phase;
+    phaseTransitionActive_ = playTransition;
+    phaseTransitionTimer_ = 0.0f;
+    runtime_.phase2BladeClashPending = false;
+    SetIsPhaseChanging(playTransition);
+    stateTimer_ = 0.0f;
+    UpdateFacingToPlayer();
     UpdateParts();
 }
 
@@ -405,6 +479,16 @@ void Enemy::ChangeActionStep(ActionStep step) {
 }
 
 void Enemy::EndAttack() {
+    const bool endedRangedAttack =
+        action_.kind == ActionKind::ArcaneLaser ||
+        action_.kind == ActionKind::CataclysmLaser || farSlashActive_;
+    const bool keepTripleIaiChain =
+        tripleIaiSlashActive_ && tripleIaiSlashesRemaining_ > 0 &&
+        ((farSlashActive_ &&
+          (action_.kind == ActionKind::Smash ||
+           action_.kind == ActionKind::Sweep)) ||
+         (action_.kind == ActionKind::Warp && warp_.farSlashFollowup));
+
     action_.kind = ActionKind::None;
     action_.step = ActionStep::None;
     IssueAttackCue(EnemyAttackCueType::Cancel, ActionKind::None, 0.0f);
@@ -432,6 +516,16 @@ void Enemy::EndAttack() {
     stateTimer_ = 0.0f;
     cinematicPitch_ = 0.0f;
     cinematicRoll_ = 0.0f;
+    if (endedRangedAttack) {
+        sharedRangedAttackCooldown_ = (std::max)(
+            sharedRangedAttackCooldown_, sharedRangedAttackCooldownDuration_);
+    }
+    if (!keepTripleIaiChain) {
+        tripleIaiSlashActive_ = false;
+        tripleIaiSlashesRemaining_ = 0;
+        tripleIaiSlashIndex_ = 0;
+        ResetTripleIaiSlashClones();
+    }
 
     ResetPreAttackPresentationState();
 }
@@ -513,6 +607,10 @@ void Enemy::UpdateBossPhase() {
 
     if (nextPhase != phase_) {
         EndAttack();
+        tripleIaiSlashActive_ = false;
+        tripleIaiSlashesRemaining_ = 0;
+        tripleIaiSlashIndex_ = 0;
+        ResetTripleIaiSlashClones();
         hitReactionTimer_ = 0.0f;
         counterRecoilTimer_ = 0.0f;
         SetIsPhaseChanging(true);

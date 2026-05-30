@@ -13,6 +13,8 @@
 #include <array>
 #include <cmath>
 #include <cstring>
+#include <limits>
+#include <stdexcept>
 #include <vector>
 
 using namespace DirectX;
@@ -22,6 +24,26 @@ using Microsoft::WRL::ComPtr;
 namespace {
 
 constexpr UINT kSkinningThreadCount = 1024u;
+
+uint32_t CheckedUint32Count(size_t count, const char *message) {
+    if (count > (std::numeric_limits<uint32_t>::max)()) {
+        throw std::runtime_error(message);
+    }
+    return static_cast<uint32_t>(count);
+}
+
+UINT CheckedBufferSize(size_t elementSize, uint32_t count,
+                       const char *message) {
+    if (count == 0 ||
+        elementSize > (std::numeric_limits<size_t>::max)() / count) {
+        throw std::runtime_error(message);
+    }
+    const size_t bytes = elementSize * count;
+    if (bytes > (std::numeric_limits<UINT>::max)()) {
+        throw std::runtime_error(message);
+    }
+    return static_cast<UINT>(bytes);
+}
 
 bool IsTransparentMaterial(const Material &material) {
     return material.blendMode == static_cast<int32_t>(BlendMode::Transparent) ||
@@ -153,15 +175,18 @@ void ModelRenderer::CreateSkinClusters(Model &model) {
         SkinCluster &skinCluster = subMesh.skinCluster;
 
         const uint32_t jointCount =
-            std::max<uint32_t>(1, static_cast<uint32_t>(model.bones.size()));
+            std::max<uint32_t>(1, CheckedUint32Count(
+                                      model.bones.size(),
+                                      "ModelRenderer bone count overflow"));
 
         skinCluster.inverseBindPoseMatrices.assign(
             jointCount, StoreMatrix(XMMatrixIdentity()));
 
         if (subMesh.vertexCount > 0 && !subMesh.skinClusterData.empty()) {
             const Mesh &mesh = meshManager_->GetMesh(subMesh.meshId);
-            const UINT influenceBufferSize = static_cast<UINT>(
-                sizeof(VertexInfluence) * subMesh.vertexCount);
+            const UINT influenceBufferSize =
+                CheckedBufferSize(sizeof(VertexInfluence), subMesh.vertexCount,
+                                  "ModelRenderer influence buffer size overflow");
 
             CD3DX12_HEAP_PROPERTIES uploadHeap(D3D12_HEAP_TYPE_UPLOAD);
             auto influenceDesc =
@@ -181,7 +206,7 @@ void ModelRenderer::CreateSkinClusters(Model &model) {
 
             skinCluster.influenceCount = subMesh.vertexCount;
             std::memset(skinCluster.mappedInfluence, 0,
-                        sizeof(VertexInfluence) * skinCluster.influenceCount);
+                        influenceBufferSize);
 
             const UINT inputVertexSrvIndex = srvManager_->Allocate();
             skinCluster.inputVertexSrvCpuHandle =
@@ -223,7 +248,8 @@ void ModelRenderer::CreateSkinClusters(Model &model) {
                 skinCluster.influenceSrvCpuHandle);
 
             const UINT skinnedVertexBufferSize =
-                static_cast<UINT>(sizeof(Vertex) * subMesh.vertexCount);
+                CheckedBufferSize(sizeof(Vertex), subMesh.vertexCount,
+                                  "ModelRenderer skinned vertex buffer size overflow");
             CD3DX12_HEAP_PROPERTIES defaultHeap(D3D12_HEAP_TYPE_DEFAULT);
             auto skinnedVertexDesc = CD3DX12_RESOURCE_DESC::Buffer(
                 skinnedVertexBufferSize,
@@ -306,7 +332,8 @@ void ModelRenderer::CreateSkinClusters(Model &model) {
         }
 
         const UINT paletteBufferSize =
-            static_cast<UINT>(sizeof(WellForGPU) * jointCount);
+            CheckedBufferSize(sizeof(WellForGPU), jointCount,
+                              "ModelRenderer palette buffer size overflow");
 
         CD3DX12_HEAP_PROPERTIES uploadHeap(D3D12_HEAP_TYPE_UPLOAD);
         auto paletteDesc = CD3DX12_RESOURCE_DESC::Buffer(paletteBufferSize);
@@ -394,23 +421,23 @@ void ModelRenderer::UpdateSkinClusters(Model &model) {
     }
 }
 void ModelRenderer::CreateSkinningRootSignature() {
-    CD3DX12_ROOT_PARAMETER params[5];
+    CD3DX12_ROOT_PARAMETER params[5]{};
 
     params[0].InitAsConstants(1, 0);
 
-    CD3DX12_DESCRIPTOR_RANGE inputVertexRange;
+    CD3DX12_DESCRIPTOR_RANGE inputVertexRange{};
     inputVertexRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
     params[1].InitAsDescriptorTable(1, &inputVertexRange);
 
-    CD3DX12_DESCRIPTOR_RANGE influenceRange;
+    CD3DX12_DESCRIPTOR_RANGE influenceRange{};
     influenceRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1);
     params[2].InitAsDescriptorTable(1, &influenceRange);
 
-    CD3DX12_DESCRIPTOR_RANGE matrixPaletteRange;
+    CD3DX12_DESCRIPTOR_RANGE matrixPaletteRange{};
     matrixPaletteRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2);
     params[3].InitAsDescriptorTable(1, &matrixPaletteRange);
 
-    CD3DX12_DESCRIPTOR_RANGE skinnedVertexRange;
+    CD3DX12_DESCRIPTOR_RANGE skinnedVertexRange{};
     skinnedVertexRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
     params[4].InitAsDescriptorTable(1, &skinnedVertexRange);
 

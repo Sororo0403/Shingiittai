@@ -1,6 +1,7 @@
 #include "animation/SkeletonPoseBuilder.h"
 #include "animation/AnimationSampler.h"
 #include <DirectXMath.h>
+#include <stdexcept>
 
 using namespace DirectX;
 
@@ -67,6 +68,10 @@ void SkeletonPoseBuilder::UpdateSkeleton(
         if (parent < 0) {
             globalMatrices[i] = localMatrices[i];
         } else {
+            if (static_cast<size_t>(parent) >= boneCount ||
+                static_cast<size_t>(parent) >= i) {
+                throw std::runtime_error("Invalid skeleton parent index");
+            }
             globalMatrices[i] = localMatrices[i] * globalMatrices[parent];
         }
 

@@ -385,40 +385,48 @@ void Enemy::UpdateParts() {
         const float charge = GetCataclysmLaserChargeRatio();
         const float heavyPulse = pulse * (0.65f + 0.35f * charge);
         if (action_.step == ActionStep::Charge) {
-            bodyTf_.position.y -= 0.22f + 0.20f * charge;
+            bodyTf_.position.y += 0.78f + 1.16f * charge + 0.10f * heavyPulse;
             bodyTf_.position.x += (-forwardX) * (0.34f + 0.42f * charge);
             bodyTf_.position.z += (-forwardZ) * (0.34f + 0.42f * charge);
             bodyTf_.scale.x += 0.22f + 0.26f * charge;
-            bodyTf_.scale.y += 0.10f + 0.12f * charge;
+            bodyTf_.scale.y += 0.06f + 0.08f * charge;
             bodyTf_.scale.z += 0.24f + 0.34f * charge;
             rightHandTf_.position.x += forwardX * (2.25f + 0.72f * charge);
             rightHandTf_.position.z += forwardZ * (2.25f + 0.72f * charge);
-            rightHandTf_.position.y += 0.92f + 0.42f * heavyPulse;
+            rightHandTf_.position.y += 1.38f + 0.82f * charge +
+                                       0.42f * heavyPulse;
             rightHandTf_.scale.x += 0.54f + 0.44f * charge;
             rightHandTf_.scale.y += 0.54f + 0.44f * charge;
             rightHandTf_.scale.z += 0.54f + 0.44f * charge;
             leftHandTf_.position.x += (-rightX) * 0.38f + forwardX * 0.42f;
             leftHandTf_.position.z += (-rightZ) * 0.38f + forwardZ * 0.42f;
-            leftHandTf_.position.y += 0.28f + 0.18f * charge;
+            leftHandTf_.position.y += 0.82f + 0.72f * charge;
+            visualTf_.position.y += 0.78f + 1.12f * charge +
+                                    0.08f * heavyPulse;
             visualTf_.scale.x += 0.06f * charge;
             visualTf_.scale.z += 0.08f * charge;
             visualPitch -= 0.24f + 0.18f * charge;
         } else if (action_.step == ActionStep::Active) {
+            bodyTf_.position.y += 2.10f + 0.14f * heavyPulse;
             bodyTf_.position.x += (-forwardX) * 0.22f;
             bodyTf_.position.z += (-forwardZ) * 0.22f;
             bodyTf_.scale.x += 0.18f;
             bodyTf_.scale.z += 0.26f;
             rightHandTf_.position.x += forwardX * 2.85f;
             rightHandTf_.position.z += forwardZ * 2.85f;
-            rightHandTf_.position.y += 0.94f + 0.10f * heavyPulse;
+            rightHandTf_.position.y += 2.52f + 0.18f * heavyPulse;
             rightHandTf_.scale.x += 0.78f;
             rightHandTf_.scale.y += 0.78f;
             rightHandTf_.scale.z += 0.78f;
+            leftHandTf_.position.y += 1.52f + 0.12f * heavyPulse;
+            visualTf_.position.y += 2.08f + 0.12f * heavyPulse;
             visualPitch -= 0.12f;
         } else if (action_.step == ActionStep::Recovery) {
             rightHandTf_.position.x += forwardX * 0.88f;
             rightHandTf_.position.z += forwardZ * 0.88f;
-            rightHandTf_.position.y += 0.34f;
+            rightHandTf_.position.y += 0.80f;
+            bodyTf_.position.y += 0.58f;
+            visualTf_.position.y += 0.52f;
             visualPitch += 0.08f;
         }
     } else if (!suppressActionPresentation && action_.kind == ActionKind::Stalk) {
@@ -636,6 +644,14 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
 
     if (isVisible_) {
         drawEnemyVisual(visualTf_);
+    }
+
+    for (const auto &clone : tripleIaiClones_) {
+        if (!clone.isActive) {
+            continue;
+        }
+
+        drawEnemyVisual(clone.visual);
     }
 
     for (const auto &trail : afterimageGhosts_) {

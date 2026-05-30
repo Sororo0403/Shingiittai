@@ -10,6 +10,13 @@ using namespace DirectX;
 namespace {
 constexpr float kPlayerVisualScaleMultiplier = 1.45f;
 constexpr float kBaseSwordAttackDamage = 8.0f;
+constexpr float kRangedAttackWindupSeconds = 0.42f;
+constexpr float kRangedAttackChargeSeconds = 1.15f;
+constexpr float kRangedAttackRecoverySeconds = 0.55f;
+constexpr float kRangedAttackCooldownSeconds = 0.35f;
+constexpr float kHandRangedJoinDistance = 0.18f;
+constexpr float kHandRangedReleaseDistance = 0.26f;
+constexpr float kRangedHandAimYawRange = 0.95f;
 }
 
 void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
@@ -33,6 +40,14 @@ void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
     keyboardLeftSwordState_ = {};
     autoMoveOrbitDir_ = 1.0f;
     autoMoveOrbitTimer_ = 0.0f;
+    rangedAttackState_ = RangedAttackState::Idle;
+    rangedAttackTimer_ = 0.0f;
+    rangedChargeRatio_ = 0.0f;
+    rangedAttackCooldown_ = 0.0f;
+    rangedShotPending_ = false;
+    pendingRangedShot_ = {};
+    rangedAimDirection_ = {0.0f, 0.0f, 1.0f};
+    handRangedIntentActive_ = false;
     leftSword_.Update(BuildSwordTransform(MakeIdleSwordPose(true), true),
                       MakeIdleSwordPose(true), 0.0f);
     rightSword_.Update(BuildSwordTransform(MakeIdleSwordPose(false), false),
@@ -55,7 +70,6 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
         ToggleGamepadControlMode();
     }
 
-    (void)cameraYaw;
     if (suppressMovement) {
         velocity_ = {0.0f, 0.0f, 0.0f};
         knockbackVelocity_ = {0.0f, 0.0f, 0.0f};
@@ -78,6 +92,8 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     if (useUdpSword) {
         swordUdpController_.Update(inputDeltaTime);
     }
+    UpdateRangedAttack(input, inputDeltaTime, cameraYaw, useKeyboardMouse,
+                       useUdpSword);
 
     SwordPose leftPose = MakeIdleSwordPose(true);
     if (useUdpSword && swordUdpController_.IsActive(0)) {
@@ -124,6 +140,11 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     }
 
     if (suppressCameraSwordSlash_ && controlType == InputControlType::Hand) {
+        leftPose.isSlashMode = false;
+        rightPose.isSlashMode = false;
+    }
+    if (IsChargingRangedAttack() ||
+        rangedAttackState_ == RangedAttackState::Recovery) {
         leftPose.isSlashMode = false;
         rightPose.isSlashMode = false;
     }
@@ -496,6 +517,14 @@ float Player::TakeDamage(float damage) {
     return appliedDamage;
 }
 
+Player::ChargedShot Player::ConsumeChargedShot() {
+    if (!rangedShotPending_) {
+        return {};
+    }
+    rangedShotPending_ = false;
+    return pendingRangedShot_;
+}
+
 Transform Player::BuildSwordTransform(const SwordPose &pose, bool isLeft) const {
     Transform swordTransform{};
 
@@ -586,6 +615,125 @@ void Player::UpdateWeaponRules(Input *input, SwordPose &leftPose,
     }
 
     (void)deltaTime;
+}
+
+void Player::UpdateRangedAttack(Input *input, float deltaTime, float cameraYaw,
+                                bool useKeyboardMouse, bool useUdpSword) {
+    if (rangedAttackCooldown_ > 0.0f) {
+        rangedAttackCooldown_ =
+            (std::max)(0.0f, rangedAttackCooldown_ - deltaTime);
+    }
+
+    bool intentHeld = false;
+    bool intentPressed = false;
+    bool intentReleased = false;
+    DirectX::XMFLOAT3 desiredAim{std::sinf(cameraYaw), 0.0f,
+                                 std::cosf(cameraYaw)};
+
+    if (useKeyboardMouse && input != nullptr) {
+        intentHeld = input->IsMousePress(1);
+        intentPressed = input->IsMouseTrigger(1);
+        intentReleased = input->IsMouseRelease(1);
+    } else if (useUdpSword) {
+        const auto left = swordUdpController_.GetDebugHandState(0);
+        const auto right = swordUdpController_.GetDebugHandState(1);
+        const bool bothHands = left.active && right.active;
+        const float dx = left.calibratedPalm.x - right.calibratedPalm.x;
+        const float dy = left.calibratedPalm.y - right.calibratedPalm.y;
+        const float distance = std::sqrt(dx * dx + dy * dy);
+        const bool joined =
+            bothHands &&
+            (handRangedIntentActive_ ? distance < kHandRangedReleaseDistance
+                                     : distance < kHandRangedJoinDistance);
+        intentHeld = joined;
+        intentPressed = joined && !handRangedIntentActive_;
+        intentReleased = !joined && handRangedIntentActive_;
+        handRangedIntentActive_ = joined;
+
+        if (bothHands) {
+            const float aimX = std::clamp(
+                ((left.calibratedPalm.x + right.calibratedPalm.x) * 0.5f -
+                 0.5f) *
+                    2.0f,
+                -1.0f, 1.0f);
+            const float yaw = yaw_ + aimX * kRangedHandAimYawRange;
+            desiredAim = {std::sinf(yaw), 0.0f, std::cosf(yaw)};
+        }
+    } else {
+        handRangedIntentActive_ = false;
+    }
+
+    const float lenSq = desiredAim.x * desiredAim.x +
+                        desiredAim.y * desiredAim.y +
+                        desiredAim.z * desiredAim.z;
+    if (lenSq > 0.0001f) {
+        const float invLen = 1.0f / std::sqrt(lenSq);
+        rangedAimDirection_ = {desiredAim.x * invLen, desiredAim.y * invLen,
+                               desiredAim.z * invLen};
+    }
+
+    switch (rangedAttackState_) {
+    case RangedAttackState::Idle:
+        rangedChargeRatio_ = 0.0f;
+        if (intentPressed && rangedAttackCooldown_ <= 0.0f) {
+            rangedAttackState_ = RangedAttackState::Windup;
+            rangedAttackTimer_ = 0.0f;
+        }
+        break;
+    case RangedAttackState::Windup:
+        rangedAttackTimer_ += deltaTime;
+        if (!intentHeld || intentReleased) {
+            rangedAttackState_ = RangedAttackState::Recovery;
+            rangedAttackTimer_ = 0.0f;
+            rangedChargeRatio_ = 0.0f;
+            break;
+        }
+        if (rangedAttackTimer_ >= kRangedAttackWindupSeconds) {
+            rangedAttackState_ = RangedAttackState::Charging;
+            rangedAttackTimer_ = 0.0f;
+        }
+        break;
+    case RangedAttackState::Charging:
+        rangedAttackTimer_ += deltaTime;
+        rangedChargeRatio_ =
+            std::clamp(rangedAttackTimer_ / kRangedAttackChargeSeconds, 0.0f,
+                       1.0f);
+        if (!intentHeld || intentReleased) {
+            if (rangedChargeRatio_ >= 1.0f) {
+                pendingRangedShot_.fired = true;
+                pendingRangedShot_.origin = ComputeRangedAttackOrigin();
+                pendingRangedShot_.direction = rangedAimDirection_;
+                pendingRangedShot_.chargeRatio = rangedChargeRatio_;
+                rangedShotPending_ = true;
+            }
+            rangedAttackState_ = RangedAttackState::Recovery;
+            rangedAttackTimer_ = 0.0f;
+        }
+        break;
+    case RangedAttackState::Recovery:
+        rangedAttackTimer_ += deltaTime;
+        if (rangedAttackTimer_ >= kRangedAttackRecoverySeconds) {
+            rangedAttackState_ = RangedAttackState::Idle;
+            rangedAttackTimer_ = 0.0f;
+            rangedChargeRatio_ = 0.0f;
+            rangedAttackCooldown_ = kRangedAttackCooldownSeconds;
+        }
+        break;
+    }
+}
+
+DirectX::XMFLOAT3 Player::ComputeRangedAttackOrigin() const {
+    DirectX::XMVECTOR playerRot =
+        DirectX::XMQuaternionNormalize(DirectX::XMLoadFloat4(&tf_.rotation));
+    DirectX::XMVECTOR playerPos = DirectX::XMLoadFloat3(&tf_.position);
+    DirectX::XMVECTOR local =
+        DirectX::XMVectorSet(0.0f, kHandHeight + 0.18f, kArmLength + 0.35f, 0.0f);
+    DirectX::XMFLOAT3 origin{};
+    DirectX::XMStoreFloat3(&origin,
+                           DirectX::XMVectorAdd(
+                               playerPos, DirectX::XMVector3Rotate(local,
+                                                                    playerRot)));
+    return origin;
 }
 
 void Player::ToggleGamepadControlMode() {

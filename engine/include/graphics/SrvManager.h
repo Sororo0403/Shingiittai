@@ -86,4 +86,5 @@ class SrvManager {
     UINT maxSrvCount_ = 0;
     UINT currentIndex_ = 0;
     std::vector<UINT> freeList_;
+    std::vector<bool> allocated_;
 };

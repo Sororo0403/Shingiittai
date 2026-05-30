@@ -4,7 +4,6 @@
 #include "Camera.h"
 #include "Enemy.h"
 #include "EnemyPhaseMaterial.h"
-#include "GPUParticleSystem.h"
 #include "Player.h"
 #include "SwordInputCalibration.h"
 #include <DirectXMath.h>
@@ -142,13 +141,6 @@ class GameVictoryScene : public BaseScene {
     bool slashSound1Played_ = false;
     bool slashSound2Played_ = false;
     bool slashSound3Played_ = false;
-    bool particlesReady_ = false;
-    GPUParticleSystem impactParticles_;
-    GPUParticleSystem shockParticles_;
-    GPUParticleSystem pierceParticles_;
-    GPUParticleSystem fireCloudParticles_;
-    GPUParticleSystem darkSmokeParticles_;
-    GPUParticleSystem smokeParticles_;
     std::array<VictoryShard, 180> victoryShards_{};
 
     Image missionCompleteLabel_{};

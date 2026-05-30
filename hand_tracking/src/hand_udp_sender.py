@@ -339,8 +339,8 @@ def print_startup_log(args, cap, backend, hands_detector):
 def parse_args():
     parser = argparse.ArgumentParser(description="Shingiittai raw hand sender.")
     parser.add_argument("--camera", default="0")
-    parser.add_argument("--width", type=int, default=1280)
-    parser.add_argument("--height", type=int, default=720)
+    parser.add_argument("--width", type=int, default=1920)
+    parser.add_argument("--height", type=int, default=1080)
     parser.add_argument("--udp-host", default="127.0.0.1")
     parser.add_argument("--udp-port", type=int, default=5005)
     parser.add_argument("--preview-host", default="127.0.0.1")

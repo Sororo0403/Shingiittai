@@ -79,6 +79,7 @@ void SwordTrailRenderer::Reset() {
     for (TrailState &trail : trails_) {
         trail.samples.clear();
         trail.wasActive = false;
+        trail.suppressUntilInactive = false;
     }
     vertexCount_ = 0;
 }
@@ -92,6 +93,18 @@ void SwordTrailRenderer::Update(const Player &player, float deltaTime) {
         UpdateOneSword(i, swords[i], slashStates[i], damages[i], deltaTime);
     }
 
+    BuildVertices();
+}
+
+void SwordTrailRenderer::SuppressSlashUntilInactive(size_t swordIndex) {
+    if (swordIndex >= trails_.size()) {
+        return;
+    }
+
+    TrailState &trail = trails_[swordIndex];
+    trail.samples.clear();
+    trail.wasActive = true;
+    trail.suppressUntilInactive = true;
     BuildVertices();
 }
 
@@ -141,6 +154,18 @@ void SwordTrailRenderer::UpdateOneSword(size_t index, const Sword *sword,
 
     if (!sword) {
         trail.wasActive = false;
+        trail.suppressUntilInactive = false;
+        return;
+    }
+
+    if (trail.suppressUntilInactive) {
+        trail.samples.clear();
+        if (!isSlashing) {
+            trail.suppressUntilInactive = false;
+            trail.wasActive = false;
+        } else {
+            trail.wasActive = true;
+        }
         return;
     }
 

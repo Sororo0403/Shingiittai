@@ -13,6 +13,8 @@
 #include <array>
 #include <cmath>
 #include <cstring>
+#include <limits>
+#include <stdexcept>
 #include <vector>
 
 using namespace DirectX;
@@ -281,8 +283,10 @@ ModelRenderer::WriteInstances(const Model &model,
 
     D3D12_VERTEX_BUFFER_VIEW view{};
     view.BufferLocation = allocation.gpu;
-    view.SizeInBytes =
-        static_cast<UINT>(sizeof(InstanceData) * instances.size());
+    if (allocation.size > (std::numeric_limits<UINT>::max)()) {
+        throw std::runtime_error("ModelRenderer instance buffer size overflow");
+    }
+    view.SizeInBytes = static_cast<UINT>(allocation.size);
     view.StrideInBytes = sizeof(InstanceData);
     return view;
 }

@@ -11,6 +11,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <limits>
+#include <stdexcept>
 
 using namespace DirectX;
 using namespace DxUtils;
@@ -217,6 +219,9 @@ MeshRenderer::WriteInstances(const InstanceData *instances,
         uploadBuffer_.WriteArray(instances, instanceCount, alignof(InstanceData));
     D3D12_VERTEX_BUFFER_VIEW view{};
     view.BufferLocation = allocation.gpu;
+    if (allocation.size > (std::numeric_limits<UINT>::max)()) {
+        throw std::runtime_error("MeshRenderer instance buffer size overflow");
+    }
     view.SizeInBytes = static_cast<UINT>(allocation.size);
     view.StrideInBytes = sizeof(InstanceData);
     return view;

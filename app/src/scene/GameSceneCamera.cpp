@@ -497,6 +497,10 @@ void GameScene::UpdateBattleCamera() {
                                enemyActionStep == ActionStep::Recovery);
     const bool isEnemyPhaseTransition = enemy_.IsPhaseTransitionActive();
     const float enemyPhaseTransitionRatio = enemy_.GetPhaseTransitionRatio();
+    const DirectX::XMFLOAT3 enemyCameraPos =
+        enemy_.IsTripleIaiCenterCameraHold()
+            ? enemy_.GetTripleIaiCenterFocusPosition()
+            : enemyPos;
     // =========================
     // FOV繧�E�繝ｼ繧�E�繝�Eヨ豎ｺ螳・
     // =========================
@@ -581,8 +585,8 @@ void GameScene::UpdateBattleCamera() {
             playerPos.x, playerPos.y + playerViewEyeHeight_, playerPos.z};
 
         if (isLockOn_) {
-            float dx = enemyPos.x - playerPos.x;
-            float dz = enemyPos.z - playerPos.z;
+            float dx = enemyCameraPos.x - playerPos.x;
+            float dz = enemyCameraPos.z - playerPos.z;
             float targetYaw = std::atan2f(dx, dz);
             float diff = WrapRadians(targetYaw - cameraYaw_);
 
@@ -620,8 +624,9 @@ void GameScene::UpdateBattleCamera() {
         DirectX::XMFLOAT3 lookAt{};
         if (isLockOn_) {
             DirectX::XMFLOAT3 desiredLookAt = {
-                enemyPos.x, enemyPos.y + playerViewLockOnLookHeight_,
-                enemyPos.z};
+                enemyCameraPos.x,
+                enemyCameraPos.y + playerViewLockOnLookHeight_,
+                enemyCameraPos.z};
 
             const float lookAlpha =
                 SaturatedAlpha(16.0f, ctx_->frame.deltaTime);
@@ -656,7 +661,7 @@ void GameScene::UpdateBattleCamera() {
     // 繝ｭ繝�Eけ繧�E�繝ｳ荳�E�縺�E�縺・yaw 陬懷勧
     // =========================
     if (isLockOn_) {
-        DirectX::XMFLOAT3 assistTarget = enemyPos;
+        DirectX::XMFLOAT3 assistTarget = enemyCameraPos;
 
         float assistStrength = lockOnAssistStrength_;
         float assistMaxStep = lockOnAssistMaxStep_;
@@ -721,9 +726,9 @@ void GameScene::UpdateBattleCamera() {
         // 繝ｭ繝�Eけ繧�E�繝ｳ譎�E
         // 謨�E�縺�E�縺�E�繝ｩ繧�E�繝ｳ蝓ｺ貁E��〒蜀・�E��E�霑ｽ蠕�E
         // ---------------------------------
-        float toEnemyX = enemyPos.x - playerPos.x;
-        float toEnemyZ = enemyPos.z - playerPos.z;
-        const float distXZ = DistanceXZ(enemyPos, playerPos);
+        float toEnemyX = enemyCameraPos.x - playerPos.x;
+        float toEnemyZ = enemyCameraPos.z - playerPos.z;
+        const float distXZ = DistanceXZ(enemyCameraPos, playerPos);
         const XMFLOAT2 enemyLine = NormalizeXZ(toEnemyX, toEnemyZ);
         const float lineX = enemyLine.x;
         const float lineZ = enemyLine.y;
@@ -784,7 +789,7 @@ void GameScene::UpdateBattleCamera() {
         // ---------------------------------
         // 騾壼�E��E�譎�E 閧�E�雜翫�E�荳我ｺ�E�遘ｰ
         // ---------------------------------
-        float enemyDistanceXZ = DistanceXZ(enemyPos, playerPos);
+        float enemyDistanceXZ = DistanceXZ(enemyCameraPos, playerPos);
         float dynamicDistance = cameraDistance_;
         if (enemyDistanceXZ > 5.0f) {
             dynamicDistance +=
@@ -823,11 +828,11 @@ void GameScene::UpdateBattleCamera() {
         const float playerLookWeight = 1.0f - enemyLookWeight;
         DirectX::XMFLOAT3 desiredLookAt = {
             playerPos.x * lockOnLookPlayerWeight_ +
-                enemyPos.x * lockOnLookEnemyWeight_,
+                enemyCameraPos.x * lockOnLookEnemyWeight_,
             (playerPos.y + playerLookHeight) * playerLookWeight +
-                (enemyPos.y + enemyLookHeight) * enemyLookWeight,
+                (enemyCameraPos.y + enemyLookHeight) * enemyLookWeight,
             playerPos.z * lockOnLookPlayerWeight_ +
-                enemyPos.z * lockOnLookEnemyWeight_};
+                enemyCameraPos.z * lockOnLookEnemyWeight_};
 
         const float lookAlpha =
             SaturatedAlpha(lockOnLookAtLerpSpeed_, ctx_->frame.deltaTime);

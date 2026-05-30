@@ -125,8 +125,8 @@ void Enemy::SetDifficulty(float difficulty) {
     idleTurnSpeed_ = 5.0f + 5.0f * t;
 
     quickSlashChance_ = 0.20f;
-    quickSmashChargeTime_ = 0.82f - 0.34f * t;
-    quickSweepChargeTime_ = 0.76f - 0.30f * t;
+    quickSmashChargeTime_ = 0.98f - 0.34f * t;
+    quickSweepChargeTime_ = 0.92f - 0.30f * t;
     directionFeintChance_ = 0.36f;
     chargeWarpFeintChance_ = 0.38f;
     farWarpSlashChance_ = 0.76f;
@@ -136,6 +136,9 @@ void Enemy::SetDifficulty(float difficulty) {
     farSlashSweepChargeTime_ = 1.04f - 0.20f * t;
     phantomWarpChance_ = 0.38f;
     phantomWarpCooldownDuration_ = 6.8f - 3.6f * t;
+    tripleIaiSlashChance_ = 0.28f + 0.24f * t;
+    tripleIaiSlashCooldownDuration_ = 9.6f - 3.2f * t;
+    tripleIaiCloneLife_ = 1.20f + 0.30f * t;
     phantomFinalLockDuration_ = 0.38f - 0.16f * t;
     bladeClashChance_ = 0.30f;
     arcaneLaserChance_ = 0.38f + 0.22f * t;
@@ -147,7 +150,10 @@ void Enemy::SetDifficulty(float difficulty) {
     cataclysmLaserChance_ = 0.28f + 0.26f * t;
     cataclysmLaserCooldownDuration_ = 12.8f - 4.2f * t;
     cataclysmLaserMinDistance_ = 10.2f - 1.8f * t;
-    cataclysmLaserWarpDistance_ = 38.0f + 8.5f * t;
+    cataclysmLaserWarpDistance_ = 34.0f + 6.0f * t;
+    sharedRangedAttackCooldownDuration_ = 5.6f - 1.2f * t;
+    rangedAttackChainLockoutDuration_ = 10.5f - 2.0f * t;
+    rangedAttackChainLockoutThreshold_ = 5;
     config_.attacks.arcaneLaser.range = 28.0f + 5.0f * t;
     config_.attacks.arcaneLaser.radius = 0.44f + 0.10f * t;
     config_.attacks.arcaneLaser.profile.chargeTime = 1.16f - 0.24f * t;
@@ -163,7 +169,7 @@ void Enemy::SetDifficulty(float difficulty) {
         config_.attacks.arcaneLaser.recoveryDuration;
     config_.attacks.cataclysmLaser.range = 39.0f + 9.0f * t;
     config_.attacks.cataclysmLaser.radius = 1.85f + 0.70f * t;
-    config_.attacks.cataclysmLaser.profile.chargeTime = 1.78f - 0.28f * t;
+    config_.attacks.cataclysmLaser.profile.chargeTime = 0.62f - 0.08f * t;
     config_.attacks.cataclysmLaser.profile.timing.trackingEndTime =
         0.95f - 0.18f * t;
     config_.attacks.cataclysmLaser.profile.timing.activeStartTime = 0.0f;
@@ -201,6 +207,9 @@ void Enemy::SetDifficulty(float difficulty) {
 }
 
 float Enemy::GetCurrentSmashChargeTime() const {
+    if (farSlashActive_ && tripleIaiSlashActive_) {
+        return (std::max)(0.10f, farSlashSmashChargeTime_ * 0.34f);
+    }
     if (farSlashActive_) {
         return farSlashSmashChargeTime_;
     }
@@ -218,6 +227,9 @@ float Enemy::GetCurrentSmashChargeTime() const {
 }
 
 float Enemy::GetCurrentSweepChargeTime() const {
+    if (farSlashActive_ && tripleIaiSlashActive_) {
+        return (std::max)(0.10f, farSlashSweepChargeTime_ * 0.34f);
+    }
     if (farSlashActive_) {
         return farSlashSweepChargeTime_;
     }

@@ -210,35 +210,35 @@ void ModelRenderer::SetInstancedPipelineForMaterial(const Material &material) {
 }
 
 void ModelRenderer::CreateRootSignature() {
-    CD3DX12_ROOT_PARAMETER params[10];
+    CD3DX12_ROOT_PARAMETER params[10]{};
 
     params[0].InitAsConstantBufferView(0);
     params[1].InitAsConstantBufferView(1);
     params[2].InitAsConstantBufferView(2);
 
-    CD3DX12_DESCRIPTOR_RANGE textureRange;
+    CD3DX12_DESCRIPTOR_RANGE textureRange{};
     textureRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
     params[3].InitAsDescriptorTable(1, &textureRange);
 
-    CD3DX12_DESCRIPTOR_RANGE matrixPaletteRange;
+    CD3DX12_DESCRIPTOR_RANGE matrixPaletteRange{};
     matrixPaletteRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1);
     params[4].InitAsDescriptorTable(1, &matrixPaletteRange);
 
-    CD3DX12_DESCRIPTOR_RANGE environmentRange;
+    CD3DX12_DESCRIPTOR_RANGE environmentRange{};
     environmentRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2);
     params[5].InitAsDescriptorTable(1, &environmentRange);
 
-    CD3DX12_DESCRIPTOR_RANGE shadowRange;
+    CD3DX12_DESCRIPTOR_RANGE shadowRange{};
     shadowRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3);
     params[6].InitAsDescriptorTable(1, &shadowRange);
 
-    CD3DX12_DESCRIPTOR_RANGE normalRange;
+    CD3DX12_DESCRIPTOR_RANGE normalRange{};
     normalRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 4);
     params[7].InitAsDescriptorTable(1, &normalRange);
 
     params[8].InitAsConstantBufferView(3);
 
-    CD3DX12_DESCRIPTOR_RANGE dissolveNoiseRange;
+    CD3DX12_DESCRIPTOR_RANGE dissolveNoiseRange{};
     dissolveNoiseRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 5);
     params[9].InitAsDescriptorTable(1, &dissolveNoiseRange);
 
@@ -264,11 +264,11 @@ void ModelRenderer::CreateRootSignature() {
 }
 
 void ModelRenderer::CreateShadowRootSignature() {
-    CD3DX12_ROOT_PARAMETER params[3];
+    CD3DX12_ROOT_PARAMETER params[3]{};
     params[0].InitAsConstantBufferView(0);
     params[1].InitAsConstantBufferView(2);
 
-    CD3DX12_DESCRIPTOR_RANGE textureRange;
+    CD3DX12_DESCRIPTOR_RANGE textureRange{};
     textureRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
     params[2].InitAsDescriptorTable(1, &textureRange);
 

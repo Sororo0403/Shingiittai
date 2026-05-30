@@ -204,6 +204,8 @@ void SwordSlashArcRenderer::EmitHitLine(const XMFLOAT3 &position,
         style == SwordSlashHitLineStyle::RedPunish
             ? XMFLOAT4{1.00f, 0.05f, 0.02f, 0.74f}
             : XMFLOAT4{1.0f, 1.0f, 1.0f, 0.66f};
+    const float lifeScale =
+        style == SwordSlashHitLineStyle::RedPunish ? 1.65f : 1.0f;
 
     auto emitStroke = [&](const XMFLOAT3 &axis, float alongOffset,
                           float normalOffset, float heightOffset,
@@ -220,13 +222,15 @@ void SwordSlashArcRenderer::EmitHitLine(const XMFLOAT3 &position,
         arc.axisB = strokeNormal;
         arc.radius = halfLength;
         arc.thickness = thickness;
-        arc.life = life;
+        arc.life = life * lifeScale;
         arc.age = -delay;
         arc.color = color;
         arc.startAngle = 0.0f;
         arc.endAngle = 0.0f;
         arc.isLine = true;
         arc.isDirectionCue = false;
+        arc.instantLineReveal =
+            style == SwordSlashHitLineStyle::RedPunish;
         arc.active = true;
     };
 
@@ -309,6 +313,7 @@ void SwordSlashArcRenderer::EmitDirectionCueLine(
         arc.endAngle = 0.0f;
         arc.isLine = true;
         arc.isDirectionCue = true;
+        arc.instantLineReveal = true;
         arc.active = true;
     };
 
@@ -405,6 +410,7 @@ void SwordSlashArcRenderer::EmitParryLine(const XMFLOAT3 &position,
         arc.endAngle = 0.0f;
         arc.isLine = true;
         arc.isDirectionCue = false;
+        arc.instantLineReveal = true;
         arc.active = true;
     };
 
@@ -583,6 +589,7 @@ void SwordSlashArcRenderer::EmitEnemyWindSlash(const XMFLOAT3 &position,
         arc.endAngle = endAngle;
         arc.isLine = false;
         arc.isDirectionCue = false;
+        arc.instantLineReveal = false;
         arc.active = true;
     };
 
@@ -606,7 +613,8 @@ void SwordSlashArcRenderer::EmitEnemyWindSlash(const XMFLOAT3 &position,
         arc.startAngle = 0.0f;
         arc.endAngle = 0.0f;
         arc.isLine = true;
-        arc.isDirectionCue = false;
+    arc.isDirectionCue = false;
+    arc.instantLineReveal = false;
         arc.active = true;
     };
 
@@ -695,7 +703,9 @@ void SwordSlashArcRenderer::BuildVertices() {
         const float fade = 1.0f - SmoothStep(0.46f, 1.0f, ageRate);
         if (arc.isLine) {
             const float growLine =
-                arc.isDirectionCue ? 1.0f : SmoothStep(0.0f, 0.18f, ageRate);
+                (arc.isDirectionCue || arc.instantLineReveal)
+                    ? 1.0f
+                    : SmoothStep(0.0f, 0.18f, ageRate);
             const float fadeLine =
                 arc.isDirectionCue
                     ? 1.0f

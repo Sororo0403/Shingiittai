@@ -90,6 +90,9 @@ ModelManager &ModelManager::GetInstance() {
 
 void ModelManager::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
                               TextureManager *textureManager) {
+    if (!dxCommon || !srvManager || !textureManager) {
+        throw std::runtime_error("ModelManager::Initialize null argument");
+    }
     dxCommon_ = dxCommon;
     textureManager_ = textureManager;
 

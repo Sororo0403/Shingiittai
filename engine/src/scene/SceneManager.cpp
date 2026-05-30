@@ -12,7 +12,12 @@ class UploadPassScope {
                     bool active)
         : dxCommon_(dxCommon), textureManager_(textureManager), active_(active) {}
 
-    ~UploadPassScope() { Finish(); }
+    ~UploadPassScope() noexcept {
+        try {
+            Finish();
+        } catch (...) {
+        }
+    }
 
     void Finish() {
         if (!active_) {

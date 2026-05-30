@@ -33,10 +33,13 @@ void RenderTexture::Resize(int width, int height) {
 void RenderTexture::BeginRender(const DirectX::XMFLOAT4 &clearColor) {
     auto commandList = dxCommon_->GetCommandList();
 
-    auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-        resource_.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-        D3D12_RESOURCE_STATE_RENDER_TARGET);
-    commandList->ResourceBarrier(1, &barrier);
+    if (resourceState_ != D3D12_RESOURCE_STATE_RENDER_TARGET) {
+        auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            resource_.Get(), resourceState_,
+            D3D12_RESOURCE_STATE_RENDER_TARGET);
+        commandList->ResourceBarrier(1, &barrier);
+        resourceState_ = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    }
 
     D3D12_VIEWPORT viewport{};
     viewport.TopLeftX = 0.0f;
@@ -67,10 +70,13 @@ void RenderTexture::BeginRender(const DirectX::XMFLOAT4 &clearColor) {
 }
 
 void RenderTexture::EndRender() {
-    auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-        resource_.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET,
-        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    dxCommon_->GetCommandList()->ResourceBarrier(1, &barrier);
+    if (resourceState_ != D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE) {
+        auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+            resource_.Get(), resourceState_,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        dxCommon_->GetCommandList()->ResourceBarrier(1, &barrier);
+        resourceState_ = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    }
 }
 
 D3D12_GPU_DESCRIPTOR_HANDLE RenderTexture::GetGpuHandle() const {
@@ -108,6 +114,7 @@ void RenderTexture::CreateResources() {
                       D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, &clearValue,
                       IID_PPV_ARGS(&resource_)),
                   "Create RenderTexture resource failed");
+    resourceState_ = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 
     D3D12_RENDER_TARGET_VIEW_DESC rtvDesc{};
     rtvDesc.Format = DirectXCommon::kSceneColorFormat;

@@ -7,9 +7,10 @@
 #include <DirectXMath.h>
 #include <algorithm>
 #include <assimp/GltfMaterial.h>
-#include <cstdlib>
+#include <charconv>
 #include <filesystem>
 #include <functional>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -20,6 +21,37 @@ namespace {
 XMFLOAT4X4 ToMatrix(const aiMatrix4x4 &m) {
     return {m.a1, m.b1, m.c1, m.d1, m.a2, m.b2, m.c2, m.d2,
             m.a3, m.b3, m.c3, m.d3, m.a4, m.b4, m.c4, m.d4};
+}
+
+uint32_t CheckedUint32Size(size_t value, const char *message) {
+    if (value > (std::numeric_limits<uint32_t>::max)()) {
+        throw std::runtime_error(message);
+    }
+    return static_cast<uint32_t>(value);
+}
+
+int CheckedIntSize(size_t value, const char *message) {
+    if (value > static_cast<size_t>((std::numeric_limits<int>::max)())) {
+        throw std::runtime_error(message);
+    }
+    return static_cast<int>(value);
+}
+
+bool TryParseEmbeddedTextureIndex(const std::string &name, unsigned int &index) {
+    if (name.size() <= 1 || name[0] != '*') {
+        return false;
+    }
+
+    unsigned int parsed = 0;
+    const char *begin = name.data() + 1;
+    const char *end = name.data() + name.size();
+    const auto result = std::from_chars(begin, end, parsed);
+    if (result.ec != std::errc{} || result.ptr != end) {
+        return false;
+    }
+
+    index = parsed;
+    return true;
 }
 
 } // namespace
@@ -56,7 +88,7 @@ void AssimpMeshLoader::LoadMeshes(const aiScene *scene, const std::string &path,
         std::vector<uint32_t> indices;
 
         vertices.reserve(mesh->mNumVertices);
-        indices.reserve(mesh->mNumFaces * 3);
+        indices.reserve(static_cast<size_t>(mesh->mNumFaces) * 3u);
 
         for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
             Vertex v{};
@@ -86,10 +118,25 @@ void AssimpMeshLoader::LoadMeshes(const aiScene *scene, const std::string &path,
 
         for (unsigned int i = 0; i < mesh->mNumFaces; i++) {
             const aiFace &face = mesh->mFaces[i];
-
-            for (unsigned int j = 0; j < face.mNumIndices; j++) {
-                indices.push_back(face.mIndices[j]);
+            if (face.mNumIndices != 3 || !face.mIndices) {
+                continue;
             }
+
+            uint32_t triangle[3]{};
+            bool faceValid = true;
+            for (unsigned int j = 0; j < face.mNumIndices; j++) {
+                if (face.mIndices[j] >= vertices.size()) {
+                    faceValid = false;
+                    break;
+                }
+                triangle[j] = face.mIndices[j];
+            }
+            if (!faceValid) {
+                continue;
+            }
+            indices.push_back(triangle[0]);
+            indices.push_back(triangle[1]);
+            indices.push_back(triangle[2]);
         }
 
         if (vertices.empty() || indices.empty()) {
@@ -97,7 +144,9 @@ void AssimpMeshLoader::LoadMeshes(const aiScene *scene, const std::string &path,
         }
 
         ModelSubMesh subMesh{};
-        subMesh.vertexCount = static_cast<uint32_t>(vertices.size());
+        subMesh.vertexCount =
+            CheckedUint32Size(vertices.size(),
+                              "AssimpMeshLoader vertex count overflow");
         subMesh.sourcePositions.reserve(vertices.size());
         subMesh.sourceBoundsMin = vertices.front().position;
         subMesh.sourceBoundsMax = vertices.front().position;
@@ -131,7 +180,14 @@ void AssimpMeshLoader::LoadMeshes(const aiScene *scene, const std::string &path,
                 auto it = model.boneMap.find(boneName);
 
                 if (it == model.boneMap.end()) {
-                    boneIndex = static_cast<uint32_t>(model.bones.size());
+                    boneIndex =
+                        CheckedUint32Size(model.bones.size(),
+                                          "AssimpMeshLoader bone count overflow");
+                    if (boneIndex >
+                        static_cast<uint32_t>((std::numeric_limits<int>::max)())) {
+                        throw std::runtime_error(
+                            "AssimpMeshLoader bone count exceeds parent index range");
+                    }
 
                     model.boneMap[boneName] = boneIndex;
 
@@ -184,9 +240,9 @@ void AssimpMeshLoader::LoadMeshes(const aiScene *scene, const std::string &path,
                 std::string texName = texPath.C_Str();
 
                 if (!texName.empty() && texName[0] == '*') {
-                    int texIndex = std::atoi(texName.c_str() + 1);
-                    if (texIndex < 0 ||
-                        texIndex >= static_cast<int>(scene->mNumTextures)) {
+                    unsigned int texIndex = 0;
+                    if (!TryParseEmbeddedTextureIndex(texName, texIndex) ||
+                        texIndex >= scene->mNumTextures) {
                         return false;
                     }
 
@@ -220,8 +276,11 @@ void AssimpMeshLoader::LoadMeshes(const aiScene *scene, const std::string &path,
 
         uint32_t meshId = meshManager_->CreateMesh(
             vertices.data(), sizeof(Vertex),
-            static_cast<uint32_t>(vertices.size()), indices.data(),
-            static_cast<uint32_t>(indices.size()));
+            CheckedUint32Size(vertices.size(),
+                              "AssimpMeshLoader vertex count overflow"),
+            indices.data(),
+            CheckedUint32Size(indices.size(),
+                              "AssimpMeshLoader index count overflow"));
 
         Material material{};
         material.color = {1, 1, 1, 1};
@@ -339,6 +398,9 @@ void AssimpMeshLoader::ReorderBonesParentFirst(Model &model) const {
     if (boneCount <= 1) {
         return;
     }
+    if (boneCount > static_cast<size_t>((std::numeric_limits<int>::max)())) {
+        throw std::runtime_error("AssimpMeshLoader bone count overflow");
+    }
 
     std::vector<std::vector<size_t>> children(boneCount);
     std::vector<size_t> roots;
@@ -365,7 +427,9 @@ void AssimpMeshLoader::ReorderBonesParentFirst(Model &model) const {
 
         BoneInfo bone = model.bones[oldIndex];
         bone.parentIndex = newParentIndex;
-        const int newIndex = static_cast<int>(orderedBones.size());
+        const int newIndex =
+            CheckedIntSize(orderedBones.size(),
+                           "AssimpMeshLoader reordered bone count overflow");
         oldToNew[oldIndex] = newIndex;
         orderedBones.push_back(bone);
 
@@ -388,6 +452,7 @@ void AssimpMeshLoader::ReorderBonesParentFirst(Model &model) const {
     model.boneMap.clear();
     for (size_t boneIndex = 0; boneIndex < model.bones.size(); ++boneIndex) {
         model.boneMap[model.bones[boneIndex].name] =
-            static_cast<uint32_t>(boneIndex);
+            CheckedUint32Size(boneIndex,
+                              "AssimpMeshLoader reordered bone count overflow");
     }
 }

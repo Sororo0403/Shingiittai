@@ -16,6 +16,7 @@ class SwordTrailRenderer {
     void Reset();
 
     void Update(const Player &player, float deltaTime);
+    void SuppressSlashUntilInactive(size_t swordIndex);
     void Draw(const Camera &camera);
 
   private:
@@ -28,6 +29,7 @@ class SwordTrailRenderer {
     struct TrailState {
         std::vector<TrailSample> samples;
         bool wasActive = false;
+        bool suppressUntilInactive = false;
     };
 
     struct TrailVertex {

@@ -28,7 +28,7 @@
     <Filter Include="Resources\Audio">
       <UniqueIdentifier>{7d5a4983-9ca7-5ac1-b285-9b2770c6f339}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Resources\Audio\sfx">
+    <Filter Include="Resources\Audio\se">
       <UniqueIdentifier>{75cd1bbf-105d-4073-bb6d-ea37b8d7e644}</UniqueIdentifier>
     </Filter>
     <Filter Include="Resources\Audio\bgm">
@@ -369,26 +369,23 @@
     <None Include="resources\audio\bgm\bgm_TutorialTheme.wav">
       <Filter>Resources\Audio\bgm</Filter>
     </None>
+    <None Include="resources\audio\se\se_Selected.mp3">
+      <Filter>Resources\Audio\se</Filter>
+    </None>
+    <None Include="resources\audio\se\ロボットを殴る2.mp3">
+      <Filter>Resources\Audio\se</Filter>
+    </None>
     <None Include="resources\audio\se\剣で斬る2.mp3">
-      <Filter>Resources\Audio\sfx</Filter>
+      <Filter>Resources\Audio\se</Filter>
     </None>
-    <None Include="resources\audio\sfx\counter_burst.wav">
-      <Filter>Resources\Audio\sfx</Filter>
+    <None Include="resources\audio\se\剣で斬る3.mp3">
+      <Filter>Resources\Audio\se</Filter>
     </None>
-    <None Include="resources\audio\sfx\damage_heavy.wav">
-      <Filter>Resources\Audio\sfx</Filter>
+    <None Include="resources\audio\se\爆発3.mp3">
+      <Filter>Resources\Audio\se</Filter>
     </None>
-    <None Include="resources\audio\sfx\enemy_release_snap.wav">
-      <Filter>Resources\Audio\sfx</Filter>
-    </None>
-    <None Include="resources\audio\sfx\explosion_boss.wav">
-      <Filter>Resources\Audio\sfx</Filter>
-    </None>
-    <None Include="resources\audio\sfx\hit_impact.wav">
-      <Filter>Resources\Audio\sfx</Filter>
-    </None>
-    <None Include="resources\audio\sfx\slash_hero.wav">
-      <Filter>Resources\Audio\sfx</Filter>
+    <None Include="resources\audio\se\爆発4.mp3">
+      <Filter>Resources\Audio\se</Filter>
     </None>
     <None Include="resources\fonts\MPLUS1p-ExtraBold.ttf">
       <Filter>Resources\Fonts</Filter>

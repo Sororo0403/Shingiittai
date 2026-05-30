@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <d3d12.h>
 #include <cstring>
+#include <limits>
+#include <stdexcept>
 #include <wrl.h>
 
 class DynamicBuffer {
@@ -36,10 +38,14 @@ class DynamicBuffer {
     template <class T>
     UploadAllocation WriteArray(const T *values, size_t count,
                                 size_t alignment = 0) {
+        if (count > (std::numeric_limits<size_t>::max)() / sizeof(T)) {
+            throw std::runtime_error("DynamicBuffer::WriteArray size overflow");
+        }
+        const size_t bytes = sizeof(T) * count;
         UploadAllocation allocation =
-            Allocate(sizeof(T) * count, alignment == 0 ? alignof(T) : alignment);
+            Allocate(bytes, alignment == 0 ? alignof(T) : alignment);
         if (values && count > 0) {
-            std::memcpy(allocation.cpu, values, sizeof(T) * count);
+            std::memcpy(allocation.cpu, values, bytes);
         }
         return allocation;
     }

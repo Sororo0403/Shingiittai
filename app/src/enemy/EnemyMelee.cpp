@@ -216,6 +216,11 @@ void Enemy::UpdateSmashAttack(float deltaTime) {
                       stateTimer_ <= attackEndTime;
     if (stateTimer_ >= attackEndTime) {
         ChangeActionStep(ActionStep::Recovery);
+        if (tripleIaiSlashActive_ && farSlashActive_ &&
+            tripleIaiSlashesRemaining_ > 0) {
+            runtime_.tripleIaiReturnCameraToCenter = true;
+            isVisible_ = false;
+        }
     }
 }
 
@@ -233,8 +238,15 @@ void Enemy::UpdateSmashRecovery(float deltaTime) {
         recoveryDuration = 0.0f;
     }
     recoveryDuration += RecoveryPadding(0.18f, difficulty_);
+    if (tripleIaiSlashActive_ && farSlashActive_ &&
+        tripleIaiSlashesRemaining_ > 0) {
+        recoveryDuration = std::min(recoveryDuration, 0.035f);
+    }
 
     if (stateTimer_ >= recoveryDuration) {
+        if (TryContinueTripleIaiSlash()) {
+            return;
+        }
         EndAttack();
     }
 }
@@ -334,6 +346,11 @@ void Enemy::UpdateSweepAttack(float deltaTime) {
                       stateTimer_ <= attackEndTime;
     if (stateTimer_ >= attackEndTime) {
         ChangeActionStep(ActionStep::Recovery);
+        if (tripleIaiSlashActive_ && farSlashActive_ &&
+            tripleIaiSlashesRemaining_ > 0) {
+            runtime_.tripleIaiReturnCameraToCenter = true;
+            isVisible_ = false;
+        }
     }
 }
 
@@ -351,8 +368,15 @@ void Enemy::UpdateSweepRecovery(float deltaTime) {
         recoveryDuration = 0.0f;
     }
     recoveryDuration += RecoveryPadding(0.16f, difficulty_);
+    if (tripleIaiSlashActive_ && farSlashActive_ &&
+        tripleIaiSlashesRemaining_ > 0) {
+        recoveryDuration = std::min(recoveryDuration, 0.035f);
+    }
 
     if (stateTimer_ >= recoveryDuration) {
+        if (TryContinueTripleIaiSlash()) {
+            return;
+        }
         EndAttack();
     }
 }
@@ -427,10 +451,6 @@ void Enemy::UpdateArcaneLaserRecovery(float deltaTime) {
         if (TryBeginLaserReengageWarp(1.0f)) {
             return;
         }
-        if (TryBeginArcaneLaserSlashFollowup(
-                arcaneLaserSlashFollowupChance_)) {
-            return;
-        }
         EndAttack();
     }
 }
@@ -440,8 +460,28 @@ void Enemy::UpdateCataclysmLaserCharge(float deltaTime) {
     UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_ * 0.30f);
     const float forwardX = std::sin(facingYaw_);
     const float forwardZ = std::cos(facingYaw_);
-    tf_.position.x += forwardX * stalkMoveSpeed_ * 1.02f * deltaTime;
-    tf_.position.z += forwardZ * stalkMoveSpeed_ * 1.02f * deltaTime;
+
+    constexpr float kLiftDelay = 0.12f;
+    constexpr float kBoostLiftTime = 0.26f;
+    constexpr float kHoverHeight = 4.25f;
+    const float groundY = playerPos_.y;
+    const float liftDuration = std::min(
+        kBoostLiftTime, std::max(0.18f, profile.chargeTime - kLiftDelay));
+    const float liftRatio =
+        std::clamp((stateTimer_ - kLiftDelay) / liftDuration, 0.0f, 1.0f);
+    const float smoothLift = 1.0f - (1.0f - liftRatio) * (1.0f - liftRatio) *
+                                        (1.0f - liftRatio);
+    tf_.position.y = groundY + kHoverHeight * smoothLift;
+
+    const float boostPush =
+        stateTimer_ >= kLiftDelay && stateTimer_ <= kLiftDelay + kBoostLiftTime
+            ? 1.35f
+            : 0.0f;
+    const float thrustForwardScale = 0.24f + 0.42f * smoothLift + boostPush;
+    tf_.position.x +=
+        forwardX * stalkMoveSpeed_ * thrustForwardScale * deltaTime;
+    tf_.position.z +=
+        forwardZ * stalkMoveSpeed_ * thrustForwardScale * deltaTime;
 
     if (stateTimer_ >= profile.chargeTime) {
         LockCurrentFacing();
@@ -464,10 +504,16 @@ void Enemy::UpdateCataclysmLaserActive(float) {
 void Enemy::UpdateCataclysmLaserRecovery(float deltaTime) {
     UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_ * 0.12f);
 
+    const float groundY = playerPos_.y;
+    const float descendStep = 6.4f * deltaTime;
+    if (tf_.position.y > groundY) {
+        tf_.position.y = std::max(groundY, tf_.position.y - descendStep);
+    } else if (tf_.position.y < groundY) {
+        tf_.position.y = std::min(groundY, tf_.position.y + descendStep);
+    }
+
     if (stateTimer_ >= config_.attacks.cataclysmLaser.recoveryDuration) {
-        if (TryBeginLaserReengageWarp(1.0f)) {
-            return;
-        }
+        tf_.position.y = groundY;
         EndAttack();
     }
 }

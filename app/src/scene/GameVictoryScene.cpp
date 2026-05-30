@@ -5,7 +5,6 @@
 #include "Input.h"
 #include "Material.h"
 #include "ModelManager.h"
-#include "ParticleEmitterSettings.h"
 #include "PostEffectManager.h"
 #include "SceneManager.h"
 #include "SoundManager.h"
@@ -25,9 +24,6 @@
 using namespace DirectX;
 
 namespace {
-constexpr const wchar_t *kVictorySmokePixelShader =
-    L"app/resources/shaders/particle/GPUParticleSmokePS.hlsl";
-
 constexpr float kPi = 3.14159265f;
 constexpr float kImpactTime = 2.20f;  // Extended for slower animation
 constexpr float kExplosionFreezeTime = 4.80f;  // Extended
@@ -239,11 +235,11 @@ PostProcessProfile MakeVictoryPostProcessProfile(float stylizeStrength,
     profile.vignette.scale = 18.0f;
     profile.radialBlur.center[0] = 0.5f;
     profile.radialBlur.center[1] = 0.50f;
-    profile.radialBlur.sampleCount = stylizeStrength > 0.001f ? 28 : 1;
-    profile.radialBlur.strength = stylizeStrength;
+    profile.radialBlur.sampleCount = stylizeStrength > 0.001f ? 12 : 1;
+    profile.radialBlur.strength = stylizeStrength * 0.72f;
     profile.sceneDim.strength = 0.20f + 0.12f * punch;
     profile.bloom.enabled = true;
-    profile.bloom.intensity = 0.62f + 1.25f * punch;
+    profile.bloom.intensity = 0.48f + 0.82f * punch;
     profile.bloom.threshold = 0.34f - 0.12f * punch;
     profile.toon.enabled = enableToon;
     profile.toon.strength = enableToon ? (0.20f + 0.35f * punch) : 0.0f;
@@ -364,33 +360,6 @@ void GameVictoryScene::Initialize(const SceneContext &ctx) {
             particleTextureId_,
             MakeTransparentMaterial(particleTextureId_,
                                     darkSmokeMaterialColor));
-        if (ctx_->rendering.dxCommon != nullptr && ctx_->rendering.srv != nullptr) {
-            GPUParticleMaterialSettings smokeMaterial{};
-            smokeMaterial.pixelShaderPath = kVictorySmokePixelShader;
-            smokeParticles_.SetMaterialSettings(smokeMaterial);
-            darkSmokeParticles_.SetMaterialSettings(smokeMaterial);
-
-            impactParticles_.Initialize(ctx_->rendering.dxCommon, ctx_->rendering.srv,
-                                        ctx_->rendering.texture, particleTextureId_,
-                                        36000);
-            fireCloudParticles_.Initialize(ctx_->rendering.dxCommon, ctx_->rendering.srv,
-                                           ctx_->rendering.texture,
-                                           particleTextureId_, 47000);
-            shockParticles_.Initialize(ctx_->rendering.dxCommon, ctx_->rendering.srv,
-                                       ctx_->rendering.texture, particleTextureId_,
-                                       18000);
-            pierceParticles_.Initialize(ctx_->rendering.dxCommon, ctx_->rendering.srv,
-                                        ctx_->rendering.texture, particleTextureId_,
-                                        18000);
-            smokeParticles_.Initialize(ctx_->rendering.dxCommon, ctx_->rendering.srv,
-                                       ctx_->rendering.texture, particleTextureId_,
-                                       52000);
-            darkSmokeParticles_.Initialize(ctx_->rendering.dxCommon,
-                                           ctx_->rendering.srv,
-                                           ctx_->rendering.texture,
-                                           particleTextureId_, 52000);
-            particlesReady_ = true;
-        }
     }
 
     missionCompleteLabel_ =
@@ -535,23 +504,6 @@ void GameVictoryScene::DrawForeground3D() {
 }
 
 void GameVictoryScene::DrawTransparent() {
-    if (!particlesReady_) {
-        return;
-    }
-
-    impactParticles_.DispatchPendingUpdate();
-    shockParticles_.DispatchPendingUpdate();
-    pierceParticles_.DispatchPendingUpdate();
-    fireCloudParticles_.DispatchPendingUpdate();
-    darkSmokeParticles_.DispatchPendingUpdate();
-    smokeParticles_.DispatchPendingUpdate();
-
-    smokeParticles_.Draw(camera_);
-    darkSmokeParticles_.Draw(camera_);
-    impactParticles_.Draw(camera_);
-    shockParticles_.Draw(camera_);
-    pierceParticles_.Draw(camera_);
-    fireCloudParticles_.Draw(camera_);
 }
 
 void GameVictoryScene::DrawPostProcessOverlay() {
@@ -568,6 +520,8 @@ void GameVictoryScene::DrawPostProcessOverlay() {
 }
 
 void GameVictoryScene::UpdateCinematic(float deltaTime) {
+    (void)deltaTime;
+
     const float rawPierceT = PierceRawT(sceneTime_);
     const float pierceT = EaseOutCubic(rawPierceT);
     const float thrustPulse =
@@ -589,7 +543,6 @@ void GameVictoryScene::UpdateCinematic(float deltaTime) {
         EmitPreImpactBurst();
     }
 
-    bool emittedImpactThisFrame = false;
     if (!impactEmitted_ && sceneTime_ >= kImpactTime) {
         impactEmitted_ = true;
         explosionEnemyTransform_ = enemy_.GetTransform();
@@ -598,19 +551,6 @@ void GameVictoryScene::UpdateCinematic(float deltaTime) {
             ctx_->systems.sound->Play(explosionSoundId_, 1.0f, false);
         }
         EmitImpactBurst();
-        emittedImpactThisFrame = true;
-    }
-    if (particlesReady_ &&
-        (emittedImpactThisFrame || !impactEmitted_ ||
-         sceneTime_ < kExplosionFreezeTime)) {
-        const float particleDt =
-            deltaTime * (impactEmitted_ ? kExplosionSpeedBoost : 1.0f);
-        impactParticles_.Update(particleDt);
-        shockParticles_.Update(particleDt);
-        pierceParticles_.Update(particleDt);
-        fireCloudParticles_.Update(particleDt);
-        darkSmokeParticles_.Update(particleDt);
-        smokeParticles_.Update(particleDt);
     }
 
     enemy_.ApplyVictoryDefeatPose(kEnemyFallenPoseRatio,
@@ -810,261 +750,9 @@ void GameVictoryScene::StopResultCrowdAudio() {
 }
 
 void GameVictoryScene::EmitPreImpactBurst() {
-    if (!particlesReady_) {
-        return;
-    }
-
-    const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
-    const XMFLOAT3 center{enemyPos.x, enemyPos.y + 1.05f,
-                          enemyPos.z + 0.06f};
-    const float difficultyT = DifficultyRatio(combatDifficulty_);
-    const float burstAmount = 0.42f + 1.18f * difficultyT;
-    const float burstSize = 0.55f + 1.15f * difficultyT;
-    const float burstSpeed = 0.58f + 0.96f * difficultyT;
-    const XMFLOAT4 sparkColor =
-        BrightHeatColorForDifficulty(combatDifficulty_, 0.88f, 0.20f);
-    const XMFLOAT4 smokeColor =
-        SmokeHeatColorForDifficulty(combatDifficulty_, 0.52f);
-    auto emit = [&](GPUParticleSystem &particles,
-                    ParticleEmitterSettings settings) {
-        settings.position = center;
-        settings.emissionType = ParticleEmissionType::Burst;
-        settings.burstCount = static_cast<uint32_t>(
-            static_cast<float>(settings.burstCount) * burstAmount);
-        settings.maxParticles = settings.burstCount;
-        settings.spawnOffsetScale.x *= burstSize;
-        settings.spawnOffsetScale.y *= burstSize;
-        settings.spawnOffsetScale.z *= burstSize;
-        settings.directionalVelocity *= burstSpeed;
-        settings.radialVelocity *= burstSpeed;
-        settings.startScale *= burstSize;
-        settings.endScale *= burstSize;
-        particles.EmitOnce(settings);
-    };
-
-    ParticleEmitterSettings spark{};
-    spark.spawnShape = ParticleSpawnShape::Sphere;
-    spark.burstCount = 620;
-    spark.maxParticles = 620;
-    spark.spawnOffsetScale = {0.72f, 0.48f, 0.68f};
-    spark.tintColor = sparkColor;
-    spark.direction = {0.0f, 0.10f, -1.0f};
-    spark.velocityBias = {0.0f, 0.05f, -0.28f};
-    spark.directionalVelocity = 1.65f;
-    spark.radialVelocity = 3.20f;
-    spark.baseLifeTime = 2.40f;
-    spark.lifeTimeRandom = 0.80f;
-    spark.startScale = 0.10f;
-    spark.endScale = 0.035f;
-    spark.scaleRandom = 0.08f;
-    spark.stretch = 4.20f;
-    spark.turbulence = 0.18f;
-    spark.damping = 0.965f;
-    spark.fadeInTime = 0.0f;
-    spark.fadeOutTime = 1.05f;
-    emit(pierceParticles_, spark);
-
-    ParticleEmitterSettings smoke{};
-    smoke.spawnShape = ParticleSpawnShape::Sphere;
-    smoke.burstCount = 180;
-    smoke.maxParticles = 180;
-    smoke.spawnOffsetScale = {0.84f, 0.44f, 0.72f};
-    smoke.tintColor = smokeColor;
-    smoke.direction = {0.0f, 0.42f, -0.24f};
-    smoke.velocityBias = {0.0f, 0.18f, -0.06f};
-    smoke.directionalVelocity = 0.62f;
-    smoke.radialVelocity = 1.25f;
-    smoke.baseLifeTime = 3.10f;
-    smoke.lifeTimeRandom = 0.95f;
-    smoke.startScale = 0.20f;
-    smoke.endScale = 0.38f;
-    smoke.scaleRandom = 0.16f;
-    smoke.stretch = 1.18f;
-    smoke.turbulence = 0.46f;
-    smoke.damping = 0.948f;
-    smoke.fadeInTime = 0.06f;
-    smoke.fadeOutTime = 1.45f;
-    emit(smokeParticles_, smoke);
 }
 
 void GameVictoryScene::EmitImpactBurst() {
-    if (!particlesReady_) {
-        return;
-    }
-
-    const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
-    const XMFLOAT3 center{enemyPos.x, enemyPos.y + 1.08f,
-                          enemyPos.z - 0.02f};
-    const float difficultyT = DifficultyRatio(combatDifficulty_);
-    const XMFLOAT4 brightHeat =
-        BrightHeatColorForDifficulty(combatDifficulty_, 0.94f, 0.18f);
-    const XMFLOAT4 smokeHeat =
-        SmokeHeatColorForDifficulty(combatDifficulty_, 0.78f);
-    const XMFLOAT4 darkSmokeHeat =
-        DarkSmokeHeatColorForDifficulty(combatDifficulty_, 0.92f);
-
-    auto emitAt = [&](GPUParticleSystem &particles,
-                      const XMFLOAT3 &position,
-                      ParticleEmitterSettings settings) {
-        settings.position = position;
-        settings.emissionType = ParticleEmissionType::Burst;
-        settings.maxParticles = settings.burstCount;
-        particles.EmitOnce(settings);
-    };
-    auto emit = [&](GPUParticleSystem &particles,
-                    ParticleEmitterSettings settings) {
-        emitAt(particles, center, settings);
-    };
-
-    ParticleEmitterSettings shock{};
-    shock.spawnShape = ParticleSpawnShape::Ring;
-    shock.burstCount =
-        static_cast<uint32_t>((56.0f + 58.0f * difficultyT) * kExplosionSizeBoost);
-    shock.spawnOffsetScale = {0.40f * kExplosionSizeBoost,
-                              0.12f * kExplosionSizeBoost,
-                              0.40f * kExplosionSizeBoost};
-    shock.tintColor = brightHeat;
-    shock.direction = {0.0f, 0.06f, -1.0f};
-    shock.velocityBias = {0.0f, 0.02f, -0.10f};
-    shock.directionalVelocity =
-        (1.55f + 0.90f * difficultyT) * kExplosionSpeedBoost;
-    shock.radialVelocity = (13.6f + 9.8f * difficultyT) * kExplosionSpeedBoost;
-    shock.baseLifeTime = 0.24f;
-    shock.lifeTimeRandom = 0.14f;
-    shock.startScale = 0.105f;
-    shock.endScale = 0.022f;
-    shock.scaleRandom = 0.08f;
-    shock.stretch = 13.8f;
-    shock.turbulence = 0.08f;
-    shock.damping = 0.955f;
-    shock.fadeInTime = 0.0f;
-    shock.fadeOutTime = 0.13f;
-    emit(shockParticles_, shock);
-
-    ParticleEmitterSettings sparks = shock;
-    sparks.spawnShape = ParticleSpawnShape::Sphere;
-    sparks.burstCount =
-        static_cast<uint32_t>((48.0f + 66.0f * difficultyT) * kExplosionSizeBoost);
-    sparks.spawnOffsetScale = {0.40f * kExplosionSizeBoost,
-                               0.28f * kExplosionSizeBoost,
-                               0.40f * kExplosionSizeBoost};
-    sparks.direction = {0.0f, 0.12f, -0.35f};
-    sparks.velocityBias = {0.0f, 0.06f, -0.18f};
-    sparks.directionalVelocity =
-        (6.2f + 3.6f * difficultyT) * kExplosionSpeedBoost;
-    sparks.radialVelocity = (10.8f + 8.4f * difficultyT) * kExplosionSpeedBoost;
-    sparks.baseLifeTime = 0.30f + 0.10f * difficultyT;
-    sparks.lifeTimeRandom = 0.12f;
-    sparks.startScale = 0.070f;
-    sparks.endScale = 0.020f;
-    sparks.scaleRandom = 0.06f;
-    sparks.stretch = 15.4f;
-    sparks.turbulence = 0.05f;
-    sparks.fadeOutTime = 0.18f;
-    emit(pierceParticles_, sparks);
-
-    ParticleEmitterSettings smoke{};
-    smoke.spawnShape = ParticleSpawnShape::Sphere;
-    smoke.burstCount =
-        static_cast<uint32_t>((310.0f + 340.0f * difficultyT) * kExplosionSizeBoost);
-    smoke.spawnOffsetScale = {1.46f * kExplosionSizeBoost,
-                              0.72f * kExplosionSizeBoost,
-                              1.10f * kExplosionSizeBoost};
-    smoke.tintColor = smokeHeat;
-    smoke.direction = {0.0f, 0.42f, -0.18f};
-    smoke.velocityBias = {0.0f, 0.12f, -0.04f};
-    smoke.directionalVelocity =
-        (0.34f + 0.18f * difficultyT) * kExplosionSpeedBoost;
-    smoke.radialVelocity = (1.02f + 0.72f * difficultyT) * kExplosionSpeedBoost;
-    smoke.baseLifeTime = 4.10f;
-    smoke.lifeTimeRandom = 1.28f;
-    smoke.startScale = 0.56f * kExplosionSizeBoost;
-    smoke.endScale =
-        (2.86f + 1.04f * difficultyT) * kExplosionSizeBoost;
-    smoke.scaleRandom = 0.50f * kExplosionSizeBoost;
-    smoke.stretch = 1.18f;
-    smoke.acceleration = {0.0f, 0.030f, -0.028f};
-    smoke.turbulence = 0.96f;
-    smoke.damping = 0.982f;
-    smoke.fadeInTime = 0.18f;
-    smoke.fadeOutTime = 2.10f;
-    smoke.fadeOutPower = 1.42f;
-    emit(smokeParticles_, smoke);
-
-    ParticleEmitterSettings darkSmoke = smoke;
-    darkSmoke.burstCount = static_cast<uint32_t>(
-        (620.0f + 480.0f * difficultyT) * kExplosionSizeBoost);
-    darkSmoke.spawnOffsetScale = {2.18f * kExplosionSizeBoost,
-                                  1.02f * kExplosionSizeBoost,
-                                  1.62f * kExplosionSizeBoost};
-    darkSmoke.tintColor = darkSmokeHeat;
-    darkSmoke.direction = {0.0f, 0.46f, -0.18f};
-    darkSmoke.velocityBias = {0.0f, 0.08f, -0.10f};
-    darkSmoke.directionalVelocity =
-        (0.14f + 0.10f * difficultyT) * kExplosionSpeedBoost;
-    darkSmoke.radialVelocity =
-        (0.68f + 0.52f * difficultyT) * kExplosionSpeedBoost;
-    darkSmoke.baseLifeTime = 4.95f;
-    darkSmoke.lifeTimeRandom = 1.62f;
-    darkSmoke.startScale = 0.78f * kExplosionSizeBoost;
-    darkSmoke.endScale =
-        (4.18f + 1.30f * difficultyT) * kExplosionSizeBoost;
-    darkSmoke.scaleRandom = 0.68f * kExplosionSizeBoost;
-    darkSmoke.stretch = 1.22f;
-    darkSmoke.acceleration = {0.0f, 0.020f, -0.052f};
-    darkSmoke.turbulence = 1.08f;
-    darkSmoke.damping = 0.986f;
-    darkSmoke.fadeInTime = 0.28f;
-    darkSmoke.fadeOutTime = 2.46f;
-    darkSmoke.fadeOutPower = 1.66f;
-    emit(darkSmokeParticles_, darkSmoke);
-
-    ParticleEmitterSettings rollingSmoke = darkSmoke;
-    rollingSmoke.burstCount = static_cast<uint32_t>(
-        (310.0f + 280.0f * difficultyT) * kExplosionSizeBoost);
-    rollingSmoke.spawnOffsetScale = {1.20f * kExplosionSizeBoost,
-                                     0.32f * kExplosionSizeBoost,
-                                     1.02f * kExplosionSizeBoost};
-    rollingSmoke.direction = {0.0f, 0.12f, -0.40f};
-    rollingSmoke.velocityBias = {0.0f, 0.00f, -0.16f};
-    rollingSmoke.directionalVelocity =
-        (0.08f + 0.06f * difficultyT) * kExplosionSpeedBoost;
-    rollingSmoke.radialVelocity =
-        (0.28f + 0.22f * difficultyT) * kExplosionSpeedBoost;
-    rollingSmoke.baseLifeTime = 4.80f;
-    rollingSmoke.lifeTimeRandom = 1.70f;
-    rollingSmoke.startScale = 0.58f;
-    rollingSmoke.endScale = 3.52f + 1.02f * difficultyT;
-    rollingSmoke.acceleration = {0.0f, 0.012f, -0.040f};
-    rollingSmoke.turbulence = 1.12f;
-    rollingSmoke.fadeInTime = 0.34f;
-    rollingSmoke.fadeOutTime = 2.60f;
-    emitAt(darkSmokeParticles_,
-           {center.x - 0.34f, center.y - 0.32f, center.z + 0.08f},
-           rollingSmoke);
-    emitAt(darkSmokeParticles_,
-           {center.x + 0.32f, center.y - 0.28f, center.z + 0.02f},
-           rollingSmoke);
-
-    ParticleEmitterSettings heatTintSmoke = smoke;
-    heatTintSmoke.burstCount = static_cast<uint32_t>(
-        (190.0f + 220.0f * difficultyT) * kExplosionSizeBoost);
-    heatTintSmoke.spawnOffsetScale = {1.18f * kExplosionSizeBoost,
-                                      0.54f * kExplosionSizeBoost,
-                                      0.88f * kExplosionSizeBoost};
-    heatTintSmoke.tintColor = SmokeHeatColorForDifficulty(combatDifficulty_, 0.72f);
-    heatTintSmoke.directionalVelocity =
-        (0.46f + 0.26f * difficultyT) * kExplosionSpeedBoost;
-    heatTintSmoke.radialVelocity =
-        (0.96f + 0.62f * difficultyT) * kExplosionSpeedBoost;
-    heatTintSmoke.baseLifeTime = 2.82f;
-    heatTintSmoke.lifeTimeRandom = 0.90f;
-    heatTintSmoke.startScale = 0.32f * kExplosionSizeBoost;
-    heatTintSmoke.endScale =
-        (2.38f + 0.78f * difficultyT) * kExplosionSizeBoost;
-    heatTintSmoke.fadeInTime = 0.12f;
-    heatTintSmoke.fadeOutTime = 1.58f;
-    emit(smokeParticles_, heatTintSmoke);
 }
 
 void GameVictoryScene::UpdateCamera(float screenWidth, float screenHeight) {
@@ -1158,7 +846,7 @@ void GameVictoryScene::DrawWorld() {
     if (!impactEmitted_) {
         DrawPreExplosionCharge();
     }
-    if (IsPlayerRevealed(sceneTime_)) {
+    if (IsPlayerRevealed(sceneTime_) && !impactEmitted_) {
         player_.Draw(model, camera_, true, true, kVictoryPlayerVisualScale);
         DrawSlash();
     }

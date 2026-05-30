@@ -3,11 +3,18 @@
 #include <cassert>
 #include <cmath>
 #include <filesystem>
+#include <stdexcept>
 #include <string>
 
 #pragma comment(lib, "xinput.lib")
 
 namespace {
+void ThrowIfFailed(HRESULT hr, const char *message) {
+    if (FAILED(hr)) {
+        throw std::runtime_error(message);
+    }
+}
+
 float NormalizeThumbAxis(SHORT value, SHORT deadZone) {
     const int intValue = static_cast<int>(value);
     const int absValue = std::abs(intValue);
@@ -59,31 +66,31 @@ void Input::Initialize(HINSTANCE hInstance, HWND hwnd) {
     hr = DirectInput8Create(
         hInstance, DIRECTINPUT_VERSION, IID_IDirectInput8,
         reinterpret_cast<void **>(directInput_.GetAddressOf()), nullptr);
-    assert(SUCCEEDED(hr));
+    ThrowIfFailed(hr, "DirectInput8Create failed");
 
     hr = directInput_->CreateDevice(GUID_SysKeyboard, keyboard_.GetAddressOf(),
                                     nullptr);
-    assert(SUCCEEDED(hr));
+    ThrowIfFailed(hr, "Create keyboard device failed");
 
     hr = keyboard_->SetDataFormat(&c_dfDIKeyboard);
-    assert(SUCCEEDED(hr));
+    ThrowIfFailed(hr, "Set keyboard data format failed");
 
     hr = keyboard_->SetCooperativeLevel(hwnd,
                                         DISCL_FOREGROUND | DISCL_NONEXCLUSIVE);
-    assert(SUCCEEDED(hr));
+    ThrowIfFailed(hr, "Set keyboard cooperative level failed");
 
     keyboard_->Acquire();
 
     hr = directInput_->CreateDevice(GUID_SysMouse, mouse_.GetAddressOf(),
                                     nullptr);
-    assert(SUCCEEDED(hr));
+    ThrowIfFailed(hr, "Create mouse device failed");
 
     hr = mouse_->SetDataFormat(&c_dfDIMouse);
-    assert(SUCCEEDED(hr));
+    ThrowIfFailed(hr, "Set mouse data format failed");
 
     hr = mouse_->SetCooperativeLevel(hwnd,
                                      DISCL_FOREGROUND | DISCL_NONEXCLUSIVE);
-    assert(SUCCEEDED(hr));
+    ThrowIfFailed(hr, "Set mouse cooperative level failed");
 
     mouse_->Acquire();
 }
@@ -117,6 +124,10 @@ void Input::Update(float deltaTime) {
 
 void Input::UpdateKeyboard() {
     keyPrev_ = keyNow_;
+    if (!keyboard_) {
+        keyNow_.fill(0);
+        return;
+    }
 
     HRESULT hr = keyboard_->GetDeviceState(256, keyNow_.data());
 
@@ -124,13 +135,20 @@ void Input::UpdateKeyboard() {
         hr = keyboard_->Acquire();
 
         if (SUCCEEDED(hr)) {
-            keyboard_->GetDeviceState(256, keyNow_.data());
+            hr = keyboard_->GetDeviceState(256, keyNow_.data());
+        }
+        if (FAILED(hr)) {
+            keyNow_.fill(0);
         }
     }
 }
 
 void Input::UpdateMouse() {
     mousePrevState_ = mouseState_;
+    if (!mouse_) {
+        mouseState_ = {};
+        return;
+    }
 
     HRESULT hr = mouse_->GetDeviceState(sizeof(DIMOUSESTATE), &mouseState_);
 
@@ -138,7 +156,10 @@ void Input::UpdateMouse() {
         hr = mouse_->Acquire();
 
         if (SUCCEEDED(hr)) {
-            mouse_->GetDeviceState(sizeof(DIMOUSESTATE), &mouseState_);
+            hr = mouse_->GetDeviceState(sizeof(DIMOUSESTATE), &mouseState_);
+        }
+        if (FAILED(hr)) {
+            mouseState_ = {};
         }
     }
 }
@@ -174,27 +195,48 @@ void Input::UpdateGamepad() {
 }
 
 bool Input::IsKeyPress(int dik) const {
+    if (dik < 0 || dik >= static_cast<int>(keyNow_.size())) {
+        return false;
+    }
     return (keyNow_[dik] & kPressMask) != 0;
 }
 
 bool Input::IsKeyTrigger(int dik) const {
+    if (dik < 0 || dik >= static_cast<int>(keyNow_.size())) {
+        return false;
+    }
     return (keyNow_[dik] & kPressMask) && !(keyPrev_[dik] & kPressMask);
 }
 
 bool Input::IsKeyRelease(int dik) const {
+    if (dik < 0 || dik >= static_cast<int>(keyNow_.size())) {
+        return false;
+    }
     return !(keyNow_[dik] & kPressMask) && (keyPrev_[dik] & kPressMask);
 }
 
 bool Input::IsMousePress(int button) const {
+    if (button < 0 ||
+        button >= static_cast<int>(_countof(mouseState_.rgbButtons))) {
+        return false;
+    }
     return (mouseState_.rgbButtons[button] & 0x80) != 0;
 }
 
 bool Input::IsMouseTrigger(int button) const {
+    if (button < 0 ||
+        button >= static_cast<int>(_countof(mouseState_.rgbButtons))) {
+        return false;
+    }
     return (mouseState_.rgbButtons[button] & 0x80) &&
            !(mousePrevState_.rgbButtons[button] & 0x80);
 }
 
 bool Input::IsMouseRelease(int button) const {
+    if (button < 0 ||
+        button >= static_cast<int>(_countof(mouseState_.rgbButtons))) {
+        return false;
+    }
     return !(mouseState_.rgbButtons[button] & 0x80) &&
            (mousePrevState_.rgbButtons[button] & 0x80);
 }

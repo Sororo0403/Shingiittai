@@ -1,5 +1,6 @@
 #include "TitleScene.h"
 #include "AppSceneServices.h"
+#include "CameraAccuracyDebugScene.h"
 #include "GameOverScene.h"
 #include "Input.h"
 #include "PostEffectManager.h"
@@ -96,6 +97,15 @@ void TitleScene::Update() {
         AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
         return;
     }
+
+#if defined(_DEBUG)
+    if (ctx_->systems.input->IsKeyTrigger(DIK_F9)) {
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Selected);
+        sceneManager_->ChangeScene(
+            std::make_unique<CameraAccuracyDebugScene>());
+        return;
+    }
+#endif
 
     if (IsAnyButtonTriggered(*ctx_->systems.input)) {
         startRequested_ = true;

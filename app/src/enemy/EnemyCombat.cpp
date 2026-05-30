@@ -468,6 +468,21 @@ bool Enemy::ApplyCounterBreakReaction(float vulnerabilityDuration) {
         return false;
     }
 
+    const bool continueTripleIai =
+        tripleIaiSlashActive_ && tripleIaiSlashesRemaining_ > 0 &&
+        farSlashActive_ &&
+        (action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep);
+
+    if (continueTripleIai) {
+        EndAttack();
+        counterRecoilTimer_ = 0.0f;
+        hitReactionTimer_ = 0.0f;
+        stateTimer_ = 0.0f;
+        BeginTripleIaiSlashStep();
+        UpdateParts();
+        return true;
+    }
+
     EndAttack();
     counterRecoilTimer_ = counterRecoilDuration_;
     hitReactionTimer_ = (std::max)(hitReactionTimer_, vulnerabilityDuration);

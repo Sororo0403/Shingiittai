@@ -79,8 +79,8 @@ class WinApp {
     static bool cursorVisible_;
     static bool requestedCursorVisible_;
 
-    int width_;
-    int height_;
+    int width_ = 0;
+    int height_ = 0;
 
     HWND hwnd_ = nullptr;
 };

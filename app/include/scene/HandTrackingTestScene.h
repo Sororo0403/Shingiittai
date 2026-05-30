@@ -50,6 +50,7 @@ class HandTrackingTestScene : public BaseScene {
     void DecodePreviewJpeg(const std::vector<uint8_t> &jpegData);
     void UploadPreviewTextureIfNeeded();
     void UpdateHand(size_t handIndex);
+    void UpdateRangedGesture();
     void CalibrateNeutralFromCurrentHands();
     void ResetCalibration();
     bool IsHandTrackingReady() const;
@@ -60,6 +61,7 @@ class HandTrackingTestScene : public BaseScene {
     void DrawCameraPreview(float screenWidth, float screenHeight);
     void DrawTrackingField(float screenWidth, float screenHeight);
     void DrawHand(size_t handIndex, float screenWidth, float screenHeight);
+    void DrawRangedGesture(float screenWidth, float screenHeight);
     void DrawStatusPanel(float screenWidth, float screenHeight);
     void DrawHandMeter(size_t handIndex, float x, float y, float width);
     void DrawCameraBadge(float screenWidth, float screenHeight);
@@ -71,6 +73,15 @@ class HandTrackingTestScene : public BaseScene {
 
     SwordUdpController handController_;
     std::array<HandDebugState, 2> hands_{};
+    enum class RangedGestureState { Idle, Windup, Charging, Recovery };
+    RangedGestureState rangedGestureState_ = RangedGestureState::Idle;
+    bool rangedGestureHeld_ = false;
+    bool rangedGestureReleased_ = false;
+    float rangedGestureTimer_ = 0.0f;
+    float rangedGestureChargeRatio_ = 0.0f;
+    float rangedGesturePulse_ = 0.0f;
+    DirectX::XMFLOAT2 rangedGestureCenter_{0.5f, 0.5f};
+    DirectX::XMFLOAT2 rangedGestureAim_{0.0f, -1.0f};
     CameraPreviewFrame previewFrame_{};
     std::vector<uint8_t> previewJpegBuffer_;
     std::vector<bool> previewChunkReceived_;

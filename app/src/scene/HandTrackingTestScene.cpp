@@ -26,6 +26,11 @@ constexpr float kFieldWidthRatio = 0.72f;
 constexpr float kFieldHeightRatio = 0.62f;
 constexpr float kRawSpeedFull = 2.1f;
 constexpr float kMotionSpeedFull = 2600.0f;
+constexpr float kRangedGestureJoinDistance = 0.18f;
+constexpr float kRangedGestureReleaseDistance = 0.26f;
+constexpr float kRangedGestureWindupSeconds = 0.42f;
+constexpr float kRangedGestureChargeSeconds = 1.15f;
+constexpr float kRangedGestureRecoverySeconds = 0.55f;
 constexpr uint16_t kPreviewPort = 5006;
 
 XMFLOAT4 Color(float r, float g, float b, float a = 1.0f) {
@@ -64,6 +69,14 @@ void HandTrackingTestScene::Initialize(const SceneContext &ctx) {
     for (HandDebugState &hand : hands_) {
         hand = {};
     }
+    rangedGestureState_ = RangedGestureState::Idle;
+    rangedGestureHeld_ = false;
+    rangedGestureReleased_ = false;
+    rangedGestureTimer_ = 0.0f;
+    rangedGestureChargeRatio_ = 0.0f;
+    rangedGesturePulse_ = 0.0f;
+    rangedGestureCenter_ = {0.5f, 0.5f};
+    rangedGestureAim_ = {0.0f, -1.0f};
 
     if (ctx_->rendering.postEffectManager != nullptr) {
         ctx_->rendering.postEffectManager->SetBaseProfile(PostProcessProfile{});
@@ -89,6 +102,7 @@ void HandTrackingTestScene::Update() {
     for (size_t i = 0; i < hands_.size(); ++i) {
         UpdateHand(i);
     }
+    UpdateRangedGesture();
 
     if (ctx_->systems.input->IsKeyTrigger(DIK_ESCAPE) ||
         ctx_->systems.input->IsKeyTrigger(DIK_TAB) ||
@@ -112,6 +126,7 @@ void HandTrackingTestScene::Draw() {
     for (size_t i = 0; i < hands_.size(); ++i) {
         DrawHand(i, w, h);
     }
+    DrawRangedGesture(w, h);
     ctx_->rendering.sprite->PostDraw();
 }
 
@@ -333,6 +348,78 @@ void HandTrackingTestScene::UpdateHand(size_t handIndex) {
     }
 }
 
+void HandTrackingTestScene::UpdateRangedGesture() {
+    const HandDebugState &left = hands_[0];
+    const HandDebugState &right = hands_[1];
+    const bool bothHands = left.hasCenter && right.hasCenter;
+    const float dx = left.x - right.x;
+    const float dy = left.y - right.y;
+    const float distance = std::sqrt(dx * dx + dy * dy);
+    const bool joined =
+        bothHands &&
+        (rangedGestureHeld_ ? distance < kRangedGestureReleaseDistance
+                            : distance < kRangedGestureJoinDistance);
+    const bool pressed = joined && !rangedGestureHeld_;
+    const bool released = !joined && rangedGestureHeld_;
+    rangedGestureHeld_ = joined;
+    rangedGestureReleased_ = false;
+
+    if (bothHands) {
+        rangedGestureCenter_ = {(left.x + right.x) * 0.5f,
+                                (left.y + right.y) * 0.5f};
+        const float aimX = std::clamp((rangedGestureCenter_.x - 0.5f) * 2.0f,
+                                      -1.0f, 1.0f);
+        rangedGestureAim_ = {aimX, -std::sqrt((std::max)(0.0f, 1.0f - aimX * aimX))};
+    }
+
+    switch (rangedGestureState_) {
+    case RangedGestureState::Idle:
+        rangedGestureChargeRatio_ = 0.0f;
+        if (pressed) {
+            rangedGestureState_ = RangedGestureState::Windup;
+            rangedGestureTimer_ = 0.0f;
+            rangedGesturePulse_ = 0.55f;
+        }
+        break;
+    case RangedGestureState::Windup:
+        rangedGestureTimer_ += ctx_->frame.deltaTime;
+        if (released || !joined) {
+            rangedGestureState_ = RangedGestureState::Recovery;
+            rangedGestureTimer_ = 0.0f;
+            rangedGestureChargeRatio_ = 0.0f;
+            break;
+        }
+        if (rangedGestureTimer_ >= kRangedGestureWindupSeconds) {
+            rangedGestureState_ = RangedGestureState::Charging;
+            rangedGestureTimer_ = 0.0f;
+        }
+        break;
+    case RangedGestureState::Charging:
+        rangedGestureTimer_ += ctx_->frame.deltaTime;
+        rangedGestureChargeRatio_ = std::clamp(
+            rangedGestureTimer_ / kRangedGestureChargeSeconds, 0.0f, 1.0f);
+        if (released || !joined) {
+            rangedGestureReleased_ = rangedGestureChargeRatio_ >= 1.0f;
+            rangedGesturePulse_ = rangedGestureReleased_ ? 1.0f : 0.34f;
+            rangedGestureState_ = RangedGestureState::Recovery;
+            rangedGestureTimer_ = 0.0f;
+        }
+        break;
+    case RangedGestureState::Recovery:
+        rangedGestureTimer_ += ctx_->frame.deltaTime;
+        if (rangedGestureTimer_ >= kRangedGestureRecoverySeconds) {
+            rangedGestureState_ = RangedGestureState::Idle;
+            rangedGestureTimer_ = 0.0f;
+            rangedGestureChargeRatio_ = 0.0f;
+            rangedGestureReleased_ = false;
+        }
+        break;
+    }
+
+    rangedGesturePulse_ =
+        (std::max)(0.0f, rangedGesturePulse_ - ctx_->frame.deltaTime * 2.5f);
+}
+
 void HandTrackingTestScene::CalibrateNeutralFromCurrentHands() {
     bool hasNeutral = false;
     for (size_t i = 0; i < hands_.size(); ++i) {
@@ -497,6 +584,58 @@ void HandTrackingTestScene::DrawHand(size_t handIndex, float screenWidth,
         DrawLine(pos.x, pos.y, pos.x + hand.slashDir.x * len,
                  pos.y + hand.slashDir.y * len, 8.0f,
                  Color(1.0f, 0.18f, 0.10f, 0.88f));
+    }
+}
+
+void HandTrackingTestScene::DrawRangedGesture(float screenWidth,
+                                              float screenHeight) {
+    const bool visible = rangedGestureHeld_ ||
+                         rangedGestureState_ != RangedGestureState::Idle ||
+                         rangedGesturePulse_ > 0.0f;
+    if (!visible) {
+        return;
+    }
+
+    const XMFLOAT2 center = ToFieldPosition(
+        screenWidth, screenHeight, rangedGestureCenter_.x, rangedGestureCenter_.y);
+    const XMFLOAT2 left =
+        ToFieldPosition(screenWidth, screenHeight, hands_[0].x, hands_[0].y);
+    const XMFLOAT2 right =
+        ToFieldPosition(screenWidth, screenHeight, hands_[1].x, hands_[1].y);
+    const float ready = rangedGestureChargeRatio_;
+    const bool charging = rangedGestureState_ == RangedGestureState::Charging;
+    const bool windup = rangedGestureState_ == RangedGestureState::Windup;
+    const XMFLOAT4 chargeColor =
+        ready >= 1.0f ? Color(1.0f, 0.92f, 0.20f, 0.96f)
+                      : Color(1.0f, 0.58f, 0.12f, charging ? 0.84f : 0.56f);
+
+    if (hands_[0].hasCenter && hands_[1].hasCenter) {
+        DrawLine(left.x, left.y, right.x, right.y, windup ? 5.0f : 8.0f,
+                 Color(1.0f, 0.78f, 0.18f, windup ? 0.46f : 0.78f));
+    }
+
+    const float ring = 26.0f + ready * 38.0f + rangedGesturePulse_ * 42.0f;
+    DrawRect(center.x - ring, center.y - 3.0f, ring * 2.0f, 6.0f,
+             chargeColor);
+    DrawRect(center.x - 3.0f, center.y - ring, 6.0f, ring * 2.0f,
+             chargeColor);
+    DrawRect(center.x - 14.0f, center.y - 14.0f, 28.0f, 28.0f,
+             Color(1.0f, 0.86f, 0.24f, 0.62f + ready * 0.30f));
+
+    const float aimLen = 94.0f + ready * 36.0f;
+    DrawLine(center.x, center.y, center.x + rangedGestureAim_.x * aimLen,
+             center.y + rangedGestureAim_.y * aimLen, 7.0f,
+             ready >= 1.0f ? Color(1.0f, 0.96f, 0.32f, 0.96f)
+                           : Color(1.0f, 0.62f, 0.16f, 0.74f));
+
+    const float meterW = screenWidth * 0.28f;
+    const float meterX = (screenWidth - meterW) * 0.5f;
+    const float meterY = screenHeight - 34.0f;
+    DrawRect(meterX, meterY, meterW, 12.0f, Color(0.16f, 0.13f, 0.08f, 0.92f));
+    DrawRect(meterX, meterY, meterW * ready, 12.0f, chargeColor);
+    if (rangedGestureReleased_) {
+        DrawRect(meterX - 18.0f, meterY - 7.0f, meterW + 36.0f, 26.0f,
+                 Color(1.0f, 0.90f, 0.22f, 0.32f + rangedGesturePulse_ * 0.38f));
     }
 }
 

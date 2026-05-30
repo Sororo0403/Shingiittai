@@ -2,6 +2,7 @@
 
 #include "graphics/DxHelpers.h"
 #include "graphics/DxUtils.h"
+#include <limits>
 #include <stdexcept>
 
 using namespace DxUtils;
@@ -58,6 +59,9 @@ UploadAllocation UploadRingBuffer::Allocate(size_t size, size_t alignment) {
 
     FrameResource &frame = frames_[frameIndex_];
     const size_t alignedOffset = AlignUp(frame.offset, alignment);
+    if (size > (std::numeric_limits<size_t>::max)() - alignedOffset) {
+        throw std::runtime_error("UploadRingBuffer allocation size overflow");
+    }
     const size_t endOffset = alignedOffset + size;
     if (endOffset > bytesPerFrame_) {
         throw std::runtime_error("UploadRingBuffer frame capacity exceeded");
@@ -84,7 +88,11 @@ size_t UploadRingBuffer::AlignUp(size_t value, size_t alignment) {
     if (alignment <= 1) {
         return value;
     }
-    return ((value + alignment - 1) / alignment) * alignment;
+    const size_t addend = alignment - 1;
+    if (value > (std::numeric_limits<size_t>::max)() - addend) {
+        throw std::runtime_error("UploadRingBuffer alignment overflow");
+    }
+    return ((value + addend) / alignment) * alignment;
 }
 
 void UploadRingBuffer::CreateFrameResource(FrameResource &frame) {

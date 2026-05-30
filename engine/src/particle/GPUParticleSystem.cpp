@@ -8,6 +8,7 @@
 #include "texture/TextureManager.h"
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <map>
 #include <random>
 #include <stdexcept>
@@ -54,6 +55,18 @@ XMFLOAT4 SanitizeFinite(XMFLOAT4 value, XMFLOAT4 fallback) {
     value.z = SanitizeFinite(value.z, fallback.z);
     value.w = SanitizeFinite(value.w, fallback.w);
     return value;
+}
+
+UINT CheckedByteSize(size_t elementSize, size_t count, const char *message) {
+    if (count == 0 ||
+        elementSize > (std::numeric_limits<size_t>::max)() / count) {
+        throw std::runtime_error(message);
+    }
+    const size_t bytes = elementSize * count;
+    if (bytes > (std::numeric_limits<UINT>::max)()) {
+        throw std::runtime_error(message);
+    }
+    return static_cast<UINT>(bytes);
 }
 
 ParticleEmitterSettings
@@ -144,22 +157,22 @@ ID3D12RootSignature *GetSharedParticleDrawRootSignature(ID3D12Device *device) {
         return gCachedParticleDrawRootSignature.Get();
     }
 
-    CD3DX12_ROOT_PARAMETER params[5];
+    CD3DX12_ROOT_PARAMETER params[5]{};
     params[0].InitAsConstantBufferView(0);
 
-    CD3DX12_DESCRIPTOR_RANGE particleRange;
+    CD3DX12_DESCRIPTOR_RANGE particleRange{};
     particleRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
     params[1].InitAsDescriptorTable(1, &particleRange);
 
-    CD3DX12_DESCRIPTOR_RANGE textureRange;
+    CD3DX12_DESCRIPTOR_RANGE textureRange{};
     textureRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1);
     params[2].InitAsDescriptorTable(1, &textureRange);
 
-    CD3DX12_DESCRIPTOR_RANGE noiseTextureRange;
+    CD3DX12_DESCRIPTOR_RANGE noiseTextureRange{};
     noiseTextureRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2);
     params[3].InitAsDescriptorTable(1, &noiseTextureRange);
 
-    CD3DX12_DESCRIPTOR_RANGE activeIndexRange;
+    CD3DX12_DESCRIPTOR_RANGE activeIndexRange{};
     activeIndexRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3);
     params[4].InitAsDescriptorTable(1, &activeIndexRange);
 
@@ -278,6 +291,13 @@ void GPUParticleSystem::Initialize(DirectXCommon *dxCommon,
     textureManager_ = textureManager;
     textureId_ = textureId;
     maxParticles_ = (std::max)(1u, maxParticles);
+    if (maxParticles_ > static_cast<uint32_t>((std::numeric_limits<int32_t>::max)())) {
+        throw std::runtime_error("GPUParticleSystem maxParticles exceeds supported range");
+    }
+    CheckedByteSize(sizeof(ParticleForGPU), maxParticles_,
+                    "GPUParticleSystem particle buffer size overflow");
+    CheckedByteSize(sizeof(uint32_t), maxParticles_,
+                    "GPUParticleSystem index buffer size overflow");
     totalTime_ = 0.0f;
     emitterFrequencyTime_ = 0.0f;
     activeTimeRemaining_ = 0.0f;
@@ -664,28 +684,28 @@ void GPUParticleSystem::CreateRootSignatures() {
         static_assert((sizeof(EmitterForGPU) / sizeof(uint32_t)) + 2u + 5u <=
                           64u,
                       "GPUParticle update root signature exceeds 64 DWORDs");
-        CD3DX12_ROOT_PARAMETER params[7];
+        CD3DX12_ROOT_PARAMETER params[7]{};
         params[0].InitAsConstantBufferView(0);
         params[1].InitAsConstants(
             static_cast<UINT>(sizeof(EmitterForGPU) / sizeof(uint32_t)), 1);
 
-        CD3DX12_DESCRIPTOR_RANGE particleRange;
+        CD3DX12_DESCRIPTOR_RANGE particleRange{};
         particleRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
         params[2].InitAsDescriptorTable(1, &particleRange);
 
-        CD3DX12_DESCRIPTOR_RANGE freeListRange;
+        CD3DX12_DESCRIPTOR_RANGE freeListRange{};
         freeListRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 1);
         params[3].InitAsDescriptorTable(1, &freeListRange);
 
-        CD3DX12_DESCRIPTOR_RANGE freeListIndexRange;
+        CD3DX12_DESCRIPTOR_RANGE freeListIndexRange{};
         freeListIndexRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 2);
         params[4].InitAsDescriptorTable(1, &freeListIndexRange);
 
-        CD3DX12_DESCRIPTOR_RANGE activeIndexRange;
+        CD3DX12_DESCRIPTOR_RANGE activeIndexRange{};
         activeIndexRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 3);
         params[5].InitAsDescriptorTable(1, &activeIndexRange);
 
-        CD3DX12_DESCRIPTOR_RANGE activeCountRange;
+        CD3DX12_DESCRIPTOR_RANGE activeCountRange{};
         activeCountRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 4);
         params[6].InitAsDescriptorTable(1, &activeCountRange);
 
@@ -703,14 +723,14 @@ void GPUParticleSystem::CreateRootSignatures() {
     }
 
     {
-        CD3DX12_ROOT_PARAMETER params[3];
+        CD3DX12_ROOT_PARAMETER params[3]{};
         params[0].InitAsConstants(1u + kMaxParticleArgsJobs, 0);
 
-        CD3DX12_DESCRIPTOR_RANGE activeCountRange;
+        CD3DX12_DESCRIPTOR_RANGE activeCountRange{};
         activeCountRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
         params[1].InitAsDescriptorTable(1, &activeCountRange);
 
-        CD3DX12_DESCRIPTOR_RANGE drawArgsRange;
+        CD3DX12_DESCRIPTOR_RANGE drawArgsRange{};
         drawArgsRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 32);
         params[2].InitAsDescriptorTable(1, &drawArgsRange);
 
@@ -765,7 +785,8 @@ void GPUParticleSystem::CreatePipelineStates() {
 void GPUParticleSystem::CreateParticleBuffer(
     const std::vector<ParticleForGPU> &particles) {
     const UINT bufferSize =
-        static_cast<UINT>(sizeof(ParticleForGPU) * particles.size());
+        CheckedByteSize(sizeof(ParticleForGPU), particles.size(),
+                        "GPUParticleSystem particle buffer size overflow");
     auto *device = dxCommon_->GetDevice();
 
     CD3DX12_HEAP_PROPERTIES defaultHeap(D3D12_HEAP_TYPE_DEFAULT);
@@ -834,7 +855,9 @@ void GPUParticleSystem::CreateParticleBuffer(
 
 void GPUParticleSystem::CreateFreeListBuffers() {
     auto *device = dxCommon_->GetDevice();
-    const UINT freeListBufferSize = sizeof(uint32_t) * maxParticles_;
+    const UINT freeListBufferSize =
+        CheckedByteSize(sizeof(uint32_t), maxParticles_,
+                        "GPUParticleSystem free list buffer size overflow");
 
     CD3DX12_HEAP_PROPERTIES defaultHeap(D3D12_HEAP_TYPE_DEFAULT);
     auto freeListDesc = CD3DX12_RESOURCE_DESC::Buffer(
@@ -948,7 +971,9 @@ void GPUParticleSystem::CreateActiveDrawBuffers() {
     auto *device = dxCommon_->GetDevice();
     CD3DX12_HEAP_PROPERTIES defaultHeap(D3D12_HEAP_TYPE_DEFAULT);
 
-    const UINT activeIndexBufferSize = sizeof(uint32_t) * maxParticles_;
+    const UINT activeIndexBufferSize =
+        CheckedByteSize(sizeof(uint32_t), maxParticles_,
+                        "GPUParticleSystem active index buffer size overflow");
     auto activeIndexDesc = CD3DX12_RESOURCE_DESC::Buffer(
         activeIndexBufferSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
     ThrowIfFailed(device->CreateCommittedResource(

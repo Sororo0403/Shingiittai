@@ -62,4 +62,6 @@ class RenderTexture {
     UINT srvIndex_ = 0;
     int width_ = 0;
     int height_ = 0;
+    D3D12_RESOURCE_STATES resourceState_ =
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 };

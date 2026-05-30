@@ -9,6 +9,9 @@ using namespace DxUtils;
 using Microsoft::WRL::ComPtr;
 
 void MaterialManager::Initialize(DirectXCommon *dxCommon) {
+    if (!dxCommon) {
+        throw std::runtime_error("MaterialManager::Initialize null argument");
+    }
     dxCommon_ = dxCommon;
 }
 
@@ -65,5 +68,8 @@ MaterialManager::GetGPUVirtualAddress(uint32_t materialId) const {
 }
 
 const Material &MaterialManager::GetMaterial(uint32_t materialId) const {
+    if (materialId >= materials_.size()) {
+        throw std::out_of_range("Material id out of range");
+    }
     return materials_[materialId].material;
 }

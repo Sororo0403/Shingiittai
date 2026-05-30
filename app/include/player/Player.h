@@ -15,6 +15,9 @@ class Input;
 class Player {
   public:
     static constexpr size_t kSwordCount = 2;
+  private:
+    enum class RangedAttackState { Idle, Windup, Charging, Recovery };
+  public:
 
     void Initialize(uint32_t playerModelId, uint32_t swordModelId);
     void SetInputCalibration(const SwordInputCalibration &calibration);
@@ -50,6 +53,18 @@ class Player {
     std::array<float, kSwordCount> GetSwordAttackDamages() const {
         return {leftSwordAttackDamage_, rightSwordAttackDamage_};
     }
+    struct ChargedShot {
+        bool fired = false;
+        DirectX::XMFLOAT3 origin{0.0f, 0.0f, 0.0f};
+        DirectX::XMFLOAT3 direction{0.0f, 0.0f, 1.0f};
+        float chargeRatio = 0.0f;
+    };
+    ChargedShot ConsumeChargedShot();
+    bool IsChargingRangedAttack() const {
+        return rangedAttackState_ == RangedAttackState::Windup ||
+               rangedAttackState_ == RangedAttackState::Charging;
+    }
+    float GetRangedAttackChargeRatio() const { return rangedChargeRatio_; }
     OBB GetOBB() const;
 
     float GetCounterDamageMultiplier() const;
@@ -91,6 +106,9 @@ class Player {
     void UpdateWeaponRules(Input *input, SwordPose &leftPose,
                            SwordPose &rightPose, bool useDualControls,
                            float deltaTime);
+    void UpdateRangedAttack(Input *input, float deltaTime, float cameraYaw,
+                            bool useKeyboardMouse, bool useUdpSword);
+    DirectX::XMFLOAT3 ComputeRangedAttackOrigin() const;
 
   private:
     static constexpr float kHandHeight = 1.0f;
@@ -123,6 +141,14 @@ class Player {
     static constexpr float kAutoMoveDistanceSpeed = 4.20f;
     float leftSwordAttackDamage_ = 8.0f;
     float rightSwordAttackDamage_ = 8.0f;
+    RangedAttackState rangedAttackState_ = RangedAttackState::Idle;
+    float rangedAttackTimer_ = 0.0f;
+    float rangedChargeRatio_ = 0.0f;
+    float rangedAttackCooldown_ = 0.0f;
+    bool rangedShotPending_ = false;
+    ChargedShot pendingRangedShot_{};
+    DirectX::XMFLOAT3 rangedAimDirection_ = {0.0f, 0.0f, 1.0f};
+    bool handRangedIntentActive_ = false;
 
     float defeatPoseRatio_ = 0.0f;
     bool bladeClashPoseActive_ = false;

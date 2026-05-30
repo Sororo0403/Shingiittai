@@ -14,6 +14,7 @@ enum class BossDecisionAction {
     Warp,
     FarWarpSlash,
     PhantomWarp,
+    TripleIaiSlash,
     Stalk,
     ArcaneLaser,
     CataclysmLaser,
@@ -87,12 +88,18 @@ bool Enemy::ShouldEnterSmashHold() const {
     if (farSlashActive_) {
         return false;
     }
+    if (phase_ == BossPhase::Phase3) {
+        return false;
+    }
 
     const float unlock = TechniqueUnlock(BossPhase::Phase2);
     if (unlock <= 0.0f) {
         return false;
     }
     float chance = config_.attacks.smash.melee.feintChance;
+    if (phase_ == BossPhase::Phase2) {
+        chance *= 0.25f;
+    }
     chance *= unlock;
     chance = (std::clamp)(chance, 0.0f, 0.88f);
     float r = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
@@ -103,12 +110,18 @@ bool Enemy::ShouldEnterSweepHold() const {
     if (farSlashActive_) {
         return false;
     }
+    if (phase_ == BossPhase::Phase3) {
+        return false;
+    }
 
     const float unlock = TechniqueUnlock(BossPhase::Phase2);
     if (unlock <= 0.0f) {
         return false;
     }
     float chance = config_.attacks.sweep.melee.feintChance;
+    if (phase_ == BossPhase::Phase2) {
+        chance *= 0.25f;
+    }
     chance *= unlock;
     chance = (std::clamp)(chance, 0.0f, 0.88f);
     float r = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
@@ -125,6 +138,10 @@ void Enemy::EnterHold(float duration) {
 }
 
 bool Enemy::TryBeginChargeWarpFeint(ActionKind kind) {
+    if (phase_ == BossPhase::Phase3) {
+        return false;
+    }
+
     if (warpFeintFollowupLocked_ || warpFeintDecisionMade_ ||
         !(kind == ActionKind::Smash || kind == ActionKind::Sweep) ||
         action_.kind != kind ||
@@ -145,8 +162,8 @@ bool Enemy::TryBeginChargeWarpFeint(ActionKind kind) {
     float chance = chargeWarpFeintChance_;
     if (phase_ == BossPhase::Phase1) {
         chance *= 0.55f;
-    } else if (phase_ == BossPhase::Phase3) {
-        chance += 0.12f;
+    } else if (phase_ == BossPhase::Phase2) {
+        chance *= 0.30f;
     }
     chance *= unlock;
     chance = std::clamp(chance, 0.0f, 0.76f);
@@ -176,6 +193,10 @@ bool Enemy::TryBeginChargeWarpFeint(ActionKind kind) {
 }
 
 bool Enemy::TryApplyDirectionFeint(ActionKind kind) {
+    if (phase_ == BossPhase::Phase3) {
+        return false;
+    }
+
     if (warpFeintFollowupLocked_ || directionFeintDecisionMade_ ||
         !(kind == ActionKind::Smash || kind == ActionKind::Sweep) ||
         action_.kind != kind || action_.step != ActionStep::Charge) {
@@ -198,8 +219,8 @@ bool Enemy::TryApplyDirectionFeint(ActionKind kind) {
     float chance = directionFeintChance_;
     if (phase_ == BossPhase::Phase1) {
         chance *= 0.50f;
-    } else if (phase_ == BossPhase::Phase3) {
-        chance += 0.10f;
+    } else if (phase_ == BossPhase::Phase2) {
+        chance *= 0.30f;
     }
     chance *= unlock;
     chance = std::clamp(chance, 0.0f, 0.64f);
@@ -394,8 +415,12 @@ bool Enemy::TryBeginQuickSlash(float chance) {
 }
 
 bool Enemy::TryBeginFarWarpSlash(float chance) {
+    if (phase_ == BossPhase::Phase3) {
+        return TryBeginTripleIaiSlash(chance);
+    }
+
     const float unlock = TechniqueUnlock(BossPhase::Phase2);
-    if (unlock <= 0.0f) {
+    if (unlock <= 0.0f || !IsRangedAttackAvailable()) {
         return false;
     }
     if (lastActionKind_ == ActionKind::Warp) {
@@ -426,6 +451,7 @@ bool Enemy::TryBeginFarWarpSlash(float chance) {
     warp_.followupKind = SelectNearPressureAction();
     warp_.followupStep = ActionStep::Charge;
     warp_.faceLivePlayerOnEnd = true;
+    RegisterRangedAttackCommit();
     BeginAction(ActionKind::Warp, ActionStep::Start);
     return true;
 }
@@ -494,6 +520,42 @@ bool Enemy::TryBeginPhantomWarpSkill(float chance) {
     return true;
 }
 
+bool Enemy::TryBeginTripleIaiSlash(float chance) {
+    const float unlock = TechniqueUnlock(BossPhase::Phase3);
+    if (unlock <= 0.0f || tripleIaiSlashCooldown_ > 0.0f ||
+        !IsRangedAttackAvailable() || deathFinished_ || isDying_ ||
+        phaseTransitionActive_) {
+        return false;
+    }
+
+    const float distance = GetDistanceToPlayer();
+    if (phase_ != BossPhase::Phase3 && distance < 4.2f) {
+        return false;
+    }
+
+    if (lastActionKind_ == ActionKind::Warp) {
+        chance *= 0.68f;
+    }
+    chance *= unlock;
+    chance = std::clamp(chance, 0.0f,
+                        phase_ == BossPhase::Phase3 ? 1.0f : 0.84f);
+
+    const float roll =
+        static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+    if (roll >= chance) {
+        return false;
+    }
+
+    tripleIaiSlashActive_ = true;
+    tripleIaiSlashesRemaining_ = 3;
+    tripleIaiSlashIndex_ = 0;
+    tripleIaiSlashCooldown_ = tripleIaiSlashCooldownDuration_;
+    PrepareTripleIaiSlashClones();
+    RegisterRangedAttackCommit();
+    BeginTripleIaiSlashStep();
+    return true;
+}
+
 bool Enemy::TryBeginBladeClash(float chance) {
     // Blade clash is reserved for the phase 2 transition event.
     (void)chance;
@@ -502,7 +564,9 @@ bool Enemy::TryBeginBladeClash(float chance) {
 
 bool Enemy::TryBeginArcaneLaser(float chance) {
     const float unlock = TechniqueUnlock(BossPhase::Phase2);
-    if (unlock <= 0.0f || arcaneLaserCooldown_ > 0.0f ||
+    if (phase_ == BossPhase::Phase3 ||
+        unlock <= 0.0f || arcaneLaserCooldown_ > 0.0f ||
+        !IsRangedAttackAvailable() ||
         rangedReengagePending_ ||
         deathFinished_ || isDying_ || phaseTransitionActive_) {
         return false;
@@ -537,13 +601,19 @@ bool Enemy::TryBeginArcaneLaser(float chance) {
         return false;
     }
     warp_.hasValidTarget = true;
+    RegisterRangedAttackCommit();
     BeginAction(ActionKind::Warp, ActionStep::Start);
     return true;
 }
 
 bool Enemy::TryBeginArcaneLaserSlashFollowup(float chance) {
+    if (phase_ == BossPhase::Phase3) {
+        return TryBeginTripleIaiSlash(chance);
+    }
+
     const float unlock = TechniqueUnlock(BossPhase::Phase2);
     if (unlock <= 0.0f || deathFinished_ || isDying_ ||
+        !IsRangedAttackAvailable() ||
         phaseTransitionActive_) {
         return false;
     }
@@ -578,6 +648,7 @@ bool Enemy::TryBeginArcaneLaserSlashFollowup(float chance) {
     warp_.followupKind = SelectNearPressureAction();
     warp_.followupStep = ActionStep::Charge;
     warp_.faceLivePlayerOnEnd = true;
+    RegisterRangedAttackCommit();
     BeginAction(ActionKind::Warp, ActionStep::Start);
     return true;
 }
@@ -612,6 +683,7 @@ bool Enemy::TryBeginLaserReengageWarp(float chance) {
 bool Enemy::TryBeginCataclysmLaser(float chance) {
     const float unlock = TechniqueUnlock(BossPhase::Phase3);
     if (unlock <= 0.0f || cataclysmLaserCooldown_ > 0.0f ||
+        !IsRangedAttackAvailable() ||
         rangedReengagePending_ ||
         deathFinished_ || isDying_ || phaseTransitionActive_) {
         return false;
@@ -646,8 +718,30 @@ bool Enemy::TryBeginCataclysmLaser(float chance) {
         return false;
     }
     warp_.hasValidTarget = true;
+    RegisterRangedAttackCommit();
     BeginAction(ActionKind::Warp, ActionStep::Start);
     return true;
+}
+
+bool Enemy::IsRangedAttackAvailable() const {
+    return sharedRangedAttackCooldown_ <= 0.0f &&
+           rangedAttackLockoutTimer_ <= 0.0f;
+}
+
+void Enemy::RegisterRangedAttackCommit() {
+    sharedRangedAttackCooldown_ = sharedRangedAttackCooldownDuration_;
+    ++consecutiveRangedAttackCount_;
+    if (consecutiveRangedAttackCount_ >= rangedAttackChainLockoutThreshold_) {
+        rangedAttackLockoutTimer_ = rangedAttackChainLockoutDuration_;
+        consecutiveRangedAttackCount_ = 0;
+    }
+}
+
+void Enemy::RegisterNonRangedAttackCommit(ActionKind kind) {
+    if (kind == ActionKind::Smash || kind == ActionKind::Sweep ||
+        kind == ActionKind::BladeClash) {
+        consecutiveRangedAttackCount_ = 0;
+    }
 }
 
 void Enemy::BeginPhantomWarpStep(int viewWarpsRemaining, bool finalBehind,
@@ -682,6 +776,119 @@ void Enemy::BeginPhantomWarpStep(int viewWarpsRemaining, bool finalBehind,
     BeginAction(ActionKind::Warp, ActionStep::Start);
 }
 
+void Enemy::PrepareTripleIaiSlashClones() {
+    ResetTripleIaiSlashClones();
+
+    for (int i = 0; i < kTripleIaiCloneCount_; ++i) {
+        tripleIaiSlashOrder_[i] = i;
+        DirectX::XMFLOAT3 clonePos{};
+        if (!DecideWarpTargetTripleIaiSlash(clonePos, i)) {
+            continue;
+        }
+
+        EnemyTripleIaiClone &clone = tripleIaiClones_[i];
+        clone.visual = visualTf_;
+        clone.visual.position = clonePos;
+        clone.slashKind = (i % 2 == 0) ? ActionKind::Smash : ActionKind::Sweep;
+        clone.isActive = true;
+
+        if (warp_.hasTargetYaw) {
+            DirectX::XMStoreFloat4(
+                &clone.visual.rotation,
+                DirectX::XMQuaternionRotationRollPitchYaw(0.0f,
+                                                          warp_.targetYaw,
+                                                          0.0f));
+        }
+    }
+    if (tripleIaiClones_[1].isActive) {
+        runtime_.tripleIaiCenterFocusPosition =
+            tripleIaiClones_[1].visual.position;
+    } else {
+        runtime_.tripleIaiCenterFocusPosition = tf_.position;
+    }
+
+    for (int i = kTripleIaiCloneCount_ - 1; i > 0; --i) {
+        const int j = std::rand() % (i + 1);
+        std::swap(tripleIaiSlashOrder_[i], tripleIaiSlashOrder_[j]);
+    }
+
+    ResetWarpContext();
+}
+
+void Enemy::BeginTripleIaiSlashStep() {
+    if (tripleIaiSlashesRemaining_ <= 0) {
+        tripleIaiSlashActive_ = false;
+        ResetTripleIaiSlashClones();
+        BeginChaseAction();
+        return;
+    }
+
+    const int slashIndex = tripleIaiSlashIndex_;
+    const int cloneIndex =
+        slashIndex >= 0 && slashIndex < kTripleIaiCloneCount_
+            ? tripleIaiSlashOrder_[slashIndex]
+            : slashIndex;
+    runtime_.tripleIaiReturnCameraToCenter = false;
+    ResetWarpContext();
+    warp_.isCutIn = true;
+    warp_.farSlashFollowup = true;
+    warp_.approachSlot = WarpApproachSlot::Front;
+    warp_.followupKind =
+        (cloneIndex % 2 == 0) ? ActionKind::Smash : ActionKind::Sweep;
+    warp_.followupStep = ActionStep::Charge;
+    warp_.faceLivePlayerOnEnd = true;
+    if (cloneIndex >= 0 && cloneIndex < kTripleIaiCloneCount_ &&
+        tripleIaiClones_[cloneIndex].isActive) {
+        warp_.targetPos = tripleIaiClones_[cloneIndex].visual.position;
+        FinalizeWarpTargetFacing(warp_.targetPos);
+        tf_.position = warp_.targetPos;
+        if (warp_.hasTargetYaw) {
+            facingYaw_ = NormalizeAngle(warp_.targetYaw);
+        }
+        LockCurrentFacing();
+        UpdateParts();
+        warp_.departurePos = tf_.position;
+        warp_.hasDeparturePos = true;
+    } else if (!DecideWarpTargetTripleIaiSlash(warp_.targetPos, cloneIndex)) {
+        tripleIaiSlashActive_ = false;
+        tripleIaiSlashesRemaining_ = 0;
+        tripleIaiSlashIndex_ = 0;
+        ResetTripleIaiSlashClones();
+        ResetWarpContext();
+        BeginChaseAction();
+        return;
+    }
+
+    if (cloneIndex >= 0 && cloneIndex < kTripleIaiCloneCount_) {
+        tripleIaiClones_[cloneIndex].isActive = false;
+    }
+
+    warp_.hasValidTarget = true;
+    --tripleIaiSlashesRemaining_;
+    ++tripleIaiSlashIndex_;
+    BeginAction(ActionKind::Warp, ActionStep::Start);
+}
+
+bool Enemy::TryContinueTripleIaiSlash() {
+    if (!tripleIaiSlashActive_ || tripleIaiSlashesRemaining_ <= 0 ||
+        deathFinished_ || isDying_ || phaseTransitionActive_) {
+        return false;
+    }
+
+    EndAttack();
+    BeginTripleIaiSlashStep();
+    return true;
+}
+
+void Enemy::ResetTripleIaiSlashClones() {
+    for (int i = 0; i < kTripleIaiCloneCount_; ++i) {
+        tripleIaiClones_[i] = EnemyTripleIaiClone{};
+        tripleIaiSlashOrder_[i] = i;
+    }
+    runtime_.tripleIaiCenterFocusPosition = tf_.position;
+    runtime_.tripleIaiReturnCameraToCenter = false;
+}
+
 void Enemy::BeginPressureAction() {
     if (!IsPlayerInMeleeFront()) {
         BeginChaseAction();
@@ -691,19 +898,27 @@ void Enemy::BeginPressureAction() {
     const float distance = GetDistanceToPlayer();
     const bool phase2Unlocked = TechniqueUnlock(BossPhase::Phase2) > 0.0f;
     const bool phase3Unlocked = TechniqueUnlock(BossPhase::Phase3) > 0.0f;
+    const bool isPhase3 = phase_ == BossPhase::Phase3;
     const bool canQuickSlash = phase2Unlocked;
     const bool canBladeClash = false;
     const bool canWarp = phase2Unlocked;
-    const bool canFarWarpSlash = phase2Unlocked;
+    const bool canFarWarpSlash = phase2Unlocked && IsRangedAttackAvailable();
     const bool canPhantomWarp =
         phase3Unlocked && phantomWarpCooldown_ <= 0.0f && !deathFinished_ &&
         !isDying_ && !phaseTransitionActive_ && distance >= 1.65f &&
         distance <= 9.8f;
+    const bool canTripleIaiSlash =
+        phase3Unlocked && tripleIaiSlashCooldown_ <= 0.0f &&
+        IsRangedAttackAvailable() &&
+        (isPhase3 || distance >= 4.2f) && !deathFinished_ && !isDying_ &&
+        !phaseTransitionActive_;
     const bool canArcaneLaser =
-        phase2Unlocked && arcaneLaserCooldown_ <= 0.0f &&
+        phase2Unlocked && !isPhase3 && arcaneLaserCooldown_ <= 0.0f &&
+        IsRangedAttackAvailable() &&
         !rangedReengagePending_;
     const bool canCataclysmLaser =
         phase3Unlocked && cataclysmLaserCooldown_ <= 0.0f &&
+        IsRangedAttackAvailable() &&
         !rangedReengagePending_;
     int smashWeight = 55;
     int sweepWeight = 45;
@@ -712,27 +927,29 @@ void Enemy::BeginPressureAction() {
     int warpWeight = 0;
     int farWarpSlashWeight = 0;
     int phantomWarpWeight = 0;
+    int tripleIaiSlashWeight = 0;
     int arcaneLaserWeight = 0;
     int cataclysmLaserWeight = 0;
 
-    if (phase3Unlocked) {
-        smashWeight = 12;
-        sweepWeight = 12;
-        quickSlashWeight = 5;
+    if (isPhase3) {
+        smashWeight = 0;
+        sweepWeight = 0;
+        quickSlashWeight = 0;
         bladeClashWeight = 0;
-        warpWeight = 10;
-        farWarpSlashWeight = 30;
-        phantomWarpWeight = 26;
-        arcaneLaserWeight = 26;
-        cataclysmLaserWeight = 16;
+        warpWeight = 0;
+        farWarpSlashWeight = 24;
+        phantomWarpWeight = 24;
+        tripleIaiSlashWeight = 22;
+        arcaneLaserWeight = 0;
+        cataclysmLaserWeight = 44;
     } else if (phase2Unlocked) {
-        smashWeight = 18;
-        sweepWeight = 18;
+        smashWeight = 5;
+        sweepWeight = 5;
         quickSlashWeight = 6;
         bladeClashWeight = 0;
-        warpWeight = 16;
-        farWarpSlashWeight = 24;
-        arcaneLaserWeight = 28;
+        warpWeight = 28;
+        farWarpSlashWeight = 52;
+        arcaneLaserWeight = 64;
     }
 
     const BossDecisionAction selected = PickWeightedAction(
@@ -747,30 +964,41 @@ void Enemy::BeginPressureAction() {
           canFarWarpSlash ? farWarpSlashWeight : 0},
          {BossDecisionAction::PhantomWarp,
           canPhantomWarp ? phantomWarpWeight : 0},
+         {BossDecisionAction::TripleIaiSlash,
+          canTripleIaiSlash ? tripleIaiSlashWeight : 0},
          {BossDecisionAction::ArcaneLaser,
           canArcaneLaser ? arcaneLaserWeight : 0},
          {BossDecisionAction::CataclysmLaser,
           canCataclysmLaser ? cataclysmLaserWeight : 0}},
-        BossDecisionAction::Smash);
+        isPhase3 ? BossDecisionAction::Stalk : BossDecisionAction::Smash);
 
-    auto beginDefaultMelee = [&]() {
+    auto beginFallback = [&]() {
+        if (isPhase3) {
+            BeginStalkAction();
+            return;
+        }
+        RegisterNonRangedAttackCommit(ActionKind::Smash);
         BeginAction(SelectNearPressureAction(), ActionStep::Charge);
     };
 
     switch (selected) {
     case BossDecisionAction::Smash:
+        RegisterNonRangedAttackCommit(ActionKind::Smash);
         BeginAction(ActionKind::Smash, ActionStep::Charge);
         return;
     case BossDecisionAction::Sweep:
+        RegisterNonRangedAttackCommit(ActionKind::Sweep);
         BeginAction(ActionKind::Sweep, ActionStep::Charge);
         return;
     case BossDecisionAction::QuickSlash:
+        RegisterNonRangedAttackCommit(ActionKind::Smash);
         BeginAction(SelectNearPressureAction(), ActionStep::Charge);
         quickSlashActive_ = true;
         warpFeintDecisionMade_ = true;
         directionFeintDecisionMade_ = true;
         return;
     case BossDecisionAction::BladeClash:
+        RegisterNonRangedAttackCommit(ActionKind::BladeClash);
         BeginAction(ActionKind::BladeClash, ActionStep::Charge);
         return;
     case BossDecisionAction::Warp:
@@ -778,32 +1006,38 @@ void Enemy::BeginPressureAction() {
             BeginAction(ActionKind::Warp, ActionStep::Start);
             return;
         }
-        beginDefaultMelee();
+        beginFallback();
         return;
     case BossDecisionAction::FarWarpSlash:
         if (TryBeginFarWarpSlash(1.0f)) {
             return;
         }
-        beginDefaultMelee();
+        beginFallback();
         return;
     case BossDecisionAction::PhantomWarp:
         BeginPhantomWarpStep(2, false, ActionKind::None);
         phantomWarpCooldown_ = phantomWarpCooldownDuration_;
         return;
+    case BossDecisionAction::TripleIaiSlash:
+        if (TryBeginTripleIaiSlash(1.0f)) {
+            return;
+        }
+        beginFallback();
+        return;
     case BossDecisionAction::ArcaneLaser:
         if (TryBeginArcaneLaser(1.0f)) {
             return;
         }
-        beginDefaultMelee();
+        beginFallback();
         return;
     case BossDecisionAction::CataclysmLaser:
         if (TryBeginCataclysmLaser(1.0f)) {
             return;
         }
-        beginDefaultMelee();
+        beginFallback();
         return;
     default:
-        beginDefaultMelee();
+        beginFallback();
         return;
     }
 }
@@ -819,9 +1053,11 @@ void Enemy::BeginChaseAction() {
 
     const bool phase2Unlocked = TechniqueUnlock(BossPhase::Phase2) > 0.0f;
     const bool phase3Unlocked = TechniqueUnlock(BossPhase::Phase3) > 0.0f;
+    const bool isPhase3 = phase_ == BossPhase::Phase3;
     const bool canWarp = phase2Unlocked;
     const bool canFarWarpSlash =
-        phase2Unlocked && distance >= warpCutInDistance_;
+        phase2Unlocked && distance >= warpCutInDistance_ &&
+        IsRangedAttackAvailable();
     const bool canPhantomWarp =
         phase3Unlocked && phantomWarpCooldown_ <= 0.0f && !deathFinished_ &&
         !isDying_ && !phaseTransitionActive_ && distance >= 1.65f &&
@@ -829,31 +1065,39 @@ void Enemy::BeginChaseAction() {
     const bool mustReengageAfterRanged =
         rangedReengagePending_ &&
         distance > config_.core.nearAttackDistance + 0.75f;
+    const bool canTripleIaiSlash =
+        phase3Unlocked && tripleIaiSlashCooldown_ <= 0.0f &&
+        IsRangedAttackAvailable() && distance >= 4.2f && !deathFinished_ &&
+        !isDying_ && !phaseTransitionActive_ && !mustReengageAfterRanged;
     const bool canArcaneLaser =
-        phase2Unlocked && arcaneLaserCooldown_ <= 0.0f &&
+        phase2Unlocked && !isPhase3 && arcaneLaserCooldown_ <= 0.0f &&
+        IsRangedAttackAvailable() &&
         !mustReengageAfterRanged;
     const bool canCataclysmLaser =
         phase3Unlocked && cataclysmLaserCooldown_ <= 0.0f &&
+        IsRangedAttackAvailable() &&
         !mustReengageAfterRanged;
     int stalkWeight = 100;
     int warpWeight = 0;
     int farWarpSlashWeight = 0;
     int phantomWarpWeight = 0;
+    int tripleIaiSlashWeight = 0;
     int arcaneLaserWeight = 0;
     int cataclysmLaserWeight = 0;
 
-    if (phase3Unlocked) {
-        stalkWeight = 5;
-        warpWeight = 12;
-        farWarpSlashWeight = 34;
-        phantomWarpWeight = 28;
-        arcaneLaserWeight = 40;
-        cataclysmLaserWeight = 30;
+    if (isPhase3) {
+        stalkWeight = 8;
+        warpWeight = 0;
+        farWarpSlashWeight = 28;
+        phantomWarpWeight = 24;
+        tripleIaiSlashWeight = 24;
+        arcaneLaserWeight = 0;
+        cataclysmLaserWeight = 54;
     } else if (phase2Unlocked) {
-        stalkWeight = 14;
-        warpWeight = 18;
-        farWarpSlashWeight = 30;
-        arcaneLaserWeight = 46;
+        stalkWeight = 3;
+        warpWeight = 28;
+        farWarpSlashWeight = 54;
+        arcaneLaserWeight = 72;
     }
 
     if (mustReengageAfterRanged) {
@@ -861,6 +1105,7 @@ void Enemy::BeginChaseAction() {
         warpWeight = phase2Unlocked ? 14 : 0;
         farWarpSlashWeight = phase2Unlocked ? 66 : 0;
         phantomWarpWeight = 0;
+        tripleIaiSlashWeight = 0;
         arcaneLaserWeight = 0;
         cataclysmLaserWeight = 0;
     }
@@ -872,6 +1117,8 @@ void Enemy::BeginChaseAction() {
           canFarWarpSlash ? farWarpSlashWeight : 0},
          {BossDecisionAction::PhantomWarp,
           canPhantomWarp ? phantomWarpWeight : 0},
+         {BossDecisionAction::TripleIaiSlash,
+          canTripleIaiSlash ? tripleIaiSlashWeight : 0},
          {BossDecisionAction::ArcaneLaser,
           canArcaneLaser ? arcaneLaserWeight : 0},
          {BossDecisionAction::CataclysmLaser,
@@ -887,24 +1134,20 @@ void Enemy::BeginChaseAction() {
         BeginStalkAction();
         return;
     case BossDecisionAction::FarWarpSlash:
-        ResetWarpContext();
-        warp_.isCutIn = true;
-        warp_.farSlashFollowup = true;
-        warp_.approachSlot = WarpApproachSlot::Front;
-        if (!DecideWarpTargetFarSlash(warp_.targetPos)) {
-            ResetWarpContext();
-            BeginStalkAction();
+        if (TryBeginFarWarpSlash(1.0f)) {
             return;
         }
-        warp_.hasValidTarget = true;
-        warp_.followupKind = SelectNearPressureAction();
-        warp_.followupStep = ActionStep::Charge;
-        warp_.faceLivePlayerOnEnd = true;
-        BeginAction(ActionKind::Warp, ActionStep::Start);
+        BeginStalkAction();
         return;
     case BossDecisionAction::PhantomWarp:
         BeginPhantomWarpStep(2, false, ActionKind::None);
         phantomWarpCooldown_ = phantomWarpCooldownDuration_;
+        return;
+    case BossDecisionAction::TripleIaiSlash:
+        if (TryBeginTripleIaiSlash(1.0f)) {
+            return;
+        }
+        BeginStalkAction();
         return;
     case BossDecisionAction::ArcaneLaser:
         if (TryBeginArcaneLaser(1.0f)) {

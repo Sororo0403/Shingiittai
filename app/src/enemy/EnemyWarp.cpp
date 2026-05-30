@@ -91,6 +91,41 @@ bool Enemy::DecideWarpTargetFarSlash(DirectX::XMFLOAT3 &outTarget) {
     return true;
 }
 
+bool Enemy::DecideWarpTargetTripleIaiSlash(DirectX::XMFLOAT3 &outTarget,
+                                           int slashIndex) {
+    float forwardX = playerPos_.x - tf_.position.x;
+    float forwardZ = playerPos_.z - tf_.position.z;
+    float forwardLength = std::sqrt(forwardX * forwardX + forwardZ * forwardZ);
+    if (forwardLength <= 0.0001f) {
+        forwardX = std::sin(facingYaw_);
+        forwardZ = std::cos(facingYaw_);
+        forwardLength = 1.0f;
+    }
+    forwardX /= forwardLength;
+    forwardZ /= forwardLength;
+
+    const float rightX = forwardZ;
+    const float rightZ = -forwardX;
+    const int clampedIndex = std::clamp(slashIndex, 0, 2);
+    const float lane = static_cast<float>(clampedIndex - 1);
+    const float spread = 4.8f + 2.6f * Random01();
+    const float sideJitter = (Random01() - 0.5f) * 1.35f;
+    const float centerJitter = (Random01() - 0.5f) * 2.4f;
+    const float sideOffset =
+        lane == 0.0f ? centerJitter : lane * spread + sideJitter;
+    const float depthOffset =
+        farWarpSlashDistance_ + 0.55f * clampedIndex + 2.8f * Random01();
+
+    outTarget = playerPos_;
+    outTarget.x -= forwardX * depthOffset;
+    outTarget.z -= forwardZ * depthOffset;
+    outTarget.x += rightX * sideOffset;
+    outTarget.z += rightZ * sideOffset;
+    outTarget.y = tf_.position.y;
+    FinalizeWarpTargetFacing(outTarget);
+    return true;
+}
+
 bool Enemy::DecideWarpTargetArcaneLaser(DirectX::XMFLOAT3 &outTarget) {
     float awayX = tf_.position.x - playerPos_.x;
     float awayZ = tf_.position.z - playerPos_.z;
@@ -128,15 +163,15 @@ bool Enemy::DecideWarpTargetCataclysmLaser(DirectX::XMFLOAT3 &outTarget) {
     awayX /= awayLength;
     awayZ /= awayLength;
 
-    const float sideSign = (std::rand() % 2 == 0) ? -1.0f : 1.0f;
     const float rightX = awayZ;
     const float rightZ = -awayX;
-    const float sideOffset = sideSign * (1.15f + 1.35f * Random01());
+    const float sideSign = (std::rand() % 2 == 0) ? -1.0f : 1.0f;
+    const float sideOffset = sideSign * (0.40f + 0.65f * Random01());
 
     outTarget = playerPos_;
     outTarget.x += awayX * cataclysmLaserWarpDistance_ + rightX * sideOffset;
     outTarget.z += awayZ * cataclysmLaserWarpDistance_ + rightZ * sideOffset;
-    outTarget.y = tf_.position.y;
+    outTarget.y = playerPos_.y;
     FinalizeWarpTargetFacing(outTarget);
     return true;
 }
@@ -303,6 +338,12 @@ bool Enemy::PrepareWarpContext() {
     if (warp_.isCutIn) {
         feintChance *= 0.35f;
     }
+    if (phase_ == BossPhase::Phase2) {
+        feintChance *= 0.25f;
+    }
+    if (phase_ == BossPhase::Phase3) {
+        feintChance = 0.0f;
+    }
     warp_.isFeint = Random01() < std::clamp(feintChance, 0.0f, 0.65f);
 
     if (!warp_.isFeint) {
@@ -332,6 +373,8 @@ void Enemy::UpdateWarpStart(float deltaTime) {
         startTime *= 0.56f;
     } else if (warp_.feintFollowup) {
         startTime *= 0.55f;
+    } else if (warp_.farSlashFollowup && tripleIaiSlashActive_) {
+        startTime *= 0.12f;
     } else if (warp_.farSlashFollowup) {
         startTime *= 0.44f;
     }
@@ -357,8 +400,10 @@ void Enemy::UpdateWarpMove(float deltaTime) {
     const float moveTime =
         warp_.phantomChain
             ? PhantomWarpMoveTime(warp_.phantomFinal)
-            : warp_.farSlashFollowup ? config_.warp.moveTime * 1.80f
-                                      : config_.warp.moveTime;
+            : warp_.farSlashFollowup && tripleIaiSlashActive_
+                  ? config_.warp.moveTime * 0.34f
+                  : warp_.farSlashFollowup ? config_.warp.moveTime * 1.80f
+                                            : config_.warp.moveTime;
     if (moveTime > 0.0001f) {
         t = stateTimer_ / moveTime;
     }
@@ -424,6 +469,8 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
     } else if (warp_.followupKind == ActionKind::ArcaneLaser ||
                warp_.followupKind == ActionKind::CataclysmLaser) {
         endTime = config_.warp.endTime * 0.42f;
+    } else if (warp_.farSlashFollowup && tripleIaiSlashActive_) {
+        endTime = config_.warp.endTime * 0.08f;
     } else if (warp_.farSlashFollowup) {
         endTime = config_.warp.endTime * 0.38f;
     }
@@ -531,7 +578,8 @@ void Enemy::UpdateWarpTrails(float deltaTime) {
     }
 }
 
-void Enemy::EmitWarpTrailGhost(const DirectX::XMFLOAT3 &position, float scale) {
+void Enemy::EmitWarpTrailGhost(const DirectX::XMFLOAT3 &position, float scale,
+                               float lifeOverride) {
     int slot = -1;
     for (int i = 0; i < kAfterimageGhostCount_; ++i) {
         if (!afterimageGhosts_[i].isActive) {
@@ -550,8 +598,9 @@ void Enemy::EmitWarpTrailGhost(const DirectX::XMFLOAT3 &position, float scale) {
     ghost.visual.scale.x *= scale;
     ghost.visual.scale.y *= scale;
     ghost.visual.scale.z *= scale;
-    ghost.life = warpTrailLife_;
-    ghost.maxLife = warpTrailLife_;
+    const float life = lifeOverride > 0.0f ? lifeOverride : warpTrailLife_;
+    ghost.life = life;
+    ghost.maxLife = life;
     ghost.isActive = true;
 }
 

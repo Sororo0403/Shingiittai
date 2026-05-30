@@ -73,12 +73,25 @@ class SwordUdpController {
             DirectX::XMFLOAT2{0.5f, 0.5f}};
     };
 
+    struct StableMotion {
+        bool valid = false;
+        DirectX::XMFLOAT2 direction{0.0f, 0.0f};
+        float speed = 0.0f;
+        float netDistance = 0.0f;
+    };
+
     bool EnsureSocket();
     bool HasFreshRawInput() const;
     void ReceivePackets();
     void ApplyRawInput(float dt);
     void CloseSocket();
     size_t ChooseSingleHandSlot(const DirectX::XMFLOAT2 &palm) const;
+    DirectX::XMFLOAT2 TransformCameraPalmForSword(
+        size_t handIndex, const DirectX::XMFLOAT2 &palm) const;
+    void ResetMotionHistory(size_t handIndex);
+    void AddMotionSample(size_t handIndex, const DirectX::XMFLOAT2 &palm,
+                         float dt);
+    StableMotion ComputeStableMotion(size_t handIndex) const;
 
     uintptr_t socket_ = UINTPTR_MAX;
     bool socketReady_ = false;
@@ -99,4 +112,25 @@ class SwordUdpController {
     uint32_t lastAppliedPacketSequence_ = 0;
     bool packetChangedThisUpdate_ = false;
     std::array<float, 2> motionSpeed_ = {0.0f, 0.0f};
+    std::array<bool, 2> handSlashArmed_ = {true, true};
+    std::array<float, 2> handSlashCooldown_ = {0.0f, 0.0f};
+    std::array<DirectX::XMFLOAT2, 2> smoothedPalm_ = {
+        DirectX::XMFLOAT2{0.5f, 0.5f}, DirectX::XMFLOAT2{0.5f, 0.5f}};
+    std::array<bool, 2> hasSmoothedPalm_ = {false, false};
+    std::array<bool, 2> wasHandActive_ = {false, false};
+    std::array<float, 2> reacquireSuppressTimer_ = {0.0f, 0.0f};
+    std::array<DirectX::XMFLOAT2, 2> lostPalm_ = {
+        DirectX::XMFLOAT2{0.5f, 0.5f}, DirectX::XMFLOAT2{0.5f, 0.5f}};
+    std::array<bool, 2> hasLostPalm_ = {false, false};
+    std::array<DirectX::XMFLOAT2, 2> lastMotionDir_ = {
+        DirectX::XMFLOAT2{0.0f, 0.0f}, DirectX::XMFLOAT2{0.0f, 0.0f}};
+    std::array<float, 2> lastMotionSpeed_ = {0.0f, 0.0f};
+    std::array<float, 2> lastMotionAge_ = {999.0f, 999.0f};
+    std::array<float, 2> syntheticLostSlashTimer_ = {0.0f, 0.0f};
+    static constexpr size_t kMotionHistorySize = 8;
+    std::array<std::array<DirectX::XMFLOAT2, kMotionHistorySize>, 2>
+        motionHistoryPalm_{};
+    std::array<std::array<float, kMotionHistorySize>, 2> motionHistoryAge_{};
+    std::array<size_t, 2> motionHistoryStart_ = {0, 0};
+    std::array<size_t, 2> motionHistoryCount_ = {0, 0};
 };

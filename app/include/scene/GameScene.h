@@ -75,6 +75,9 @@ class GameScene : public BaseScene {
     struct ArcaneProjectileState;
 
     void UpdateCamera(Input *input);
+#ifdef _DEBUG
+    void UpdateDebugKeys(Input *input);
+#endif
     void UpdateBattleCamera();
     void UpdateTutorial(float deltaTime);
     bool IsTutorialOperationStepComplete() const;
@@ -118,6 +121,8 @@ class GameScene : public BaseScene {
     void EmitPhaseTransitionReleaseEffects();
     void BeginVictorySequence();
     void UpdateVictorySequence(float deltaTime);
+    void EmitVictoryEnemyVanishExplosion();
+    void DrawVictoryEnemyVanishExplosionBillboards();
     void BeginDefeatSequence();
     void UpdateDefeatSequence(float deltaTime);
     void SyncEnemyAnimation();
@@ -147,6 +152,7 @@ class GameScene : public BaseScene {
     void SpawnArcaneProjectile();
     void ResetArcaneProjectile();
     void UpdateArcaneProjectile(float deltaTime);
+    void UpdatePlayerChargedProjectile(float deltaTime);
     void ReflectArcaneProjectile(size_t swordIndex);
     void ReflectArcaneProjectile(ArcaneProjectileState &projectile,
                                  size_t swordIndex);
@@ -162,6 +168,7 @@ class GameScene : public BaseScene {
     DirectX::XMFLOAT2
     ProjectWorldDirectionToCueDirection(const DirectX::XMFLOAT3 &worldDir) const;
     void DrawArcaneProjectile();
+    void DrawPlayerChargedProjectile();
     void UpdateBattlePostProcessState(float deltaTime);
     PlayerCombatObservation BuildPlayerCombatObservation() const;
     float ComputeGameplayTimeScale() const;
@@ -205,6 +212,8 @@ class GameScene : public BaseScene {
         bool active = false;
         bool reflected = false;
         bool cataclysm = false;
+        bool fromAbove = false;
+        bool waitingToFire = false;
         DirectX::XMFLOAT3 position = {0.0f, 0.0f, 0.0f};
         DirectX::XMFLOAT3 velocity = {0.0f, 0.0f, 0.0f};
         float age = 0.0f;
@@ -215,7 +224,18 @@ class GameScene : public BaseScene {
         DirectX::XMFLOAT2 cueDirection = {1.0f, 0.0f};
         size_t reflectedBySwordIndex = 0;
     };
+    struct PlayerChargedProjectileState {
+        bool active = false;
+        DirectX::XMFLOAT3 position = {0.0f, 0.0f, 0.0f};
+        DirectX::XMFLOAT3 velocity = {0.0f, 0.0f, 0.0f};
+        DirectX::XMFLOAT3 direction = {0.0f, 0.0f, 1.0f};
+        float age = 0.0f;
+        float life = 0.0f;
+        float damage = 0.0f;
+        bool hitConsumed = false;
+    };
     ArcaneProjectileState arcaneProjectile_{};
+    PlayerChargedProjectileState playerChargedProjectile_{};
     static constexpr int kCataclysmProjectileCapacity_ = 5;
     std::array<ArcaneProjectileState, kCataclysmProjectileCapacity_>
         cataclysmProjectiles_{};
@@ -229,6 +249,9 @@ class GameScene : public BaseScene {
     uint32_t swordModelId_ = 0;
     uint32_t enemyModelId_ = 0;
     uint32_t bulletModelId_ = 0;
+    uint32_t victoryFireBillboardModelId_ = 0;
+    uint32_t victorySmokeBillboardModelId_ = 0;
+    uint32_t victoryDarkSmokeBillboardModelId_ = 0;
     EnemyPhaseMaterialSet enemyPhaseMaterials_{};
     uint32_t arenaFloorModelId_ = 0;
     uint32_t arenaLowPolyTerrainModelId_ = 0;
@@ -255,10 +278,14 @@ class GameScene : public BaseScene {
     uint32_t hitSoundId_ = 0;
     uint32_t counterSoundId_ = 0;
     uint32_t damageSoundId_ = 0;
+    uint32_t counterSuccessSlashSoundId_ = 0;
+    uint32_t mistimedCounterSoundId_ = 0;
     uint32_t explosionSoundId_ = 0;
+    uint32_t victoryExplosionSoundId_ = 0;
     uint32_t battleBgmSoundId_ = UINT32_MAX;
     uint32_t battleBgmVoiceHandle_ = UINT32_MAX;
     bool soundsLoaded_ = false;
+    float mistimedCounterSoundStartSeconds_ = 0.0f;
     std::array<bool, Player::kSwordCount> previousSwordSoundStates_{};
     float arcaneLaserParticleTimer_ = 0.0f;
     float farSlashChargeParticleTimer_ = 0.0f;
@@ -350,6 +377,7 @@ class GameScene : public BaseScene {
     float victoryClearTime_ = 0.0f;
     bool victoryFinalExplosionEmitted_ = false;
     DirectX::XMFLOAT3 victoryEnemyStartPos_ = {0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT3 victoryFinalExplosionCenter_ = {0.0f, 0.0f, 0.0f};
     bool defeatSequenceActive_ = false;
     float defeatSequenceTimer_ = 0.0f;
     float defeatSequenceDuration_ = 2.75f;
@@ -362,6 +390,8 @@ class GameScene : public BaseScene {
     float counterTimeScale_ = 0.05f;
 
     bool enemyRedPunishUncounterable_ = false;
+    bool mistimedCounterSlashThisFrame_ = false;
+    bool counterSuccessSlashThisFrame_ = false;
     bool enemyLaserHitConsumed_ = false;
     std::array<bool, Player::kSwordCount> previousCombatSlashStates_{};
     std::array<bool, Player::kSwordCount> normalSlashHitConsumed_{};
@@ -419,4 +449,7 @@ class GameScene : public BaseScene {
     std::array<uint32_t, 11> tutorialTextureIds_{};
     std::array<float, 11> tutorialTextureWidths_{};
     std::array<float, 11> tutorialTextureHeights_{};
+#ifdef _DEBUG
+    bool debugPlayerInvincible_ = false;
+#endif
 };

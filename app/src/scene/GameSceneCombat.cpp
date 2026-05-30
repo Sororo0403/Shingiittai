@@ -21,8 +21,11 @@ constexpr float kArcaneProjectilePlayerHitRange = 0.82f;
 constexpr float kArcaneProjectileEnemyHitRange = 1.45f;
 constexpr float kArcaneProjectileDeflectRange = 5.80f;
 constexpr float kArcaneProjectileSlashDot = 0.55f;
-constexpr int kArcaneProjectileVolleyRequiredHits = 1;
+constexpr int kArcaneProjectileVolleyRequiredHits = 3;
 constexpr int kCataclysmProjectileVolleyRequiredHits = 5;
+constexpr float kReflectedProjectileVolleyDamage = 130.0f;
+constexpr float kHostileProjectilePlayerDamageScale = 0.55f;
+constexpr float kHostileProjectilePlayerKnockbackScale = 0.75f;
 constexpr float kNormalSlashRearmDelay = 0.10f;
 constexpr float kNormalHitSlashSoundVolume = 0.82f;
 constexpr float kNormalHitSlashSoundStartSeconds = 0.18f;
@@ -219,6 +222,11 @@ float GameScene::ApplyEnemyDamage(float damage, bool deferTransitions,
 }
 
 float GameScene::ApplyPlayerDamage(float enemyAttackDamage) {
+#ifdef _DEBUG
+    if (debugPlayerInvincible_) {
+        return 0.0f;
+    }
+#endif
     if (enemyAttackDamage <= 0.0f || player_.GetHP() <= 0.0f) {
         return 0.0f;
     }
@@ -531,7 +539,9 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             (std::max)(enemyDamage * player_.GetCounterDamageMultiplier(),
                        130.0f);
         const float vulnerabilityDuration = GetCounterVulnerabilityDuration();
-        if (enemy_.IsFarWarpSlashActive()) {
+        const bool suppressCounterStagger =
+            enemy_.ShouldSuppressCounterStagger();
+        if (enemy_.IsFarWarpSlashActive() && !suppressCounterStagger) {
             const XMFLOAT3 start = enemy_.GetTransform().position;
             const XMFLOAT3 playerPos = player_.GetTransform().position;
             XMFLOAT2 rushDir =
@@ -567,7 +577,8 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         if (enemy_.NotifyCountered(vulnerabilityDuration)) {
             forceSyncEnemyAnimationThisFrame = true;
         }
-        const float appliedDamage = ApplyEnemyDamage(counterDamage);
+        const float appliedDamage =
+            ApplyEnemyDamage(counterDamage, false, !suppressCounterStagger);
         CombatFeedbackEvent feedback{};
         feedback.type = CombatFeedbackEventType::CounterSuccess;
         feedback.position = enemy_.GetTransform().position;
@@ -595,11 +606,18 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     };
     auto isProjectileInDeflectRange =
         [&](const ArcaneProjectileState &projectile) {
-            return projectile.active && !projectile.reflected &&
-                   DistanceSqXZ(projectile.position,
-                                player_.GetTransform().position) <=
-                       kArcaneProjectileDeflectRange *
-                           kArcaneProjectileDeflectRange;
+            if (!projectile.active || projectile.reflected ||
+                projectile.waitingToFire) {
+                return false;
+            }
+            const XMFLOAT3 playerPos = player_.GetTransform().position;
+            if (projectile.fromAbove &&
+                projectile.position.y > playerPos.y + 5.2f) {
+                return false;
+            }
+            return DistanceSqXZ(projectile.position, playerPos) <=
+                   kArcaneProjectileDeflectRange *
+                       kArcaneProjectileDeflectRange;
         };
     auto isProjectileSlashAligned =
         [&](const ArcaneProjectileState &projectile, const Sword &sword) {
@@ -752,6 +770,8 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             feedback.power = (std::max)(appliedDamage / 8.0f,
                                         enemyAttackDamage / 8.0f);
             feedback.swordIndex = i;
+            mistimedCounterSlashThisFrame_ = true;
+            normalSlashHitConsumed_[i] = true;
             DispatchCombatFeedback(feedback);
             playerHitCooldown_ = 0.45f;
             break;
@@ -849,7 +869,9 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             break;
         }
 
-        if (enemyHitCooldown_ <= 0.0f && !normalSlashHitConsumed_[i]) {
+        if (!mistimedCounterSlashThisFrame_ &&
+            !counterSuccessSlashThisFrame_ && enemyHitCooldown_ <= 0.0f &&
+            !normalSlashHitConsumed_[i]) {
             if (hitBody) {
                 const float swordDamage = swordAttackDamages[i];
                 const float appliedDamage =
@@ -900,7 +922,6 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                 DirectionFromTo(impact, enemy_.GetTransform().position);
             const ArcaneProjectileState impactProjectile = projectile;
             const size_t swordIndex = projectile.reflectedBySwordIndex;
-            const float damage = projectile.damage;
             ++arcaneProjectileVolleyReflectedHits_;
             const int requiredHits = arcaneProjectileVolleyCataclysm_
                                          ? kCataclysmProjectileVolleyRequiredHits
@@ -908,22 +929,32 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             const bool volleyComplete = arcaneProjectileVolleyReflectedHits_ >=
                                         requiredHits;
             projectile = {};
+            const float reflectedDamage =
+                kReflectedProjectileVolleyDamage /
+                static_cast<float>((std::max)(requiredHits, 1));
+            const float appliedDamage = ApplyEnemyDamage(reflectedDamage);
+            CombatFeedbackEvent feedback{};
+            feedback.type = CombatFeedbackEventType::CounterSuccess;
+            feedback.position = enemy_.GetTransform().position;
+            feedback.position.y += 1.0f;
+            feedback.direction = impactDirection;
+            feedback.power = (std::max)(appliedDamage / 10.0f,
+                                        volleyComplete ? 6.5f : 4.0f);
+            feedback.swordIndex = swordIndex;
+            DispatchCombatFeedback(feedback);
             if (volleyComplete) {
-                triggerSuccessfulCounter(swordIndex, damage * 1.45f, 0.22f);
+                const float vulnerabilityDuration =
+                    GetCounterVulnerabilityDuration();
+                if (enemy_.NotifyCountered(vulnerabilityDuration)) {
+                    forceSyncEnemyAnimationThisFrame = true;
+                }
                 arcaneProjectileVolleyActive_ = false;
                 arcaneProjectileVolleyCataclysm_ = false;
                 counterTriggeredThisFrame = true;
+                playerHitCooldown_ = GetCounterPlayerHitCooldown(0.22f);
+                startCounterCinematicThisFrame = true;
+                counterCinematicTimer_ = GetCounterCinematicDuration();
             } else {
-                const float appliedDamage =
-                    ApplyEnemyDamage((std::max)(damage * 0.75f, 28.0f));
-                CombatFeedbackEvent feedback{};
-                feedback.type = CombatFeedbackEventType::CounterSuccess;
-                feedback.position = enemy_.GetTransform().position;
-                feedback.position.y += 1.0f;
-                feedback.direction = impactDirection;
-                feedback.power = (std::max)(appliedDamage / 10.0f, 4.0f);
-                feedback.swordIndex = swordIndex;
-                DispatchCombatFeedback(feedback);
                 enemyHitCooldown_ = 0.10f;
             }
             EmitArcaneProjectileExplosion(impactProjectile, impact,
@@ -943,22 +974,34 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     auto processHostileProjectileHit =
         [&](ArcaneProjectileState &projectile) {
             if (!projectile.active || projectile.reflected ||
+                projectile.waitingToFire ||
                 arcaneProjectileReflectedThisFrame ||
                 playerHitCooldown_ > 0.0f) {
                 return false;
             }
         const bool playerHitByProjectile =
-            DistanceSqXZ(player_.GetTransform().position,
-                         projectile.position) <=
-            kArcaneProjectilePlayerHitRange * kArcaneProjectilePlayerHitRange;
+            projectile.fromAbove
+                ? (DistanceSqXZ(player_.GetTransform().position,
+                                projectile.position) <=
+                       (kArcaneProjectilePlayerHitRange + 0.22f) *
+                           (kArcaneProjectilePlayerHitRange + 0.22f) &&
+                   std::fabs(projectile.position.y -
+                             (player_.GetTransform().position.y + 0.78f)) <=
+                       1.10f)
+                : DistanceSqXZ(player_.GetTransform().position,
+                               projectile.position) <=
+                      kArcaneProjectilePlayerHitRange *
+                          kArcaneProjectilePlayerHitRange;
         if (playerHitByProjectile) {
             const XMFLOAT3 impact = projectile.position;
             const XMFLOAT3 projectileVelocity = projectile.velocity;
             const XMFLOAT3 impactDirection =
                 NormalizeParticleCompatVec3(projectileVelocity,
                                             {0.0f, 0.0f, 1.0f});
-            const float projectileDamage = projectile.damage;
-            const float projectileKnockback = projectile.knockback;
+            const float projectileDamage =
+                projectile.damage * kHostileProjectilePlayerDamageScale;
+            const float projectileKnockback =
+                projectile.knockback * kHostileProjectilePlayerKnockbackScale;
             const ArcaneProjectileState impactProjectile = projectile;
             projectile = {};
             EmitArcaneProjectileExplosion(impactProjectile, impact,
@@ -1003,6 +1046,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                 {knockbackDir.x * enemyAttackKnockback, 0.0f,
                  knockbackDir.y * enemyAttackKnockback});
             const float appliedDamage = ApplyPlayerDamage(enemyAttackDamage);
+            enemy_.NotifyTripleIaiAttackResolvedForCamera();
             CombatFeedbackEvent feedback{};
             feedback.type = CombatFeedbackEventType::PlayerDamaged;
             feedback.position = player_.GetTransform().position;

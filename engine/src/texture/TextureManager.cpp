@@ -10,6 +10,7 @@
 #include <cwctype>
 #include <filesystem>
 #include <future>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -34,7 +35,12 @@ class UploadPassScope {
                     bool active)
         : dxCommon_(dxCommon), textureManager_(textureManager), active_(active) {}
 
-    ~UploadPassScope() { Finish(); }
+    ~UploadPassScope() noexcept {
+        try {
+            Finish();
+        } catch (...) {
+        }
+    }
 
     void Finish() {
         if (!active_) {
@@ -98,6 +104,9 @@ TextureManager &TextureManager::GetInstance() {
 
 void TextureManager::Initialize(DirectXCommon *dxCommon,
                                 SrvManager *srvManager) {
+    if (!dxCommon || !srvManager) {
+        throw std::runtime_error("TextureManager::Initialize null argument");
+    }
     dxCommon_ = dxCommon;
     srvManager_ = srvManager;
 
@@ -198,6 +207,10 @@ TextureManager::LoadBatch(const std::vector<std::wstring> &filePaths) {
 }
 
 uint32_t TextureManager::LoadFromMemory(const uint8_t *data, size_t size) {
+    if (!data || size == 0) {
+        throw std::runtime_error("LoadFromMemory received invalid input");
+    }
+
     ScratchImage scratch;
     TexMetadata metadata{};
 
@@ -214,6 +227,36 @@ uint32_t TextureManager::LoadFromMemory(const uint8_t *data, size_t size) {
 
 uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
                                        const TexMetadata &metadata) {
+    if (!dxCommon_ || !srvManager_) {
+        throw std::runtime_error("TextureManager is not initialized");
+    }
+    if (!images || imageCount == 0 || metadata.width == 0 ||
+        metadata.height == 0 || metadata.arraySize == 0 ||
+        metadata.mipLevels == 0) {
+        throw std::runtime_error("CreateTexture received invalid metadata");
+    }
+    if (metadata.height > (std::numeric_limits<UINT>::max)() ||
+        metadata.arraySize > (std::numeric_limits<UINT16>::max)() ||
+        metadata.mipLevels > (std::numeric_limits<UINT16>::max)() ||
+        metadata.width > (std::numeric_limits<uint32_t>::max)()) {
+        throw std::runtime_error("CreateTexture metadata dimensions exceed supported range");
+    }
+    if (imageCount > (std::numeric_limits<UINT>::max)()) {
+        throw std::runtime_error("CreateTexture image count exceeds supported range");
+    }
+    for (size_t imageIndex = 0; imageIndex < imageCount; ++imageIndex) {
+        if (!images[imageIndex].pixels || images[imageIndex].rowPitch == 0 ||
+            images[imageIndex].slicePitch == 0) {
+            throw std::runtime_error("CreateTexture received invalid image");
+        }
+        if (images[imageIndex].rowPitch >
+                static_cast<size_t>((std::numeric_limits<LONG_PTR>::max)()) ||
+            images[imageIndex].slicePitch >
+                static_cast<size_t>((std::numeric_limits<LONG_PTR>::max)())) {
+            throw std::runtime_error("CreateTexture image pitch exceeds D3D12 range");
+        }
+    }
+
     const bool ownsUploadPass =
         dxCommon_ != nullptr && !dxCommon_->IsCommandListRecording();
     if (ownsUploadPass) {
@@ -270,7 +313,20 @@ uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
 
     cmdList->ResourceBarrier(1, &barrier);
 
-    uploadBuffers_.push_back(uploadBuffer);
+    if (ownsUploadPass) {
+        uploadBuffers_.push_back(uploadBuffer);
+    } else {
+        const UINT frameIndex = dxCommon_->GetBackBufferIndex();
+        if (frameIndex < frameUploadBuffers_.size()) {
+            if (lastDynamicUploadFrameIndex_ != frameIndex) {
+                frameUploadBuffers_[frameIndex].clear();
+                lastDynamicUploadFrameIndex_ = frameIndex;
+            }
+            frameUploadBuffers_[frameIndex].push_back(uploadBuffer);
+        } else {
+            uploadBuffers_.push_back(uploadBuffer);
+        }
+    }
 
     uint32_t srvIndex = srvManager_->Allocate();
 
@@ -307,6 +363,7 @@ uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
 
     texture.width = static_cast<uint32_t>(metadata.width);
     texture.height = static_cast<uint32_t>(metadata.height);
+    texture.state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 
     textures_.push_back({std::move(texture), srvIndex});
 
@@ -321,7 +378,25 @@ void TextureManager::ReleaseUploadBuffers() {
     if (dxCommon_ && dxCommon_->IsCommandListRecording()) {
         return;
     }
+
+    bool hasFrameUploadBuffers = false;
+    for (const auto &buffers : frameUploadBuffers_) {
+        if (!buffers.empty()) {
+            hasFrameUploadBuffers = true;
+            break;
+        }
+    }
+
+    if (dxCommon_ && !dxCommon_->IsDeviceRemoved() &&
+        (!uploadBuffers_.empty() || hasFrameUploadBuffers)) {
+        dxCommon_->WaitForGpu();
+    }
+
     uploadBuffers_.clear();
+    for (auto &buffers : frameUploadBuffers_) {
+        buffers.clear();
+    }
+    lastDynamicUploadFrameIndex_ = UINT_MAX;
 }
 
 D3D12_GPU_DESCRIPTOR_HANDLE

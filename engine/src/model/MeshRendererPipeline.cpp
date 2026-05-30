@@ -131,20 +131,20 @@ uint32_t ResolveNormalTextureId(TextureManager *textureManager,
 } // namespace
 
 void MeshRenderer::CreateRootSignature() {
-    CD3DX12_ROOT_PARAMETER params[6];
+    CD3DX12_ROOT_PARAMETER params[6]{};
     params[0].InitAsConstantBufferView(0);
     params[1].InitAsConstantBufferView(1);
     params[2].InitAsConstantBufferView(2);
 
-    CD3DX12_DESCRIPTOR_RANGE textureRange;
+    CD3DX12_DESCRIPTOR_RANGE textureRange{};
     textureRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
     params[3].InitAsDescriptorTable(1, &textureRange);
 
-    CD3DX12_DESCRIPTOR_RANGE shadowRange;
+    CD3DX12_DESCRIPTOR_RANGE shadowRange{};
     shadowRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3);
     params[4].InitAsDescriptorTable(1, &shadowRange);
 
-    CD3DX12_DESCRIPTOR_RANGE normalRange;
+    CD3DX12_DESCRIPTOR_RANGE normalRange{};
     normalRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 4);
     params[5].InitAsDescriptorTable(1, &normalRange);
 
@@ -168,12 +168,12 @@ void MeshRenderer::CreateRootSignature() {
 }
 
 void MeshRenderer::CreateShadowRootSignature() {
-    CD3DX12_ROOT_PARAMETER params[4];
+    CD3DX12_ROOT_PARAMETER params[4]{};
     params[0].InitAsConstantBufferView(0);
     params[1].InitAsConstantBufferView(1);
     params[2].InitAsConstantBufferView(2);
 
-    CD3DX12_DESCRIPTOR_RANGE textureRange;
+    CD3DX12_DESCRIPTOR_RANGE textureRange{};
     textureRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
     params[3].InitAsDescriptorTable(1, &textureRange);
 

@@ -10,6 +10,7 @@
 #include <mfapi.h>
 #include <mfidl.h>
 #include <mfreadwrite.h>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -294,7 +295,7 @@ bool SoundManager::TryLoad(const std::wstring &path, uint32_t &soundId) {
     }
 
     AudioFileLoader::SoundData data{};
-    if (!AudioFileLoader::TryLoad(path, data)) {
+    if (!AudioFileLoader::TryLoad(resolvedPath.wstring(), data)) {
         return false;
     }
 
@@ -730,6 +731,10 @@ uint32_t SoundManager::CreateSourceVoice(uint32_t soundId, float volume,
         sound.decodedPcm.empty()) {
         return kInvalidVoiceHandle;
     }
+    if (sound.decodedPcm.size() >
+        (std::numeric_limits<UINT32>::max)()) {
+        return kInvalidVoiceHandle;
+    }
 
     IXAudio2SourceVoice *voice = nullptr;
     auto callback = std::make_unique<SoundVoiceCallback>();
@@ -740,17 +745,26 @@ uint32_t SoundManager::CreateSourceVoice(uint32_t soundId, float volume,
         return kInvalidVoiceHandle;
     }
 
-    const UINT32 totalFrames = static_cast<UINT32>(
-        sound.decodedPcm.size() / static_cast<size_t>(format->nBlockAlign));
+    const size_t totalFramesSize =
+        sound.decodedPcm.size() / static_cast<size_t>(format->nBlockAlign);
+    if (totalFramesSize == 0 ||
+        totalFramesSize > (std::numeric_limits<UINT32>::max)()) {
+        voice->DestroyVoice();
+        return kInvalidVoiceHandle;
+    }
+    const UINT32 totalFrames = static_cast<UINT32>(totalFramesSize);
     if (totalFrames == 0u) {
         voice->DestroyVoice();
         return kInvalidVoiceHandle;
     }
     const float clampedStartSeconds = (std::max)(startSeconds, 0.0f);
-    const UINT32 startFrame = (std::min)(
-        static_cast<UINT32>(clampedStartSeconds *
-                            static_cast<float>(format->nSamplesPerSec)),
-        totalFrames - 1u);
+    const double requestedStartFrame =
+        static_cast<double>(clampedStartSeconds) *
+        static_cast<double>(format->nSamplesPerSec);
+    const UINT32 startFrame =
+        requestedStartFrame >= static_cast<double>(totalFrames)
+            ? totalFrames - 1u
+            : static_cast<UINT32>(requestedStartFrame);
 
     XAUDIO2_BUFFER buffer{};
     buffer.pAudioData = sound.decodedPcm.data();
@@ -805,6 +819,11 @@ uint32_t SoundManager::CreateSilentSound(const std::wstring &cacheKey,
     }
 
     WAVEFORMATEX format{};
+    if (sampleRate == 0 || channels == 0 || bitsPerSample == 0) {
+        sampleRate = 48000;
+        channels = 1;
+        bitsPerSample = 16;
+    }
     format.wFormatTag = WAVE_FORMAT_PCM;
     format.nChannels = channels;
     format.nSamplesPerSec = sampleRate;
