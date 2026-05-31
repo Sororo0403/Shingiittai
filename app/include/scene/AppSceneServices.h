@@ -46,13 +46,13 @@ inline float mouseSlashSensitivity = 0.5f;
 struct CameraAdvancedSettings {
     float singleHandLeftThreshold = 0.45f;
     float singleHandRightThreshold = 0.55f;
-    float handControlGainX = 2.55f;
-    float handControlGainY = 3.10f;
+    float handControlGainX = 3.10f;
+    float handControlGainY = 3.70f;
     float handReachCompensationMin = 0.70f;
     float handReachCompensationMax = 1.45f;
     float handMinReachForCompensation = 0.12f;
-    float handSlashThreshold = 0.88f;
-    float handSlashResetThreshold = 0.31f;
+    float handSlashThreshold = 0.96f;
+    float handSlashResetThreshold = 0.34f;
     float handVerticalSlashThresholdScale = 0.82f;
     float handHardSensitivityGainScale = 0.70f;
     float handEasySensitivityGainScale = 1.55f;
@@ -60,7 +60,7 @@ struct CameraAdvancedSettings {
     float handEasySensitivityThresholdScale = 0.62f;
     float handSlashRearmNeutralRadius = 0.20f;
     float handSlashNeutralRearmSeconds = 0.12f;
-    float handSlashCooldownSeconds = 0.24f;
+    float handSlashCooldownSeconds = 0.38f;
     float handControlSmoothing = 18.0f;
     float handFastControlSmoothing = 46.0f;
     float handFastMotionDistance = 0.045f;
@@ -79,8 +79,8 @@ struct CameraAdvancedSettings {
     float syntheticLostSlashSeconds = 0.16f;
     float handMotionWindowSeconds = 0.16f;
     float handStableNetDistanceThreshold = 0.017f;
-    float handSlashNetDistanceThreshold = 0.027f;
-    float handVelocitySlashNetDistanceThreshold = 0.008f;
+    float handSlashNetDistanceThreshold = 0.031f;
+    float handVelocitySlashNetDistanceThreshold = 0.0100f;
     float handStableConsistencyThreshold = 0.48f;
     float handReferenceVisualScale = 0.095f;
     float handMinVisualScale = 0.045f;

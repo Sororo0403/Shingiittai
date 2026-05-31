@@ -20,7 +20,9 @@ constexpr size_t kHandLandmarkCount = 21;
 constexpr size_t kHandWrist = 0;
 constexpr size_t kHandIndexMcp = 5;
 constexpr size_t kHandMiddleMcp = 9;
+constexpr size_t kHandRingMcp = 13;
 constexpr size_t kHandPinkyMcp = 17;
+constexpr float kControlPalmAxisWeight = 0.70f;
 
 struct HandSample {
     DirectX::XMFLOAT2 palm{0.5f, 0.5f};
@@ -259,16 +261,21 @@ DirectX::XMFLOAT2 EstimateControlPalm(const HandSample &sample) {
     }
 
     const DirectX::XMFLOAT2 wrist = sample.landmarks[kHandWrist];
-    const DirectX::XMFLOAT2 middleMcp = sample.landmarks[kHandMiddleMcp];
-    const DirectX::XMFLOAT2 palmAxis = Subtract(middleMcp, wrist);
+    const DirectX::XMFLOAT2 mcpCenter =
+        Scale(Add(Add(sample.landmarks[kHandIndexMcp],
+                      sample.landmarks[kHandMiddleMcp]),
+                  Add(sample.landmarks[kHandRingMcp],
+                      sample.landmarks[kHandPinkyMcp])),
+              0.25f);
+    const DirectX::XMFLOAT2 palmAxis = Subtract(mcpCenter, wrist);
     const float palmLength = Length(palmAxis);
     if (palmLength <= 0.0001f) {
         return sample.palm;
     }
 
-    // Use a wrist-to-middle-knuckle anchor instead of averaging all joints.
-    // Finger joints bend and jitter enough to create false slash velocity.
-    return ClampPoint01(Add(wrist, Scale(palmAxis, 0.82f)));
+    // Keep the control anchor near the palm heel so wrist twist does not become
+    // false slash velocity.
+    return ClampPoint01(Add(wrist, Scale(palmAxis, kControlPalmAxisWeight)));
 }
 
 }
@@ -622,6 +629,8 @@ void SwordUdpController::ApplyRawInput(float dt) {
         debugSlashTriggeredThisFrame_[i] = false;
         handSlashCooldown_[i] =
             (std::max)(0.0f, handSlashCooldown_[i] - dt);
+        const float effectiveSlashCooldown =
+            postSlashCooldownEnabled_ ? handSlashCooldown_[i] : 0.0f;
         reacquireSuppressTimer_[i] =
             (std::max)(0.0f, reacquireSuppressTimer_[i] - dt);
         edgeExitSuppressTimer_[i] =
@@ -684,7 +693,7 @@ void SwordUdpController::ApplyRawInput(float dt) {
                 edgeExitSuppressTimer_[i] <= 0.0f &&
                 lastMotionAge_[i] <= settings.handPreLossDirectionMaxAgeSeconds &&
                 lastMotionSpeed_[i] >= preLossDirectionThreshold &&
-                handSlashCooldown_[i] <= 0.0f;
+                effectiveSlashCooldown <= 0.0f;
             if (canUsePreLossMotion) {
                 state.slashDir = lastMotionDir_[i];
                 state.UpdateSlash(
@@ -693,7 +702,9 @@ void SwordUdpController::ApplyRawInput(float dt) {
                 syntheticLostSlashTimer_[i] = settings.syntheticLostSlashSeconds;
                 handSlashArmed_[i] = false;
                 handSlashNeutralTimer_[i] = 0.0f;
-                handSlashCooldown_[i] = settings.handSlashCooldownSeconds;
+                handSlashCooldown_[i] = postSlashCooldownEnabled_
+                                            ? settings.handSlashCooldownSeconds
+                                            : 0.0f;
             } else if (syntheticLostSlashTimer_[i] > 0.0f) {
                 state.UpdateSlash(0.0f, dt, settings.handSlashThreshold);
             } else {
@@ -726,7 +737,7 @@ void SwordUdpController::ApplyRawInput(float dt) {
             reacquired && hasLostPalm_[i] &&
             edgeExitSuppressTimer_[i] <= 0.0f &&
             reacquireDistance >= reacquireSlashThreshold &&
-            handSlashArmed_[i] && handSlashCooldown_[i] <= 0.0f &&
+            handSlashArmed_[i] && effectiveSlashCooldown <= 0.0f &&
             IsMovingAwayFromNeutral(reacquireDelta, corrected);
         const DirectX::XMFLOAT2 jumpDelta =
             hasSmoothedPalm_[i] ? Subtract(corrected, smoothedPalm_[i])
@@ -741,7 +752,7 @@ void SwordUdpController::ApplyRawInput(float dt) {
             jumped && !teleported &&
             jumpDistance >= jumpSlashDistanceThreshold &&
             edgeExitSuppressTimer_[i] <= 0.0f &&
-            handSlashArmed_[i] && handSlashCooldown_[i] <= 0.0f &&
+            handSlashArmed_[i] && effectiveSlashCooldown <= 0.0f &&
             IsMovingAwayFromNeutral(jumpDelta, corrected);
         if (reacquired || jumped) {
             ResetMotionHistory(i);
@@ -872,29 +883,26 @@ void SwordUdpController::ApplyRawInput(float dt) {
         const float slashSpeed =
             (std::max)(motionSpeed_[i], packetMotionSpeed_[i]);
         const bool frameVelocitySlashMotion =
-            slashSpeed >= slashThreshold &&
+            motionSpeed_[i] >= slashThreshold &&
             Length(frameDeltaPalm) >=
-                settings.handVelocitySlashNetDistanceThreshold &&
-            IsMovingAwayFromNeutral(frameDeltaPalm, corrected);
+                settings.handVelocitySlashNetDistanceThreshold;
+        const bool packetVelocitySlashMotion =
+            packetMotionSpeed_[i] >= slashThreshold &&
+            Length(packetDeltaPalm_[i]) >=
+                settings.handVelocitySlashNetDistanceThreshold;
         const bool stableSlashMotion =
             stableMotion.valid &&
-            stableMotion.netDistance >= slashNetDistanceThreshold &&
-            IsMovingAwayFromNeutral(
-                DirectX::XMFLOAT2{stableMotion.direction.x,
-                                  -stableMotion.direction.y},
-                corrected);
-        const bool movingAwaySlash =
-            frameVelocitySlashMotion ||
-            IsMovingAwayFromNeutral(packetDeltaPalm_[i], corrected) ||
-            IsMovingAwayFromNeutral(
-                DirectX::XMFLOAT2{stableMotion.direction.x,
-                                  -stableMotion.direction.y},
-                corrected);
+            stableMotion.netDistance >= slashNetDistanceThreshold;
         const float stableSlashSpeed =
-            stableSlashMotion || frameVelocitySlashMotion
+            stableSlashMotion || frameVelocitySlashMotion ||
+                    packetVelocitySlashMotion
                 ? (std::max)(slashSpeed, slashThreshold + 0.01f)
-                : (movingAwaySlash ? slashSpeed : 0.0f);
-        if (slashSpeed <= slashResetThreshold &&
+                : 0.0f;
+        const bool neutralIsStable =
+            !stableMotion.valid ||
+            stableMotion.speed <= slashResetThreshold ||
+            stableMotion.netDistance <= stableNetDistanceThreshold;
+        if (slashSpeed <= slashResetThreshold && neutralIsStable &&
             reacquireSuppressTimer_[i] <= 0.0f &&
             edgeExitSuppressTimer_[i] <= 0.0f && IsNearNeutral(corrected)) {
             handSlashNeutralTimer_[i] += dt;
@@ -911,7 +919,7 @@ void SwordUdpController::ApplyRawInput(float dt) {
         const float gatedSlashSpeed =
             synthesizeReacquireSlash || synthesizeJumpSlash
                 ? (std::max)(slashSpeed, slashThreshold + 0.01f)
-                : (handSlashArmed_[i] && handSlashCooldown_[i] <= 0.0f &&
+                : (handSlashArmed_[i] && effectiveSlashCooldown <= 0.0f &&
                            reacquireSuppressTimer_[i] <= 0.0f &&
                            edgeExitSuppressTimer_[i] <= 0.0f
                        ? stableSlashSpeed
@@ -921,7 +929,9 @@ void SwordUdpController::ApplyRawInput(float dt) {
         if (!wasSlashMode && state.isSlashMode) {
             handSlashArmed_[i] = false;
             handSlashNeutralTimer_[i] = 0.0f;
-            handSlashCooldown_[i] = settings.handSlashCooldownSeconds;
+            handSlashCooldown_[i] = postSlashCooldownEnabled_
+                                        ? settings.handSlashCooldownSeconds
+                                        : 0.0f;
             debugSlashTriggeredThisFrame_[i] = true;
         }
         wasHandActive_[i] = true;

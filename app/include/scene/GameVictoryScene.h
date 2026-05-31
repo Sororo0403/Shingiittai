@@ -34,6 +34,10 @@ class GameVictoryScene : public BaseScene {
         uint32_t textureId = 0;
         float width = 0.0f;
         float height = 0.0f;
+        float inkLeft = 0.0f;
+        float inkRight = 0.0f;
+        float inkTop = 0.0f;
+        float inkBottom = 0.0f;
     };
 
     struct VictoryConfetti {
@@ -107,8 +111,13 @@ class GameVictoryScene : public BaseScene {
                           float scale = 1.0f, float alpha = 1.0f);
     void DrawTextLineLeft(const std::string &text, float x, float y,
                           float scale, const DirectX::XMFLOAT4 &color);
+    void DrawTextLineLeftBaseline(const std::string &text, float x,
+                                  float baselineY, float scale,
+                                  const DirectX::XMFLOAT4 &color);
     float GetCharAdvance(char c) const;
     float MeasureTextLine(const std::string &text, float scale) const;
+    float MeasureTextInkCenterOffset(const std::string &text,
+                                     float scale) const;
     const Image *FindCharImage(char c) const;
     Image LoadTextureImage(const std::wstring &path);
 

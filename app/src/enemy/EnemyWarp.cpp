@@ -294,7 +294,11 @@ void Enemy::ConfigureFarSlashLungeTarget() {
     float toTargetX = farSlashLungeTargetPos_.x - farSlashLungeStartPos_.x;
     float toTargetZ = farSlashLungeTargetPos_.z - farSlashLungeStartPos_.z;
     const float targetDistance = std::sqrt(toTargetX * toTargetX + toTargetZ * toTargetZ);
-    const float travelDuration = targetDistance / std::max(1.0f, farSlashLungeSpeed_);
+    const float lungeSpeed = farSlashLungeSpeed_ *
+                             (tripleIaiSlashActive_
+                                  ? tripleIaiSlashSpeedScale_
+                                  : 1.0f);
+    const float travelDuration = targetDistance / std::max(1.0f, lungeSpeed);
     farSlashLungeDuration_ = std::max(travelDuration, 0.06f);
     hasFarSlashLungeTarget_ = true;
 }

@@ -9,6 +9,7 @@ enum class CombatFeedbackEventType {
     PlayerDamaged,
     MistimedCounterSlash,
     CounterSuccess,
+    EnemyProjectileReflect,
     BladeClashGuardBreak,
     BladeClashPierce,
 };

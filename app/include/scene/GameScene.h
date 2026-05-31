@@ -163,6 +163,8 @@ class GameScene : public BaseScene {
     void ReflectArcaneProjectile(size_t swordIndex);
     void ReflectArcaneProjectile(ArcaneProjectileState &projectile,
                                  size_t swordIndex);
+    float GetEnemyProjectileSpeedScale() const;
+    float GetEnemyRangedVolleyInterval() const;
     void EmitArcaneProjectileExplosion(const ArcaneProjectileState &projectile,
                                        const DirectX::XMFLOAT3 &position,
                                        const DirectX::XMFLOAT3 &direction,
@@ -457,6 +459,7 @@ class GameScene : public BaseScene {
     float tutorialSuccessTimer_ = 0.0f;
     float tutorialMissTimer_ = 0.0f;
     float tutorialExcellentTimer_ = 0.0f;
+    float tutorialHandHoldTimer_ = 0.0f;
     float tutorialRedWaitTimer_ = 0.0f;
     float tutorialGreenCutTimer_ = 0.0f;
     int tutorialStep_ = 0;
@@ -469,9 +472,9 @@ class GameScene : public BaseScene {
     bool tutorialExitRequested_ = false;
     bool tutorialExitToSelect_ = false;
     bool tutorialImagesLoaded_ = false;
-    std::array<uint32_t, 11> tutorialTextureIds_{};
-    std::array<float, 11> tutorialTextureWidths_{};
-    std::array<float, 11> tutorialTextureHeights_{};
+    std::array<uint32_t, 12> tutorialTextureIds_{};
+    std::array<float, 12> tutorialTextureWidths_{};
+    std::array<float, 12> tutorialTextureHeights_{};
     std::array<uint32_t, 10> tutorialDigitTextureIds_{};
     std::array<float, 10> tutorialDigitTextureWidths_{};
     std::array<float, 10> tutorialDigitTextureHeights_{};

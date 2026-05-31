@@ -182,6 +182,12 @@ void CombatFeedbackDirector::PushEvent(const CombatFeedbackEvent &event) {
                      kCounterTint);
         fovKickDeg_ = (std::max)(fovKickDeg_, 7.0f);
         break;
+    case CombatFeedbackEventType::EnemyProjectileReflect:
+        AddCameraShake(0.18f, 0.032f, 0.020f);
+        AddPostFlash(0.14f, 0.030f, 0.035f, 0.05f, 0.0f, nullptr, 0.42f,
+                     kCounterTint);
+        fovKickDeg_ = (std::max)(fovKickDeg_, 2.2f);
+        break;
     case CombatFeedbackEventType::BladeClashGuardBreak:
         AddHitStop(0.260f, 0.004f);
         AddCameraShake(0.38f, 0.122f, 0.074f);

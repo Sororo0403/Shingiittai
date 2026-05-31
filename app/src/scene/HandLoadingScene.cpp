@@ -29,6 +29,10 @@ float SmoothStep01(float t) {
     t = std::clamp(t, 0.0f, 1.0f);
     return t * t * (3.0f - 2.0f * t);
 }
+
+bool UsesPreviewLoadingOnly(GameScene::Mode mode) {
+    return mode == GameScene::Mode::Tutorial;
+}
 } // namespace
 
 HandLoadingScene::HandLoadingScene(
@@ -81,6 +85,15 @@ void HandLoadingScene::Update() {
     const auto left = handController_.GetDebugHandState(0);
     const auto right = handController_.GetDebugHandState(1);
     const bool previewReady = previewReceiver_.HasFreshFrame(kPreviewStaleSeconds);
+    if (UsesPreviewLoadingOnly(destinationMode_)) {
+        if (previewReady) {
+            inputCalibration_.controlType = InputControlType::Hand;
+            sceneManager_->ChangeScene(
+                std::make_unique<GameScene>(inputCalibration_,
+                                            destinationMode_));
+        }
+        return;
+    }
     if (destinationSensitivityAdjust_) {
         if (previewReady) {
             sceneManager_->ChangeScene(
@@ -166,7 +179,8 @@ void HandLoadingScene::DrawPostProcessOverlay() {
                               kPreviewStaleSeconds, 1.0f);
     DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
              Color(0.0f, 0.0f, 0.0f, kPreviewDimAlpha));
-    if (destinationDifficultySelect_ || destinationSensitivityAdjust_) {
+    if (destinationDifficultySelect_ || destinationSensitivityAdjust_ ||
+        UsesPreviewLoadingOnly(destinationMode_)) {
         DrawLoadingMark(screenWidth, screenHeight);
     } else {
         DrawCalibrationOverlay(screenWidth, screenHeight);

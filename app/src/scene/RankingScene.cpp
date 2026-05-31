@@ -90,6 +90,35 @@ void RankingScene::Initialize(const SceneContext &ctx) {
         LoadTextureImage(L"app/resources/ui/result/mplus/glyphs/char_dash.png");
     secondImage_ =
         LoadTextureImage(L"app/resources/ui/result/mplus/glyphs/char_s.png");
+    const float digitInkLeft[10] = {14.0f, 16.0f, 15.0f, 16.0f, 12.0f,
+                                    16.0f, 14.0f, 16.0f, 14.0f, 14.0f};
+    const float digitInkRight[10] = {50.0f, 41.0f, 48.0f, 48.0f, 50.0f,
+                                     49.0f, 50.0f, 49.0f, 50.0f, 50.0f};
+    for (int i = 0; i < 10; ++i) {
+        Image &digit = digitImages_[static_cast<size_t>(i)];
+        digit.inkLeft = digitInkLeft[i];
+        digit.inkRight = digitInkRight[i];
+        digit.inkTop = (i == 1 || i == 3 || i == 4 || i == 5 || i == 7)
+                           ? 21.0f
+                           : 20.0f;
+        digit.inkBottom = 67.0f;
+    }
+    colonImage_.inkLeft = 19.0f;
+    colonImage_.inkRight = 32.0f;
+    colonImage_.inkTop = 31.0f;
+    colonImage_.inkBottom = 67.0f;
+    dotImage_.inkLeft = 17.0f;
+    dotImage_.inkRight = 29.0f;
+    dotImage_.inkTop = 54.0f;
+    dotImage_.inkBottom = 67.0f;
+    dashImage_.inkLeft = 16.0f;
+    dashImage_.inkRight = 38.0f;
+    dashImage_.inkTop = 44.0f;
+    dashImage_.inkBottom = 53.0f;
+    secondImage_.inkLeft = 15.0f;
+    secondImage_.inkRight = 43.0f;
+    secondImage_.inkTop = 33.0f;
+    secondImage_.inkBottom = 67.0f;
 
     LoadRanking();
 }
@@ -260,10 +289,10 @@ void RankingScene::DrawRanking(float screenWidth, float screenHeight) {
     DrawImage(rankingTitleLabel_, x + (panelW - titleW) * 0.5f,
               y + panelH * 0.085f, titleScale, 0.94f * intro);
 
-    const float tabY = y + panelH * 0.185f;
-    const float tabW = panelW * 0.22f;
-    const float tabH = panelH * 0.045f;
-    const float tabGap = panelW * 0.025f;
+    const float tabY = y + panelH * 0.168f;
+    const float tabW = std::clamp(panelW * 0.30f, 210.0f, 292.0f);
+    const float tabH = std::clamp(panelH * 0.074f, 42.0f, 54.0f);
+    const float tabGap = std::clamp(panelW * 0.034f, 24.0f, 38.0f);
     const float tabStartX = x + (panelW - tabW * 2.0f - tabGap) * 0.5f;
     const Image *modeLabels[2] = {&modeKbmLabel_, &modeHandLabel_};
     const InputControlType modes[2] = {InputControlType::KeyboardMouse,
@@ -279,9 +308,9 @@ void RankingScene::DrawRanking(float screenWidth, float screenHeight) {
                            : Color(0.62f, 0.66f, 0.72f, 0.32f * intro));
         const Image &label = *modeLabels[i];
         const float labelScale =
-            (std::min)({(tabW * 0.72f) / (std::max)(label.width, 1.0f),
-                        (tabH * 0.56f) / (std::max)(label.height, 1.0f),
-                        0.62f});
+            (std::min)({(tabW * 0.84f) / (std::max)(label.width, 1.0f),
+                        (tabH * 0.66f) / (std::max)(label.height, 1.0f),
+                        0.90f});
         const float labelW = label.width * labelScale;
         const float labelH = label.height * labelScale;
         DrawImage(label, tabX + (tabW - labelW) * 0.5f,
@@ -302,7 +331,11 @@ void RankingScene::DrawRanking(float screenWidth, float screenHeight) {
         columnGap * 3.0f;
     const float rowScale =
         std::clamp(contentW / (std::max)(nominalRowWidth, 1.0f), 0.42f, 0.62f);
-    const float gap = columnGap * rowScale;
+    const float scaledColumns =
+        (rankColumnW + scoreColumnW + timeColumnW + difficultyColumnW) *
+        rowScale;
+    const float gap =
+        (std::max)(columnGap * rowScale, (contentW - scaledColumns) / 3.0f);
     const float scoreRight =
         contentLeft + rankColumnW * rowScale + gap + scoreColumnW * rowScale;
     const float timeRight =
@@ -310,8 +343,8 @@ void RankingScene::DrawRanking(float screenWidth, float screenHeight) {
     const float difficultyRight =
         timeRight + gap + difficultyColumnW * rowScale;
     const float rankX = contentLeft;
-    const float headerY = y + panelH * 0.245f;
-    const float rowStartY = y + panelH * 0.335f;
+    const float headerY = y + panelH * 0.285f;
+    const float rowStartY = y + panelH * 0.375f;
     const float rowGap = panelH * 0.070f;
     const float headerScale = std::clamp(rowScale * 0.86f, 0.34f, 0.50f);
     DrawImage(rankHeaderLabel_, rankX, headerY, headerScale, 0.72f * intro);
@@ -323,10 +356,10 @@ void RankingScene::DrawRanking(float screenWidth, float screenHeight) {
     DrawImage(difficultyHeaderLabel_,
               difficultyRight - difficultyHeaderLabel_.width * headerScale,
               headerY, headerScale, 0.72f * intro);
-    DrawRect(contentLeft - panelW * 0.020f, y + panelH * 0.305f,
+    DrawRect(contentLeft - panelW * 0.020f, y + panelH * 0.345f,
              contentW + panelW * 0.040f, 1.0f,
              Color(0.95f, 0.72f, 0.28f, 0.30f * intro));
-    const float tableTop = y + panelH * 0.245f;
+    const float tableTop = y + panelH * 0.285f;
     const float tableBottom = rowStartY + rowGap * 4.72f;
     const float lineAlpha = 0.22f * intro;
     DrawRect(contentLeft + rankColumnW * rowScale + gap * 0.50f, tableTop,
@@ -346,20 +379,26 @@ void RankingScene::DrawRanking(float screenWidth, float screenHeight) {
     for (size_t i = 0; i < rows; ++i) {
         const RankingEntry &entry = rankingEntries_[i];
         const float rowY = rowStartY + static_cast<float>(i) * rowGap;
-        DrawRect(contentLeft - panelW * 0.020f, rowY - rowGap * 0.12f,
-                 contentW + panelW * 0.040f, rowGap * 0.84f,
+        const float rowFrameY = rowY - rowGap * 0.12f;
+        const float rowFrameH = rowGap * 0.84f;
+        const float baselineY =
+            rowFrameY + rowFrameH * 0.5f +
+            MeasureTextInkCenterOffset("00:00.00s", rowScale);
+        DrawRect(contentLeft - panelW * 0.020f, rowFrameY,
+                 contentW + panelW * 0.040f, rowFrameH,
                  Color(1.0f, 1.0f, 1.0f,
                        (i % 2 == 0 ? 0.030f : 0.015f) * intro));
         std::ostringstream row;
         row << (i + 1) << ":";
-        DrawTextLineLeft(row.str(), contentLeft, rowY, rowScale,
-                         0.96f * intro);
-        DrawTextLineRight(FormatScore(entry.score), scoreRight, rowY, rowScale,
-                          0.98f * intro);
-        DrawTextLineRight(FormatTime(entry.clearTime), timeRight, rowY,
-                          rowScale, 1.0f * intro);
-        DrawTextLineRight(FormatDifficulty(entry.difficulty), difficultyRight,
-                          rowY, rowScale, 0.94f * intro);
+        DrawTextLineLeftBaseline(row.str(), contentLeft, baselineY, rowScale,
+                                 0.96f * intro);
+        DrawTextLineRightBaseline(FormatScore(entry.score), scoreRight,
+                                  baselineY, rowScale, 0.98f * intro);
+        DrawTextLineRightBaseline(FormatTime(entry.clearTime), timeRight,
+                                  baselineY, rowScale, 1.0f * intro);
+        DrawTextLineRightBaseline(FormatDifficulty(entry.difficulty),
+                                  difficultyRight, baselineY, rowScale,
+                                  0.94f * intro);
     }
 }
 
@@ -416,18 +455,20 @@ void RankingScene::DrawTextLineLeft(const std::string &text, float x, float y,
     float cursorX = x;
     for (char c : text) {
         if (c == ' ') {
-            cursorX += 18.0f * scale;
+            cursorX += GetCharAdvance(c) * scale;
             continue;
         }
 
         const Image *image = FindCharImage(c);
         if (image == nullptr || image->width <= 0.0f) {
-            cursorX += 18.0f * scale;
+            cursorX += GetCharAdvance(c) * scale;
             continue;
         }
 
-        DrawImage(*image, cursorX, y, scale, alpha);
-        cursorX += (image->width + 5.0f) * scale;
+        const float inkLeft =
+            image->inkRight > image->inkLeft ? image->inkLeft : 0.0f;
+        DrawImage(*image, cursorX - inkLeft * scale, y, scale, alpha);
+        cursorX += GetCharAdvance(c) * scale;
     }
 }
 
@@ -437,19 +478,111 @@ void RankingScene::DrawTextLineRight(const std::string &text, float rightX,
                      alpha);
 }
 
+void RankingScene::DrawTextLineLeftBaseline(const std::string &text, float x,
+                                            float baselineY, float scale,
+                                            float alpha) {
+    float cursorX = x;
+    for (char c : text) {
+        if (c == ' ') {
+            cursorX += GetCharAdvance(c) * scale;
+            continue;
+        }
+
+        const Image *image = FindCharImage(c);
+        if (image == nullptr || image->width <= 0.0f) {
+            cursorX += GetCharAdvance(c) * scale;
+            continue;
+        }
+
+        const float inkLeft =
+            image->inkRight > image->inkLeft ? image->inkLeft : 0.0f;
+        const float inkBottom =
+            image->inkBottom > image->inkTop ? image->inkBottom : image->height;
+        DrawImage(*image, cursorX - inkLeft * scale,
+                  baselineY - inkBottom * scale, scale, alpha);
+        cursorX += GetCharAdvance(c) * scale;
+    }
+}
+
+void RankingScene::DrawTextLineRightBaseline(const std::string &text,
+                                             float rightX, float baselineY,
+                                             float scale, float alpha) {
+    DrawTextLineLeftBaseline(text, rightX - MeasureTextLine(text, scale),
+                             baselineY, scale, alpha);
+}
+
+float RankingScene::GetCharAdvance(char c) const {
+    if (c >= '0' && c <= '9') {
+        return 44.0f;
+    }
+    if (c == ':') {
+        return 28.0f;
+    }
+    if (c == '.') {
+        return 22.0f;
+    }
+    if (c == 's' || c == 'S') {
+        return 36.0f;
+    }
+    if (c == '-') {
+        return 34.0f;
+    }
+    if (c == ' ') {
+        return 18.0f;
+    }
+    return 40.0f;
+}
+
 float RankingScene::MeasureTextLine(const std::string &text,
                                     float scale) const {
+    float cursorX = 0.0f;
     float width = 0.0f;
     for (char c : text) {
         if (c == ' ') {
-            width += 18.0f * scale;
+            cursorX += GetCharAdvance(c);
+            width = cursorX;
             continue;
         }
         const Image *image = FindCharImage(c);
-        width += ((image != nullptr) ? image->width : 18.0f) * scale;
-        width += 5.0f * scale;
+        if (image == nullptr) {
+            cursorX += GetCharAdvance(c);
+            width = cursorX;
+            continue;
+        }
+        const float inkWidth =
+            image->inkRight > image->inkLeft
+                ? image->inkRight - image->inkLeft
+                : image->width;
+        width = cursorX + inkWidth;
+        cursorX += GetCharAdvance(c);
     }
-    return width;
+    return (std::max)(0.0f, width * scale);
+}
+
+float RankingScene::MeasureTextInkCenterOffset(const std::string &text,
+                                               float scale) const {
+    bool hasInk = false;
+    float top = 0.0f;
+    float bottom = 0.0f;
+    for (char c : text) {
+        const Image *image = FindCharImage(c);
+        if (image == nullptr) {
+            continue;
+        }
+        const float inkTop =
+            image->inkBottom > image->inkTop ? image->inkTop : 0.0f;
+        const float inkBottom =
+            image->inkBottom > image->inkTop ? image->inkBottom : image->height;
+        if (!hasInk) {
+            top = inkTop;
+            bottom = inkBottom;
+            hasInk = true;
+        } else {
+            top = (std::min)(top, inkTop);
+            bottom = (std::max)(bottom, inkBottom);
+        }
+    }
+    return hasInk ? (top + bottom) * 0.5f * scale : 0.0f;
 }
 
 const RankingScene::Image *RankingScene::FindCharImage(char c) const {

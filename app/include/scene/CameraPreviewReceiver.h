@@ -18,10 +18,10 @@ class CameraPreviewReceiver {
     bool HasFreshFrame(float staleSeconds) const;
     void Draw(SpriteManager *sprite, TextureManager *texture,
               float staleSeconds, bool backBufferTarget = false,
-              bool mirrorX = false);
+              bool mirrorX = true);
     void DrawArea(SpriteManager *sprite, TextureManager *texture, float x,
                   float y, float w, float h, float staleSeconds,
-                  float alpha = 1.0f, bool mirrorX = false);
+                  float alpha = 1.0f, bool mirrorX = true);
 
   private:
     struct Frame {

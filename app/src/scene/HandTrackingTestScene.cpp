@@ -506,6 +506,8 @@ void HandTrackingTestScene::DrawCameraPreview(float screenWidth,
         sprite.color = {1.0f, 1.0f, 1.0f,
                         previewFrame_.staleTimer > 0.55f ? 0.36f : 1.0f};
         sprite.textureId = previewFrame_.textureId;
+        sprite.uvLeftTop = {1.0f, 0.0f};
+        sprite.uvSize = {-1.0f, 1.0f};
         ctx_->rendering.sprite->DrawSprite(sprite);
 
         if (previewFrame_.staleTimer > 0.55f) {

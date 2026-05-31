@@ -427,6 +427,35 @@ void GameVictoryScene::Initialize(const SceneContext &ctx) {
         LoadTextureImage(L"app/resources/ui/result/mplus/glyphs/char_dash.png");
     secondImage_ =
         LoadTextureImage(L"app/resources/ui/result/mplus/glyphs/char_s.png");
+    const float digitInkLeft[10] = {14.0f, 16.0f, 15.0f, 16.0f, 12.0f,
+                                    16.0f, 14.0f, 16.0f, 14.0f, 14.0f};
+    const float digitInkRight[10] = {50.0f, 41.0f, 48.0f, 48.0f, 50.0f,
+                                     49.0f, 50.0f, 49.0f, 50.0f, 50.0f};
+    for (int i = 0; i < 10; ++i) {
+        Image &digit = digitImages_[static_cast<size_t>(i)];
+        digit.inkLeft = digitInkLeft[i];
+        digit.inkRight = digitInkRight[i];
+        digit.inkTop = (i == 1 || i == 3 || i == 4 || i == 5 || i == 7)
+                           ? 21.0f
+                           : 20.0f;
+        digit.inkBottom = 67.0f;
+    }
+    colonImage_.inkLeft = 19.0f;
+    colonImage_.inkRight = 32.0f;
+    colonImage_.inkTop = 31.0f;
+    colonImage_.inkBottom = 67.0f;
+    dotImage_.inkLeft = 17.0f;
+    dotImage_.inkRight = 29.0f;
+    dotImage_.inkTop = 54.0f;
+    dotImage_.inkBottom = 67.0f;
+    dashImage_.inkLeft = 16.0f;
+    dashImage_.inkRight = 38.0f;
+    dashImage_.inkTop = 44.0f;
+    dashImage_.inkBottom = 53.0f;
+    secondImage_.inkLeft = 15.0f;
+    secondImage_.inkRight = 43.0f;
+    secondImage_.inkTop = 33.0f;
+    secondImage_.inkBottom = 67.0f;
 
     // Play resonant slash sounds immediately upon scene initialization
     if (ctx_->systems.sound != nullptr &&
@@ -1670,16 +1699,18 @@ void GameVictoryScene::DrawResultOverlay(float screenWidth, float screenHeight) 
              Color(0.0f, 0.0f, 0.0f, 0.46f * fade));
     DrawVictoryConfetti(screenWidth, screenHeight, fade);
 
-    const float titleScale =
-        std::clamp(screenWidth * 0.58f /
-                       (std::max)(missionCompleteLabel_.width, 1.0f),
-                   0.50f, 0.88f);
-    const float titleW = missionCompleteLabel_.width * titleScale;
-    DrawImage(missionCompleteLabel_, (screenWidth - titleW) * 0.5f,
-              screenHeight * 0.055f, titleScale, fade);
-
     const float panelT =
         SmoothStep01((resultTimer_ - (kResultTextDelay + 0.02f)) / 0.16f);
+    if (!rankingVisible_) {
+        const float titleScale =
+            std::clamp(screenWidth * 0.58f /
+                           (std::max)(missionCompleteLabel_.width, 1.0f),
+                       0.50f, 0.88f);
+        const float titleW = missionCompleteLabel_.width * titleScale;
+        DrawImage(missionCompleteLabel_, (screenWidth - titleW) * 0.5f,
+                  screenHeight * 0.055f, titleScale, fade);
+    }
+
     const float panelW = std::clamp(screenWidth * 0.58f, 720.0f, 960.0f);
     const float panelH = std::clamp(screenHeight * 0.30f, 250.0f, 320.0f);
     const float panelX = (screenWidth - panelW) * 0.5f;
@@ -1757,8 +1788,6 @@ void GameVictoryScene::DrawResultOverlay(float screenWidth, float screenHeight) 
     DrawTextLineLeft(difficulty, panelX + panelW * 0.79f, rowY, difficultyScale,
                      rowTextColor);
 
-    DrawActionButtons(screenWidth, screenHeight, panelT);
-
     if (exitRequested_) {
         const float exitFade =
             SmoothStep01(exitTimer_ / kResultExitFadeDuration);
@@ -1770,9 +1799,15 @@ void GameVictoryScene::DrawResultOverlay(float screenWidth, float screenHeight) 
 void GameVictoryScene::DrawRankingPanel(float screenWidth, float screenHeight,
                                         float alpha) {
     const float panelW = std::clamp(screenWidth * 0.55f, 620.0f, 860.0f);
-    const float panelH = std::clamp(screenHeight * 0.70f, 440.0f, 620.0f);
+    const float buttonTop = screenHeight * 0.805f;
+    const float topMargin = std::clamp(screenHeight * 0.12f, 72.0f, 108.0f);
+    const float bottomGap = std::clamp(screenHeight * 0.055f, 34.0f, 48.0f);
+    const float maxPanelH = (std::max)(360.0f, buttonTop - topMargin - bottomGap);
+    const float panelH =
+        std::clamp(screenHeight * 0.62f, 380.0f, (std::min)(500.0f, maxPanelH));
     const float x = (screenWidth - panelW) * 0.5f;
-    const float y = (screenHeight - panelH) * 0.5f;
+    const float y = (std::max)(topMargin,
+                               (buttonTop - bottomGap - panelH) * 0.5f);
 
     DrawRect(x + 12.0f, y + 14.0f, panelW, panelH,
              Color(0.0f, 0.0f, 0.0f, 0.44f * alpha));
@@ -1804,7 +1839,11 @@ void GameVictoryScene::DrawRankingPanel(float screenWidth, float screenHeight,
         columnGap * 3.0f;
     const float rowScale =
         std::clamp(contentW / (std::max)(nominalRowWidth, 1.0f), 0.42f, 0.62f);
-    const float gap = columnGap * rowScale;
+    const float scaledColumns =
+        (rankColumnW + scoreColumnW + timeColumnW + difficultyColumnW) *
+        rowScale;
+    const float gap =
+        (std::max)(columnGap * rowScale, (contentW - scaledColumns) / 3.0f);
     const float scoreRight =
         contentLeft + rankColumnW * rowScale + gap + scoreColumnW * rowScale;
     const float timeRight = scoreRight + gap + timeColumnW * rowScale;
@@ -1812,7 +1851,9 @@ void GameVictoryScene::DrawRankingPanel(float screenWidth, float screenHeight,
         timeRight + gap + difficultyColumnW * rowScale;
     const float headerY = y + panelH * 0.245f;
     const float rowStartY = y + panelH * 0.335f;
-    const float rowGap = panelH * 0.070f;
+    const float rowGap = std::clamp(panelH * 0.115f, 50.0f, 68.0f);
+    const float rowFramePadY = std::clamp(rowGap * 0.18f, 9.0f, 13.0f);
+    const float rowFrameH = std::clamp(rowGap * 0.86f, 43.0f, 58.0f);
     const float headerScale = std::clamp(rowScale * 0.86f, 0.34f, 0.50f);
     DrawImage(rankingRankHeaderLabel_, contentLeft, headerY, headerScale,
               0.72f * alpha);
@@ -1847,17 +1888,17 @@ void GameVictoryScene::DrawRankingPanel(float screenWidth, float screenHeight,
         const bool highlight = entry.isCurrent;
         const float pulse =
             highlight ? 0.5f + 0.5f * std::sinf(resultTimer_ * 8.0f) : 0.0f;
-        DrawRect(contentLeft - panelW * 0.020f, rowY - rowGap * 0.12f,
-                 contentW + panelW * 0.040f, rowGap * 0.84f,
+        DrawRect(contentLeft - panelW * 0.020f, rowY - rowFramePadY,
+                 contentW + panelW * 0.040f, rowFrameH,
                  Color(1.0f, 1.0f, 1.0f,
                        (i % 2 == 0 ? 0.030f : 0.015f) * alpha));
         if (highlight) {
-            DrawRect(contentLeft - panelW * 0.020f, rowY - rowGap * 0.12f,
-                     contentW + panelW * 0.040f, rowGap * 0.84f,
+            DrawRect(contentLeft - panelW * 0.020f, rowY - rowFramePadY,
+                     contentW + panelW * 0.040f, rowFrameH,
                      Color(1.0f, 0.74f, 0.24f,
                            (0.20f + 0.20f * pulse) * alpha));
-            DrawFrame(contentLeft - panelW * 0.020f, rowY - rowGap * 0.12f,
-                      contentW + panelW * 0.040f, rowGap * 0.84f,
+            DrawFrame(contentLeft - panelW * 0.020f, rowY - rowFramePadY,
+                      contentW + panelW * 0.040f, rowFrameH,
                       1.0f + pulse * 2.0f,
                       Color(1.0f, 0.86f, 0.32f,
                             (0.44f + 0.42f * pulse) * alpha));
@@ -1867,21 +1908,25 @@ void GameVictoryScene::DrawRankingPanel(float screenWidth, float screenHeight,
         const int rankNumber = rankingDisplayFirstRank_ + static_cast<int>(i);
         rank << rankNumber << ":";
         const float textAlpha = (highlight ? 1.0f : 0.88f) * alpha;
-        DrawTextLineLeft(rank.str(), contentLeft, rowY, rowScale, textAlpha);
-        DrawTextLineLeft(FormatScore(entry.score),
-                         scoreRight -
-                             MeasureTextLine(FormatScore(entry.score), rowScale),
-                         rowY, rowScale, textAlpha);
-        DrawTextLineLeft(FormatTime(entry.clearTime),
-                         timeRight -
-                             MeasureTextLine(FormatTime(entry.clearTime),
-                                             rowScale),
-                         rowY, rowScale, textAlpha);
-        DrawTextLineLeft(FormatDifficulty(entry.difficulty),
-                         difficultyRight -
-                             MeasureTextLine(FormatDifficulty(entry.difficulty),
-                                             rowScale),
-                         rowY, rowScale, textAlpha);
+        const XMFLOAT4 textColor = Color(1.0f, 1.0f, 1.0f, textAlpha);
+        const float rowFrameY = rowY - rowFramePadY;
+        const float baselineY =
+            rowFrameY + rowFrameH * 0.5f +
+            MeasureTextInkCenterOffset("00:00.00s", rowScale);
+        const std::string score = FormatScore(entry.score);
+        const std::string time = FormatTime(entry.clearTime);
+        const std::string difficulty = FormatDifficulty(entry.difficulty);
+        DrawTextLineLeftBaseline(rank.str(), contentLeft, baselineY, rowScale,
+                                 textColor);
+        DrawTextLineLeftBaseline(score,
+                                 scoreRight - MeasureTextLine(score, rowScale),
+                                 baselineY, rowScale, textColor);
+        DrawTextLineLeftBaseline(time,
+                                 timeRight - MeasureTextLine(time, rowScale),
+                                 baselineY, rowScale, textColor);
+        DrawTextLineLeftBaseline(
+            difficulty, difficultyRight - MeasureTextLine(difficulty, rowScale),
+            baselineY, rowScale, textColor);
     }
 }
 
@@ -1994,7 +2039,32 @@ void GameVictoryScene::DrawTextLineLeft(const std::string &text, float x,
         if (image == nullptr) {
             continue;
         }
-        DrawImage(*image, x, y, scale, color);
+        const float inkLeft =
+            image->inkRight > image->inkLeft ? image->inkLeft : 0.0f;
+        DrawImage(*image, x - inkLeft * scale, y, scale, color);
+        x += GetCharAdvance(c) * scale;
+    }
+}
+
+void GameVictoryScene::DrawTextLineLeftBaseline(const std::string &text,
+                                                float x, float baselineY,
+                                                float scale,
+                                                const XMFLOAT4 &color) {
+    for (char c : text) {
+        if (c == ' ') {
+            x += GetCharAdvance(c) * scale;
+            continue;
+        }
+        const Image *image = FindCharImage(c);
+        if (image == nullptr) {
+            continue;
+        }
+        const float inkLeft =
+            image->inkRight > image->inkLeft ? image->inkLeft : 0.0f;
+        const float inkBottom =
+            image->inkBottom > image->inkTop ? image->inkBottom : image->height;
+        DrawImage(*image, x - inkLeft * scale,
+                  baselineY - inkBottom * scale, scale, color);
         x += GetCharAdvance(c) * scale;
     }
 }
@@ -2023,17 +2093,51 @@ float GameVictoryScene::GetCharAdvance(char c) const {
 
 float GameVictoryScene::MeasureTextLine(const std::string &text,
                                         float scale) const {
+    float cursorX = 0.0f;
     float width = 0.0f;
     for (char c : text) {
         if (c == ' ') {
-            width += GetCharAdvance(c) * scale;
+            cursorX += GetCharAdvance(c);
+            width = cursorX;
             continue;
         }
-        if (FindCharImage(c) != nullptr) {
-            width += GetCharAdvance(c) * scale;
+        const Image *image = FindCharImage(c);
+        if (image != nullptr) {
+            const float inkWidth =
+                image->inkRight > image->inkLeft
+                    ? image->inkRight - image->inkLeft
+                    : image->width;
+            width = cursorX + inkWidth;
+            cursorX += GetCharAdvance(c);
         }
     }
-    return (std::max)(0.0f, width);
+    return (std::max)(0.0f, width * scale);
+}
+
+float GameVictoryScene::MeasureTextInkCenterOffset(const std::string &text,
+                                                   float scale) const {
+    bool hasInk = false;
+    float top = 0.0f;
+    float bottom = 0.0f;
+    for (char c : text) {
+        const Image *image = FindCharImage(c);
+        if (image == nullptr) {
+            continue;
+        }
+        const float inkTop =
+            image->inkBottom > image->inkTop ? image->inkTop : 0.0f;
+        const float inkBottom =
+            image->inkBottom > image->inkTop ? image->inkBottom : image->height;
+        if (!hasInk) {
+            top = inkTop;
+            bottom = inkBottom;
+            hasInk = true;
+        } else {
+            top = (std::min)(top, inkTop);
+            bottom = (std::max)(bottom, inkBottom);
+        }
+    }
+    return hasInk ? (top + bottom) * 0.5f * scale : 0.0f;
 }
 
 const GameVictoryScene::Image *GameVictoryScene::FindCharImage(char c) const {

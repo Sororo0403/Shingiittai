@@ -28,6 +28,10 @@ class RankingScene : public BaseScene {
         uint32_t textureId = 0;
         float width = 0.0f;
         float height = 0.0f;
+        float inkLeft = 0.0f;
+        float inkRight = 0.0f;
+        float inkTop = 0.0f;
+        float inkBottom = 0.0f;
     };
 
     struct RankingEntry {
@@ -54,7 +58,16 @@ class RankingScene : public BaseScene {
                           float scale = 1.0f, float alpha = 1.0f);
     void DrawTextLineRight(const std::string &text, float rightX, float y,
                            float scale = 1.0f, float alpha = 1.0f);
+    void DrawTextLineLeftBaseline(const std::string &text, float x,
+                                  float baselineY, float scale = 1.0f,
+                                  float alpha = 1.0f);
+    void DrawTextLineRightBaseline(const std::string &text, float rightX,
+                                   float baselineY, float scale = 1.0f,
+                                   float alpha = 1.0f);
+    float GetCharAdvance(char c) const;
     float MeasureTextLine(const std::string &text, float scale) const;
+    float MeasureTextInkCenterOffset(const std::string &text,
+                                     float scale) const;
     const Image *FindCharImage(char c) const;
     std::string FormatTime(float seconds) const;
     std::string FormatDifficulty(float difficulty) const;

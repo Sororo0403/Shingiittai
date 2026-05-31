@@ -1042,7 +1042,7 @@ void Enemy::BeginPressureAction() {
         phantomWarpWeight = 24;
         tripleIaiSlashWeight = 22;
         arcaneLaserWeight = 0;
-        cataclysmLaserWeight = 44;
+        cataclysmLaserWeight = 20;
     } else if (phase2Unlocked) {
         smashWeight = 5;
         sweepWeight = 5;
@@ -1193,7 +1193,7 @@ void Enemy::BeginChaseAction() {
         phantomWarpWeight = 24;
         tripleIaiSlashWeight = 24;
         arcaneLaserWeight = 0;
-        cataclysmLaserWeight = 54;
+        cataclysmLaserWeight = 24;
     } else if (phase2Unlocked) {
         stalkWeight = 3;
         warpWeight = 28;

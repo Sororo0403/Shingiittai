@@ -100,14 +100,17 @@ constexpr int kTutorialTextMiss = 7;
 constexpr int kTutorialTextComplete = 8;
 constexpr int kTutorialTextExcellent = 9;
 constexpr int kTutorialTextExit = 10;
-constexpr int kTutorialStepLeftSword = 0;
-constexpr int kTutorialStepRightSword = 1;
-constexpr int kTutorialStepRedSmash = 2;
-constexpr int kTutorialStepGreenSmash = 3;
-constexpr int kTutorialStepRedSweep = 4;
-constexpr int kTutorialStepGreenSweep = 5;
-constexpr int kTutorialStepPractice = 6;
+constexpr int kTutorialTextShowHand = 11;
+constexpr int kTutorialStepHandPresence = 0;
+constexpr int kTutorialStepLeftSword = 1;
+constexpr int kTutorialStepRightSword = 2;
+constexpr int kTutorialStepRedSmash = 3;
+constexpr int kTutorialStepGreenSmash = 4;
+constexpr int kTutorialStepRedSweep = 5;
+constexpr int kTutorialStepGreenSweep = 6;
+constexpr int kTutorialStepPractice = 7;
 constexpr int kTutorialOperationRequiredSlashes = 3;
+constexpr float kTutorialHandPresenceRequiredSeconds = 3.0f;
 
 XMFLOAT3 ComputeCataclysmProjectileLaunchDirection(int shotIndex,
                                                    const XMFLOAT3 &baseForward) {
@@ -715,6 +718,21 @@ float GameScene::GetHighDifficultyPressure() const {
     return GetDifficultyRatio();
 }
 
+float GameScene::GetEnemyProjectileSpeedScale() const {
+    const float t = GetDifficultyRatio();
+    return std::clamp(1.0f + (t - 0.56f) * 0.86f, 0.86f, 1.42f);
+}
+
+float GameScene::GetEnemyRangedVolleyInterval() const {
+    const float t = GetDifficultyRatio();
+    const float intervalScale =
+        std::clamp(1.0f - (t - 0.56f) * 1.05f, 0.60f, 1.14f);
+    const float baseInterval = arcaneProjectileVolleyCataclysm_
+                                   ? kCataclysmProjectileVolleyInterval
+                                   : kArcaneProjectileVolleyInterval;
+    return baseInterval * intervalScale;
+}
+
 float GameScene::GetCounterCinematicDuration() const {
     constexpr float kBaseDuration = 0.66f;
     constexpr float kHardDuration = 0.38f;
@@ -1077,9 +1095,12 @@ void GameScene::Initialize(const SceneContext &ctx) {
     tutorialSuccessTimer_ = 0.0f;
     tutorialMissTimer_ = 0.0f;
     tutorialExcellentTimer_ = 0.0f;
+    tutorialHandHoldTimer_ = 0.0f;
     tutorialRedWaitTimer_ = 0.0f;
     tutorialGreenCutTimer_ = 0.0f;
-    tutorialStep_ = 0;
+    tutorialStep_ = inputCalibration_.controlType == InputControlType::Hand
+                        ? kTutorialStepHandPresence
+                        : kTutorialStepLeftSword;
     tutorialPendingStep_ = -1;
     tutorialPendingAttackIndexIncrement_ = 0;
     tutorialOperationSlashCount_ = 0;
@@ -1348,6 +1369,7 @@ void GameScene::Update() {
                 ? kCataclysmPreviewPlayerSlowMultiplier
                 : (slowPlayerForRangedAttack ? kRangedAttackPlayerMoveMultiplier
                                              : 1.0f));
+        player_.SetHandPostSlashCooldownEnabled(!bladeClashActive_);
         player_.Update(input, playerDeltaTime, enemy_.GetTransform().position,
                        cameraYaw_, baseDeltaTime, false,
                        lockPlayerForFarWarpSlash);
@@ -1561,6 +1583,7 @@ void GameScene::AdvanceTutorialOperationStep() {
     tutorialSuccessTimer_ = 2.0f;
     tutorialMissTimer_ = 0.0f;
     tutorialExcellentTimer_ = 0.0f;
+    tutorialHandHoldTimer_ = 0.0f;
     tutorialRedWaitTimer_ = 0.0f;
     tutorialGreenCutTimer_ = 0.0f;
     tutorialAttackDelay_ = tutorialPendingStep_ >= kTutorialStepRedSmash
@@ -1626,6 +1649,8 @@ void GameScene::UpdateTutorial(float deltaTime) {
     UpdateBattlePostProcessState(deltaTime);
 
     UpdateCamera(input);
+    player_.SetCameraSwordSlashSuppressed(
+        tutorialStep_ == kTutorialStepHandPresence);
     player_.Update(input, deltaTime, enemy_.GetTransform().position,
                    cameraYaw_, deltaTime, false);
     player_.LockPosition({0.0f, 0.0f, 0.0f});
@@ -1645,7 +1670,49 @@ void GameScene::UpdateTutorial(float deltaTime) {
         tutorialPendingStep_ = -1;
         tutorialPendingAttackIndexIncrement_ = 0;
         tutorialOperationSlashCount_ = 0;
+        tutorialHandHoldTimer_ = 0.0f;
         previousCombatSlashStates_.fill(false);
+    }
+
+    if (tutorialStep_ == kTutorialStepHandPresence) {
+        if (tutorialPendingStep_ < 0 && tutorialSuccessTimer_ <= 0.0f &&
+            tutorialExcellentTimer_ <= 0.0f) {
+            const bool handVisible =
+                player_.HasFreshHandInput() &&
+                (player_.IsHandActive(0) || player_.IsHandActive(1));
+            tutorialHandHoldTimer_ =
+                handVisible
+                    ? (std::min)(tutorialHandHoldTimer_ + deltaTime,
+                                 kTutorialHandPresenceRequiredSeconds)
+                    : 0.0f;
+            if (tutorialHandHoldTimer_ >=
+                kTutorialHandPresenceRequiredSeconds) {
+                tutorialPendingStep_ = kTutorialStepLeftSword;
+                tutorialPendingAttackIndexIncrement_ = 0;
+                tutorialExcellentTimer_ = 2.0f;
+                tutorialSuccessTimer_ = 0.0f;
+                tutorialMissTimer_ = 0.0f;
+                tutorialRedWaitTimer_ = 0.0f;
+                tutorialGreenCutTimer_ = 0.0f;
+                tutorialAttackDelay_ = 0.0f;
+                previousCombatSlashStates_.fill(false);
+            }
+        }
+
+        enemy_.ResetTutorialState();
+        enemy_.SetTutorialPosition({0.0f, 0.0f, 3.10f});
+        enemy_.FaceTargetImmediately(player_.GetTransform().position);
+        ctx_->rendering.model->UpdateAnimation(playerModelId_, deltaTime);
+        ctx_->rendering.model->UpdateAnimation(enemyModelId_, deltaTime);
+        ApplyEnemyProceduralAnimation();
+        UpdateSceneLighting();
+        UpdateBattleCamera();
+        camera_.UpdateMatrices();
+        sparkParticles_.Update(deltaTime);
+        explosionParticles_.Update(deltaTime);
+        smokeParticles_.Update(deltaTime);
+        swordFlashParticles_.Update(deltaTime);
+        return;
     }
 
     if (tutorialStep_ < kTutorialStepRedSmash) {
@@ -2145,7 +2212,7 @@ void GameScene::LoadTutorialImages() {
 
     const bool handTutorial =
         inputCalibration_.controlType == InputControlType::Hand;
-    const std::array<std::wstring, 11> paths{
+    const std::array<std::wstring, 12> paths{
         handTutorial
             ? L"app/resources/ui/tutorial_dynamic/left_right_hand.png"
             : L"app/resources/ui/tutorial_dynamic/left_right_kbm.png",
@@ -2161,6 +2228,7 @@ void GameScene::LoadTutorialImages() {
         L"app/resources/ui/tutorial_dynamic/complete.png",
         L"app/resources/ui/tutorial_dynamic/excellent.png",
         L"app/resources/ui/tutorial_dynamic/exit.png",
+        L"app/resources/ui/tutorial_dynamic/show_hand.png",
     };
     for (size_t i = 0; i < paths.size(); ++i) {
         tutorialTextureIds_[i] = ctx_->rendering.texture->Load(paths[i]);
@@ -2472,6 +2540,8 @@ void GameScene::DrawTutorialOverlay() {
     int messageIndex = kTutorialTextWait;
     if (tutorialMissTimer_ > 0.0f) {
         messageIndex = kTutorialTextMiss;
+    } else if (tutorialStep_ == kTutorialStepHandPresence) {
+        messageIndex = kTutorialTextShowHand;
     } else if (tutorialStep_ == kTutorialStepLeftSword) {
         messageIndex = kTutorialTextLeftRight;
     } else if (tutorialStep_ == kTutorialStepRightSword) {
@@ -2525,7 +2595,22 @@ void GameScene::DrawTutorialOverlay() {
                        panelX + (panelW - textW * scale) * 0.5f,
                        panelY + (panelH - textH * scale) * 0.5f, scale, 1.0f);
 
-        if (tutorialStep_ < kTutorialStepRedSmash) {
+        if (tutorialStep_ == kTutorialStepHandPresence) {
+            const float meterW = panelW - 128.0f;
+            const float meterH = 8.0f;
+            const float meterX = panelX + (panelW - meterW) * 0.5f;
+            const float meterY = panelY - 26.0f;
+            const float holdRatio = std::clamp(
+                tutorialHandHoldTimer_ / kTutorialHandPresenceRequiredSeconds,
+                0.0f, 1.0f);
+            DrawPauseRect(meterX, meterY, meterW, meterH,
+                          {0.0f, 0.0f, 0.0f, 0.42f});
+            DrawPauseRect(meterX, meterY, meterW * holdRatio, meterH,
+                          {0.02f, 0.95f, 0.84f, 0.88f});
+        }
+
+        if (tutorialStep_ >= kTutorialStepLeftSword &&
+            tutorialStep_ < kTutorialStepRedSmash) {
             const float counterScale = std::clamp(w / 1600.0f, 0.76f, 1.0f);
             DrawTutorialSlashCounter(panelX + panelW - 150.0f * counterScale,
                                      panelY - 82.0f * counterScale,
@@ -2599,7 +2684,8 @@ void GameScene::DispatchCombatFeedback(const CombatFeedbackEvent &event) {
     }
     if (!suppressSwordVfx &&
         (event.type == CombatFeedbackEventType::MistimedCounterSlash ||
-         event.type == CombatFeedbackEventType::CounterSuccess)) {
+         event.type == CombatFeedbackEventType::CounterSuccess ||
+         event.type == CombatFeedbackEventType::EnemyProjectileReflect)) {
         swordTrailRenderer_.SuppressSlashUntilInactive(event.swordIndex);
     }
     if (event.type == CombatFeedbackEventType::MistimedCounterSlash) {
@@ -2613,6 +2699,7 @@ void GameScene::DispatchCombatFeedback(const CombatFeedbackEvent &event) {
         event.type == CombatFeedbackEventType::PlayerSlashHit ||
         event.type == CombatFeedbackEventType::MistimedCounterSlash ||
         event.type == CombatFeedbackEventType::CounterSuccess ||
+        event.type == CombatFeedbackEventType::EnemyProjectileReflect ||
         event.type == CombatFeedbackEventType::BladeClashPierce;
     if (!suppressSwordVfx || !isSwordVfxFeedback) {
         EmitCombatParticles(event);
@@ -2624,7 +2711,8 @@ void GameScene::DispatchCombatFeedback(const CombatFeedbackEvent &event) {
         if (event.swordIndex < swords.size() && swords[event.swordIndex]) {
             slashDirection = swords[event.swordIndex]->GetSlashDirection();
         }
-        if (event.type == CombatFeedbackEventType::CounterSuccess) {
+        if (event.type == CombatFeedbackEventType::CounterSuccess ||
+            event.type == CombatFeedbackEventType::EnemyProjectileReflect) {
             swordSlashArcRenderer_.EmitParryLine(event.position, event.direction,
                                                  camera_, event.power,
                                                  slashDirection);
@@ -2643,6 +2731,7 @@ void GameScene::DispatchCombatFeedback(const CombatFeedbackEvent &event) {
     }
 
     switch (event.type) {
+    case CombatFeedbackEventType::EnemyProjectileReflect:
     case CombatFeedbackEventType::CounterSuccess:
         ctx_->systems.sound->Play(
             counterSuccessSlashSoundId_,
@@ -2788,7 +2877,7 @@ void GameScene::UpdateArcaneProjectileVolley(float deltaTime) {
         ArcaneProjectileState &projectile = cataclysmProjectiles_[shotIndex];
         if (!projectile.active || !projectile.waitingToFire) {
             ++arcaneProjectileVolleyShotsFired_;
-            arcaneProjectileVolleyTimer_ = kCataclysmProjectileVolleyInterval;
+            arcaneProjectileVolleyTimer_ = GetEnemyRangedVolleyInterval();
             return;
         }
 
@@ -2797,10 +2886,12 @@ void GameScene::UpdateArcaneProjectileVolley(float deltaTime) {
                                         {0.0f, 0.0f, 1.0f});
         const XMFLOAT3 launchDir =
             ComputeCataclysmProjectileLaunchDirection(shotIndex, baseForward);
+        const float speedScale = GetEnemyProjectileSpeedScale();
+        const float launchSpeed = kCataclysmProjectileLaunchSpeed * speedScale;
         projectile.waitingToFire = false;
-        projectile.velocity = {launchDir.x * kCataclysmProjectileLaunchSpeed,
-                               launchDir.y * kCataclysmProjectileLaunchSpeed,
-                               launchDir.z * kCataclysmProjectileLaunchSpeed};
+        projectile.velocity = {launchDir.x * launchSpeed,
+                               launchDir.y * launchSpeed,
+                               launchDir.z * launchSpeed};
         projectile.age = 0.0f;
         projectile.life = 3.8f;
         EmitParticleBurst(swordFlashParticles_, projectile.position, 58, 0.24f,
@@ -2813,11 +2904,8 @@ void GameScene::UpdateArcaneProjectileVolley(float deltaTime) {
         SpawnArcaneProjectile();
     }
     ++arcaneProjectileVolleyShotsFired_;
-    arcaneProjectileVolleyTimer_ = arcaneProjectileVolleyCataclysm_
-                                       ? kCataclysmProjectileVolleyInterval
-                                       : kArcaneProjectileVolleyInterval;
-    if (soundsLoaded_ && ctx_ != nullptr && ctx_->systems.sound != nullptr &&
-        arcaneProjectileVolleyShotsFired_ > 1) {
+    arcaneProjectileVolleyTimer_ = GetEnemyRangedVolleyInterval();
+    if (soundsLoaded_ && ctx_ != nullptr && ctx_->systems.sound != nullptr) {
         ctx_->systems.sound->Play(
             enemyReleaseSoundId_,
             kEnemyReleaseSoundVolume * AppSceneServices::GetSeVolume());
@@ -2905,8 +2993,12 @@ void GameScene::SpawnArcaneProjectile() {
             direction);
     }
 
-    const float hostileSpeed = cataclysmShot ? kCataclysmProjectileHostileSpeed
-                                             : kArcaneProjectileHostileSpeed;
+    const float speedScale = GetEnemyProjectileSpeedScale();
+    const float hostileSpeed = (cataclysmShot
+                                    ? kCataclysmProjectileHostileSpeed
+                                    : kArcaneProjectileHostileSpeed) *
+                               speedScale;
+    const float arcSpeed = kArcaneProjectileArcSpeed * speedScale;
     projectile->active = true;
     projectile->reflected = false;
     projectile->cataclysm = cataclysmShot;
@@ -2918,9 +3010,8 @@ void GameScene::SpawnArcaneProjectile() {
         cataclysmShot
             ? direction
             : arcaneArcShot
-                ? XMFLOAT3{direction.x * kArcaneProjectileArcSpeed,
-                           direction.y * kArcaneProjectileArcSpeed,
-                           direction.z * kArcaneProjectileArcSpeed}
+                ? XMFLOAT3{direction.x * arcSpeed, direction.y * arcSpeed,
+                           direction.z * arcSpeed}
             : XMFLOAT3{direction.x * hostileSpeed, 0.0f,
                        direction.z * hostileSpeed};
     projectile->age = 0.0f;
@@ -3060,16 +3151,18 @@ void GameScene::UpdateArcaneProjectile(float deltaTime) {
                 current.z + (desired.z - current.z) * steer};
             const XMFLOAT3 convergedDir =
                 NormalizeParticleCompatVec3(blended, desired);
+            const float speedScale = GetEnemyProjectileSpeedScale();
             const float arcedSpeed =
-                projectile.cataclysm
-                    ? kCataclysmProjectileLaunchSpeed * 0.42f +
-                          (kCataclysmProjectileBarrageSpeed * 1.42f -
-                           kCataclysmProjectileLaunchSpeed * 0.42f) *
-                              speedEase
-                    : kArcaneProjectileArcSpeed +
-                          (kArcaneProjectileHostileSpeed -
-                           kArcaneProjectileArcSpeed) *
-                              speedEase;
+                (projectile.cataclysm
+                     ? kCataclysmProjectileLaunchSpeed * 0.42f +
+                           (kCataclysmProjectileBarrageSpeed * 1.42f -
+                            kCataclysmProjectileLaunchSpeed * 0.42f) *
+                               speedEase
+                     : kArcaneProjectileArcSpeed +
+                           (kArcaneProjectileHostileSpeed -
+                            kArcaneProjectileArcSpeed) *
+                               speedEase) *
+                speedScale;
             projectile.velocity = {convergedDir.x * arcedSpeed,
                                    convergedDir.y * arcedSpeed,
                                    convergedDir.z * arcedSpeed};
@@ -3105,9 +3198,12 @@ void GameScene::UpdateArcaneProjectile(float deltaTime) {
                 current.z + (desired.z - current.z) * steer};
             const XMFLOAT3 homingDir =
                 NormalizeParticleCompatVec3(blended, desired);
+            const float hostileSpeed =
+                kCataclysmProjectileHostileSpeed *
+                GetEnemyProjectileSpeedScale();
             projectile.velocity = {
-                homingDir.x * kCataclysmProjectileHostileSpeed, 0.0f,
-                homingDir.z * kCataclysmProjectileHostileSpeed};
+                homingDir.x * hostileSpeed, 0.0f,
+                homingDir.z * hostileSpeed};
         }
 
         projectile.position.x += projectile.velocity.x * deltaTime;
@@ -3241,7 +3337,7 @@ void GameScene::ReflectArcaneProjectile(ArcaneProjectileState &projectile,
     projectile.life = projectile.cataclysm ? 4.2f : 3.2f;
 
     CombatFeedbackEvent feedback{};
-    feedback.type = CombatFeedbackEventType::CounterSuccess;
+    feedback.type = CombatFeedbackEventType::EnemyProjectileReflect;
     feedback.position = projectile.position;
     feedback.direction = launchDirection;
     feedback.power = 5.8f;

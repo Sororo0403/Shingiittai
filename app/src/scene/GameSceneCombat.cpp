@@ -269,6 +269,7 @@ void GameScene::BeginBladeClash(size_t swordIndex) {
     bladeClashPreviousSlashStates_ = player_.GetSwordSlashStates();
     bladeClashActive_ = true;
     player_.LockPosition(bladeClashPlayerFixedPos_);
+    player_.SetHandPostSlashCooldownEnabled(false);
     player_.SetBladeClashPose(true, 0.5f);
     counterCinematicActive_ = false;
     counterCinematicTimer_ = 0.0f;
@@ -420,6 +421,7 @@ void GameScene::FinishBladeClash(bool playerWon) {
     bladeClashFinishPendingEnemyTransition_ = false;
     bladeClashFinishTimer_ = 0.0f;
     bladeClashFinishDuration_ = playerWon ? 2.05f : 2.38f;
+    player_.SetHandPostSlashCooldownEnabled(true);
     bladeClashFinishCenter_ =
         playerWon ? XMFLOAT3{enemy_.GetTransform().position.x,
                              enemy_.GetTransform().position.y + 1.22f,
@@ -929,11 +931,6 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             DistancePointToSegmentSqXZ(enemyPos, projectile.previousPosition,
                                        projectile.position) <=
                 enemyHitRangeSq) {
-            const XMFLOAT3 impact = projectile.position;
-            const XMFLOAT3 impactDirection =
-                DirectionFromTo(impact, enemy_.GetTransform().position);
-            const ArcaneProjectileState impactProjectile = projectile;
-            const size_t swordIndex = projectile.reflectedBySwordIndex;
             ++arcaneProjectileVolleyReflectedHits_;
             const int requiredHits = arcaneProjectileVolleyCataclysm_
                                          ? kCataclysmProjectileVolleyRequiredHits
@@ -944,16 +941,7 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             const float reflectedDamage =
                 kReflectedProjectileVolleyDamage /
                 static_cast<float>((std::max)(requiredHits, 1));
-            const float appliedDamage = ApplyEnemyDamage(reflectedDamage);
-            CombatFeedbackEvent feedback{};
-            feedback.type = CombatFeedbackEventType::CounterSuccess;
-            feedback.position = enemy_.GetTransform().position;
-            feedback.position.y += 1.0f;
-            feedback.direction = impactDirection;
-            feedback.power = (std::max)(appliedDamage / 10.0f,
-                                        volleyComplete ? 6.5f : 4.0f);
-            feedback.swordIndex = swordIndex;
-            DispatchCombatFeedback(feedback);
+            ApplyEnemyDamage(reflectedDamage);
             if (volleyComplete) {
                 const float vulnerabilityDuration =
                     GetCounterVulnerabilityDuration();
@@ -964,13 +952,9 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                 arcaneProjectileVolleyCataclysm_ = false;
                 counterTriggeredThisFrame = true;
                 playerHitCooldown_ = GetCounterPlayerHitCooldown(0.22f);
-                startCounterCinematicThisFrame = true;
-                counterCinematicTimer_ = GetCounterCinematicDuration();
             } else {
                 enemyHitCooldown_ = 0.10f;
             }
-            EmitArcaneProjectileExplosion(impactProjectile, impact,
-                                          impactDirection, true);
             return true;
         }
         return false;

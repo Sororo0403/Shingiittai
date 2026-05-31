@@ -22,6 +22,9 @@ class SwordUdpController {
     SwordPose GetPose(size_t handIndex = 0) const;
     float GetMotionSpeed(size_t handIndex = 0) const;
     void SetCalibration(const SwordInputCalibration &calibration);
+    void SetPostSlashCooldownEnabled(bool enabled) {
+        postSlashCooldownEnabled_ = enabled;
+    }
     bool HasFreshInput() const;
 
     struct DebugHandState {
@@ -146,6 +149,7 @@ class SwordUdpController {
     std::array<bool, 2> handSlashArmed_ = {true, true};
     std::array<float, 2> handSlashNeutralTimer_ = {0.0f, 0.0f};
     std::array<float, 2> handSlashCooldown_ = {0.0f, 0.0f};
+    bool postSlashCooldownEnabled_ = true;
     std::array<DirectX::XMFLOAT2, 2> smoothedPalm_ = {
         DirectX::XMFLOAT2{0.5f, 0.5f}, DirectX::XMFLOAT2{0.5f, 0.5f}};
     std::array<bool, 2> hasSmoothedPalm_ = {false, false};

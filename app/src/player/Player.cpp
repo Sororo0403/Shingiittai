@@ -109,10 +109,11 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
         rightPose.isSlashMode = false;
     }
 
+    const bool slashSuppressed =
+        (suppressCameraSwordSlash_ && controlType == InputControlType::Hand) ||
+        IsChargingRangedAttack();
     const bool allowMotionSlash =
-        !useUdpSword && !useKeyboardMouse &&
-        !(suppressCameraSwordSlash_ && controlType == InputControlType::Hand) &&
-        !IsChargingRangedAttack();
+        (useUdpSword || !useKeyboardMouse) && !slashSuppressed;
     leftSword_.Update(BuildSwordTransform(leftPose, true), leftPose,
                       inputDeltaTime, allowMotionSlash);
     rightSword_.Update(BuildSwordTransform(rightPose, false), rightPose,

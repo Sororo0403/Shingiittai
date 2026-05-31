@@ -22,9 +22,16 @@ class Player {
     void SetCameraSwordSlashSuppressed(bool suppressed) {
         suppressCameraSwordSlash_ = suppressed;
     }
+    void SetHandPostSlashCooldownEnabled(bool enabled) {
+        swordUdpController_.SetPostSlashCooldownEnabled(enabled);
+    }
     void SetMovementSpeedMultiplier(float multiplier) {
         movementSpeedMultiplier_ = multiplier;
     }
+    bool IsHandActive(size_t handIndex) const {
+        return swordUdpController_.GetDebugHandState(handIndex).active;
+    }
+    bool HasFreshHandInput() const { return swordUdpController_.HasFreshInput(); }
 
     void Update(Input *input, float deltaTime,
                 const DirectX::XMFLOAT3 &lookTarget, float cameraYaw,

@@ -19,8 +19,8 @@ constexpr float kSlashFollowThroughMaxSurge = 0.26f;
 constexpr float kSlashFollowThroughMaxStretch = 0.14f;
 constexpr float kSlashFollowThroughMinDirLengthSq = 0.01f;
 constexpr float kSlashFollowThroughMinAngle = 0.001f;
-constexpr float kSwordMotionSlashSpeedThreshold = 3.2f;
-constexpr float kSwordMotionSlashMinDelta = 0.025f;
+constexpr float kSwordMotionSlashSpeedThreshold = 4.7f;
+constexpr float kSwordMotionSlashMinDelta = 0.038f;
 constexpr float kCounterAxisMinComponent = 0.24f;
 constexpr float kCounterAxisDominanceRatio = 1.8f;
 

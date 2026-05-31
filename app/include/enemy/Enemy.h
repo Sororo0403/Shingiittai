@@ -607,6 +607,7 @@ class Enemy {
     float phantomWarpCooldownDuration_ = 5.8f;
     float tripleIaiSlashChance_ = 0.30f;
     float tripleIaiSlashCooldownDuration_ = 8.8f;
+    float tripleIaiSlashSpeedScale_ = 1.0f;
     float tripleIaiCloneLife_ = 1.35f;
     float tripleIaiIntroDuration_ = 1.24f;
     float tripleIaiIntroLiftHeight_ = 8.4f;

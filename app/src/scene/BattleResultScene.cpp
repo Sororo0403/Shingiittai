@@ -281,6 +281,35 @@ void BattleResultScene::Initialize(const SceneContext &ctx) {
         LoadTextureImage(L"app/resources/ui/result/mplus/glyphs/char_dash.png");
     secondImage_ =
         LoadTextureImage(L"app/resources/ui/result/mplus/glyphs/char_s.png");
+    const float digitInkLeft[10] = {14.0f, 16.0f, 15.0f, 16.0f, 12.0f,
+                                    16.0f, 14.0f, 16.0f, 14.0f, 14.0f};
+    const float digitInkRight[10] = {50.0f, 41.0f, 48.0f, 48.0f, 50.0f,
+                                     49.0f, 50.0f, 49.0f, 50.0f, 50.0f};
+    for (int i = 0; i < 10; ++i) {
+        Image &digit = digitImages_[static_cast<size_t>(i)];
+        digit.inkLeft = digitInkLeft[i];
+        digit.inkRight = digitInkRight[i];
+        digit.inkTop = (i == 1 || i == 3 || i == 4 || i == 5 || i == 7)
+                           ? 21.0f
+                           : 20.0f;
+        digit.inkBottom = 67.0f;
+    }
+    colonImage_.inkLeft = 19.0f;
+    colonImage_.inkRight = 32.0f;
+    colonImage_.inkTop = 31.0f;
+    colonImage_.inkBottom = 67.0f;
+    dotImage_.inkLeft = 17.0f;
+    dotImage_.inkRight = 29.0f;
+    dotImage_.inkTop = 54.0f;
+    dotImage_.inkBottom = 67.0f;
+    dashImage_.inkLeft = 16.0f;
+    dashImage_.inkRight = 38.0f;
+    dashImage_.inkTop = 44.0f;
+    dashImage_.inkBottom = 53.0f;
+    secondImage_.inkLeft = 15.0f;
+    secondImage_.inkRight = 43.0f;
+    secondImage_.inkTop = 33.0f;
+    secondImage_.inkBottom = 67.0f;
 
     if (resultKind_ == ResultKind::Clear) {
         RegisterClearRanking();
@@ -1193,6 +1222,8 @@ void BattleResultScene::DrawRanking(float x, float y, float w, float h,
         const std::string time = FormatTime(entry.clearTime);
         const std::string difficulty = FormatDifficulty(entry.difficulty);
         const float alpha = highlight ? 1.0f : 0.86f;
+        const float rowFrameY = rowY - rowGap * 0.12f;
+        const float rowFrameH = rowGap * 0.82f;
         const float rankScale =
             std::clamp(rankColumnW / MeasureTextLine(rank.str(), 1.0f),
                        fullDetail ? 0.42f : 0.34f,
@@ -1205,22 +1236,34 @@ void BattleResultScene::DrawRanking(float x, float y, float w, float h,
             std::clamp(timeColumnW / MeasureTextLine(time, 1.0f),
                        fullDetail ? 0.42f : 0.30f,
                        fullDetail ? 0.58f : 0.44f);
+        const float timeBaselineY =
+            rowFrameY + rowFrameH * 0.5f +
+            MeasureTextInkCenterOffset("00:00.00s", timeScale);
         const float difficultyScale =
             std::clamp(difficultyColumnW / MeasureTextLine(difficulty, 1.0f),
                        0.42f, 0.58f);
 
-        DrawTextLineLeft(rank.str(), rankX, rowY, rankScale, alpha);
-        DrawTextLineLeft(score,
-                         scoreRightX - MeasureTextLine(score, scoreScale),
-                         rowY, scoreScale, alpha);
-        DrawTextLineLeft(time, timeRightX - MeasureTextLine(time, timeScale),
-                         rowY, timeScale, highlight ? 1.0f : 0.90f);
+        DrawTextLineLeftBaseline(
+            rank.str(), rankX,
+            rowFrameY + rowFrameH * 0.5f +
+                MeasureTextInkCenterOffset("00:00.00s", rankScale),
+            rankScale, alpha);
+        DrawTextLineLeftBaseline(
+            score, scoreRightX - MeasureTextLine(score, scoreScale),
+            rowFrameY + rowFrameH * 0.5f +
+                MeasureTextInkCenterOffset("00:00.00s", scoreScale),
+            scoreScale, alpha);
+        DrawTextLineLeftBaseline(time,
+                                 timeRightX - MeasureTextLine(time, timeScale),
+                                 timeBaselineY, timeScale,
+                                 highlight ? 1.0f : 0.90f);
         if (fullDetail) {
-            DrawTextLineLeft(difficulty,
-                             difficultyRightX -
-                                 MeasureTextLine(difficulty, difficultyScale),
-                             rowY, difficultyScale,
-                             highlight ? 1.0f : 0.90f);
+            DrawTextLineLeftBaseline(
+                difficulty,
+                difficultyRightX - MeasureTextLine(difficulty, difficultyScale),
+                rowFrameY + rowFrameH * 0.5f +
+                    MeasureTextInkCenterOffset("00:00.00s", difficultyScale),
+                difficultyScale, highlight ? 1.0f : 0.90f);
         }
     }
 }
@@ -1431,7 +1474,31 @@ void BattleResultScene::DrawTextLineLeft(const std::string &text, float x,
         if (image == nullptr) {
             continue;
         }
-        DrawImage(*image, x, y, scale, alpha);
+        const float inkLeft =
+            image->inkRight > image->inkLeft ? image->inkLeft : 0.0f;
+        DrawImage(*image, x - inkLeft * scale, y, scale, alpha);
+        x += GetCharAdvance(c) * scale;
+    }
+}
+
+void BattleResultScene::DrawTextLineLeftBaseline(const std::string &text,
+                                                 float x, float baselineY,
+                                                 float scale, float alpha) {
+    for (char c : text) {
+        if (c == ' ') {
+            x += GetCharAdvance(c) * scale;
+            continue;
+        }
+        const Image *image = FindCharImage(c);
+        if (image == nullptr) {
+            continue;
+        }
+        const float inkLeft =
+            image->inkRight > image->inkLeft ? image->inkLeft : 0.0f;
+        const float inkBottom =
+            image->inkBottom > image->inkTop ? image->inkBottom : image->height;
+        DrawImage(*image, x - inkLeft * scale,
+                  baselineY - inkBottom * scale, scale, alpha);
         x += GetCharAdvance(c) * scale;
     }
 }
@@ -1460,18 +1527,51 @@ float BattleResultScene::GetCharAdvance(char c) const {
 
 float BattleResultScene::MeasureTextLine(const std::string &text,
                                          float scale) const {
+    float cursorX = 0.0f;
     float width = 0.0f;
     for (char c : text) {
         if (c == ' ') {
-            width += GetCharAdvance(c) * scale;
+            cursorX += GetCharAdvance(c);
+            width = cursorX;
             continue;
         }
         const Image *image = FindCharImage(c);
         if (image != nullptr) {
-            width += GetCharAdvance(c) * scale;
+            const float inkWidth =
+                image->inkRight > image->inkLeft
+                    ? image->inkRight - image->inkLeft
+                    : image->width;
+            width = cursorX + inkWidth;
+            cursorX += GetCharAdvance(c);
         }
     }
-    return (std::max)(0.0f, width);
+    return (std::max)(0.0f, width * scale);
+}
+
+float BattleResultScene::MeasureTextInkCenterOffset(const std::string &text,
+                                                    float scale) const {
+    bool hasInk = false;
+    float top = 0.0f;
+    float bottom = 0.0f;
+    for (char c : text) {
+        const Image *image = FindCharImage(c);
+        if (image == nullptr) {
+            continue;
+        }
+        const float inkTop =
+            image->inkBottom > image->inkTop ? image->inkTop : 0.0f;
+        const float inkBottom =
+            image->inkBottom > image->inkTop ? image->inkBottom : image->height;
+        if (!hasInk) {
+            top = inkTop;
+            bottom = inkBottom;
+            hasInk = true;
+        } else {
+            top = (std::min)(top, inkTop);
+            bottom = (std::max)(bottom, inkBottom);
+        }
+    }
+    return hasInk ? (top + bottom) * 0.5f * scale : 0.0f;
 }
 
 const BattleResultScene::Image *BattleResultScene::FindCharImage(char c) const {
