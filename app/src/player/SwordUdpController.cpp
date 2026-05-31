@@ -14,48 +14,6 @@ using namespace DirectX;
 
 namespace {
 constexpr char kRawMagic[] = "HAND_RAW ";
-constexpr float kSingleHandLeftThreshold = 0.45f;
-constexpr float kSingleHandRightThreshold = 0.55f;
-constexpr float kHandControlGainX = 2.90f;
-constexpr float kHandControlGainY = 3.55f;
-constexpr float kHandReachCompensationMin = 0.70f;
-constexpr float kHandReachCompensationMax = 1.45f;
-constexpr float kHandMinReachForCompensation = 0.12f;
-constexpr float kHandSlashThreshold = 0.88f;
-constexpr float kHandSlashResetThreshold = 0.31f;
-constexpr float kHandVerticalSlashThresholdScale = 0.82f;
-constexpr float kHandHardSensitivityGainScale = 0.75f;
-constexpr float kHandEasySensitivityGainScale = 1.85f;
-constexpr float kHandHardSensitivityThresholdScale = 1.18f;
-constexpr float kHandEasySensitivityThresholdScale = 0.48f;
-constexpr float kHandSlashRearmNeutralRadius = 0.20f;
-constexpr float kHandSlashCooldownSeconds = 0.24f;
-constexpr float kHandControlSmoothing = 18.0f;
-constexpr float kHandFastControlSmoothing = 46.0f;
-constexpr float kHandFastMotionDistance = 0.045f;
-constexpr float kHandTiltMaxRadians = 0.52f;
-constexpr float kHandTiltSmoothing = 10.0f;
-constexpr float kHandTiltMinWidth = 0.12f;
-constexpr float kHandReacquireSuppressSeconds = 0.24f;
-constexpr float kHandReacquireSlashThreshold = 0.090f;
-constexpr float kHandEdgeExitSuppressSeconds = 0.44f;
-constexpr float kHandTrackingJumpThreshold = 0.30f;
-constexpr float kHandTrackingTeleportThreshold = 0.62f;
-constexpr float kHandJumpSlashDistanceThreshold = 0.085f;
-constexpr float kHandPreLossDirectionThreshold = 0.30f;
-constexpr float kHandPreLossNetDistanceThreshold = 0.026f;
-constexpr float kHandPreLossDirectionMaxAgeSeconds = 0.14f;
-constexpr float kSyntheticLostSlashSeconds = 0.16f;
-constexpr float kHandMotionWindowSeconds = 0.16f;
-constexpr float kHandStableNetDistanceThreshold = 0.017f;
-constexpr float kHandSlashNetDistanceThreshold = 0.027f;
-constexpr float kHandVelocitySlashNetDistanceThreshold = 0.008f;
-constexpr float kHandStableConsistencyThreshold = 0.48f;
-constexpr float kHandReferenceVisualScale = 0.095f;
-constexpr float kHandMinVisualScale = 0.045f;
-constexpr float kHandMaxVisualScale = 0.180f;
-constexpr float kHandFarThresholdScale = 0.58f;
-constexpr float kHandNearThresholdScale = 1.18f;
 constexpr std::array<DirectX::XMFLOAT2, 2> kDefaultHandNeutral = {
     DirectX::XMFLOAT2{0.34f, 0.58f}, DirectX::XMFLOAT2{0.66f, 0.58f}};
 constexpr size_t kHandLandmarkCount = 21;
@@ -69,7 +27,7 @@ struct HandSample {
     DirectX::XMFLOAT2 controlPalm{0.5f, 0.5f};
     std::array<DirectX::XMFLOAT2, kHandLandmarkCount> landmarks{};
     bool hasLandmarks = false;
-    float visualScale = kHandReferenceVisualScale;
+    float visualScale = 0.095f;
     bool hasTilt = false;
     float tiltRadians = 0.0f;
     std::string label{};
@@ -115,6 +73,10 @@ float Length(const DirectX::XMFLOAT2 &value) {
     return std::sqrt(value.x * value.x + value.y * value.y);
 }
 
+const AppSceneServices::CameraAdvancedSettings &CameraSettings() {
+    return AppSceneServices::GetCameraAdvancedSettingsConst();
+}
+
 DirectX::XMFLOAT2 CameraPalmToPlayerView(const DirectX::XMFLOAT2 &palm) {
     return {1.0f - palm.x, palm.y};
 }
@@ -153,20 +115,21 @@ float ReachCompensatedDelta(float delta, float neutral, float defaultNeutral,
     const float defaultReach = towardMax == positiveTowardMax
                                    ? 1.0f - defaultNeutral
                                    : defaultNeutral;
-    if (reach < kHandMinReachForCompensation ||
-        defaultReach < kHandMinReachForCompensation) {
+    const auto &settings = CameraSettings();
+    if (reach < settings.handMinReachForCompensation ||
+        defaultReach < settings.handMinReachForCompensation) {
         return delta;
     }
 
-    const float scale =
-        std::clamp(defaultReach / reach, kHandReachCompensationMin,
-                   kHandReachCompensationMax);
+    const float scale = std::clamp(defaultReach / reach,
+                                   settings.handReachCompensationMin,
+                                   settings.handReachCompensationMax);
     return delta * scale;
 }
 
 bool IsNearNeutral(const DirectX::XMFLOAT2 &palm) {
     return Length(Subtract(palm, DirectX::XMFLOAT2{0.5f, 0.5f})) <=
-           kHandSlashRearmNeutralRadius;
+           CameraSettings().handSlashRearmNeutralRadius;
 }
 
 bool IsNearControlEdge(const DirectX::XMFLOAT2 &palm) {
@@ -183,31 +146,37 @@ bool IsMovingAwayFromNeutral(const DirectX::XMFLOAT2 &delta,
 
 float EstimateHandVisualScale(const HandSample &sample) {
     if (!sample.hasLandmarks) {
-        return kHandReferenceVisualScale;
+        return CameraSettings().handReferenceVisualScale;
     }
 
     const DirectX::XMFLOAT2 wrist = sample.landmarks[kHandWrist];
     const DirectX::XMFLOAT2 middleMcp = sample.landmarks[kHandMiddleMcp];
+    const auto &settings = CameraSettings();
     return std::clamp(Length(Subtract(middleMcp, wrist)),
-                      kHandMinVisualScale, kHandMaxVisualScale);
+                      settings.handMinVisualScale, settings.handMaxVisualScale);
 }
 
 float HandDistanceThresholdScale(float visualScale) {
+    const auto &settings = CameraSettings();
     const float clampedScale =
-        std::clamp(visualScale, kHandMinVisualScale, kHandMaxVisualScale);
-    return std::clamp(clampedScale / kHandReferenceVisualScale,
-                      kHandFarThresholdScale, kHandNearThresholdScale);
+        std::clamp(visualScale, settings.handMinVisualScale,
+                   settings.handMaxVisualScale);
+    return std::clamp(clampedScale / settings.handReferenceVisualScale,
+                      settings.handFarThresholdScale,
+                      settings.handNearThresholdScale);
 }
 
 float HandSensitivityGainScale(float sensitivity) {
-    return std::lerp(kHandHardSensitivityGainScale,
-                     kHandEasySensitivityGainScale,
+    const auto &settings = CameraSettings();
+    return std::lerp(settings.handHardSensitivityGainScale,
+                     settings.handEasySensitivityGainScale,
                      std::clamp(sensitivity, 0.0f, 1.0f));
 }
 
 float HandSensitivityThresholdScale(float sensitivity) {
-    return std::lerp(kHandHardSensitivityThresholdScale,
-                     kHandEasySensitivityThresholdScale,
+    const auto &settings = CameraSettings();
+    return std::lerp(settings.handHardSensitivityThresholdScale,
+                     settings.handEasySensitivityThresholdScale,
                      std::clamp(sensitivity, 0.0f, 1.0f));
 }
 
@@ -232,7 +201,8 @@ float DirectionalRootThresholdScale(const DirectX::XMFLOAT2 &direction) {
     if (totalWeight <= 0.0001f) {
         return 1.0f;
     }
-    return (horizontalWeight + verticalWeight * kHandVerticalSlashThresholdScale) /
+    return (horizontalWeight +
+            verticalWeight * CameraSettings().handVerticalSlashThresholdScale) /
            totalWeight;
 }
 
@@ -246,12 +216,12 @@ bool EstimateTiltFromPlayerPoints(const DirectX::XMFLOAT2 &a,
     }
 
     const DirectX::XMFLOAT2 delta = Subtract(right, left);
-    if (std::fabs(delta.x) < kHandTiltMinWidth) {
+    if (std::fabs(delta.x) < CameraSettings().handTiltMinWidth) {
         return false;
     }
 
-    outRadians = std::clamp(std::atan2(delta.y, delta.x),
-                            -kHandTiltMaxRadians, kHandTiltMaxRadians);
+    const float maxTilt = CameraSettings().handTiltMaxRadians;
+    outRadians = std::clamp(std::atan2(delta.y, delta.x), -maxTilt, maxTilt);
     return true;
 }
 
@@ -265,8 +235,9 @@ bool ReadBodyTilt(const nlohmann::json &packet, float &outTiltRadians,
     if (!body.value("tracked", true) || !body.contains("tiltRadians")) {
         return false;
     }
-    outTiltRadians = std::clamp(body.value("tiltRadians", 0.0f),
-                                -kHandTiltMaxRadians, kHandTiltMaxRadians);
+    const float maxTilt = CameraSettings().handTiltMaxRadians;
+    outTiltRadians =
+        std::clamp(body.value("tiltRadians", 0.0f), -maxTilt, maxTilt);
     outVisibility = std::clamp(body.value("visibility", 0.0f), 0.0f, 1.0f);
     return true;
 }
@@ -351,6 +322,7 @@ void SwordUdpController::SetCalibration(
     packetChangedThisUpdate_ = false;
     motionSpeed_ = {0.0f, 0.0f};
     handSlashArmed_ = {true, true};
+    handSlashNeutralTimer_ = {0.0f, 0.0f};
     handSlashCooldown_ = {0.0f, 0.0f};
     smoothedPalm_ = {DirectX::XMFLOAT2{0.5f, 0.5f},
                      DirectX::XMFLOAT2{0.5f, 0.5f}};
@@ -395,6 +367,7 @@ void SwordUdpController::Update(float dt) {
                             DirectX::XMFLOAT2{0.0f, 0.0f}};
         packetMotionSpeed_ = {0.0f, 0.0f};
         handSlashArmed_ = {true, true};
+        handSlashNeutralTimer_ = {0.0f, 0.0f};
         handSlashCooldown_ = {0.0f, 0.0f};
         hasSmoothedPalm_ = {false, false};
         wasHandActive_ = {false, false};
@@ -637,6 +610,7 @@ void SwordUdpController::ApplyRawInput(float dt) {
     UpdateTiltEstimate(dt);
 
     for (size_t i = 0; i < swordStates_.size(); ++i) {
+        const auto &settings = CameraSettings();
         SwordControllerState &state = swordStates_[i];
         debugGameNetDelta_[i] = {0.0f, 0.0f};
         debugGameNetDirection_[i] = {0.0f, 0.0f};
@@ -668,9 +642,9 @@ void SwordUdpController::ApplyRawInput(float dt) {
         const float defaultAxisThresholdScale = HandSensitivityThresholdScale(
             (verticalSensitivity + horizontalSensitivity) * 0.5f);
         const float baseSlashThreshold =
-            kHandSlashThreshold * distanceThresholdScale;
+            settings.handSlashThreshold * distanceThresholdScale;
         const float baseSlashResetThreshold =
-            kHandSlashResetThreshold * distanceThresholdScale;
+            settings.handSlashResetThreshold * distanceThresholdScale;
         float slashThreshold =
             baseSlashThreshold * overallThresholdScale *
             defaultAxisThresholdScale;
@@ -678,17 +652,17 @@ void SwordUdpController::ApplyRawInput(float dt) {
             baseSlashResetThreshold * overallThresholdScale *
             defaultAxisThresholdScale;
         const float reacquireSlashThreshold =
-            kHandReacquireSlashThreshold * distanceThresholdScale;
+            settings.handReacquireSlashThreshold * distanceThresholdScale;
         const float jumpSlashDistanceThreshold =
-            kHandJumpSlashDistanceThreshold * distanceThresholdScale;
+            settings.handJumpSlashDistanceThreshold * distanceThresholdScale;
         const float preLossDirectionThreshold =
-            kHandPreLossDirectionThreshold * distanceThresholdScale;
+            settings.handPreLossDirectionThreshold * distanceThresholdScale;
         const float preLossNetDistanceThreshold =
-            kHandPreLossNetDistanceThreshold * distanceThresholdScale;
+            settings.handPreLossNetDistanceThreshold * distanceThresholdScale;
         const float stableNetDistanceThreshold =
-            kHandStableNetDistanceThreshold * distanceThresholdScale;
+            settings.handStableNetDistanceThreshold * distanceThresholdScale;
         const float baseSlashNetDistanceThreshold =
-            kHandSlashNetDistanceThreshold * distanceThresholdScale;
+            settings.handSlashNetDistanceThreshold * distanceThresholdScale;
 
         if (!rawInput_.active[i]) {
             if (hasSmoothedPalm_[i]) {
@@ -700,14 +674,15 @@ void SwordUdpController::ApplyRawInput(float dt) {
             }
             if (wasHandActive_[i] && hasLostPalm_[i] &&
                 IsNearControlEdge(lostPalm_[i])) {
-                edgeExitSuppressTimer_[i] = kHandEdgeExitSuppressSeconds;
+                edgeExitSuppressTimer_[i] = settings.handEdgeExitSuppressSeconds;
                 handSlashArmed_[i] = false;
+                handSlashNeutralTimer_[i] = 0.0f;
             }
 
             const bool canUsePreLossMotion =
                 wasHandActive_[i] &&
                 edgeExitSuppressTimer_[i] <= 0.0f &&
-                lastMotionAge_[i] <= kHandPreLossDirectionMaxAgeSeconds &&
+                lastMotionAge_[i] <= settings.handPreLossDirectionMaxAgeSeconds &&
                 lastMotionSpeed_[i] >= preLossDirectionThreshold &&
                 handSlashCooldown_[i] <= 0.0f;
             if (canUsePreLossMotion) {
@@ -715,11 +690,12 @@ void SwordUdpController::ApplyRawInput(float dt) {
                 state.UpdateSlash(
                     (std::max)(lastMotionSpeed_[i], slashThreshold + 0.01f),
                     dt, slashThreshold);
-                syntheticLostSlashTimer_[i] = kSyntheticLostSlashSeconds;
+                syntheticLostSlashTimer_[i] = settings.syntheticLostSlashSeconds;
                 handSlashArmed_[i] = false;
-                handSlashCooldown_[i] = kHandSlashCooldownSeconds;
+                handSlashNeutralTimer_[i] = 0.0f;
+                handSlashCooldown_[i] = settings.handSlashCooldownSeconds;
             } else if (syntheticLostSlashTimer_[i] > 0.0f) {
-                state.UpdateSlash(0.0f, dt, kHandSlashThreshold);
+                state.UpdateSlash(0.0f, dt, settings.handSlashThreshold);
             } else {
                 state = {};
             }
@@ -731,7 +707,7 @@ void SwordUdpController::ApplyRawInput(float dt) {
             packetMotionSpeed_[i] = 0.0f;
             hasSmoothedPalm_[i] = false;
             wasHandActive_[i] = false;
-            reacquireSuppressTimer_[i] = kHandReacquireSuppressSeconds;
+            reacquireSuppressTimer_[i] = settings.handReacquireSuppressSeconds;
             if (syntheticLostSlashTimer_[i] <= 0.0f) {
                 ResetMotionHistory(i);
             }
@@ -757,9 +733,10 @@ void SwordUdpController::ApplyRawInput(float dt) {
                                 : DirectX::XMFLOAT2{0.0f, 0.0f};
         const float jumpDistance = Length(jumpDelta);
         const bool jumped =
-            hasSmoothedPalm_[i] && jumpDistance > kHandTrackingJumpThreshold;
+            hasSmoothedPalm_[i] &&
+            jumpDistance > settings.handTrackingJumpThreshold;
         const bool teleported =
-            jumped && jumpDistance > kHandTrackingTeleportThreshold;
+            jumped && jumpDistance > settings.handTrackingTeleportThreshold;
         const bool synthesizeJumpSlash =
             jumped && !teleported &&
             jumpDistance >= jumpSlashDistanceThreshold &&
@@ -779,16 +756,19 @@ void SwordUdpController::ApplyRawInput(float dt) {
             packetMotionSpeed_[i] = 0.0f;
             handSlashArmed_[i] =
                 synthesizeReacquireSlash || synthesizeJumpSlash;
+            handSlashNeutralTimer_[i] = 0.0f;
             reacquireSuppressTimer_[i] =
                 (synthesizeReacquireSlash || synthesizeJumpSlash)
                     ? 0.0f
-                    : kHandReacquireSuppressSeconds;
+                    : settings.handReacquireSuppressSeconds;
         } else {
             const float rawDistance = Length(Subtract(corrected, smoothedPalm_[i]));
             const float fastBlend =
-                std::clamp(rawDistance / kHandFastMotionDistance, 0.0f, 1.0f);
+                std::clamp(rawDistance / settings.handFastMotionDistance, 0.0f,
+                           1.0f);
             const float smoothingRate =
-                std::lerp(kHandControlSmoothing, kHandFastControlSmoothing,
+                std::lerp(settings.handControlSmoothing,
+                          settings.handFastControlSmoothing,
                           fastBlend);
             const float smoothing =
                 std::clamp(1.0f - std::exp(-smoothingRate * dt), 0.0f, 1.0f);
@@ -866,7 +846,7 @@ void SwordUdpController::ApplyRawInput(float dt) {
             slashDir = stableMotion.direction;
         } else {
             const float frameDistance = Length(frameDeltaPalm);
-            if (frameDistance >= kHandVelocitySlashNetDistanceThreshold) {
+            if (frameDistance >= settings.handVelocitySlashNetDistanceThreshold) {
                 slashDir = {frameDeltaPalm.x / frameDistance,
                             -frameDeltaPalm.y / frameDistance};
             }
@@ -893,7 +873,8 @@ void SwordUdpController::ApplyRawInput(float dt) {
             (std::max)(motionSpeed_[i], packetMotionSpeed_[i]);
         const bool frameVelocitySlashMotion =
             slashSpeed >= slashThreshold &&
-            Length(frameDeltaPalm) >= kHandVelocitySlashNetDistanceThreshold &&
+            Length(frameDeltaPalm) >=
+                settings.handVelocitySlashNetDistanceThreshold &&
             IsMovingAwayFromNeutral(frameDeltaPalm, corrected);
         const bool stableSlashMotion =
             stableMotion.valid &&
@@ -916,7 +897,13 @@ void SwordUdpController::ApplyRawInput(float dt) {
         if (slashSpeed <= slashResetThreshold &&
             reacquireSuppressTimer_[i] <= 0.0f &&
             edgeExitSuppressTimer_[i] <= 0.0f && IsNearNeutral(corrected)) {
-            handSlashArmed_[i] = true;
+            handSlashNeutralTimer_[i] += dt;
+            if (handSlashNeutralTimer_[i] >=
+                settings.handSlashNeutralRearmSeconds) {
+                handSlashArmed_[i] = true;
+            }
+        } else {
+            handSlashNeutralTimer_[i] = 0.0f;
         }
 
         state.slashDir = slashDir;
@@ -933,7 +920,8 @@ void SwordUdpController::ApplyRawInput(float dt) {
         debugGameGatedSlashSpeed_[i] = gatedSlashSpeed;
         if (!wasSlashMode && state.isSlashMode) {
             handSlashArmed_[i] = false;
-            handSlashCooldown_[i] = kHandSlashCooldownSeconds;
+            handSlashNeutralTimer_[i] = 0.0f;
+            handSlashCooldown_[i] = settings.handSlashCooldownSeconds;
             debugSlashTriggeredThisFrame_[i] = true;
         }
         wasHandActive_[i] = true;
@@ -987,7 +975,8 @@ void SwordUdpController::UpdateTiltEstimate(float dt) {
     }
 
     const float smoothing =
-        std::clamp(1.0f - std::exp(-kHandTiltSmoothing * dt), 0.0f, 1.0f);
+        std::clamp(1.0f - std::exp(-CameraSettings().handTiltSmoothing * dt),
+                   0.0f, 1.0f);
     smoothedTiltRadians_ += (targetTilt - smoothedTiltRadians_) * smoothing;
     hasSmoothedTilt_ =
         hasTargetTilt || std::fabs(smoothedTiltRadians_) > 0.001f;
@@ -995,10 +984,11 @@ void SwordUdpController::UpdateTiltEstimate(float dt) {
 
 size_t SwordUdpController::ChooseSingleHandSlot(
     const DirectX::XMFLOAT2 &palm) const {
-    if (palm.x < kSingleHandLeftThreshold) {
+    const auto &settings = CameraSettings();
+    if (palm.x < settings.singleHandLeftThreshold) {
         return 0u;
     }
-    if (palm.x > kSingleHandRightThreshold) {
+    if (palm.x > settings.singleHandRightThreshold) {
         return 1u;
     }
 
@@ -1037,10 +1027,11 @@ DirectX::XMFLOAT2 SwordUdpController::TransformCameraPalmForSword(
     const float verticalGainScale =
         HandSensitivityGainScale(
             AppSceneServices::GetCameraVerticalSensitivity(handIndex));
-    return {std::clamp(0.5f + compensatedX * kHandControlGainX *
+    const auto &settings = CameraSettings();
+    return {std::clamp(0.5f + compensatedX * settings.handControlGainX *
                                   overallGainScale * horizontalGainScale,
                        0.0f, 1.0f),
-            std::clamp(0.5f + compensatedY * kHandControlGainY *
+            std::clamp(0.5f + compensatedY * settings.handControlGainY *
                                   overallGainScale * verticalGainScale,
                        0.0f, 1.0f)};
 }
@@ -1070,7 +1061,7 @@ void SwordUdpController::AddMotionSample(size_t handIndex,
     while (motionHistoryCount_[handIndex] > 0) {
         const size_t oldest = motionHistoryStart_[handIndex];
         if (motionHistoryAge_[handIndex][oldest] <=
-            kHandMotionWindowSeconds) {
+            CameraSettings().handMotionWindowSeconds) {
             break;
         }
         motionHistoryStart_[handIndex] =
@@ -1124,7 +1115,8 @@ SwordUdpController::ComputeStableMotion(size_t handIndex,
         previous = current;
     }
     if (pathDistance <= 0.0001f ||
-        netDistance / pathDistance < kHandStableConsistencyThreshold) {
+        netDistance / pathDistance <
+            CameraSettings().handStableConsistencyThreshold) {
         return result;
     }
 

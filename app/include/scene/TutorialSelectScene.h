@@ -42,6 +42,8 @@ class TutorialSelectScene : public BaseScene {
     void UpdateDeviceAvailability();
     void BeginStart();
     void BeginHandCameraConfirm();
+    void BeginCameraTestConfirm();
+    void BeginCameraTest();
     void ContinueHandStart();
     void BeginShowUtilityMenu();
     void BeginUtilityMenuAction();
@@ -81,6 +83,7 @@ class TutorialSelectScene : public BaseScene {
     bool waitingForHandTrackingReady_ = false;
     bool handTrackingStartRequested_ = false;
     bool handCameraConfirmVisible_ = false;
+    bool cameraTestConfirmPending_ = false;
     bool preserveMenuBgmOnExit_ = false;
     int handCameraConfirmIndex_ = 1;
     int utilityMenuIndex_ = 0;

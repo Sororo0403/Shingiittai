@@ -17,6 +17,7 @@ constexpr float kDefaultFovY = XM_PIDIV4;
 constexpr float kDefaultOrthoHeight = 10.0f;
 constexpr float kDefaultNearZ = 0.1f;
 constexpr float kDefaultFarZ = 1000.0f;
+constexpr float kMinDeterminant = 0.000001f;
 
 float FiniteOr(float value, float fallback) {
     return std::isfinite(value) ? value : fallback;
@@ -37,7 +38,12 @@ void Camera::UpdateMatrices() {
     const XMMATRIX world =
         XMMatrixRotationRollPitchYaw(rotation_.x, rotation_.y, rotation_.z) *
         XMMatrixTranslation(position_.x, position_.y, position_.z);
-    view_ = XMMatrixInverse(nullptr, world);
+    const XMVECTOR determinant = XMMatrixDeterminant(world);
+    const float determinantValue = XMVectorGetX(determinant);
+    view_ = std::isfinite(determinantValue) &&
+                    std::abs(determinantValue) > kMinDeterminant
+                ? XMMatrixInverse(nullptr, world)
+                : XMMatrixIdentity();
 
     if (projectionMode_ == ProjectionMode::Orthographic) {
         proj_ = XMMatrixOrthographicLH(orthographicHeight_ * aspect_,

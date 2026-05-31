@@ -107,9 +107,21 @@ std::wstring NormalizeCacheKey(std::wstring key) {
     return key;
 }
 
+float ClampFinite(float value, float minimum, float maximum, float fallback) {
+    if (!std::isfinite(value)) {
+        return fallback;
+    }
+    return std::clamp(value, minimum, maximum);
+}
+
 XMVECTOR LoadFloat3OrDefault(const XMFLOAT3 &value, FXMVECTOR fallback) {
+    if (!std::isfinite(value.x) || !std::isfinite(value.y) ||
+        !std::isfinite(value.z)) {
+        return fallback;
+    }
     XMVECTOR v = XMLoadFloat3(&value);
-    if (XMVectorGetX(XMVector3LengthSq(v)) <= 0.000001f) {
+    const float lengthSq = XMVectorGetX(XMVector3LengthSq(v));
+    if (!std::isfinite(lengthSq) || lengthSq <= 0.000001f) {
         return fallback;
     }
     return XMVector3Normalize(v);
@@ -320,27 +332,7 @@ void SoundManager::Initialize() {
 }
 
 uint32_t SoundManager::Load(const std::wstring &path) {
-    const std::filesystem::path resolvedPath = ResolveAudioPath(path);
-    std::error_code ec;
-    if (!std::filesystem::exists(resolvedPath, ec)) {
-        throw std::runtime_error("Audio file not found. requested=" +
-                                 std::filesystem::path(path).string() +
-                                 " resolved=" + resolvedPath.string());
-    }
-
-    const std::wstring key = NormalizePathKey(resolvedPath);
-    const auto cached = pathToSoundId_.find(key);
-    if (cached != pathToSoundId_.end()) {
-        return cached->second;
-    }
-
-    SoundResource resource{};
-    resource.data = AudioFileLoader::Load(resolvedPath.wstring());
-
-    const uint32_t soundId = AppendSoundResource(std::move(resource));
-    pathToSoundId_[key] = soundId;
-
-    return soundId;
+    return LoadOrCreateSilent(path);
 }
 
 bool SoundManager::TryLoad(const std::wstring &path, uint32_t &soundId) {
@@ -367,6 +359,9 @@ bool SoundManager::TryLoad(const std::wstring &path, uint32_t &soundId) {
     SoundResource resource{};
     resource.data = std::move(data);
     soundId = AppendSoundResource(std::move(resource));
+    if (soundId == kInvalidSoundId) {
+        return false;
+    }
     pathToSoundId_[key] = soundId;
     return true;
 }
@@ -426,6 +421,9 @@ uint32_t SoundManager::CreatePcm16Sound(const std::wstring &cacheKey,
     resource.data.info.decodedBytes = resource.data.decodedPcm.size();
 
     const uint32_t soundId = AppendSoundResource(std::move(resource));
+    if (soundId == kInvalidSoundId) {
+        return soundId;
+    }
     pathToSoundId_[key] = soundId;
     return soundId;
 }
@@ -478,7 +476,7 @@ void SoundManager::Resume(uint32_t voiceHandle) {
 }
 
 void SoundManager::SetVoiceVolume(uint32_t voiceHandle, float volume) {
-    const float clampedVolume = std::clamp(volume, 0.0f, 1.0f);
+    const float clampedVolume = ClampFinite(volume, 0.0f, 1.0f, 0.0f);
     for (PlayingVoice &playingVoice : playingVoices_) {
         if (playingVoice.handle == voiceHandle && playingVoice.voice) {
             playingVoice.volume = clampedVolume;
@@ -491,8 +489,8 @@ void SoundManager::SetVoiceVolume(uint32_t voiceHandle, float volume) {
 void SoundManager::SetVoiceFrequencyRatio(uint32_t voiceHandle,
                                           float frequencyRatio) {
     const float clampedRatio =
-        std::clamp(frequencyRatio, XAUDIO2_MIN_FREQ_RATIO,
-                   XAUDIO2_MAX_FREQ_RATIO);
+        ClampFinite(frequencyRatio, XAUDIO2_MIN_FREQ_RATIO,
+                    XAUDIO2_MAX_FREQ_RATIO, XAUDIO2_DEFAULT_FREQ_RATIO);
     for (PlayingVoice &playingVoice : playingVoices_) {
         if (playingVoice.handle == voiceHandle && playingVoice.voice) {
             playingVoice.frequencyRatio = clampedRatio;
@@ -631,20 +629,33 @@ float SoundManager::GetAmplitudeAt(uint32_t soundId, float playbackSeconds,
     const float duration =
         static_cast<float>(frameCount) /
         static_cast<float>(format->nSamplesPerSec);
-    if (duration <= 0.0f) {
+    if (!std::isfinite(duration) || duration <= 0.0f) {
         return 0.0f;
     }
 
-    float sampleTime = std::fmod(playbackSeconds, duration);
+    const float safePlaybackSeconds =
+        std::isfinite(playbackSeconds) ? playbackSeconds : 0.0f;
+    float sampleTime = std::fmod(safePlaybackSeconds, duration);
+    if (!std::isfinite(sampleTime)) {
+        return 0.0f;
+    }
     if (sampleTime < 0.0f) {
         sampleTime += duration;
     }
 
+    const float maxWindowSeconds = (std::max)(duration, 0.005f);
+    const float safeWindowSeconds =
+        ClampFinite(windowSeconds, 0.005f, maxWindowSeconds,
+                    (std::min)(0.045f, maxWindowSeconds));
+    const double halfWindowFramesDouble =
+        static_cast<double>(safeWindowSeconds) *
+        static_cast<double>(format->nSamplesPerSec) * 0.5;
+
     const size_t centerFrame =
         static_cast<size_t>(sampleTime * format->nSamplesPerSec) % frameCount;
     const size_t halfWindowFrames = (std::max<size_t>)(
-        1, static_cast<size_t>((std::max)(windowSeconds, 0.005f) *
-                               format->nSamplesPerSec * 0.5f));
+        1, (std::min)(frameCount,
+                      static_cast<size_t>(halfWindowFramesDouble)));
     const size_t sampleFrames =
         (std::min)(frameCount, halfWindowFrames * 2 + 1);
     const uint16_t channels = (std::max<uint16_t>)(format->nChannels, 1);
@@ -717,11 +728,16 @@ void SoundManager::FillSpectrumBands(uint32_t soundId, float playbackSeconds,
     const float duration =
         static_cast<float>(frameCount) /
         static_cast<float>(format->nSamplesPerSec);
-    if (duration <= 0.0f) {
+    if (!std::isfinite(duration) || duration <= 0.0f) {
         return;
     }
 
-    float sampleTime = std::fmod(playbackSeconds, duration);
+    const float safePlaybackSeconds =
+        std::isfinite(playbackSeconds) ? playbackSeconds : 0.0f;
+    float sampleTime = std::fmod(safePlaybackSeconds, duration);
+    if (!std::isfinite(sampleTime)) {
+        return;
+    }
     if (sampleTime < 0.0f) {
         sampleTime += duration;
     }
@@ -790,14 +806,17 @@ void SoundManager::FillSpectrumBands(uint32_t soundId, float playbackSeconds,
             static_cast<float>(std::sqrt(real * real + imag * imag)) /
             static_cast<float>(kWindowFrames);
         const float bassLift = 1.35f - 0.45f * t;
+        const float bandValue =
+            std::pow(magnitude * bassLift * 32.0f, 0.55f);
         outBands[band] =
-            std::clamp(std::pow(magnitude * bassLift * 32.0f, 0.55f),
-                       0.0f, 1.0f);
+            std::isfinite(bandValue)
+                ? std::clamp(bandValue, 0.0f, 1.0f)
+                : 0.0f;
     }
 }
 
 void SoundManager::SetMasterVolume(float volume) {
-    masterVolume_ = std::clamp(volume, 0.0f, 1.0f);
+    masterVolume_ = ClampFinite(volume, 0.0f, 1.0f, 0.0f);
     if (masterVoice_) {
         masterVoice_->SetVolume(masterVolume_);
     }
@@ -837,12 +856,15 @@ uint32_t SoundManager::CreateSourceVoice(uint32_t soundId, float volume,
         voice->DestroyVoice();
         return kInvalidVoiceHandle;
     }
-    const float clampedStartSeconds = (std::max)(startSeconds, 0.0f);
+    const float safeVolume = ClampFinite(volume, 0.0f, 1.0f, 0.0f);
+    const float clampedStartSeconds =
+        std::isfinite(startSeconds) ? (std::max)(startSeconds, 0.0f) : 0.0f;
     const double requestedStartFrame =
         static_cast<double>(clampedStartSeconds) *
         static_cast<double>(format->nSamplesPerSec);
     const UINT32 startFrame =
-        requestedStartFrame >= static_cast<double>(totalFrames)
+        !std::isfinite(requestedStartFrame) ||
+                requestedStartFrame >= static_cast<double>(totalFrames)
             ? totalFrames - 1u
             : static_cast<UINT32>(requestedStartFrame);
 
@@ -869,7 +891,7 @@ uint32_t SoundManager::CreateSourceVoice(uint32_t soundId, float volume,
         return kInvalidVoiceHandle;
     }
 
-    voice->SetVolume(std::clamp(volume, 0.0f, 1.0f));
+    voice->SetVolume(safeVolume);
 
     hr = voice->Start();
     if (FAILED(hr)) {
@@ -885,8 +907,12 @@ uint32_t SoundManager::CreateSourceVoice(uint32_t soundId, float volume,
     playingVoice.voice = voice;
     playingVoice.callback = std::move(callback);
     playingVoice.handle = AllocateVoiceHandle();
+    if (playingVoice.handle == kInvalidVoiceHandle) {
+        voice->DestroyVoice();
+        return kInvalidVoiceHandle;
+    }
     playingVoice.soundId = soundId;
-    playingVoice.volume = std::clamp(volume, 0.0f, 1.0f);
+    playingVoice.volume = safeVolume;
     playingVoice.loop = loop;
     playingVoices_.push_back(std::move(playingVoice));
 
@@ -916,20 +942,20 @@ uint32_t SoundManager::CreateSilentSound(const std::wstring &cacheKey,
         const bool defaultFormatOk =
             BuildPcmWaveFormat(sampleRate, channels, bitsPerSample, format);
         if (!defaultFormatOk) {
-            throw std::runtime_error("SoundManager default PCM format invalid");
+            return kInvalidSoundId;
         }
     }
 
     const float safeDuration =
         std::isfinite(durationSeconds)
-            ? (std::max)(durationSeconds, 0.01f)
+            ? std::clamp(durationSeconds, 0.01f, 10.0f)
             : 0.01f;
     const double decodedBytesDouble =
         static_cast<double>(safeDuration) *
         static_cast<double>(format.nAvgBytesPerSec);
     if (decodedBytesDouble >
         static_cast<double>((std::numeric_limits<size_t>::max)())) {
-        throw std::runtime_error("SoundManager silent sound buffer too large");
+        return kInvalidSoundId;
     }
     const size_t decodedBytes = static_cast<size_t>(decodedBytesDouble);
 
@@ -946,6 +972,9 @@ uint32_t SoundManager::CreateSilentSound(const std::wstring &cacheKey,
     resource.data.info.decodedBytes = decodedBytes;
 
     const uint32_t soundId = AppendSoundResource(std::move(resource));
+    if (soundId == kInvalidSoundId) {
+        return soundId;
+    }
     pathToSoundId_[cacheKey] = soundId;
 
     return soundId;
@@ -954,7 +983,7 @@ uint32_t SoundManager::CreateSilentSound(const std::wstring &cacheKey,
 uint32_t SoundManager::AppendSoundResource(SoundResource resource) {
     if (sounds_.size() >=
         static_cast<size_t>((std::numeric_limits<uint32_t>::max)())) {
-        throw std::runtime_error("SoundManager sound id overflow");
+        return kInvalidSoundId;
     }
     sounds_.push_back(std::move(resource));
     return static_cast<uint32_t>(sounds_.size() - 1);
@@ -963,7 +992,7 @@ uint32_t SoundManager::AppendSoundResource(SoundResource resource) {
 uint32_t SoundManager::AllocateVoiceHandle() {
     if (playingVoices_.size() >=
         static_cast<size_t>((std::numeric_limits<uint32_t>::max)()) - 1u) {
-        throw std::runtime_error("SoundManager voice handle exhausted");
+        return kInvalidVoiceHandle;
     }
 
     for (;;) {

@@ -353,7 +353,7 @@ void GameVictoryScene::Initialize(const SceneContext &ctx) {
             L"app/resources/audio/se/combat/explosion_4.mp3",
                                      explosionSoundId_);
         ctx_->systems.sound->TryLoad(
-            L"app/resources/audio/se/combat/sword_slash_2.mp3",
+            L"app/resources/audio/se/combat/se_Slash.wav",
                                      slashSoundId_);
         ctx_->systems.sound->TryLoad(
             L"app/resources/audio/se/victory/crowd_cheer_applause_1.mp3",

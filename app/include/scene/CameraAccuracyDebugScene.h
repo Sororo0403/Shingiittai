@@ -42,6 +42,13 @@ class CameraAccuracyDebugScene : public BaseScene {
     Image LoadTextureImage(const std::wstring &path);
     void UpdateCamera();
     void AdjustSelectedSensitivity(int direction);
+    int SensitivityItemCount() const;
+    float GetSensitivityValue(size_t index) const;
+    float GetSensitivityMin(size_t index) const;
+    float GetSensitivityMax(size_t index) const;
+    float GetSensitivityStep(size_t index) const;
+    void SetSensitivityValue(size_t index, float value);
+    float GetSensitivityNormalizedValue(size_t index) const;
     void CaptureNeutral();
     void ResetNeutral();
     void UpdateGamePreview(float deltaTime);
@@ -56,8 +63,13 @@ class CameraAccuracyDebugScene : public BaseScene {
     void DrawGaugeRow(size_t index, const Image &label, float value,
                       const DirectX::XMFLOAT4 &barColor, float panelX,
                       float rowY, float panelW);
+    void DrawSettingGaugeRow(size_t index, const Image &label,
+                             const DirectX::XMFLOAT4 &barColor, float panelX,
+                             float rowY, float panelW);
     void DrawImage(const Image &image, float x, float y, float scale = 1.0f,
                    float alpha = 1.0f);
+    void DrawImageSized(const Image &image, float x, float y, float w, float h,
+                        const DirectX::XMFLOAT4 &color);
     void DrawImageCentered(const Image &image, float centerX, float centerY,
                            float maxWidth, float maxHeight, float alpha = 1.0f);
     void DrawSensitivityValue(float value, float x, float y, float scale,
@@ -84,11 +96,21 @@ class CameraAccuracyDebugScene : public BaseScene {
     uint32_t swordModelId_ = 0;
     Image titleImage_{};
     Image controlsImage_{};
-    std::array<Image, 4> sensitivityLabelImages_{};
+    Image detailTitleImage_{};
+    Image basicTitleImage_{};
+    Image detailHintImage_{};
+    Image basicHintImage_{};
+    Image pageLabelImage_{};
+    Image gaugeTrackImage_{};
+    Image gaugeFillImage_{};
+    Image gaugeFrameImage_{};
+    Image rowSelectImage_{};
+    std::array<Image, 64> settingLabelImages_{};
     std::array<Image, 10> digitImages_{};
     Image dotImage_{};
     ReturnTarget returnTarget_ = ReturnTarget::Title;
     int selectedSensitivityIndex_ = 0;
+    bool detailedSensitivityMode_ = false;
     bool handTrackingStartRequested_ = false;
     bool neutralCapturedThisScene_ = false;
     float sceneTime_ = 0.0f;

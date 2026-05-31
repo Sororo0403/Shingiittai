@@ -24,6 +24,15 @@ bool NearlyEqual(float a, float b, float epsilon = 1.0e-6f) {
     return std::fabs(a - b) <= epsilon;
 }
 
+float FiniteOr(float value, float fallback) {
+    return std::isfinite(value) ? value : fallback;
+}
+
+XMFLOAT3 SanitizeFloat3(const XMFLOAT3 &value) {
+    return {FiniteOr(value.x, 0.0f), FiniteOr(value.y, 0.0f),
+            FiniteOr(value.z, 0.0f)};
+}
+
 bool IsSameFloat3(const XMFLOAT3 &lhs, const XMFLOAT3 &rhs) {
     return NearlyEqual(lhs.x, rhs.x) && NearlyEqual(lhs.y, rhs.y) &&
            NearlyEqual(lhs.z, rhs.z);
@@ -41,6 +50,21 @@ bool IsSameMatrix(const XMFLOAT4X4 &lhs, const XMFLOAT4X4 &rhs) {
     return true;
 }
 
+uint32_t ResolveSkyboxTextureId(TextureManager *textureManager,
+                                uint32_t textureId) {
+    if (textureManager == nullptr) {
+        return UINT32_MAX;
+    }
+    if (textureId != UINT32_MAX &&
+        textureManager->IsValidTextureId(textureId)) {
+        return textureId;
+    }
+    const uint32_t fallbackTextureId = textureManager->GetWhiteCubeTextureId();
+    return textureManager->IsValidTextureId(fallbackTextureId)
+               ? fallbackTextureId
+               : UINT32_MAX;
+}
+
 } // namespace
 
 SkyboxRenderer::~SkyboxRenderer() {
@@ -50,7 +74,8 @@ SkyboxRenderer::~SkyboxRenderer() {
 void SkyboxRenderer::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
                                 TextureManager *textureManager) {
     if (!dxCommon || !srvManager || !textureManager) {
-        throw std::runtime_error("SkyboxRenderer::Initialize null argument");
+        Finalize();
+        return;
     }
 
     Finalize();
@@ -98,12 +123,14 @@ void SkyboxRenderer::Draw(uint32_t textureId, const Camera &camera) {
     if (!dxCommon_ || !srvManager_ || !textureManager_ || !pipelineState_ ||
         !rootSignature_ || !vertexBuffer_ || !indexBuffer_ || !constBuffer_ ||
         mappedCB_ == nullptr) {
-        throw std::runtime_error("SkyboxRenderer::Draw called before Initialize");
+        return;
     }
 
     const uint32_t boundTextureId =
-        textureId == UINT32_MAX ? textureManager_->GetWhiteCubeTextureId()
-                                : textureId;
+        ResolveSkyboxTextureId(textureManager_, textureId);
+    if (boundTextureId == UINT32_MAX) {
+        return;
+    }
 
     auto *cmd = dxCommon_->GetCommandList();
 
@@ -120,22 +147,23 @@ void SkyboxRenderer::Draw(uint32_t textureId, const Camera &camera) {
     XMFLOAT4X4 currentProj{};
     XMStoreFloat4x4(&currentView, camera.GetView());
     XMStoreFloat4x4(&currentProj, camera.GetProj());
+    const XMFLOAT3 cameraPosition = SanitizeFloat3(camera.GetPosition());
 
     const bool needsConstantBufferUpdate =
         !hasCachedCameraState_ ||
-        !IsSameFloat3(camera.GetPosition(), cachedCameraPosition_) ||
+        !IsSameFloat3(cameraPosition, cachedCameraPosition_) ||
         !IsSameMatrix(currentView, cachedView_) ||
         !IsSameMatrix(currentProj, cachedProj_);
 
     if (needsConstantBufferUpdate) {
         XMMATRIX world =
             XMMatrixScaling(50.0f, 50.0f, 50.0f) *
-            XMMatrixTranslation(camera.GetPosition().x, camera.GetPosition().y,
-                                camera.GetPosition().z);
+            XMMatrixTranslation(cameraPosition.x, cameraPosition.y,
+                                cameraPosition.z);
         XMMATRIX wvp = world * camera.GetView() * camera.GetProj();
         XMStoreFloat4x4(&mappedCB_->matWVP, XMMatrixTranspose(wvp));
 
-        cachedCameraPosition_ = camera.GetPosition();
+        cachedCameraPosition_ = cameraPosition;
         cachedView_ = currentView;
         cachedProj_ = currentProj;
         hasCachedCameraState_ = true;

@@ -185,16 +185,7 @@ AudioFileLoader::SoundData AudioFileLoader::Load(const std::wstring &path) {
     if (TryLoad(path, data)) {
         return data;
     }
-
-    const std::filesystem::path resolvedPath = ResolveAudioPath(path);
-    std::error_code ec;
-    if (!std::filesystem::exists(resolvedPath, ec)) {
-        throw std::runtime_error("Audio file not found. requested=" +
-                                 std::filesystem::path(path).string() +
-                                 " resolved=" + resolvedPath.string());
-    }
-
-    throw std::runtime_error("Loaded audio data is empty or unsupported");
+    return {};
 }
 
 bool AudioFileLoader::TryLoad(const std::wstring &path, SoundData &outData) {

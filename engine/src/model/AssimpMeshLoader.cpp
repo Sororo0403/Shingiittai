@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <assimp/GltfMaterial.h>
 #include <charconv>
+#include <cmath>
 #include <filesystem>
 #include <functional>
 #include <limits>
@@ -17,6 +18,43 @@
 using namespace DirectX;
 
 namespace {
+constexpr float kEpsilon = 0.000001f;
+
+float FiniteOr(float value, float fallback) {
+    return std::isfinite(value) ? value : fallback;
+}
+
+float ClampFinite(float value, float minimum, float maximum, float fallback) {
+    return std::clamp(FiniteOr(value, fallback), minimum, maximum);
+}
+
+XMFLOAT3 SanitizeFloat3(const aiVector3D &value,
+                        const XMFLOAT3 &fallback) {
+    return {FiniteOr(value.x, fallback.x), FiniteOr(value.y, fallback.y),
+            FiniteOr(value.z, fallback.z)};
+}
+
+XMFLOAT3 SanitizeNormal(const aiVector3D &value) {
+    XMFLOAT3 normal = SanitizeFloat3(value, {0.0f, 1.0f, 0.0f});
+    XMVECTOR vector = XMLoadFloat3(&normal);
+    const float lengthSq = XMVectorGetX(XMVector3LengthSq(vector));
+    if (!std::isfinite(lengthSq) || lengthSq <= kEpsilon) {
+        return {0.0f, 1.0f, 0.0f};
+    }
+    XMStoreFloat3(&normal, XMVector3Normalize(vector));
+    return normal;
+}
+
+XMFLOAT4 SanitizeTangent(const aiVector3D &value) {
+    XMFLOAT3 tangent = SanitizeFloat3(value, {1.0f, 0.0f, 0.0f});
+    XMVECTOR vector = XMLoadFloat3(&tangent);
+    const float lengthSq = XMVectorGetX(XMVector3LengthSq(vector));
+    if (!std::isfinite(lengthSq) || lengthSq <= kEpsilon) {
+        return {1.0f, 0.0f, 0.0f, 1.0f};
+    }
+    XMStoreFloat3(&tangent, XMVector3Normalize(vector));
+    return {tangent.x, tangent.y, tangent.z, 1.0f};
+}
 
 XMFLOAT4X4 ToMatrix(const aiMatrix4x4 &m) {
     return {m.a1, m.b1, m.c1, m.d1, m.a2, m.b2, m.c2, m.d2,
@@ -87,34 +125,43 @@ void AssimpMeshLoader::LoadMeshes(const aiScene *scene, const std::string &path,
         if (!mesh) {
             continue;
         }
+        if (!mesh->HasPositions() || mesh->mNumVertices == 0 ||
+            !mesh->mVertices) {
+            continue;
+        }
+        if (mesh->mNumFaces > 0 && !mesh->mFaces) {
+            continue;
+        }
 
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;
 
         vertices.reserve(mesh->mNumVertices);
+        if (static_cast<size_t>(mesh->mNumFaces) >
+            (std::numeric_limits<size_t>::max)() / 3u) {
+            throw std::runtime_error("AssimpMeshLoader face count overflow");
+        }
         indices.reserve(static_cast<size_t>(mesh->mNumFaces) * 3u);
 
         for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
             Vertex v{};
 
-            v.position = {mesh->mVertices[i].x, mesh->mVertices[i].y,
-                          mesh->mVertices[i].z};
+            v.position =
+                SanitizeFloat3(mesh->mVertices[i], {0.0f, 0.0f, 0.0f});
             v.bindPosition = v.position;
             if (mesh->HasNormals()) {
-                v.normal = {mesh->mNormals[i].x, mesh->mNormals[i].y,
-                            mesh->mNormals[i].z};
+                v.normal = SanitizeNormal(mesh->mNormals[i]);
             }
 
             if (mesh->HasTextureCoords(0)) {
-                v.uv = {mesh->mTextureCoords[0][i].x,
-                        mesh->mTextureCoords[0][i].y};
+                v.uv = {FiniteOr(mesh->mTextureCoords[0][i].x, 0.0f),
+                        FiniteOr(mesh->mTextureCoords[0][i].y, 0.0f)};
             } else {
                 v.uv = {0.0f, 0.0f};
             }
 
             if (mesh->HasTangentsAndBitangents()) {
-                v.tangent = {mesh->mTangents[i].x, mesh->mTangents[i].y,
-                             mesh->mTangents[i].z, 1.0f};
+                v.tangent = SanitizeTangent(mesh->mTangents[i]);
             }
 
             vertices.push_back(v);
@@ -212,9 +259,11 @@ void AssimpMeshLoader::LoadMeshes(const aiScene *scene, const std::string &path,
 
                 for (unsigned int w = 0; w < bone->mNumWeights; w++) {
                     uint32_t vertexId = bone->mWeights[w].mVertexId;
-                    float weight = bone->mWeights[w].mWeight;
+                    const float weight =
+                        ClampFinite(bone->mWeights[w].mWeight, 0.0f, 1.0f,
+                                    0.0f);
 
-                    if (vertexId >= vertices.size()) {
+                    if (vertexId >= vertices.size() || weight <= 0.0f) {
                         continue;
                     }
 
@@ -256,6 +305,9 @@ void AssimpMeshLoader::LoadMeshes(const aiScene *scene, const std::string &path,
                     }
 
                     if (tex->mHeight == 0) {
+                        if (tex->mWidth == 0 || tex->pcData == nullptr) {
+                            return false;
+                        }
                         outTextureId = textureManager_->LoadFromMemory(
                             reinterpret_cast<const uint8_t *>(tex->pcData),
                             tex->mWidth);
@@ -319,15 +371,15 @@ void AssimpMeshLoader::LoadMeshes(const aiScene *scene, const std::string &path,
 
         if (mat && aiGetMaterialColor(mat, AI_MATKEY_COLOR_DIFFUSE, &diffuse) ==
                        AI_SUCCESS) {
-            material.color.x = diffuse.r;
-            material.color.y = diffuse.g;
-            material.color.z = diffuse.b;
+            material.color.x = ClampFinite(diffuse.r, 0.0f, 1.0f, 1.0f);
+            material.color.y = ClampFinite(diffuse.g, 0.0f, 1.0f, 1.0f);
+            material.color.z = ClampFinite(diffuse.b, 0.0f, 1.0f, 1.0f);
         }
 
         float opacity = 1.0f;
 
         if (mat && mat->Get(AI_MATKEY_OPACITY, opacity) == AI_SUCCESS) {
-            material.color.w = opacity;
+            material.color.w = ClampFinite(opacity, 0.0f, 1.0f, 1.0f);
         }
 
         XMStoreFloat4x4(&material.uvTransform,

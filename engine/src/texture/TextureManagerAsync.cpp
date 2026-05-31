@@ -173,7 +173,7 @@ bool TextureManager::HasAsyncLoadFailed(uint32_t requestId) const {
 uint32_t TextureManager::AllocateAsyncRequestId() {
     if (asyncRequests_.size() >=
         static_cast<size_t>((std::numeric_limits<uint32_t>::max)()) - 1u) {
-        throw std::runtime_error("TextureManager async request id exhausted");
+        return 0;
     }
 
     for (;;) {

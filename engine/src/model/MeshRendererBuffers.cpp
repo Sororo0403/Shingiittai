@@ -13,6 +13,7 @@
 #include <cstring>
 #include <limits>
 #include <stdexcept>
+#include <vector>
 
 using namespace DirectX;
 using namespace DxUtils;
@@ -57,13 +58,28 @@ struct SceneConstBufferData {
     SpotLightData spotLight;
 };
 
+XMVECTOR LoadNormalizedQuaternionOrIdentity(const XMFLOAT4 &rotation) {
+    if (!std::isfinite(rotation.x) || !std::isfinite(rotation.y) ||
+        !std::isfinite(rotation.z) || !std::isfinite(rotation.w)) {
+        return XMQuaternionIdentity();
+    }
+    XMVECTOR q = XMLoadFloat4(&rotation);
+    const float lengthSq = XMVectorGetX(XMVector4LengthSq(q));
+    if (!std::isfinite(lengthSq) || lengthSq <= 0.000001f) {
+        return XMQuaternionIdentity();
+    }
+    return XMQuaternionNormalize(q);
+}
+
 XMMATRIX MakeWorldMatrix(const Transform &transform) {
-    XMVECTOR q = XMQuaternionNormalize(XMLoadFloat4(&transform.rotation));
-    return XMMatrixScaling(transform.scale.x, transform.scale.y,
-                           transform.scale.z) *
+    const Transform safeTransform = SanitizeTransformForDraw(transform);
+    XMVECTOR q = LoadNormalizedQuaternionOrIdentity(safeTransform.rotation);
+    return XMMatrixScaling(safeTransform.scale.x, safeTransform.scale.y,
+                           safeTransform.scale.z) *
            XMMatrixRotationQuaternion(q) *
-           XMMatrixTranslation(transform.position.x, transform.position.y,
-                               transform.position.z);
+           XMMatrixTranslation(safeTransform.position.x,
+                               safeTransform.position.y,
+                               safeTransform.position.z);
 }
 
 XMMATRIX MakeWorldInverseTranspose(const XMMATRIX &world) {
@@ -214,13 +230,16 @@ MeshRenderer::WriteMaterialConstants(const Material &material) {
 D3D12_VERTEX_BUFFER_VIEW
 MeshRenderer::WriteInstances(const InstanceData *instances,
                              uint32_t instanceCount) {
+    std::vector<InstanceData> safeInstances(instanceCount);
+    for (uint32_t index = 0; index < instanceCount; ++index) {
+        safeInstances[index] = SanitizeInstanceDataForDraw(instances[index]);
+    }
+
     const UploadAllocation allocation =
-        uploadBuffer_.WriteArray(instances, instanceCount, alignof(InstanceData));
+        uploadBuffer_.WriteArray(safeInstances.data(), safeInstances.size(),
+                                 alignof(InstanceData));
     D3D12_VERTEX_BUFFER_VIEW view{};
     view.BufferLocation = allocation.gpu;
-    if (allocation.size > (std::numeric_limits<UINT>::max)()) {
-        throw std::runtime_error("MeshRenderer instance buffer size overflow");
-    }
     view.SizeInBytes = static_cast<UINT>(allocation.size);
     view.StrideInBytes = sizeof(InstanceData);
     return view;

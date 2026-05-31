@@ -50,12 +50,40 @@ std::wstring NormalizePathKey(const std::filesystem::path &path) {
     return key;
 }
 
+float ClampFinite(float value, float minimum, float maximum, float fallback) {
+    if (!std::isfinite(value)) {
+        return fallback;
+    }
+    return std::clamp(value, minimum, maximum);
+}
+
 XMVECTOR LoadFloat3OrDefault(const XMFLOAT3 &value, FXMVECTOR fallback) {
+    if (!std::isfinite(value.x) || !std::isfinite(value.y) ||
+        !std::isfinite(value.z)) {
+        return fallback;
+    }
     XMVECTOR v = XMLoadFloat3(&value);
-    if (XMVectorGetX(XMVector3LengthSq(v)) <= 0.000001f) {
+    const float lengthSq = XMVectorGetX(XMVector3LengthSq(v));
+    if (!std::isfinite(lengthSq) || lengthSq <= 0.000001f) {
         return fallback;
     }
     return XMVector3Normalize(v);
+}
+
+XMVECTOR LoadPositionOrDefault(const XMFLOAT3 &value, FXMVECTOR fallback) {
+    if (!std::isfinite(value.x) || !std::isfinite(value.y) ||
+        !std::isfinite(value.z)) {
+        return fallback;
+    }
+    return XMLoadFloat3(&value);
+}
+
+XMVECTOR NormalizeVectorOrDefault(FXMVECTOR value, FXMVECTOR fallback) {
+    const float lengthSq = XMVectorGetX(XMVector3LengthSq(value));
+    if (!std::isfinite(lengthSq) || lengthSq <= 0.000001f) {
+        return fallback;
+    }
+    return XMVector3Normalize(value);
 }
 
 class MediaBufferLock {
@@ -240,9 +268,15 @@ void SoundManager::SetVoice3DRange(uint32_t voiceHandle, float minDistance,
                                    float maxDistance) {
     for (PlayingVoice &playingVoice : playingVoices_) {
         if (playingVoice.handle == voiceHandle) {
-            playingVoice.minDistance = (std::max)(minDistance, 0.001f);
+            playingVoice.minDistance =
+                std::isfinite(minDistance)
+                    ? (std::max)(minDistance, 0.001f)
+                    : 0.001f;
             playingVoice.maxDistance =
-                (std::max)(maxDistance, playingVoice.minDistance + 0.001f);
+                std::isfinite(maxDistance)
+                    ? (std::max)(maxDistance,
+                                 playingVoice.minDistance + 0.001f)
+                    : playingVoice.minDistance + 0.001f;
             Apply3D(playingVoice);
             return;
         }
@@ -254,16 +288,29 @@ void SoundManager::Apply3D(PlayingVoice &playingVoice) {
         return;
     }
 
-    XMVECTOR listener = XMLoadFloat3(&listenerPosition_);
-    XMVECTOR source = XMLoadFloat3(&playingVoice.position);
+    XMVECTOR listener =
+        LoadPositionOrDefault(listenerPosition_, XMVectorZero());
+    XMVECTOR source = LoadPositionOrDefault(playingVoice.position, listener);
     XMVECTOR toSource = source - listener;
     const float distance = XMVectorGetX(XMVector3Length(toSource));
+    if (!std::isfinite(distance)) {
+        return;
+    }
 
+    const float minDistance =
+        std::isfinite(playingVoice.minDistance)
+            ? (std::max)(playingVoice.minDistance, 0.001f)
+            : 0.001f;
+    const float maxDistance =
+        std::isfinite(playingVoice.maxDistance)
+            ? (std::max)(playingVoice.maxDistance, minDistance + 0.001f)
+            : minDistance + 0.001f;
     const float attenuation =
-        1.0f - (distance - playingVoice.minDistance) /
-                   (playingVoice.maxDistance - playingVoice.minDistance);
-    const float volume = playingVoice.volume *
-                         std::clamp(attenuation, 0.0f, 1.0f);
+        1.0f - (distance - minDistance) / (maxDistance - minDistance);
+    const float voiceVolume =
+        ClampFinite(playingVoice.volume, 0.0f, 1.0f, 0.0f);
+    const float volume =
+        voiceVolume * ClampFinite(attenuation, 0.0f, 1.0f, 0.0f);
 
     XAUDIO2_VOICE_DETAILS sourceDetails{};
     XAUDIO2_VOICE_DETAILS masterDetails{};
@@ -281,10 +328,12 @@ void SoundManager::Apply3D(PlayingVoice &playingVoice) {
             listenerForward_, XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f));
         XMVECTOR up = LoadFloat3OrDefault(
             listenerUp_, XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
-        XMVECTOR right = XMVector3Normalize(XMVector3Cross(up, forward));
-        XMVECTOR direction = XMVector3Normalize(toSource);
-        const float pan = std::clamp(XMVectorGetX(XMVector3Dot(direction, right)),
-                                     -1.0f, 1.0f);
+        XMVECTOR right = NormalizeVectorOrDefault(
+            XMVector3Cross(up, forward),
+            XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f));
+        XMVECTOR direction = NormalizeVectorOrDefault(toSource, forward);
+        const float pan = ClampFinite(
+            XMVectorGetX(XMVector3Dot(direction, right)), -1.0f, 1.0f, 0.0f);
         const float left = volume * std::sqrt((1.0f - pan) * 0.5f);
         const float rightVolume = volume * std::sqrt((1.0f + pan) * 0.5f);
 

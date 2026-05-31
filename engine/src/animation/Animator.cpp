@@ -7,6 +7,25 @@
 
 using namespace DirectX;
 
+namespace {
+
+constexpr float kQuaternionEpsilon = 0.000001f;
+
+XMVECTOR LoadNormalizedQuaternionOrIdentity(const XMFLOAT4 &rotation) {
+    if (!std::isfinite(rotation.x) || !std::isfinite(rotation.y) ||
+        !std::isfinite(rotation.z) || !std::isfinite(rotation.w)) {
+        return XMQuaternionIdentity();
+    }
+    XMVECTOR q = XMLoadFloat4(&rotation);
+    const float lengthSq = XMVectorGetX(XMVector4LengthSq(q));
+    if (!std::isfinite(lengthSq) || lengthSq <= kQuaternionEpsilon) {
+        return XMQuaternionIdentity();
+    }
+    return XMQuaternionNormalize(q);
+}
+
+} // namespace
+
 void Animator::Play(Model &model, const std::string &animationName, bool loop) {
     auto it = model.animations.find(animationName);
     if (it == model.animations.end()) {
@@ -118,7 +137,7 @@ void Animator::Update(Model &model, float deltaTime) {
 
             XMMATRIX local = XMMatrixScaling(scl.x, scl.y, scl.z) *
                              XMMatrixRotationQuaternion(
-                                 XMQuaternionNormalize(XMLoadFloat4(&rot))) *
+                                 LoadNormalizedQuaternionOrIdentity(rot)) *
                              XMMatrixTranslation(pos.x, pos.y, pos.z);
             XMStoreFloat4x4(&model.rootAnimationMatrix, local);
             model.hasRootAnimation = true;

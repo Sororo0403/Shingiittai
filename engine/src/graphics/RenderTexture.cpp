@@ -3,11 +3,20 @@
 #include "graphics/DxHelpers.h"
 #include "graphics/DxUtils.h"
 #include "graphics/SrvManager.h"
+#include <algorithm>
+#include <cmath>
 #include <stdexcept>
 
 using namespace DxUtils;
 
 namespace {
+float ClampFinite(float value, float minimum, float maximum, float fallback) {
+    if (!std::isfinite(value)) {
+        return fallback;
+    }
+    return std::clamp(value, minimum, maximum);
+}
+
 class RenderTextureInitializationGuard {
   public:
     explicit RenderTextureInitializationGuard(RenderTexture &target)
@@ -38,10 +47,12 @@ RenderTexture::~RenderTexture() {
 void RenderTexture::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
                                int width, int height) {
     if (!dxCommon || !srvManager) {
-        throw std::runtime_error("RenderTexture::Initialize null argument");
+        Release();
+        return;
     }
     if (width <= 0 || height <= 0) {
-        throw std::runtime_error("RenderTexture::Initialize invalid size");
+        Release();
+        return;
     }
 
     Release();
@@ -62,8 +73,7 @@ void RenderTexture::Resize(int width, int height) {
         return;
     }
     if (!dxCommon_ || !srvManager_ || srvIndex_ == UINT_MAX) {
-        throw std::runtime_error(
-            "RenderTexture::Resize called before Initialize");
+        return;
     }
 
     if (resource_ && dxCommon_ && !dxCommon_->IsDeviceRemoved() &&
@@ -103,8 +113,7 @@ void RenderTexture::Release() {
 
 void RenderTexture::BeginRender(const DirectX::XMFLOAT4 &clearColor) {
     if (!dxCommon_ || !resource_ || !rtvHeap_) {
-        throw std::runtime_error(
-            "RenderTexture::BeginRender called before Initialize");
+        return;
     }
 
     auto commandList = dxCommon_->GetCommandList();
@@ -138,8 +147,12 @@ void RenderTexture::BeginRender(const DirectX::XMFLOAT4 &clearColor) {
     commandList->RSSetScissorRects(1, &scissorRect);
     commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 
-    const float clear[4] = {clearColor.x, clearColor.y, clearColor.z,
-                            clearColor.w};
+    const float clear[4] = {
+        ClampFinite(clearColor.x, 0.0f, 1.0f, 0.0f),
+        ClampFinite(clearColor.y, 0.0f, 1.0f, 0.0f),
+        ClampFinite(clearColor.z, 0.0f, 1.0f, 0.0f),
+        ClampFinite(clearColor.w, 0.0f, 1.0f, 1.0f),
+    };
     commandList->ClearRenderTargetView(rtvHandle, clear, 0, nullptr);
     commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f,
                                        0, 0, nullptr);
@@ -147,8 +160,7 @@ void RenderTexture::BeginRender(const DirectX::XMFLOAT4 &clearColor) {
 
 void RenderTexture::EndRender() {
     if (!dxCommon_ || !resource_) {
-        throw std::runtime_error(
-            "RenderTexture::EndRender called before Initialize");
+        return;
     }
 
     if (resourceState_ != D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE) {
@@ -162,8 +174,7 @@ void RenderTexture::EndRender() {
 
 D3D12_GPU_DESCRIPTOR_HANDLE RenderTexture::GetGpuHandle() const {
     if (!srvManager_ || srvIndex_ == UINT_MAX) {
-        throw std::runtime_error(
-            "RenderTexture::GetGpuHandle called before Initialize");
+        return {};
     }
 
     return srvManager_->GetGpuHandle(srvIndex_);

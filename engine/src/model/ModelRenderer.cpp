@@ -111,12 +111,82 @@ bool IsDrawableSubMesh(const ModelSubMesh &subMesh, MeshManager *meshManager,
            materialManager->IsValidMaterialId(subMesh.materialId);
 }
 
+bool HasCompleteSkinningDescriptors(const SkinCluster &skinCluster) {
+    return skinCluster.inputVertexSrvGpuHandle.ptr != 0 &&
+           skinCluster.influenceSrvGpuHandle.ptr != 0 &&
+           skinCluster.paletteSrvGpuHandle.ptr != 0 &&
+           skinCluster.skinnedVertexUavGpuHandle.ptr != 0;
+}
+
+bool HasRenderableVertexSource(const ModelSubMesh &subMesh) {
+    const SkinCluster &skinCluster = subMesh.skinCluster;
+    if (!skinCluster.skinnedVertexResource) {
+        return true;
+    }
+
+    return skinCluster.skinningValid &&
+           HasCompleteSkinningDescriptors(skinCluster) &&
+           skinCluster.skinnedVertexBufferView.BufferLocation != 0 &&
+           skinCluster.skinnedVertexBufferView.SizeInBytes > 0 &&
+           skinCluster.skinnedVertexBufferView.StrideInBytes > 0;
+}
+
+bool IsDrawableSubMeshWithValidVertexSource(
+    const ModelSubMesh &subMesh, MeshManager *meshManager,
+    MaterialManager *materialManager) {
+    return IsDrawableSubMesh(subMesh, meshManager, materialManager) &&
+           HasRenderableVertexSource(subMesh);
+}
+
+bool HasPaletteDescriptor(const ModelSubMesh &subMesh) {
+    const SkinCluster &skinCluster = subMesh.skinCluster;
+    return skinCluster.paletteResource != nullptr &&
+           skinCluster.paletteCount > 0 &&
+           skinCluster.paletteSrvGpuHandle.ptr != 0;
+}
+
+bool IsForwardDrawableSubMesh(const ModelSubMesh &subMesh,
+                              MeshManager *meshManager,
+                              MaterialManager *materialManager) {
+    return IsDrawableSubMesh(subMesh, meshManager, materialManager) &&
+           HasPaletteDescriptor(subMesh) &&
+           HasRenderableVertexSource(subMesh);
+}
+
 }
 
 static XMFLOAT4X4 StoreMatrix(const XMMATRIX &matrix) {
     XMFLOAT4X4 result{};
     XMStoreFloat4x4(&result, matrix);
     return result;
+}
+
+static XMVECTOR LoadNormalizedQuaternionOrIdentity(const XMFLOAT4 &rotation) {
+    if (!std::isfinite(rotation.x) || !std::isfinite(rotation.y) ||
+        !std::isfinite(rotation.z) || !std::isfinite(rotation.w)) {
+        return XMQuaternionIdentity();
+    }
+    XMVECTOR q = XMLoadFloat4(&rotation);
+    const float lengthSq = XMVectorGetX(XMVector4LengthSq(q));
+    if (!std::isfinite(lengthSq) || lengthSq <= 0.000001f) {
+        return XMQuaternionIdentity();
+    }
+    return XMQuaternionNormalize(q);
+}
+
+static float ClampFinite(float value, float minimum, float maximum,
+                         float fallback) {
+    if (!std::isfinite(value)) {
+        return fallback;
+    }
+    return std::clamp(value, minimum, maximum);
+}
+
+static float ClampFiniteMin(float value, float minimum) {
+    if (!std::isfinite(value)) {
+        return minimum;
+    }
+    return (std::max)(value, minimum);
 }
 
 static XMMATRIX MakeSafeInverseTranspose(const XMMATRIX &matrix) {
@@ -256,14 +326,16 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
 
     auto cmd = dxCommon_->GetCommandList();
 
-    XMVECTOR q = XMQuaternionNormalize(XMLoadFloat4(&transform.rotation));
+    const Transform safeTransform = SanitizeTransformForDraw(transform);
+    XMVECTOR q = LoadNormalizedQuaternionOrIdentity(safeTransform.rotation);
 
     XMMATRIX world =
-        XMMatrixScaling(transform.scale.x, transform.scale.y,
-                        transform.scale.z) *
+        XMMatrixScaling(safeTransform.scale.x, safeTransform.scale.y,
+                        safeTransform.scale.z) *
         XMMatrixRotationQuaternion(q) *
-        XMMatrixTranslation(transform.position.x, transform.position.y,
-                            transform.position.z);
+        XMMatrixTranslation(safeTransform.position.x,
+                            safeTransform.position.y,
+                            safeTransform.position.z);
 
     if (model.hasRootAnimation) {
         world = XMLoadFloat4x4(&model.rootAnimationMatrix) * world;
@@ -284,7 +356,8 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
         if (drawIndex_ >= kMaxDraws) {
             return;
         }
-        if (!IsDrawableSubMesh(subMesh, meshManager_, materialManager_)) {
+        if (!IsForwardDrawableSubMesh(subMesh, meshManager_,
+                                      materialManager_)) {
             return;
         }
 
@@ -374,7 +447,8 @@ void ModelRenderer::DrawInstanced(const Model &model,
         if (drawIndex_ >= kMaxDraws) {
             return;
         }
-        if (!IsDrawableSubMesh(subMesh, meshManager_, materialManager_)) {
+        if (!IsForwardDrawableSubMesh(subMesh, meshManager_,
+                                      materialManager_)) {
             return;
         }
 
@@ -463,7 +537,8 @@ void ModelRenderer::DrawInstanced(const Model &model,
         if (drawIndex_ >= kMaxDraws) {
             return;
         }
-        if (!IsDrawableSubMesh(subMesh, meshManager_, materialManager_)) {
+        if (!IsForwardDrawableSubMesh(subMesh, meshManager_,
+                                      materialManager_)) {
             return;
         }
 
@@ -538,12 +613,14 @@ void ModelRenderer::SetShadowMap(
             ? shadowMap
             : textureManager_->GetGpuHandle(textureManager_->GetWhiteTextureId());
     shadowLightViewProjection_ = lightViewProjection;
-    shadowParams_ = {hasShadowMap ? 1.0f : 0.0f, settings.bias,
-                     (std::clamp)(settings.strength, 0.0f, 1.0f),
-                     settings.normalBias};
-    shadowFilterParams_ = {(std::max)(settings.filterRadius, 0.0f),
-                           (std::max)(settings.depthSoftness, 0.0001f),
-                           (std::max)(settings.edgeFade, 0.0f), 0.0f};
+    shadowParams_ = {
+        hasShadowMap ? 1.0f : 0.0f,
+        std::isfinite(settings.bias) ? settings.bias : 0.0f,
+        ClampFinite(settings.strength, 0.0f, 1.0f, 0.0f),
+        std::isfinite(settings.normalBias) ? settings.normalBias : 0.0f};
+    shadowFilterParams_ = {ClampFiniteMin(settings.filterRadius, 0.0f),
+                           ClampFiniteMin(settings.depthSoftness, 0.0001f),
+                           ClampFiniteMin(settings.edgeFade, 0.0f), 0.0f};
 }
 
 void ModelRenderer::PreDrawShadow() {
@@ -564,13 +641,15 @@ void ModelRenderer::DrawShadow(
     }
 
     auto cmd = dxCommon_->GetCommandList();
-    XMVECTOR q = XMQuaternionNormalize(XMLoadFloat4(&transform.rotation));
+    const Transform safeTransform = SanitizeTransformForDraw(transform);
+    XMVECTOR q = LoadNormalizedQuaternionOrIdentity(safeTransform.rotation);
     XMMATRIX world =
-        XMMatrixScaling(transform.scale.x, transform.scale.y,
-                        transform.scale.z) *
+        XMMatrixScaling(safeTransform.scale.x, safeTransform.scale.y,
+                        safeTransform.scale.z) *
         XMMatrixRotationQuaternion(q) *
-        XMMatrixTranslation(transform.position.x, transform.position.y,
-                            transform.position.z);
+        XMMatrixTranslation(safeTransform.position.x,
+                            safeTransform.position.y,
+                            safeTransform.position.z);
 
     if (model.hasRootAnimation) {
         world = XMLoadFloat4x4(&model.rootAnimationMatrix) * world;
@@ -587,7 +666,8 @@ void ModelRenderer::DrawShadow(
         if (drawIndex_ >= kMaxDraws) {
             return;
         }
-        if (!IsDrawableSubMesh(subMesh, meshManager_, materialManager_)) {
+        if (!IsDrawableSubMeshWithValidVertexSource(
+                subMesh, meshManager_, materialManager_)) {
             return;
         }
 
@@ -644,7 +724,8 @@ void ModelRenderer::DrawInstancedShadow(
         if (drawIndex_ >= kMaxDraws) {
             return;
         }
-        if (!IsDrawableSubMesh(subMesh, meshManager_, materialManager_)) {
+        if (!IsDrawableSubMeshWithValidVertexSource(
+                subMesh, meshManager_, materialManager_)) {
             return;
         }
 
@@ -702,7 +783,8 @@ void ModelRenderer::DrawInstancedShadow(
         if (drawIndex_ >= kMaxDraws) {
             return;
         }
-        if (!IsDrawableSubMesh(subMesh, meshManager_, materialManager_)) {
+        if (!IsDrawableSubMeshWithValidVertexSource(
+                subMesh, meshManager_, materialManager_)) {
             return;
         }
 

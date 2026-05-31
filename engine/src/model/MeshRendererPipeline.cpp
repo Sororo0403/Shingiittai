@@ -50,13 +50,28 @@ struct SceneConstBufferData {
     XMFLOAT4 customSceneParams1;
 };
 
+XMVECTOR LoadNormalizedQuaternionOrIdentity(const XMFLOAT4 &rotation) {
+    if (!std::isfinite(rotation.x) || !std::isfinite(rotation.y) ||
+        !std::isfinite(rotation.z) || !std::isfinite(rotation.w)) {
+        return XMQuaternionIdentity();
+    }
+    XMVECTOR q = XMLoadFloat4(&rotation);
+    const float lengthSq = XMVectorGetX(XMVector4LengthSq(q));
+    if (!std::isfinite(lengthSq) || lengthSq <= 0.000001f) {
+        return XMQuaternionIdentity();
+    }
+    return XMQuaternionNormalize(q);
+}
+
 XMMATRIX MakeWorldMatrix(const Transform &transform) {
-    XMVECTOR q = XMQuaternionNormalize(XMLoadFloat4(&transform.rotation));
-    return XMMatrixScaling(transform.scale.x, transform.scale.y,
-                           transform.scale.z) *
+    const Transform safeTransform = SanitizeTransformForDraw(transform);
+    XMVECTOR q = LoadNormalizedQuaternionOrIdentity(safeTransform.rotation);
+    return XMMatrixScaling(safeTransform.scale.x, safeTransform.scale.y,
+                           safeTransform.scale.z) *
            XMMatrixRotationQuaternion(q) *
-           XMMatrixTranslation(transform.position.x, transform.position.y,
-                               transform.position.z);
+           XMMatrixTranslation(safeTransform.position.x,
+                               safeTransform.position.y,
+                               safeTransform.position.z);
 }
 
 XMMATRIX MakeWorldInverseTranspose(const XMMATRIX &world) {
@@ -344,7 +359,7 @@ uint32_t MeshRenderer::CreatePipeline(const MeshPipelineDesc &desc) {
         DirectXCommon::kDepthStencilFormat);
     if (customPipelines_.size() >=
         static_cast<size_t>((std::numeric_limits<uint32_t>::max)())) {
-        throw std::runtime_error("MeshRenderer custom pipeline id overflow");
+        return UINT32_MAX;
     }
     const uint32_t pipelineId = static_cast<uint32_t>(customPipelines_.size());
     customPipelines_.push_back(std::move(pipelineSet));
@@ -514,8 +529,7 @@ uint32_t MeshRenderer::CreateInstancedPipeline(
 
     if (customInstancedPipelines_.size() >=
         static_cast<size_t>((std::numeric_limits<uint32_t>::max)())) {
-        throw std::runtime_error(
-            "MeshRenderer custom instanced pipeline id overflow");
+        return UINT32_MAX;
     }
     const uint32_t pipelineId =
         static_cast<uint32_t>(customInstancedPipelines_.size());

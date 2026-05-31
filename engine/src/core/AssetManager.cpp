@@ -3,13 +3,19 @@
 
 namespace {
 
-std::filesystem::path gAssetRoot = std::filesystem::current_path();
+std::filesystem::path SafeCurrentPath() {
+    std::error_code ec;
+    const std::filesystem::path path = std::filesystem::current_path(ec);
+    return ec ? std::filesystem::path(L".") : path;
+}
+
+std::filesystem::path gAssetRoot = SafeCurrentPath();
 
 std::filesystem::path ResolveRoot(const std::filesystem::path &path) {
     if (path.is_absolute()) {
         return AssetManager::ResolvePath(path);
     }
-    return AssetManager::ResolvePath(std::filesystem::current_path() / path);
+    return AssetManager::ResolvePath(SafeCurrentPath() / path);
 }
 
 } // namespace

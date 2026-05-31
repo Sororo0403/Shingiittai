@@ -43,6 +43,8 @@ class WeaponSelectScene : public BaseScene {
     void UpdateDeviceAvailability();
     void BeginStart();
     void BeginHandCameraConfirm();
+    void BeginCameraTestConfirm();
+    void BeginCameraTest();
     void ContinueHandStart();
     void BeginReturnToTitle();
     void BeginShowUtilityMenu();
@@ -87,6 +89,7 @@ class WeaponSelectScene : public BaseScene {
     bool waitingForHandTrackingReady_ = false;
     bool handTrackingStartRequested_ = false;
     bool handCameraConfirmVisible_ = false;
+    bool cameraTestConfirmPending_ = false;
     bool preserveMenuBgmOnExit_ = false;
     int handCameraConfirmIndex_ = 1;
     int utilityMenuIndex_ = 0;

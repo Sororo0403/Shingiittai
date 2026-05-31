@@ -65,17 +65,31 @@ void SoundTestScene::Initialize(const SceneContext &ctx) {
         LoadTextureImage(L"app/resources/ui/sound_test/controls.png");
     playingStatusImage_ =
         LoadTextureImage(L"app/resources/ui/sound_test/playing.png");
+    authorImage_ =
+        LoadTextureImage(L"app/resources/ui/sound_test/author_aotomori.png");
     keyAImage_ = LoadTextureImage(L"app/resources/ui/sound_test/key_a.png");
     keyDImage_ = LoadTextureImage(L"app/resources/ui/sound_test/key_d.png");
     tracks_ = {{
         {L"app/resources/audio/bgm/bgm_TitleTheme.wav",
-         L"app/resources/ui/sound_test/track_title.png"},
+         L"app/resources/ui/sound_test/track_title.png", true, 0.28f},
         {L"app/resources/audio/bgm/bgm_MenuTheme.wav",
-         L"app/resources/ui/sound_test/track_menu.png"},
+         L"app/resources/ui/sound_test/track_menu.png", true, 0.28f},
         {L"app/resources/audio/bgm/bgm_TutorialTheme.wav",
-         L"app/resources/ui/sound_test/track_tutorial.png"},
+         L"app/resources/ui/sound_test/track_tutorial.png", true, 0.28f},
         {L"app/resources/audio/bgm/bgm_Battle.wav",
-         L"app/resources/ui/sound_test/track_battle.png"},
+         L"app/resources/ui/sound_test/track_battle.png", true, 0.28f},
+        {L"app/resources/audio/se/combat/se_MetalSound.wav",
+         L"app/resources/ui/sound_test/track_se_metal_sound.png", false, 0.84f},
+        {L"app/resources/audio/se/combat/se_Shot.wav",
+         L"app/resources/ui/sound_test/track_se_shot.png", false, 0.84f},
+        {L"app/resources/audio/se/combat/se_Slash.wav",
+         L"app/resources/ui/sound_test/track_se_slash.png", false, 0.84f},
+        {L"app/resources/audio/se/ui/se_Cancel.mp3",
+         L"app/resources/ui/sound_test/track_se_cancel.png", false, 0.95f},
+        {L"app/resources/audio/se/ui/se_Select.mp3",
+         L"app/resources/ui/sound_test/track_se_select.png", false, 0.95f},
+        {L"app/resources/audio/se/ui/se_Selected.mp3",
+         L"app/resources/ui/sound_test/track_se_selected.png", false, 0.95f},
     }};
 
     for (Track &track : tracks_) {
@@ -93,6 +107,7 @@ void SoundTestScene::Update() {
     if (backgroundScene_) {
         backgroundScene_->Update();
     }
+    RefreshPlayingState();
     UpdateVisualizer(ctx_->frame.deltaTime);
 
     if (returnRequested_) {
@@ -109,7 +124,6 @@ void SoundTestScene::Update() {
     }
 
     if (input->IsKeyTrigger(DIK_ESCAPE)) {
-        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
         BeginReturn();
         return;
     }
@@ -118,15 +132,12 @@ void SoundTestScene::Update() {
             (selectedIndex_ + static_cast<int>(kTrackCount) - 1) %
             static_cast<int>(kTrackCount);
         StopPlayingTrack();
-        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
     }
     if (input->IsKeyTrigger(DIK_D) || input->IsKeyTrigger(DIK_RIGHT)) {
         selectedIndex_ = (selectedIndex_ + 1) % static_cast<int>(kTrackCount);
         StopPlayingTrack();
-        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
     }
     if (input->IsKeyTrigger(DIK_SPACE) || input->IsKeyTrigger(DIK_RETURN)) {
-        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Selected);
         ToggleSelectedTrackPlayback();
     }
 }
@@ -177,8 +188,11 @@ void SoundTestScene::PlaySelectedTrack() {
         return;
     }
 
-    playingVoiceHandle_ = ctx_->systems.sound->Play(
-        track.soundId, 0.28f * AppSceneServices::GetBgmVolume(), true);
+    const float volume = track.baseVolume *
+                         (track.loop ? AppSceneServices::GetBgmVolume()
+                                     : AppSceneServices::GetSeVolume());
+    playingVoiceHandle_ =
+        ctx_->systems.sound->Play(track.soundId, volume, track.loop);
     playingIndex_ = selectedIndex_;
     playbackPaused_ = false;
 }
@@ -215,6 +229,21 @@ void SoundTestScene::StopPlayingTrack() {
     playingVoiceHandle_ = SoundManager::kInvalidVoiceHandle;
     playingIndex_ = -1;
     playbackPaused_ = false;
+}
+
+void SoundTestScene::RefreshPlayingState() {
+    if (ctx_ == nullptr || ctx_->systems.sound == nullptr ||
+        playingVoiceHandle_ == SoundManager::kInvalidVoiceHandle ||
+        playbackPaused_) {
+        return;
+    }
+
+    if (ctx_->systems.sound->IsPlaying(playingVoiceHandle_)) {
+        return;
+    }
+
+    playingVoiceHandle_ = SoundManager::kInvalidVoiceHandle;
+    playingIndex_ = -1;
 }
 
 void SoundTestScene::UpdateVisualizer(float deltaTime) {
@@ -395,9 +424,14 @@ void SoundTestScene::DrawPanel(float screenWidth, float screenHeight) {
               iconBoxSize, iconBoxSize, 2.0f,
               playingCurrent ? Color(0.00f, 0.86f, 0.78f, 0.62f * intro)
                              : Color(0.95f, 0.72f, 0.28f, 0.36f * intro));
-    DrawMusicIcon(iconX, iconY, iconSize, intro, playingCurrent);
+    const Track &selectedTrack = tracks_[static_cast<size_t>(selectedIndex_)];
+    if (selectedTrack.loop) {
+        DrawMusicIcon(iconX, iconY, iconSize, intro, playingCurrent);
+    } else {
+        DrawSpeakerIcon(iconX, iconY, iconSize, intro, playingCurrent);
+    }
 
-    const Image &label = tracks_[static_cast<size_t>(selectedIndex_)].label;
+    const Image &label = selectedTrack.label;
     const float labelScale =
         (std::min)({1.0f,
                     (cardH * 0.34f) / (std::max)(label.height, 1.0f),
@@ -406,10 +440,20 @@ void SoundTestScene::DrawPanel(float screenWidth, float screenHeight) {
     const float labelH = label.height * labelScale;
     const float labelCenterX = cardX + cardW * 0.64f;
     DrawImage(label, labelCenterX - labelW * 0.5f,
-              cardY + cardH * 0.40f - labelH * 0.5f, labelScale,
+              cardY + cardH * 0.34f - labelH * 0.5f, labelScale,
               0.96f * intro);
 
-    DrawRect(cardX + cardW * 0.45f, cardY + cardH * 0.58f, cardW * 0.36f,
+    const float authorScale =
+        (std::min)({0.56f,
+                    (cardH * 0.16f) / (std::max)(authorImage_.height, 1.0f),
+                    (cardW * 0.34f) / (std::max)(authorImage_.width, 1.0f)});
+    const float authorW = authorImage_.width * authorScale;
+    const float authorH = authorImage_.height * authorScale;
+    DrawImage(authorImage_, labelCenterX - authorW * 0.5f,
+              cardY + cardH * 0.55f - authorH * 0.5f, authorScale,
+              0.74f * intro);
+
+    DrawRect(cardX + cardW * 0.45f, cardY + cardH * 0.67f, cardW * 0.36f,
              2.0f,
              playingCurrent ? cardAccentDim
                             : Color(0.62f, 0.66f, 0.72f, 0.20f * intro));
@@ -437,11 +481,11 @@ void SoundTestScene::DrawPanel(float screenWidth, float screenHeight) {
                             (std::max)(playingStatusImage_.width, 1.0f)});
         const float statusW = playingStatusImage_.width * statusScale;
         const float statusH = playingStatusImage_.height * statusScale;
-        DrawRect(cardX + (cardW - statusW) * 0.5f - 18.0f,
-                 cardY + cardH * 0.70f - statusH * 0.5f + 8.0f,
+        const float statusX = labelCenterX - statusW * 0.5f;
+        const float statusY = cardY + cardH * 0.80f - statusH * 0.5f;
+        DrawRect(statusX - 18.0f, statusY + statusH * 0.5f - 5.0f,
                  10.0f, 10.0f, Color(0.00f, 0.86f, 0.78f, 0.86f * intro));
-        DrawImage(playingStatusImage_, cardX + (cardW - statusW) * 0.5f,
-                  cardY + cardH * 0.70f - statusH * 0.5f, statusScale,
+        DrawImage(playingStatusImage_, statusX, statusY, statusScale,
                   0.82f * intro);
     }
 }
@@ -479,10 +523,57 @@ void SoundTestScene::DrawMusicIcon(float centerX, float centerY, float size,
 
     for (int i = 0; i < 5; ++i) {
         const float t = sceneTime_ * 4.5f + static_cast<float>(i) * 0.75f;
-        const float barH = (14.0f + (std::sinf(t) * 0.5f + 0.5f) * 28.0f) * s;
-        const float barX = centerX + (-34.0f + static_cast<float>(i) * 17.0f) * s;
+        const float barH =
+            (14.0f + (std::sinf(t) * 0.5f + 0.5f) * 28.0f) * s;
+        const float barX =
+            centerX + (-34.0f + static_cast<float>(i) * 17.0f) * s;
         DrawRect(barX, centerY + 56.0f * s - barH, 7.0f * s, barH,
                  Color(0.00f, 0.86f, 0.78f, 0.62f * alpha));
+    }
+}
+
+void SoundTestScene::DrawSpeakerIcon(float centerX, float centerY, float size,
+                                     float alpha, bool playing) {
+    const XMFLOAT4 line =
+        playing ? Color(0.00f, 0.86f, 0.78f, 0.90f * alpha)
+                : Color(1.0f, 0.78f, 0.34f, 0.82f * alpha);
+    const XMFLOAT4 fill =
+        playing ? Color(0.00f, 0.20f, 0.18f, 0.40f * alpha)
+                : Color(0.16f, 0.12f, 0.070f, 0.38f * alpha);
+    const float s = size / 100.0f;
+    auto x = [&](float v) { return centerX + v * s; };
+    auto y = [&](float v) { return centerY + v * s; };
+    auto r = [&](float px, float py, float w, float h,
+                 const XMFLOAT4 &color) {
+        DrawRect(x(px), y(py), w * s, h * s, color);
+    };
+    auto f = [&](float px, float py, float w, float h) {
+        DrawFrame(x(px), y(py), w * s, h * s, 4.0f * s, line);
+    };
+
+    r(-44.0f, -26.0f, 20.0f, 52.0f, fill);
+    f(-44.0f, -26.0f, 20.0f, 52.0f);
+    r(-24.0f, -18.0f, 12.0f, 36.0f, line);
+    r(-12.0f, -32.0f, 10.0f, 64.0f, line);
+    r(-2.0f, -42.0f, 36.0f, 10.0f, line);
+    r(-2.0f, 32.0f, 36.0f, 10.0f, line);
+    r(24.0f, -32.0f, 10.0f, 74.0f, line);
+    r(34.0f, -24.0f, 10.0f, 10.0f, line);
+    r(34.0f, 14.0f, 10.0f, 10.0f, line);
+
+    if (!playing) {
+        return;
+    }
+
+    for (int i = 0; i < 3; ++i) {
+        const float t = sceneTime_ * 5.2f + static_cast<float>(i) * 0.65f;
+        const float pulse = 0.5f + 0.5f * std::sinf(t);
+        const float waveX = (50.0f + static_cast<float>(i) * 12.0f) * s;
+        const float waveH = (22.0f + static_cast<float>(i) * 18.0f +
+                             pulse * 9.0f) *
+                            s;
+        DrawRect(centerX + waveX, centerY - waveH * 0.5f, 6.0f * s, waveH,
+                 Color(0.00f, 0.86f, 0.78f, (0.54f - i * 0.10f) * alpha));
     }
 }
 

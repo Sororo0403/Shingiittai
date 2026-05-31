@@ -8,11 +8,11 @@ using namespace DirectX;
 
 namespace {
 constexpr float kMouseSwordOrientationScale = 0.0065f;
-constexpr float kMouseSlashSpeedScale = 0.64f;
+constexpr float kMouseSlashSpeedScale = 0.58f;
 constexpr float kMouseSwordMaxAngle = 1.18f;
 constexpr float kMouseSlashMinDeltaSq = 12.0f * 12.0f;
-constexpr float kMouseSlashHardThresholdScale = 1.45f;
-constexpr float kMouseSlashEasyThresholdScale = 0.65f;
+constexpr float kMouseSlashHardThresholdScale = 1.75f;
+constexpr float kMouseSlashEasyThresholdScale = 0.82f;
 }
 
 SwordPose SwordMouseController::GetPose() const {

@@ -2,7 +2,6 @@
 #include "graphics/DirectXCommon.h"
 #include "scene/BaseScene.h"
 #include "texture/TextureManager.h"
-#include <stdexcept>
 
 namespace {
 
@@ -73,16 +72,13 @@ void SceneManager::SetSceneFactory(AbstractSceneFactory *sceneFactory) {
 
 void SceneManager::ChangeScene(const std::string &sceneName) {
     if (!sceneFactory_) {
-        throw std::runtime_error(
-            "SceneManager::ChangeScene requires a scene factory: " +
-            sceneName);
+        return;
     }
 
     std::unique_ptr<BaseScene> nextScene =
         sceneFactory_->CreateScene(sceneName);
     if (!nextScene) {
-        throw std::runtime_error(
-            "Scene factory returned null scene: " + sceneName);
+        return;
     }
 
     ChangeScene(std::move(nextScene));
@@ -98,12 +94,8 @@ void SceneManager::ChangeScene(std::unique_ptr<BaseScene> nextScene) {
 }
 
 void SceneManager::ApplySceneChange(std::unique_ptr<BaseScene> nextScene) {
-    if (!ctx_) {
-        throw std::runtime_error(
-            "SceneManager::ApplySceneChange called before Initialize");
-    }
-    if (!nextScene) {
-        throw std::runtime_error("SceneManager received null scene");
+    if (!ctx_ || !nextScene) {
+        return;
     }
 
     DirectXCommon *dxCommon = ctx_->rendering.dxCommon;

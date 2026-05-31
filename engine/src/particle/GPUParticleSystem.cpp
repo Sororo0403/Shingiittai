@@ -58,6 +58,15 @@ XMFLOAT4 SanitizeFinite(XMFLOAT4 value, XMFLOAT4 fallback) {
     return value;
 }
 
+XMFLOAT4 ClampColor(XMFLOAT4 value, XMFLOAT4 fallback) {
+    value = SanitizeFinite(value, fallback);
+    value.x = std::clamp(value.x, 0.0f, 1.0f);
+    value.y = std::clamp(value.y, 0.0f, 1.0f);
+    value.z = std::clamp(value.z, 0.0f, 1.0f);
+    value.w = std::clamp(value.w, 0.0f, 1.0f);
+    return value;
+}
+
 uint32_t ResolveTextureId(TextureManager *textureManager, uint32_t textureId,
                           uint32_t fallbackTextureId) {
     if (textureManager == nullptr) {
@@ -356,7 +365,8 @@ void GPUParticleSystem::Initialize(DirectXCommon *dxCommon,
                                    TextureManager *textureManager,
                                    uint32_t textureId, uint32_t maxParticles) {
     if (!dxCommon || !srvManager || !textureManager) {
-        throw std::runtime_error("GPUParticleSystem::Initialize null argument");
+        ReleaseResources();
+        return;
     }
 
     std::vector<ParticleEmitterSettings> pendingBeforeInitialize;
@@ -441,8 +451,8 @@ void GPUParticleSystem::SetEmitterSettings(
 
 void GPUParticleSystem::SetTextureFromFile(const std::wstring &filePath) {
     if (!textureManager_) {
-        throw std::runtime_error(
-            "GPUParticleSystem::SetTextureFromFile requires TextureManager");
+        textureId_ = UINT32_MAX;
+        return;
     }
 
     textureId_ = textureManager_->Load(filePath);
@@ -451,6 +461,8 @@ void GPUParticleSystem::SetTextureFromFile(const std::wstring &filePath) {
 void GPUParticleSystem::SetMaterialSettings(
     const GPUParticleMaterialSettings &settings) {
     materialSettings_ = settings;
+    materialSettings_.params0 = SanitizeFinite(materialSettings_.params0, {});
+    materialSettings_.params1 = SanitizeFinite(materialSettings_.params1, {});
     if (dxCommon_ && drawRootSignature_) {
         const std::wstring pixelShaderPath =
             materialSettings_.pixelShaderPath.empty()
@@ -468,6 +480,9 @@ void GPUParticleSystem::EmitOnce(const ParticleEmitterSettings &settings) {
     activeTimeRemaining_ =
         (std::max)(activeTimeRemaining_,
                    EstimateParticleActiveDuration(normalized));
+    if (pendingEmitSettings_.size() >= kMaxQueuedParticleEmitsPerFrame) {
+        pendingEmitSettings_.erase(pendingEmitSettings_.begin());
+    }
     pendingEmitSettings_.push_back(normalized);
     if (mappedUpdateCB_ && !updatePending_) {
         mappedUpdateCB_->time = {totalTime_, 0.0f,
@@ -520,7 +535,10 @@ void GPUParticleSystem::Update(float deltaTime) {
 
     if (continuousEmitter) {
         emitterFrequencyTime_ += deltaTime;
-        const float interval = 1.0f / emitterSettings_.emitRate;
+        const float safeEmitRate =
+            (std::max)(SanitizeFinite(emitterSettings_.emitRate, 0.0f),
+                       0.0001f);
+        const float interval = 1.0f / safeEmitRate;
         while (emitterFrequencyTime_ >= interval &&
                pendingEmitSettings_.size() < kMaxQueuedParticleEmitsPerFrame) {
             emitterFrequencyTime_ -= interval;
@@ -575,7 +593,13 @@ void GPUParticleSystem::Draw(const Camera &camera) {
 
     XMMATRIX billboard = camera.GetView();
     billboard.r[3] = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
-    billboard = XMMatrixInverse(nullptr, billboard);
+    const XMVECTOR billboardDeterminant = XMMatrixDeterminant(billboard);
+    const float billboardDeterminantValue =
+        XMVectorGetX(billboardDeterminant);
+    billboard = std::isfinite(billboardDeterminantValue) &&
+                        std::abs(billboardDeterminantValue) > 0.000001f
+                    ? XMMatrixInverse(nullptr, billboard)
+                    : XMMatrixIdentity();
 
     XMFLOAT3 right{};
     XMFLOAT3 up{};
@@ -583,7 +607,8 @@ void GPUParticleSystem::Draw(const Camera &camera) {
     XMStoreFloat3(&up, billboard.r[1]);
     mappedDrawCB_->cameraRight = {right.x, right.y, right.z, 0.0f};
     mappedDrawCB_->cameraUp = {up.x, up.y, up.z, 0.0f};
-    mappedDrawCB_->tintColor = {1.0f, 1.0f, 1.0f, 1.0f};
+    mappedDrawCB_->tintColor =
+        ClampColor(emitterSettings_.tintColor, {1.0f, 1.0f, 1.0f, 1.0f});
     mappedDrawCB_->atlasInfo = {
         static_cast<float>((std::max)(1u, emitterSettings_.atlasColumns)),
         static_cast<float>((std::max)(1u, emitterSettings_.atlasRows)),

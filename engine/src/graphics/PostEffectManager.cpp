@@ -165,6 +165,9 @@ PostEffectLayerId
 PostEffectManager::CreateLayer(const PostEffectLayerDesc &desc) {
     Layer layer{};
     layer.id = AllocateLayerId();
+    if (layer.id == 0) {
+        return 0;
+    }
     layer.priority = desc.priority;
     layer.blendMode = desc.blendMode;
     layers_.push_back(layer);
@@ -245,7 +248,7 @@ PostEffectLayerId PostEffectManager::AllocateLayerId() {
     if (layers_.size() >=
         static_cast<size_t>((std::numeric_limits<PostEffectLayerId>::max)()) -
             1u) {
-        throw std::runtime_error("PostEffectManager layer id exhausted");
+        return 0;
     }
 
     for (;;) {

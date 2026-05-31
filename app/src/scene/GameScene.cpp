@@ -1005,26 +1005,26 @@ void GameScene::Initialize(const SceneContext &ctx) {
     ApplyBulletTextureToModel(GetCurrentEnemyTextureId());
     if (!titleDemoMode_ && ctx_->systems.sound != nullptr) {
         slashSoundId_ = ctx_->systems.sound->Load(
-            L"app/resources/audio/se/combat/sword_slash_2.mp3");
+            L"app/resources/audio/se/combat/se_Slash.wav");
         normalHitSlashSoundId_ = ctx_->systems.sound->Load(
-            L"app/resources/audio/se/combat/sword_slash_2.mp3");
+            L"app/resources/audio/se/combat/se_MetalSound.wav");
         enemyReleaseSoundId_ = ctx_->systems.sound->Load(
-            L"app/resources/audio/se/ui/se_Selected.mp3");
+            L"app/resources/audio/se/combat/se_Shot.wav");
         hitSoundId_ = ctx_->systems.sound->Load(
-            L"app/resources/audio/se/combat/sword_slash_2.mp3");
+            L"app/resources/audio/se/combat/se_MetalSound.wav");
         counterSoundId_ = ctx_->systems.sound->Load(
-            L"app/resources/audio/se/combat/robot_punch_2.mp3");
+            L"app/resources/audio/se/combat/se_MetalSound.wav");
         damageSoundId_ = ctx_->systems.sound->Load(
-            L"app/resources/audio/se/combat/robot_punch_2.mp3");
+            L"app/resources/audio/se/combat/se_MetalSound.wav");
         counterSuccessSlashSoundId_ = ctx_->systems.sound->Load(
-            L"app/resources/audio/se/combat/sword_slash_3.mp3");
+            L"app/resources/audio/se/combat/se_Slash.wav");
         mistimedCounterSoundId_ = ctx_->systems.sound->Load(
-            L"app/resources/audio/se/combat/robot_punch_2.mp3");
+            L"app/resources/audio/se/combat/se_MetalSound.wav");
         mistimedCounterSoundStartSeconds_ =
             FindLoudestPlaybackSecond(ctx_->systems.sound,
                                       mistimedCounterSoundId_);
         explosionSoundId_ = ctx_->systems.sound->Load(
-            L"app/resources/audio/se/combat/explosion_3.mp3");
+            L"app/resources/audio/se/combat/explosion_4.mp3");
         victoryExplosionSoundId_ = ctx_->systems.sound->Load(
             L"app/resources/audio/se/combat/explosion_4.mp3");
         warpSoundId_ = ctx_->systems.sound->LoadOrCreateSilent(
@@ -2913,6 +2913,7 @@ void GameScene::SpawnArcaneProjectile() {
     projectile->fromAbove = cataclysmShot || arcaneArcShot;
     projectile->waitingToFire = cataclysmShot;
     projectile->position = muzzle;
+    projectile->previousPosition = muzzle;
     projectile->velocity =
         cataclysmShot
             ? direction
@@ -2971,6 +2972,7 @@ void GameScene::UpdateArcaneProjectile(float deltaTime) {
             return;
         }
         projectile.age += deltaTime;
+        projectile.previousPosition = projectile.position;
 
         if (projectile.reflected) {
             XMFLOAT3 target = enemy_.GetTransform().position;
@@ -3114,8 +3116,17 @@ void GameScene::UpdateArcaneProjectile(float deltaTime) {
         projectile.life -= deltaTime;
 
         const XMFLOAT3 playerPos = player_.GetTransform().position;
+        if (projectile.reflected && projectile.life <= 0.0f) {
+            XMFLOAT3 target = enemy_.GetTransform().position;
+            target.y += 1.08f;
+            projectile.position = target;
+            projectile.previousPosition = target;
+            projectile.life = 0.016f;
+            return;
+        }
         if (projectile.life <= 0.0f ||
-            DistanceSq(projectile.position, playerPos) > 70.0f * 70.0f) {
+            (!projectile.reflected &&
+             DistanceSq(projectile.position, playerPos) > 70.0f * 70.0f)) {
             projectile = {};
         }
     };
@@ -3219,6 +3230,7 @@ void GameScene::ReflectArcaneProjectile(ArcaneProjectileState &projectile,
     projectile.waitingToFire = false;
     projectile.reflectedBySwordIndex = swordIndex;
     projectile.reflectedLaunchDirection = launchDirection;
+    projectile.previousPosition = projectile.position;
     const float reflectedSpeed = projectile.cataclysm
                                      ? kCataclysmProjectileReflectedSpeed
                                      : kArcaneProjectileReflectedSpeed;
@@ -3226,7 +3238,7 @@ void GameScene::ReflectArcaneProjectile(ArcaneProjectileState &projectile,
                            launchDirection.y * reflectedSpeed,
                            launchDirection.z * reflectedSpeed};
     projectile.age = 0.0f;
-    projectile.life = projectile.cataclysm ? 0.75f : 1.8f;
+    projectile.life = projectile.cataclysm ? 4.2f : 3.2f;
 
     CombatFeedbackEvent feedback{};
     feedback.type = CombatFeedbackEventType::CounterSuccess;

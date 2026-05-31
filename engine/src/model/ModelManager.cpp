@@ -48,9 +48,18 @@ XMFLOAT3 CalculateFaceNormal(const XMFLOAT3 &a, const XMFLOAT3 &b,
     XMVECTOR av = XMLoadFloat3(&a);
     XMVECTOR bv = XMLoadFloat3(&b);
     XMVECTOR cv = XMLoadFloat3(&c);
-    XMVECTOR normal = XMVector3Normalize(XMVector3Cross(bv - av, cv - av));
+    XMVECTOR normal = XMVector3Cross(bv - av, cv - av);
+    const float lengthSq = XMVectorGetX(XMVector3LengthSq(normal));
+    if (!std::isfinite(lengthSq) || lengthSq <= 0.000001f) {
+        return {0.0f, 1.0f, 0.0f};
+    }
+    normal = XMVector3Normalize(normal);
     XMFLOAT3 out{};
     XMStoreFloat3(&out, normal);
+    if (!std::isfinite(out.x) || !std::isfinite(out.y) ||
+        !std::isfinite(out.z)) {
+        return {0.0f, 1.0f, 0.0f};
+    }
     if (out.y < 0.0f) {
         out.x = -out.x;
         out.y = -out.y;
@@ -61,6 +70,12 @@ XMFLOAT3 CalculateFaceNormal(const XMFLOAT3 &a, const XMFLOAT3 &b,
 
 std::filesystem::path ResolveModelPath(const std::filesystem::path &path) {
     return AssetManager::ResolvePath(path);
+}
+
+std::filesystem::path SafeCurrentPath() {
+    std::error_code ec;
+    const std::filesystem::path path = std::filesystem::current_path(ec);
+    return ec ? std::filesystem::path(L".") : path;
 }
 
 std::wstring NormalizeModelPathKey(const std::filesystem::path &path) {
@@ -75,8 +90,7 @@ std::wstring NormalizeModelPathKey(const std::filesystem::path &path) {
 std::string MakeAssimpModelPath(const std::filesystem::path &resolvedPath) {
     std::error_code ec;
     const std::filesystem::path relative =
-        std::filesystem::relative(resolvedPath, std::filesystem::current_path(),
-                                  ec);
+        std::filesystem::relative(resolvedPath, SafeCurrentPath(), ec);
     if (!ec && !relative.empty()) {
         auto begin = relative.begin();
         if (begin != relative.end() && *begin != L"..") {
@@ -100,7 +114,7 @@ void ResetModelPlayback(Model &model) {
 uint32_t AppendModel(std::vector<Model> &models, Model model) {
     if (models.size() >=
         static_cast<size_t>((std::numeric_limits<uint32_t>::max)())) {
-        throw std::runtime_error("ModelManager model id overflow");
+        return UINT32_MAX;
     }
     models.push_back(std::move(model));
     return static_cast<uint32_t>(models.size() - 1);
@@ -108,6 +122,20 @@ uint32_t AppendModel(std::vector<Model> &models, Model model) {
 
 uint32_t ClampProceduralSegments(uint32_t value, uint32_t minimum,
                                  uint32_t maximum) {
+    return std::clamp(value, minimum, maximum);
+}
+
+float ClampFiniteMin(float value, float minimum) {
+    if (!std::isfinite(value)) {
+        return minimum;
+    }
+    return (std::max)(value, minimum);
+}
+
+float ClampFinite(float value, float minimum, float maximum, float fallback) {
+    if (!std::isfinite(value)) {
+        return fallback;
+    }
     return std::clamp(value, minimum, maximum);
 }
 
@@ -133,7 +161,8 @@ ModelManager::~ModelManager() {
 void ModelManager::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
                               TextureManager *textureManager) {
     if (!dxCommon || !srvManager || !textureManager) {
-        throw std::runtime_error("ModelManager::Initialize null argument");
+        Finalize();
+        return;
     }
     Finalize();
 
@@ -207,9 +236,7 @@ uint32_t ModelManager::Load(const std::wstring &path) {
     std::filesystem::path p = ResolveModelPath(path);
     std::error_code ec;
     if (!std::filesystem::exists(p, ec)) {
-        throw std::runtime_error("Model file not found. requested=" +
-                                 std::filesystem::path(path).string() +
-                                 " resolved=" + p.string());
+        return UINT32_MAX;
     }
 
     const std::wstring pathKey = NormalizeModelPathKey(p);
@@ -229,6 +256,9 @@ uint32_t ModelManager::Load(const std::wstring &path) {
     std::string pathStr = MakeAssimpModelPath(p);
 
     Model model = assimpLoader_.Load(pathStr);
+    if (model.subMeshes.empty()) {
+        return UINT32_MAX;
+    }
     modelRenderer_.CreateSkinClusters(model);
 
     ResetModelPlayback(model);
@@ -237,6 +267,9 @@ uint32_t ModelManager::Load(const std::wstring &path) {
     modelRenderer_.UpdateSkinClusters(model);
 
     uint32_t modelId = AppendModel(models_, std::move(model));
+    if (modelId == UINT32_MAX) {
+        return modelId;
+    }
     modelPathToId_[pathKey] = modelId;
 
     return modelId;
@@ -273,9 +306,9 @@ uint32_t ModelManager::CreatePlane(uint32_t textureId,
 
 uint32_t ModelManager::CreateBox(uint32_t textureId, const Material &material,
                                  float width, float height, float depth) {
-    width = (std::max)(width, 0.001f);
-    height = (std::max)(height, 0.001f);
-    depth = (std::max)(depth, 0.001f);
+    width = ClampFiniteMin(width, 0.001f);
+    height = ClampFiniteMin(height, 0.001f);
+    depth = ClampFiniteMin(depth, 0.001f);
 
     Material boxMaterial = material;
     if (boxMaterial.baseColorTextureId == UINT32_MAX) {
@@ -346,7 +379,7 @@ uint32_t ModelManager::CreateSphere(uint32_t textureId,
                                     uint32_t stack, float radius) {
     slice = ClampProceduralSegments(slice, 3u, kMaxProceduralSegments);
     stack = ClampProceduralSegments(stack, 2u, kMaxProceduralSegments);
-    radius = (std::max)(radius, 0.001f);
+    radius = ClampFiniteMin(radius, 0.001f);
 
     Material sphereMaterial = material;
     if (sphereMaterial.baseColorTextureId == UINT32_MAX) {
@@ -418,8 +451,9 @@ uint32_t ModelManager::CreateRing(uint32_t textureId, const Material &material,
                                   float innerRadius) {
     divide = ClampProceduralSegments(divide, 3u, kMaxProceduralSegments);
 
-    outerRadius = (std::max)(outerRadius, 0.001f);
-    innerRadius = (std::clamp)(innerRadius, 0.0f, outerRadius - 0.0001f);
+    outerRadius = ClampFiniteMin(outerRadius, 0.001f);
+    innerRadius =
+        ClampFinite(innerRadius, 0.0f, outerRadius - 0.0001f, 0.0f);
 
     Material ringMaterial = material;
     if (ringMaterial.baseColorTextureId == UINT32_MAX) {
@@ -498,9 +532,9 @@ uint32_t ModelManager::CreateCylinder(uint32_t textureId,
                                       float height) {
     divide = ClampProceduralSegments(divide, 3u, kMaxProceduralSegments);
 
-    topRadius = (std::max)(topRadius, 0.001f);
-    bottomRadius = (std::max)(bottomRadius, 0.001f);
-    height = (std::max)(height, 0.001f);
+    topRadius = ClampFiniteMin(topRadius, 0.001f);
+    bottomRadius = ClampFiniteMin(bottomRadius, 0.001f);
+    height = ClampFiniteMin(height, 0.001f);
 
     Material cylinderMaterial = material;
     if (cylinderMaterial.baseColorTextureId == UINT32_MAX) {
@@ -585,9 +619,9 @@ uint32_t ModelManager::CreateLowPolyTerrain(uint32_t textureId,
                                             float maxHeight, float flatRadius,
                                             uint32_t seed) {
     grid = ClampProceduralSegments(grid, 4u, kMaxTerrainGrid);
-    size = (std::max)(size, 1.0f);
-    maxHeight = (std::max)(maxHeight, 0.0f);
-    flatRadius = std::clamp(flatRadius, 0.0f, size * 0.499f);
+    size = ClampFiniteMin(size, 1.0f);
+    maxHeight = ClampFiniteMin(maxHeight, 0.0f);
+    flatRadius = ClampFinite(flatRadius, 0.0f, size * 0.499f, 0.0f);
 
     Material terrainMaterial = material;
     if (terrainMaterial.baseColorTextureId == UINT32_MAX) {

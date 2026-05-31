@@ -9,13 +9,21 @@ using namespace DirectX;
 using namespace DxUtils;
 using Microsoft::WRL::ComPtr;
 
+namespace {
+const Material &FallbackMaterial() {
+    static const Material fallback{};
+    return fallback;
+}
+} // namespace
+
 MaterialManager::~MaterialManager() {
     Finalize();
 }
 
 void MaterialManager::Initialize(DirectXCommon *dxCommon) {
     if (!dxCommon) {
-        throw std::runtime_error("MaterialManager::Initialize null argument");
+        Finalize();
+        return;
     }
     Finalize();
     dxCommon_ = dxCommon;
@@ -36,7 +44,7 @@ void MaterialManager::Finalize() {
 
 uint32_t MaterialManager::CreateMaterial(const Material &material) {
     if (!dxCommon_) {
-        throw std::runtime_error("MaterialManager is not initialized");
+        return UINT32_MAX;
     }
 
     MaterialResource matRes;
@@ -62,7 +70,7 @@ uint32_t MaterialManager::CreateMaterial(const Material &material) {
 
     if (materials_.size() >=
         static_cast<size_t>((std::numeric_limits<uint32_t>::max)())) {
-        throw std::runtime_error("MaterialManager material id overflow");
+        return UINT32_MAX;
     }
     materials_.push_back(std::move(matRes));
     uint32_t materialId = static_cast<uint32_t>(materials_.size() - 1);
@@ -92,7 +100,7 @@ MaterialManager::GetGPUVirtualAddress(uint32_t materialId) const {
 
 const Material &MaterialManager::GetMaterial(uint32_t materialId) const {
     if (!IsValidMaterialId(materialId)) {
-        throw std::out_of_range("Material id out of range");
+        return FallbackMaterial();
     }
     return materials_[materialId].material;
 }

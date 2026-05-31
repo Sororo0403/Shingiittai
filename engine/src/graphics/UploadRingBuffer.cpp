@@ -13,7 +13,8 @@ UploadRingBuffer::~UploadRingBuffer() { Reset(); }
 void UploadRingBuffer::Initialize(ID3D12Device *device, size_t bytesPerFrame,
                                   uint32_t frameCount) {
     if (!device || bytesPerFrame == 0 || frameCount == 0) {
-        throw std::runtime_error("UploadRingBuffer::Initialize invalid argument");
+        Reset();
+        return;
     }
 
     Reset();
@@ -56,17 +57,17 @@ void UploadRingBuffer::BeginFrame(uint32_t frameIndex) {
 
 UploadAllocation UploadRingBuffer::Allocate(size_t size, size_t alignment) {
     if (frames_.empty() || size == 0) {
-        throw std::runtime_error("UploadRingBuffer::Allocate before Initialize");
+        return {};
     }
 
     FrameResource &frame = frames_[frameIndex_];
     const size_t alignedOffset = AlignUp(frame.offset, alignment);
     if (size > (std::numeric_limits<size_t>::max)() - alignedOffset) {
-        throw std::runtime_error("UploadRingBuffer allocation size overflow");
+        return {};
     }
     const size_t endOffset = alignedOffset + size;
     if (endOffset > bytesPerFrame_) {
-        throw std::runtime_error("UploadRingBuffer frame capacity exceeded");
+        return {};
     }
 
     frame.offset = endOffset;
@@ -92,7 +93,7 @@ size_t UploadRingBuffer::AlignUp(size_t value, size_t alignment) {
     }
     const size_t addend = alignment - 1;
     if (value > (std::numeric_limits<size_t>::max)() - addend) {
-        throw std::runtime_error("UploadRingBuffer alignment overflow");
+        return (std::numeric_limits<size_t>::max)();
     }
     return ((value + addend) / alignment) * alignment;
 }

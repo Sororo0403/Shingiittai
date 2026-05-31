@@ -57,27 +57,29 @@ uint32_t TextureManager::CreateTexture2D(uint32_t width, uint32_t height,
                                          DXGI_FORMAT format,
                                          const uint8_t *pixels,
                                          size_t rowPitch) {
+    const uint32_t fallbackTextureId =
+        IsValidTextureId(whiteTextureId_) ? whiteTextureId_ : UINT32_MAX;
     if (width == 0 || height == 0 || !pixels || rowPitch == 0) {
-        throw std::runtime_error("CreateTexture2D received invalid pixel data");
+        return fallbackTextureId;
     }
     if (DirectX::IsCompressed(format) || DirectX::IsDepthStencil(format)) {
-        throw std::runtime_error("CreateTexture2D supports only plain color formats");
+        return fallbackTextureId;
     }
     const size_t bitsPerPixel = DirectX::BitsPerPixel(format);
     if (bitsPerPixel == 0) {
-        throw std::runtime_error("CreateTexture2D unsupported texture format");
+        return fallbackTextureId;
     }
     if (static_cast<size_t>(width) >
         ((std::numeric_limits<size_t>::max)() - 7u) / bitsPerPixel) {
-        throw std::runtime_error("CreateTexture2D row pitch overflow");
+        return fallbackTextureId;
     }
     const size_t minimumRowPitch =
         (static_cast<size_t>(width) * bitsPerPixel + 7u) / 8u;
     if (rowPitch < minimumRowPitch) {
-        throw std::runtime_error("CreateTexture2D row pitch is too small");
+        return fallbackTextureId;
     }
     if (rowPitch > (std::numeric_limits<size_t>::max)() / height) {
-        throw std::runtime_error("CreateTexture2D slice pitch overflow");
+        return fallbackTextureId;
     }
 
     Image image{};
@@ -103,34 +105,21 @@ uint32_t TextureManager::CreateTexture2D(uint32_t width, uint32_t height,
 void TextureManager::UpdateTexture2D(uint32_t textureId, const uint8_t *pixels,
                                      size_t rowPitch) {
     if (!dxCommon_) {
-        throw std::runtime_error("UpdateTexture2D requires DirectXCommon");
+        return;
     }
     if (!pixels || rowPitch == 0 || !IsValidTextureId(textureId)) {
-        throw std::runtime_error("UpdateTexture2D received invalid input");
+        return;
     }
-
-    const bool ownsUploadPass = !dxCommon_->IsCommandListRecording();
-    if (ownsUploadPass) {
-        dxCommon_->BeginUpload();
-    }
-    UploadPassScope uploadPass(dxCommon_, this, ownsUploadPass);
 
     Texture &texture = textures_[textureId].texture;
     if (!texture.resource || texture.width <= 0 || texture.height <= 0) {
-        throw std::runtime_error("UpdateTexture2D target texture is invalid");
-    }
-
-    const UINT frameIndex = dxCommon_->GetBackBufferIndex();
-    if (frameIndex < frameUploadBuffers_.size() &&
-        lastDynamicUploadFrameIndex_ != frameIndex) {
-        frameUploadBuffers_[frameIndex].clear();
-        lastDynamicUploadFrameIndex_ = frameIndex;
+        return;
     }
 
     D3D12_RESOURCE_DESC textureDesc = texture.resource->GetDesc();
     if (textureDesc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D ||
         textureDesc.DepthOrArraySize != 1 || textureDesc.MipLevels != 1) {
-        throw std::runtime_error("UpdateTexture2D target must be a single 2D texture");
+        return;
     }
     if (textureDesc.Width >
             static_cast<UINT64>((std::numeric_limits<int>::max)()) ||
@@ -138,43 +127,56 @@ void TextureManager::UpdateTexture2D(uint32_t textureId, const uint8_t *pixels,
             static_cast<UINT>((std::numeric_limits<int>::max)()) ||
         static_cast<int>(textureDesc.Width) != texture.width ||
         static_cast<int>(textureDesc.Height) != texture.height) {
-        throw std::runtime_error("UpdateTexture2D target size mismatch");
+        return;
     }
     const size_t bitsPerPixel = DirectX::BitsPerPixel(textureDesc.Format);
     if (bitsPerPixel == 0) {
-        throw std::runtime_error("UpdateTexture2D unsupported texture format");
+        return;
     }
     if (DirectX::IsCompressed(textureDesc.Format) ||
         DirectX::IsDepthStencil(textureDesc.Format)) {
-        throw std::runtime_error("UpdateTexture2D supports only plain color formats");
+        return;
     }
     const size_t width = static_cast<size_t>(texture.width);
     if (width >
         ((std::numeric_limits<size_t>::max)() - 7u) / bitsPerPixel) {
-        throw std::runtime_error("UpdateTexture2D rowPitch overflow");
+        return;
     }
     const size_t expectedRowPitch = (width * bitsPerPixel + 7u) / 8u;
     if (rowPitch < expectedRowPitch) {
-        throw std::runtime_error("UpdateTexture2D rowPitch is too small");
+        return;
     }
 
     D3D12_SUBRESOURCE_DATA subresource{};
     subresource.pData = pixels;
     if (rowPitch >
         static_cast<size_t>((std::numeric_limits<LONG_PTR>::max)())) {
-        throw std::runtime_error("UpdateTexture2D rowPitch exceeds D3D12 range");
+        return;
     }
     if (rowPitch > (std::numeric_limits<size_t>::max)() /
                        static_cast<size_t>(texture.height)) {
-        throw std::runtime_error("UpdateTexture2D slice pitch overflow");
+        return;
     }
     const size_t slicePitch = rowPitch * static_cast<size_t>(texture.height);
     if (slicePitch >
         static_cast<size_t>((std::numeric_limits<LONG_PTR>::max)())) {
-        throw std::runtime_error("UpdateTexture2D slicePitch exceeds D3D12 range");
+        return;
     }
     subresource.RowPitch = static_cast<LONG_PTR>(rowPitch);
     subresource.SlicePitch = static_cast<LONG_PTR>(slicePitch);
+
+    const bool ownsUploadPass = !dxCommon_->IsCommandListRecording();
+    if (ownsUploadPass) {
+        dxCommon_->BeginUpload();
+    }
+    UploadPassScope uploadPass(dxCommon_, this, ownsUploadPass);
+
+    const UINT frameIndex = dxCommon_->GetBackBufferIndex();
+    if (frameIndex < frameUploadBuffers_.size() &&
+        lastDynamicUploadFrameIndex_ != frameIndex) {
+        frameUploadBuffers_[frameIndex].clear();
+        lastDynamicUploadFrameIndex_ = frameIndex;
+    }
 
     const UINT64 uploadSize =
         GetRequiredIntermediateSize(texture.resource.Get(), 0, 1);

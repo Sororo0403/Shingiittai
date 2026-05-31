@@ -923,8 +923,12 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
                 return false;
             }
         const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
-        if (DistanceSqXZ(projectile.position, enemyPos) <=
-            kArcaneProjectileEnemyHitRange * kArcaneProjectileEnemyHitRange) {
+        const float enemyHitRangeSq =
+            kArcaneProjectileEnemyHitRange * kArcaneProjectileEnemyHitRange;
+        if (DistanceSqXZ(projectile.position, enemyPos) <= enemyHitRangeSq ||
+            DistancePointToSegmentSqXZ(enemyPos, projectile.previousPosition,
+                                       projectile.position) <=
+                enemyHitRangeSq) {
             const XMFLOAT3 impact = projectile.position;
             const XMFLOAT3 impactDirection =
                 DirectionFromTo(impact, enemy_.GetTransform().position);

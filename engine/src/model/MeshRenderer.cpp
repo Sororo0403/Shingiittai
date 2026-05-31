@@ -49,13 +49,42 @@ struct SceneConstBufferData {
     XMFLOAT4 customSceneParams1;
 };
 
+XMVECTOR LoadNormalizedQuaternionOrIdentity(const XMFLOAT4 &rotation) {
+    if (!std::isfinite(rotation.x) || !std::isfinite(rotation.y) ||
+        !std::isfinite(rotation.z) || !std::isfinite(rotation.w)) {
+        return XMQuaternionIdentity();
+    }
+    XMVECTOR q = XMLoadFloat4(&rotation);
+    const float lengthSq = XMVectorGetX(XMVector4LengthSq(q));
+    if (!std::isfinite(lengthSq) || lengthSq <= 0.000001f) {
+        return XMQuaternionIdentity();
+    }
+    return XMQuaternionNormalize(q);
+}
+
+float ClampFinite(float value, float minimum, float maximum, float fallback) {
+    if (!std::isfinite(value)) {
+        return fallback;
+    }
+    return std::clamp(value, minimum, maximum);
+}
+
+float ClampFiniteMin(float value, float minimum) {
+    if (!std::isfinite(value)) {
+        return minimum;
+    }
+    return (std::max)(value, minimum);
+}
+
 XMMATRIX MakeWorldMatrix(const Transform &transform) {
-    XMVECTOR q = XMQuaternionNormalize(XMLoadFloat4(&transform.rotation));
-    return XMMatrixScaling(transform.scale.x, transform.scale.y,
-                           transform.scale.z) *
+    const Transform safeTransform = SanitizeTransformForDraw(transform);
+    XMVECTOR q = LoadNormalizedQuaternionOrIdentity(safeTransform.rotation);
+    return XMMatrixScaling(safeTransform.scale.x, safeTransform.scale.y,
+                           safeTransform.scale.z) *
            XMMatrixRotationQuaternion(q) *
-           XMMatrixTranslation(transform.position.x, transform.position.y,
-                               transform.position.z);
+           XMMatrixTranslation(safeTransform.position.x,
+                               safeTransform.position.y,
+                               safeTransform.position.z);
 }
 
 XMMATRIX MakeWorldInverseTranspose(const XMMATRIX &world) {
@@ -573,12 +602,14 @@ void MeshRenderer::SetShadowMap(
             ? shadowMap
             : textureManager_->GetGpuHandle(textureManager_->GetWhiteTextureId());
     shadowLightViewProjection_ = lightViewProjection;
-    shadowParams_ = {hasShadowMap ? 1.0f : 0.0f, settings.bias,
-                     (std::clamp)(settings.strength, 0.0f, 1.0f),
-                     settings.normalBias};
-    shadowFilterParams_ = {(std::max)(settings.filterRadius, 0.0f),
-                           (std::max)(settings.depthSoftness, 0.0001f),
-                           (std::max)(settings.edgeFade, 0.0f), 0.0f};
+    shadowParams_ = {
+        hasShadowMap ? 1.0f : 0.0f,
+        std::isfinite(settings.bias) ? settings.bias : 0.0f,
+        ClampFinite(settings.strength, 0.0f, 1.0f, 0.0f),
+        std::isfinite(settings.normalBias) ? settings.normalBias : 0.0f};
+    shadowFilterParams_ = {ClampFiniteMin(settings.filterRadius, 0.0f),
+                           ClampFiniteMin(settings.depthSoftness, 0.0001f),
+                           ClampFiniteMin(settings.edgeFade, 0.0f), 0.0f};
 }
 
 void MeshRenderer::SetCustomSceneParams(const DirectX::XMFLOAT4 &params0,

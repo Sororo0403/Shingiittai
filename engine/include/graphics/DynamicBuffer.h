@@ -37,7 +37,9 @@ class DynamicBuffer {
     template <class T>
     UploadAllocation Write(const T &value, size_t alignment = 0) {
         UploadAllocation allocation = Allocate(sizeof(T), alignment);
-        *static_cast<T *>(allocation.cpu) = value;
+        if (allocation.cpu != nullptr) {
+            *static_cast<T *>(allocation.cpu) = value;
+        }
         return allocation;
     }
 
@@ -45,15 +47,17 @@ class DynamicBuffer {
     UploadAllocation WriteArray(const T *values, size_t count,
                                 size_t alignment = 0) {
         if (!values || count == 0) {
-            throw std::runtime_error("DynamicBuffer::WriteArray invalid array");
+            return {};
         }
         if (count > (std::numeric_limits<size_t>::max)() / sizeof(T)) {
-            throw std::runtime_error("DynamicBuffer::WriteArray size overflow");
+            return {};
         }
         const size_t bytes = sizeof(T) * count;
         UploadAllocation allocation =
             Allocate(bytes, alignment == 0 ? alignof(T) : alignment);
-        std::memcpy(allocation.cpu, values, bytes);
+        if (allocation.cpu != nullptr) {
+            std::memcpy(allocation.cpu, values, bytes);
+        }
         return allocation;
     }
 

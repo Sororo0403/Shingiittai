@@ -33,6 +33,8 @@ class SoundTestScene : public BaseScene {
     struct Track {
         const wchar_t *path;
         const wchar_t *labelPath;
+        bool loop = true;
+        float baseVolume = 1.0f;
         uint32_t soundId = SoundManager::kInvalidSoundId;
         Image label{};
     };
@@ -42,12 +44,15 @@ class SoundTestScene : public BaseScene {
     void PlaySelectedTrack();
     void ToggleSelectedTrackPlayback();
     void StopPlayingTrack();
+    void RefreshPlayingState();
     void UpdateVisualizer(float deltaTime);
     void DrawOverlay(float screenWidth, float screenHeight);
     void DrawAudioVisualizer(float screenWidth, float screenHeight);
     void DrawPanel(float screenWidth, float screenHeight);
     void DrawMusicIcon(float centerX, float centerY, float size, float alpha,
                        bool playing);
+    void DrawSpeakerIcon(float centerX, float centerY, float size, float alpha,
+                         bool playing);
     void DrawControlsPrompt(float screenWidth, float screenHeight);
     void DrawTransition(float screenWidth, float screenHeight);
     void DrawRect(float x, float y, float w, float h,
@@ -58,13 +63,14 @@ class SoundTestScene : public BaseScene {
                    float alpha = 1.0f);
     std::unique_ptr<BaseScene> CreateReturnScene() const;
 
-    static constexpr size_t kTrackCount = 4;
+    static constexpr size_t kTrackCount = 10;
 
     ReturnTarget returnTarget_ = ReturnTarget::WeaponSelect;
     std::unique_ptr<GameScene> backgroundScene_;
     Image titleImage_{};
     Image controlsImage_{};
     Image playingStatusImage_{};
+    Image authorImage_{};
     Image keyAImage_{};
     Image keyDImage_{};
     std::array<Track, kTrackCount> tracks_{};

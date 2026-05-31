@@ -8,6 +8,7 @@
 #include "sprite/Sprite.h"
 #include "texture/TextureManager.h"
 #include <algorithm>
+#include <cmath>
 #include <stdexcept>
 
 using namespace DirectX;
@@ -17,11 +18,60 @@ struct SpriteConstBuffer {
     XMFLOAT4X4 mat;
 };
 
+namespace {
+
+float FiniteOr(float value, float fallback) {
+    return std::isfinite(value) ? value : fallback;
+}
+
+XMFLOAT2 SanitizeFloat2(const XMFLOAT2 &value,
+                        const XMFLOAT2 &fallback) {
+    return {FiniteOr(value.x, fallback.x), FiniteOr(value.y, fallback.y)};
+}
+
+XMFLOAT4 SanitizeColor(const XMFLOAT4 &value) {
+    return {
+        std::clamp(FiniteOr(value.x, 1.0f), 0.0f, 1.0f),
+        std::clamp(FiniteOr(value.y, 1.0f), 0.0f, 1.0f),
+        std::clamp(FiniteOr(value.z, 1.0f), 0.0f, 1.0f),
+        std::clamp(FiniteOr(value.w, 1.0f), 0.0f, 1.0f),
+    };
+}
+
+uint32_t ResolveSpriteTextureId(TextureManager *textureManager,
+                                uint32_t textureId) {
+    if (textureManager == nullptr) {
+        return UINT32_MAX;
+    }
+    if (textureId != UINT32_MAX &&
+        textureManager->IsValidTextureId(textureId)) {
+        return textureId;
+    }
+    const uint32_t fallbackTextureId = textureManager->GetWhiteTextureId();
+    return textureManager->IsValidTextureId(fallbackTextureId)
+               ? fallbackTextureId
+               : UINT32_MAX;
+}
+
+} // namespace
+
 void SpriteRenderer::Initialize(DirectXCommon *dxCommon,
                                 TextureManager *textureManager,
                                 SrvManager *srvManager, int width, int height) {
     if (!dxCommon || !textureManager || !srvManager) {
-        throw std::runtime_error("SpriteRenderer::Initialize null argument");
+        dxCommon_ = nullptr;
+        textureManager_ = nullptr;
+        srvManager_ = nullptr;
+        rootSignature_.Reset();
+        for (auto &targetPipelines : pipelineStates_) {
+            for (auto &pipeline : targetPipelines) {
+                pipeline.Reset();
+            }
+        }
+        uploadBuffer_.Reset();
+        queuedDraws_.clear();
+        batchVertices_.clear();
+        return;
     }
 
     dxCommon_ = dxCommon;
@@ -35,14 +85,25 @@ void SpriteRenderer::Initialize(DirectXCommon *dxCommon,
 }
 
 void SpriteRenderer::Draw(const Sprite &sprite) {
-    const float l = sprite.position.x;
-    const float t = sprite.position.y;
-    const float r = sprite.position.x + sprite.size.x;
-    const float b = sprite.position.y + sprite.size.y;
-    const float u0 = sprite.uvLeftTop.x;
-    const float v0 = sprite.uvLeftTop.y;
-    const float u1 = sprite.uvLeftTop.x + sprite.uvSize.x;
-    const float v1 = sprite.uvLeftTop.y + sprite.uvSize.y;
+    if (textureManager_ == nullptr) {
+        return;
+    }
+
+    const XMFLOAT2 position = SanitizeFloat2(sprite.position, {0.0f, 0.0f});
+    const XMFLOAT2 size = SanitizeFloat2(sprite.size, {0.0f, 0.0f});
+    const XMFLOAT2 uvLeftTop =
+        SanitizeFloat2(sprite.uvLeftTop, {0.0f, 0.0f});
+    const XMFLOAT2 uvSize = SanitizeFloat2(sprite.uvSize, {1.0f, 1.0f});
+    const XMFLOAT4 color = SanitizeColor(sprite.color);
+
+    const float l = position.x;
+    const float t = position.y;
+    const float r = position.x + size.x;
+    const float b = position.y + size.y;
+    const float u0 = uvLeftTop.x;
+    const float v0 = uvLeftTop.y;
+    const float u1 = uvLeftTop.x + uvSize.x;
+    const float v1 = uvLeftTop.y + uvSize.y;
 
     auto drawPass = [&](PipelineKind pipelineKind, const XMFLOAT4 &color) {
         if (drawCursor_ >= kMaxSpriteDraws) {
@@ -51,7 +112,11 @@ void SpriteRenderer::Draw(const Sprite &sprite) {
 
         QueuedDraw draw{};
         draw.pipelineKind = pipelineKind;
-        draw.textureId = sprite.textureId;
+        draw.textureId = ResolveSpriteTextureId(textureManager_,
+                                                sprite.textureId);
+        if (draw.textureId == UINT32_MAX) {
+            return;
+        }
         draw.vertices = std::array<SpriteVertex, kVerticesPerSprite>{
             SpriteVertex{{l, t, 0.0f}, {u0, v0}, color},
             SpriteVertex{{r, t, 0.0f}, {u1, v0}, color},
@@ -66,27 +131,33 @@ void SpriteRenderer::Draw(const Sprite &sprite) {
 
     switch (sprite.blendMode) {
     case SpriteBlendMode::Modulate:
-        drawPass(PipelineKind::Modulate, sprite.color);
+        drawPass(PipelineKind::Modulate, color);
         break;
     case SpriteBlendMode::PremultipliedMask: {
 
         const XMFLOAT4 darkenColor = {
-            sprite.color.x * 0.60f, sprite.color.y * 0.60f,
-            sprite.color.z * 0.60f, sprite.color.w * 1.10f};
-        const XMFLOAT4 tintColor = {sprite.color.x, sprite.color.y,
-                                    sprite.color.z, sprite.color.w * 0.64f};
+            color.x * 0.60f, color.y * 0.60f,
+            color.z * 0.60f, std::clamp(color.w * 1.10f, 0.0f, 1.0f)};
+        const XMFLOAT4 tintColor = {color.x, color.y,
+                                    color.z, color.w * 0.64f};
         drawPass(PipelineKind::Modulate, darkenColor);
         drawPass(PipelineKind::Alpha, tintColor);
         break;
     }
     case SpriteBlendMode::Alpha:
     default:
-        drawPass(PipelineKind::Alpha, sprite.color);
+        drawPass(PipelineKind::Alpha, color);
         break;
     }
 }
 
 void SpriteRenderer::BeginFrame() {
+    if (!dxCommon_) {
+        drawCursor_ = 0;
+        queuedDraws_.clear();
+        batchVertices_.clear();
+        return;
+    }
     uploadBuffer_.BeginFrame(dxCommon_->GetBackBufferIndex());
     drawCursor_ = 0;
     queuedDraws_.clear();
@@ -94,6 +165,11 @@ void SpriteRenderer::BeginFrame() {
 }
 
 void SpriteRenderer::PreDraw(bool backBufferTarget) {
+    if (!dxCommon_ || !srvManager_ || !rootSignature_) {
+        queuedDraws_.clear();
+        batchVertices_.clear();
+        return;
+    }
     auto cmd = dxCommon_->GetCommandList();
 
     ID3D12DescriptorHeap *heaps[] = {srvManager_->GetHeap()};
@@ -112,6 +188,11 @@ void SpriteRenderer::PreDraw(bool backBufferTarget) {
     SpriteConstBuffer constants{};
     constants.mat = matProjection_;
     const UploadAllocation allocation = uploadBuffer_.Write(constants);
+    if (allocation.gpu == 0) {
+        queuedDraws_.clear();
+        batchVertices_.clear();
+        return;
+    }
     cmd->SetGraphicsRootConstantBufferView(0, allocation.gpu);
 
     cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -123,6 +204,11 @@ void SpriteRenderer::PostDraw() { FlushQueuedDraws(); }
 
 void SpriteRenderer::FlushQueuedDraws() {
     if (queuedDraws_.empty()) {
+        return;
+    }
+    if (!dxCommon_ || !textureManager_ || !srvManager_ || !rootSignature_) {
+        queuedDraws_.clear();
+        batchVertices_.clear();
         return;
     }
 
@@ -156,14 +242,24 @@ void SpriteRenderer::FlushQueuedDraws() {
         const UploadAllocation allocation = uploadBuffer_.WriteArray(
             batchVertices_.data(), batchVertices_.size(),
             alignof(SpriteVertex));
+        if (allocation.gpu == 0) {
+            runStart = runEnd;
+            continue;
+        }
         D3D12_VERTEX_BUFFER_VIEW view{};
         view.BufferLocation = allocation.gpu;
         view.SizeInBytes =
             static_cast<UINT>(batchVertices_.size() * sizeof(SpriteVertex));
         view.StrideInBytes = sizeof(SpriteVertex);
         cmd->IASetVertexBuffers(0, 1, &view);
+        const uint32_t boundTextureId =
+            ResolveSpriteTextureId(textureManager_, first.textureId);
+        if (boundTextureId == UINT32_MAX) {
+            runStart = runEnd;
+            continue;
+        }
         cmd->SetGraphicsRootDescriptorTable(
-            1, textureManager_->GetGpuHandle(first.textureId));
+            1, textureManager_->GetGpuHandle(boundTextureId));
         cmd->DrawInstanced(static_cast<UINT>(batchVertices_.size()), 1, 0, 0);
 
         runStart = runEnd;

@@ -43,6 +43,54 @@ inline std::array<float, 2> cameraHandVerticalSensitivity = {0.5f, 0.5f};
 inline std::array<float, 2> cameraHandHorizontalSensitivity = {0.5f, 0.5f};
 inline float mouseSlashSensitivity = 0.5f;
 
+struct CameraAdvancedSettings {
+    float singleHandLeftThreshold = 0.45f;
+    float singleHandRightThreshold = 0.55f;
+    float handControlGainX = 2.55f;
+    float handControlGainY = 3.10f;
+    float handReachCompensationMin = 0.70f;
+    float handReachCompensationMax = 1.45f;
+    float handMinReachForCompensation = 0.12f;
+    float handSlashThreshold = 0.88f;
+    float handSlashResetThreshold = 0.31f;
+    float handVerticalSlashThresholdScale = 0.82f;
+    float handHardSensitivityGainScale = 0.70f;
+    float handEasySensitivityGainScale = 1.55f;
+    float handHardSensitivityThresholdScale = 1.30f;
+    float handEasySensitivityThresholdScale = 0.62f;
+    float handSlashRearmNeutralRadius = 0.20f;
+    float handSlashNeutralRearmSeconds = 0.12f;
+    float handSlashCooldownSeconds = 0.24f;
+    float handControlSmoothing = 18.0f;
+    float handFastControlSmoothing = 46.0f;
+    float handFastMotionDistance = 0.045f;
+    float handTiltMaxRadians = 0.52f;
+    float handTiltSmoothing = 10.0f;
+    float handTiltMinWidth = 0.12f;
+    float handReacquireSuppressSeconds = 0.24f;
+    float handReacquireSlashThreshold = 0.090f;
+    float handEdgeExitSuppressSeconds = 0.44f;
+    float handTrackingJumpThreshold = 0.30f;
+    float handTrackingTeleportThreshold = 0.62f;
+    float handJumpSlashDistanceThreshold = 0.085f;
+    float handPreLossDirectionThreshold = 0.30f;
+    float handPreLossNetDistanceThreshold = 0.026f;
+    float handPreLossDirectionMaxAgeSeconds = 0.14f;
+    float syntheticLostSlashSeconds = 0.16f;
+    float handMotionWindowSeconds = 0.16f;
+    float handStableNetDistanceThreshold = 0.017f;
+    float handSlashNetDistanceThreshold = 0.027f;
+    float handVelocitySlashNetDistanceThreshold = 0.008f;
+    float handStableConsistencyThreshold = 0.48f;
+    float handReferenceVisualScale = 0.095f;
+    float handMinVisualScale = 0.045f;
+    float handMaxVisualScale = 0.180f;
+    float handFarThresholdScale = 0.58f;
+    float handNearThresholdScale = 1.18f;
+};
+
+inline CameraAdvancedSettings cameraAdvancedSettings{};
+
 enum class MenuSe {
     Select,
     Selected,
@@ -132,6 +180,14 @@ inline float GetCameraHorizontalSensitivity(size_t handIndex) {
 }
 
 inline float GetMouseSlashSensitivity() { return mouseSlashSensitivity; }
+
+inline CameraAdvancedSettings &GetCameraAdvancedSettings() {
+    return cameraAdvancedSettings;
+}
+
+inline const CameraAdvancedSettings &GetCameraAdvancedSettingsConst() {
+    return cameraAdvancedSettings;
+}
 
 inline void SetBgmVolume(const SceneContext &ctx, float volume) {
     bgmVolume = std::clamp(volume, 0.0f, 1.0f);

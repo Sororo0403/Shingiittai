@@ -3,9 +3,21 @@
 #include "sprite/Sprite.h"
 #include "texture/TextureManager.h"
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <numeric>
 #include <stdexcept>
+
+namespace {
+float FiniteOr(float value, float fallback) {
+    return std::isfinite(value) ? value : fallback;
+}
+
+Sprite &FallbackSprite() {
+    static Sprite fallback{};
+    return fallback;
+}
+} // namespace
 
 SpriteManager &SpriteManager::GetInstance() {
     static SpriteManager instance;
@@ -16,7 +28,10 @@ void SpriteManager::Initialize(DirectXCommon *dxCommon,
                                TextureManager *textureManager,
                                SrvManager *srvManager, int width, int height) {
     if (!dxCommon || !textureManager || !srvManager) {
-        throw std::runtime_error("SpriteManager::Initialize null argument");
+        dxCommon_ = nullptr;
+        textureManager_ = nullptr;
+        sprites_.clear();
+        return;
     }
 
     spriteRenderer_.Initialize(dxCommon, textureManager, srvManager, width,
@@ -28,7 +43,7 @@ void SpriteManager::Initialize(DirectXCommon *dxCommon,
 
 void SpriteManager::Draw(uint32_t id) {
     if (!IsValidSpriteId(id)) {
-        throw std::out_of_range("SpriteManager sprite id out of range");
+        return;
     }
     spriteRenderer_.Draw(sprites_[id]);
 }
@@ -38,9 +53,11 @@ void SpriteManager::DrawAllSorted(bool backToFront) {
     std::iota(indices.begin(), indices.end(), size_t{0});
     std::stable_sort(indices.begin(), indices.end(),
                      [&](size_t lhs, size_t rhs) {
+                         const float lhsZ = FiniteOr(sprites_[lhs].zOrder, 0.0f);
+                         const float rhsZ = FiniteOr(sprites_[rhs].zOrder, 0.0f);
                          return backToFront
-                                    ? sprites_[lhs].zOrder > sprites_[rhs].zOrder
-                                    : sprites_[lhs].zOrder < sprites_[rhs].zOrder;
+                                    ? lhsZ > rhsZ
+                                    : lhsZ < rhsZ;
                      });
 
     for (size_t index : indices) {
@@ -53,6 +70,9 @@ void SpriteManager::DrawSprite(const Sprite &sprite) {
 }
 
 uint32_t SpriteManager::Create(const std::wstring &filePath) {
+    if (textureManager_ == nullptr) {
+        return UINT32_MAX;
+    }
 
     uint32_t texId = textureManager_->Load(filePath);
 
@@ -67,7 +87,7 @@ uint32_t SpriteManager::Create(const std::wstring &filePath) {
 
     if (sprites_.size() >=
         static_cast<size_t>((std::numeric_limits<uint32_t>::max)())) {
-        throw std::runtime_error("SpriteManager sprite id overflow");
+        return UINT32_MAX;
     }
     sprites_.push_back(sprite);
     return static_cast<uint32_t>(sprites_.size() - 1);
@@ -91,14 +111,14 @@ bool SpriteManager::IsValidSpriteId(uint32_t id) const {
 
 Sprite &SpriteManager::GetSprite(uint32_t id) {
     if (!IsValidSpriteId(id)) {
-        throw std::out_of_range("SpriteManager sprite id out of range");
+        return FallbackSprite();
     }
     return sprites_[id];
 }
 
 const Sprite &SpriteManager::GetSprite(uint32_t id) const {
     if (!IsValidSpriteId(id)) {
-        throw std::out_of_range("SpriteManager sprite id out of range");
+        return FallbackSprite();
     }
     return sprites_[id];
 }

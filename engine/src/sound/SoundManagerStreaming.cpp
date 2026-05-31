@@ -36,9 +36,21 @@ std::wstring NormalizePathKey(const std::filesystem::path &path) {
     return key;
 }
 
+float ClampFinite(float value, float minimum, float maximum, float fallback) {
+    if (!std::isfinite(value)) {
+        return fallback;
+    }
+    return std::clamp(value, minimum, maximum);
+}
+
 XMVECTOR LoadFloat3OrDefault(const XMFLOAT3 &value, FXMVECTOR fallback) {
+    if (!std::isfinite(value.x) || !std::isfinite(value.y) ||
+        !std::isfinite(value.z)) {
+        return fallback;
+    }
     XMVECTOR v = XMLoadFloat3(&value);
-    if (XMVectorGetX(XMVector3LengthSq(v)) <= 0.000001f) {
+    const float lengthSq = XMVectorGetX(XMVector3LengthSq(v));
+    if (!std::isfinite(lengthSq) || lengthSq <= 0.000001f) {
         return fallback;
     }
     return XMVector3Normalize(v);
@@ -271,7 +283,7 @@ uint32_t SoundManager::CreateStreamingVoice(const std::wstring &path,
     playingVoice.callback = std::move(callback);
     playingVoice.handle = AllocateVoiceHandle();
     playingVoice.soundId = kInvalidSoundId;
-    playingVoice.volume = std::clamp(volume, 0.0f, 1.0f);
+    playingVoice.volume = ClampFinite(volume, 0.0f, 1.0f, 0.0f);
     playingVoice.loop = loop;
     playingVoice.isStreaming = true;
     playingVoice.streamReader = reader;

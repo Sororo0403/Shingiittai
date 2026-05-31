@@ -73,7 +73,8 @@ void PostProcessSystem::Initialize(DirectXCommon *dxCommon,
                                     SrvManager *srvManager, int width,
                                     int height) {
     if (!dxCommon || !srvManager) {
-        throw std::runtime_error("PostProcessSystem::Initialize null argument");
+        Finalize();
+        return;
     }
 
     Finalize();
@@ -108,8 +109,7 @@ void PostProcessSystem::Finalize() {
 
 void PostProcessSystem::Resize(int width, int height) {
     if (!dxCommon_ || !srvManager_) {
-        throw std::runtime_error(
-            "PostProcessSystem::Resize called before Initialize");
+        return;
     }
 
     width_ = width > 0 ? width : 1;
@@ -152,10 +152,10 @@ void PostProcessSystem::Draw(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle,
                               D3D12_GPU_DESCRIPTOR_HANDLE depthHandle) {
     if (!dxCommon_ || !srvManager_ || !rootSignature_ || !pipelineState_ ||
         !copyPipelineState_ || !constBuffer_) {
-        throw std::runtime_error("PostProcessSystem::Draw called before Initialize");
+        return;
     }
     if (textureHandle.ptr == 0 || depthHandle.ptr == 0) {
-        throw std::runtime_error("PostProcessSystem::Draw received invalid SRV handle");
+        return;
     }
 
     auto commandList = dxCommon_->GetCommandList();

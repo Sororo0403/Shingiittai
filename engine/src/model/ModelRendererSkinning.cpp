@@ -200,6 +200,13 @@ static void NormalizeInfluence(VertexInfluence &influence) {
     }
 }
 
+static bool HasSkinningDescriptors(const SkinCluster &skinCluster) {
+    return skinCluster.inputVertexSrvGpuHandle.ptr != 0 &&
+           skinCluster.influenceSrvGpuHandle.ptr != 0 &&
+           skinCluster.paletteSrvGpuHandle.ptr != 0 &&
+           skinCluster.skinnedVertexUavGpuHandle.ptr != 0;
+}
+
 struct PerObjectConstBufferData {
     XMFLOAT4X4 matWVP;
     XMFLOAT4X4 matWorld;
@@ -477,8 +484,11 @@ void ModelRenderer::UpdateSkinClusters(Model &model) {
             static_cast<uint32_t>(model.skeletonSpaceMatrices.size()));
 
         for (uint32_t jointIndex = 0; jointIndex < jointCount; ++jointIndex) {
-            XMMATRIX inverseBindPose = XMLoadFloat4x4(
-                &skinCluster.inverseBindPoseMatrices[jointIndex]);
+            const XMMATRIX inverseBindPose =
+                jointIndex < skinCluster.inverseBindPoseMatrices.size()
+                    ? XMLoadFloat4x4(
+                          &skinCluster.inverseBindPoseMatrices[jointIndex])
+                    : XMMatrixIdentity();
             XMMATRIX skeletonSpace =
                 XMLoadFloat4x4(&model.skeletonSpaceMatrices[jointIndex]);
             XMMATRIX skinningMatrix = inverseBindPose * skeletonSpace;
@@ -545,6 +555,7 @@ void ModelRenderer::CreateSkinningPipelineState() {
 bool ModelRenderer::NeedsSkinningDispatch(const ModelSubMesh &subMesh) const {
     const SkinCluster &skinCluster = subMesh.skinCluster;
     return skinCluster.skinnedVertexResource && subMesh.vertexCount > 0 &&
+           HasSkinningDescriptors(skinCluster) &&
            (!skinCluster.skinningValid ||
             skinCluster.lastSkinningFrame != skinningFrameId_);
 }
@@ -600,7 +611,9 @@ void ModelRenderer::DispatchSkinningJobs(
 
 void ModelRenderer::DispatchSkinning(const ModelSubMesh &subMesh) {
     const SkinCluster &skinCluster = subMesh.skinCluster;
-    if (!NeedsSkinningDispatch(subMesh)) {
+    if (!NeedsSkinningDispatch(subMesh) || dxCommon_ == nullptr ||
+        srvManager_ == nullptr || skinningRootSignature_ == nullptr ||
+        skinningPSO_ == nullptr) {
         return;
     }
 

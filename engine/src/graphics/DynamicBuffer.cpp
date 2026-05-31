@@ -14,7 +14,8 @@ DynamicBuffer::~DynamicBuffer() { Reset(); }
 void DynamicBuffer::Initialize(ID3D12Device *device, size_t capacity,
                                size_t defaultAlignment) {
     if (!device || capacity == 0) {
-        throw std::runtime_error("DynamicBuffer::Initialize invalid argument");
+        Reset();
+        return;
     }
 
     Reset();
@@ -36,32 +37,31 @@ void DynamicBuffer::BeginWrite() { offset_ = 0; }
 
 void DynamicBuffer::Reserve(size_t capacity) {
     if (!device_) {
-        throw std::runtime_error("DynamicBuffer::Reserve before Initialize");
+        return;
     }
     if (capacity <= capacity_) {
         return;
     }
     if (offset_ != 0) {
-        throw std::runtime_error(
-            "DynamicBuffer::Reserve cannot grow after allocations");
+        return;
     }
     CreateResource(capacity);
 }
 
 UploadAllocation DynamicBuffer::Allocate(size_t size, size_t alignment) {
     if (!resource_ || size == 0) {
-        throw std::runtime_error("DynamicBuffer::Allocate before Initialize");
+        return {};
     }
 
     const size_t effectiveAlignment =
         alignment == 0 ? defaultAlignment_ : alignment;
     const size_t alignedOffset = AlignUp(offset_, effectiveAlignment);
     if (size > (std::numeric_limits<size_t>::max)() - alignedOffset) {
-        throw std::runtime_error("DynamicBuffer allocation size overflow");
+        return {};
     }
     const size_t endOffset = alignedOffset + size;
     if (endOffset > capacity_) {
-        throw std::runtime_error("DynamicBuffer capacity exceeded");
+        return {};
     }
 
     offset_ = endOffset;
@@ -87,7 +87,7 @@ size_t DynamicBuffer::AlignUp(size_t value, size_t alignment) {
     }
     const size_t addend = alignment - 1;
     if (value > (std::numeric_limits<size_t>::max)() - addend) {
-        throw std::runtime_error("DynamicBuffer alignment overflow");
+        return (std::numeric_limits<size_t>::max)();
     }
     return ((value + addend) / alignment) * alignment;
 }

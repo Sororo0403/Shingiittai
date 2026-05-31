@@ -9,7 +9,9 @@ using namespace DxUtils;
 
 void PipelineManager::Initialize(DirectXCommon *dxCommon) {
     if (!dxCommon) {
-        throw std::runtime_error("PipelineManager::Initialize null dxCommon");
+        dxCommon_ = nullptr;
+        Clear();
+        return;
     }
     dxCommon_ = dxCommon;
 }
@@ -32,7 +34,7 @@ IDxcBlob *PipelineManager::CompileShader(const std::wstring &path,
 ID3D12PipelineState *PipelineManager::CreateGraphicsPipeline(
     const std::string &name, const D3D12_GRAPHICS_PIPELINE_STATE_DESC &desc) {
     if (!dxCommon_) {
-        throw std::runtime_error("PipelineManager is not initialized");
+        return nullptr;
     }
 
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline;

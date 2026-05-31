@@ -36,7 +36,44 @@ constexpr float kVisualSlashNetDistanceThreshold = 0.027f;
 constexpr float kHardSensitivityThresholdScale = 1.18f;
 constexpr float kEasySensitivityThresholdScale = 0.48f;
 constexpr float kVerticalSlashThresholdScale = 0.82f;
-constexpr int kSensitivityCount = 4;
+constexpr int kBasicSensitivityCount = 4;
+constexpr int kHandSensitivityCount = 4;
+constexpr int kDetailedSensitivityCount = 45;
+constexpr int kVisibleDetailedRows = 13;
+
+struct SettingRange {
+    float min = 0.0f;
+    float max = 1.0f;
+    float step = 0.05f;
+};
+
+constexpr std::array<SettingRange, kDetailedSensitivityCount> kSettingRanges = {
+    SettingRange{0.0f, 1.0f, 0.05f},    // 全体 操作感度
+    SettingRange{0.0f, 1.0f, 0.05f},    // 全体 斬撃感度
+    SettingRange{0.0f, 1.0f, 0.05f},    // 全体 縦斬り感度
+    SettingRange{0.0f, 1.0f, 0.05f},    // 全体 横斬り感度
+    SettingRange{0.50f, 5.00f, 0.05f},  SettingRange{0.50f, 5.00f, 0.05f},
+    SettingRange{0.20f, 1.20f, 0.02f},  SettingRange{1.00f, 2.50f, 0.02f},
+    SettingRange{0.04f, 0.30f, 0.01f},  SettingRange{0.20f, 1.80f, 0.02f},
+    SettingRange{0.05f, 1.00f, 0.01f},  SettingRange{0.40f, 1.20f, 0.01f},
+    SettingRange{0.20f, 1.50f, 0.02f},  SettingRange{1.00f, 3.00f, 0.02f},
+    SettingRange{0.60f, 2.20f, 0.02f},  SettingRange{0.30f, 1.40f, 0.02f},
+    SettingRange{0.05f, 0.50f, 0.01f},  SettingRange{0.02f, 0.40f, 0.01f},
+    SettingRange{0.05f, 0.80f, 0.01f},  SettingRange{2.00f, 40.0f, 0.5f},
+    SettingRange{10.0f, 80.0f, 1.0f},   SettingRange{0.010f, 0.120f, 0.005f},
+    SettingRange{0.10f, 1.00f, 0.01f},  SettingRange{2.00f, 30.0f, 0.5f},
+    SettingRange{0.04f, 0.30f, 0.01f},  SettingRange{0.05f, 0.80f, 0.01f},
+    SettingRange{0.020f, 0.200f, 0.005f}, SettingRange{0.05f, 1.00f, 0.01f},
+    SettingRange{0.05f, 0.80f, 0.01f},  SettingRange{0.20f, 1.00f, 0.01f},
+    SettingRange{0.020f, 0.200f, 0.005f}, SettingRange{0.05f, 0.80f, 0.01f},
+    SettingRange{0.005f, 0.080f, 0.001f}, SettingRange{0.04f, 0.40f, 0.01f},
+    SettingRange{0.02f, 0.50f, 0.01f},  SettingRange{0.05f, 0.60f, 0.01f},
+    SettingRange{0.005f, 0.080f, 0.001f}, SettingRange{0.005f, 0.120f, 0.001f},
+    SettingRange{0.002f, 0.040f, 0.001f}, SettingRange{0.20f, 0.90f, 0.01f},
+    SettingRange{0.040f, 0.200f, 0.005f}, SettingRange{0.020f, 0.120f, 0.005f},
+    SettingRange{0.100f, 0.300f, 0.005f}, SettingRange{0.30f, 1.00f, 0.01f},
+    SettingRange{0.90f, 1.50f, 0.01f},
+};
 
 XMFLOAT4 Color(float r, float g, float b, float a = 1.0f) {
     return {r, g, b, a};
@@ -151,14 +188,31 @@ void CameraAccuracyDebugScene::Initialize(const SceneContext &ctx) {
         LoadTextureImage(L"app/resources/ui/sensitivity_adjust/title.png");
     controlsImage_ =
         LoadTextureImage(L"app/resources/ui/sensitivity_adjust/controls.png");
-    sensitivityLabelImages_[0] =
-        LoadTextureImage(L"app/resources/ui/sensitivity/label_ctrl.png");
-    sensitivityLabelImages_[1] =
-        LoadTextureImage(L"app/resources/ui/sensitivity/label_slash.png");
-    sensitivityLabelImages_[2] =
-        LoadTextureImage(L"app/resources/ui/sensitivity/label_vert.png");
-    sensitivityLabelImages_[3] =
-        LoadTextureImage(L"app/resources/ui/sensitivity/label_horz.png");
+    detailTitleImage_ = LoadTextureImage(
+        L"app/resources/ui/sensitivity_adjust/detail/title_detail.png");
+    basicTitleImage_ = LoadTextureImage(
+        L"app/resources/ui/sensitivity_adjust/detail/title_basic.png");
+    detailHintImage_ = LoadTextureImage(
+        L"app/resources/ui/sensitivity_adjust/detail/hint_detail.png");
+    basicHintImage_ = LoadTextureImage(
+        L"app/resources/ui/sensitivity_adjust/detail/hint_basic.png");
+    pageLabelImage_ = LoadTextureImage(
+        L"app/resources/ui/sensitivity_adjust/detail/page_label.png");
+    gaugeTrackImage_ = LoadTextureImage(
+        L"app/resources/ui/sensitivity_adjust/detail/gauge_track.png");
+    gaugeFillImage_ = LoadTextureImage(
+        L"app/resources/ui/sensitivity_adjust/detail/gauge_fill.png");
+    gaugeFrameImage_ = LoadTextureImage(
+        L"app/resources/ui/sensitivity_adjust/detail/gauge_frame.png");
+    rowSelectImage_ = LoadTextureImage(
+        L"app/resources/ui/sensitivity_adjust/detail/row_select.png");
+    for (int i = 0; i < kDetailedSensitivityCount; ++i) {
+        wchar_t path[128]{};
+        std::swprintf(path, sizeof(path) / sizeof(path[0]),
+                      L"app/resources/ui/sensitivity_adjust/detail/label_%02d.png",
+                      i);
+        settingLabelImages_[static_cast<size_t>(i)] = LoadTextureImage(path);
+    }
     for (int i = 0; i < 10; ++i) {
         digitImages_[static_cast<size_t>(i)] =
             LoadTextureImage(L"app/resources/ui/result/mplus/glyphs/char_" +
@@ -229,15 +283,21 @@ void CameraAccuracyDebugScene::Update() {
     if (input->IsKeyTrigger(DIK_R)) {
         ResetNeutral();
     }
+    if (input->IsKeyTrigger(DIK_TAB)) {
+        detailedSensitivityMode_ = !detailedSensitivityMode_;
+        selectedSensitivityIndex_ =
+            std::clamp(selectedSensitivityIndex_, 0, SensitivityItemCount() - 1);
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
+    }
     if (input->IsKeyTrigger(DIK_W) || input->IsKeyTrigger(DIK_UP)) {
         selectedSensitivityIndex_ =
-            (selectedSensitivityIndex_ + kSensitivityCount - 1) %
-            kSensitivityCount;
+            (selectedSensitivityIndex_ + SensitivityItemCount() - 1) %
+            SensitivityItemCount();
         AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
     }
     if (input->IsKeyTrigger(DIK_S) || input->IsKeyTrigger(DIK_DOWN)) {
         selectedSensitivityIndex_ =
-            (selectedSensitivityIndex_ + 1) % kSensitivityCount;
+            (selectedSensitivityIndex_ + 1) % SensitivityItemCount();
         AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
     }
     if (input->IsKeyTrigger(DIK_A) || input->IsKeyTrigger(DIK_LEFT)) {
@@ -290,28 +350,180 @@ CameraAccuracyDebugScene::LoadTextureImage(const std::wstring &path) {
 }
 
 void CameraAccuracyDebugScene::AdjustSelectedSensitivity(int direction) {
-    const float delta = static_cast<float>(direction) * kSensitivityStep;
-    switch (selectedSensitivityIndex_) {
-    case 0:
-        AppSceneServices::SetCameraSensitivity(
-            AppSceneServices::GetCameraSensitivity() + delta);
-        break;
-    case 1:
-        AppSceneServices::SetCameraSlashSensitivity(
-            AppSceneServices::GetCameraSlashSensitivity() + delta);
-        break;
-    case 2:
-        AppSceneServices::SetCameraVerticalSensitivity(
-            AppSceneServices::GetCameraVerticalSensitivity() + delta);
-        break;
-    case 3:
-        AppSceneServices::SetCameraHorizontalSensitivity(
-            AppSceneServices::GetCameraHorizontalSensitivity() + delta);
-        break;
-    default:
+    if (selectedSensitivityIndex_ < 0 ||
+        selectedSensitivityIndex_ >= SensitivityItemCount()) {
         return;
     }
+    const size_t index = static_cast<size_t>(selectedSensitivityIndex_);
+    const float delta =
+        static_cast<float>(direction) * GetSensitivityStep(index);
+    SetSensitivityValue(index, GetSensitivityValue(index) + delta);
     AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
+}
+
+int CameraAccuracyDebugScene::SensitivityItemCount() const {
+    return detailedSensitivityMode_ ? kDetailedSensitivityCount
+                                    : kBasicSensitivityCount;
+}
+
+float CameraAccuracyDebugScene::GetSensitivityValue(size_t index) const {
+    const auto &advanced = AppSceneServices::GetCameraAdvancedSettingsConst();
+    const size_t kind = index % kBasicSensitivityCount;
+
+    if (index < kHandSensitivityCount) {
+        switch (kind) {
+        case 0:
+            return AppSceneServices::GetCameraSensitivity();
+        case 1:
+            return AppSceneServices::GetCameraSlashSensitivity();
+        case 2:
+            return AppSceneServices::GetCameraVerticalSensitivity();
+        case 3:
+            return AppSceneServices::GetCameraHorizontalSensitivity();
+        default:
+            return 0.0f;
+        }
+    }
+
+    switch (index - kHandSensitivityCount) {
+    case 0: return advanced.handControlGainX;
+    case 1: return advanced.handControlGainY;
+    case 2: return advanced.handReachCompensationMin;
+    case 3: return advanced.handReachCompensationMax;
+    case 4: return advanced.handMinReachForCompensation;
+    case 5: return advanced.handSlashThreshold;
+    case 6: return advanced.handSlashResetThreshold;
+    case 7: return advanced.handVerticalSlashThresholdScale;
+    case 8: return advanced.handHardSensitivityGainScale;
+    case 9: return advanced.handEasySensitivityGainScale;
+    case 10: return advanced.handHardSensitivityThresholdScale;
+    case 11: return advanced.handEasySensitivityThresholdScale;
+    case 12: return advanced.handSlashRearmNeutralRadius;
+    case 13: return advanced.handSlashNeutralRearmSeconds;
+    case 14: return advanced.handSlashCooldownSeconds;
+    case 15: return advanced.handControlSmoothing;
+    case 16: return advanced.handFastControlSmoothing;
+    case 17: return advanced.handFastMotionDistance;
+    case 18: return advanced.handTiltMaxRadians;
+    case 19: return advanced.handTiltSmoothing;
+    case 20: return advanced.handTiltMinWidth;
+    case 21: return advanced.handReacquireSuppressSeconds;
+    case 22: return advanced.handReacquireSlashThreshold;
+    case 23: return advanced.handEdgeExitSuppressSeconds;
+    case 24: return advanced.handTrackingJumpThreshold;
+    case 25: return advanced.handTrackingTeleportThreshold;
+    case 26: return advanced.handJumpSlashDistanceThreshold;
+    case 27: return advanced.handPreLossDirectionThreshold;
+    case 28: return advanced.handPreLossNetDistanceThreshold;
+    case 29: return advanced.handPreLossDirectionMaxAgeSeconds;
+    case 30: return advanced.syntheticLostSlashSeconds;
+    case 31: return advanced.handMotionWindowSeconds;
+    case 32: return advanced.handStableNetDistanceThreshold;
+    case 33: return advanced.handSlashNetDistanceThreshold;
+    case 34: return advanced.handVelocitySlashNetDistanceThreshold;
+    case 35: return advanced.handStableConsistencyThreshold;
+    case 36: return advanced.handReferenceVisualScale;
+    case 37: return advanced.handMinVisualScale;
+    case 38: return advanced.handMaxVisualScale;
+    case 39: return advanced.handFarThresholdScale;
+    case 40: return advanced.handNearThresholdScale;
+    default: return 0.0f;
+    }
+}
+
+float CameraAccuracyDebugScene::GetSensitivityMin(size_t index) const {
+    return index < kSettingRanges.size() ? kSettingRanges[index].min : 0.0f;
+}
+
+float CameraAccuracyDebugScene::GetSensitivityMax(size_t index) const {
+    return index < kSettingRanges.size() ? kSettingRanges[index].max : 1.0f;
+}
+
+float CameraAccuracyDebugScene::GetSensitivityStep(size_t index) const {
+    return index < kSettingRanges.size() ? kSettingRanges[index].step
+                                         : kSensitivityStep;
+}
+
+void CameraAccuracyDebugScene::SetSensitivityValue(size_t index, float value) {
+    value = std::clamp(value, GetSensitivityMin(index), GetSensitivityMax(index));
+    auto &advanced = AppSceneServices::GetCameraAdvancedSettings();
+    const size_t kind = index % kBasicSensitivityCount;
+
+    if (index >= kHandSensitivityCount) {
+        switch (index - kHandSensitivityCount) {
+        case 0: advanced.handControlGainX = value; break;
+        case 1: advanced.handControlGainY = value; break;
+        case 2: advanced.handReachCompensationMin = value; break;
+        case 3: advanced.handReachCompensationMax = value; break;
+        case 4: advanced.handMinReachForCompensation = value; break;
+        case 5: advanced.handSlashThreshold = value; break;
+        case 6: advanced.handSlashResetThreshold = value; break;
+        case 7: advanced.handVerticalSlashThresholdScale = value; break;
+        case 8: advanced.handHardSensitivityGainScale = value; break;
+        case 9: advanced.handEasySensitivityGainScale = value; break;
+        case 10: advanced.handHardSensitivityThresholdScale = value; break;
+        case 11: advanced.handEasySensitivityThresholdScale = value; break;
+        case 12: advanced.handSlashRearmNeutralRadius = value; break;
+        case 13: advanced.handSlashNeutralRearmSeconds = value; break;
+        case 14: advanced.handSlashCooldownSeconds = value; break;
+        case 15: advanced.handControlSmoothing = value; break;
+        case 16: advanced.handFastControlSmoothing = value; break;
+        case 17: advanced.handFastMotionDistance = value; break;
+        case 18: advanced.handTiltMaxRadians = value; break;
+        case 19: advanced.handTiltSmoothing = value; break;
+        case 20: advanced.handTiltMinWidth = value; break;
+        case 21: advanced.handReacquireSuppressSeconds = value; break;
+        case 22: advanced.handReacquireSlashThreshold = value; break;
+        case 23: advanced.handEdgeExitSuppressSeconds = value; break;
+        case 24: advanced.handTrackingJumpThreshold = value; break;
+        case 25: advanced.handTrackingTeleportThreshold = value; break;
+        case 26: advanced.handJumpSlashDistanceThreshold = value; break;
+        case 27: advanced.handPreLossDirectionThreshold = value; break;
+        case 28: advanced.handPreLossNetDistanceThreshold = value; break;
+        case 29: advanced.handPreLossDirectionMaxAgeSeconds = value; break;
+        case 30: advanced.syntheticLostSlashSeconds = value; break;
+        case 31: advanced.handMotionWindowSeconds = value; break;
+        case 32: advanced.handStableNetDistanceThreshold = value; break;
+        case 33: advanced.handSlashNetDistanceThreshold = value; break;
+        case 34: advanced.handVelocitySlashNetDistanceThreshold = value; break;
+        case 35: advanced.handStableConsistencyThreshold = value; break;
+        case 36: advanced.handReferenceVisualScale = value; break;
+        case 37: advanced.handMinVisualScale = value; break;
+        case 38: advanced.handMaxVisualScale = value; break;
+        case 39: advanced.handFarThresholdScale = value; break;
+        case 40: advanced.handNearThresholdScale = value; break;
+        default: break;
+        }
+        return;
+    }
+
+    switch (kind) {
+    case 0:
+        AppSceneServices::SetCameraSensitivity(value);
+        break;
+    case 1:
+        AppSceneServices::SetCameraSlashSensitivity(value);
+        break;
+    case 2:
+        AppSceneServices::SetCameraVerticalSensitivity(value);
+        break;
+    case 3:
+        AppSceneServices::SetCameraHorizontalSensitivity(value);
+        break;
+    default:
+        break;
+    }
+}
+
+float CameraAccuracyDebugScene::GetSensitivityNormalizedValue(size_t index) const {
+    const float minValue = GetSensitivityMin(index);
+    const float maxValue = GetSensitivityMax(index);
+    if (maxValue <= minValue) {
+        return 0.0f;
+    }
+    return std::clamp((GetSensitivityValue(index) - minValue) /
+                          (maxValue - minValue),
+                      0.0f, 1.0f);
 }
 
 void CameraAccuracyDebugScene::UpdateCamera() {
@@ -422,8 +634,12 @@ void CameraAccuracyDebugScene::DrawOverlay(float screenWidth,
     DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
              Color(0.0f, 0.0f, 0.0f, 0.10f));
     DrawRect(0.0f, 0.0f, screenWidth, 74.0f, Color(0.0f, 0.0f, 0.0f, 0.66f));
-    DrawImage(titleImage_, 24.0f, 12.0f, 0.58f, 0.96f);
-    DrawImage(controlsImage_, 374.0f, 23.0f, 0.62f, 0.88f);
+    DrawImage(detailedSensitivityMode_ ? detailTitleImage_ : basicTitleImage_,
+              24.0f, 13.0f, 0.86f, 0.96f);
+    const Image &hint = detailedSensitivityMode_ ? detailHintImage_
+                                                 : basicHintImage_;
+    DrawImage(hint, screenWidth - hint.width * 0.72f - 22.0f, 22.0f, 0.72f,
+              0.90f);
     DrawSensitivityPanel(screenWidth);
 }
 
@@ -439,12 +655,44 @@ void CameraAccuracyDebugScene::DrawPreviewBackground(float screenWidth,
 }
 
 void CameraAccuracyDebugScene::DrawSensitivityPanel(float screenWidth) {
-    const float controlSensitivity = AppSceneServices::GetCameraSensitivity();
-    const float slashSensitivity = AppSceneServices::GetCameraSlashSensitivity();
-    const float verticalSensitivity =
-        AppSceneServices::GetCameraVerticalSensitivity();
-    const float horizontalSensitivity =
-        AppSceneServices::GetCameraHorizontalSensitivity();
+    if (detailedSensitivityMode_) {
+        const float panelW = 840.0f;
+        const float rowGap = 38.0f;
+        const float panelH = 94.0f + rowGap * kVisibleDetailedRows;
+        const float panelX = (screenWidth - panelW) * 0.5f;
+        const float panelY = 82.0f;
+        const int firstRow =
+            std::clamp(selectedSensitivityIndex_ - kVisibleDetailedRows / 2, 0,
+                       kDetailedSensitivityCount - kVisibleDetailedRows);
+
+        DrawRect(panelX - 5.0f, panelY - 5.0f, panelW + 10.0f,
+                 panelH + 10.0f, Color(1.0f, 0.95f, 0.62f, 0.52f));
+        DrawRect(panelX, panelY, panelW, panelH, Color(0.0f, 0.0f, 0.0f, 0.92f));
+        DrawFrame(panelX, panelY, panelW, panelH, 4.0f,
+                  Color(1.0f, 0.86f, 0.20f, 1.0f));
+        DrawImage(pageLabelImage_, panelX + 24.0f, panelY + 16.0f, 0.72f, 0.92f);
+        char pageText[32]{};
+        std::snprintf(pageText, sizeof(pageText), "%02d/%02d",
+                      selectedSensitivityIndex_ + 1, kDetailedSensitivityCount);
+        DrawText(pageText, panelX + panelW - 92.0f, panelY + 22.0f, 1.45f,
+                 Color(0.96f, 0.88f, 0.54f, 0.92f));
+
+        for (int row = 0; row < kVisibleDetailedRows; ++row) {
+            const size_t i = static_cast<size_t>(firstRow + row);
+            const size_t kind = i < kHandSensitivityCount
+                                    ? i % kBasicSensitivityCount
+                                    : (i - kHandSensitivityCount + 2) % 4;
+            const XMFLOAT4 color =
+                kind == 0 ? Color(0.0f, 0.92f, 1.0f, 1.0f)
+                          : kind == 1 ? Color(1.0f, 0.28f, 0.20f, 1.0f)
+                                      : kind == 2 ? Color(0.58f, 1.0f, 0.30f, 1.0f)
+                                                  : Color(1.0f, 0.58f, 0.18f, 1.0f);
+            DrawSettingGaugeRow(i, settingLabelImages_[i], color, panelX,
+                                panelY + 62.0f + rowGap * row, panelW);
+        }
+        return;
+    }
+
     const float panelW = 560.0f;
     const float panelH = 198.0f;
     const float panelX = (screenWidth - panelW) * 0.5f;
@@ -456,18 +704,49 @@ void CameraAccuracyDebugScene::DrawSensitivityPanel(float screenWidth) {
     DrawFrame(panelX, panelY, panelW, panelH, 4.0f,
               Color(1.0f, 0.86f, 0.20f, 1.0f));
 
-    DrawGaugeRow(0, sensitivityLabelImages_[0], controlSensitivity,
+    DrawGaugeRow(0, settingLabelImages_[0], GetSensitivityValue(0),
                  Color(0.0f, 0.92f, 1.0f, 1.0f), panelX, panelY + 22.0f,
                  panelW);
-    DrawGaugeRow(1, sensitivityLabelImages_[1], slashSensitivity,
+    DrawGaugeRow(1, settingLabelImages_[1], GetSensitivityValue(1),
                  Color(1.0f, 0.28f, 0.20f, 1.0f), panelX, panelY + 64.0f,
                  panelW);
-    DrawGaugeRow(2, sensitivityLabelImages_[2], verticalSensitivity,
+    DrawGaugeRow(2, settingLabelImages_[2], GetSensitivityValue(2),
                  Color(0.58f, 1.0f, 0.30f, 1.0f), panelX, panelY + 106.0f,
                  panelW);
-    DrawGaugeRow(3, sensitivityLabelImages_[3], horizontalSensitivity,
+    DrawGaugeRow(3, settingLabelImages_[3], GetSensitivityValue(3),
                  Color(1.0f, 0.58f, 0.18f, 1.0f), panelX, panelY + 148.0f,
                  panelW);
+}
+
+void CameraAccuracyDebugScene::DrawSettingGaugeRow(
+    size_t index, const Image &label, const XMFLOAT4 &barColor, float panelX,
+    float rowY, float panelW) {
+    const bool selected = static_cast<int>(index) == selectedSensitivityIndex_;
+    const float labelX = panelX + 28.0f;
+    const float barX = panelX + 360.0f;
+    const float valueX = panelX + panelW - 86.0f;
+    const float barW = panelW - 482.0f;
+    const float barH = 18.0f;
+    if (selected) {
+        DrawImageSized(rowSelectImage_, panelX + 12.0f, rowY - 7.0f,
+                       panelW - 24.0f, 31.0f,
+                       Color(1.0f, 0.82f, 0.30f, 0.38f));
+        DrawFrame(panelX + 12.0f, rowY - 7.0f, panelW - 24.0f, 31.0f,
+                  2.0f, Color(1.0f, 0.78f, 0.24f, 0.70f));
+    }
+    DrawImageCentered(label, labelX + 150.0f, rowY + 9.0f, 300.0f, 30.0f,
+                      selected ? 1.0f : 0.82f);
+    const float normalized = GetSensitivityNormalizedValue(index);
+    DrawImageSized(gaugeTrackImage_, barX, rowY, barW, barH,
+                   Color(0.42f, 0.48f, 0.58f, 0.90f));
+    DrawImageSized(gaugeFillImage_, barX, rowY, barW * normalized, barH,
+                   barColor);
+    DrawFrame(barX, rowY, barW, barH, 2.0f,
+              selected ? Color(1.0f, 0.92f, 0.38f, 0.95f)
+                       : Color(0.86f, 0.88f, 0.90f, 0.54f));
+    DrawSensitivityValue(GetSensitivityValue(index), valueX, rowY - 3.0f, 0.32f,
+                         selected ? Color(1.0f, 0.88f, 0.34f, 1.0f)
+                                  : Color(0.92f, 0.94f, 0.96f, 0.84f));
 }
 
 void CameraAccuracyDebugScene::DrawGaugeRow(
@@ -487,9 +766,10 @@ void CameraAccuracyDebugScene::DrawGaugeRow(
     }
     DrawImageCentered(label, labelX + 48.0f, rowY + 10.0f, 110.0f, 28.0f,
                       selected ? 1.0f : 0.82f);
-    DrawRect(barX, rowY, barW, barH, Color(0.06f, 0.07f, 0.09f, 0.94f));
-    DrawRect(barX, rowY, barW * std::clamp(value, 0.0f, 1.0f), barH,
-             barColor);
+    DrawImageSized(gaugeTrackImage_, barX, rowY, barW, barH,
+                   Color(0.42f, 0.48f, 0.58f, 0.90f));
+    DrawImageSized(gaugeFillImage_, barX, rowY,
+                   barW * std::clamp(value, 0.0f, 1.0f), barH, barColor);
     DrawFrame(barX, rowY, barW, barH, 2.0f,
               selected ? Color(1.0f, 0.92f, 0.38f, 0.95f)
                        : Color(0.86f, 0.88f, 0.90f, 0.54f));
@@ -622,6 +902,21 @@ void CameraAccuracyDebugScene::DrawImage(const Image &image, float x, float y,
     ctx_->rendering.sprite->DrawSprite(sprite);
 }
 
+void CameraAccuracyDebugScene::DrawImageSized(const Image &image, float x,
+                                              float y, float w, float h,
+                                              const XMFLOAT4 &color) {
+    if (ctx_ == nullptr || ctx_->rendering.sprite == nullptr ||
+        image.textureId == 0 || w <= 0.0f || h <= 0.0f) {
+        return;
+    }
+    Sprite sprite{};
+    sprite.textureId = image.textureId;
+    sprite.position = {x, y};
+    sprite.size = {w, h};
+    sprite.color = color;
+    ctx_->rendering.sprite->DrawSprite(sprite);
+}
+
 void CameraAccuracyDebugScene::DrawImageCentered(const Image &image,
                                                  float centerX, float centerY,
                                                  float maxWidth,
@@ -637,18 +932,22 @@ void CameraAccuracyDebugScene::DrawImageCentered(const Image &image,
 
 void CameraAccuracyDebugScene::DrawSensitivityValue(
     float value, float x, float y, float scale, const XMFLOAT4 &color) {
-    const int clamped = std::clamp(static_cast<int>(std::round(value * 100.0f)),
-                                  0, 100);
-    const int whole = clamped / 100;
-    const int tens = (clamped / 10) % 10;
-    const int ones = clamped % 10;
-    const Image *parts[] = {&digitImages_[static_cast<size_t>(whole)],
-                            &dotImage_,
-                            &digitImages_[static_cast<size_t>(tens)],
-                            &digitImages_[static_cast<size_t>(ones)]};
+    char text[16]{};
+    if (value >= 10.0f) {
+        std::snprintf(text, sizeof(text), "%.1f", value);
+    } else {
+        std::snprintf(text, sizeof(text), "%.2f", value);
+    }
     float cursorX = x;
-    for (const Image *part : parts) {
+    for (char c : std::string(text)) {
+        const Image *part = nullptr;
+        if (c >= '0' && c <= '9') {
+            part = &digitImages_[static_cast<size_t>(c - '0')];
+        } else if (c == '.') {
+            part = &dotImage_;
+        }
         if (part == nullptr || part->textureId == 0) {
+            cursorX += 12.0f * scale;
             continue;
         }
         Sprite sprite{};

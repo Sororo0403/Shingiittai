@@ -144,6 +144,7 @@ class SwordUdpController {
     bool packetChangedThisUpdate_ = false;
     std::array<float, 2> motionSpeed_ = {0.0f, 0.0f};
     std::array<bool, 2> handSlashArmed_ = {true, true};
+    std::array<float, 2> handSlashNeutralTimer_ = {0.0f, 0.0f};
     std::array<float, 2> handSlashCooldown_ = {0.0f, 0.0f};
     std::array<DirectX::XMFLOAT2, 2> smoothedPalm_ = {
         DirectX::XMFLOAT2{0.5f, 0.5f}, DirectX::XMFLOAT2{0.5f, 0.5f}};

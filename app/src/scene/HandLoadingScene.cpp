@@ -220,7 +220,7 @@ void HandLoadingScene::DrawLoadingMark(float screenWidth, float screenHeight) {
     const float centerY = screenHeight - padding - radius;
     const float messageW = std::clamp(screenWidth * 0.46f, 420.0f, 760.0f);
     DrawImageCentered(faceCameraMessageImage_, screenWidth * 0.5f,
-                      screenHeight * 0.62f, messageW, screenHeight * 0.12f,
+                      screenHeight * 0.5f, messageW, screenHeight * 0.12f,
                       Color(1.0f, 1.0f, 1.0f, 0.96f));
     DrawLoadingRing(centerX, centerY, radius);
     DrawImageCentered(gameLogoImage_, centerX, centerY, radius * 1.30f,

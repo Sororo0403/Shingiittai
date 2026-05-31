@@ -228,6 +228,7 @@ class GameScene : public BaseScene {
         bool fromAbove = false;
         bool waitingToFire = false;
         DirectX::XMFLOAT3 position = {0.0f, 0.0f, 0.0f};
+        DirectX::XMFLOAT3 previousPosition = {0.0f, 0.0f, 0.0f};
         DirectX::XMFLOAT3 velocity = {0.0f, 0.0f, 0.0f};
         DirectX::XMFLOAT3 reflectedLaunchDirection = {0.0f, 0.0f, 1.0f};
         float age = 0.0f;

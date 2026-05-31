@@ -349,7 +349,7 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
         HandUdpSenderProcess::IsRuntimeAvailable();
     // WinApp初期化
     WinApp winApp;
-    winApp.Initialize(hInstance, nCmdShow, 1280, 720, L"3145_身技一体", true);
+    winApp.Initialize(hInstance, nCmdShow, 1280, 720, L"3145_身技一体", false);
     winApp.SetCursorVisible(false);
     // クライアント領域の幅と高さ
     int width = winApp.GetWidth();

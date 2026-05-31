@@ -40,7 +40,8 @@ void ShadowMapRenderer::Initialize(DirectXCommon *dxCommon,
                                    SrvManager *srvManager, uint32_t width,
                                    uint32_t height) {
     if (!dxCommon || !srvManager) {
-        throw std::runtime_error("ShadowMapRenderer::Initialize null argument");
+        Release();
+        return;
     }
 
     Release();
@@ -70,8 +71,7 @@ void ShadowMapRenderer::Release() {
 
 void ShadowMapRenderer::Resize(uint32_t width, uint32_t height) {
     if (!dxCommon_ || !srvManager_ || srvIndex_ == UINT32_MAX) {
-        throw std::runtime_error(
-            "ShadowMapRenderer::Resize called before Initialize");
+        return;
     }
 
     constexpr uint32_t kMaxShadowMapSize =
@@ -98,8 +98,7 @@ void ShadowMapRenderer::Resize(uint32_t width, uint32_t height) {
 
 void ShadowMapRenderer::Begin() {
     if (!dxCommon_ || !depthTexture_ || !dsvHeap_) {
-        throw std::runtime_error(
-            "ShadowMapRenderer::Begin called before Initialize");
+        return;
     }
 
     auto commandList = dxCommon_->GetCommandList();
@@ -121,8 +120,7 @@ void ShadowMapRenderer::Begin() {
 
 void ShadowMapRenderer::End() {
     if (!dxCommon_ || !depthTexture_) {
-        throw std::runtime_error(
-            "ShadowMapRenderer::End called before Initialize");
+        return;
     }
 
     auto commandList = dxCommon_->GetCommandList();
@@ -138,8 +136,7 @@ void ShadowMapRenderer::End() {
 
 D3D12_GPU_DESCRIPTOR_HANDLE ShadowMapRenderer::GetGpuHandle() const {
     if (srvGpuHandle_.ptr == 0) {
-        throw std::runtime_error(
-            "ShadowMapRenderer::GetGpuHandle called before Initialize");
+        return {};
     }
 
     return srvGpuHandle_;
@@ -147,8 +144,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE ShadowMapRenderer::GetGpuHandle() const {
 
 D3D12_CPU_DESCRIPTOR_HANDLE ShadowMapRenderer::GetDsvHandle() const {
     if (!dsvHeap_) {
-        throw std::runtime_error(
-            "ShadowMapRenderer::GetDsvHandle called before Initialize");
+        return {};
     }
 
     return dsvHeap_->GetCPUDescriptorHandleForHeapStart();

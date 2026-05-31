@@ -34,6 +34,29 @@ float SmoothStep(float t) { return t * t * (3.0f - 2.0f * t); }
 float Smooth01(float t) {
     return SmoothStep(std::clamp(t, 0.0f, 1.0f));
 }
+
+bool IsTitleStartKey(int key) {
+    switch (key) {
+    case DIK_ESCAPE:
+    case DIK_LWIN:
+    case DIK_RWIN:
+    case DIK_APPS:
+    case DIK_LCONTROL:
+    case DIK_RCONTROL:
+    case DIK_LSHIFT:
+    case DIK_RSHIFT:
+    case DIK_LMENU:
+    case DIK_RMENU:
+    case DIK_CAPITAL:
+    case DIK_NUMLOCK:
+    case DIK_SCROLL:
+    case DIK_SYSRQ:
+    case DIK_PAUSE:
+        return false;
+    default:
+        return true;
+    }
+}
 } // namespace
 
 TitleScene::~TitleScene() { StopTitleBgm(); }
@@ -440,7 +463,7 @@ void TitleScene::DrawImage(const Image &image, float x, float y, float alpha,
 
 bool TitleScene::IsAnyButtonTriggered(const Input &input) const {
     for (int key = 0; key < 256; ++key) {
-        if (key == DIK_ESCAPE) {
+        if (!IsTitleStartKey(key)) {
             continue;
         }
         if (input.IsKeyTrigger(key)) {

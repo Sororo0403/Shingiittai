@@ -93,6 +93,19 @@ static XMFLOAT4X4 StoreMatrix(const XMMATRIX &matrix) {
     return result;
 }
 
+static XMVECTOR LoadNormalizedQuaternionOrIdentity(const XMFLOAT4 &rotation) {
+    if (!std::isfinite(rotation.x) || !std::isfinite(rotation.y) ||
+        !std::isfinite(rotation.z) || !std::isfinite(rotation.w)) {
+        return XMQuaternionIdentity();
+    }
+    XMVECTOR q = XMLoadFloat4(&rotation);
+    const float lengthSq = XMVectorGetX(XMVector4LengthSq(q));
+    if (!std::isfinite(lengthSq) || lengthSq <= 0.000001f) {
+        return XMQuaternionIdentity();
+    }
+    return XMQuaternionNormalize(q);
+}
+
 static XMMATRIX MakeSafeInverseTranspose(const XMMATRIX &matrix) {
     const XMVECTOR determinant = XMMatrixDeterminant(matrix);
     const float determinantValue = XMVectorGetX(determinant);
@@ -245,8 +258,9 @@ ModelRenderer::WriteInstances(const Model &model, const Transform *transforms,
                               uint32_t instanceCount) {
     std::vector<InstanceData> instances(instanceCount);
     for (uint32_t index = 0; index < instanceCount; ++index) {
-        const Transform &transform = transforms[index];
-        XMVECTOR q = XMQuaternionNormalize(XMLoadFloat4(&transform.rotation));
+        const Transform transform = SanitizeTransformForDraw(transforms[index]);
+        XMVECTOR q =
+            LoadNormalizedQuaternionOrIdentity(transform.rotation);
         const XMMATRIX world =
             XMMatrixScaling(transform.scale.x, transform.scale.y,
                             transform.scale.z) *
@@ -264,13 +278,18 @@ ModelRenderer::WriteInstances(const Model &model,
                               const InstanceData *sourceInstances,
                               uint32_t instanceCount) {
     std::vector<InstanceData> instances(instanceCount);
-    const XMMATRIX root =
-        model.hasRootAnimation ? XMLoadFloat4x4(&model.rootAnimationMatrix)
-                               : XMMatrixIdentity();
+    const XMFLOAT4X4 safeRootMatrix =
+        model.hasRootAnimation
+            ? InstanceDataDetail::SanitizeMatrix(model.rootAnimationMatrix)
+            : InstanceDataDetail::IdentityMatrix();
+    const XMMATRIX root = model.hasRootAnimation
+                              ? XMLoadFloat4x4(&safeRootMatrix)
+                              : XMMatrixIdentity();
 
     for (uint32_t index = 0; index < instanceCount; ++index) {
-        instances[index] = sourceInstances[index];
-        XMMATRIX world = XMLoadFloat4x4(&sourceInstances[index].world);
+        instances[index] =
+            SanitizeInstanceDataForDraw(sourceInstances[index]);
+        XMMATRIX world = XMLoadFloat4x4(&instances[index].world);
         if (model.hasRootAnimation) {
             world = root * world;
         }
@@ -283,9 +302,6 @@ ModelRenderer::WriteInstances(const Model &model,
 
     D3D12_VERTEX_BUFFER_VIEW view{};
     view.BufferLocation = allocation.gpu;
-    if (allocation.size > (std::numeric_limits<UINT>::max)()) {
-        throw std::runtime_error("ModelRenderer instance buffer size overflow");
-    }
     view.SizeInBytes = static_cast<UINT>(allocation.size);
     view.StrideInBytes = sizeof(InstanceData);
     return view;

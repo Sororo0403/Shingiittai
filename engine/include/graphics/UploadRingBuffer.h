@@ -51,7 +51,9 @@ class UploadRingBuffer {
     template <class T>
     UploadAllocation Write(const T &value, size_t alignment = 256) {
         UploadAllocation allocation = Allocate(sizeof(T), alignment);
-        *static_cast<T *>(allocation.cpu) = value;
+        if (allocation.cpu != nullptr) {
+            *static_cast<T *>(allocation.cpu) = value;
+        }
         return allocation;
     }
 
@@ -59,15 +61,17 @@ class UploadRingBuffer {
     UploadAllocation WriteArray(const T *values, size_t count,
                                 size_t alignment = alignof(T)) {
         if (!values || count == 0) {
-            throw std::runtime_error("UploadRingBuffer::WriteArray invalid array");
+            return {};
         }
         if (count > (std::numeric_limits<size_t>::max)() / sizeof(T)) {
-            throw std::runtime_error("UploadRingBuffer::WriteArray size overflow");
+            return {};
         }
         const size_t bytes = sizeof(T) * count;
         UploadAllocation allocation =
             Allocate(bytes, alignment);
-        std::memcpy(allocation.cpu, values, bytes);
+        if (allocation.cpu != nullptr) {
+            std::memcpy(allocation.cpu, values, bytes);
+        }
         return allocation;
     }
 

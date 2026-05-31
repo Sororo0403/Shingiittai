@@ -46,11 +46,12 @@ class OptionScene : public BaseScene {
                    float alpha = 1.0f);
     std::unique_ptr<BaseScene> CreateReturnScene() const;
 
-    static constexpr int kOptionCount = 7;
+    static constexpr int kOptionCount = 8;
 
     ReturnTarget returnTarget_ = ReturnTarget::WeaponSelect;
     std::unique_ptr<GameScene> backgroundScene_;
     Image titleImage_{};
+    Image displayLabelImage_{};
     Image bgmLabelImage_{};
     Image seLabelImage_{};
     Image cameraSensitivityLabelImage_{};
@@ -58,6 +59,8 @@ class OptionScene : public BaseScene {
     Image cameraVerticalSensitivityLabelImage_{};
     Image cameraHorizontalSensitivityLabelImage_{};
     Image mouseSlashLabelImage_{};
+    Image fullscreenValueImage_{};
+    Image windowValueImage_{};
     Image keyAImage_{};
     Image keyDImage_{};
     Image tabBackPromptImage_{};

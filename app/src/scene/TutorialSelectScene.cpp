@@ -102,6 +102,7 @@ void TutorialSelectScene::Initialize(const SceneContext &ctx) {
     waitingForHandTrackingReady_ = false;
     handTrackingStartRequested_ = false;
     handCameraConfirmVisible_ = false;
+    cameraTestConfirmPending_ = false;
     preserveMenuBgmOnExit_ = false;
     handCameraConfirmIndex_ = 1;
     utilityMenuIndex_ = 0;
@@ -351,6 +352,25 @@ void TutorialSelectScene::BeginHandCameraConfirm() {
     handCameraConfirmIndex_ = 1;
 }
 
+void TutorialSelectScene::BeginCameraTestConfirm() {
+    if (!cameraAvailable_) {
+        ShowUnavailableMessage();
+        return;
+    }
+    cameraTestConfirmPending_ = true;
+    handCameraConfirmVisible_ = true;
+    handCameraConfirmIndex_ = 1;
+}
+
+void TutorialSelectScene::BeginCameraTest() {
+    handCameraConfirmVisible_ = false;
+    cameraTestConfirmPending_ = false;
+    menuActionRequested_ = false;
+    utilityMenuVisible_ = false;
+    sceneManager_->ChangeScene(std::make_unique<HandLoadingScene>(
+        CameraAccuracyDebugScene::ReturnTarget::TutorialSelect));
+}
+
 void TutorialSelectScene::ContinueHandStart() {
     if (!RequestHandTrackingStartOnce()) {
         return;
@@ -366,6 +386,10 @@ void TutorialSelectScene::BeginShowUtilityMenu() {
 }
 
 void TutorialSelectScene::BeginUtilityMenuAction() {
+    if (utilityMenuIndex_ == 3) {
+        BeginCameraTestConfirm();
+        return;
+    }
     menuActionRequested_ = true;
     startRequested_ = false;
     utilityMenuVisible_ = true;
@@ -476,6 +500,7 @@ void TutorialSelectScene::UpdateHandCameraConfirm(Input *input) {
     }
     if (input->IsKeyTrigger(DIK_ESCAPE)) {
         handCameraConfirmVisible_ = false;
+        cameraTestConfirmPending_ = false;
         handCameraConfirmIndex_ = 1;
         AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
         return;
@@ -488,12 +513,17 @@ void TutorialSelectScene::UpdateHandCameraConfirm(Input *input) {
     }
     if (handCameraConfirmIndex_ != 0) {
         handCameraConfirmVisible_ = false;
+        cameraTestConfirmPending_ = false;
         AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
         return;
     }
 
     handCameraConfirmVisible_ = false;
     AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Selected);
+    if (cameraTestConfirmPending_) {
+        BeginCameraTest();
+        return;
+    }
     ContinueHandStart();
 }
 
@@ -761,8 +791,18 @@ void TutorialSelectScene::DrawUtilityMenuWindow(float screenWidth,
     DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
              MakeColor(0.0f, 0.0f, 0.0f, 0.54f));
 
-    const float panelW = std::clamp(screenWidth * 0.72f, 860.0f, 1220.0f);
-    const float panelH = std::clamp(screenHeight * 0.44f, 380.0f, 480.0f);
+    const float screenMargin = 48.0f;
+    const float availablePanelW =
+        (std::max)(320.0f, screenWidth - screenMargin * 2.0f);
+    const float availablePanelH =
+        (std::max)(280.0f, screenHeight - screenMargin * 2.0f);
+    const float panelMaxW = (std::min)(1220.0f, availablePanelW);
+    const float panelMaxH = (std::min)(480.0f, availablePanelH);
+    const float panelMinW = (std::min)(860.0f, panelMaxW);
+    const float panelMinH = (std::min)(380.0f, panelMaxH);
+    const float panelW = std::clamp(screenWidth * 0.72f, panelMinW, panelMaxW);
+    const float panelH =
+        std::clamp(screenHeight * 0.44f, panelMinH, panelMaxH);
     const float panelX = (screenWidth - panelW) * 0.5f;
     const float panelY = (screenHeight - panelH) * 0.5f;
     const float edge = 3.0f;
@@ -788,10 +828,19 @@ void TutorialSelectScene::DrawUtilityMenuWindow(float screenWidth,
                   kUtilityMenuTitleContentBounds.CenterY() * titleScale,
               titleScale, 0.94f);
 
-    const float buttonSize = std::clamp(panelH * 0.46f, 140.0f, 180.0f);
+    const float buttonGap = panelW * 0.028f;
+    const float buttonAreaPadding = panelW * 0.075f;
+    const float buttonAreaW =
+        (std::max)(0.0f, panelW - buttonAreaPadding * 2.0f);
+    const float buttonSizeByWidth =
+        (buttonAreaW -
+         buttonGap * static_cast<float>(kUtilityMenuItemCount - 1)) /
+        static_cast<float>(kUtilityMenuItemCount);
+    const float buttonSize = std::clamp((std::min)(panelH * 0.46f,
+                                                   buttonSizeByWidth),
+                                        32.0f, 180.0f);
     const float buttonW = buttonSize;
     const float buttonH = buttonSize;
-    const float buttonGap = panelW * 0.028f;
     const float totalButtonW =
         buttonSize * static_cast<float>(kUtilityMenuItemCount) +
         buttonGap * static_cast<float>(kUtilityMenuItemCount - 1);

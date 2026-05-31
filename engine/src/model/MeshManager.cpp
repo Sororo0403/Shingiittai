@@ -10,13 +10,21 @@
 using namespace DxUtils;
 using Microsoft::WRL::ComPtr;
 
+namespace {
+const Mesh &FallbackMesh() {
+    static const Mesh fallback{};
+    return fallback;
+}
+} // namespace
+
 MeshManager::~MeshManager() {
     Finalize();
 }
 
 void MeshManager::Initialize(DirectXCommon *dxCommon) {
     if (!dxCommon) {
-        throw std::runtime_error("MeshManager::Initialize null argument");
+        Finalize();
+        return;
     }
     Finalize();
     dxCommon_ = dxCommon;
@@ -37,13 +45,13 @@ uint32_t MeshManager::CreateMesh(const void *vertexData, uint32_t vertexStride,
                                  const uint32_t *indexData, uint32_t indexCount,
                                  D3D12_PRIMITIVE_TOPOLOGY primitiveTopology) {
     if (!dxCommon_) {
-        throw std::runtime_error("MeshManager is not initialized");
+        return UINT32_MAX;
     }
     if (vertexStride == 0 || vertexCount == 0 || indexCount == 0) {
-        throw std::runtime_error("CreateMesh received empty mesh data");
+        return UINT32_MAX;
     }
     if (!vertexData || !indexData) {
-        throw std::runtime_error("CreateMesh received null mesh data");
+        return UINT32_MAX;
     }
 
     Mesh mesh{};
@@ -57,7 +65,7 @@ uint32_t MeshManager::CreateMesh(const void *vertexData, uint32_t vertexStride,
         sizeof(uint32_t) * static_cast<uint64_t>(indexCount);
     if (vbSize64 > (std::numeric_limits<UINT>::max)() ||
         ibSize64 > (std::numeric_limits<UINT>::max)()) {
-        throw std::runtime_error("CreateMesh buffer is too large");
+        return UINT32_MAX;
     }
     const UINT vbSize = static_cast<UINT>(vbSize64);
     const UINT ibSize = static_cast<UINT>(ibSize64);
@@ -103,7 +111,7 @@ uint32_t MeshManager::CreateMesh(const void *vertexData, uint32_t vertexStride,
 
     if (meshes_.size() >=
         static_cast<size_t>((std::numeric_limits<uint32_t>::max)())) {
-        throw std::runtime_error("MeshManager mesh id overflow");
+        return UINT32_MAX;
     }
     meshes_.push_back(std::move(mesh));
     uint32_t meshId = static_cast<uint32_t>(meshes_.size() - 1);
@@ -113,7 +121,7 @@ uint32_t MeshManager::CreateMesh(const void *vertexData, uint32_t vertexStride,
 
 const Mesh &MeshManager::GetMesh(uint32_t meshId) const {
     if (!IsValidMeshId(meshId)) {
-        throw std::out_of_range("MeshManager mesh id out of range");
+        return FallbackMesh();
     }
     return meshes_[meshId];
 }

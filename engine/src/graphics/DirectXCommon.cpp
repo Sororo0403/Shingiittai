@@ -3,11 +3,19 @@
 #include "graphics/DxUtils.h"
 #include "graphics/SrvManager.h"
 #include <algorithm>
+#include <cmath>
 #include <stdexcept>
 
 using namespace DxUtils;
 
 namespace {
+float ClampFinite(float value, float minimum, float maximum, float fallback) {
+    if (!std::isfinite(value)) {
+        return fallback;
+    }
+    return std::clamp(value, minimum, maximum);
+}
+
 Microsoft::WRL::ComPtr<IDXGIAdapter1>
 PickHighPerformanceAdapter(IDXGIFactory7 *factory) {
     Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
@@ -360,7 +368,7 @@ void DirectXCommon::TransitionBackBuffer(
 
 void DirectXCommon::CreateDepthStencilSrv(SrvManager *srvManager) {
     if (srvManager == nullptr) {
-        throw std::runtime_error("CreateDepthStencilSrv: srvManager is null");
+        return;
     }
 
     srvManager_ = srvManager;
@@ -373,7 +381,7 @@ void DirectXCommon::CreateDepthStencilSrv(SrvManager *srvManager) {
 
 void DirectXCommon::RegisterSceneColorSRV(SrvManager *srvManager) {
     if (srvManager == nullptr) {
-        throw std::runtime_error("RegisterSceneColorSRV: srvManager is null");
+        return;
     }
 
     srvManager_ = srvManager;
@@ -435,10 +443,10 @@ void DirectXCommon::SetClearColor(const DirectX::XMFLOAT4 &color) {
 }
 
 void DirectXCommon::SetClearColor(float r, float g, float b, float a) {
-    clearColor_[0] = r;
-    clearColor_[1] = g;
-    clearColor_[2] = b;
-    clearColor_[3] = a;
+    clearColor_[0] = ClampFinite(r, 0.0f, 1.0f, kClearColor[0]);
+    clearColor_[1] = ClampFinite(g, 0.0f, 1.0f, kClearColor[1]);
+    clearColor_[2] = ClampFinite(b, 0.0f, 1.0f, kClearColor[2]);
+    clearColor_[3] = ClampFinite(a, 0.0f, 1.0f, kClearColor[3]);
 }
 
 void DirectXCommon::ResetClearColor() {
@@ -711,6 +719,10 @@ D3D12_CPU_DESCRIPTOR_HANDLE DirectXCommon::GetBackBufferRtvHandle() const {
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE DirectXCommon::GetSceneRtvHandle() const {
+    if (!rtvHeap_ || rtvDescriptorSize_ == 0) {
+        return {};
+    }
+
     return CD3DX12_CPU_DESCRIPTOR_HANDLE(
         rtvHeap_->GetCPUDescriptorHandleForHeapStart(),
         static_cast<INT>(kSceneRtvIndex), static_cast<INT>(rtvDescriptorSize_));
@@ -718,9 +730,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE DirectXCommon::GetSceneRtvHandle() const {
 
 D3D12_CPU_DESCRIPTOR_HANDLE DirectXCommon::GetDepthStencilView() const {
     if (!dsvHeap_ || !depthBuffer_) {
-        throw std::runtime_error(
-            "DirectXCommon::GetDepthStencilView called before depth buffer "
-            "initialization");
+        return {};
     }
 
     return dsvHeap_->GetCPUDescriptorHandleForHeapStart();
@@ -730,9 +740,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE
 DirectXCommon::GetDepthStencilGpuHandle() const {
     if (depthSrvIndex_ == UINT_MAX || depthSrvGpuHandle_.ptr == 0 ||
         !depthBuffer_) {
-        throw std::runtime_error(
-            "DirectXCommon::GetDepthStencilGpuHandle called before "
-            "CreateDepthStencilSrv");
+        return {};
     }
 
     return depthSrvGpuHandle_;
@@ -741,13 +749,10 @@ DirectXCommon::GetDepthStencilGpuHandle() const {
 D3D12_GPU_DESCRIPTOR_HANDLE
 DirectXCommon::GetSceneSrvGpuHandle(const SrvManager *srvManager) const {
     if (srvManager == nullptr) {
-        throw std::runtime_error(
-            "DirectXCommon::GetSceneSrvGpuHandle null srvManager");
+        return {};
     }
     if (sceneSrvIndex_ == UINT_MAX || !sceneColorBuffer_) {
-        throw std::runtime_error(
-            "DirectXCommon::GetSceneSrvGpuHandle called before "
-            "RegisterSceneColorSRV");
+        return {};
     }
 
     return srvManager->GetGpuHandle(sceneSrvIndex_);
