@@ -9,6 +9,7 @@
 #include "TutorialSelectScene.h"
 #include "WeaponSelectScene.h"
 #include "WinApp.h"
+#include <Xinput.h>
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
@@ -40,6 +41,11 @@ float Smooth01(float t) {
 std::filesystem::path RankingPath() {
     return AssetManager::GetAssetRoot() / L"save" / L"ranking.tsv";
 }
+
+InputControlType RankingModeFromToken(const std::string &token) {
+    return token == "hand" ? InputControlType::Hand
+                           : InputControlType::KeyboardMouse;
+}
 } // namespace
 
 RankingScene::RankingScene(ReturnTarget returnTarget)
@@ -67,6 +73,10 @@ void RankingScene::Initialize(const SceneContext &ctx) {
         LoadTextureImage(L"app/resources/ui/result/text/ranking_time.png");
     difficultyHeaderLabel_ =
         LoadTextureImage(L"app/resources/ui/result/text/ranking_difficulty.png");
+    modeKbmLabel_ =
+        LoadTextureImage(L"app/resources/ui/weapon_select/text/input_kbm.png");
+    modeHandLabel_ =
+        LoadTextureImage(L"app/resources/ui/weapon_select/text/input_hand.png");
     for (int i = 0; i < 10; ++i) {
         digitImages_[static_cast<size_t>(i)] =
             LoadTextureImage(L"app/resources/ui/result/mplus/glyphs/char_" +
@@ -100,6 +110,20 @@ void RankingScene::Update() {
     }
 
     Input *input = ctx_->systems.input;
+    if (input != nullptr) {
+        const bool gamepad = input->IsGamepadConnected();
+        if (input->IsKeyTrigger(DIK_A) || input->IsKeyTrigger(DIK_LEFT) ||
+            (gamepad &&
+             input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_LEFT))) {
+            ChangeControlType(InputControlType::KeyboardMouse);
+        }
+        if (input->IsKeyTrigger(DIK_D) || input->IsKeyTrigger(DIK_RIGHT) ||
+            (gamepad &&
+             input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_RIGHT))) {
+            ChangeControlType(InputControlType::Hand);
+        }
+    }
+
     if (input != nullptr &&
         (input->IsKeyTrigger(DIK_ESCAPE) || input->IsKeyTrigger(DIK_SPACE))) {
         AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
@@ -150,7 +174,21 @@ void RankingScene::LoadRanking() {
             continue;
         }
 
-        if (stream >> entry.score >> entry.difficulty >> entry.clearTime) {
+        std::string mode;
+        if (stream >> mode >> entry.score >> entry.difficulty >>
+            entry.clearTime) {
+            entry.controlType = RankingModeFromToken(mode);
+        } else {
+            stream.clear();
+            stream.str(line);
+            if (!(stream >> entry.score >> entry.difficulty >>
+                  entry.clearTime)) {
+                continue;
+            }
+            entry.controlType = InputControlType::KeyboardMouse;
+        }
+
+        if (entry.controlType == selectedControlType_) {
             entry.score = (std::max)(0, entry.score);
             entry.difficulty = std::clamp(entry.difficulty, 0.0f, 9.0f);
             entry.clearTime = (std::max)(0.0f, entry.clearTime);
@@ -170,6 +208,15 @@ void RankingScene::LoadRanking() {
 void RankingScene::BeginReturn() {
     returnRequested_ = true;
     transitionTimer_ = 0.0f;
+}
+
+void RankingScene::ChangeControlType(InputControlType controlType) {
+    if (selectedControlType_ == controlType) {
+        return;
+    }
+    selectedControlType_ = controlType;
+    LoadRanking();
+    AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
 }
 
 void RankingScene::DrawOverlay(float screenWidth, float screenHeight) {
@@ -212,6 +259,35 @@ void RankingScene::DrawRanking(float screenWidth, float screenHeight) {
     const float titleW = rankingTitleLabel_.width * titleScale;
     DrawImage(rankingTitleLabel_, x + (panelW - titleW) * 0.5f,
               y + panelH * 0.085f, titleScale, 0.94f * intro);
+
+    const float tabY = y + panelH * 0.185f;
+    const float tabW = panelW * 0.22f;
+    const float tabH = panelH * 0.045f;
+    const float tabGap = panelW * 0.025f;
+    const float tabStartX = x + (panelW - tabW * 2.0f - tabGap) * 0.5f;
+    const Image *modeLabels[2] = {&modeKbmLabel_, &modeHandLabel_};
+    const InputControlType modes[2] = {InputControlType::KeyboardMouse,
+                                       InputControlType::Hand};
+    for (int i = 0; i < 2; ++i) {
+        const bool selected = selectedControlType_ == modes[i];
+        const float tabX = tabStartX + static_cast<float>(i) * (tabW + tabGap);
+        DrawRect(tabX, tabY, tabW, tabH,
+                 selected ? Color(0.18f, 0.13f, 0.055f, 0.88f * intro)
+                          : Color(0.040f, 0.046f, 0.058f, 0.72f * intro));
+        DrawFrame(tabX, tabY, tabW, tabH, selected ? 2.0f : 1.0f,
+                  selected ? Color(1.0f, 0.78f, 0.34f, 0.88f * intro)
+                           : Color(0.62f, 0.66f, 0.72f, 0.32f * intro));
+        const Image &label = *modeLabels[i];
+        const float labelScale =
+            (std::min)({(tabW * 0.72f) / (std::max)(label.width, 1.0f),
+                        (tabH * 0.56f) / (std::max)(label.height, 1.0f),
+                        0.62f});
+        const float labelW = label.width * labelScale;
+        const float labelH = label.height * labelScale;
+        DrawImage(label, tabX + (tabW - labelW) * 0.5f,
+                  tabY + (tabH - labelH) * 0.5f, labelScale,
+                  (selected ? 0.92f : 0.62f) * intro);
+    }
 
     const float contentLeft = x + panelW * 0.08f;
     const float contentRight = x + panelW * 0.92f;

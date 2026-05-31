@@ -40,6 +40,9 @@ class DirectXCommon {
     /// <param name="hwnd">ウィンドウハンドル</param>
     /// <param name="width">クライアント領域の幅</param>
     /// <param name="height">クライアント領域の高さ</param>
+    /// <summary>
+    /// 必要なリソースを初期化する
+    /// </summary>
     void Initialize(HWND hwnd, int width, int height);
 
     /// <summary>
@@ -68,6 +71,9 @@ class DirectXCommon {
     /// <param name="clearDepth">
     /// trueの場合、意図的に深度を破棄する。透明エフェクト前の復元ではfalseにする。
     /// </param>
+    /// <summary>
+    /// RestoreSceneRenderStateを実行する
+    /// </summary>
     void RestoreSceneRenderState(bool clearDepth = false);
 
     /// <summary>
@@ -152,6 +158,7 @@ class DirectXCommon {
     /// コマンドキューへFenceを送信し、GPU処理の完了を待機する
     /// </summary>
     void WaitForGpu();
+    bool WaitForGpuIfPossible();
 
     /// <summary>
     /// GPU同期に必要なD3D12オブジェクトが初期化済みかを取得する
@@ -199,16 +206,12 @@ class DirectXCommon {
     /// <summary>
     /// 深度ステンシルビューのCPUハンドルを取得する
     /// </summary>
-    D3D12_CPU_DESCRIPTOR_HANDLE GetDepthStencilView() const {
-        return dsvHeap_->GetCPUDescriptorHandleForHeapStart();
-    }
+    D3D12_CPU_DESCRIPTOR_HANDLE GetDepthStencilView() const;
 
     /// <summary>
     /// 深度SRVのGPUハンドルを取得する
     /// </summary>
-    D3D12_GPU_DESCRIPTOR_HANDLE GetDepthStencilGpuHandle() const {
-        return depthSrvGpuHandle_;
-    }
+    D3D12_GPU_DESCRIPTOR_HANDLE GetDepthStencilGpuHandle() const;
 
     /// <summary>
     /// シーンカラー用リソースを取得する
@@ -327,6 +330,9 @@ class DirectXCommon {
     /// <remarks>
     /// sceneColorBuffer_のResourceBarrierは必ずこの関数を通す。
     /// </remarks>
+    /// <summary>
+    /// TransitionSceneColorを実行する
+    /// </summary>
     void TransitionSceneColor(D3D12_RESOURCE_STATES afterState);
 
     /// <summary>

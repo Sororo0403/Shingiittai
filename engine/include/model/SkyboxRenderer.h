@@ -14,7 +14,7 @@ class SrvManager;
 /// </summary>
 class SkyboxRenderer {
   public:
-    ~SkyboxRenderer() noexcept;
+    ~SkyboxRenderer();
 
     /// <summary>
     /// スカイボックス描画に必要なリソースを初期化する
@@ -36,6 +36,9 @@ class SkyboxRenderer {
     /// <param
     /// name="textureId">描画に使用するキューブマップのテクスチャID</param>
     /// <param name="camera">描画に使用するカメラ</param>
+    /// <summary>
+    /// 描画を実行する
+    /// </summary>
     void Draw(uint32_t textureId, const Camera &camera);
 
   private:

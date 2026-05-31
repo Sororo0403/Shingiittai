@@ -22,6 +22,23 @@ DirectX::XMFLOAT4 LerpColor(const DirectX::XMFLOAT4 &from,
             from.z + (to.z - from.z) * t, from.w + (to.w - from.w) * t};
 }
 
+float FarDistanceVisualScale(const DirectX::XMFLOAT3 &visualPosition,
+                             const DirectX::XMFLOAT3 &playerPosition) {
+    constexpr float kScaleStartDistance = 6.0f;
+    constexpr float kScaleFullDistance = 18.0f;
+    constexpr float kMaxScaleBonus = 0.55f;
+
+    const float dx = playerPosition.x - visualPosition.x;
+    const float dy = playerPosition.y - visualPosition.y;
+    const float dz = playerPosition.z - visualPosition.z;
+    const float distance = std::sqrt(dx * dx + dy * dy + dz * dz);
+    const float t =
+        Saturate((distance - kScaleStartDistance) /
+                 (kScaleFullDistance - kScaleStartDistance));
+    const float eased = t * t * (3.0f - 2.0f * t);
+    return 1.0f + kMaxScaleBonus * eased;
+}
+
 } // namespace
 
 void Enemy::UpdateParts() {
@@ -439,6 +456,46 @@ void Enemy::UpdateParts() {
         visualRoll += 0.04f * pulse;
     }
 
+    if (action_.kind == ActionKind::Warp && action_.step == ActionStep::Start) {
+        const float startTime = GetCurrentWarpStartTime();
+        const float t =
+            startTime > 0.0001f ? Saturate(runtime_.stateTimer / startTime)
+                                 : 1.0f;
+        const float windup = std::sin(t * 3.14159265f);
+        const float snapT = Saturate((t - 0.34f) / 0.66f);
+        const float snap = std::pow(snapT, 2.65f);
+        const float shimmer =
+            std::sin(runtime_.stateTimer * 72.0f) * (0.35f + 0.65f * snap);
+
+        visualTf_.scale.x += 0.18f * windup - 0.42f * snap;
+        visualTf_.scale.y += 0.10f * windup + 0.54f * snap;
+        visualTf_.scale.z -= 0.12f * windup + 0.34f * snap;
+        visualTf_.position.y += 0.04f * windup + 0.18f * snap;
+        visualTf_.position.x += rightX * shimmer * 0.045f;
+        visualTf_.position.z += rightZ * shimmer * 0.045f;
+        visualYaw += shimmer * 0.10f + snap * 0.12f;
+        visualRoll += shimmer * 0.18f - snap * 0.20f;
+    } else if (action_.kind == ActionKind::Warp &&
+               action_.step == ActionStep::End) {
+        const float t = Saturate(runtime_.stateTimer / 0.26f);
+        const float returnT = t * t * (3.0f - 2.0f * t);
+        const float distortion = std::pow(1.0f - returnT, 2.20f);
+        const float overshoot =
+            std::sin(t * 3.14159265f) * std::pow(1.0f - t, 0.65f);
+        const float shimmer =
+            std::sin(runtime_.stateTimer * 64.0f) * (1.0f - returnT);
+
+        visualTf_.scale.x += -0.36f * distortion + 0.20f * overshoot;
+        visualTf_.scale.y += 0.48f * distortion - 0.18f * overshoot;
+        visualTf_.scale.z += -0.30f * distortion + 0.18f * overshoot;
+        visualTf_.position.y += 0.16f * distortion - 0.05f * overshoot;
+        visualTf_.position.x += rightX * shimmer * 0.040f;
+        visualTf_.position.z += rightZ * shimmer * 0.040f;
+        visualYaw += shimmer * 0.08f - distortion * 0.08f;
+        visualRoll += shimmer * 0.14f + distortion * 0.16f -
+                      overshoot * 0.12f;
+    }
+
     if (suppressAttackBodyMotion) {
         bodyTf_.position.x = tf_.position.x;
         bodyTf_.position.z = tf_.position.z;
@@ -511,8 +568,8 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
         break;
     case ActionKind::Warp:
         actionTint = {0.46f, 0.72f, 0.92f, 0.24f};
-        actionIntensity = 0.075f + 0.030f * actionPulse;
-        actionNoise = 0.16f;
+        actionIntensity = 0.0f;
+        actionNoise = 0.0f;
         break;
     case ActionKind::Stalk:
         actionTint = {0.58f, 0.60f, 0.52f, 0.12f};
@@ -594,28 +651,44 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
         hitEffect.alphaBoost = hasHitReactionFlash ? 0.62f : 0.34f;
     }
 
+    ModelDrawEffect baseEffect{};
     if (isHitFlashing) {
-        modelManager->SetDrawEffect(hitEffect);
+        baseEffect = hitEffect;
     } else {
-        ModelDrawEffect actionEffect{};
-        actionEffect.enabled = false;
-        actionEffect.additiveBlend = false;
-        actionEffect.color = actionTint;
-        actionEffect.intensity = (isTelegraphCharge || action_.step == ActionStep::Active)
-                                     ? actionIntensity * 0.32f
-                                     : actionIntensity * 0.50f;
-        actionEffect.fresnelPower = 2.5f;
-        actionEffect.noiseAmount = actionNoise;
-        actionEffect.time = runtime_.stateTimer;
-        modelManager->SetDrawEffect(actionEffect);
+        baseEffect.enabled = false;
+        baseEffect.additiveBlend = false;
+        baseEffect.color = actionTint;
+        baseEffect.intensity =
+            (isTelegraphCharge || action_.step == ActionStep::Active)
+                ? actionIntensity * 0.32f
+                : actionIntensity * 0.50f;
+        baseEffect.fresnelPower = 2.5f;
+        baseEffect.noiseAmount = actionNoise;
+        baseEffect.time = runtime_.stateTimer;
     }
 
-    auto drawEnemyVisual = [&](const Transform &visual) {
+    auto applyBaseEffect = [&](float alpha) {
+        ModelDrawEffect effect = baseEffect;
+        if (alpha < 0.999f) {
+            effect.enabled = true;
+            effect.blendOverride = ModelDrawEffectBlendOverride::Alpha;
+            effect.alphaMultiplier = std::clamp(alpha, 0.0f, 1.0f);
+            if (!baseEffect.enabled) {
+                effect.intensity = 0.0f;
+            }
+        }
+        modelManager->SetDrawEffect(effect);
+    };
+
+    auto drawEnemyVisual = [&](const Transform &visual, float alpha) {
         Transform scaledVisual = visual;
-        scaledVisual.scale.x *= visualScale;
-        scaledVisual.scale.y *= visualScale;
-        scaledVisual.scale.z *= visualScale;
-        if (visualScale > 1.01f && !isHitFlashing) {
+        const float distanceVisualScale =
+            visualScale * FarDistanceVisualScale(visual.position, playerPos_);
+        scaledVisual.scale.x *= distanceVisualScale;
+        scaledVisual.scale.y *= distanceVisualScale;
+        scaledVisual.scale.z *= distanceVisualScale;
+        applyBaseEffect(alpha);
+        if (alpha > 0.999f && distanceVisualScale > 1.01f && !isHitFlashing) {
             Transform rimVisual = scaledVisual;
             rimVisual.scale.x *= 1.015f;
             rimVisual.scale.y *= 1.012f;
@@ -639,11 +712,13 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
             finishEffect.time = runtime_.stateTimer;
             modelManager->SetDrawEffect(finishEffect);
         }
+        applyBaseEffect(alpha);
         modelManager->Draw(modelId_, scaledVisual, camera);
     };
 
-    if (isVisible_) {
-        drawEnemyVisual(visualTf_);
+    const float warpAlpha = GetWarpVisualAlpha();
+    if (isVisible_ && warpAlpha > 0.001f) {
+        drawEnemyVisual(visualTf_, warpAlpha);
     }
 
     for (const auto &clone : tripleIaiClones_) {
@@ -651,7 +726,7 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
             continue;
         }
 
-        drawEnemyVisual(clone.visual);
+        drawEnemyVisual(clone.visual, 1.0f);
     }
 
     for (const auto &trail : afterimageGhosts_) {
@@ -663,9 +738,12 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
                                              1.0f)
                                 : 0.0f;
         Transform trailVisual = trail.visual;
-        trailVisual.scale.x *= visualScale * (0.98f + 0.04f * alpha);
-        trailVisual.scale.y *= visualScale * (0.98f + 0.04f * alpha);
-        trailVisual.scale.z *= visualScale * (0.98f + 0.04f * alpha);
+        const float distanceVisualScale =
+            visualScale *
+            FarDistanceVisualScale(trailVisual.position, playerPos_);
+        trailVisual.scale.x *= distanceVisualScale * (0.98f + 0.04f * alpha);
+        trailVisual.scale.y *= distanceVisualScale * (0.98f + 0.04f * alpha);
+        trailVisual.scale.z *= distanceVisualScale * (0.98f + 0.04f * alpha);
 
         ModelDrawEffect trailEffect{};
         trailEffect.enabled = true;

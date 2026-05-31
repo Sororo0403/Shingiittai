@@ -4,12 +4,15 @@
 #include "Input.h"
 #include "ModelDrawEffect.h"
 #include "ModelManager.h"
+#include "OptionScene.h"
 #include "PostEffectManager.h"
 #include "SceneManager.h"
 #include "Sprite.h"
 #include "SpriteManager.h"
 #include "TextureManager.h"
 #include "TitleScene.h"
+#include "TutorialSelectScene.h"
+#include "WeaponSelectScene.h"
 #include "WinApp.h"
 #include <algorithm>
 #include <array>
@@ -28,6 +31,12 @@ namespace {
 constexpr uint16_t kPreviewPort = 5006;
 constexpr float kPreviewStaleSeconds = 0.75f;
 constexpr float kPi = 3.14159265f;
+constexpr float kSensitivityStep = 0.05f;
+constexpr float kVisualSlashNetDistanceThreshold = 0.027f;
+constexpr float kHardSensitivityThresholdScale = 1.18f;
+constexpr float kEasySensitivityThresholdScale = 0.48f;
+constexpr float kVerticalSlashThresholdScale = 0.82f;
+constexpr int kSensitivityCount = 4;
 
 XMFLOAT4 Color(float r, float g, float b, float a = 1.0f) {
     return {r, g, b, a};
@@ -110,7 +119,16 @@ const std::array<const char *, 7> &GlyphRows(char c) {
 }
 
 float Clamp01(float value) { return std::clamp(value, 0.0f, 1.0f); }
+
+float SensitivityThresholdScale(float sensitivity) {
+    return std::lerp(kHardSensitivityThresholdScale,
+                     kEasySensitivityThresholdScale,
+                     std::clamp(sensitivity, 0.0f, 1.0f));
+}
 } // namespace
+
+CameraAccuracyDebugScene::CameraAccuracyDebugScene(ReturnTarget returnTarget)
+    : returnTarget_(returnTarget) {}
 
 CameraAccuracyDebugScene::~CameraAccuracyDebugScene() {
     previewReceiver_.Close();
@@ -122,12 +140,32 @@ void CameraAccuracyDebugScene::Initialize(const SceneContext &ctx) {
     sceneTime_ = 0.0f;
     handTrackingStartRequested_ = false;
     neutralCapturedThisScene_ = false;
+    selectedSensitivityIndex_ = 0;
 
     calibration_ = {};
     calibration_.controlType = InputControlType::Hand;
     controller_.SetCalibration(calibration_);
     RequestHandTrackingStartOnce();
     previewReceiver_.Initialize(ctx_->rendering.texture, kPreviewPort);
+    titleImage_ =
+        LoadTextureImage(L"app/resources/ui/sensitivity_adjust/title.png");
+    controlsImage_ =
+        LoadTextureImage(L"app/resources/ui/sensitivity_adjust/controls.png");
+    sensitivityLabelImages_[0] =
+        LoadTextureImage(L"app/resources/ui/sensitivity/label_ctrl.png");
+    sensitivityLabelImages_[1] =
+        LoadTextureImage(L"app/resources/ui/sensitivity/label_slash.png");
+    sensitivityLabelImages_[2] =
+        LoadTextureImage(L"app/resources/ui/sensitivity/label_vert.png");
+    sensitivityLabelImages_[3] =
+        LoadTextureImage(L"app/resources/ui/sensitivity/label_horz.png");
+    for (int i = 0; i < 10; ++i) {
+        digitImages_[static_cast<size_t>(i)] =
+            LoadTextureImage(L"app/resources/ui/result/mplus/glyphs/char_" +
+                             std::to_wstring(i) + L".png");
+    }
+    dotImage_ =
+        LoadTextureImage(L"app/resources/ui/result/mplus/glyphs/char_dot.png");
 
     if (ctx_->rendering.postEffectManager != nullptr) {
         ctx_->rendering.postEffectManager->SetBaseProfile(PostProcessProfile{});
@@ -163,21 +201,63 @@ void CameraAccuracyDebugScene::Update() {
         return;
     }
     if (input->IsKeyTrigger(DIK_ESCAPE)) {
-        sceneManager_->ChangeScene(std::make_unique<TitleScene>());
+        switch (returnTarget_) {
+        case ReturnTarget::WeaponSelect:
+            sceneManager_->ChangeScene(std::make_unique<WeaponSelectScene>());
+            break;
+        case ReturnTarget::TutorialSelect:
+            sceneManager_->ChangeScene(std::make_unique<TutorialSelectScene>());
+            break;
+        case ReturnTarget::WeaponOption:
+            sceneManager_->ChangeScene(std::make_unique<OptionScene>(
+                OptionScene::ReturnTarget::WeaponSelect));
+            break;
+        case ReturnTarget::TutorialOption:
+            sceneManager_->ChangeScene(std::make_unique<OptionScene>(
+                OptionScene::ReturnTarget::TutorialSelect));
+            break;
+        case ReturnTarget::Title:
+        default:
+            sceneManager_->ChangeScene(std::make_unique<TitleScene>());
+            break;
+        }
         return;
+    }
+    if (input->IsKeyTrigger(DIK_C)) {
+        CaptureNeutral();
+    }
+    if (input->IsKeyTrigger(DIK_R)) {
+        ResetNeutral();
+    }
+    if (input->IsKeyTrigger(DIK_W) || input->IsKeyTrigger(DIK_UP)) {
+        selectedSensitivityIndex_ =
+            (selectedSensitivityIndex_ + kSensitivityCount - 1) %
+            kSensitivityCount;
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
+    }
+    if (input->IsKeyTrigger(DIK_S) || input->IsKeyTrigger(DIK_DOWN)) {
+        selectedSensitivityIndex_ =
+            (selectedSensitivityIndex_ + 1) % kSensitivityCount;
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
+    }
+    if (input->IsKeyTrigger(DIK_A) || input->IsKeyTrigger(DIK_LEFT)) {
+        AdjustSelectedSensitivity(-1);
+    }
+    if (input->IsKeyTrigger(DIK_D) || input->IsKeyTrigger(DIK_RIGHT)) {
+        AdjustSelectedSensitivity(1);
     }
 }
 
 void CameraAccuracyDebugScene::Draw() {
+    const float w = static_cast<float>(ctx_->systems.winApp->GetWidth());
+    const float h = static_cast<float>(ctx_->systems.winApp->GetHeight());
+    DrawPreviewBackground(w, h);
     DrawDebugSwords();
 }
 
 void CameraAccuracyDebugScene::DrawTransparent() {
     const float w = static_cast<float>(ctx_->systems.winApp->GetWidth());
     const float h = static_cast<float>(ctx_->systems.winApp->GetHeight());
-
-    previewReceiver_.Draw(ctx_->rendering.sprite, ctx_->rendering.texture,
-                          kPreviewStaleSeconds);
 
     ctx_->rendering.sprite->PreDraw();
     DrawOverlay(w, h);
@@ -193,6 +273,45 @@ bool CameraAccuracyDebugScene::RequestHandTrackingStartOnce() {
     }
     handTrackingStartRequested_ = AppSceneServices::RequestHandTrackingStart();
     return handTrackingStartRequested_;
+}
+
+CameraAccuracyDebugScene::Image
+CameraAccuracyDebugScene::LoadTextureImage(const std::wstring &path) {
+    Image image{};
+    if (ctx_ == nullptr || ctx_->rendering.texture == nullptr) {
+        return image;
+    }
+    image.textureId = ctx_->rendering.texture->Load(path);
+    image.width =
+        static_cast<float>(ctx_->rendering.texture->GetWidth(image.textureId));
+    image.height =
+        static_cast<float>(ctx_->rendering.texture->GetHeight(image.textureId));
+    return image;
+}
+
+void CameraAccuracyDebugScene::AdjustSelectedSensitivity(int direction) {
+    const float delta = static_cast<float>(direction) * kSensitivityStep;
+    switch (selectedSensitivityIndex_) {
+    case 0:
+        AppSceneServices::SetCameraSensitivity(
+            AppSceneServices::GetCameraSensitivity() + delta);
+        break;
+    case 1:
+        AppSceneServices::SetCameraSlashSensitivity(
+            AppSceneServices::GetCameraSlashSensitivity() + delta);
+        break;
+    case 2:
+        AppSceneServices::SetCameraVerticalSensitivity(
+            AppSceneServices::GetCameraVerticalSensitivity() + delta);
+        break;
+    case 3:
+        AppSceneServices::SetCameraHorizontalSensitivity(
+            AppSceneServices::GetCameraHorizontalSensitivity() + delta);
+        break;
+    default:
+        return;
+    }
+    AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
 }
 
 void CameraAccuracyDebugScene::UpdateCamera() {
@@ -294,43 +413,6 @@ void CameraAccuracyDebugScene::DrawDebugSwords() {
 
     model->PreDraw();
     gamePreviewPlayer_.Draw(model, camera_, true, false, 0.82f);
-
-    for (size_t i = 0; i < 2; ++i) {
-        const bool isLeft = i == 0;
-        const auto sample = controller_.GetDebugHandState(i);
-
-        const SwordPose rawPose = MakePoseFromPalm(sample.rawPalm);
-        const SwordPose correctedPose =
-            sample.active ? SwordPose{sample.slashDir, sample.orientation,
-                                      sample.isSlashMode}
-                          : MakePoseFromPalm(sample.calibratedPalm);
-
-        ModelDrawEffect rawEffect{};
-        rawEffect.enabled = true;
-        rawEffect.blendOverride = ModelDrawEffectBlendOverride::Alpha;
-        rawEffect.color = {0.18f, 0.58f, 1.0f, sample.active ? 0.48f : 0.20f};
-        rawEffect.intensity = 0.12f;
-        rawEffect.surfaceTint = 0.85f;
-        rawEffect.baseDim = 0.18f;
-        model->SetDrawEffect(rawEffect);
-        model->Draw(swordModelId_,
-                    BuildSwordTransform(rawPose, {-1.35f, 0.78f, 0.0f}, isLeft),
-                    camera_);
-
-        ModelDrawEffect correctedEffect{};
-        correctedEffect.enabled = true;
-        correctedEffect.blendOverride = ModelDrawEffectBlendOverride::Alpha;
-        correctedEffect.color = {1.0f, 0.72f, 0.20f,
-                                 sample.active ? 0.88f : 0.26f};
-        correctedEffect.intensity = 0.16f;
-        correctedEffect.surfaceTint = 0.82f;
-        correctedEffect.baseDim = 0.05f;
-        model->SetDrawEffect(correctedEffect);
-        model->Draw(swordModelId_,
-                    BuildSwordTransform(correctedPose, {1.35f, 0.78f, 0.0f},
-                                        isLeft),
-                    camera_);
-    }
     model->ClearDrawEffect();
     model->PostDraw();
 }
@@ -338,42 +420,90 @@ void CameraAccuracyDebugScene::DrawDebugSwords() {
 void CameraAccuracyDebugScene::DrawOverlay(float screenWidth,
                                            float screenHeight) {
     DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
-             Color(0.0f, 0.0f, 0.0f, 0.20f));
-    DrawRect(0.0f, 0.0f, screenWidth, 34.0f, Color(0.0f, 0.0f, 0.0f, 0.72f));
-    DrawText("CAMERA SWORD DEBUG", 18.0f, 10.0f, 2.0f,
-             Color(0.78f, 0.90f, 1.0f, 0.92f));
-    DrawText("ESC TITLE  C CALIB  R RESET  1 MISS  2 FALSE  3 GOOD", 312.0f,
-             12.0f, 1.4f, Color(0.82f, 0.78f, 0.62f, 0.88f));
+             Color(0.0f, 0.0f, 0.0f, 0.10f));
+    DrawRect(0.0f, 0.0f, screenWidth, 74.0f, Color(0.0f, 0.0f, 0.0f, 0.66f));
+    DrawImage(titleImage_, 24.0f, 12.0f, 0.58f, 0.96f);
+    DrawImage(controlsImage_, 374.0f, 23.0f, 0.62f, 0.88f);
+    DrawSensitivityPanel(screenWidth);
+}
 
-    DrawText("RAW SWORD", screenWidth * 0.5f - 232.0f,
-             screenHeight * 0.50f - 158.0f, 2.0f,
-             Color(0.36f, 0.72f, 1.0f, 0.82f));
-    DrawText("GAME PREVIEW", screenWidth * 0.5f - 58.0f,
-             screenHeight * 0.50f - 204.0f, 1.75f,
-             Color(0.86f, 0.92f, 0.98f, 0.88f));
-    DrawText("CORRECTED SWORD", screenWidth * 0.5f + 66.0f,
-             screenHeight * 0.50f - 158.0f, 2.0f,
-             Color(1.0f, 0.76f, 0.28f, 0.88f));
+void CameraAccuracyDebugScene::DrawPreviewBackground(float screenWidth,
+                                                     float screenHeight) {
+    ctx_->rendering.sprite->PreDraw();
+    previewReceiver_.DrawArea(ctx_->rendering.sprite, ctx_->rendering.texture,
+                              0.0f, 0.0f, screenWidth, screenHeight,
+                              kPreviewStaleSeconds, 1.0f, true);
+    DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
+             Color(0.0f, 0.0f, 0.0f, 0.34f));
+    ctx_->rendering.sprite->PostDraw();
+}
 
-    const float panelW = (std::min)(300.0f, screenWidth * 0.22f);
-    const float panelH = 208.0f;
-    DrawHandPanel("LEFT HAND", "INDEX 0", 0, screenWidth - panelW - 18.0f,
-                  56.0f, panelW, panelH);
-    DrawHandPanel("RIGHT HAND", "INDEX 1", 1, screenWidth - panelW - 18.0f,
-                  286.0f, panelW, panelH);
+void CameraAccuracyDebugScene::DrawSensitivityPanel(float screenWidth) {
+    const float controlSensitivity = AppSceneServices::GetCameraSensitivity();
+    const float slashSensitivity = AppSceneServices::GetCameraSlashSensitivity();
+    const float verticalSensitivity =
+        AppSceneServices::GetCameraVerticalSensitivity();
+    const float horizontalSensitivity =
+        AppSceneServices::GetCameraHorizontalSensitivity();
+    const float panelW = 560.0f;
+    const float panelH = 198.0f;
+    const float panelX = (screenWidth - panelW) * 0.5f;
+    const float panelY = 64.0f;
 
-    const float statsX = 18.0f;
-    const float statsY = (std::max)(234.0f, screenHeight - 174.0f);
-    DrawRect(statsX - 10.0f, statsY - 14.0f, 496.0f, 154.0f,
-             Color(0.0f, 0.0f, 0.0f, 0.54f));
-    DrawFrame(statsX - 10.0f, statsY - 14.0f, 496.0f, 154.0f, 2.0f,
-              Color(0.38f, 0.46f, 0.54f, 0.55f));
-    DrawText(neutralCapturedThisScene_ ? "NEUTRAL ACTIVE" : "NEUTRAL OFF",
-             statsX, statsY - 2.0f, 1.7f,
-             neutralCapturedThisScene_ ? Color(0.86f, 1.0f, 0.58f, 0.90f)
-                                       : Color(0.92f, 0.62f, 0.42f, 0.86f));
-    DrawHandStats(0, statsX, statsY + 28.0f);
-    DrawHandStats(1, statsX, statsY + 78.0f);
+    DrawRect(panelX - 5.0f, panelY - 5.0f, panelW + 10.0f, panelH + 10.0f,
+             Color(1.0f, 0.95f, 0.62f, 0.52f));
+    DrawRect(panelX, panelY, panelW, panelH, Color(0.0f, 0.0f, 0.0f, 0.92f));
+    DrawFrame(panelX, panelY, panelW, panelH, 4.0f,
+              Color(1.0f, 0.86f, 0.20f, 1.0f));
+
+    DrawGaugeRow(0, sensitivityLabelImages_[0], controlSensitivity,
+                 Color(0.0f, 0.92f, 1.0f, 1.0f), panelX, panelY + 22.0f,
+                 panelW);
+    DrawGaugeRow(1, sensitivityLabelImages_[1], slashSensitivity,
+                 Color(1.0f, 0.28f, 0.20f, 1.0f), panelX, panelY + 64.0f,
+                 panelW);
+    DrawGaugeRow(2, sensitivityLabelImages_[2], verticalSensitivity,
+                 Color(0.58f, 1.0f, 0.30f, 1.0f), panelX, panelY + 106.0f,
+                 panelW);
+    DrawGaugeRow(3, sensitivityLabelImages_[3], horizontalSensitivity,
+                 Color(1.0f, 0.58f, 0.18f, 1.0f), panelX, panelY + 148.0f,
+                 panelW);
+}
+
+void CameraAccuracyDebugScene::DrawGaugeRow(
+    size_t index, const Image &label, float value, const XMFLOAT4 &barColor,
+    float panelX, float rowY, float panelW) {
+    const bool selected = static_cast<int>(index) == selectedSensitivityIndex_;
+    const float labelX = panelX + 26.0f;
+    const float barX = panelX + 180.0f;
+    const float valueX = panelX + panelW - 72.0f;
+    const float barW = panelW - 276.0f;
+    const float barH = 20.0f;
+    if (selected) {
+        DrawRect(panelX + 12.0f, rowY - 8.0f, panelW - 24.0f, 34.0f,
+                 Color(1.0f, 0.74f, 0.20f, 0.20f));
+        DrawFrame(panelX + 12.0f, rowY - 8.0f, panelW - 24.0f, 34.0f,
+                  2.0f, Color(1.0f, 0.78f, 0.24f, 0.70f));
+    }
+    DrawImageCentered(label, labelX + 48.0f, rowY + 10.0f, 110.0f, 28.0f,
+                      selected ? 1.0f : 0.82f);
+    DrawRect(barX, rowY, barW, barH, Color(0.06f, 0.07f, 0.09f, 0.94f));
+    DrawRect(barX, rowY, barW * std::clamp(value, 0.0f, 1.0f), barH,
+             barColor);
+    DrawFrame(barX, rowY, barW, barH, 2.0f,
+              selected ? Color(1.0f, 0.92f, 0.38f, 0.95f)
+                       : Color(0.86f, 0.88f, 0.90f, 0.54f));
+    DrawSensitivityValue(value, valueX, rowY - 2.0f, 0.34f,
+                         selected ? Color(1.0f, 0.88f, 0.34f, 1.0f)
+                                  : Color(0.92f, 0.94f, 0.96f, 0.84f));
+}
+
+float CameraAccuracyDebugScene::RequiredTravelForSensitivity(
+    float axisSensitivity) const {
+    return kVisualSlashNetDistanceThreshold *
+           SensitivityThresholdScale(
+               AppSceneServices::GetCameraSlashSensitivity()) *
+           SensitivityThresholdScale(axisSensitivity);
 }
 
 void CameraAccuracyDebugScene::DrawHandPanel(const char *title,
@@ -401,6 +531,27 @@ void CameraAccuracyDebugScene::DrawHandPanel(const char *title,
     DrawRect(mapX, mapY + mapH * 0.5f - 1.0f, mapW, 2.0f,
              Color(0.50f, 0.58f, 0.68f, 0.24f));
 
+    const float requiredH = RequiredTravelForSensitivity(
+        AppSceneServices::GetCameraHorizontalSensitivity());
+    const float requiredV = RequiredTravelForSensitivity(
+                                AppSceneServices::GetCameraVerticalSensitivity()) *
+                            kVerticalSlashThresholdScale;
+    const float centerX = mapX + mapW * 0.5f;
+    const float centerY = mapY + mapH * 0.5f;
+    const float requiredPixelsH = requiredH * mapW;
+    const float requiredPixelsV = requiredV * mapH;
+    DrawFrame(centerX - requiredPixelsH, centerY - requiredPixelsV,
+              requiredPixelsH * 2.0f, requiredPixelsV * 2.0f, 2.0f,
+              Color(0.98f, 0.92f, 0.24f, 0.72f));
+    DrawRect(centerX - requiredPixelsH, mapY, 3.0f, mapH,
+             Color(0.0f, 0.92f, 1.0f, 0.58f));
+    DrawRect(centerX + requiredPixelsH - 3.0f, mapY, 3.0f, mapH,
+             Color(0.0f, 0.92f, 1.0f, 0.58f));
+    DrawRect(mapX, centerY - requiredPixelsV, mapW, 3.0f,
+             Color(0.58f, 1.0f, 0.30f, 0.58f));
+    DrawRect(mapX, centerY + requiredPixelsV - 3.0f, mapW, 3.0f,
+             Color(0.58f, 1.0f, 0.30f, 0.58f));
+
     auto toPanel = [&](const XMFLOAT2 &point) {
         return XMFLOAT2{mapX + Clamp01(point.x) * mapW,
                         mapY + Clamp01(point.y) * mapH};
@@ -413,8 +564,6 @@ void CameraAccuracyDebugScene::DrawHandPanel(const char *title,
     DrawPoint(corrected.x, corrected.y, 6.0f,
               Color(1.0f, 0.72f, 0.18f, 0.92f));
 
-    const float centerX = mapX + mapW * 0.5f;
-    const float centerY = mapY + mapH * 0.5f;
     DrawRect((std::min)(centerX, corrected.x), centerY - 2.0f,
              std::abs(corrected.x - centerX) + 2.0f, 4.0f,
              Color(1.0f, 0.72f, 0.18f, 0.48f));
@@ -457,6 +606,59 @@ void CameraAccuracyDebugScene::DrawRect(float x, float y, float w, float h,
     sprite.size = {w, h};
     sprite.color = color;
     ctx_->rendering.sprite->DrawSprite(sprite);
+}
+
+void CameraAccuracyDebugScene::DrawImage(const Image &image, float x, float y,
+                                         float scale, float alpha) {
+    if (ctx_ == nullptr || ctx_->rendering.sprite == nullptr ||
+        image.textureId == 0) {
+        return;
+    }
+    Sprite sprite{};
+    sprite.textureId = image.textureId;
+    sprite.position = {x, y};
+    sprite.size = {image.width * scale, image.height * scale};
+    sprite.color = {1.0f, 1.0f, 1.0f, alpha};
+    ctx_->rendering.sprite->DrawSprite(sprite);
+}
+
+void CameraAccuracyDebugScene::DrawImageCentered(const Image &image,
+                                                 float centerX, float centerY,
+                                                 float maxWidth,
+                                                 float maxHeight,
+                                                 float alpha) {
+    if (image.textureId == 0 || image.width <= 0.0f || image.height <= 0.0f) {
+        return;
+    }
+    const float scale = std::min(maxWidth / image.width, maxHeight / image.height);
+    DrawImage(image, centerX - image.width * scale * 0.5f,
+              centerY - image.height * scale * 0.5f, scale, alpha);
+}
+
+void CameraAccuracyDebugScene::DrawSensitivityValue(
+    float value, float x, float y, float scale, const XMFLOAT4 &color) {
+    const int clamped = std::clamp(static_cast<int>(std::round(value * 100.0f)),
+                                  0, 100);
+    const int whole = clamped / 100;
+    const int tens = (clamped / 10) % 10;
+    const int ones = clamped % 10;
+    const Image *parts[] = {&digitImages_[static_cast<size_t>(whole)],
+                            &dotImage_,
+                            &digitImages_[static_cast<size_t>(tens)],
+                            &digitImages_[static_cast<size_t>(ones)]};
+    float cursorX = x;
+    for (const Image *part : parts) {
+        if (part == nullptr || part->textureId == 0) {
+            continue;
+        }
+        Sprite sprite{};
+        sprite.textureId = part->textureId;
+        sprite.position = {cursorX, y};
+        sprite.size = {part->width * scale, part->height * scale};
+        sprite.color = color;
+        ctx_->rendering.sprite->DrawSprite(sprite);
+        cursorX += part->width * scale + 2.0f;
+    }
 }
 
 void CameraAccuracyDebugScene::DrawFrame(float x, float y, float w, float h,

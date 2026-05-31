@@ -93,6 +93,9 @@ class SpriteRenderer {
     void CreatePipelineState();
 
     void CreateUploadBuffer();
+    /// <summary>
+    /// FlushQueuedDrawsを実行する
+    /// </summary>
     void FlushQueuedDraws();
 
   private:

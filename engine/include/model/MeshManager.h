@@ -27,11 +27,18 @@ struct Mesh {
 /// </summary>
 class MeshManager {
   public:
+    ~MeshManager();
+
     /// <summary>
     /// メッシュ用GPUリソースを生成できるようDirectX参照を設定する
     /// </summary>
     /// <param name="dxCommon">DirectXCommonインスタンス</param>
     void Initialize(DirectXCommon *dxCommon);
+
+    /// <summary>
+    /// 管理中のメッシュGPUリソースを解放する
+    /// </summary>
+    void Finalize();
 
     /// <summary>
     /// 頂点配列とインデックス配列からGPUメッシュを作成して登録する
@@ -54,6 +61,11 @@ class MeshManager {
     /// <param name="meshId">メッシュID</param>
     /// <returns>メッシュ情報</returns>
     const Mesh &GetMesh(uint32_t meshId) const;
+
+    /// <summary>
+    /// 指定IDが有効なメッシュを指しているかを取得する
+    /// </summary>
+    bool IsValidMeshId(uint32_t meshId) const;
 
   private:
     DirectXCommon *dxCommon_ = nullptr;

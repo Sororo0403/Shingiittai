@@ -5,6 +5,7 @@
 #include <cstring>
 #include <limits>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 #include <wrl.h>
 
@@ -34,9 +35,15 @@ class UploadRingBuffer {
 
     void Initialize(ID3D12Device *device, size_t bytesPerFrame,
                     uint32_t frameCount = 2);
+    /// <summary>
+    /// 状態をリセットする
+    /// </summary>
     void Reset();
 
     void BeginFrame();
+    /// <summary>
+    /// Frameを開始する
+    /// </summary>
     void BeginFrame(uint32_t frameIndex);
 
     UploadAllocation Allocate(size_t size, size_t alignment = 256);
@@ -51,32 +58,70 @@ class UploadRingBuffer {
     template <class T>
     UploadAllocation WriteArray(const T *values, size_t count,
                                 size_t alignment = alignof(T)) {
+        if (!values || count == 0) {
+            throw std::runtime_error("UploadRingBuffer::WriteArray invalid array");
+        }
         if (count > (std::numeric_limits<size_t>::max)() / sizeof(T)) {
             throw std::runtime_error("UploadRingBuffer::WriteArray size overflow");
         }
         const size_t bytes = sizeof(T) * count;
         UploadAllocation allocation =
             Allocate(bytes, alignment);
-        if (values && count > 0) {
-            std::memcpy(allocation.cpu, values, bytes);
-        }
+        std::memcpy(allocation.cpu, values, bytes);
         return allocation;
     }
 
     uint32_t GetFrameIndex() const { return frameIndex_; }
     size_t GetBytesPerFrame() const { return bytesPerFrame_; }
+    /// <summary>
+    /// FrameOffsetを取得する
+    /// </summary>
     size_t GetFrameOffset() const;
 
   private:
     struct FrameResource {
+        FrameResource() = default;
+        ~FrameResource() { Reset(); }
+        FrameResource(const FrameResource &) = delete;
+        FrameResource &operator=(const FrameResource &) = delete;
+        FrameResource(FrameResource &&other) noexcept
+            : resource(std::move(other.resource)), mapped(other.mapped),
+              offset(other.offset) {
+            other.mapped = nullptr;
+            other.offset = 0;
+        }
+        FrameResource &operator=(FrameResource &&other) noexcept {
+            if (this != &other) {
+                Reset();
+                resource = std::move(other.resource);
+                mapped = other.mapped;
+                offset = other.offset;
+                other.mapped = nullptr;
+                other.offset = 0;
+            }
+            return *this;
+        }
+
+        void Reset() {
+            if (resource && mapped) {
+                resource->Unmap(0, nullptr);
+                mapped = nullptr;
+            }
+            resource.Reset();
+            offset = 0;
+        }
+
         Microsoft::WRL::ComPtr<ID3D12Resource> resource;
         uint8_t *mapped = nullptr;
         size_t offset = 0;
     };
 
+    /// <summary>
+    /// AlignUpを実行する
+    /// </summary>
     static size_t AlignUp(size_t value, size_t alignment);
-    void CreateFrameResource(FrameResource &frame);
-    void UnmapFrameResource(FrameResource &frame);
+    static void CreateFrameResource(FrameResource &frame, ID3D12Device *device,
+                                    size_t bytesPerFrame);
 
     ID3D12Device *device_ = nullptr;
     size_t bytesPerFrame_ = 0;

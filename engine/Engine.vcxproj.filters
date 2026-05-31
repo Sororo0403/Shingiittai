@@ -290,6 +290,9 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)include\core\FrameTimer.h">
       <Filter>include\core</Filter>
     </ClInclude>
+    <ClInclude Include="$(MSBuildThisFileDirectory)include\core\MathUtils.h">
+      <Filter>include\core</Filter>
+    </ClInclude>
     <ClInclude Include="$(MSBuildThisFileDirectory)include\core\ResourceHandle.h">
       <Filter>include\core</Filter>
     </ClInclude>

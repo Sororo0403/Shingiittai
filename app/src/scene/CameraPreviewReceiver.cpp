@@ -79,6 +79,34 @@ bool CameraPreviewReceiver::HasFreshFrame(float staleSeconds) const {
     return frame_.valid && frame_.staleTimer <= staleSeconds;
 }
 
+void CameraPreviewReceiver::DrawArea(SpriteManager *sprite,
+                                     TextureManager *texture, float x, float y,
+                                     float w, float h, float staleSeconds,
+                                     float alpha, bool mirrorX) {
+    if (sprite == nullptr || texture == nullptr || w <= 0.0f || h <= 0.0f) {
+        return;
+    }
+
+    UploadTextureIfNeeded(texture);
+    DrawRect(sprite, x, y, w, h, {0.01f, 0.012f, 0.014f, 1.0f});
+    if (frame_.valid) {
+        const bool fresh = frame_.staleTimer <= staleSeconds;
+        Sprite preview{};
+        preview.textureId = frame_.textureId;
+        preview.position = {x, y};
+        preview.size = {w, h};
+        if (mirrorX) {
+            preview.uvLeftTop = {1.0f, 0.0f};
+            preview.uvSize = {-1.0f, 1.0f};
+        }
+        preview.color = {1.0f, 1.0f, 1.0f, fresh ? alpha : alpha * 0.36f};
+        sprite->DrawSprite(preview);
+        if (!fresh) {
+            DrawRect(sprite, x, y, w, h, {0.0f, 0.0f, 0.0f, 0.44f});
+        }
+    }
+}
+
 bool CameraPreviewReceiver::EnsureSocket() {
     if (socketReady_) {
         return true;
@@ -258,7 +286,8 @@ void CameraPreviewReceiver::UploadTextureIfNeeded(TextureManager *texture) {
 }
 
 void CameraPreviewReceiver::Draw(SpriteManager *sprite, TextureManager *texture,
-                                 float staleSeconds, bool backBufferTarget) {
+                                 float staleSeconds, bool backBufferTarget,
+                                 bool mirrorX) {
     if (sprite == nullptr || texture == nullptr) {
         return;
     }
@@ -281,6 +310,10 @@ void CameraPreviewReceiver::Draw(SpriteManager *sprite, TextureManager *texture,
         preview.textureId = frame_.textureId;
         preview.position = {kPreviewMargin, kPreviewMargin};
         preview.size = {kPreviewWidth, previewHeight};
+        if (mirrorX) {
+            preview.uvLeftTop = {1.0f, 0.0f};
+            preview.uvSize = {-1.0f, 1.0f};
+        }
         preview.color = {1.0f, 1.0f, 1.0f, alpha};
         sprite->DrawSprite(preview);
     }

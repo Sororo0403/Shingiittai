@@ -5,6 +5,7 @@
 
 #include <limits>
 #include <stdexcept>
+#include <utility>
 
 using namespace DxUtils;
 
@@ -44,8 +45,6 @@ void DynamicBuffer::Reserve(size_t capacity) {
         throw std::runtime_error(
             "DynamicBuffer::Reserve cannot grow after allocations");
     }
-    UnmapResource();
-    resource_.Reset();
     CreateResource(capacity);
 }
 
@@ -94,16 +93,24 @@ size_t DynamicBuffer::AlignUp(size_t value, size_t alignment) {
 }
 
 void DynamicBuffer::CreateResource(size_t capacity) {
-    capacity_ = AlignUp(capacity, defaultAlignment_);
+    const size_t alignedCapacity = AlignUp(capacity, defaultAlignment_);
     CD3DX12_HEAP_PROPERTIES heap(D3D12_HEAP_TYPE_UPLOAD);
-    auto desc = CD3DX12_RESOURCE_DESC::Buffer(capacity_);
+    auto desc = CD3DX12_RESOURCE_DESC::Buffer(alignedCapacity);
+    Microsoft::WRL::ComPtr<ID3D12Resource> newResource;
+    uint8_t *newMapped = nullptr;
     ThrowIfFailed(device_->CreateCommittedResource(
                       &heap, D3D12_HEAP_FLAG_NONE, &desc,
                       D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-                      IID_PPV_ARGS(&resource_)),
+                      IID_PPV_ARGS(&newResource)),
                   "CreateCommittedResource(DynamicBuffer) failed");
-    ThrowIfFailed(resource_->Map(0, nullptr, reinterpret_cast<void **>(&mapped_)),
+    ThrowIfFailed(newResource->Map(0, nullptr,
+                                   reinterpret_cast<void **>(&newMapped)),
                   "Map(DynamicBuffer) failed");
+    UnmapResource();
+    resource_.Reset();
+    resource_ = std::move(newResource);
+    mapped_ = newMapped;
+    capacity_ = alignedCapacity;
     offset_ = 0;
 }
 

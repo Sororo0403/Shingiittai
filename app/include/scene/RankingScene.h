@@ -1,6 +1,7 @@
 #pragma once
 #include "BaseScene.h"
 #include "GameScene.h"
+#include "InputControlType.h"
 #include <DirectXMath.h>
 #include <array>
 #include <cstdint>
@@ -33,11 +34,13 @@ class RankingScene : public BaseScene {
         int score = 0;
         float difficulty = 0.0f;
         float clearTime = 0.0f;
+        InputControlType controlType = InputControlType::KeyboardMouse;
     };
 
     Image LoadTextureImage(const std::wstring &path);
     void LoadRanking();
     void BeginReturn();
+    void ChangeControlType(InputControlType controlType);
     void DrawOverlay(float screenWidth, float screenHeight);
     void DrawRanking(float screenWidth, float screenHeight);
     void DrawTransition(float screenWidth, float screenHeight);
@@ -65,12 +68,15 @@ class RankingScene : public BaseScene {
     Image scoreHeaderLabel_{};
     Image timeHeaderLabel_{};
     Image difficultyHeaderLabel_{};
+    Image modeKbmLabel_{};
+    Image modeHandLabel_{};
     std::array<Image, 10> digitImages_{};
     Image colonImage_{};
     Image dotImage_{};
     Image dashImage_{};
     Image secondImage_{};
     std::vector<RankingEntry> rankingEntries_{};
+    InputControlType selectedControlType_ = InputControlType::KeyboardMouse;
     float introTimer_ = 0.0f;
     float transitionTimer_ = 0.0f;
     bool returnRequested_ = false;

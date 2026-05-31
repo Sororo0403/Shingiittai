@@ -448,6 +448,8 @@ void Enemy::UpdateArcaneLaserRecovery(float deltaTime) {
     UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_ * 0.20f);
 
     if (stateTimer_ >= config_.attacks.arcaneLaser.recoveryDuration) {
+        sharedRangedAttackCooldown_ = (std::max)(
+            sharedRangedAttackCooldown_, sharedRangedAttackCooldownDuration_);
         if (TryBeginLaserReengageWarp(1.0f)) {
             return;
         }

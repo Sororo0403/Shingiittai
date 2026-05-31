@@ -54,7 +54,9 @@ std::wstring GetDefaultReplayDirectory() {
 
 } // namespace
 
-Input::~Input() { FinishRecording(); }
+Input::~Input() {
+    FinishRecording();
+}
 
 void Input::Initialize(HINSTANCE hInstance, HWND hwnd) {
     HRESULT hr;

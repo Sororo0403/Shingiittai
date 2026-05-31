@@ -20,7 +20,7 @@ constexpr CollisionManager::LayerMask kLayerEnemyAttack = 1u << 3;
 constexpr float kArcaneProjectilePlayerHitRange = 0.82f;
 constexpr float kArcaneProjectileEnemyHitRange = 1.45f;
 constexpr float kArcaneProjectileDeflectRange = 5.80f;
-constexpr float kCataclysmProjectileDeflectHeight = 7.2f;
+constexpr float kCataclysmProjectileDeflectHeight = 13.8f;
 constexpr float kArcaneProjectileSlashDot = 0.55f;
 constexpr int kArcaneProjectileVolleyRequiredHits = 3;
 constexpr int kCataclysmProjectileVolleyRequiredHits = 5;
@@ -31,6 +31,7 @@ constexpr float kNormalSlashRearmDelay = 0.10f;
 constexpr float kNormalHitSlashSoundVolume = 0.82f;
 constexpr float kNormalHitSlashSoundStartSeconds = 0.18f;
 constexpr float kFarSlashCounterFlashDuration = 0.50f;
+constexpr float kTripleIaiCounterDamageScale = 1.0f / 3.0f;
 
 CollisionManager::BodyId AddCollisionBody(
     CollisionManager &collisionManager, const OBB &box,
@@ -536,9 +537,14 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
     bool forceSyncEnemyAnimationThisFrame = false;
     auto triggerSuccessfulCounter = [&](size_t swordIndex, float enemyDamage,
                                         float hitCooldown) {
+        const bool isTripleIaiCounter =
+            enemy_.IsTripleIaiSlashActive() && enemy_.IsFarWarpSlashActive() &&
+            (enemyActionKind == ActionKind::Smash ||
+             enemyActionKind == ActionKind::Sweep);
         const float counterDamage =
             (std::max)(enemyDamage * player_.GetCounterDamageMultiplier(),
-                       130.0f);
+                       130.0f) *
+            (isTripleIaiCounter ? kTripleIaiCounterDamageScale : 1.0f);
         const float vulnerabilityDuration = GetCounterVulnerabilityDuration();
         const bool suppressCounterStagger =
             enemy_.ShouldSuppressCounterStagger();

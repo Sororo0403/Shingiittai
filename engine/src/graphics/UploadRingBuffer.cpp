@@ -4,6 +4,7 @@
 #include "graphics/DxUtils.h"
 #include <limits>
 #include <stdexcept>
+#include <utility>
 
 using namespace DxUtils;
 
@@ -16,19 +17,20 @@ void UploadRingBuffer::Initialize(ID3D12Device *device, size_t bytesPerFrame,
     }
 
     Reset();
-    device_ = device;
-    bytesPerFrame_ = AlignUp(bytesPerFrame, 256);
-    frames_.resize(frameCount);
-    for (FrameResource &frame : frames_) {
-        CreateFrameResource(frame);
+    const size_t alignedBytesPerFrame = AlignUp(bytesPerFrame, 256);
+    std::vector<FrameResource> newFrames(frameCount);
+    for (FrameResource &frame : newFrames) {
+        CreateFrameResource(frame, device, alignedBytesPerFrame);
     }
+    device_ = device;
+    bytesPerFrame_ = alignedBytesPerFrame;
+    frames_ = std::move(newFrames);
+    frameIndex_ = 0;
 }
 
 void UploadRingBuffer::Reset() {
     for (FrameResource &frame : frames_) {
-        UnmapFrameResource(frame);
-        frame.resource.Reset();
-        frame.offset = 0;
+        frame.Reset();
     }
     frames_.clear();
     device_ = nullptr;
@@ -95,10 +97,12 @@ size_t UploadRingBuffer::AlignUp(size_t value, size_t alignment) {
     return ((value + addend) / alignment) * alignment;
 }
 
-void UploadRingBuffer::CreateFrameResource(FrameResource &frame) {
+void UploadRingBuffer::CreateFrameResource(FrameResource &frame,
+                                           ID3D12Device *device,
+                                           size_t bytesPerFrame) {
     CD3DX12_HEAP_PROPERTIES heap(D3D12_HEAP_TYPE_UPLOAD);
-    auto desc = CD3DX12_RESOURCE_DESC::Buffer(bytesPerFrame_);
-    ThrowIfFailed(device_->CreateCommittedResource(
+    auto desc = CD3DX12_RESOURCE_DESC::Buffer(bytesPerFrame);
+    ThrowIfFailed(device->CreateCommittedResource(
                       &heap, D3D12_HEAP_FLAG_NONE, &desc,
                       D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
                       IID_PPV_ARGS(&frame.resource)),
@@ -108,11 +112,4 @@ void UploadRingBuffer::CreateFrameResource(FrameResource &frame) {
                       0, nullptr, reinterpret_cast<void **>(&frame.mapped)),
                   "Map(UploadRingBuffer) failed");
     frame.offset = 0;
-}
-
-void UploadRingBuffer::UnmapFrameResource(FrameResource &frame) {
-    if (frame.resource && frame.mapped) {
-        frame.resource->Unmap(0, nullptr);
-        frame.mapped = nullptr;
-    }
 }

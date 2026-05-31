@@ -17,6 +17,8 @@ void Enemy::Initialize(uint32_t modelId) {
     runtime_.tripleIaiSlashActive = false;
     runtime_.tripleIaiSlashesRemaining = 0;
     runtime_.tripleIaiSlashIndex = 0;
+    runtime_.tripleIaiIntroActive = false;
+    runtime_.tripleIaiIntroTimer = 0.0f;
     ResetTripleIaiSlashClones();
     runtime_.arcaneLaserCooldown = 0.0f;
     runtime_.arcaneLaserDirection = {0.0f, 0.0f, 1.0f};
@@ -130,7 +132,7 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
             SetIsPhaseChanging(false);
             stateTimer_ = 0.0f;
             if (phase_ == BossPhase::Phase2 &&
-                runtime_.phase2BladeClashPending && difficulty_ > 2.0f) {
+                runtime_.phase2BladeClashPending) {
                 runtime_.phase2BladeClashPending = false;
                 hitReactionTimer_ = 0.0f;
                 counterRecoilTimer_ = 0.0f;
@@ -163,6 +165,12 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
             hitReactionTimer_ = 0.0f;
         }
 
+        UpdateParts();
+        return;
+    }
+
+    if (tripleIaiIntroActive_) {
+        UpdateTripleIaiSlashIntro(deltaTime);
         UpdateParts();
         return;
     }
@@ -258,6 +266,8 @@ void Enemy::ResetTutorialState() {
     runtime_.tripleIaiSlashActive = false;
     runtime_.tripleIaiSlashesRemaining = 0;
     runtime_.tripleIaiSlashIndex = 0;
+    runtime_.tripleIaiIntroActive = false;
+    runtime_.tripleIaiIntroTimer = 0.0f;
     ResetTripleIaiSlashClones();
     runtime_.arcaneLaserDirection = {0.0f, 0.0f, 1.0f};
     runtime_.cataclysmLaserCooldown = 0.0f;
@@ -284,6 +294,8 @@ void Enemy::DebugForceBossPhase(BossPhase phase, bool playTransition) {
     tripleIaiSlashActive_ = false;
     tripleIaiSlashesRemaining_ = 0;
     tripleIaiSlashIndex_ = 0;
+    tripleIaiIntroActive_ = false;
+    tripleIaiIntroTimer_ = 0.0f;
     ResetTripleIaiSlashClones();
     hitReactionTimer_ = 0.0f;
     damageFlashTimer_ = 0.0f;
@@ -524,6 +536,8 @@ void Enemy::EndAttack() {
         tripleIaiSlashActive_ = false;
         tripleIaiSlashesRemaining_ = 0;
         tripleIaiSlashIndex_ = 0;
+        tripleIaiIntroActive_ = false;
+        tripleIaiIntroTimer_ = 0.0f;
         ResetTripleIaiSlashClones();
     }
 
@@ -610,6 +624,8 @@ void Enemy::UpdateBossPhase() {
         tripleIaiSlashActive_ = false;
         tripleIaiSlashesRemaining_ = 0;
         tripleIaiSlashIndex_ = 0;
+        tripleIaiIntroActive_ = false;
+        tripleIaiIntroTimer_ = 0.0f;
         ResetTripleIaiSlashClones();
         hitReactionTimer_ = 0.0f;
         counterRecoilTimer_ = 0.0f;
@@ -617,7 +633,7 @@ void Enemy::UpdateBossPhase() {
         phase_ = nextPhase;
         phaseTransitionActive_ = true;
         phaseTransitionTimer_ = 0.0f;
-        if (nextPhase == BossPhase::Phase2 && difficulty_ > 2.0f) {
+        if (nextPhase == BossPhase::Phase2) {
             runtime_.phase2BladeClashPending = true;
         }
         stateTimer_ = 0.0f;

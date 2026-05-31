@@ -67,14 +67,13 @@ XMMATRIX MakeWorldMatrix(const Transform &transform) {
 }
 
 XMMATRIX MakeWorldInverseTranspose(const XMMATRIX &world) {
-    XMVECTOR determinant{};
-    XMMATRIX inverse = XMMatrixInverse(&determinant, world);
+    const XMVECTOR determinant = XMMatrixDeterminant(world);
     const float determinantValue = XMVectorGetX(determinant);
     if (!std::isfinite(determinantValue) ||
         std::abs(determinantValue) <= 0.000001f) {
         return XMMatrixIdentity();
     }
-    return XMMatrixTranspose(inverse);
+    return XMMatrixTranspose(XMMatrixInverse(nullptr, world));
 }
 
 bool IsTransparentMaterial(const Material &material) {

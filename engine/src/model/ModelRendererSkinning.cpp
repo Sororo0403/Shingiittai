@@ -50,6 +50,67 @@ bool IsTransparentMaterial(const Material &material) {
            material.color.w < 1.0f;
 }
 
+class ScopedSrvAllocations {
+  public:
+    explicit ScopedSrvAllocations(SrvManager *srvManager)
+        : srvManager_(srvManager) {}
+    ~ScopedSrvAllocations() {
+        if (srvManager_ == nullptr) {
+            return;
+        }
+        for (UINT index : indices_) {
+            srvManager_->FreeIfAllocated(index);
+        }
+    }
+
+    UINT Allocate() {
+        const UINT index = srvManager_->Allocate();
+        indices_.push_back(index);
+        return index;
+    }
+
+    void Commit() { indices_.clear(); }
+
+    ScopedSrvAllocations(const ScopedSrvAllocations &) = delete;
+    ScopedSrvAllocations &operator=(const ScopedSrvAllocations &) = delete;
+
+  private:
+    SrvManager *srvManager_ = nullptr;
+    std::vector<UINT> indices_;
+};
+
+class SkinClusterMapGuard {
+  public:
+    explicit SkinClusterMapGuard(Model &model) : model_(model) {}
+    ~SkinClusterMapGuard() {
+        if (!active_) {
+            return;
+        }
+        for (ModelSubMesh &subMesh : model_.subMeshes) {
+            SkinCluster &skinCluster = subMesh.skinCluster;
+            if (skinCluster.influenceResource &&
+                skinCluster.mappedInfluence != nullptr) {
+                skinCluster.influenceResource->Unmap(0, nullptr);
+                skinCluster.mappedInfluence = nullptr;
+            }
+            if (skinCluster.paletteResource &&
+                skinCluster.mappedPalette != nullptr) {
+                skinCluster.paletteResource->Unmap(0, nullptr);
+                skinCluster.mappedPalette = nullptr;
+            }
+        }
+    }
+
+    SkinClusterMapGuard(const SkinClusterMapGuard &) = delete;
+    SkinClusterMapGuard &operator=(const SkinClusterMapGuard &) = delete;
+
+    void Commit() { active_ = false; }
+
+  private:
+    Model &model_;
+    bool active_ = true;
+};
+
 D3D12_CULL_MODE ToD3D12CullMode(const MaterialCullMode mode) {
     switch (mode) {
     case MaterialCullMode::None:
@@ -170,8 +231,15 @@ struct SceneConstBufferData {
 
 void ModelRenderer::CreateSkinClusters(Model &model) {
     auto *device = dxCommon_->GetDevice();
+    ScopedSrvAllocations srvAllocations(srvManager_);
+    SkinClusterMapGuard mapGuard(model);
 
     for (auto &subMesh : model.subMeshes) {
+        if (meshManager_ == nullptr ||
+            !meshManager_->IsValidMeshId(subMesh.meshId)) {
+            continue;
+        }
+
         SkinCluster &skinCluster = subMesh.skinCluster;
 
         const uint32_t jointCount =
@@ -208,7 +276,7 @@ void ModelRenderer::CreateSkinClusters(Model &model) {
             std::memset(skinCluster.mappedInfluence, 0,
                         influenceBufferSize);
 
-            const UINT inputVertexSrvIndex = srvManager_->Allocate();
+            const UINT inputVertexSrvIndex = srvAllocations.Allocate();
             skinCluster.inputVertexSrvIndex = inputVertexSrvIndex;
             skinCluster.inputVertexSrvCpuHandle =
                 srvManager_->GetCpuHandle(inputVertexSrvIndex);
@@ -228,7 +296,7 @@ void ModelRenderer::CreateSkinClusters(Model &model) {
                 mesh.vertexBuffer.Get(), &vertexSrvDesc,
                 skinCluster.inputVertexSrvCpuHandle);
 
-            const UINT influenceSrvIndex = srvManager_->Allocate();
+            const UINT influenceSrvIndex = srvAllocations.Allocate();
             skinCluster.influenceSrvIndex = influenceSrvIndex;
             skinCluster.influenceSrvCpuHandle =
                 srvManager_->GetCpuHandle(influenceSrvIndex);
@@ -274,7 +342,7 @@ void ModelRenderer::CreateSkinClusters(Model &model) {
             skinCluster.lastSkinningFrame = 0;
             skinCluster.skinningValid = false;
 
-            const UINT skinnedVertexUavIndex = srvManager_->Allocate();
+            const UINT skinnedVertexUavIndex = srvAllocations.Allocate();
             skinCluster.skinnedVertexUavIndex = skinnedVertexUavIndex;
             skinCluster.skinnedVertexUavCpuHandle =
                 srvManager_->GetCpuHandle(skinnedVertexUavIndex);
@@ -362,7 +430,7 @@ void ModelRenderer::CreateSkinClusters(Model &model) {
                 StoreMatrix(XMMatrixTranspose(XMMatrixIdentity()));
         }
 
-        const UINT srvIndex = srvManager_->Allocate();
+        const UINT srvIndex = srvAllocations.Allocate();
         skinCluster.paletteSrvIndex = srvIndex;
         skinCluster.paletteSrvCpuHandle = srvManager_->GetCpuHandle(srvIndex);
         skinCluster.paletteSrvGpuHandle = srvManager_->GetGpuHandle(srvIndex);
@@ -383,6 +451,8 @@ void ModelRenderer::CreateSkinClusters(Model &model) {
     }
 
     UpdateSkinClusters(model);
+    mapGuard.Commit();
+    srvAllocations.Commit();
 }
 
 void ModelRenderer::UpdateSkinClusters(Model &model) {

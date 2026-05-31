@@ -47,18 +47,21 @@
   <PropertyGroup>
     <BundleHandTrackingHelper Condition="'$(BundleHandTrackingHelper)' == ''">true</BundleHandTrackingHelper>
     <IncludeReleasePdb Condition="'$(IncludeReleasePdb)' == ''">false</IncludeReleasePdb>
+    <RepositoryRoot>$(MSBuildThisFileDirectory)..\</RepositoryRoot>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)generated\outputs\$(Platform)\$(Configuration)\$(ProjectName)\</OutDir>
     <IntDir>$(SolutionDir)generated\intermediate\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
     <IncludePath>$(IncludePath)</IncludePath>
     <LibraryPath>$(LibraryPath)</LibraryPath>
+    <TargetName>3145_身技一体</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)generated\outputs\$(Platform)\$(Configuration)\$(ProjectName)\</OutDir>
     <IntDir>$(SolutionDir)generated\intermediate\$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
     <IncludePath>$(IncludePath)</IncludePath>
     <LibraryPath>$(LibraryPath)</LibraryPath>
+    <TargetName>3145_身技一体</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -202,12 +205,16 @@
     <None Include="resources\audio\bgm\bgm_MenuTheme.wav" />
     <None Include="resources\audio\bgm\bgm_TitleTheme.wav" />
     <None Include="resources\audio\bgm\bgm_TutorialTheme.wav" />
-    <None Include="resources\audio\se\se_Selected.mp3" />
-    <None Include="resources\audio\se\ロボットを殴る2.mp3" />
-    <None Include="resources\audio\se\剣で斬る2.mp3" />
-    <None Include="resources\audio\se\剣で斬る3.mp3" />
-    <None Include="resources\audio\se\爆発3.mp3" />
-    <None Include="resources\audio\se\爆発4.mp3" />
+    <None Include="resources\audio\se\ui\se_Cancel.mp3" />
+    <None Include="resources\audio\se\ui\se_Select.mp3" />
+    <None Include="resources\audio\se\ui\se_Selected.mp3" />
+    <None Include="resources\audio\se\combat\explosion_3.mp3" />
+    <None Include="resources\audio\se\combat\explosion_4.mp3" />
+    <None Include="resources\audio\se\combat\robot_punch_2.mp3" />
+    <None Include="resources\audio\se\combat\sword_slash_2.mp3" />
+    <None Include="resources\audio\se\combat\sword_slash_3.mp3" />
+    <None Include="resources\audio\se\movement\warp.mp3" />
+    <None Include="resources\audio\se\victory\crowd_cheer_applause_1.mp3" />
     <None Include="resources\fonts\MPLUS1p-ExtraBold.ttf" />
     <None Include="resources\effects\particles\smoke.png" />
     <None Include="resources\ui\difficulty\description_easy.png" />
@@ -254,6 +261,7 @@
     <None Include="resources\ui\result\mplus\glyphs\char_colon.png" />
     <None Include="resources\ui\result\mplus\glyphs\char_dash.png" />
     <None Include="resources\ui\result\mplus\glyphs\char_dot.png" />
+    <None Include="resources\ui\result\mplus\glyphs\char_slash.png" />
     <None Include="resources\ui\result\mplus\glyphs\char_s.png" />
     <None Include="resources\ui\result\mplus\mission_complete.png" />
     <None Include="resources\ui\result\mplus\mission_failed.png" />
@@ -289,15 +297,24 @@
     <None Include="resources\ui\common\tab_select.png" />
     <None Include="resources\ui\common\tab_menu.png" />
     <None Include="resources\ui\menu\menu_title.png" />
+    <None Include="resources\ui\menu\option_camera_test.png" />
     <None Include="resources\ui\menu\option_credits.png" />
     <None Include="resources\ui\menu\option_ranking.png" />
     <None Include="resources\ui\menu\option_sound_test.png" />
     <None Include="resources\ui\option\bgm.png" />
+    <None Include="resources\ui\option\camera_horizontal.png" />
+    <None Include="resources\ui\option\camera_sensitivity.png" />
+    <None Include="resources\ui\option\camera_slash.png" />
+    <None Include="resources\ui\option\camera_test.png" />
+    <None Include="resources\ui\option\camera_vertical.png" />
     <None Include="resources\ui\option\menu_label.png" />
     <None Include="resources\ui\option\mouse_slash.png" />
     <None Include="resources\ui\option\se.png" />
     <None Include="resources\ui\option\tab_back.png" />
     <None Include="resources\ui\option\title.png" />
+    <None Include="resources\ui\sensitivity_adjust\camera_wait.png" />
+    <None Include="resources\ui\sensitivity_adjust\controls.png" />
+    <None Include="resources\ui\sensitivity_adjust\title.png" />
     <None Include="resources\ui\sound_test\controls.png" />
     <None Include="resources\ui\sound_test\playing.png" />
     <None Include="resources\ui\sound_test\title.png" />
@@ -311,9 +328,9 @@
     <None Include="resources\ui\weapon_select\weapon_select_bg.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <Target Name="BuildHandTrackingHelper" BeforeTargets="CopyRuntimeDlls" Condition="'$(Configuration)' == 'Release' and '$(BundleHandTrackingHelper)' == 'true'" Inputs="$(SolutionDir)hand_tracking\scripts\build-hand-udp-exe.ps1;$(SolutionDir)hand_tracking\src\hand_udp_sender.py;$(SolutionDir)hand_tracking\requirements\hand-udp.txt;$(SolutionDir)hand_tracking\models\hand_landmarker.task" Outputs="$(SolutionDir)generated\outputs\$(Platform)\$(Configuration)\HandUdpSender\hand_udp_sender\hand_udp_sender.exe">
+  <Target Name="BuildHandTrackingHelper" BeforeTargets="CopyRuntimeDlls" Condition="'$(Configuration)' == 'Release' and '$(BundleHandTrackingHelper)' == 'true'" Inputs="$(RepositoryRoot)hand_tracking\scripts\build-hand-udp-exe.ps1;$(RepositoryRoot)hand_tracking\src\hand_udp_sender.py;$(RepositoryRoot)hand_tracking\requirements\hand-udp.txt;$(RepositoryRoot)hand_tracking\models\hand_landmarker.task" Outputs="$(RepositoryRoot)generated\outputs\$(Platform)\$(Configuration)\HandUdpSender\hand_udp_sender\hand_udp_sender.exe">
     <Message Text="Building hand tracking helper for Release output." Importance="High" />
-    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(SolutionDir)hand_tracking\scripts\build-hand-udp-exe.ps1&quot; -Platform &quot;$(Platform)&quot; -Configuration &quot;$(Configuration)&quot;" />
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(RepositoryRoot)hand_tracking\scripts\build-hand-udp-exe.ps1&quot; -Platform &quot;$(Platform)&quot; -Configuration &quot;$(Configuration)&quot;" />
   </Target>
   <Target Name="CopyRuntimeDlls" AfterTargets="Build">
     <ItemGroup>
@@ -322,11 +339,11 @@
       <RuntimeDll Include="$(WindowsSdkDir)Redist\D3D\x64\dxil.dll" Condition="Exists('$(WindowsSdkDir)Redist\D3D\x64\dxil.dll')" />
       <AppResource Include="$(ProjectDir)resources\**\*" />
       <EngineResource Include="$(ProjectDir)..\engine\resources\**\*" />
-      <HandTrackingSource Include="$(SolutionDir)hand_tracking\src\**\*" />
-      <HandTrackingScript Include="$(SolutionDir)hand_tracking\scripts\**\*" />
-      <HandTrackingRequirement Include="$(SolutionDir)hand_tracking\requirements\**\*" />
-      <HandTrackingModel Include="$(SolutionDir)hand_tracking\models\hand_landmarker.task" />
-      <HandTrackingDist Include="$(SolutionDir)generated\outputs\$(Platform)\$(Configuration)\HandUdpSender\hand_udp_sender\**\*" Condition="'$(BundleHandTrackingHelper)' == 'true' and Exists('$(SolutionDir)generated\outputs\$(Platform)\$(Configuration)\HandUdpSender\hand_udp_sender')" />
+      <HandTrackingSource Include="$(RepositoryRoot)hand_tracking\src\**\*" />
+      <HandTrackingScript Include="$(RepositoryRoot)hand_tracking\scripts\**\*" />
+      <HandTrackingRequirement Include="$(RepositoryRoot)hand_tracking\requirements\**\*" />
+      <HandTrackingModel Include="$(RepositoryRoot)hand_tracking\models\hand_landmarker.task" />
+      <HandTrackingDist Include="$(RepositoryRoot)generated\outputs\$(Platform)\$(Configuration)\HandUdpSender\hand_udp_sender\**\*" Condition="'$(BundleHandTrackingHelper)' == 'true' and Exists('$(RepositoryRoot)generated\outputs\$(Platform)\$(Configuration)\HandUdpSender\hand_udp_sender')" />
       <RuntimeResourceDir Include="$(TargetDir)app\resources" Condition="Exists('$(TargetDir)app\resources')" />
       <RuntimeResourceDir Include="$(TargetDir)engine\resources" Condition="Exists('$(TargetDir)engine\resources')" />
       <ReleasePdb Include="$(TargetDir)*.pdb" Condition="'$(Configuration)' == 'Release' and '$(IncludeReleasePdb)' != 'true'" />

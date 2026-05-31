@@ -142,10 +142,10 @@ class HandUdpSenderProcess {
         appendCameraArg(packagedCommand, L"SHINGIITTAI_MAIN_CAMERA", L"--camera");
 
         std::wstring command;
-        if (!scriptCommand.empty()) {
-            command = scriptCommand;
-        } else {
+        if (!packagedCommand.empty()) {
             command = packagedCommand;
+        } else {
+            command = scriptCommand;
         }
 
         if (command.empty()) {
@@ -235,15 +235,6 @@ class HandUdpSenderProcess {
         return length > 0 && value[0] == L'1';
     }
 
-    static std::filesystem::path ResolveRepoRoot() {
-        std::filesystem::path sourcePath = std::filesystem::path(__FILE__);
-        if (!sourcePath.is_absolute()) {
-            sourcePath = std::filesystem::current_path() / sourcePath;
-        }
-
-        return sourcePath.parent_path().parent_path().parent_path();
-    }
-
     static std::filesystem::path HandTrackingSourceDir(
         const std::filesystem::path &root) {
         return root / L"hand_tracking";
@@ -270,7 +261,6 @@ class HandUdpSenderProcess {
 
     static std::filesystem::path ResolveRuntimeRoot() {
         const std::filesystem::path executableDir = ResolveExecutableDirectory();
-        const std::filesystem::path repoRoot = ResolveRepoRoot();
         const auto hasSender = [](const std::filesystem::path &root) {
             const std::filesystem::path sourceDir = HandTrackingSourceDir(root);
             return std::filesystem::exists(sourceDir / L"src" /
@@ -281,32 +271,39 @@ class HandUdpSenderProcess {
         const auto hasVenv = [](const std::filesystem::path &root) {
             return std::filesystem::exists(VenvPythonPath(root));
         };
-        const std::filesystem::path siblingRepo =
-            executableDir.parent_path()
-                .parent_path()
-                .parent_path()
-                .parent_path() /
-            L"Shingiittai";
+        const auto hasPackagedExe = [](const std::filesystem::path &root) {
+            return std::filesystem::exists(PackagedExePath(root));
+        };
 
-        if (hasSender(repoRoot) && hasVenv(repoRoot)) {
-            return repoRoot;
-        }
-        if (hasSender(siblingRepo) && hasVenv(siblingRepo)) {
-            return siblingRepo;
-        }
-        if (hasSender(executableDir) && hasVenv(executableDir)) {
+        if (hasSender(executableDir) && hasPackagedExe(executableDir)) {
             return executableDir;
         }
-        if (hasSender(repoRoot)) {
-            return repoRoot;
+
+        for (std::filesystem::path dir = executableDir; !dir.empty();
+             dir = dir.parent_path()) {
+            if (hasSender(dir) && hasVenv(dir)) {
+                return dir;
+            }
+            if (dir == dir.root_path()) {
+                break;
+            }
         }
-        if (hasSender(siblingRepo)) {
-            return siblingRepo;
-        }
+
         if (hasSender(executableDir)) {
             return executableDir;
         }
-        return repoRoot;
+
+        for (std::filesystem::path dir = executableDir; !dir.empty();
+             dir = dir.parent_path()) {
+            if (hasSender(dir)) {
+                return dir;
+            }
+            if (dir == dir.root_path()) {
+                break;
+            }
+        }
+
+        return executableDir;
     }
 
     void Stop() {
@@ -350,12 +347,10 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
     HandUdpSenderProcess handUdpSenderProcess;
     const bool handTrackingRuntimeAvailable =
         HandUdpSenderProcess::IsRuntimeAvailable();
-
     // WinApp初期化
     WinApp winApp;
     winApp.Initialize(hInstance, nCmdShow, 1280, 720, L"3145_身技一体", true);
     winApp.SetCursorVisible(false);
-
     // クライアント領域の幅と高さ
     int width = winApp.GetWidth();
     int height = winApp.GetHeight();
@@ -448,7 +443,6 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
     SceneManager sceneManager;
     sceneManager.Initialize(sceneCtx);
     sceneManager.ChangeScene(std::make_unique<TitleScene>());
-
     // 高精細タイマの周波数を取得
     LARGE_INTEGER freq;
     QueryPerformanceFrequency(&freq);
@@ -484,10 +478,9 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
             postProcessSystem.Resize(width, height);
             spriteManager.Resize(width, height);
         }
-
         // Scene 更新
         sceneManager.Update();
-
+        soundManager.Update();
         // 描画
         dxCommon.BeginFrame();
         modelManager.BeginFrame();

@@ -7,6 +7,8 @@
 #include "graphics/SrvManager.h"
 #include "sprite/Sprite.h"
 #include "texture/TextureManager.h"
+#include <algorithm>
+#include <stdexcept>
 
 using namespace DirectX;
 using namespace DxUtils;
@@ -18,6 +20,10 @@ struct SpriteConstBuffer {
 void SpriteRenderer::Initialize(DirectXCommon *dxCommon,
                                 TextureManager *textureManager,
                                 SrvManager *srvManager, int width, int height) {
+    if (!dxCommon || !textureManager || !srvManager) {
+        throw std::runtime_error("SpriteRenderer::Initialize null argument");
+    }
+
     dxCommon_ = dxCommon;
     textureManager_ = textureManager;
     srvManager_ = srvManager;
@@ -172,6 +178,8 @@ void SpriteRenderer::CreateUploadBuffer() {
 }
 
 void SpriteRenderer::UpdateProjection(int width, int height) {
+    width = (std::max)(1, width);
+    height = (std::max)(1, height);
     XMMATRIX ortho = XMMatrixOrthographicOffCenterLH(
         0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 0.0f,
         1.0f);

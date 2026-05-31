@@ -10,6 +10,7 @@
 #include <cwctype>
 #include <filesystem>
 #include <future>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -32,7 +33,8 @@ static TextureManager::DecodedTexture DecodeTextureFileForAsync(
     const std::wstring &filePath) {
     const std::filesystem::path resolvedPath = ResolveTexturePath(filePath);
     TextureManager::DecodedTexture decoded{};
-    if (!std::filesystem::exists(resolvedPath)) {
+    std::error_code ec;
+    if (!std::filesystem::exists(resolvedPath, ec)) {
         return decoded;
     }
 
@@ -65,22 +67,25 @@ using namespace DirectX;
 using namespace DxUtils;
 using Microsoft::WRL::ComPtr;
 
-
-
 uint32_t TextureManager::RequestAsyncLoad(const std::wstring &filePath) {
     const std::filesystem::path resolvedPath = ResolveTexturePath(filePath);
     const std::wstring pathKey = NormalizePathKey(resolvedPath);
-    if (filePathToTextureId_.find(pathKey) != filePathToTextureId_.end()) {
-        AsyncTextureRequest request{};
-        request.requestId = nextAsyncRequestId_++;
-        request.textureId = filePathToTextureId_[pathKey];
-        request.completed = true;
-        asyncRequests_.push_back(std::move(request));
-        return asyncRequests_.back().requestId;
+    auto cached = filePathToTextureId_.find(pathKey);
+    if (cached != filePathToTextureId_.end()) {
+        if (!IsValidTextureId(cached->second)) {
+            filePathToTextureId_.erase(cached);
+        } else {
+            AsyncTextureRequest request{};
+            request.requestId = AllocateAsyncRequestId();
+            request.textureId = cached->second;
+            request.completed = true;
+            asyncRequests_.push_back(std::move(request));
+            return asyncRequests_.back().requestId;
+        }
     }
 
     AsyncTextureRequest request{};
-    request.requestId = nextAsyncRequestId_++;
+    request.requestId = AllocateAsyncRequestId();
     request.future = std::async(std::launch::async, [filePath]() {
         return DecodeTextureFileForAsync(filePath);
     });
@@ -113,25 +118,27 @@ void TextureManager::UpdateAsyncLoads() {
             continue;
         }
 
-        try {
-            DecodedTexture decoded = request.future.get();
-            if (!decoded.succeeded) {
-                request.failed = true;
-                continue;
-            }
-            auto cached = filePathToTextureId_.find(decoded.pathKey);
-            if (cached != filePathToTextureId_.end()) {
-                request.textureId = cached->second;
-            } else {
-                request.textureId = CreateTexture(
-                    decoded.scratch.GetImages(),
-                    decoded.scratch.GetImageCount(), decoded.metadata);
-                filePathToTextureId_[decoded.pathKey] = request.textureId;
-            }
-            request.completed = true;
-        } catch (...) {
+        DecodedTexture decoded = request.future.get();
+        if (!decoded.succeeded) {
             request.failed = true;
+            continue;
         }
+
+        auto cached = filePathToTextureId_.find(decoded.pathKey);
+        if (cached != filePathToTextureId_.end() &&
+            IsValidTextureId(cached->second)) {
+            request.textureId = cached->second;
+        } else {
+            if (cached != filePathToTextureId_.end()) {
+                filePathToTextureId_.erase(cached);
+            }
+            request.textureId =
+                CreateTexture(decoded.scratch.GetImages(),
+                              decoded.scratch.GetImageCount(),
+                              decoded.metadata);
+            filePathToTextureId_[decoded.pathKey] = request.textureId;
+        }
+        request.completed = true;
     }
 }
 
@@ -161,4 +168,26 @@ bool TextureManager::HasAsyncLoadFailed(uint32_t requestId) const {
         }
     }
     return false;
+}
+
+uint32_t TextureManager::AllocateAsyncRequestId() {
+    if (asyncRequests_.size() >=
+        static_cast<size_t>((std::numeric_limits<uint32_t>::max)()) - 1u) {
+        throw std::runtime_error("TextureManager async request id exhausted");
+    }
+
+    for (;;) {
+        if (nextAsyncRequestId_ == 0) {
+            nextAsyncRequestId_ = 1;
+        }
+        const uint32_t candidate = nextAsyncRequestId_++;
+        const auto it = std::find_if(
+            asyncRequests_.begin(), asyncRequests_.end(),
+            [candidate](const AsyncTextureRequest &request) {
+                return request.requestId == candidate;
+            });
+        if (it == asyncRequests_.end()) {
+            return candidate;
+        }
+    }
 }

@@ -123,6 +123,7 @@ float4 main(ModelVSOutput input) : SV_TARGET
     {
         finalColor.a = 1.0f;
     }
+    float alphaMultiplier = saturate(drawEffectParams2.y);
 
     float dissolveEdgeRate = 0.0f;
     if (customParams.x > 0.5f)
@@ -312,6 +313,8 @@ float4 main(ModelVSOutput input) : SV_TARGET
         finalColor.a =
             saturate(finalColor.a + drawEffectColor.a * glow * alphaBoost);
     }
+
+    finalColor.a *= alphaMultiplier;
 
     if (fogParams.x > 0.5f)
     {

@@ -9,6 +9,9 @@ class DirectXCommon;
 
 class PipelineManager {
   public:
+    /// <summary>
+    /// 必要なリソースを初期化する
+    /// </summary>
     void Initialize(DirectXCommon *dxCommon);
 
     IDxcBlob *CompileShader(const std::wstring &path, const std::string &entry,
@@ -20,6 +23,9 @@ class PipelineManager {
 
     ID3D12PipelineState *GetGraphicsPipeline(const std::string &name) const;
 
+    /// <summary>
+    /// Clearを実行する
+    /// </summary>
     void Clear();
 
   private:

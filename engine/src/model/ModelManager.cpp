@@ -1,5 +1,6 @@
 #include "model/ModelManager.h"
 #include "core/AssetManager.h"
+#include "core/MathUtils.h"
 #include "graphics/DirectXCommon.h"
 #include "graphics/SrvManager.h"
 #include "model/MaterialManager.h"
@@ -11,8 +12,11 @@
 #include <cmath>
 #include <cwctype>
 #include <filesystem>
+#include <limits>
 #include <numbers>
 #include <stdexcept>
+#include <system_error>
+#include <utility>
 #include <vector>
 
 using namespace DirectX;
@@ -27,6 +31,8 @@ constexpr std::array<Vertex, 4> kPlaneVertices = {{
 }};
 
 constexpr std::array<uint32_t, 6> kPlaneIndices = {0, 1, 2, 2, 1, 3};
+constexpr uint32_t kMaxProceduralSegments = 4096;
+constexpr uint32_t kMaxTerrainGrid = 1024;
 
 float Hash01(int32_t x, int32_t z, uint32_t seed) {
     uint32_t h = static_cast<uint32_t>(x) * 374761393u ^
@@ -35,11 +41,6 @@ float Hash01(int32_t x, int32_t z, uint32_t seed) {
     h ^= h >> 16u;
     return static_cast<float>(h & 0x00FFFFFFu) /
            static_cast<float>(0x00FFFFFFu);
-}
-
-float SmoothStep(float value) {
-    value = std::clamp(value, 0.0f, 1.0f);
-    return value * value * (3.0f - 2.0f * value);
 }
 
 XMFLOAT3 CalculateFaceNormal(const XMFLOAT3 &a, const XMFLOAT3 &b,
@@ -71,6 +72,21 @@ std::wstring NormalizeModelPathKey(const std::filesystem::path &path) {
     return key;
 }
 
+std::string MakeAssimpModelPath(const std::filesystem::path &resolvedPath) {
+    std::error_code ec;
+    const std::filesystem::path relative =
+        std::filesystem::relative(resolvedPath, std::filesystem::current_path(),
+                                  ec);
+    if (!ec && !relative.empty()) {
+        auto begin = relative.begin();
+        if (begin != relative.end() && *begin != L"..") {
+            return relative.generic_string();
+        }
+    }
+
+    return resolvedPath.string();
+}
+
 void ResetModelPlayback(Model &model) {
     if (!model.animations.empty()) {
         model.currentAnimation = model.animations.begin()->first;
@@ -79,6 +95,20 @@ void ResetModelPlayback(Model &model) {
         model.isPlaying = true;
         model.animationFinished = false;
     }
+}
+
+uint32_t AppendModel(std::vector<Model> &models, Model model) {
+    if (models.size() >=
+        static_cast<size_t>((std::numeric_limits<uint32_t>::max)())) {
+        throw std::runtime_error("ModelManager model id overflow");
+    }
+    models.push_back(std::move(model));
+    return static_cast<uint32_t>(models.size() - 1);
+}
+
+uint32_t ClampProceduralSegments(uint32_t value, uint32_t minimum,
+                                 uint32_t maximum) {
+    return std::clamp(value, minimum, maximum);
 }
 
 } // namespace
@@ -96,11 +126,8 @@ void ModelManager::SetActiveInstance(ModelManager *instance) {
     gActiveModelManager = instance;
 }
 
-ModelManager::~ModelManager() noexcept {
-    try {
-        Finalize();
-    } catch (...) {
-    }
+ModelManager::~ModelManager() {
+    Finalize();
 }
 
 void ModelManager::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
@@ -127,7 +154,7 @@ void ModelManager::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
 void ModelManager::Finalize() {
     if (dxCommon_ && !dxCommon_->IsDeviceRemoved() &&
         !dxCommon_->IsCommandListRecording()) {
-        dxCommon_->WaitForGpu();
+        dxCommon_->WaitForGpuIfPossible();
     }
 
     if (srvManager_ != nullptr) {
@@ -135,19 +162,19 @@ void ModelManager::Finalize() {
             for (ModelSubMesh &subMesh : model.subMeshes) {
                 SkinCluster &skinCluster = subMesh.skinCluster;
                 if (skinCluster.inputVertexSrvIndex != UINT32_MAX) {
-                    srvManager_->Free(skinCluster.inputVertexSrvIndex);
+                    srvManager_->FreeIfAllocated(skinCluster.inputVertexSrvIndex);
                     skinCluster.inputVertexSrvIndex = UINT32_MAX;
                 }
                 if (skinCluster.influenceSrvIndex != UINT32_MAX) {
-                    srvManager_->Free(skinCluster.influenceSrvIndex);
+                    srvManager_->FreeIfAllocated(skinCluster.influenceSrvIndex);
                     skinCluster.influenceSrvIndex = UINT32_MAX;
                 }
                 if (skinCluster.skinnedVertexUavIndex != UINT32_MAX) {
-                    srvManager_->Free(skinCluster.skinnedVertexUavIndex);
+                    srvManager_->FreeIfAllocated(skinCluster.skinnedVertexUavIndex);
                     skinCluster.skinnedVertexUavIndex = UINT32_MAX;
                 }
                 if (skinCluster.paletteSrvIndex != UINT32_MAX) {
-                    srvManager_->Free(skinCluster.paletteSrvIndex);
+                    srvManager_->FreeIfAllocated(skinCluster.paletteSrvIndex);
                     skinCluster.paletteSrvIndex = UINT32_MAX;
                 }
                 if (skinCluster.influenceResource &&
@@ -167,6 +194,7 @@ void ModelManager::Finalize() {
     modelPathToId_.clear();
     models_.clear();
     materialManager_.Finalize();
+    meshManager_.Finalize();
     dxCommon_ = nullptr;
     srvManager_ = nullptr;
     textureManager_ = nullptr;
@@ -177,7 +205,8 @@ void ModelManager::Finalize() {
 
 uint32_t ModelManager::Load(const std::wstring &path) {
     std::filesystem::path p = ResolveModelPath(path);
-    if (!std::filesystem::exists(p)) {
+    std::error_code ec;
+    if (!std::filesystem::exists(p, ec)) {
         throw std::runtime_error("Model file not found. requested=" +
                                  std::filesystem::path(path).string() +
                                  " resolved=" + p.string());
@@ -186,14 +215,18 @@ uint32_t ModelManager::Load(const std::wstring &path) {
     const std::wstring pathKey = NormalizeModelPathKey(p);
     auto it = modelPathToId_.find(pathKey);
     if (it != modelPathToId_.end()) {
-        Model &cached = models_.at(it->second);
-        ResetModelPlayback(cached);
-        animator_.Update(cached, 0.0f);
-        modelRenderer_.UpdateSkinClusters(cached);
-        return it->second;
+        if (it->second >= models_.size()) {
+            modelPathToId_.erase(it);
+        } else {
+            Model &cached = models_[it->second];
+            ResetModelPlayback(cached);
+            animator_.Update(cached, 0.0f);
+            modelRenderer_.UpdateSkinClusters(cached);
+            return it->second;
+        }
     }
 
-    std::string pathStr = p.string();
+    std::string pathStr = MakeAssimpModelPath(p);
 
     Model model = assimpLoader_.Load(pathStr);
     modelRenderer_.CreateSkinClusters(model);
@@ -203,8 +236,7 @@ uint32_t ModelManager::Load(const std::wstring &path) {
     animator_.Update(model, 0.0f);
     modelRenderer_.UpdateSkinClusters(model);
 
-    models_.push_back(std::move(model));
-    uint32_t modelId = static_cast<uint32_t>(models_.size() - 1);
+    uint32_t modelId = AppendModel(models_, std::move(model));
     modelPathToId_[pathKey] = modelId;
 
     return modelId;
@@ -236,8 +268,7 @@ uint32_t ModelManager::CreatePlane(uint32_t textureId,
 
     modelRenderer_.CreateSkinClusters(model);
 
-    models_.push_back(model);
-    return static_cast<uint32_t>(models_.size() - 1);
+    return AppendModel(models_, std::move(model));
 }
 
 uint32_t ModelManager::CreateBox(uint32_t textureId, const Material &material,
@@ -307,15 +338,14 @@ uint32_t ModelManager::CreateBox(uint32_t textureId, const Material &material,
     model.materialId = subMesh.materialId;
 
     modelRenderer_.CreateSkinClusters(model);
-    models_.push_back(model);
-    return static_cast<uint32_t>(models_.size() - 1);
+    return AppendModel(models_, std::move(model));
 }
 
 uint32_t ModelManager::CreateSphere(uint32_t textureId,
                                     const Material &material, uint32_t slice,
                                     uint32_t stack, float radius) {
-    slice = (std::max)(slice, 3u);
-    stack = (std::max)(stack, 2u);
+    slice = ClampProceduralSegments(slice, 3u, kMaxProceduralSegments);
+    stack = ClampProceduralSegments(stack, 2u, kMaxProceduralSegments);
     radius = (std::max)(radius, 0.001f);
 
     Material sphereMaterial = material;
@@ -380,16 +410,13 @@ uint32_t ModelManager::CreateSphere(uint32_t textureId,
     model.materialId = subMesh.materialId;
 
     modelRenderer_.CreateSkinClusters(model);
-    models_.push_back(model);
-    return static_cast<uint32_t>(models_.size() - 1);
+    return AppendModel(models_, std::move(model));
 }
 
 uint32_t ModelManager::CreateRing(uint32_t textureId, const Material &material,
                                   uint32_t divide, float outerRadius,
                                   float innerRadius) {
-    if (divide < 3) {
-        divide = 3;
-    }
+    divide = ClampProceduralSegments(divide, 3u, kMaxProceduralSegments);
 
     outerRadius = (std::max)(outerRadius, 0.001f);
     innerRadius = (std::clamp)(innerRadius, 0.0f, outerRadius - 0.0001f);
@@ -462,17 +489,14 @@ uint32_t ModelManager::CreateRing(uint32_t textureId, const Material &material,
     model.materialId = subMesh.materialId;
 
     modelRenderer_.CreateSkinClusters(model);
-    models_.push_back(model);
-    return static_cast<uint32_t>(models_.size() - 1);
+    return AppendModel(models_, std::move(model));
 }
 
 uint32_t ModelManager::CreateCylinder(uint32_t textureId,
                                       const Material &material, uint32_t divide,
                                       float topRadius, float bottomRadius,
                                       float height) {
-    if (divide < 3) {
-        divide = 3;
-    }
+    divide = ClampProceduralSegments(divide, 3u, kMaxProceduralSegments);
 
     topRadius = (std::max)(topRadius, 0.001f);
     bottomRadius = (std::max)(bottomRadius, 0.001f);
@@ -552,8 +576,7 @@ uint32_t ModelManager::CreateCylinder(uint32_t textureId,
     model.materialId = subMesh.materialId;
 
     modelRenderer_.CreateSkinClusters(model);
-    models_.push_back(model);
-    return static_cast<uint32_t>(models_.size() - 1);
+    return AppendModel(models_, std::move(model));
 }
 
 uint32_t ModelManager::CreateLowPolyTerrain(uint32_t textureId,
@@ -561,10 +584,10 @@ uint32_t ModelManager::CreateLowPolyTerrain(uint32_t textureId,
                                             uint32_t grid, float size,
                                             float maxHeight, float flatRadius,
                                             uint32_t seed) {
-    grid = (std::max)(grid, 4u);
+    grid = ClampProceduralSegments(grid, 4u, kMaxTerrainGrid);
     size = (std::max)(size, 1.0f);
     maxHeight = (std::max)(maxHeight, 0.0f);
-    flatRadius = (std::max)(flatRadius, 0.0f);
+    flatRadius = std::clamp(flatRadius, 0.0f, size * 0.499f);
 
     Material terrainMaterial = material;
     if (terrainMaterial.baseColorTextureId == UINT32_MAX) {
@@ -588,7 +611,8 @@ uint32_t ModelManager::CreateLowPolyTerrain(uint32_t textureId,
             const float worldZ = -halfSize + static_cast<float>(z) * step;
             const float dist = std::sqrt(worldX * worldX + worldZ * worldZ);
             const float outerT =
-                SmoothStep((dist - flatRadius) / (halfSize - flatRadius));
+                MathUtils::SmoothStep01((dist - flatRadius) /
+                                        (halfSize - flatRadius));
 
             const float ridge =
                 0.45f *
@@ -666,8 +690,7 @@ uint32_t ModelManager::CreateLowPolyTerrain(uint32_t textureId,
     model.materialId = subMesh.materialId;
 
     modelRenderer_.CreateSkinClusters(model);
-    models_.push_back(model);
-    return static_cast<uint32_t>(models_.size() - 1);
+    return AppendModel(models_, std::move(model));
 }
 
 uint32_t ModelManager::CreateMesh(

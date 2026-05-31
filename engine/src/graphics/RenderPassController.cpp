@@ -2,19 +2,26 @@
 
 #include "graphics/DirectXCommon.h"
 #include "graphics/SrvManager.h"
+#include <stdexcept>
 
 RenderPassController::PassScope::PassScope(RenderPassController &controller,
                                            RenderPass pass)
-    : controller_(&controller), context_(controller.BeginPass(pass)) {}
+    : controller_(&controller), previousPass_(controller.GetCurrentPass()),
+      context_(controller.BeginPass(pass)) {}
 
 RenderPassController::PassScope::~PassScope() {
     if (controller_ != nullptr) {
-        controller_->EndPass();
+        controller_->BeginPass(previousPass_);
     }
 }
 
 void RenderPassController::Initialize(DirectXCommon *dxCommon,
                                       SrvManager *srvManager) {
+    if (dxCommon == nullptr || srvManager == nullptr) {
+        throw std::runtime_error(
+            "RenderPassController::Initialize null argument");
+    }
+
     dxCommon_ = dxCommon;
     srvManager_ = srvManager;
     context_.dxCommon = dxCommon_;

@@ -3,7 +3,9 @@
 #include "sprite/Sprite.h"
 #include "texture/TextureManager.h"
 #include <algorithm>
+#include <limits>
 #include <numeric>
+#include <stdexcept>
 
 SpriteManager &SpriteManager::GetInstance() {
     static SpriteManager instance;
@@ -13,14 +15,23 @@ SpriteManager &SpriteManager::GetInstance() {
 void SpriteManager::Initialize(DirectXCommon *dxCommon,
                                TextureManager *textureManager,
                                SrvManager *srvManager, int width, int height) {
-    dxCommon_ = dxCommon;
-    textureManager_ = textureManager;
+    if (!dxCommon || !textureManager || !srvManager) {
+        throw std::runtime_error("SpriteManager::Initialize null argument");
+    }
 
     spriteRenderer_.Initialize(dxCommon, textureManager, srvManager, width,
                                height);
+    dxCommon_ = dxCommon;
+    textureManager_ = textureManager;
+    sprites_.clear();
 }
 
-void SpriteManager::Draw(uint32_t id) { spriteRenderer_.Draw(sprites_.at(id)); }
+void SpriteManager::Draw(uint32_t id) {
+    if (!IsValidSpriteId(id)) {
+        throw std::out_of_range("SpriteManager sprite id out of range");
+    }
+    spriteRenderer_.Draw(sprites_[id]);
+}
 
 void SpriteManager::DrawAllSorted(bool backToFront) {
     std::vector<size_t> indices(sprites_.size());
@@ -54,6 +65,10 @@ uint32_t SpriteManager::Create(const std::wstring &filePath) {
     sprite.uvSize = {1.0f, 1.0f};
     sprite.color = {1.0f, 1.0f, 1.0f, 1.0f};
 
+    if (sprites_.size() >=
+        static_cast<size_t>((std::numeric_limits<uint32_t>::max)())) {
+        throw std::runtime_error("SpriteManager sprite id overflow");
+    }
     sprites_.push_back(sprite);
     return static_cast<uint32_t>(sprites_.size() - 1);
 }
@@ -70,8 +85,20 @@ void SpriteManager::Resize(int width, int height) {
     spriteRenderer_.UpdateProjection(width, height);
 }
 
-Sprite &SpriteManager::GetSprite(uint32_t id) { return sprites_.at(id); }
+bool SpriteManager::IsValidSpriteId(uint32_t id) const {
+    return id < sprites_.size();
+}
+
+Sprite &SpriteManager::GetSprite(uint32_t id) {
+    if (!IsValidSpriteId(id)) {
+        throw std::out_of_range("SpriteManager sprite id out of range");
+    }
+    return sprites_[id];
+}
 
 const Sprite &SpriteManager::GetSprite(uint32_t id) const {
-    return sprites_.at(id);
+    if (!IsValidSpriteId(id)) {
+        throw std::out_of_range("SpriteManager sprite id out of range");
+    }
+    return sprites_[id];
 }

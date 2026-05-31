@@ -1,11 +1,25 @@
 #include "animation/SkeletonPoseBuilder.h"
 #include "animation/AnimationSampler.h"
 #include <DirectXMath.h>
-#include <stdexcept>
 
 using namespace DirectX;
 
 namespace {
+
+bool ResolveReadyParentIndex(int parentIndex, size_t childIndex,
+                             size_t boneCount, size_t &resolvedIndex) {
+    if (parentIndex < 0) {
+        return false;
+    }
+
+    const size_t parent = static_cast<size_t>(parentIndex);
+    if (parent >= boneCount || parent >= childIndex) {
+        return false;
+    }
+
+    resolvedIndex = parent;
+    return true;
+}
 
 XMMATRIX MakeAnimatedLocalMatrix(const BoneInfo &bone,
                                  const AnimationClip &clip, float time) {
@@ -61,18 +75,23 @@ void SkeletonPoseBuilder::BuildAnimatedLocals(
 void SkeletonPoseBuilder::UpdateSkeleton(
     Model &model, const std::vector<XMMATRIX> &localMatrices) {
     const size_t boneCount = model.bones.size();
+    model.skeletonSpaceMatrices.resize(boneCount);
+    model.finalBoneMatrices.resize(boneCount);
+
     std::vector<XMMATRIX> globalMatrices(boneCount);
 
     for (size_t i = 0; i < boneCount; i++) {
-        int parent = model.bones[i].parentIndex;
-        if (parent < 0) {
-            globalMatrices[i] = localMatrices[i];
+        const XMMATRIX local =
+            i < localMatrices.size()
+                ? localMatrices[i]
+                : XMLoadFloat4x4(&model.bones[i].localBindMatrix);
+
+        size_t parent = 0;
+        if (ResolveReadyParentIndex(model.bones[i].parentIndex, i, boneCount,
+                                    parent)) {
+            globalMatrices[i] = local * globalMatrices[parent];
         } else {
-            if (static_cast<size_t>(parent) >= boneCount ||
-                static_cast<size_t>(parent) >= i) {
-                throw std::runtime_error("Invalid skeleton parent index");
-            }
-            globalMatrices[i] = localMatrices[i] * globalMatrices[parent];
+            globalMatrices[i] = local;
         }
 
         XMStoreFloat4x4(&model.skeletonSpaceMatrices[i], globalMatrices[i]);

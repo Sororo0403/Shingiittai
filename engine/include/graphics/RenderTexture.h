@@ -11,11 +11,8 @@ class SrvManager;
 /// </summary>
 class RenderTexture {
   public:
-    ~RenderTexture() noexcept;
+    ~RenderTexture();
 
-    /// <summary>
-    /// RenderTextureを生成する
-    /// </summary>
     void Initialize(DirectXCommon *dxCommon, SrvManager *srvManager, int width,
                     int height);
 

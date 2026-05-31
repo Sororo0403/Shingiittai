@@ -9,6 +9,7 @@
 #include <array>
 #include <cmath>
 #include <cstring>
+#include <stdexcept>
 
 using namespace DirectX;
 using namespace DxUtils;
@@ -42,15 +43,16 @@ bool IsSameMatrix(const XMFLOAT4X4 &lhs, const XMFLOAT4X4 &rhs) {
 
 } // namespace
 
-SkyboxRenderer::~SkyboxRenderer() noexcept {
-    try {
-        Finalize();
-    } catch (...) {
-    }
+SkyboxRenderer::~SkyboxRenderer() {
+    Finalize();
 }
 
 void SkyboxRenderer::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
                                 TextureManager *textureManager) {
+    if (!dxCommon || !srvManager || !textureManager) {
+        throw std::runtime_error("SkyboxRenderer::Initialize null argument");
+    }
+
     Finalize();
 
     dxCommon_ = dxCommon;
@@ -64,6 +66,12 @@ void SkyboxRenderer::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
 }
 
 void SkyboxRenderer::Finalize() {
+    if ((constBuffer_ || indexBuffer_ || vertexBuffer_) && dxCommon_ != nullptr &&
+        !dxCommon_->IsDeviceRemoved() &&
+        !dxCommon_->IsCommandListRecording()) {
+        dxCommon_->WaitForGpuIfPossible();
+    }
+
     if (constBuffer_ && mappedCB_ != nullptr) {
         constBuffer_->Unmap(0, nullptr);
         mappedCB_ = nullptr;
@@ -87,6 +95,16 @@ void SkyboxRenderer::Finalize() {
 }
 
 void SkyboxRenderer::Draw(uint32_t textureId, const Camera &camera) {
+    if (!dxCommon_ || !srvManager_ || !textureManager_ || !pipelineState_ ||
+        !rootSignature_ || !vertexBuffer_ || !indexBuffer_ || !constBuffer_ ||
+        mappedCB_ == nullptr) {
+        throw std::runtime_error("SkyboxRenderer::Draw called before Initialize");
+    }
+
+    const uint32_t boundTextureId =
+        textureId == UINT32_MAX ? textureManager_->GetWhiteCubeTextureId()
+                                : textureId;
+
     auto *cmd = dxCommon_->GetCommandList();
 
     ID3D12DescriptorHeap *heaps[] = {srvManager_->GetHeap()};
@@ -126,7 +144,7 @@ void SkyboxRenderer::Draw(uint32_t textureId, const Camera &camera) {
     cmd->SetGraphicsRootConstantBufferView(
         0, constBuffer_->GetGPUVirtualAddress());
     cmd->SetGraphicsRootDescriptorTable(
-        1, textureManager_->GetGpuHandle(textureId));
+        1, textureManager_->GetGpuHandle(boundTextureId));
     cmd->DrawIndexedInstanced(indexCount_, 1, 0, 0, 0);
 }
 

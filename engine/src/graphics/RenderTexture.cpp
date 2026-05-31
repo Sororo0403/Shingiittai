@@ -3,32 +3,72 @@
 #include "graphics/DxHelpers.h"
 #include "graphics/DxUtils.h"
 #include "graphics/SrvManager.h"
+#include <stdexcept>
 
 using namespace DxUtils;
 
-RenderTexture::~RenderTexture() noexcept {
-    try {
-        Release();
-    } catch (...) {
+namespace {
+class RenderTextureInitializationGuard {
+  public:
+    explicit RenderTextureInitializationGuard(RenderTexture &target)
+        : target_(target) {}
+    ~RenderTextureInitializationGuard() {
+        if (active_) {
+            target_.Release();
+        }
     }
+
+    RenderTextureInitializationGuard(const RenderTextureInitializationGuard &) =
+        delete;
+    RenderTextureInitializationGuard &
+    operator=(const RenderTextureInitializationGuard &) = delete;
+
+    void Commit() { active_ = false; }
+
+  private:
+    RenderTexture &target_;
+    bool active_ = true;
+};
+} // namespace
+
+RenderTexture::~RenderTexture() {
+    Release();
 }
 
 void RenderTexture::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
                                int width, int height) {
+    if (!dxCommon || !srvManager) {
+        throw std::runtime_error("RenderTexture::Initialize null argument");
+    }
+    if (width <= 0 || height <= 0) {
+        throw std::runtime_error("RenderTexture::Initialize invalid size");
+    }
+
     Release();
 
     dxCommon_ = dxCommon;
     srvManager_ = srvManager;
+    RenderTextureInitializationGuard initializeGuard(*this);
     srvIndex_ = srvManager_->Allocate();
     width_ = width;
     height_ = height;
 
     CreateResources();
+    initializeGuard.Commit();
 }
 
 void RenderTexture::Resize(int width, int height) {
     if (width <= 0 || height <= 0 || (width == width_ && height == height_)) {
         return;
+    }
+    if (!dxCommon_ || !srvManager_ || srvIndex_ == UINT_MAX) {
+        throw std::runtime_error(
+            "RenderTexture::Resize called before Initialize");
+    }
+
+    if (resource_ && dxCommon_ && !dxCommon_->IsDeviceRemoved() &&
+        !dxCommon_->IsCommandListRecording()) {
+        dxCommon_->WaitForGpuIfPossible();
     }
 
     width_ = width;
@@ -42,7 +82,7 @@ void RenderTexture::Resize(int width, int height) {
 void RenderTexture::Release() {
     if (resource_ && dxCommon_ && !dxCommon_->IsDeviceRemoved() &&
         !dxCommon_->IsCommandListRecording()) {
-        dxCommon_->WaitForGpu();
+        dxCommon_->WaitForGpuIfPossible();
     }
 
     resource_.Reset();
@@ -51,7 +91,7 @@ void RenderTexture::Release() {
     resourceState_ = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 
     if (srvManager_ != nullptr && srvIndex_ != UINT_MAX) {
-        srvManager_->Free(srvIndex_);
+        srvManager_->FreeIfAllocated(srvIndex_);
         srvIndex_ = UINT_MAX;
     }
 
@@ -62,6 +102,11 @@ void RenderTexture::Release() {
 }
 
 void RenderTexture::BeginRender(const DirectX::XMFLOAT4 &clearColor) {
+    if (!dxCommon_ || !resource_ || !rtvHeap_) {
+        throw std::runtime_error(
+            "RenderTexture::BeginRender called before Initialize");
+    }
+
     auto commandList = dxCommon_->GetCommandList();
 
     if (resourceState_ != D3D12_RESOURCE_STATE_RENDER_TARGET) {
@@ -101,6 +146,11 @@ void RenderTexture::BeginRender(const DirectX::XMFLOAT4 &clearColor) {
 }
 
 void RenderTexture::EndRender() {
+    if (!dxCommon_ || !resource_) {
+        throw std::runtime_error(
+            "RenderTexture::EndRender called before Initialize");
+    }
+
     if (resourceState_ != D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE) {
         auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
             resource_.Get(), resourceState_,
@@ -111,6 +161,11 @@ void RenderTexture::EndRender() {
 }
 
 D3D12_GPU_DESCRIPTOR_HANDLE RenderTexture::GetGpuHandle() const {
+    if (!srvManager_ || srvIndex_ == UINT_MAX) {
+        throw std::runtime_error(
+            "RenderTexture::GetGpuHandle called before Initialize");
+    }
+
     return srvManager_->GetGpuHandle(srvIndex_);
 }
 

@@ -6,25 +6,79 @@
 #include "imgui.h"
 #include "imgui_impl_dx12.h"
 #include "imgui_impl_win32.h"
+#include <cstdint>
+#include <stdexcept>
 
-ImguiManager::~ImguiManager() noexcept {
-    try {
-        Finalize();
-    } catch (...) {
+namespace {
+class ImguiInitializationGuard {
+  public:
+    explicit ImguiInitializationGuard(ImguiManager &manager)
+        : manager_(manager) {}
+    ~ImguiInitializationGuard() {
+        if (active_) {
+            manager_.Finalize();
+        }
     }
+
+    ImguiInitializationGuard(const ImguiInitializationGuard &) = delete;
+    ImguiInitializationGuard &
+    operator=(const ImguiInitializationGuard &) = delete;
+
+    void Commit() { active_ = false; }
+
+  private:
+    ImguiManager &manager_;
+    bool active_ = true;
+};
+
+class ImguiDescriptorAllocationGuard {
+  public:
+    ImguiDescriptorAllocationGuard(SrvManager &srvManager, uint32_t index)
+        : srvManager_(&srvManager), index_(index) {}
+    ~ImguiDescriptorAllocationGuard() {
+        if (active_ && srvManager_ != nullptr) {
+            srvManager_->FreeIfAllocated(index_);
+        }
+    }
+
+    ImguiDescriptorAllocationGuard(const ImguiDescriptorAllocationGuard &) =
+        delete;
+    ImguiDescriptorAllocationGuard &
+    operator=(const ImguiDescriptorAllocationGuard &) = delete;
+
+    void Commit() { active_ = false; }
+
+  private:
+    SrvManager *srvManager_ = nullptr;
+    uint32_t index_ = UINT32_MAX;
+    bool active_ = true;
+};
+} // namespace
+
+ImguiManager::~ImguiManager() {
+    Finalize();
 }
 
 void ImguiManager::Initialize(WinApp *winApp, DirectXCommon *dxCommon,
                               SrvManager *srvManager) {
+    if (!winApp || !dxCommon || !srvManager) {
+        throw std::runtime_error("ImguiManager::Initialize null argument");
+    }
+
     Finalize();
 
     srvManager_ = srvManager;
+    ImguiInitializationGuard initializeGuard(*this);
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
+    contextCreated_ = true;
     ImGui::StyleColorsDark();
 
-    ImGui_ImplWin32_Init(winApp->GetHwnd());
+    if (!ImGui_ImplWin32_Init(winApp->GetHwnd())) {
+        throw std::runtime_error("ImGui_ImplWin32_Init failed");
+    }
+    win32Initialized_ = true;
 
     ImGui_ImplDX12_InitInfo init_info{};
     init_info.Device = dxCommon->GetDevice();
@@ -40,9 +94,16 @@ void ImguiManager::Initialize(WinApp *winApp, DirectXCommon *dxCommon,
                                         D3D12_GPU_DESCRIPTOR_HANDLE *out_gpu) {
         auto *manager = static_cast<ImguiManager *>(info->UserData);
         uint32_t index = manager->srvManager_->Allocate();
-        *out_cpu = manager->srvManager_->GetCpuHandle(index);
-        *out_gpu = manager->srvManager_->GetGpuHandle(index);
-        manager->allocatedSrvIndices_[out_cpu->ptr] = index;
+        ImguiDescriptorAllocationGuard allocationGuard(*manager->srvManager_,
+                                                       index);
+        const D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle =
+            manager->srvManager_->GetCpuHandle(index);
+        const D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle =
+            manager->srvManager_->GetGpuHandle(index);
+        manager->allocatedSrvIndices_.emplace(cpuHandle.ptr, index);
+        *out_cpu = cpuHandle;
+        *out_gpu = gpuHandle;
+        allocationGuard.Commit();
     };
 
     init_info.SrvDescriptorFreeFn = [](ImGui_ImplDX12_InitInfo *info,
@@ -53,26 +114,35 @@ void ImguiManager::Initialize(WinApp *winApp, DirectXCommon *dxCommon,
         if (it == manager->allocatedSrvIndices_.end()) {
             return;
         }
-        manager->srvManager_->Free(it->second);
+        manager->srvManager_->FreeIfAllocated(it->second);
         manager->allocatedSrvIndices_.erase(it);
     };
 
-    ImGui_ImplDX12_Init(&init_info);
-    initialized_ = true;
+    if (!ImGui_ImplDX12_Init(&init_info)) {
+        throw std::runtime_error("ImGui_ImplDX12_Init failed");
+    }
+    dx12Initialized_ = true;
+    initializeGuard.Commit();
 }
 
 void ImguiManager::Finalize() {
-    if (initialized_) {
+    if (dx12Initialized_) {
         ImGui_ImplDX12_Shutdown();
+        dx12Initialized_ = false;
+    }
+    if (win32Initialized_) {
         ImGui_ImplWin32_Shutdown();
+        win32Initialized_ = false;
+    }
+    if (contextCreated_) {
         ImGui::DestroyContext();
-        initialized_ = false;
+        contextCreated_ = false;
     }
 
     if (srvManager_ != nullptr) {
         for (const auto &[handlePtr, index] : allocatedSrvIndices_) {
             (void)handlePtr;
-            srvManager_->Free(index);
+            srvManager_->FreeIfAllocated(index);
         }
     }
     allocatedSrvIndices_.clear();

@@ -12,10 +12,12 @@ class UploadPassScope {
                     bool active)
         : dxCommon_(dxCommon), textureManager_(textureManager), active_(active) {}
 
-    ~UploadPassScope() noexcept {
-        try {
-            Finish();
-        } catch (...) {
+    ~UploadPassScope() {
+        if (active_ && dxCommon_ != nullptr) {
+            dxCommon_->AbortFrame();
+            if (textureManager_ != nullptr) {
+                textureManager_->ReleaseUploadBuffers();
+            }
         }
     }
 
@@ -54,6 +56,16 @@ class BoolFlagScope {
 } // namespace
 
 void SceneManager::Initialize(const SceneContext &ctx) { ctx_ = &ctx; }
+
+void SceneManager::Finalize() {
+    if (ctx_ != nullptr && ctx_->rendering.dxCommon != nullptr) {
+        ctx_->rendering.dxCommon->WaitForGpuIfPossible();
+    }
+    pendingScene_.reset();
+    currentScene_.reset();
+    isUpdating_ = false;
+    isDrawing_ = false;
+}
 
 void SceneManager::SetSceneFactory(AbstractSceneFactory *sceneFactory) {
     sceneFactory_ = sceneFactory;

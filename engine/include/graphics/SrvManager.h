@@ -34,11 +34,16 @@ class SrvManager {
     /// 指定インデックスを解放して再利用可能にする
     /// </summary>
     void Free(UINT index);
+    bool FreeIfAllocated(UINT index);
+    bool IsAllocated(UINT index) const;
 
     /// <summary>
     /// 指定ハンドルを解放して再利用可能にする
     /// </summary>
     void Free(DescriptorHandle handle) { Free(handle.Get()); }
+    bool FreeIfAllocated(DescriptorHandle handle) {
+        return FreeIfAllocated(handle.Get());
+    }
 
     /// <summary>
     /// 指定インデックスのCPUハンドルを取得する
@@ -81,6 +86,8 @@ class SrvManager {
     UINT GetDescriptorSize() const { return descriptorSize_; }
 
   private:
+    void ValidateAllocatedIndex(UINT index, const char *operation) const;
+
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> heap_;
     UINT descriptorSize_ = 0;
     UINT maxSrvCount_ = 0;

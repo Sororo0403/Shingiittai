@@ -4,6 +4,7 @@
 #include "Camera.h"
 #include "Enemy.h"
 #include "EnemyPhaseMaterial.h"
+#include "InputControlType.h"
 #include "Player.h"
 #include "SwordInputCalibration.h"
 #include <DirectXMath.h>
@@ -11,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 class GameVictoryScene : public BaseScene {
   public:
@@ -47,6 +49,13 @@ class GameVictoryScene : public BaseScene {
         float startTime = 0.0f;
         float shine = 0.0f;
     };
+    struct RankingEntry {
+        int score = 0;
+        float difficulty = 0.0f;
+        float clearTime = 0.0f;
+        InputControlType controlType = InputControlType::KeyboardMouse;
+        bool isCurrent = false;
+    };
 
     void UpdateCamera(float screenWidth, float screenHeight);
     void UpdateCinematic(float deltaTime);
@@ -73,6 +82,10 @@ class GameVictoryScene : public BaseScene {
     void UpdateResultPostProcess();
     void UpdateResultInput();
     void DrawResultOverlay(float screenWidth, float screenHeight);
+    void RegisterRanking();
+    void LoadRanking();
+    void SaveRanking() const;
+    void DrawRankingPanel(float screenWidth, float screenHeight, float alpha);
     void DrawActionButtons(float screenWidth, float screenHeight, float alpha);
     int ComputeScore(float clearTime, float difficulty) const;
     std::string FormatTime(float seconds) const;
@@ -111,8 +124,12 @@ class GameVictoryScene : public BaseScene {
     bool preImpactEmitted_ = false;
     bool impactEmitted_ = false;
     bool resultMode_ = false;
+    bool rankingVisible_ = false;
+    bool rankingRegistered_ = false;
     bool exitRequested_ = false;
     int exitTargetIndex_ = 1;
+    int currentRank_ = -1;
+    int rankingDisplayFirstRank_ = 1;
     Transform explosionEnemyTransform_{};
 
     Camera camera_;
@@ -147,6 +164,11 @@ class GameVictoryScene : public BaseScene {
     Image clearTimeLabel_{};
     Image scoreTitleLabel_{};
     Image difficultyLabel_{};
+    Image rankingTitleLabel_{};
+    Image rankingRankHeaderLabel_{};
+    Image rankingScoreHeaderLabel_{};
+    Image rankingTimeHeaderLabel_{};
+    Image rankingDifficultyHeaderLabel_{};
     Image retryButtonLabel_{};
     Image titleButtonLabel_{};
     std::array<Image, 10> digitImages_{};
@@ -154,5 +176,6 @@ class GameVictoryScene : public BaseScene {
     Image dotImage_{};
     Image dashImage_{};
     Image secondImage_{};
+    std::vector<RankingEntry> rankingEntries_{};
     int actionButtonIndex_ = 1;
 };

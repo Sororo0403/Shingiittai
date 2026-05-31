@@ -31,6 +31,18 @@
     <Filter Include="Resources\Audio\se">
       <UniqueIdentifier>{75cd1bbf-105d-4073-bb6d-ea37b8d7e644}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Resources\Audio\se\ui">
+      <UniqueIdentifier>{89ed9ef4-f08f-4e4a-a0e3-3e8dcf1bd2c5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\Audio\se\combat">
+      <UniqueIdentifier>{193f5d0c-2448-40d6-a918-3f0cbf7962bf}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\Audio\se\movement">
+      <UniqueIdentifier>{9f5953de-f293-42fb-b6d1-a1fcf1956b70}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\Audio\se\victory">
+      <UniqueIdentifier>{99d14521-fd12-41a5-bf80-4ee663bd605b}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Resources\Audio\bgm">
       <UniqueIdentifier>{a354bf52-f80e-4a4f-8f11-c96723e605af}</UniqueIdentifier>
     </Filter>
@@ -84,6 +96,9 @@
     </Filter>
     <Filter Include="Resources\UI\option">
       <UniqueIdentifier>{47fe7ce2-52c4-4e40-9b0b-67ad80ea6f35}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources\UI\sensitivity_adjust">
+      <UniqueIdentifier>{e0f63f35-1f61-4551-94a3-604c20e3d032}</UniqueIdentifier>
     </Filter>
     <Filter Include="Resources\Fonts">
       <UniqueIdentifier>{c19f3d03-d2f9-4305-b7b6-f85efcf4fa56}</UniqueIdentifier>
@@ -375,23 +390,35 @@
     <None Include="resources\audio\bgm\bgm_TutorialTheme.wav">
       <Filter>Resources\Audio\bgm</Filter>
     </None>
-    <None Include="resources\audio\se\se_Selected.mp3">
-      <Filter>Resources\Audio\se</Filter>
+    <None Include="resources\audio\se\ui\se_Cancel.mp3">
+      <Filter>Resources\Audio\se\ui</Filter>
     </None>
-    <None Include="resources\audio\se\ロボットを殴る2.mp3">
-      <Filter>Resources\Audio\se</Filter>
+    <None Include="resources\audio\se\ui\se_Select.mp3">
+      <Filter>Resources\Audio\se\ui</Filter>
     </None>
-    <None Include="resources\audio\se\剣で斬る2.mp3">
-      <Filter>Resources\Audio\se</Filter>
+    <None Include="resources\audio\se\ui\se_Selected.mp3">
+      <Filter>Resources\Audio\se\ui</Filter>
     </None>
-    <None Include="resources\audio\se\剣で斬る3.mp3">
-      <Filter>Resources\Audio\se</Filter>
+    <None Include="resources\audio\se\combat\explosion_3.mp3">
+      <Filter>Resources\Audio\se\combat</Filter>
     </None>
-    <None Include="resources\audio\se\爆発3.mp3">
-      <Filter>Resources\Audio\se</Filter>
+    <None Include="resources\audio\se\combat\explosion_4.mp3">
+      <Filter>Resources\Audio\se\combat</Filter>
     </None>
-    <None Include="resources\audio\se\爆発4.mp3">
-      <Filter>Resources\Audio\se</Filter>
+    <None Include="resources\audio\se\combat\robot_punch_2.mp3">
+      <Filter>Resources\Audio\se\combat</Filter>
+    </None>
+    <None Include="resources\audio\se\combat\sword_slash_2.mp3">
+      <Filter>Resources\Audio\se\combat</Filter>
+    </None>
+    <None Include="resources\audio\se\combat\sword_slash_3.mp3">
+      <Filter>Resources\Audio\se\combat</Filter>
+    </None>
+    <None Include="resources\audio\se\movement\warp.mp3">
+      <Filter>Resources\Audio\se\movement</Filter>
+    </None>
+    <None Include="resources\audio\se\victory\crowd_cheer_applause_1.mp3">
+      <Filter>Resources\Audio\se\victory</Filter>
     </None>
     <None Include="resources\fonts\MPLUS1p-ExtraBold.ttf">
       <Filter>Resources\Fonts</Filter>
@@ -531,6 +558,9 @@
     <None Include="resources\ui\result\mplus\glyphs\char_dot.png">
       <Filter>Resources\UI\result\mplus\glyphs</Filter>
     </None>
+    <None Include="resources\ui\result\mplus\glyphs\char_slash.png">
+      <Filter>Resources\UI\result\mplus\glyphs</Filter>
+    </None>
     <None Include="resources\ui\result\mplus\glyphs\char_s.png">
       <Filter>Resources\UI\result\mplus\glyphs</Filter>
     </None>
@@ -636,6 +666,9 @@
     <None Include="resources\ui\menu\menu_title.png">
       <Filter>Resources\UI\menu</Filter>
     </None>
+    <None Include="resources\ui\menu\option_camera_test.png">
+      <Filter>Resources\UI\menu</Filter>
+    </None>
     <None Include="resources\ui\menu\option_credits.png">
       <Filter>Resources\UI\menu</Filter>
     </None>
@@ -646,6 +679,21 @@
       <Filter>Resources\UI\menu</Filter>
     </None>
     <None Include="resources\ui\option\bgm.png">
+      <Filter>Resources\UI\option</Filter>
+    </None>
+    <None Include="resources\ui\option\camera_horizontal.png">
+      <Filter>Resources\UI\option</Filter>
+    </None>
+    <None Include="resources\ui\option\camera_sensitivity.png">
+      <Filter>Resources\UI\option</Filter>
+    </None>
+    <None Include="resources\ui\option\camera_slash.png">
+      <Filter>Resources\UI\option</Filter>
+    </None>
+    <None Include="resources\ui\option\camera_test.png">
+      <Filter>Resources\UI\option</Filter>
+    </None>
+    <None Include="resources\ui\option\camera_vertical.png">
       <Filter>Resources\UI\option</Filter>
     </None>
     <None Include="resources\ui\option\menu_label.png">
@@ -662,6 +710,15 @@
     </None>
     <None Include="resources\ui\option\title.png">
       <Filter>Resources\UI\option</Filter>
+    </None>
+    <None Include="resources\ui\sensitivity_adjust\camera_wait.png">
+      <Filter>Resources\UI\sensitivity_adjust</Filter>
+    </None>
+    <None Include="resources\ui\sensitivity_adjust\controls.png">
+      <Filter>Resources\UI\sensitivity_adjust</Filter>
+    </None>
+    <None Include="resources\ui\sensitivity_adjust\title.png">
+      <Filter>Resources\UI\sensitivity_adjust</Filter>
     </None>
     <None Include="resources\ui\sound_test\controls.png">
       <Filter>Resources\UI\sound_test</Filter>

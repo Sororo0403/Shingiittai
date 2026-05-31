@@ -10,6 +10,8 @@ float Random01() {
 }
 
 constexpr float kFarSlashCounterFlashDuration = 0.50f;
+constexpr float kTwoPi = 6.28318530f;
+constexpr float kWarpPlayerClearance = 3.05f;
 
 float PhantomWarpMoveTime(bool finalWarp) { return finalWarp ? 0.24f : 0.20f; }
 
@@ -53,11 +55,15 @@ bool Enemy::DecideWarpTargetNearPlayer(DirectX::XMFLOAT3 &outTarget) {
 
     outTarget = playerPos_;
     if (warp_.approachSlot == WarpApproachSlot::Front) {
-        outTarget.x -= forwardX * warpApproachFrontDistance_;
-        outTarget.z -= forwardZ * warpApproachFrontDistance_;
+        const float distance =
+            std::max(warpApproachFrontDistance_, kWarpPlayerClearance);
+        outTarget.x -= forwardX * distance;
+        outTarget.z -= forwardZ * distance;
     } else {
-        outTarget.x += forwardX * warpApproachBackDistance_;
-        outTarget.z += forwardZ * warpApproachBackDistance_;
+        const float distance =
+            std::max(warpApproachBackDistance_, kWarpPlayerClearance);
+        outTarget.x += forwardX * distance;
+        outTarget.z += forwardZ * distance;
     }
     outTarget.y = tf_.position.y;
     FinalizeWarpTargetFacing(outTarget);
@@ -104,23 +110,24 @@ bool Enemy::DecideWarpTargetTripleIaiSlash(DirectX::XMFLOAT3 &outTarget,
     forwardX /= forwardLength;
     forwardZ /= forwardLength;
 
-    const float rightX = forwardZ;
-    const float rightZ = -forwardX;
-    const int clampedIndex = std::clamp(slashIndex, 0, 2);
-    const float lane = static_cast<float>(clampedIndex - 1);
-    const float spread = 4.8f + 2.6f * Random01();
-    const float sideJitter = (Random01() - 0.5f) * 1.35f;
-    const float centerJitter = (Random01() - 0.5f) * 2.4f;
-    const float sideOffset =
-        lane == 0.0f ? centerJitter : lane * spread + sideJitter;
-    const float depthOffset =
-        farWarpSlashDistance_ + 0.55f * clampedIndex + 2.8f * Random01();
+    const int clampedIndex =
+        std::clamp(slashIndex, 0, kTripleIaiCloneCount_ - 1);
+    const float baseAngle = std::atan2f(-forwardX, -forwardZ);
+    const float ringAngle =
+        baseAngle +
+        (static_cast<float>(clampedIndex) *
+         (kTwoPi / static_cast<float>(kTripleIaiCloneCount_))) +
+        (Random01() - 0.5f) * 0.18f;
+    const float ringRadius = 13.2f + 2.8f * Random01();
+    const float radialX = std::sinf(ringAngle);
+    const float radialZ = std::cosf(ringAngle);
+    const float tangentX = radialZ;
+    const float tangentZ = -radialX;
+    const float tangentJitter = (Random01() - 0.5f) * 1.6f;
 
     outTarget = playerPos_;
-    outTarget.x -= forwardX * depthOffset;
-    outTarget.z -= forwardZ * depthOffset;
-    outTarget.x += rightX * sideOffset;
-    outTarget.z += rightZ * sideOffset;
+    outTarget.x += radialX * ringRadius + tangentX * tangentJitter;
+    outTarget.z += radialZ * ringRadius + tangentZ * tangentJitter;
     outTarget.y = tf_.position.y;
     FinalizeWarpTargetFacing(outTarget);
     return true;
@@ -216,8 +223,10 @@ bool Enemy::DecideWarpTargetBehindPlayer(DirectX::XMFLOAT3 &outTarget) {
     forwardZ /= forwardLength;
 
     outTarget = playerPos_;
-    outTarget.x += forwardX * warpApproachBackDistance_;
-    outTarget.z += forwardZ * warpApproachBackDistance_;
+    const float distance =
+        std::max(warpApproachBackDistance_, kWarpPlayerClearance);
+    outTarget.x += forwardX * distance;
+    outTarget.z += forwardZ * distance;
     outTarget.y = tf_.position.y;
     FinalizeWarpTargetFacing(outTarget);
     return true;
@@ -355,16 +364,7 @@ bool Enemy::PrepareWarpContext() {
 
 void Enemy::ResetWarpContext() { warp_ = WarpContext{}; }
 
-void Enemy::UpdateWarpStart(float deltaTime) {
-    if (!warp_.hasDeparturePos) {
-        warp_.departurePos = tf_.position;
-        warp_.hasDeparturePos = true;
-    }
-
-    UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_ * 0.45f);
-    isVisible_ = true;
-    warp_.collisionDisabled = false;
-
+float Enemy::GetCurrentWarpStartTime() const {
     float startTime = config_.warp.startTime;
     if (warp_.phantomChain) {
         startTime = warp_.phantomFinal ? 0.13f : 0.11f;
@@ -378,6 +378,44 @@ void Enemy::UpdateWarpStart(float deltaTime) {
     } else if (warp_.farSlashFollowup) {
         startTime *= 0.44f;
     }
+    return startTime;
+}
+
+float Enemy::GetWarpVisualAlpha() const {
+    if (action_.kind != ActionKind::Warp) {
+        return 1.0f;
+    }
+    if (action_.step == ActionStep::Move) {
+        return 0.0f;
+    }
+    if (action_.step != ActionStep::Start) {
+        return 1.0f;
+    }
+
+    const float startTime = GetCurrentWarpStartTime();
+    if (startTime <= 0.0001f) {
+        return 0.0f;
+    }
+
+    const float t = std::clamp(stateTimer_ / startTime, 0.0f, 1.0f);
+    const float holdRatio = warp_.phantomChain ? 0.08f : 0.18f;
+    const float fadeT =
+        std::clamp((t - holdRatio) / (1.0f - holdRatio), 0.0f, 1.0f);
+    const float snapFade = std::pow(fadeT, 2.35f);
+    return std::pow(1.0f - snapFade, 2.80f);
+}
+
+void Enemy::UpdateWarpStart(float deltaTime) {
+    if (!warp_.hasDeparturePos) {
+        warp_.departurePos = tf_.position;
+        warp_.hasDeparturePos = true;
+    }
+
+    UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_ * 0.45f);
+    isVisible_ = true;
+    warp_.collisionDisabled = false;
+
+    const float startTime = GetCurrentWarpStartTime();
 
     if (stateTimer_ >= startTime) {
         isVisible_ = false;
@@ -580,28 +618,9 @@ void Enemy::UpdateWarpTrails(float deltaTime) {
 
 void Enemy::EmitWarpTrailGhost(const DirectX::XMFLOAT3 &position, float scale,
                                float lifeOverride) {
-    int slot = -1;
-    for (int i = 0; i < kAfterimageGhostCount_; ++i) {
-        if (!afterimageGhosts_[i].isActive) {
-            slot = i;
-            break;
-        }
-    }
-    if (slot < 0) {
-        slot = 0;
-    }
-
-    EnemyAfterimageGhost &ghost = afterimageGhosts_[slot];
-    ghost.visual = visualTf_;
-    ghost.visual.position = position;
-    ghost.visual.position.y += warpArrivalPreviewHeight_;
-    ghost.visual.scale.x *= scale;
-    ghost.visual.scale.y *= scale;
-    ghost.visual.scale.z *= scale;
-    const float life = lifeOverride > 0.0f ? lifeOverride : warpTrailLife_;
-    ghost.life = life;
-    ghost.maxLife = life;
-    ghost.isActive = true;
+    (void)position;
+    (void)scale;
+    (void)lifeOverride;
 }
 
 void Enemy::ResetWarpTrails() {

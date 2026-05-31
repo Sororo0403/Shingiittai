@@ -37,6 +37,55 @@ void ThrowIfFailed(HRESULT hr, const char *message) {
     }
 }
 
+bool BuildPcmWaveFormat(uint32_t sampleRate, uint16_t channels,
+                        uint16_t bitsPerSample, WAVEFORMATEX &format) {
+    if (sampleRate == 0u || channels == 0u || bitsPerSample == 0u) {
+        return false;
+    }
+
+    const uint32_t frameBits =
+        static_cast<uint32_t>(channels) * static_cast<uint32_t>(bitsPerSample);
+    if (frameBits == 0u || (frameBits % 8u) != 0u) {
+        return false;
+    }
+
+    const uint32_t blockAlign = frameBits / 8u;
+    if (blockAlign == 0u ||
+        blockAlign >
+            static_cast<uint32_t>((std::numeric_limits<WORD>::max)())) {
+        return false;
+    }
+    if (sampleRate >
+        (std::numeric_limits<DWORD>::max)() / static_cast<DWORD>(blockAlign)) {
+        return false;
+    }
+
+    format = {};
+    format.wFormatTag = WAVE_FORMAT_PCM;
+    format.nChannels = channels;
+    format.nSamplesPerSec = sampleRate;
+    format.wBitsPerSample = bitsPerSample;
+    format.nBlockAlign = static_cast<WORD>(blockAlign);
+    format.nAvgBytesPerSec = sampleRate * format.nBlockAlign;
+    return true;
+}
+
+bool IsSupportedPcmReadFormat(const WAVEFORMATEX &format) {
+    if (format.nSamplesPerSec == 0 || format.nChannels == 0 ||
+        format.nBlockAlign == 0) {
+        return false;
+    }
+    if (format.wBitsPerSample != 8 && format.wBitsPerSample != 16) {
+        return false;
+    }
+
+    const uint32_t bytesPerSample =
+        static_cast<uint32_t>(format.wBitsPerSample) / 8u;
+    const uint32_t minBlockAlign =
+        static_cast<uint32_t>(format.nChannels) * bytesPerSample;
+    return minBlockAlign != 0u && minBlockAlign <= format.nBlockAlign;
+}
+
 std::filesystem::path ResolveAudioPath(const std::wstring &path) {
     return AssetManager::ResolvePath(std::filesystem::path(path));
 }
@@ -180,6 +229,10 @@ std::vector<BYTE> ReadNextStreamChunk(IMFSourceReader *reader,
 
         const MediaBufferLock locked(mediaBuffer.Get());
         const size_t oldSize = decodedPcm.size();
+        if (locked.Size() >
+            (std::numeric_limits<size_t>::max)() - oldSize) {
+            throw std::runtime_error("Decoded audio buffer size overflow");
+        }
         decodedPcm.resize(oldSize + locked.Size());
         std::copy_n(locked.Data(), locked.Size(), decodedPcm.data() + oldSize);
     }
@@ -268,7 +321,8 @@ void SoundManager::Initialize() {
 
 uint32_t SoundManager::Load(const std::wstring &path) {
     const std::filesystem::path resolvedPath = ResolveAudioPath(path);
-    if (!std::filesystem::exists(resolvedPath)) {
+    std::error_code ec;
+    if (!std::filesystem::exists(resolvedPath, ec)) {
         throw std::runtime_error("Audio file not found. requested=" +
                                  std::filesystem::path(path).string() +
                                  " resolved=" + resolvedPath.string());
@@ -283,8 +337,7 @@ uint32_t SoundManager::Load(const std::wstring &path) {
     SoundResource resource{};
     resource.data = AudioFileLoader::Load(resolvedPath.wstring());
 
-    sounds_.push_back(std::move(resource));
-    const uint32_t soundId = static_cast<uint32_t>(sounds_.size() - 1);
+    const uint32_t soundId = AppendSoundResource(std::move(resource));
     pathToSoundId_[key] = soundId;
 
     return soundId;
@@ -294,7 +347,8 @@ bool SoundManager::TryLoad(const std::wstring &path, uint32_t &soundId) {
     soundId = kInvalidSoundId;
 
     const std::filesystem::path resolvedPath = ResolveAudioPath(path);
-    if (!std::filesystem::exists(resolvedPath)) {
+    std::error_code ec;
+    if (!std::filesystem::exists(resolvedPath, ec)) {
         return false;
     }
 
@@ -312,8 +366,7 @@ bool SoundManager::TryLoad(const std::wstring &path, uint32_t &soundId) {
 
     SoundResource resource{};
     resource.data = std::move(data);
-    sounds_.push_back(std::move(resource));
-    soundId = static_cast<uint32_t>(sounds_.size() - 1);
+    soundId = AppendSoundResource(std::move(resource));
     pathToSoundId_[key] = soundId;
     return true;
 }
@@ -350,13 +403,13 @@ uint32_t SoundManager::CreatePcm16Sound(const std::wstring &cacheKey,
     }
 
     WAVEFORMATEX format{};
-    format.wFormatTag = WAVE_FORMAT_PCM;
-    format.nChannels = channels;
-    format.nSamplesPerSec = sampleRate;
-    format.wBitsPerSample = 16;
-    format.nBlockAlign =
-        static_cast<WORD>((format.nChannels * format.wBitsPerSample) / 8u);
-    format.nAvgBytesPerSec = format.nSamplesPerSec * format.nBlockAlign;
+    if (!BuildPcmWaveFormat(sampleRate, channels, 16, format)) {
+        return CreateSilentSound(key);
+    }
+    if (pcmSamples.size() >
+        (std::numeric_limits<size_t>::max)() / sizeof(int16_t)) {
+        return CreateSilentSound(key);
+    }
 
     SoundResource resource{};
     resource.data.waveFormat.resize(sizeof(WAVEFORMATEX));
@@ -372,8 +425,7 @@ uint32_t SoundManager::CreatePcm16Sound(const std::wstring &cacheKey,
         static_cast<float>(sampleRate);
     resource.data.info.decodedBytes = resource.data.decodedPcm.size();
 
-    sounds_.push_back(std::move(resource));
-    const uint32_t soundId = static_cast<uint32_t>(sounds_.size() - 1);
+    const uint32_t soundId = AppendSoundResource(std::move(resource));
     pathToSoundId_[key] = soundId;
     return soundId;
 }
@@ -479,8 +531,11 @@ float SoundManager::GetPlaybackPosition(uint32_t voiceHandle) const {
         playingVoice.voice->GetState(&state);
         const WAVEFORMATEX *format = nullptr;
         if (playingVoice.isStreaming) {
-            format = reinterpret_cast<const WAVEFORMATEX *>(
-                playingVoice.streamWaveFormat.data());
+            if (playingVoice.streamWaveFormat.size() >=
+                sizeof(WAVEFORMATEX)) {
+                format = reinterpret_cast<const WAVEFORMATEX *>(
+                    playingVoice.streamWaveFormat.data());
+            }
         } else if (playingVoice.soundId < sounds_.size()) {
             format = sounds_[playingVoice.soundId].data.GetFormat();
         }
@@ -512,7 +567,7 @@ void SoundManager::StopAll() {
 
 void SoundManager::Update() {
     for (auto it = playingVoices_.begin(); it != playingVoices_.end();) {
-        if (it->isStreaming) {
+        if (it->isStreaming && it->voice) {
             ReleaseFinishedStreamBuffers(*it);
 
             XAUDIO2_VOICE_STATE state{};
@@ -562,7 +617,7 @@ float SoundManager::GetAmplitudeAt(uint32_t soundId, float playbackSeconds,
 
     const AudioFileLoader::SoundData &sound = sounds_[soundId].data;
     const WAVEFORMATEX *format = sound.GetFormat();
-    if (!format || format->nSamplesPerSec == 0 || format->nBlockAlign == 0 ||
+    if (!format || !IsSupportedPcmReadFormat(*format) ||
         sound.decodedPcm.empty()) {
         return 0.0f;
     }
@@ -594,6 +649,7 @@ float SoundManager::GetAmplitudeAt(uint32_t soundId, float playbackSeconds,
         (std::min)(frameCount, halfWindowFrames * 2 + 1);
     const uint16_t channels = (std::max<uint16_t>)(format->nChannels, 1);
     const uint16_t bits = format->wBitsPerSample;
+    const size_t bytesPerSample = static_cast<size_t>(bits) / 8u;
 
     double sumSquares = 0.0;
     size_t valueCount = 0;
@@ -603,13 +659,19 @@ float SoundManager::GetAmplitudeAt(uint32_t soundId, float playbackSeconds,
         const BYTE *base =
             sound.decodedPcm.data() + frame * format->nBlockAlign;
         for (uint16_t ch = 0; ch < channels; ++ch) {
+            const size_t byteOffset =
+                static_cast<size_t>(ch) * bytesPerSample;
+            if (byteOffset + bytesPerSample > format->nBlockAlign) {
+                continue;
+            }
+
             float value = 0.0f;
             if (bits == 16) {
-                const int16_t sample =
-                    *reinterpret_cast<const int16_t *>(base + ch * 2);
+                int16_t sample = 0;
+                std::memcpy(&sample, base + byteOffset, sizeof(sample));
                 value = static_cast<float>(sample) / 32768.0f;
             } else if (bits == 8) {
-                const uint8_t sample = *(base + ch);
+                const uint8_t sample = *(base + byteOffset);
                 value = (static_cast<float>(sample) - 128.0f) / 128.0f;
             } else {
                 continue;
@@ -641,7 +703,7 @@ void SoundManager::FillSpectrumBands(uint32_t soundId, float playbackSeconds,
 
     const AudioFileLoader::SoundData &sound = sounds_[soundId].data;
     const WAVEFORMATEX *format = sound.GetFormat();
-    if (!format || format->nSamplesPerSec == 0 || format->nBlockAlign == 0 ||
+    if (!format || !IsSupportedPcmReadFormat(*format) ||
         sound.decodedPcm.empty()) {
         return;
     }
@@ -669,6 +731,7 @@ void SoundManager::FillSpectrumBands(uint32_t soundId, float playbackSeconds,
         static_cast<size_t>(sampleTime * format->nSamplesPerSec) % frameCount;
     const uint16_t channels = (std::max<uint16_t>)(format->nChannels, 1);
     const uint16_t bits = format->wBitsPerSample;
+    const size_t bytesPerSample = static_cast<size_t>(bits) / 8u;
     const float sampleRate = static_cast<float>(format->nSamplesPerSec);
 
     auto readFrame = [&](size_t frame) {
@@ -677,13 +740,19 @@ void SoundManager::FillSpectrumBands(uint32_t soundId, float playbackSeconds,
         float total = 0.0f;
         size_t count = 0;
         for (uint16_t ch = 0; ch < channels; ++ch) {
+            const size_t byteOffset =
+                static_cast<size_t>(ch) * bytesPerSample;
+            if (byteOffset + bytesPerSample > format->nBlockAlign) {
+                continue;
+            }
+
             if (bits == 16) {
-                const int16_t sample =
-                    *reinterpret_cast<const int16_t *>(base + ch * 2);
+                int16_t sample = 0;
+                std::memcpy(&sample, base + byteOffset, sizeof(sample));
                 total += static_cast<float>(sample) / 32768.0f;
                 ++count;
             } else if (bits == 8) {
-                const uint8_t sample = *(base + ch);
+                const uint8_t sample = *(base + byteOffset);
                 total += (static_cast<float>(sample) - 128.0f) / 128.0f;
                 ++count;
             }
@@ -779,6 +848,11 @@ uint32_t SoundManager::CreateSourceVoice(uint32_t soundId, float volume,
 
     XAUDIO2_BUFFER buffer{};
     buffer.pAudioData = sound.decodedPcm.data();
+    if (sound.decodedPcm.size() >
+        static_cast<size_t>((std::numeric_limits<UINT32>::max)())) {
+        voice->DestroyVoice();
+        return kInvalidVoiceHandle;
+    }
     buffer.AudioBytes = static_cast<UINT32>(sound.decodedPcm.size());
     buffer.Flags = XAUDIO2_END_OF_STREAM;
     buffer.PlayBegin = startFrame;
@@ -810,7 +884,7 @@ uint32_t SoundManager::CreateSourceVoice(uint32_t soundId, float volume,
     PlayingVoice playingVoice{};
     playingVoice.voice = voice;
     playingVoice.callback = std::move(callback);
-    playingVoice.handle = nextVoiceHandle_++;
+    playingVoice.handle = AllocateVoiceHandle();
     playingVoice.soundId = soundId;
     playingVoice.volume = std::clamp(volume, 0.0f, 1.0f);
     playingVoice.loop = loop;
@@ -829,23 +903,35 @@ uint32_t SoundManager::CreateSilentSound(const std::wstring &cacheKey,
         return cached->second;
     }
 
-    WAVEFORMATEX format{};
     if (sampleRate == 0 || channels == 0 || bitsPerSample == 0) {
         sampleRate = 48000;
         channels = 1;
         bitsPerSample = 16;
     }
-    format.wFormatTag = WAVE_FORMAT_PCM;
-    format.nChannels = channels;
-    format.nSamplesPerSec = sampleRate;
-    format.wBitsPerSample = bitsPerSample;
-    format.nBlockAlign =
-        static_cast<WORD>((channels * bitsPerSample) / 8u);
-    format.nAvgBytesPerSec = sampleRate * format.nBlockAlign;
+    WAVEFORMATEX format{};
+    if (!BuildPcmWaveFormat(sampleRate, channels, bitsPerSample, format)) {
+        sampleRate = 48000;
+        channels = 1;
+        bitsPerSample = 16;
+        const bool defaultFormatOk =
+            BuildPcmWaveFormat(sampleRate, channels, bitsPerSample, format);
+        if (!defaultFormatOk) {
+            throw std::runtime_error("SoundManager default PCM format invalid");
+        }
+    }
 
-    const size_t decodedBytes = static_cast<size_t>(
-        (std::max)(durationSeconds, 0.01f) *
-        static_cast<float>(format.nAvgBytesPerSec));
+    const float safeDuration =
+        std::isfinite(durationSeconds)
+            ? (std::max)(durationSeconds, 0.01f)
+            : 0.01f;
+    const double decodedBytesDouble =
+        static_cast<double>(safeDuration) *
+        static_cast<double>(format.nAvgBytesPerSec);
+    if (decodedBytesDouble >
+        static_cast<double>((std::numeric_limits<size_t>::max)())) {
+        throw std::runtime_error("SoundManager silent sound buffer too large");
+    }
+    const size_t decodedBytes = static_cast<size_t>(decodedBytesDouble);
 
     SoundResource resource{};
     resource.data.waveFormat.resize(sizeof(WAVEFORMATEX));
@@ -859,11 +945,41 @@ uint32_t SoundManager::CreateSilentSound(const std::wstring &cacheKey,
         static_cast<float>(format.nAvgBytesPerSec);
     resource.data.info.decodedBytes = decodedBytes;
 
-    sounds_.push_back(std::move(resource));
-    const uint32_t soundId = static_cast<uint32_t>(sounds_.size() - 1);
+    const uint32_t soundId = AppendSoundResource(std::move(resource));
     pathToSoundId_[cacheKey] = soundId;
 
     return soundId;
+}
+
+uint32_t SoundManager::AppendSoundResource(SoundResource resource) {
+    if (sounds_.size() >=
+        static_cast<size_t>((std::numeric_limits<uint32_t>::max)())) {
+        throw std::runtime_error("SoundManager sound id overflow");
+    }
+    sounds_.push_back(std::move(resource));
+    return static_cast<uint32_t>(sounds_.size() - 1);
+}
+
+uint32_t SoundManager::AllocateVoiceHandle() {
+    if (playingVoices_.size() >=
+        static_cast<size_t>((std::numeric_limits<uint32_t>::max)()) - 1u) {
+        throw std::runtime_error("SoundManager voice handle exhausted");
+    }
+
+    for (;;) {
+        if (nextVoiceHandle_ == kInvalidVoiceHandle) {
+            nextVoiceHandle_ = 1;
+        }
+        const uint32_t candidate = nextVoiceHandle_++;
+        const auto it = std::find_if(
+            playingVoices_.begin(), playingVoices_.end(),
+            [candidate](const PlayingVoice &voice) {
+                return voice.handle == candidate;
+            });
+        if (it == playingVoices_.end()) {
+            return candidate;
+        }
+    }
 }
 
 void SoundManager::DestroyVoice(PlayingVoice &playingVoice) {

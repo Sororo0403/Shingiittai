@@ -79,6 +79,10 @@ class GameScene : public BaseScene {
     void UpdateDebugKeys(Input *input);
 #endif
     void UpdateBattleCamera();
+    void ApplyGameplayCameraPose(const DirectX::XMFLOAT3 &cameraPos,
+                                 const DirectX::XMFLOAT3 &lookAt,
+                                 float positionLerpSpeed,
+                                 float lookAtLerpSpeed);
     void UpdateTutorial(float deltaTime);
     bool IsTutorialOperationStepComplete() const;
     void AdvanceTutorialOperationStep();
@@ -103,6 +107,8 @@ class GameScene : public BaseScene {
     void DrawTutorialOverlay();
     void DrawTutorialEntryFade();
     void DrawTutorialSlashCounter(float x, float y, float scale, float alpha);
+    void DrawTutorialCounterDigit(int digit, float x, float y, float scale,
+                                  const DirectX::XMFLOAT4 &color);
     void UpdateHandCameraPreview(float deltaTime);
     void DrawHandCameraPreview();
     void DrawPauseRect(float x, float y, float w, float h,
@@ -173,6 +179,9 @@ class GameScene : public BaseScene {
     void UpdateBattlePostProcessState(float deltaTime);
     PlayerCombatObservation BuildPlayerCombatObservation() const;
     float ComputeGameplayTimeScale() const;
+    bool ShouldSuppressSwordVfx() const;
+    void ClearSwordVfx();
+    void ClearGameplayParticles();
     void UpdateSwordVfx(float deltaTime);
     float GetDifficultyRatio() const;
     float GetHighDifficultyPressure() const;
@@ -185,6 +194,9 @@ class GameScene : public BaseScene {
     float ApplyPlayerDamage(float enemyAttackDamage);
     void StartBattleBgm();
     void StopBattleBgm();
+    void UpdateEnemyWarpSound(ActionKind previousKind, ActionStep previousStep,
+                              ActionKind currentKind, ActionStep currentStep);
+    void PlayEnemyWarpSound();
 
   private:
     SwordInputCalibration inputCalibration_{};
@@ -217,6 +229,7 @@ class GameScene : public BaseScene {
         bool waitingToFire = false;
         DirectX::XMFLOAT3 position = {0.0f, 0.0f, 0.0f};
         DirectX::XMFLOAT3 velocity = {0.0f, 0.0f, 0.0f};
+        DirectX::XMFLOAT3 reflectedLaunchDirection = {0.0f, 0.0f, 1.0f};
         float age = 0.0f;
         float life = 0.0f;
         float damage = 0.0f;
@@ -283,6 +296,7 @@ class GameScene : public BaseScene {
     uint32_t mistimedCounterSoundId_ = 0;
     uint32_t explosionSoundId_ = 0;
     uint32_t victoryExplosionSoundId_ = 0;
+    uint32_t warpSoundId_ = UINT32_MAX;
     uint32_t battleBgmSoundId_ = UINT32_MAX;
     uint32_t battleBgmVoiceHandle_ = UINT32_MAX;
     bool soundsLoaded_ = false;
@@ -346,6 +360,13 @@ class GameScene : public BaseScene {
     float playerViewSideOffset_ = 0.12f;
     float playerViewLookAhead_ = 8.0f;
     float playerViewLockOnLookHeight_ = 1.48f;
+    float gameplayCameraPositionLerpSpeed_ = 7.8f;
+    float gameplayCameraLookAtLerpSpeed_ = 10.5f;
+    float playerViewCameraPositionLerpSpeed_ = 10.0f;
+    float playerViewCameraLookAtLerpSpeed_ = 12.0f;
+    bool gameplayCameraPoseInitialized_ = false;
+    DirectX::XMFLOAT3 gameplayCameraPos_ = {0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT3 gameplayCameraLookAt_ = {0.0f, 0.0f, 0.0f};
 
     float sceneLightTime_ = 0.0f;
     float backgroundBuildTimer_ = 0.0f;
@@ -450,6 +471,12 @@ class GameScene : public BaseScene {
     std::array<uint32_t, 11> tutorialTextureIds_{};
     std::array<float, 11> tutorialTextureWidths_{};
     std::array<float, 11> tutorialTextureHeights_{};
+    std::array<uint32_t, 10> tutorialDigitTextureIds_{};
+    std::array<float, 10> tutorialDigitTextureWidths_{};
+    std::array<float, 10> tutorialDigitTextureHeights_{};
+    uint32_t tutorialSlashTextureId_ = 0;
+    float tutorialSlashTextureWidth_ = 0.0f;
+    float tutorialSlashTextureHeight_ = 0.0f;
 #ifdef _DEBUG
     bool debugPlayerInvincible_ = false;
 #endif

@@ -85,7 +85,7 @@ float Enemy::TechniqueUnlock(BossPhase requiredPhase) const {
 }
 
 bool Enemy::ShouldEnterSmashHold() const {
-    if (farSlashActive_) {
+    if (quickSlashActive_ || farSlashActive_) {
         return false;
     }
     if (phase_ == BossPhase::Phase3) {
@@ -107,7 +107,7 @@ bool Enemy::ShouldEnterSmashHold() const {
 }
 
 bool Enemy::ShouldEnterSweepHold() const {
-    if (farSlashActive_) {
+    if (quickSlashActive_ || farSlashActive_) {
         return false;
     }
     if (phase_ == BossPhase::Phase3) {
@@ -547,12 +547,12 @@ bool Enemy::TryBeginTripleIaiSlash(float chance) {
     }
 
     tripleIaiSlashActive_ = true;
-    tripleIaiSlashesRemaining_ = 3;
+    tripleIaiSlashesRemaining_ = kTripleIaiCloneCount_;
     tripleIaiSlashIndex_ = 0;
     tripleIaiSlashCooldown_ = tripleIaiSlashCooldownDuration_;
     PrepareTripleIaiSlashClones();
     RegisterRangedAttackCommit();
-    BeginTripleIaiSlashStep();
+    BeginTripleIaiSlashIntro();
     return true;
 }
 
@@ -789,6 +789,7 @@ void Enemy::PrepareTripleIaiSlashClones() {
         EnemyTripleIaiClone &clone = tripleIaiClones_[i];
         clone.visual = visualTf_;
         clone.visual.position = clonePos;
+        clone.targetPosition = clonePos;
         clone.slashKind = (i % 2 == 0) ? ActionKind::Smash : ActionKind::Sweep;
         clone.isActive = true;
 
@@ -815,9 +816,103 @@ void Enemy::PrepareTripleIaiSlashClones() {
     ResetWarpContext();
 }
 
+void Enemy::BeginTripleIaiSlashIntro() {
+    tripleIaiIntroActive_ = true;
+    tripleIaiIntroTimer_ = 0.0f;
+    tripleIaiIntroStartPosition_ = tf_.position;
+    tripleIaiIntroLiftPosition_ = tf_.position;
+    tripleIaiIntroLiftPosition_.y += tripleIaiIntroLiftHeight_;
+    runtime_.tripleIaiCenterFocusPosition = tripleIaiIntroLiftPosition_;
+    IssueAttackCue(EnemyAttackCueType::Cancel, ActionKind::None, 0.0f);
+
+    for (int i = 0; i < kTripleIaiCloneCount_; ++i) {
+        EnemyTripleIaiClone &clone = tripleIaiClones_[i];
+        if (!clone.isActive) {
+            continue;
+        }
+
+        const float jitterX =
+            static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX) -
+            0.5f;
+        const float jitterZ =
+            static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX) -
+            0.5f;
+        clone.visual.position = tripleIaiIntroLiftPosition_;
+        clone.visual.position.x += jitterX * 0.55f;
+        clone.visual.position.z += jitterZ * 0.55f;
+        clone.visual.position.y += 0.18f * static_cast<float>(i);
+    }
+}
+
+void Enemy::UpdateTripleIaiSlashIntro(float deltaTime) {
+    tripleIaiIntroTimer_ += deltaTime;
+
+    const float duration = std::max(0.0001f, tripleIaiIntroDuration_);
+    const float t = std::clamp(tripleIaiIntroTimer_ / duration, 0.0f, 1.0f);
+    const float liftT = std::clamp(t / 0.34f, 0.0f, 1.0f);
+    const float liftEase = 1.0f - std::pow(1.0f - liftT, 3.0f);
+    const float splitT = std::clamp((t - 0.24f) / 0.62f, 0.0f, 1.0f);
+
+    tf_.position.x =
+        tripleIaiIntroStartPosition_.x +
+        (tripleIaiIntroLiftPosition_.x - tripleIaiIntroStartPosition_.x) *
+            liftEase;
+    tf_.position.y =
+        tripleIaiIntroStartPosition_.y +
+        (tripleIaiIntroLiftPosition_.y - tripleIaiIntroStartPosition_.y) *
+            liftEase;
+    tf_.position.z =
+        tripleIaiIntroStartPosition_.z +
+        (tripleIaiIntroLiftPosition_.z - tripleIaiIntroStartPosition_.z) *
+            liftEase;
+
+    const float focusT = std::clamp((t - 0.18f) / 0.50f, 0.0f, 1.0f);
+    runtime_.tripleIaiCenterFocusPosition = {
+        tripleIaiIntroLiftPosition_.x +
+            (playerPos_.x - tripleIaiIntroLiftPosition_.x) * focusT,
+        tripleIaiIntroLiftPosition_.y +
+            (playerPos_.y + 1.55f - tripleIaiIntroLiftPosition_.y) * focusT,
+        tripleIaiIntroLiftPosition_.z +
+            (playerPos_.z - tripleIaiIntroLiftPosition_.z) * focusT};
+
+    for (int i = 0; i < kTripleIaiCloneCount_; ++i) {
+        EnemyTripleIaiClone &clone = tripleIaiClones_[i];
+        if (!clone.isActive) {
+            continue;
+        }
+
+        const float stagger = std::clamp(
+            (splitT - static_cast<float>(i) * 0.045f) / 0.82f, 0.0f, 1.0f);
+        const float eased = stagger * stagger * (3.0f - 2.0f * stagger);
+        clone.visual.position.x =
+            tripleIaiIntroLiftPosition_.x +
+            (clone.targetPosition.x - tripleIaiIntroLiftPosition_.x) * eased;
+        clone.visual.position.y =
+            tripleIaiIntroLiftPosition_.y +
+            (clone.targetPosition.y - tripleIaiIntroLiftPosition_.y) * eased;
+        clone.visual.position.z =
+            tripleIaiIntroLiftPosition_.z +
+            (clone.targetPosition.z - tripleIaiIntroLiftPosition_.z) * eased;
+
+        if (eased > 0.94f) {
+            clone.visual.position = clone.targetPosition;
+        }
+    }
+
+    UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_ * 0.70f);
+    isVisible_ = true;
+
+    if (tripleIaiIntroTimer_ >= duration) {
+        tripleIaiIntroActive_ = false;
+        tf_.position = tripleIaiIntroLiftPosition_;
+        BeginTripleIaiSlashStep();
+    }
+}
+
 void Enemy::BeginTripleIaiSlashStep() {
     if (tripleIaiSlashesRemaining_ <= 0) {
         tripleIaiSlashActive_ = false;
+        tripleIaiIntroActive_ = false;
         ResetTripleIaiSlashClones();
         BeginChaseAction();
         return;
@@ -839,7 +934,8 @@ void Enemy::BeginTripleIaiSlashStep() {
     warp_.faceLivePlayerOnEnd = true;
     if (cloneIndex >= 0 && cloneIndex < kTripleIaiCloneCount_ &&
         tripleIaiClones_[cloneIndex].isActive) {
-        warp_.targetPos = tripleIaiClones_[cloneIndex].visual.position;
+        warp_.targetPos = tripleIaiClones_[cloneIndex].targetPosition;
+        runtime_.tripleIaiCenterFocusPosition = warp_.targetPos;
         FinalizeWarpTargetFacing(warp_.targetPos);
         tf_.position = warp_.targetPos;
         if (warp_.hasTargetYaw) {
@@ -857,6 +953,8 @@ void Enemy::BeginTripleIaiSlashStep() {
         ResetWarpContext();
         BeginChaseAction();
         return;
+    } else {
+        runtime_.tripleIaiCenterFocusPosition = warp_.targetPos;
     }
 
     if (cloneIndex >= 0 && cloneIndex < kTripleIaiCloneCount_) {
@@ -885,6 +983,8 @@ void Enemy::ResetTripleIaiSlashClones() {
         tripleIaiClones_[i] = EnemyTripleIaiClone{};
         tripleIaiSlashOrder_[i] = i;
     }
+    tripleIaiIntroActive_ = false;
+    tripleIaiIntroTimer_ = 0.0f;
     runtime_.tripleIaiCenterFocusPosition = tf_.position;
     runtime_.tripleIaiReturnCameraToCenter = false;
 }
@@ -902,7 +1002,8 @@ void Enemy::BeginPressureAction() {
     const bool canQuickSlash = phase2Unlocked;
     const bool canBladeClash = false;
     const bool canWarp = phase2Unlocked;
-    const bool canFarWarpSlash = phase2Unlocked && IsRangedAttackAvailable();
+    const bool canFarWarpSlash =
+        phase2Unlocked && IsRangedAttackAvailable() && !rangedReengagePending_;
     const bool canPhantomWarp =
         phase3Unlocked && phantomWarpCooldown_ <= 0.0f && !deathFinished_ &&
         !isDying_ && !phaseTransitionActive_ && distance >= 1.65f &&
@@ -1057,7 +1158,7 @@ void Enemy::BeginChaseAction() {
     const bool canWarp = phase2Unlocked;
     const bool canFarWarpSlash =
         phase2Unlocked && distance >= warpCutInDistance_ &&
-        IsRangedAttackAvailable();
+        IsRangedAttackAvailable() && !rangedReengagePending_;
     const bool canPhantomWarp =
         phase3Unlocked && phantomWarpCooldown_ <= 0.0f && !deathFinished_ &&
         !isDying_ && !phaseTransitionActive_ && distance >= 1.65f &&
@@ -1102,8 +1203,8 @@ void Enemy::BeginChaseAction() {
 
     if (mustReengageAfterRanged) {
         stalkWeight = 10;
-        warpWeight = phase2Unlocked ? 14 : 0;
-        farWarpSlashWeight = phase2Unlocked ? 66 : 0;
+        warpWeight = phase2Unlocked ? 72 : 0;
+        farWarpSlashWeight = 0;
         phantomWarpWeight = 0;
         tripleIaiSlashWeight = 0;
         arcaneLaserWeight = 0;

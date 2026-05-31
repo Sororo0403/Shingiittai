@@ -13,6 +13,7 @@
 #include <array>
 #include <cmath>
 #include <cstring>
+#include <stdexcept>
 #include <vector>
 
 using namespace DirectX;
@@ -60,18 +61,38 @@ size_t PipelineVariantIndex(const Material &material) {
                                 drawMaterial.depthWrite != 0);
 }
 
-uint32_t ResolveNormalTextureId(TextureManager *textureManager,
-                                uint32_t normalTextureId) {
-    return normalTextureId == UINT32_MAX
-               ? textureManager->GetDefaultNormalTextureId()
-               : normalTextureId;
+uint32_t ResolveTextureId(TextureManager *textureManager, uint32_t textureId,
+                          uint32_t fallbackTextureId) {
+    if (textureManager == nullptr) {
+        return UINT32_MAX;
+    }
+    if (textureId != UINT32_MAX &&
+        textureManager->IsValidTextureId(textureId)) {
+        return textureId;
+    }
+    if (fallbackTextureId != UINT32_MAX &&
+        textureManager->IsValidTextureId(fallbackTextureId)) {
+        return fallbackTextureId;
+    }
+    return textureManager->GetWhiteTextureId();
 }
 
-uint32_t ResolveBaseColorTextureId(const Material &material,
+uint32_t ResolveNormalTextureId(TextureManager *textureManager,
+                                uint32_t normalTextureId) {
+    const uint32_t fallbackTextureId =
+        textureManager != nullptr ? textureManager->GetDefaultNormalTextureId()
+                                  : UINT32_MAX;
+    return ResolveTextureId(textureManager, normalTextureId,
+                            fallbackTextureId);
+}
+
+uint32_t ResolveBaseColorTextureId(TextureManager *textureManager,
+                                   const Material &material,
                                    uint32_t fallbackTextureId) {
-    return material.baseColorTextureId == UINT32_MAX
-               ? fallbackTextureId
-               : material.baseColorTextureId;
+    const uint32_t textureId = material.baseColorTextureId == UINT32_MAX
+                                   ? fallbackTextureId
+                                   : material.baseColorTextureId;
+    return ResolveTextureId(textureManager, textureId, fallbackTextureId);
 }
 
 uint32_t ResolveNormalTextureId(TextureManager *textureManager,
@@ -81,6 +102,13 @@ uint32_t ResolveNormalTextureId(TextureManager *textureManager,
                                    ? fallbackTextureId
                                    : material.normalTextureId;
     return ResolveNormalTextureId(textureManager, textureId);
+}
+
+bool IsDrawableSubMesh(const ModelSubMesh &subMesh, MeshManager *meshManager,
+                       MaterialManager *materialManager) {
+    return meshManager != nullptr && materialManager != nullptr &&
+           meshManager->IsValidMeshId(subMesh.meshId) &&
+           materialManager->IsValidMaterialId(subMesh.materialId);
 }
 
 }
@@ -169,6 +197,11 @@ void ModelRenderer::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
                                MeshManager *meshManager,
                                TextureManager *textureManager,
                                MaterialManager *materialManager) {
+    if (!dxCommon || !srvManager || !meshManager || !textureManager ||
+        !materialManager) {
+        throw std::runtime_error("ModelRenderer::Initialize null argument");
+    }
+
     dxCommon_ = dxCommon;
     srvManager_ = srvManager;
     meshManager_ = meshManager;
@@ -177,6 +210,8 @@ void ModelRenderer::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
     environmentTextureId_ = textureManager_->GetWhiteCubeTextureId();
     hasEnvironmentTexture_ = true;
     dissolveNoiseTextureId_ = textureManager_->GetWhiteTextureId();
+    shadowMapGpuHandle_ =
+        textureManager_->GetGpuHandle(textureManager_->GetWhiteTextureId());
     const std::vector<uint8_t> dissolveNoise =
         CreateDissolveNoisePixels(128u, 128u);
     dissolveNoiseTextureId_ = textureManager_->CreateFromRgbaPixels(
@@ -249,6 +284,9 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
         if (drawIndex_ >= kMaxDraws) {
             return;
         }
+        if (!IsDrawableSubMesh(subMesh, meshManager_, materialManager_)) {
+            return;
+        }
 
         const Material &material =
             materialManager_->GetMaterial(subMesh.materialId);
@@ -267,20 +305,23 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
             2, materialManager_->GetGPUVirtualAddress(subMesh.materialId));
         cmd->SetGraphicsRootDescriptorTable(
             3, textureManager_->GetGpuHandle(
-                   ResolveBaseColorTextureId(material, subMesh.textureId)));
+                   ResolveBaseColorTextureId(textureManager_, material,
+                                             subMesh.textureId)));
         cmd->SetGraphicsRootDescriptorTable(
             4, subMesh.skinCluster.paletteSrvGpuHandle);
         const bool hasPerDrawEnvironmentTexture =
             (environmentTextureId != UINT32_MAX);
-        const bool useEnvironmentTexture =
-            hasPerDrawEnvironmentTexture || hasEnvironmentTexture_;
         const uint32_t boundEnvironmentTextureId = hasPerDrawEnvironmentTexture
                                                        ? environmentTextureId
-                                                       : environmentTextureId_;
-        if (useEnvironmentTexture) {
-            cmd->SetGraphicsRootDescriptorTable(
-                5, textureManager_->GetGpuHandle(boundEnvironmentTextureId));
-        }
+                                                       : hasEnvironmentTexture_
+                                                             ? environmentTextureId_
+                                                             : textureManager_->GetBlackCubeTextureId();
+        const uint32_t safeEnvironmentTextureId =
+            textureManager_->IsValidTextureId(boundEnvironmentTextureId)
+                ? boundEnvironmentTextureId
+                : textureManager_->GetBlackCubeTextureId();
+        cmd->SetGraphicsRootDescriptorTable(
+            5, textureManager_->GetGpuHandle(safeEnvironmentTextureId));
         cmd->SetGraphicsRootDescriptorTable(6, shadowMapGpuHandle_);
         cmd->SetGraphicsRootDescriptorTable(
             7, textureManager_->GetGpuHandle(ResolveNormalTextureId(
@@ -333,6 +374,9 @@ void ModelRenderer::DrawInstanced(const Model &model,
         if (drawIndex_ >= kMaxDraws) {
             return;
         }
+        if (!IsDrawableSubMesh(subMesh, meshManager_, materialManager_)) {
+            return;
+        }
 
         const Material &material =
             materialManager_->GetMaterial(subMesh.materialId);
@@ -351,21 +395,24 @@ void ModelRenderer::DrawInstanced(const Model &model,
             2, materialManager_->GetGPUVirtualAddress(subMesh.materialId));
         cmd->SetGraphicsRootDescriptorTable(
             3, textureManager_->GetGpuHandle(
-                   ResolveBaseColorTextureId(material, subMesh.textureId)));
+                   ResolveBaseColorTextureId(textureManager_, material,
+                                             subMesh.textureId)));
         cmd->SetGraphicsRootDescriptorTable(
             4, subMesh.skinCluster.paletteSrvGpuHandle);
 
         const bool hasPerDrawEnvironmentTexture =
             (environmentTextureId != UINT32_MAX);
-        const bool useEnvironmentTexture =
-            hasPerDrawEnvironmentTexture || hasEnvironmentTexture_;
         const uint32_t boundEnvironmentTextureId = hasPerDrawEnvironmentTexture
                                                        ? environmentTextureId
-                                                       : environmentTextureId_;
-        if (useEnvironmentTexture) {
-            cmd->SetGraphicsRootDescriptorTable(
-                5, textureManager_->GetGpuHandle(boundEnvironmentTextureId));
-        }
+                                                       : hasEnvironmentTexture_
+                                                             ? environmentTextureId_
+                                                             : textureManager_->GetBlackCubeTextureId();
+        const uint32_t safeEnvironmentTextureId =
+            textureManager_->IsValidTextureId(boundEnvironmentTextureId)
+                ? boundEnvironmentTextureId
+                : textureManager_->GetBlackCubeTextureId();
+        cmd->SetGraphicsRootDescriptorTable(
+            5, textureManager_->GetGpuHandle(safeEnvironmentTextureId));
         cmd->SetGraphicsRootDescriptorTable(6, shadowMapGpuHandle_);
         cmd->SetGraphicsRootDescriptorTable(
             7, textureManager_->GetGpuHandle(ResolveNormalTextureId(
@@ -416,6 +463,9 @@ void ModelRenderer::DrawInstanced(const Model &model,
         if (drawIndex_ >= kMaxDraws) {
             return;
         }
+        if (!IsDrawableSubMesh(subMesh, meshManager_, materialManager_)) {
+            return;
+        }
 
         const Material &material =
             materialManager_->GetMaterial(subMesh.materialId);
@@ -434,21 +484,24 @@ void ModelRenderer::DrawInstanced(const Model &model,
             2, materialManager_->GetGPUVirtualAddress(subMesh.materialId));
         cmd->SetGraphicsRootDescriptorTable(
             3, textureManager_->GetGpuHandle(
-                   ResolveBaseColorTextureId(material, subMesh.textureId)));
+                   ResolveBaseColorTextureId(textureManager_, material,
+                                             subMesh.textureId)));
         cmd->SetGraphicsRootDescriptorTable(
             4, subMesh.skinCluster.paletteSrvGpuHandle);
 
         const bool hasPerDrawEnvironmentTexture =
             (environmentTextureId != UINT32_MAX);
-        const bool useEnvironmentTexture =
-            hasPerDrawEnvironmentTexture || hasEnvironmentTexture_;
         const uint32_t boundEnvironmentTextureId = hasPerDrawEnvironmentTexture
                                                        ? environmentTextureId
-                                                       : environmentTextureId_;
-        if (useEnvironmentTexture) {
-            cmd->SetGraphicsRootDescriptorTable(
-                5, textureManager_->GetGpuHandle(boundEnvironmentTextureId));
-        }
+                                                       : hasEnvironmentTexture_
+                                                             ? environmentTextureId_
+                                                             : textureManager_->GetBlackCubeTextureId();
+        const uint32_t safeEnvironmentTextureId =
+            textureManager_->IsValidTextureId(boundEnvironmentTextureId)
+                ? boundEnvironmentTextureId
+                : textureManager_->GetBlackCubeTextureId();
+        cmd->SetGraphicsRootDescriptorTable(
+            5, textureManager_->GetGpuHandle(safeEnvironmentTextureId));
         cmd->SetGraphicsRootDescriptorTable(6, shadowMapGpuHandle_);
         cmd->SetGraphicsRootDescriptorTable(
             7, textureManager_->GetGpuHandle(ResolveNormalTextureId(
@@ -479,9 +532,13 @@ void ModelRenderer::SetShadowMap(
     D3D12_GPU_DESCRIPTOR_HANDLE shadowMap,
     const DirectX::XMFLOAT4X4 &lightViewProjection,
     const SceneShadowSettings &settings) {
-    shadowMapGpuHandle_ = shadowMap;
+    const bool hasShadowMap = shadowMap.ptr != 0;
+    shadowMapGpuHandle_ =
+        hasShadowMap
+            ? shadowMap
+            : textureManager_->GetGpuHandle(textureManager_->GetWhiteTextureId());
     shadowLightViewProjection_ = lightViewProjection;
-    shadowParams_ = {1.0f, settings.bias,
+    shadowParams_ = {hasShadowMap ? 1.0f : 0.0f, settings.bias,
                      (std::clamp)(settings.strength, 0.0f, 1.0f),
                      settings.normalBias};
     shadowFilterParams_ = {(std::max)(settings.filterRadius, 0.0f),
@@ -530,6 +587,9 @@ void ModelRenderer::DrawShadow(
         if (drawIndex_ >= kMaxDraws) {
             return;
         }
+        if (!IsDrawableSubMesh(subMesh, meshManager_, materialManager_)) {
+            return;
+        }
 
         cmd->SetGraphicsRootSignature(shadowRootSignature_.Get());
         cmd->SetPipelineState(shadowPSO_.Get());
@@ -547,7 +607,8 @@ void ModelRenderer::DrawShadow(
         cmd->SetGraphicsRootConstantBufferView(1, materialCbAddr);
         cmd->SetGraphicsRootDescriptorTable(
             2, textureManager_->GetGpuHandle(
-                   ResolveBaseColorTextureId(material, subMesh.textureId)));
+                   ResolveBaseColorTextureId(textureManager_, material,
+                                             subMesh.textureId)));
         cmd->IASetVertexBuffers(0, 1, &vertexBufferView);
         cmd->IASetIndexBuffer(&mesh.ibView);
         cmd->IASetPrimitiveTopology(mesh.primitiveTopology);
@@ -583,6 +644,9 @@ void ModelRenderer::DrawInstancedShadow(
         if (drawIndex_ >= kMaxDraws) {
             return;
         }
+        if (!IsDrawableSubMesh(subMesh, meshManager_, materialManager_)) {
+            return;
+        }
 
         cmd->SetGraphicsRootSignature(shadowRootSignature_.Get());
         cmd->SetPipelineState(instancedShadowPSO_.Get());
@@ -601,7 +665,8 @@ void ModelRenderer::DrawInstancedShadow(
         cmd->SetGraphicsRootConstantBufferView(1, materialCbAddr);
         cmd->SetGraphicsRootDescriptorTable(
             2, textureManager_->GetGpuHandle(
-                   ResolveBaseColorTextureId(material, subMesh.textureId)));
+                   ResolveBaseColorTextureId(textureManager_, material,
+                                             subMesh.textureId)));
         cmd->IASetVertexBuffers(0, 2, views);
         cmd->IASetIndexBuffer(&mesh.ibView);
         cmd->IASetPrimitiveTopology(mesh.primitiveTopology);
@@ -637,6 +702,9 @@ void ModelRenderer::DrawInstancedShadow(
         if (drawIndex_ >= kMaxDraws) {
             return;
         }
+        if (!IsDrawableSubMesh(subMesh, meshManager_, materialManager_)) {
+            return;
+        }
 
         cmd->SetGraphicsRootSignature(shadowRootSignature_.Get());
         cmd->SetPipelineState(instancedShadowPSO_.Get());
@@ -655,7 +723,8 @@ void ModelRenderer::DrawInstancedShadow(
         cmd->SetGraphicsRootConstantBufferView(1, materialCbAddr);
         cmd->SetGraphicsRootDescriptorTable(
             2, textureManager_->GetGpuHandle(
-                   ResolveBaseColorTextureId(material, subMesh.textureId)));
+                   ResolveBaseColorTextureId(textureManager_, material,
+                                             subMesh.textureId)));
         cmd->IASetVertexBuffers(0, 2, views);
         cmd->IASetIndexBuffer(&mesh.ibView);
         cmd->IASetPrimitiveTopology(mesh.primitiveTopology);

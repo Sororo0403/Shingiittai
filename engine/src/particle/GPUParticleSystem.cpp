@@ -22,6 +22,7 @@ namespace {
 constexpr uint32_t kParticleThreadCount = 256u;
 constexpr uint32_t kMaxParticleArgsJobs = 16u;
 constexpr size_t kMaxQueuedParticleEmitsPerFrame = 64u;
+constexpr uint32_t kMaxGpuParticles = 1'048'576u;
 
 ID3D12Device *gCachedParticleDrawDevice = nullptr;
 ComPtr<ID3D12RootSignature> gCachedParticleDrawRootSignature;
@@ -55,6 +56,22 @@ XMFLOAT4 SanitizeFinite(XMFLOAT4 value, XMFLOAT4 fallback) {
     value.z = SanitizeFinite(value.z, fallback.z);
     value.w = SanitizeFinite(value.w, fallback.w);
     return value;
+}
+
+uint32_t ResolveTextureId(TextureManager *textureManager, uint32_t textureId,
+                          uint32_t fallbackTextureId) {
+    if (textureManager == nullptr) {
+        return UINT32_MAX;
+    }
+    if (textureId != UINT32_MAX &&
+        textureManager->IsValidTextureId(textureId)) {
+        return textureId;
+    }
+    if (fallbackTextureId != UINT32_MAX &&
+        textureManager->IsValidTextureId(fallbackTextureId)) {
+        return fallbackTextureId;
+    }
+    return textureManager->GetWhiteTextureId();
 }
 
 UINT CheckedByteSize(size_t elementSize, size_t count, const char *message) {
@@ -274,9 +291,58 @@ ID3D12CommandSignature *GetSharedParticleDrawCommandSignature(
     return gCachedParticleDrawCommandSignature.Get();
 }
 
+class ParticleUploadPassScope {
+  public:
+    ParticleUploadPassScope(DirectXCommon *dxCommon, bool active)
+        : dxCommon_(dxCommon), active_(active) {}
+
+    ~ParticleUploadPassScope() {
+        if (active_ && dxCommon_ != nullptr) {
+            dxCommon_->AbortFrame();
+        }
+    }
+
+    ParticleUploadPassScope(const ParticleUploadPassScope &) = delete;
+    ParticleUploadPassScope &
+    operator=(const ParticleUploadPassScope &) = delete;
+
+    void Finish() {
+        if (!active_) {
+            return;
+        }
+        dxCommon_->EndUpload();
+        active_ = false;
+    }
+
+  private:
+    DirectXCommon *dxCommon_ = nullptr;
+    bool active_ = false;
+};
+
 }
 
-GPUParticleSystem::~GPUParticleSystem() { ReleaseResources(); }
+GPUParticleSystem::~GPUParticleSystem() {
+    ReleaseResources();
+}
+
+class GPUParticleSystem::InitializationGuard {
+  public:
+    explicit InitializationGuard(GPUParticleSystem &system) : system_(system) {}
+    ~InitializationGuard() {
+        if (active_) {
+            system_.ReleaseResources();
+        }
+    }
+
+    InitializationGuard(const InitializationGuard &) = delete;
+    InitializationGuard &operator=(const InitializationGuard &) = delete;
+
+    void Commit() { active_ = false; }
+
+  private:
+    GPUParticleSystem &system_;
+    bool active_ = true;
+};
 
 void GPUParticleSystem::ReleaseSharedResources() {
     gParticleDrawPsoCache.clear();
@@ -289,6 +355,10 @@ void GPUParticleSystem::Initialize(DirectXCommon *dxCommon,
                                    SrvManager *srvManager,
                                    TextureManager *textureManager,
                                    uint32_t textureId, uint32_t maxParticles) {
+    if (!dxCommon || !srvManager || !textureManager) {
+        throw std::runtime_error("GPUParticleSystem::Initialize null argument");
+    }
+
     std::vector<ParticleEmitterSettings> pendingBeforeInitialize;
     pendingBeforeInitialize.swap(pendingEmitSettings_);
     ReleaseResources();
@@ -296,11 +366,9 @@ void GPUParticleSystem::Initialize(DirectXCommon *dxCommon,
     dxCommon_ = dxCommon;
     srvManager_ = srvManager;
     textureManager_ = textureManager;
+    InitializationGuard initializeGuard(*this);
     textureId_ = textureId;
-    maxParticles_ = (std::max)(1u, maxParticles);
-    if (maxParticles_ > static_cast<uint32_t>((std::numeric_limits<int32_t>::max)())) {
-        throw std::runtime_error("GPUParticleSystem maxParticles exceeds supported range");
-    }
+    maxParticles_ = std::clamp(maxParticles, 1u, kMaxGpuParticles);
     CheckedByteSize(sizeof(ParticleForGPU), maxParticles_,
                     "GPUParticleSystem particle buffer size overflow");
     CheckedByteSize(sizeof(uint32_t), maxParticles_,
@@ -336,23 +404,27 @@ void GPUParticleSystem::Initialize(DirectXCommon *dxCommon,
         particle.params3 = {};
     }
 
-    try {
-        CreateRootSignatures();
-        CreatePipelineStates();
-        CreateParticleBuffer(particles);
-        CreateFreeListBuffers();
-        CreateActiveDrawBuffers();
-        CreateConstantBuffers();
+    CreateRootSignatures();
+    CreatePipelineStates();
 
-        if (!pendingEmitSettings_.empty() && mappedUpdateCB_) {
-            mappedUpdateCB_->time = {totalTime_, 0.0f,
-                                     static_cast<float>(maxParticles_), 0.0f};
-            updatePending_ = true;
-        }
-    } catch (...) {
-        ReleaseResources();
-        throw;
+    const bool ownsUploadPass = !dxCommon_->IsCommandListRecording();
+    if (ownsUploadPass) {
+        dxCommon_->BeginUpload();
     }
+    ParticleUploadPassScope uploadPass(dxCommon_, ownsUploadPass);
+    CreateParticleBuffer(particles);
+    CreateFreeListBuffers();
+    CreateActiveDrawBuffers();
+    uploadPass.Finish();
+
+    CreateConstantBuffers();
+
+    if (!pendingEmitSettings_.empty() && mappedUpdateCB_) {
+        mappedUpdateCB_->time = {totalTime_, 0.0f,
+                                 static_cast<float>(maxParticles_), 0.0f};
+        updatePending_ = true;
+    }
+    initializeGuard.Commit();
 }
 
 void GPUParticleSystem::SetEmitterSettings(
@@ -404,6 +476,32 @@ void GPUParticleSystem::EmitOnce(const ParticleEmitterSettings &settings) {
     }
 }
 
+void GPUParticleSystem::Clear() {
+    if (!dxCommon_ || !srvManager_ || !textureManager_ || maxParticles_ == 0) {
+        pendingEmitSettings_.clear();
+        activeTimeRemaining_ = 0.0f;
+        updatePending_ = false;
+        emitterFrequencyTime_ = 0.0f;
+        return;
+    }
+
+    DirectXCommon *dxCommon = dxCommon_;
+    SrvManager *srvManager = srvManager_;
+    TextureManager *textureManager = textureManager_;
+    const uint32_t textureId = textureId_;
+    const uint32_t maxParticles = maxParticles_;
+    const ParticleEmitterSettings emitterSettings = emitterSettings_;
+    const GPUParticleMaterialSettings materialSettings = materialSettings_;
+
+    Initialize(dxCommon, srvManager, textureManager, textureId, maxParticles);
+    SetEmitterSettings(emitterSettings);
+    SetMaterialSettings(materialSettings);
+    pendingEmitSettings_.clear();
+    activeTimeRemaining_ = 0.0f;
+    updatePending_ = false;
+    emitterFrequencyTime_ = 0.0f;
+}
+
 void GPUParticleSystem::Update(float deltaTime) {
     deltaTime = std::clamp(SanitizeFinite(deltaTime, 0.0f), 0.0f, 0.1f);
     totalTime_ += deltaTime;
@@ -452,7 +550,9 @@ void GPUParticleSystem::Update(float deltaTime) {
 void GPUParticleSystem::Draw(const Camera &camera) {
     if (!dxCommon_ || !srvManager_ || !textureManager_ ||
         !particleResource_ || !activeIndexResource_ || !drawArgsResource_ ||
-        !drawCommandSignature_) {
+        !drawCommandSignature_ || !drawRootSignature_ || !drawPSO_ ||
+        !drawConstantBuffer_ || mappedDrawCB_ == nullptr ||
+        particleSrvGpuHandle_.ptr == 0 || activeIndexSrvGpuHandle_.ptr == 0) {
         return;
     }
     if (!updatePending_ && pendingEmitSettings_.empty() &&
@@ -492,10 +592,11 @@ void GPUParticleSystem::Draw(const Camera &camera) {
     mappedDrawCB_->materialParams0 = materialSettings_.params0;
     mappedDrawCB_->materialParams1 = materialSettings_.params1;
 
-    const uint32_t noiseTextureId =
-        materialSettings_.noiseTextureId != UINT32_MAX
-            ? materialSettings_.noiseTextureId
-            : textureManager_->GetWhiteTextureId();
+    const uint32_t whiteTextureId = textureManager_->GetWhiteTextureId();
+    const uint32_t noiseTextureId = ResolveTextureId(
+        textureManager_, materialSettings_.noiseTextureId, whiteTextureId);
+    const uint32_t baseTextureId =
+        ResolveTextureId(textureManager_, textureId_, whiteTextureId);
 
     cmd->SetGraphicsRootSignature(drawRootSignature_.Get());
     cmd->SetPipelineState(drawPSO_.Get());
@@ -504,7 +605,7 @@ void GPUParticleSystem::Draw(const Camera &camera) {
         0, drawConstantBuffer_->GetGPUVirtualAddress());
     cmd->SetGraphicsRootDescriptorTable(1, particleSrvGpuHandle_);
     cmd->SetGraphicsRootDescriptorTable(
-        2, textureManager_->GetGpuHandle(textureId_));
+        2, textureManager_->GetGpuHandle(baseTextureId));
     cmd->SetGraphicsRootDescriptorTable(
         3, textureManager_->GetGpuHandle(noiseTextureId));
     cmd->SetGraphicsRootDescriptorTable(4, activeIndexSrvGpuHandle_);
@@ -623,16 +724,29 @@ void GPUParticleSystem::RecordDrawArgsDispatches(
     DirectXCommon *dxCommon, SrvManager *srvManager,
     const std::vector<GPUParticleSystem *> &jobs) {
     (void)srvManager;
-    if (jobs.empty()) {
+    if (!dxCommon || jobs.empty()) {
+        return;
+    }
+
+    GPUParticleSystem *pipelineOwner = nullptr;
+    for (GPUParticleSystem *job : jobs) {
+        if (job != nullptr && job->argsRootSignature_ && job->argsPSO_) {
+            pipelineOwner = job;
+            break;
+        }
+    }
+    if (pipelineOwner == nullptr) {
         return;
     }
 
     auto *cmd = dxCommon->GetCommandList();
-    cmd->SetComputeRootSignature(jobs.front()->argsRootSignature_.Get());
-    cmd->SetPipelineState(jobs.front()->argsPSO_.Get());
+    cmd->SetComputeRootSignature(pipelineOwner->argsRootSignature_.Get());
+    cmd->SetPipelineState(pipelineOwner->argsPSO_.Get());
 
     for (GPUParticleSystem *job : jobs) {
-        if (job == nullptr) {
+        if (job == nullptr || job->maxParticles_ == 0 ||
+            job->activeCountUavGpuHandle_.ptr == 0 ||
+            job->drawArgsUavGpuHandle_.ptr == 0) {
             continue;
         }
         uint32_t constants[1u + kMaxParticleArgsJobs] = {};
@@ -1118,40 +1232,40 @@ void GPUParticleSystem::ReleaseResources() {
         activeCountResource_ || drawArgsResource_;
     if (hasGpuResources && dxCommon_ && !dxCommon_->IsDeviceRemoved() &&
         !dxCommon_->IsCommandListRecording()) {
-        dxCommon_->WaitForGpu();
+        dxCommon_->WaitForGpuIfPossible();
     }
 
     if (srvManager_) {
         if (particleSrvIndex_ != UINT32_MAX) {
-            srvManager_->Free(particleSrvIndex_);
+            srvManager_->FreeIfAllocated(particleSrvIndex_);
             particleSrvIndex_ = UINT32_MAX;
         }
         if (particleUavIndex_ != UINT32_MAX) {
-            srvManager_->Free(particleUavIndex_);
+            srvManager_->FreeIfAllocated(particleUavIndex_);
             particleUavIndex_ = UINT32_MAX;
         }
         if (freeListUavIndex_ != UINT32_MAX) {
-            srvManager_->Free(freeListUavIndex_);
+            srvManager_->FreeIfAllocated(freeListUavIndex_);
             freeListUavIndex_ = UINT32_MAX;
         }
         if (freeListIndexUavIndex_ != UINT32_MAX) {
-            srvManager_->Free(freeListIndexUavIndex_);
+            srvManager_->FreeIfAllocated(freeListIndexUavIndex_);
             freeListIndexUavIndex_ = UINT32_MAX;
         }
         if (activeIndexSrvIndex_ != UINT32_MAX) {
-            srvManager_->Free(activeIndexSrvIndex_);
+            srvManager_->FreeIfAllocated(activeIndexSrvIndex_);
             activeIndexSrvIndex_ = UINT32_MAX;
         }
         if (activeIndexUavIndex_ != UINT32_MAX) {
-            srvManager_->Free(activeIndexUavIndex_);
+            srvManager_->FreeIfAllocated(activeIndexUavIndex_);
             activeIndexUavIndex_ = UINT32_MAX;
         }
         if (activeCountUavIndex_ != UINT32_MAX) {
-            srvManager_->Free(activeCountUavIndex_);
+            srvManager_->FreeIfAllocated(activeCountUavIndex_);
             activeCountUavIndex_ = UINT32_MAX;
         }
         if (drawArgsUavIndex_ != UINT32_MAX) {
-            srvManager_->Free(drawArgsUavIndex_);
+            srvManager_->FreeIfAllocated(drawArgsUavIndex_);
             drawArgsUavIndex_ = UINT32_MAX;
         }
     }
@@ -1188,5 +1302,31 @@ void GPUParticleSystem::ReleaseResources() {
     updatePending_ = false;
     activeTimeRemaining_ = 0.0f;
     pendingEmitSettings_.clear();
+    particleSrvIndex_ = UINT32_MAX;
+    particleUavIndex_ = UINT32_MAX;
+    freeListUavIndex_ = UINT32_MAX;
+    freeListIndexUavIndex_ = UINT32_MAX;
+    activeIndexSrvIndex_ = UINT32_MAX;
+    activeIndexUavIndex_ = UINT32_MAX;
+    activeCountUavIndex_ = UINT32_MAX;
+    drawArgsUavIndex_ = UINT32_MAX;
+    particleSrvGpuHandle_ = {};
+    particleSrvCpuHandle_ = {};
+    particleUavGpuHandle_ = {};
+    particleUavCpuHandle_ = {};
+    freeListUavGpuHandle_ = {};
+    freeListUavCpuHandle_ = {};
+    freeListIndexUavGpuHandle_ = {};
+    freeListIndexUavCpuHandle_ = {};
+    activeIndexSrvGpuHandle_ = {};
+    activeIndexSrvCpuHandle_ = {};
+    activeIndexUavGpuHandle_ = {};
+    activeIndexUavCpuHandle_ = {};
+    activeCountUavGpuHandle_ = {};
+    activeCountUavCpuHandle_ = {};
+    drawArgsUavGpuHandle_ = {};
+    drawArgsUavCpuHandle_ = {};
+    dxCommon_ = nullptr;
+    srvManager_ = nullptr;
+    textureManager_ = nullptr;
 }
-

@@ -17,6 +17,11 @@ class SceneManager {
     void Initialize(const SceneContext &ctx);
 
     /// <summary>
+    /// 保持中のシーンを破棄する
+    /// </summary>
+    void Finalize();
+
+    /// <summary>
     /// シーン生成を委譲するファクトリを設定する
     /// </summary>
     void SetSceneFactory(AbstractSceneFactory *sceneFactory);

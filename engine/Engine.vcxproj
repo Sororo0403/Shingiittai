@@ -191,6 +191,7 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)include\core\AssetManager.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)include\core\EngineRuntime.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)include\core\FrameTimer.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)include\core\MathUtils.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)include\core\ResourceHandle.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)include\core\WinApp.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)include\model\Model.h" />

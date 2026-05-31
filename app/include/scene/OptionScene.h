@@ -7,6 +7,8 @@
 #include <memory>
 #include <string>
 
+class Input;
+
 class OptionScene : public BaseScene {
   public:
     enum class ReturnTarget {
@@ -44,13 +46,17 @@ class OptionScene : public BaseScene {
                    float alpha = 1.0f);
     std::unique_ptr<BaseScene> CreateReturnScene() const;
 
-    static constexpr int kOptionCount = 3;
+    static constexpr int kOptionCount = 7;
 
     ReturnTarget returnTarget_ = ReturnTarget::WeaponSelect;
     std::unique_ptr<GameScene> backgroundScene_;
     Image titleImage_{};
     Image bgmLabelImage_{};
     Image seLabelImage_{};
+    Image cameraSensitivityLabelImage_{};
+    Image cameraSlashSensitivityLabelImage_{};
+    Image cameraVerticalSensitivityLabelImage_{};
+    Image cameraHorizontalSensitivityLabelImage_{};
     Image mouseSlashLabelImage_{};
     Image keyAImage_{};
     Image keyDImage_{};

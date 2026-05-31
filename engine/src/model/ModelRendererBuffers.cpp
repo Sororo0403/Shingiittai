@@ -233,7 +233,7 @@ D3D12_GPU_VIRTUAL_ADDRESS ModelRenderer::WriteDrawEffectConstants() {
     };
     data.params2 = {
         currentEffect_.surfaceTint,
-        0.0f,
+        currentEffect_.alphaMultiplier,
         0.0f,
         0.0f,
     };

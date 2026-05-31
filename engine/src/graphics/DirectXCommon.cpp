@@ -41,6 +41,7 @@ PickHighPerformanceAdapter(IDXGIFactory7 *factory) {
 } // namespace
 
 DirectXCommon::~DirectXCommon() {
+    WaitForGpuIfPossible();
     if (fenceEvent_) {
         CloseHandle(fenceEvent_);
         fenceEvent_ = nullptr;
@@ -132,13 +133,12 @@ void DirectXCommon::EndFrame() {
     TransitionBackBuffer(backBufferIndex_, D3D12_RESOURCE_STATE_PRESENT);
 
     TrackGpuPhase("EndFrame.CloseCommandList");
-    try {
-        ThrowIfFailed(commandList_->Close(), "commandList_->Close failed");
-    } catch (...) {
+    const HRESULT closeResult = commandList_->Close();
+    if (FAILED(closeResult)) {
         isCommandListRecording_ = false;
         uploadPassActive_ = false;
         uploadPassDepth_ = 0;
-        throw;
+        ThrowIfFailed(closeResult, "commandList_->Close failed");
     }
     isCommandListRecording_ = false;
 
@@ -175,11 +175,8 @@ void DirectXCommon::AbortFrame() noexcept {
         return;
     }
 
-    try {
-        if (commandList_) {
-            commandList_->Close();
-        }
-    } catch (...) {
+    if (commandList_) {
+        commandList_->Close();
     }
 
     isCommandListRecording_ = false;
@@ -249,13 +246,12 @@ void DirectXCommon::EndUpload() {
         return;
     }
 
-    try {
-        ThrowIfFailed(commandList_->Close(), "commandList_->Close failed");
-    } catch (...) {
+    const HRESULT closeResult = commandList_->Close();
+    if (FAILED(closeResult)) {
         isCommandListRecording_ = false;
         uploadPassActive_ = false;
         uploadPassDepth_ = 0;
-        throw;
+        ThrowIfFailed(closeResult, "commandList_->Close failed");
     }
     isCommandListRecording_ = false;
     uploadPassActive_ = false;
@@ -286,6 +282,29 @@ void DirectXCommon::WaitForGpu() {
     for (UINT i = 0; i < kSwapChainBufferCount; ++i) {
         frameFenceValues_[i] = fenceValue_;
     }
+}
+
+bool DirectXCommon::WaitForGpuIfPossible() {
+    if (!IsInitialized()) {
+        return false;
+    }
+
+    TrackGpuPhase("WaitForGpuIfPossible");
+    ++fenceValue_;
+    if (FAILED(commandQueue_->Signal(fence_.Get(), fenceValue_))) {
+        return false;
+    }
+
+    if (fence_->GetCompletedValue() < fenceValue_) {
+        if (FAILED(fence_->SetEventOnCompletion(fenceValue_, fenceEvent_))) {
+            return false;
+        }
+        WaitForSingleObject(fenceEvent_, INFINITE);
+    }
+    for (UINT i = 0; i < kSwapChainBufferCount; ++i) {
+        frameFenceValues_[i] = fenceValue_;
+    }
+    return true;
 }
 
 void DirectXCommon::SetBackBufferRenderTarget(bool clear, bool bindDepth) {
@@ -340,6 +359,10 @@ void DirectXCommon::TransitionBackBuffer(
 }
 
 void DirectXCommon::CreateDepthStencilSrv(SrvManager *srvManager) {
+    if (srvManager == nullptr) {
+        throw std::runtime_error("CreateDepthStencilSrv: srvManager is null");
+    }
+
     srvManager_ = srvManager;
     if (depthSrvIndex_ == UINT_MAX) {
         depthSrvIndex_ = srvManager_->Allocate();
@@ -369,11 +392,11 @@ void DirectXCommon::ReleaseRegisteredSrvs() {
     }
 
     if (depthSrvIndex_ != UINT_MAX) {
-        srvManager_->Free(depthSrvIndex_);
+        srvManager_->FreeIfAllocated(depthSrvIndex_);
         depthSrvIndex_ = UINT_MAX;
     }
     if (sceneSrvIndex_ != UINT_MAX) {
-        srvManager_->Free(sceneSrvIndex_);
+        srvManager_->FreeIfAllocated(sceneSrvIndex_);
         sceneSrvIndex_ = UINT_MAX;
     }
 
@@ -693,8 +716,40 @@ D3D12_CPU_DESCRIPTOR_HANDLE DirectXCommon::GetSceneRtvHandle() const {
         static_cast<INT>(kSceneRtvIndex), static_cast<INT>(rtvDescriptorSize_));
 }
 
+D3D12_CPU_DESCRIPTOR_HANDLE DirectXCommon::GetDepthStencilView() const {
+    if (!dsvHeap_ || !depthBuffer_) {
+        throw std::runtime_error(
+            "DirectXCommon::GetDepthStencilView called before depth buffer "
+            "initialization");
+    }
+
+    return dsvHeap_->GetCPUDescriptorHandleForHeapStart();
+}
+
+D3D12_GPU_DESCRIPTOR_HANDLE
+DirectXCommon::GetDepthStencilGpuHandle() const {
+    if (depthSrvIndex_ == UINT_MAX || depthSrvGpuHandle_.ptr == 0 ||
+        !depthBuffer_) {
+        throw std::runtime_error(
+            "DirectXCommon::GetDepthStencilGpuHandle called before "
+            "CreateDepthStencilSrv");
+    }
+
+    return depthSrvGpuHandle_;
+}
+
 D3D12_GPU_DESCRIPTOR_HANDLE
 DirectXCommon::GetSceneSrvGpuHandle(const SrvManager *srvManager) const {
+    if (srvManager == nullptr) {
+        throw std::runtime_error(
+            "DirectXCommon::GetSceneSrvGpuHandle null srvManager");
+    }
+    if (sceneSrvIndex_ == UINT_MAX || !sceneColorBuffer_) {
+        throw std::runtime_error(
+            "DirectXCommon::GetSceneSrvGpuHandle called before "
+            "RegisterSceneColorSRV");
+    }
+
     return srvManager->GetGpuHandle(sceneSrvIndex_);
 }
 

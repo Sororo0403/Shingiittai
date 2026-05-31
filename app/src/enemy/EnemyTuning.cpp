@@ -278,6 +278,9 @@ float Enemy::GetReleaseAnticipationRatio() const {
     if (releaseTime <= 0.0f) {
         return 0.0f;
     }
+    if (quickSlashActive_ && action_.step == ActionStep::Charge) {
+        cueWindow = std::max(cueWindow, releaseTime + 0.001f);
+    }
 
     const float remaining = releaseTime - stateTimer_;
     if (remaining < 0.0f || remaining > cueWindow) {

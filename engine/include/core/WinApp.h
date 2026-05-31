@@ -72,6 +72,9 @@ class WinApp {
     static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam,
                                        LPARAM lParam);
     static void RevealCursorForSystemInteraction();
+    /// <summary>
+    /// RestoreCursorForAppInteractionを実行する
+    /// </summary>
     static void RestoreCursorForAppInteraction();
 
   private:

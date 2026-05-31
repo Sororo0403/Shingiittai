@@ -74,6 +74,9 @@ class SoundManager {
     /// <param name="volume">この再生だけに適用する音量</param>
     /// <param name="loop">末尾まで到達したら先頭へ戻すか</param>
     /// <returns>再生中のボイスを操作するためのハンドル</returns>
+    /// <summary>
+    /// Playを実行する
+    /// </summary>
     uint32_t Play(uint32_t soundId, float volume = 1.0f, bool loop = false);
 
     /// <summary>
@@ -225,6 +228,9 @@ class SoundManager {
                                float startSeconds = 0.0f);
     uint32_t CreateStreamingVoice(const std::wstring &path, float volume,
                                   bool loop);
+    /// <summary>
+    /// SubmitNextStreamBufferを実行する
+    /// </summary>
     bool SubmitNextStreamBuffer(PlayingVoice &playingVoice);
     void ReleaseFinishedStreamBuffers(PlayingVoice &playingVoice);
     void Apply3D(PlayingVoice &playingVoice);
@@ -233,6 +239,9 @@ class SoundManager {
                                uint16_t channels = 1,
                                uint16_t bitsPerSample = 16,
                                float durationSeconds = 0.05f);
+    /// <summary>
+    /// DestroyVoiceを実行する
+    /// </summary>
     void DestroyVoice(PlayingVoice &playingVoice);
     bool IsVoiceActive(const PlayingVoice &playingVoice) const;
 
@@ -250,6 +259,9 @@ class SoundManager {
     struct SoundResource {
         AudioFileLoader::SoundData data;
     };
+
+    uint32_t AppendSoundResource(SoundResource resource);
+    uint32_t AllocateVoiceHandle();
 
     std::vector<SoundResource> sounds_;
     std::vector<PlayingVoice> playingVoices_;

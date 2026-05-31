@@ -1,6 +1,8 @@
 #include "graphics/PostEffectManager.h"
 #include "graphics/PostProcessSystem.h"
 #include <algorithm>
+#include <limits>
+#include <stdexcept>
 
 namespace {
 bool HasSpecial(const PostProcessProfile &profile) {
@@ -162,7 +164,7 @@ void PostEffectManager::Initialize(PostProcessSystem *system) {
 PostEffectLayerId
 PostEffectManager::CreateLayer(const PostEffectLayerDesc &desc) {
     Layer layer{};
-    layer.id = nextLayerId_++;
+    layer.id = AllocateLayerId();
     layer.priority = desc.priority;
     layer.blendMode = desc.blendMode;
     layers_.push_back(layer);
@@ -237,6 +239,24 @@ PostEffectManager::FindLayer(PostEffectLayerId id) const {
         std::find_if(layers_.begin(), layers_.end(),
                      [id](const Layer &layer) { return layer.id == id; });
     return it != layers_.end() ? &*it : nullptr;
+}
+
+PostEffectLayerId PostEffectManager::AllocateLayerId() {
+    if (layers_.size() >=
+        static_cast<size_t>((std::numeric_limits<PostEffectLayerId>::max)()) -
+            1u) {
+        throw std::runtime_error("PostEffectManager layer id exhausted");
+    }
+
+    for (;;) {
+        if (nextLayerId_ == 0) {
+            nextLayerId_ = 1;
+        }
+        const PostEffectLayerId candidate = nextLayerId_++;
+        if (FindLayer(candidate) == nullptr) {
+            return candidate;
+        }
+    }
 }
 
 void PostEffectManager::Rebuild() {

@@ -12,7 +12,7 @@ class WinApp;
 /// </summary>
 class ImguiManager {
   public:
-    ~ImguiManager() noexcept;
+    ~ImguiManager();
 
     /// <summary>
     /// ImGuiのWin32/DX12バックエンドを初期化する
@@ -43,7 +43,9 @@ class ImguiManager {
   private:
     SrvManager *srvManager_ = nullptr;
     std::unordered_map<SIZE_T, UINT> allocatedSrvIndices_;
-    bool initialized_ = false;
+    bool contextCreated_ = false;
+    bool win32Initialized_ = false;
+    bool dx12Initialized_ = false;
 };
 
 #endif

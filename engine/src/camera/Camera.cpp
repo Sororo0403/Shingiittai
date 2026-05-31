@@ -1,5 +1,6 @@
 #include "camera/Camera.h"
 #include <algorithm>
+#include <cmath>
 
 using namespace DirectX;
 
@@ -11,6 +12,15 @@ constexpr float kMaxFovY = XMConvertToRadians(179.0f);
 constexpr float kMinOrthoHeight = 0.001f;
 constexpr float kMinNearZ = 0.001f;
 constexpr float kMinDepthRange = 0.001f;
+constexpr float kDefaultAspect = 16.0f / 9.0f;
+constexpr float kDefaultFovY = XM_PIDIV4;
+constexpr float kDefaultOrthoHeight = 10.0f;
+constexpr float kDefaultNearZ = 0.1f;
+constexpr float kDefaultFarZ = 1000.0f;
+
+float FiniteOr(float value, float fallback) {
+    return std::isfinite(value) ? value : fallback;
+}
 
 } // namespace
 
@@ -39,12 +49,16 @@ void Camera::UpdateMatrices() {
 }
 
 void Camera::SetPosition(const XMFLOAT3 &position) {
-    position_ = position;
+    position_ = {FiniteOr(position.x, position_.x),
+                 FiniteOr(position.y, position_.y),
+                 FiniteOr(position.z, position_.z)};
     UpdateMatrices();
 }
 
 void Camera::SetRotation(const XMFLOAT3 &rotation) {
-    rotation_ = rotation;
+    rotation_ = {FiniteOr(rotation.x, rotation_.x),
+                 FiniteOr(rotation.y, rotation_.y),
+                 FiniteOr(rotation.z, rotation_.z)};
     UpdateMatrices();
 }
 
@@ -76,9 +90,13 @@ void Camera::SetClipRange(float nearZ, float farZ) {
 }
 
 void Camera::SanitizeProjection() {
-    aspect_ = (std::max)(aspect_, kMinAspect);
+    aspect_ = (std::max)(FiniteOr(aspect_, kDefaultAspect), kMinAspect);
+    fovY_ = FiniteOr(fovY_, kDefaultFovY);
     fovY_ = std::clamp(fovY_, kMinFovY, kMaxFovY);
-    orthographicHeight_ = (std::max)(orthographicHeight_, kMinOrthoHeight);
-    nearZ_ = (std::max)(nearZ_, kMinNearZ);
-    farZ_ = (std::max)(farZ_, nearZ_ + kMinDepthRange);
+    orthographicHeight_ =
+        (std::max)(FiniteOr(orthographicHeight_, kDefaultOrthoHeight),
+                   kMinOrthoHeight);
+    nearZ_ = (std::max)(FiniteOr(nearZ_, kDefaultNearZ), kMinNearZ);
+    farZ_ = (std::max)(FiniteOr(farZ_, kDefaultFarZ),
+                       nearZ_ + kMinDepthRange);
 }

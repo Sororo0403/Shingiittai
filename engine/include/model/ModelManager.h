@@ -20,7 +20,7 @@ class TextureManager;
 /// </summary>
 class ModelManager {
   public:
-    ~ModelManager() noexcept;
+    ~ModelManager();
 
     /// <summary>
     /// ModelManagerの共有インスタンスを取得する
@@ -59,6 +59,9 @@ class ModelManager {
     /// <param name="textureId">貼り付けるテクスチャID</param>
     /// <param name="material">使用するマテリアル</param>
     /// <returns>生成されたモデルID</returns>
+    /// <summary>
+    /// Planeを生成する
+    /// </summary>
     uint32_t CreatePlane(uint32_t textureId, const Material &material);
 
     /// <summary>

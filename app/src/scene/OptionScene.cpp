@@ -9,6 +9,7 @@
 #include "WeaponSelectScene.h"
 #include "WinApp.h"
 #include <algorithm>
+#include <cstring>
 
 using namespace DirectX;
 
@@ -29,9 +30,7 @@ XMFLOAT4 Color(float r, float g, float b, float a = 1.0f) {
 
 float SmoothStep(float t) { return t * t * (3.0f - 2.0f * t); }
 
-float Smooth01(float t) {
-    return SmoothStep(std::clamp(t, 0.0f, 1.0f));
-}
+float Smooth01(float t) { return SmoothStep(std::clamp(t, 0.0f, 1.0f)); }
 
 } // namespace
 
@@ -65,6 +64,14 @@ void OptionScene::Initialize(const SceneContext &ctx) {
     titleImage_ = LoadTextureImage(L"app/resources/ui/option/title.png");
     bgmLabelImage_ = LoadTextureImage(L"app/resources/ui/option/bgm.png");
     seLabelImage_ = LoadTextureImage(L"app/resources/ui/option/se.png");
+    cameraSensitivityLabelImage_ =
+        LoadTextureImage(L"app/resources/ui/option/camera_sensitivity.png");
+    cameraSlashSensitivityLabelImage_ =
+        LoadTextureImage(L"app/resources/ui/option/camera_slash.png");
+    cameraVerticalSensitivityLabelImage_ =
+        LoadTextureImage(L"app/resources/ui/option/camera_vertical.png");
+    cameraHorizontalSensitivityLabelImage_ =
+        LoadTextureImage(L"app/resources/ui/option/camera_horizontal.png");
     mouseSlashLabelImage_ =
         LoadTextureImage(L"app/resources/ui/option/mouse_slash.png");
     keyAImage_ = LoadTextureImage(L"app/resources/ui/sound_test/key_a.png");
@@ -210,11 +217,33 @@ void OptionScene::AdjustSelectedOption(int direction) {
             std::clamp(AppSceneServices::GetSeVolume() +
                            static_cast<float>(direction) * kStep,
                        0.0f, 1.0f));
-    } else {
+    } else if (selectedIndex_ == 2) {
+        AppSceneServices::SetCameraSensitivity(
+            std::clamp(AppSceneServices::GetCameraSensitivity() +
+                           static_cast<float>(direction) * kStep,
+                       0.0f, 1.0f));
+    } else if (selectedIndex_ == 3) {
+        AppSceneServices::SetCameraSlashSensitivity(
+            std::clamp(AppSceneServices::GetCameraSlashSensitivity() +
+                           static_cast<float>(direction) * kStep,
+                       0.0f, 1.0f));
+    } else if (selectedIndex_ == 4) {
+        AppSceneServices::SetCameraVerticalSensitivity(
+            std::clamp(AppSceneServices::GetCameraVerticalSensitivity() +
+                           static_cast<float>(direction) * kStep,
+                       0.0f, 1.0f));
+    } else if (selectedIndex_ == 5) {
+        AppSceneServices::SetCameraHorizontalSensitivity(
+            std::clamp(AppSceneServices::GetCameraHorizontalSensitivity() +
+                           static_cast<float>(direction) * kStep,
+                       0.0f, 1.0f));
+    } else if (selectedIndex_ == 6) {
         AppSceneServices::SetMouseSlashSensitivity(
             std::clamp(AppSceneServices::GetMouseSlashSensitivity() +
                            static_cast<float>(direction) * kStep,
                        0.0f, 1.0f));
+    } else {
+        return;
     }
     AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
 }
@@ -237,8 +266,8 @@ void OptionScene::DrawPanel(float screenWidth, float screenHeight) {
     if (intro <= 0.0f) {
         return;
     }
-    const float panelW = std::clamp(screenWidth * 0.58f, 660.0f, 920.0f);
-    const float panelH = std::clamp(screenHeight * 0.56f, 440.0f, 560.0f);
+    const float panelW = std::clamp(screenWidth * 0.66f, 820.0f, 1120.0f);
+    const float panelH = std::clamp(screenHeight * 0.62f, 500.0f, 660.0f);
     const float panelX = (screenWidth - panelW) * 0.5f;
     const float panelY = (screenHeight - panelH) * 0.5f +
                          (1.0f - intro) * 30.0f;
@@ -257,17 +286,25 @@ void OptionScene::DrawPanel(float screenWidth, float screenHeight) {
               panelX + (panelW - titleImage_.width * titleScale) * 0.5f,
               panelY + panelH * 0.16f, titleScale, 0.96f * intro);
 
-    const Image *labels[kOptionCount] = {&bgmLabelImage_, &seLabelImage_,
-                                         &mouseSlashLabelImage_};
+    const Image *labels[kOptionCount] = {
+        &bgmLabelImage_, &seLabelImage_, &cameraSensitivityLabelImage_,
+        &cameraSlashSensitivityLabelImage_,
+        &cameraVerticalSensitivityLabelImage_,
+        &cameraHorizontalSensitivityLabelImage_,
+        &mouseSlashLabelImage_};
     const float values[kOptionCount] = {AppSceneServices::GetBgmVolume(),
                                         AppSceneServices::GetSeVolume(),
+                                        AppSceneServices::GetCameraSensitivity(),
+                                        AppSceneServices::GetCameraSlashSensitivity(),
+                                        AppSceneServices::GetCameraVerticalSensitivity(),
+                                        AppSceneServices::GetCameraHorizontalSensitivity(),
                                         AppSceneServices::GetMouseSlashSensitivity()};
     const float rowX = panelX + panelW * 0.20f;
     const float barX = panelX + panelW * 0.40f;
     const float barW = panelW * 0.36f;
     const float barH = 22.0f;
-    const float firstRowY = panelY + panelH * 0.48f;
-    const float rowGap = panelH * 0.18f;
+    const float firstRowY = panelY + panelH * 0.29f;
+    const float rowGap = panelH * 0.078f;
 
     for (int i = 0; i < kOptionCount; ++i) {
         const bool selected = i == selectedIndex_;
@@ -280,7 +317,8 @@ void OptionScene::DrawPanel(float screenWidth, float screenHeight) {
         const float labelScale =
             (std::min)(1.0f,
                        (panelW * 0.16f) / (std::max)(label.width, 1.0f));
-        DrawImage(label, rowX, rowCenterY - label.height * labelScale * 0.5f,
+        DrawImage(label, rowX,
+                  rowCenterY - label.height * labelScale * 0.5f,
                   labelScale, textColor.w);
         DrawRect(barX, barY, barW, barH,
                  Color(0.055f, 0.062f, 0.074f, 0.96f));

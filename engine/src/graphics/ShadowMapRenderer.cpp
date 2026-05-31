@@ -4,15 +4,36 @@
 #include "graphics/DxUtils.h"
 #include "graphics/SrvManager.h"
 #include <algorithm>
+#include <limits>
 #include <stdexcept>
 
 using namespace DxUtils;
 
-ShadowMapRenderer::~ShadowMapRenderer() noexcept {
-    try {
-        Release();
-    } catch (...) {
+namespace {
+class ShadowMapInitializationGuard {
+  public:
+    explicit ShadowMapInitializationGuard(ShadowMapRenderer &target)
+        : target_(target) {}
+    ~ShadowMapInitializationGuard() {
+        if (active_) {
+            target_.Release();
+        }
     }
+
+    ShadowMapInitializationGuard(const ShadowMapInitializationGuard &) = delete;
+    ShadowMapInitializationGuard &
+    operator=(const ShadowMapInitializationGuard &) = delete;
+
+    void Commit() { active_ = false; }
+
+  private:
+    ShadowMapRenderer &target_;
+    bool active_ = true;
+};
+} // namespace
+
+ShadowMapRenderer::~ShadowMapRenderer() {
+    Release();
 }
 
 void ShadowMapRenderer::Initialize(DirectXCommon *dxCommon,
@@ -26,16 +47,18 @@ void ShadowMapRenderer::Initialize(DirectXCommon *dxCommon,
 
     dxCommon_ = dxCommon;
     srvManager_ = srvManager;
+    ShadowMapInitializationGuard initializeGuard(*this);
     srvIndex_ = srvManager_->Allocate();
     srvGpuHandle_ = srvManager_->GetGpuHandle(srvIndex_);
     Resize(width, height);
+    initializeGuard.Commit();
 }
 
 void ShadowMapRenderer::Release() {
     ReleaseDepthResources();
 
     if (srvManager_ != nullptr && srvIndex_ != UINT32_MAX) {
-        srvManager_->Free(srvIndex_);
+        srvManager_->FreeIfAllocated(srvIndex_);
     }
 
     dxCommon_ = nullptr;
@@ -46,8 +69,15 @@ void ShadowMapRenderer::Release() {
 }
 
 void ShadowMapRenderer::Resize(uint32_t width, uint32_t height) {
-    width_ = (std::max)(width, 1u);
-    height_ = (std::max)(height, 1u);
+    if (!dxCommon_ || !srvManager_ || srvIndex_ == UINT32_MAX) {
+        throw std::runtime_error(
+            "ShadowMapRenderer::Resize called before Initialize");
+    }
+
+    constexpr uint32_t kMaxShadowMapSize =
+        static_cast<uint32_t>((std::numeric_limits<LONG>::max)());
+    width_ = std::clamp(width, 1u, kMaxShadowMapSize);
+    height_ = std::clamp(height, 1u, kMaxShadowMapSize);
 
     viewport_.TopLeftX = 0.0f;
     viewport_.TopLeftY = 0.0f;
@@ -67,6 +97,11 @@ void ShadowMapRenderer::Resize(uint32_t width, uint32_t height) {
 }
 
 void ShadowMapRenderer::Begin() {
+    if (!dxCommon_ || !depthTexture_ || !dsvHeap_) {
+        throw std::runtime_error(
+            "ShadowMapRenderer::Begin called before Initialize");
+    }
+
     auto commandList = dxCommon_->GetCommandList();
 
     if (state_ != D3D12_RESOURCE_STATE_DEPTH_WRITE) {
@@ -85,6 +120,11 @@ void ShadowMapRenderer::Begin() {
 }
 
 void ShadowMapRenderer::End() {
+    if (!dxCommon_ || !depthTexture_) {
+        throw std::runtime_error(
+            "ShadowMapRenderer::End called before Initialize");
+    }
+
     auto commandList = dxCommon_->GetCommandList();
 
     if (state_ != D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE) {
@@ -96,7 +136,21 @@ void ShadowMapRenderer::End() {
     }
 }
 
+D3D12_GPU_DESCRIPTOR_HANDLE ShadowMapRenderer::GetGpuHandle() const {
+    if (srvGpuHandle_.ptr == 0) {
+        throw std::runtime_error(
+            "ShadowMapRenderer::GetGpuHandle called before Initialize");
+    }
+
+    return srvGpuHandle_;
+}
+
 D3D12_CPU_DESCRIPTOR_HANDLE ShadowMapRenderer::GetDsvHandle() const {
+    if (!dsvHeap_) {
+        throw std::runtime_error(
+            "ShadowMapRenderer::GetDsvHandle called before Initialize");
+    }
+
     return dsvHeap_->GetCPUDescriptorHandleForHeapStart();
 }
 
@@ -104,7 +158,7 @@ void ShadowMapRenderer::ReleaseDepthResources() {
     if (depthTexture_ && dxCommon_ != nullptr &&
         !dxCommon_->IsDeviceRemoved() &&
         !dxCommon_->IsCommandListRecording()) {
-        dxCommon_->WaitForGpu();
+        dxCommon_->WaitForGpuIfPossible();
     }
 
     depthTexture_.Reset();

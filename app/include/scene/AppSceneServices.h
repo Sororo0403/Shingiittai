@@ -2,6 +2,8 @@
 #include "SceneContext.h"
 #include "SoundManager.h"
 #include <algorithm>
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 
@@ -13,11 +15,11 @@ using VoidCallback = std::function<void()>;
 inline constexpr const wchar_t *kMenuBgmPath =
     L"app/resources/audio/bgm/bgm_MenuTheme.wav";
 inline constexpr const wchar_t *kSelectSePath =
-    L"app/resources/audio/se/se_Select.mp3";
+    L"app/resources/audio/se/ui/se_Select.mp3";
 inline constexpr const wchar_t *kSelectedSePath =
-    L"app/resources/audio/se/se_Selected.mp3";
+    L"app/resources/audio/se/ui/se_Selected.mp3";
 inline constexpr const wchar_t *kCancelSePath =
-    L"app/resources/audio/se/se_Cancel.mp3";
+    L"app/resources/audio/se/ui/se_Cancel.mp3";
 inline constexpr float kMenuBgmBaseVolume = 0.24f;
 
 inline StartCallback requestHandTrackingStart;
@@ -31,6 +33,14 @@ inline uint32_t selectedSeSoundId = SoundManager::kInvalidSoundId;
 inline uint32_t cancelSeSoundId = SoundManager::kInvalidSoundId;
 inline float bgmVolume = 1.0f;
 inline float seVolume = 1.0f;
+inline float cameraSensitivity = 0.5f;
+inline float cameraSlashSensitivity = 0.5f;
+inline float cameraVerticalSensitivity = 0.5f;
+inline float cameraHorizontalSensitivity = 0.5f;
+inline std::array<float, 2> cameraHandSensitivity = {0.5f, 0.5f};
+inline std::array<float, 2> cameraHandSlashSensitivity = {0.5f, 0.5f};
+inline std::array<float, 2> cameraHandVerticalSensitivity = {0.5f, 0.5f};
+inline std::array<float, 2> cameraHandHorizontalSensitivity = {0.5f, 0.5f};
 inline float mouseSlashSensitivity = 0.5f;
 
 enum class MenuSe {
@@ -89,6 +99,38 @@ inline float GetBgmVolume() { return bgmVolume; }
 
 inline float GetSeVolume() { return seVolume; }
 
+inline size_t ClampCameraHandIndex(size_t handIndex) {
+    return handIndex < cameraHandSensitivity.size()
+               ? handIndex
+               : cameraHandSensitivity.size() - 1;
+}
+
+inline float GetCameraSensitivity() { return cameraSensitivity; }
+
+inline float GetCameraSensitivity(size_t handIndex) {
+    return cameraHandSensitivity[ClampCameraHandIndex(handIndex)];
+}
+
+inline float GetCameraSlashSensitivity() { return cameraSlashSensitivity; }
+
+inline float GetCameraSlashSensitivity(size_t handIndex) {
+    return cameraHandSlashSensitivity[ClampCameraHandIndex(handIndex)];
+}
+
+inline float GetCameraVerticalSensitivity() { return cameraVerticalSensitivity; }
+
+inline float GetCameraVerticalSensitivity(size_t handIndex) {
+    return cameraHandVerticalSensitivity[ClampCameraHandIndex(handIndex)];
+}
+
+inline float GetCameraHorizontalSensitivity() {
+    return cameraHorizontalSensitivity;
+}
+
+inline float GetCameraHorizontalSensitivity(size_t handIndex) {
+    return cameraHandHorizontalSensitivity[ClampCameraHandIndex(handIndex)];
+}
+
 inline float GetMouseSlashSensitivity() { return mouseSlashSensitivity; }
 
 inline void SetBgmVolume(const SceneContext &ctx, float volume) {
@@ -102,6 +144,59 @@ inline void SetBgmVolume(const SceneContext &ctx, float volume) {
 
 inline void SetSeVolume(float volume) {
     seVolume = std::clamp(volume, 0.0f, 1.0f);
+}
+
+inline void SetCameraSensitivity(float sensitivity) {
+    cameraSensitivity = std::clamp(sensitivity, 0.0f, 1.0f);
+    cameraHandSensitivity = {cameraSensitivity, cameraSensitivity};
+}
+
+inline void SetCameraSensitivity(size_t handIndex, float sensitivity) {
+    cameraHandSensitivity[ClampCameraHandIndex(handIndex)] =
+        std::clamp(sensitivity, 0.0f, 1.0f);
+    cameraSensitivity =
+        (cameraHandSensitivity[0] + cameraHandSensitivity[1]) * 0.5f;
+}
+
+inline void SetCameraSlashSensitivity(float sensitivity) {
+    cameraSlashSensitivity = std::clamp(sensitivity, 0.0f, 1.0f);
+    cameraHandSlashSensitivity = {cameraSlashSensitivity, cameraSlashSensitivity};
+}
+
+inline void SetCameraSlashSensitivity(size_t handIndex, float sensitivity) {
+    cameraHandSlashSensitivity[ClampCameraHandIndex(handIndex)] =
+        std::clamp(sensitivity, 0.0f, 1.0f);
+    cameraSlashSensitivity =
+        (cameraHandSlashSensitivity[0] + cameraHandSlashSensitivity[1]) * 0.5f;
+}
+
+inline void SetCameraVerticalSensitivity(float sensitivity) {
+    cameraVerticalSensitivity = std::clamp(sensitivity, 0.0f, 1.0f);
+    cameraHandVerticalSensitivity = {cameraVerticalSensitivity,
+                                     cameraVerticalSensitivity};
+}
+
+inline void SetCameraVerticalSensitivity(size_t handIndex, float sensitivity) {
+    cameraHandVerticalSensitivity[ClampCameraHandIndex(handIndex)] =
+        std::clamp(sensitivity, 0.0f, 1.0f);
+    cameraVerticalSensitivity =
+        (cameraHandVerticalSensitivity[0] + cameraHandVerticalSensitivity[1]) *
+        0.5f;
+}
+
+inline void SetCameraHorizontalSensitivity(float sensitivity) {
+    cameraHorizontalSensitivity = std::clamp(sensitivity, 0.0f, 1.0f);
+    cameraHandHorizontalSensitivity = {cameraHorizontalSensitivity,
+                                       cameraHorizontalSensitivity};
+}
+
+inline void SetCameraHorizontalSensitivity(size_t handIndex, float sensitivity) {
+    cameraHandHorizontalSensitivity[ClampCameraHandIndex(handIndex)] =
+        std::clamp(sensitivity, 0.0f, 1.0f);
+    cameraHorizontalSensitivity =
+        (cameraHandHorizontalSensitivity[0] +
+         cameraHandHorizontalSensitivity[1]) *
+        0.5f;
 }
 
 inline void SetMouseSlashSensitivity(float sensitivity) {

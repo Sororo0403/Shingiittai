@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <stdexcept>
 
 using namespace DirectX;
 using namespace DxUtils;
@@ -58,14 +59,13 @@ XMMATRIX MakeWorldMatrix(const Transform &transform) {
 }
 
 XMMATRIX MakeWorldInverseTranspose(const XMMATRIX &world) {
-    XMVECTOR determinant{};
-    XMMATRIX inverse = XMMatrixInverse(&determinant, world);
+    const XMVECTOR determinant = XMMatrixDeterminant(world);
     const float determinantValue = XMVectorGetX(determinant);
     if (!std::isfinite(determinantValue) ||
         std::abs(determinantValue) <= 0.000001f) {
         return XMMatrixIdentity();
     }
-    return XMMatrixTranspose(inverse);
+    return XMMatrixTranspose(XMMatrixInverse(nullptr, world));
 }
 
 bool IsTransparentMaterial(const Material &material) {
@@ -105,18 +105,38 @@ size_t PipelineVariantIndex(const Material &material) {
                                 drawMaterial.depthWrite != 0);
 }
 
-uint32_t ResolveNormalTextureId(TextureManager *textureManager,
-                                uint32_t normalTextureId) {
-    return normalTextureId == UINT32_MAX
-               ? textureManager->GetDefaultNormalTextureId()
-               : normalTextureId;
+uint32_t ResolveTextureId(TextureManager *textureManager, uint32_t textureId,
+                          uint32_t fallbackTextureId) {
+    if (textureManager == nullptr) {
+        return UINT32_MAX;
+    }
+    if (textureId != UINT32_MAX &&
+        textureManager->IsValidTextureId(textureId)) {
+        return textureId;
+    }
+    if (fallbackTextureId != UINT32_MAX &&
+        textureManager->IsValidTextureId(fallbackTextureId)) {
+        return fallbackTextureId;
+    }
+    return textureManager->GetWhiteTextureId();
 }
 
-uint32_t ResolveBaseColorTextureId(const Material &material,
+uint32_t ResolveNormalTextureId(TextureManager *textureManager,
+                                uint32_t normalTextureId) {
+    const uint32_t fallbackTextureId =
+        textureManager != nullptr ? textureManager->GetDefaultNormalTextureId()
+                                  : UINT32_MAX;
+    return ResolveTextureId(textureManager, normalTextureId,
+                            fallbackTextureId);
+}
+
+uint32_t ResolveBaseColorTextureId(TextureManager *textureManager,
+                                   const Material &material,
                                    uint32_t fallbackTextureId) {
-    return material.baseColorTextureId == UINT32_MAX
-               ? fallbackTextureId
-               : material.baseColorTextureId;
+    const uint32_t textureId = material.baseColorTextureId == UINT32_MAX
+                                   ? fallbackTextureId
+                                   : material.baseColorTextureId;
+    return ResolveTextureId(textureManager, textureId, fallbackTextureId);
 }
 
 uint32_t ResolveNormalTextureId(TextureManager *textureManager,
@@ -132,9 +152,15 @@ uint32_t ResolveNormalTextureId(TextureManager *textureManager,
 
 void MeshRenderer::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
                               TextureManager *textureManager) {
+    if (!dxCommon || !srvManager || !textureManager) {
+        throw std::runtime_error("MeshRenderer::Initialize null argument");
+    }
+
     dxCommon_ = dxCommon;
     srvManager_ = srvManager;
     textureManager_ = textureManager;
+    shadowMapGpuHandle_ =
+        textureManager_->GetGpuHandle(textureManager_->GetWhiteTextureId());
 
     CreateRootSignature();
     CreateShadowRootSignature();
@@ -190,7 +216,8 @@ void MeshRenderer::DrawMesh(const Mesh &mesh, const Material &material,
     cmd->SetGraphicsRootConstantBufferView(2, materialCbAddr);
     cmd->SetGraphicsRootDescriptorTable(
         3, textureManager_->GetGpuHandle(
-               ResolveBaseColorTextureId(drawMaterial, textureId)));
+               ResolveBaseColorTextureId(textureManager_, drawMaterial,
+                                         textureId)));
     cmd->SetGraphicsRootDescriptorTable(4, shadowMapGpuHandle_);
     cmd->SetGraphicsRootDescriptorTable(
         5, textureManager_->GetGpuHandle(
@@ -231,7 +258,8 @@ void MeshRenderer::DrawMeshWithPipeline(
     cmd->SetGraphicsRootConstantBufferView(2, materialCbAddr);
     cmd->SetGraphicsRootDescriptorTable(
         3, textureManager_->GetGpuHandle(
-               ResolveBaseColorTextureId(drawMaterial, textureId)));
+               ResolveBaseColorTextureId(textureManager_, drawMaterial,
+                                         textureId)));
     cmd->SetGraphicsRootDescriptorTable(4, shadowMapGpuHandle_);
     cmd->SetGraphicsRootDescriptorTable(
         5, textureManager_->GetGpuHandle(
@@ -271,9 +299,18 @@ void MeshRenderer::DrawMeshWithPipelineHandles(
     cmd->SetGraphicsRootConstantBufferView(0, objectCbAddr);
     cmd->SetGraphicsRootConstantBufferView(1, sceneCbAddr);
     cmd->SetGraphicsRootConstantBufferView(2, materialCbAddr);
-    cmd->SetGraphicsRootDescriptorTable(3, textureHandle);
+    const D3D12_GPU_DESCRIPTOR_HANDLE baseColorHandle =
+        textureHandle.ptr != 0
+            ? textureHandle
+            : textureManager_->GetGpuHandle(textureManager_->GetWhiteTextureId());
+    const D3D12_GPU_DESCRIPTOR_HANDLE normalHandle =
+        normalTextureHandle.ptr != 0
+            ? normalTextureHandle
+            : textureManager_->GetGpuHandle(
+                  textureManager_->GetDefaultNormalTextureId());
+    cmd->SetGraphicsRootDescriptorTable(3, baseColorHandle);
     cmd->SetGraphicsRootDescriptorTable(4, shadowMapGpuHandle_);
-    cmd->SetGraphicsRootDescriptorTable(5, normalTextureHandle);
+    cmd->SetGraphicsRootDescriptorTable(5, normalHandle);
     cmd->IASetVertexBuffers(0, 1, &mesh.vbView);
     cmd->IASetIndexBuffer(&mesh.ibView);
     cmd->IASetPrimitiveTopology(mesh.primitiveTopology);
@@ -310,7 +347,8 @@ void MeshRenderer::DrawMeshInstanced(const Mesh &mesh, const Material &material,
     cmd->SetGraphicsRootConstantBufferView(2, materialCbAddr);
     cmd->SetGraphicsRootDescriptorTable(
         3, textureManager_->GetGpuHandle(
-               ResolveBaseColorTextureId(drawMaterial, textureId)));
+               ResolveBaseColorTextureId(textureManager_, drawMaterial,
+                                         textureId)));
     cmd->SetGraphicsRootDescriptorTable(4, shadowMapGpuHandle_);
     cmd->SetGraphicsRootDescriptorTable(
         5, textureManager_->GetGpuHandle(
@@ -353,7 +391,8 @@ void MeshRenderer::DrawMeshInstancedWithPipeline(
     cmd->SetGraphicsRootConstantBufferView(2, materialCbAddr);
     cmd->SetGraphicsRootDescriptorTable(
         3, textureManager_->GetGpuHandle(
-               ResolveBaseColorTextureId(drawMaterial, textureId)));
+               ResolveBaseColorTextureId(textureManager_, drawMaterial,
+                                         textureId)));
     cmd->SetGraphicsRootDescriptorTable(4, shadowMapGpuHandle_);
     cmd->SetGraphicsRootDescriptorTable(
         5, textureManager_->GetGpuHandle(
@@ -400,7 +439,8 @@ void MeshRenderer::DrawMeshShadow(
     cmd->SetGraphicsRootConstantBufferView(2, materialCbAddr);
     cmd->SetGraphicsRootDescriptorTable(
         3, textureManager_->GetGpuHandle(
-               ResolveBaseColorTextureId(drawMaterial, textureId)));
+               ResolveBaseColorTextureId(textureManager_, drawMaterial,
+                                         textureId)));
     cmd->IASetVertexBuffers(0, 1, &mesh.vbView);
     cmd->IASetIndexBuffer(&mesh.ibView);
     cmd->IASetPrimitiveTopology(mesh.primitiveTopology);
@@ -443,7 +483,8 @@ void MeshRenderer::DrawMeshInstancedShadow(
     cmd->SetGraphicsRootConstantBufferView(2, materialCbAddr);
     cmd->SetGraphicsRootDescriptorTable(
         3, textureManager_->GetGpuHandle(
-               ResolveBaseColorTextureId(drawMaterial, textureId)));
+               ResolveBaseColorTextureId(textureManager_, drawMaterial,
+                                         textureId)));
 
     D3D12_VERTEX_BUFFER_VIEW views[] = {mesh.vbView, instanceView};
     cmd->IASetVertexBuffers(0, 2, views);
@@ -483,7 +524,8 @@ void MeshRenderer::DrawMeshInstancedShadowWithPipeline(
     cmd->SetGraphicsRootConstantBufferView(2, materialCbAddr);
     cmd->SetGraphicsRootDescriptorTable(
         3, textureManager_->GetGpuHandle(
-               ResolveBaseColorTextureId(drawMaterial, textureId)));
+               ResolveBaseColorTextureId(textureManager_, drawMaterial,
+                                         textureId)));
 
     D3D12_VERTEX_BUFFER_VIEW views[] = {mesh.vbView, instanceView};
     cmd->IASetVertexBuffers(0, 2, views);
@@ -525,9 +567,13 @@ void MeshRenderer::SetShadowMap(
     D3D12_GPU_DESCRIPTOR_HANDLE shadowMap,
     const DirectX::XMFLOAT4X4 &lightViewProjection,
     const SceneShadowSettings &settings) {
-    shadowMapGpuHandle_ = shadowMap;
+    const bool hasShadowMap = shadowMap.ptr != 0;
+    shadowMapGpuHandle_ =
+        hasShadowMap
+            ? shadowMap
+            : textureManager_->GetGpuHandle(textureManager_->GetWhiteTextureId());
     shadowLightViewProjection_ = lightViewProjection;
-    shadowParams_ = {1.0f, settings.bias,
+    shadowParams_ = {hasShadowMap ? 1.0f : 0.0f, settings.bias,
                      (std::clamp)(settings.strength, 0.0f, 1.0f),
                      settings.normalBias};
     shadowFilterParams_ = {(std::max)(settings.filterRadius, 0.0f),

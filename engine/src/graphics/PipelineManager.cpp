@@ -2,6 +2,7 @@
 #include "graphics/DirectXCommon.h"
 #include "graphics/DxUtils.h"
 #include "graphics/ShaderCompiler.h"
+#include <cstdint>
 #include <stdexcept>
 
 using namespace DxUtils;
@@ -58,10 +59,11 @@ void PipelineManager::Clear() {
 std::string PipelineManager::MakeShaderKey(const std::wstring &path,
                                            const std::string &entry,
                                            const std::string &target) {
-    std::string narrowPath;
-    narrowPath.reserve(path.size());
+    std::string pathKey;
+    pathKey.reserve(path.size() * 6u);
     for (wchar_t ch : path) {
-        narrowPath.push_back(static_cast<char>(ch & 0xff));
+        pathKey += std::to_string(static_cast<uint32_t>(ch));
+        pathKey.push_back(',');
     }
-    return narrowPath + "|" + entry + "|" + target;
+    return pathKey + "|" + entry + "|" + target;
 }

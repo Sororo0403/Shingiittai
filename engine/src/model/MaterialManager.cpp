@@ -2,17 +2,15 @@
 #include "graphics/DirectXCommon.h"
 #include "graphics/DxHelpers.h"
 #include "graphics/DxUtils.h"
+#include <limits>
 #include <stdexcept>
 
 using namespace DirectX;
 using namespace DxUtils;
 using Microsoft::WRL::ComPtr;
 
-MaterialManager::~MaterialManager() noexcept {
-    try {
-        Finalize();
-    } catch (...) {
-    }
+MaterialManager::~MaterialManager() {
+    Finalize();
 }
 
 void MaterialManager::Initialize(DirectXCommon *dxCommon) {
@@ -24,11 +22,13 @@ void MaterialManager::Initialize(DirectXCommon *dxCommon) {
 }
 
 void MaterialManager::Finalize() {
+    if (dxCommon_ && !dxCommon_->IsDeviceRemoved() &&
+        !dxCommon_->IsCommandListRecording()) {
+        dxCommon_->WaitForGpuIfPossible();
+    }
+
     for (MaterialResource &material : materials_) {
-        if (material.resource && material.mappedData != nullptr) {
-            material.resource->Unmap(0, nullptr);
-            material.mappedData = nullptr;
-        }
+        material.Reset();
     }
     materials_.clear();
     dxCommon_ = nullptr;
@@ -60,6 +60,10 @@ uint32_t MaterialManager::CreateMaterial(const Material &material) {
 
     std::memcpy(matRes.mappedData, &matRes.material, sizeof(Material));
 
+    if (materials_.size() >=
+        static_cast<size_t>((std::numeric_limits<uint32_t>::max)())) {
+        throw std::runtime_error("MaterialManager material id overflow");
+    }
     materials_.push_back(std::move(matRes));
     uint32_t materialId = static_cast<uint32_t>(materials_.size() - 1);
 
@@ -68,7 +72,7 @@ uint32_t MaterialManager::CreateMaterial(const Material &material) {
 
 void MaterialManager::SetMaterial(uint32_t materialId,
                                   const Material &material) {
-    if (materialId >= materials_.size()) {
+    if (!IsValidMaterialId(materialId)) {
         return;
     }
 
@@ -79,7 +83,7 @@ void MaterialManager::SetMaterial(uint32_t materialId,
 
 D3D12_GPU_VIRTUAL_ADDRESS
 MaterialManager::GetGPUVirtualAddress(uint32_t materialId) const {
-    if (materialId >= materials_.size()) {
+    if (!IsValidMaterialId(materialId)) {
         return 0;
     }
 
@@ -87,8 +91,14 @@ MaterialManager::GetGPUVirtualAddress(uint32_t materialId) const {
 }
 
 const Material &MaterialManager::GetMaterial(uint32_t materialId) const {
-    if (materialId >= materials_.size()) {
+    if (!IsValidMaterialId(materialId)) {
         throw std::out_of_range("Material id out of range");
     }
     return materials_[materialId].material;
+}
+
+bool MaterialManager::IsValidMaterialId(uint32_t materialId) const {
+    return materialId < materials_.size() &&
+           materials_[materialId].resource != nullptr &&
+           materials_[materialId].mappedData != nullptr;
 }

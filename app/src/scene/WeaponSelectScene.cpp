@@ -12,6 +12,7 @@
 #include "TextureManager.h"
 #include "TitleScene.h"
 #include "DifficultyCauldronScene.h"
+#include "HandLoadingScene.h"
 #include "TutorialSelectScene.h"
 #include "WinApp.h"
 #include <algorithm>
@@ -31,7 +32,7 @@ constexpr float kButtonGroupYOffset = 24.0f;
 constexpr float kTitleBandVerticalPadding = 32.0f;
 constexpr float kNormalButtonNameMaxAspect = 495.0f / 53.0f;
 constexpr float kSmallButtonNameMaxAspect = 374.0f / 47.0f;
-constexpr int kUtilityMenuItemCount = 4;
+constexpr int kUtilityMenuItemCount = 5;
 
 struct ImageContentBounds {
     float left = 0.0f;
@@ -59,6 +60,18 @@ constexpr std::array<ImageContentBounds, 3> kButtonIllustrationBounds = {{
 
 constexpr ImageContentBounds kTitleContentBounds{
     0.0f, 0.0f, 187.0f, 43.0f};
+
+constexpr ImageContentBounds kUtilityMenuTitleContentBounds{
+    1.0f, 25.0f, 118.0f, 52.0f};
+
+constexpr std::array<ImageContentBounds, kUtilityMenuItemCount>
+    kUtilityMenuLabelContentBounds = {{
+        {1.0f, 25.0f, 150.0f, 54.0f},
+        {1.0f, 25.0f, 209.0f, 53.0f},
+        {1.0f, 24.0f, 148.0f, 53.0f},
+        {0.0f, 0.0f, 222.0f, 39.0f},
+        {9.0f, 8.0f, 173.0f, 38.0f},
+    }};
 
 XMFLOAT4 MakeColor(float r, float g, float b, float a = 1.0f) {
     return {r, g, b, a};
@@ -120,6 +133,8 @@ void WeaponSelectScene::Initialize(const SceneContext &ctx) {
         LoadTextureImage(L"app/resources/ui/menu/option_sound_test.png");
     utilityMenuOptionImages_[2] =
         LoadTextureImage(L"app/resources/ui/menu/option_credits.png");
+    utilityMenuOptionImages_[3] =
+        LoadTextureImage(L"app/resources/ui/menu/option_camera_test.png");
     modeNameImages_[0] =
         LoadTextureImage(L"app/resources/ui/weapon_select/text/input_kbm.png");
     modeNameImages_[1] =
@@ -180,6 +195,10 @@ void WeaponSelectScene::Update() {
                     CreditScene::ReturnTarget::WeaponSelect));
                 break;
             case 3:
+                sceneManager_->ChangeScene(std::make_unique<HandLoadingScene>(
+                    CameraAccuracyDebugScene::ReturnTarget::WeaponSelect));
+                break;
+            case 4:
                 preserveMenuBgmOnExit_ = true;
                 sceneManager_->ChangeScene(std::make_unique<OptionScene>(
                     OptionScene::ReturnTarget::WeaponSelect));
@@ -221,8 +240,13 @@ void WeaponSelectScene::Update() {
             SwordInputCalibration calibration{};
             calibration.controlType = selectedType;
             preserveMenuBgmOnExit_ = true;
-            sceneManager_->ChangeScene(
-                std::make_unique<DifficultyCauldronScene>(calibration));
+            if (selectedType == InputControlType::Hand) {
+                sceneManager_->ChangeScene(
+                    std::make_unique<HandLoadingScene>(calibration));
+            } else {
+                sceneManager_->ChangeScene(
+                    std::make_unique<DifficultyCauldronScene>(calibration));
+            }
         }
         return;
     }
@@ -799,8 +823,8 @@ void WeaponSelectScene::DrawUtilityMenuWindow(float screenWidth,
     DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
              MakeColor(0.0f, 0.0f, 0.0f, 0.54f));
 
-    const float panelW = std::clamp(screenWidth * 0.60f, 700.0f, 960.0f);
-    const float panelH = std::clamp(screenHeight * 0.42f, 360.0f, 460.0f);
+    const float panelW = std::clamp(screenWidth * 0.72f, 860.0f, 1220.0f);
+    const float panelH = std::clamp(screenHeight * 0.44f, 380.0f, 480.0f);
     const float panelX = (screenWidth - panelW) * 0.5f;
     const float panelY = (screenHeight - panelH) * 0.5f;
     const float edge = 3.0f;
@@ -812,17 +836,24 @@ void WeaponSelectScene::DrawUtilityMenuWindow(float screenWidth,
     DrawFrame(panelX, panelY, panelW, panelH, edge,
               MakeColor(0.92f, 0.68f, 0.28f, 0.72f));
 
-    const float titleScale =
-        (std::min)(0.92f, (panelW * 0.24f) /
-                             (std::max)(utilityMenuTitleImage_.width, 1.0f));
-    const float titleW = utilityMenuTitleImage_.width * titleScale;
-    DrawImage(utilityMenuTitleImage_, panelX + (panelW - titleW) * 0.5f,
-              panelY + panelH * 0.18f, titleScale, 0.94f);
+    const float titleScale = (std::min)(
+        {1.18f, (panelW * 0.30f) /
+                    (std::max)(kUtilityMenuTitleContentBounds.Width(), 1.0f),
+         (panelH * 0.13f) /
+             (std::max)(kUtilityMenuTitleContentBounds.Height(), 1.0f)});
+    const float titleCenterX = panelX + panelW * 0.5f;
+    const float titleCenterY = panelY + panelH * 0.23f;
+    DrawImage(utilityMenuTitleImage_,
+              titleCenterX -
+                  kUtilityMenuTitleContentBounds.CenterX() * titleScale,
+              titleCenterY -
+                  kUtilityMenuTitleContentBounds.CenterY() * titleScale,
+              titleScale, 0.94f);
 
-    const float buttonSize = std::clamp(panelH * 0.50f, 152.0f, 196.0f);
+    const float buttonSize = std::clamp(panelH * 0.46f, 140.0f, 180.0f);
     const float buttonW = buttonSize;
     const float buttonH = buttonSize;
-    const float buttonGap = panelW * 0.040f;
+    const float buttonGap = panelW * 0.028f;
     const float totalButtonW =
         buttonSize * static_cast<float>(kUtilityMenuItemCount) +
         buttonGap * static_cast<float>(kUtilityMenuItemCount - 1);
@@ -855,32 +886,21 @@ void WeaponSelectScene::DrawUtilityMenuWindow(float screenWidth,
                             iconBoxSize * 0.78f, selected ? 1.0f : 0.78f,
                             selected);
 
-        if (i < 3) {
-            const Image &label = utilityMenuOptionImages_[i];
-            const float labelScale =
-                (std::min)({1.0f,
-                            (buttonH * 0.18f) /
-                                (std::max)(label.height, 1.0f),
-                            (buttonW * 0.86f) /
-                                (std::max)(label.width, 1.0f)});
-            const float labelW = label.width * labelScale;
-            const float labelH = label.height * labelScale;
-            DrawImage(label, x + (buttonW - labelW) * 0.5f,
-                      buttonY + buttonH * 0.78f - labelH * 0.5f, labelScale,
-                      selected ? 1.0f : 0.82f);
-        } else {
-            const float labelScale =
-                (std::min)({1.0f,
-                            (buttonH * 0.18f) /
-                                (std::max)(optionMenuLabelImage_.height, 1.0f),
-                            (buttonW * 0.86f) /
-                                (std::max)(optionMenuLabelImage_.width, 1.0f)});
-            const float labelW = optionMenuLabelImage_.width * labelScale;
-            const float labelH = optionMenuLabelImage_.height * labelScale;
-            DrawImage(optionMenuLabelImage_, x + (buttonW - labelW) * 0.5f,
-                      buttonY + buttonH * 0.78f - labelH * 0.5f, labelScale,
-                      selected ? 1.0f : 0.82f);
-        }
+        const Image &label =
+            i < 4 ? utilityMenuOptionImages_[i] : optionMenuLabelImage_;
+        const ImageContentBounds &labelBounds =
+            kUtilityMenuLabelContentBounds[i];
+        const float labelScale =
+            (std::min)({0.82f,
+                        (buttonH * 0.15f) /
+                            (std::max)(labelBounds.Height(), 1.0f),
+                        (buttonW * 0.86f) /
+                            (std::max)(labelBounds.Width(), 1.0f)});
+        const float labelCenterX = x + buttonW * 0.5f;
+        const float labelCenterY = buttonY + buttonH * 0.78f;
+        DrawImage(label, labelCenterX - labelBounds.CenterX() * labelScale,
+                  labelCenterY - labelBounds.CenterY() * labelScale,
+                  labelScale, selected ? 1.0f : 0.82f);
     }
 }
 
@@ -924,6 +944,15 @@ void WeaponSelectScene::DrawUtilityMenuIcon(int index, float centerX,
     }
 
     if (index == 3) {
+        r(-40.0f, -24.0f, 80.0f, 50.0f, fill);
+        f(-40.0f, -24.0f, 80.0f, 50.0f);
+        r(-26.0f, -36.0f, 52.0f, 14.0f, line);
+        r(-12.0f, -4.0f, 24.0f, 18.0f, line);
+        r(-4.0f, -38.0f, 8.0f, 12.0f, fill);
+        return;
+    }
+
+    if (index == 4) {
         r(-36.0f, -22.0f, 72.0f, 10.0f, line);
         r(-36.0f, 14.0f, 72.0f, 10.0f, line);
         r(-18.0f, -30.0f, 12.0f, 26.0f, fill);

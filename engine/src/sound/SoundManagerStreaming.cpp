@@ -7,6 +7,7 @@
 #include <cstring>
 #include <cmath>
 #include <filesystem>
+#include <limits>
 #include <mfapi.h>
 #include <mfidl.h>
 #include <mfreadwrite.h>
@@ -184,6 +185,11 @@ bool ReadNextStreamChunk(IMFSourceReader *reader, bool &sourceEnded,
             return false;
         }
         const size_t oldSize = decodedPcm.size();
+        if (locked.Size() >
+            (std::numeric_limits<size_t>::max)() - oldSize) {
+            decodedPcm.clear();
+            return false;
+        }
         decodedPcm.resize(oldSize + locked.Size());
         std::copy_n(locked.Data(), locked.Size(), decodedPcm.data() + oldSize);
     }
@@ -221,7 +227,8 @@ uint32_t SoundManager::CreateStreamingVoice(const std::wstring &path,
     }
 
     const std::filesystem::path resolvedPath = ResolveAudioPath(path);
-    if (!std::filesystem::exists(resolvedPath)) {
+    std::error_code ec;
+    if (!std::filesystem::exists(resolvedPath, ec)) {
         return kInvalidVoiceHandle;
     }
 
@@ -239,9 +246,12 @@ uint32_t SoundManager::CreateStreamingVoice(const std::wstring &path,
     if (!GetWaveFormat(mediaType.Get(), waveFormat)) {
         return kInvalidVoiceHandle;
     }
+    if (waveFormat.size() < sizeof(WAVEFORMATEX)) {
+        return kInvalidVoiceHandle;
+    }
     const WAVEFORMATEX *format =
         reinterpret_cast<const WAVEFORMATEX *>(waveFormat.data());
-    if (!format) {
+    if (!format || format->nSamplesPerSec == 0 || format->nBlockAlign == 0) {
         return kInvalidVoiceHandle;
     }
 
@@ -259,7 +269,7 @@ uint32_t SoundManager::CreateStreamingVoice(const std::wstring &path,
     PlayingVoice playingVoice{};
     playingVoice.voice = voice;
     playingVoice.callback = std::move(callback);
-    playingVoice.handle = nextVoiceHandle_++;
+    playingVoice.handle = AllocateVoiceHandle();
     playingVoice.soundId = kInvalidSoundId;
     playingVoice.volume = std::clamp(volume, 0.0f, 1.0f);
     playingVoice.loop = loop;
@@ -327,6 +337,12 @@ bool SoundManager::SubmitNextStreamBuffer(PlayingVoice &playingVoice) {
 
     XAUDIO2_BUFFER buffer{};
     buffer.pAudioData = playingVoice.streamBuffers.back().data();
+    if (playingVoice.streamBuffers.back().size() >
+        static_cast<size_t>((std::numeric_limits<UINT32>::max)())) {
+        playingVoice.streamBuffers.pop_back();
+        playingVoice.streamSourceEnded = true;
+        return false;
+    }
     buffer.AudioBytes =
         static_cast<UINT32>(playingVoice.streamBuffers.back().size());
     if (reachedEnd && !playingVoice.loop) {

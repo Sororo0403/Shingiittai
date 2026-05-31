@@ -7,6 +7,7 @@
 #include <cstring>
 #include <cmath>
 #include <filesystem>
+#include <limits>
 #include <mfapi.h>
 #include <mfidl.h>
 #include <mfreadwrite.h>
@@ -171,6 +172,10 @@ std::vector<BYTE> ReadNextStreamChunk(IMFSourceReader *reader,
 
         const MediaBufferLock locked(mediaBuffer.Get());
         const size_t oldSize = decodedPcm.size();
+        if (locked.Size() >
+            (std::numeric_limits<size_t>::max)() - oldSize) {
+            throw std::runtime_error("Decoded audio buffer size overflow");
+        }
         decodedPcm.resize(oldSize + locked.Size());
         std::copy_n(locked.Data(), locked.Size(), decodedPcm.data() + oldSize);
     }

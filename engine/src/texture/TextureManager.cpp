@@ -35,10 +35,12 @@ class UploadPassScope {
                     bool active)
         : dxCommon_(dxCommon), textureManager_(textureManager), active_(active) {}
 
-    ~UploadPassScope() noexcept {
-        try {
-            Finish();
-        } catch (...) {
+    ~UploadPassScope() {
+        if (active_ && dxCommon_ != nullptr) {
+            dxCommon_->AbortFrame();
+            if (textureManager_ != nullptr) {
+                textureManager_->ReleaseUploadBuffers();
+            }
         }
     }
 
@@ -59,10 +61,33 @@ class UploadPassScope {
     bool active_ = false;
 };
 
+class TextureManagerInitializationGuard {
+  public:
+    explicit TextureManagerInitializationGuard(TextureManager &manager)
+        : manager_(manager) {}
+    ~TextureManagerInitializationGuard() {
+        if (active_) {
+            manager_.Finalize();
+        }
+    }
+
+    TextureManagerInitializationGuard(const TextureManagerInitializationGuard &) =
+        delete;
+    TextureManagerInitializationGuard &
+    operator=(const TextureManagerInitializationGuard &) = delete;
+
+    void Commit() { active_ = false; }
+
+  private:
+    TextureManager &manager_;
+    bool active_ = true;
+};
+
 static TextureManager::DecodedTexture DecodeTextureFileForAsync(
     const std::wstring &filePath) {
     const std::filesystem::path resolvedPath = ResolveTexturePath(filePath);
-    if (!std::filesystem::exists(resolvedPath)) {
+    std::error_code ec;
+    if (!std::filesystem::exists(resolvedPath, ec)) {
         throw std::runtime_error("Texture file not found. requested=" +
                                  std::filesystem::path(filePath).string() +
                                  " resolved=" + resolvedPath.string());
@@ -99,6 +124,31 @@ using Microsoft::WRL::ComPtr;
 
 namespace {
 TextureManager *gActiveTextureManager = nullptr;
+
+class ScopedSrvAllocation {
+  public:
+    explicit ScopedSrvAllocation(SrvManager *srvManager)
+        : srvManager_(srvManager) {}
+    ~ScopedSrvAllocation() {
+        if (srvManager_ != nullptr && index_ != UINT32_MAX) {
+            srvManager_->FreeIfAllocated(index_);
+        }
+    }
+
+    uint32_t Allocate() {
+        index_ = srvManager_->Allocate();
+        return index_;
+    }
+
+    void Commit() { index_ = UINT32_MAX; }
+
+    ScopedSrvAllocation(const ScopedSrvAllocation &) = delete;
+    ScopedSrvAllocation &operator=(const ScopedSrvAllocation &) = delete;
+
+  private:
+    SrvManager *srvManager_ = nullptr;
+    uint32_t index_ = UINT32_MAX;
+};
 }
 
 TextureManager &TextureManager::GetInstance() {
@@ -110,11 +160,8 @@ void TextureManager::SetActiveInstance(TextureManager *instance) {
     gActiveTextureManager = instance;
 }
 
-TextureManager::~TextureManager() noexcept {
-    try {
-        Finalize();
-    } catch (...) {
-    }
+TextureManager::~TextureManager() {
+    Finalize();
 }
 
 void TextureManager::Initialize(DirectXCommon *dxCommon,
@@ -127,6 +174,7 @@ void TextureManager::Initialize(DirectXCommon *dxCommon,
     dxCommon_ = dxCommon;
     srvManager_ = srvManager;
     SetActiveInstance(this);
+    TextureManagerInitializationGuard initializeGuard(*this);
 
     textures_.clear();
     uploadBuffers_.clear();
@@ -167,9 +215,19 @@ void TextureManager::Initialize(DirectXCommon *dxCommon,
     whiteCubeTextureId_ = CreateTexture(cubeImages, _countof(cubeImages),
                                         cubeMetadata);
 
+    uint32_t blackPixel = 0xFF000000;
+    image.pixels = reinterpret_cast<uint8_t *>(&blackPixel);
+    Image blackCubeImages[6]{};
+    for (Image &cubeImage : blackCubeImages) {
+        cubeImage = image;
+    }
+    blackCubeTextureId_ = CreateTexture(blackCubeImages, _countof(blackCubeImages),
+                                        cubeMetadata);
+
     uint32_t flatNormalPixel = 0xFFFF8080;
     image.pixels = reinterpret_cast<uint8_t *>(&flatNormalPixel);
     defaultNormalTextureId_ = CreateTexture(&image, 1, metadata);
+    initializeGuard.Commit();
 }
 
 void TextureManager::Finalize() {
@@ -178,7 +236,7 @@ void TextureManager::Finalize() {
 
     if (srvManager_ != nullptr) {
         for (const Entry &entry : textures_) {
-            srvManager_->Free(entry.srvIndex);
+            srvManager_->FreeIfAllocated(entry.srvIndex);
         }
     }
 
@@ -193,13 +251,15 @@ void TextureManager::Finalize() {
     }
     whiteTextureId_ = 0;
     whiteCubeTextureId_ = 0;
+    blackCubeTextureId_ = 0;
     defaultNormalTextureId_ = 0;
     lastDynamicUploadFrameIndex_ = UINT_MAX;
 }
 
 uint32_t TextureManager::Load(const std::wstring &filePath) {
     const std::filesystem::path resolvedPath = ResolveTexturePath(filePath);
-    if (!std::filesystem::exists(resolvedPath)) {
+    std::error_code ec;
+    if (!std::filesystem::exists(resolvedPath, ec)) {
         throw std::runtime_error("Texture file not found. requested=" +
                                  std::filesystem::path(filePath).string() +
                                  " resolved=" + resolvedPath.string());
@@ -209,7 +269,10 @@ uint32_t TextureManager::Load(const std::wstring &filePath) {
 
     auto it = filePathToTextureId_.find(pathKey);
     if (it != filePathToTextureId_.end()) {
-        return it->second;
+        if (IsValidTextureId(it->second)) {
+            return it->second;
+        }
+        filePathToTextureId_.erase(it);
     }
 
     ScratchImage scratch;
@@ -278,6 +341,19 @@ uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
         metadata.mipLevels == 0) {
         throw std::runtime_error("CreateTexture received invalid metadata");
     }
+    if (metadata.dimension != TEX_DIMENSION_TEXTURE2D || metadata.depth != 1) {
+        throw std::runtime_error("CreateTexture supports only 2D texture metadata");
+    }
+    if (metadata.arraySize >
+        (std::numeric_limits<size_t>::max)() / metadata.mipLevels) {
+        throw std::runtime_error("CreateTexture subresource count overflow");
+    }
+    const size_t expectedImageCount =
+        static_cast<size_t>(metadata.arraySize) *
+        static_cast<size_t>(metadata.mipLevels);
+    if (imageCount != expectedImageCount) {
+        throw std::runtime_error("CreateTexture image count does not match metadata");
+    }
     if (metadata.height > (std::numeric_limits<UINT>::max)() ||
         metadata.arraySize > (std::numeric_limits<UINT16>::max)() ||
         metadata.mipLevels > (std::numeric_limits<UINT16>::max)() ||
@@ -344,18 +420,6 @@ uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
                       IID_PPV_ARGS(&uploadBuffer)),
                   "Create upload buffer failed");
 
-    ID3D12GraphicsCommandList *cmdList = dxCommon_->GetCommandList();
-
-    UpdateSubresources(cmdList, texture.resource.Get(), uploadBuffer.Get(), 0,
-                       0, static_cast<UINT>(subresources.size()),
-                       subresources.data());
-
-    auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-        texture.resource.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
-        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-
-    cmdList->ResourceBarrier(1, &barrier);
-
     if (ownsUploadPass) {
         uploadBuffers_.push_back(uploadBuffer);
     } else {
@@ -371,7 +435,20 @@ uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
         }
     }
 
-    uint32_t srvIndex = srvManager_->Allocate();
+    ID3D12GraphicsCommandList *cmdList = dxCommon_->GetCommandList();
+
+    UpdateSubresources(cmdList, texture.resource.Get(), uploadBuffer.Get(), 0,
+                       0, static_cast<UINT>(subresources.size()),
+                       subresources.data());
+
+    auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+        texture.resource.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+    cmdList->ResourceBarrier(1, &barrier);
+
+    ScopedSrvAllocation srvAllocation(srvManager_);
+    uint32_t srvIndex = srvAllocation.Allocate();
 
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
@@ -408,7 +485,12 @@ uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
     texture.height = static_cast<uint32_t>(metadata.height);
     texture.state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 
+    if (textures_.size() >=
+        static_cast<size_t>((std::numeric_limits<uint32_t>::max)())) {
+        throw std::runtime_error("TextureManager texture id overflow");
+    }
     textures_.push_back({std::move(texture), srvIndex});
+    srvAllocation.Commit();
 
     uint32_t textureId = static_cast<uint32_t>(textures_.size() - 1);
 
@@ -432,7 +514,7 @@ void TextureManager::ReleaseUploadBuffers() {
 
     if (dxCommon_ && !dxCommon_->IsDeviceRemoved() &&
         (!uploadBuffers_.empty() || hasFrameUploadBuffers)) {
-        dxCommon_->WaitForGpu();
+        dxCommon_->WaitForGpuIfPossible();
     }
 
     uploadBuffers_.clear();
@@ -444,17 +526,35 @@ void TextureManager::ReleaseUploadBuffers() {
 
 D3D12_GPU_DESCRIPTOR_HANDLE
 TextureManager::GetGpuHandle(uint32_t textureId) const {
-    return srvManager_->GetGpuHandle(textures_.at(textureId).srvIndex);
+    if (!IsValidTextureId(textureId) || srvManager_ == nullptr ||
+        !srvManager_->IsAllocated(textures_[textureId].srvIndex)) {
+        throw std::out_of_range("TextureManager texture id out of range");
+    }
+    return srvManager_->GetGpuHandle(textures_[textureId].srvIndex);
+}
+
+bool TextureManager::IsValidTextureId(uint32_t textureId) const {
+    return textureId < textures_.size() &&
+           textures_[textureId].texture.resource != nullptr;
 }
 
 ID3D12Resource *TextureManager::GetResource(uint32_t textureId) const {
-    return textures_.at(textureId).texture.resource.Get();
+    if (!IsValidTextureId(textureId)) {
+        throw std::out_of_range("TextureManager texture id out of range");
+    }
+    return textures_[textureId].texture.resource.Get();
 }
 
 uint32_t TextureManager::GetWidth(uint32_t id) const {
-    return textures_.at(id).texture.width;
+    if (!IsValidTextureId(id)) {
+        throw std::out_of_range("TextureManager texture id out of range");
+    }
+    return textures_[id].texture.width;
 }
 
 uint32_t TextureManager::GetHeight(uint32_t id) const {
-    return textures_.at(id).texture.height;
+    if (!IsValidTextureId(id)) {
+        throw std::out_of_range("TextureManager texture id out of range");
+    }
+    return textures_[id].texture.height;
 }

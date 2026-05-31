@@ -47,6 +47,11 @@ class GPUParticleSystem {
     void Update(float deltaTime);
 
     /// <summary>
+    /// 現在残っている粒子と保留中の発生要求を消去する
+    /// </summary>
+    void Clear();
+
+    /// <summary>
     /// カメラに向いたビルボードとして生存中のパーティクルを描画する
     /// </summary>
     void Draw(const Camera &camera);
@@ -89,6 +94,8 @@ class GPUParticleSystem {
     void EmitOnce(const ParticleEmitterSettings &settings);
 
   private:
+    class InitializationGuard;
+
     struct ParticleForGPU {
         DirectX::XMFLOAT3 translate{};
         float currentTime = 0.0f;

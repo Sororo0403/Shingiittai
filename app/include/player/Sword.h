@@ -1,5 +1,6 @@
 #pragma once
 #include "OBB.h"
+#include "SwordControllerState.h"
 #include "SwordPose.h"
 #include "Transform.h"
 #include <DirectXMath.h>
@@ -14,7 +15,7 @@ class Sword {
   public:
     void Initialize(uint32_t modelId);
     void Update(const Transform &transform, const SwordPose &pose,
-                float deltaTime);
+                float deltaTime, bool allowMotionSlash = true);
 
     void Draw(ModelManager *modelManager, const Camera &camera,
               float visualScale = 1.0f);
@@ -37,6 +38,7 @@ class Sword {
     OBB BuildOBB(const Transform &transform) const;
     Transform InterpolateTransform(float alpha) const;
     void UpdateSlashFollowThrough(float deltaTime);
+    void UpdateMotionSlash(float deltaTime, bool allowMotionSlash);
     void ApplySlashFollowThrough(Transform &drawTransform) const;
     SwordCounterAxis ComputeSlashAxis() const;
 
@@ -56,6 +58,7 @@ class Sword {
 
     DirectX::XMFLOAT2 slashDir_{};
     DirectX::XMFLOAT4 orientation_{0, 0, 0, 1};
+    SwordControllerState motionSlashState_{};
 
     float slashFollowThroughTimer_ = 0.0f;
     bool slashFollowThroughStarted_ = false;

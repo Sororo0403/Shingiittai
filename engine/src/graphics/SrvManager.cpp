@@ -4,6 +4,8 @@
 #include "graphics/DxUtils.h"
 #include <algorithm>
 #include <stdexcept>
+#include <string>
+#include <utility>
 
 using namespace DxUtils;
 
@@ -15,22 +17,29 @@ void SrvManager::Initialize(DirectXCommon *dxCommon, UINT maxSrvCount) {
         throw std::runtime_error("SrvManager::Initialize invalid descriptor count");
     }
 
+    std::vector<bool> newAllocated(maxSrvCount, false);
+    std::vector<UINT> newFreeList;
+
     D3D12_DESCRIPTOR_HEAP_DESC desc{};
     desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     desc.NumDescriptors = maxSrvCount;
     desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> newHeap;
     ThrowIfFailed(dxCommon->GetDevice()->CreateDescriptorHeap(
-                      &desc, IID_PPV_ARGS(&heap_)),
+                      &desc, IID_PPV_ARGS(&newHeap)),
                   "Create SRV Heap failed");
 
-    descriptorSize_ = dxCommon->GetDevice()->GetDescriptorHandleIncrementSize(
+    const UINT descriptorSize =
+        dxCommon->GetDevice()->GetDescriptorHandleIncrementSize(
         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
+    heap_ = std::move(newHeap);
+    descriptorSize_ = descriptorSize;
     maxSrvCount_ = maxSrvCount;
     currentIndex_ = 0;
-    freeList_.clear();
-    allocated_.assign(maxSrvCount_, false);
+    freeList_ = std::move(newFreeList);
+    allocated_ = std::move(newAllocated);
 }
 
 UINT SrvManager::Allocate() {
@@ -111,11 +120,39 @@ void SrvManager::Free(UINT index) {
     freeList_.push_back(index);
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE
-SrvManager::GetCpuHandle(UINT index) const {
+bool SrvManager::FreeIfAllocated(UINT index) {
+    if (!IsAllocated(index)) {
+        return false;
+    }
+
+    allocated_[index] = false;
+    freeList_.push_back(index);
+    return true;
+}
+
+bool SrvManager::IsAllocated(UINT index) const {
+    return index < currentIndex_ && index < allocated_.size() &&
+           allocated_[index];
+}
+
+void SrvManager::ValidateAllocatedIndex(UINT index,
+                                        const char *operation) const {
+    if (!heap_ || descriptorSize_ == 0 || maxSrvCount_ == 0) {
+        throw std::runtime_error(std::string(operation) +
+                                 " called before Initialize");
+    }
     if (index >= maxSrvCount_) {
         throw std::out_of_range("SRV descriptor index out of range");
     }
+    if (!IsAllocated(index)) {
+        throw std::runtime_error(std::string(operation) +
+                                 " requested unallocated descriptor");
+    }
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE
+SrvManager::GetCpuHandle(UINT index) const {
+    ValidateAllocatedIndex(index, "SrvManager::GetCpuHandle");
 
     return CD3DX12_CPU_DESCRIPTOR_HANDLE(
         heap_->GetCPUDescriptorHandleForHeapStart(), index, descriptorSize_);
@@ -123,9 +160,7 @@ SrvManager::GetCpuHandle(UINT index) const {
 
 D3D12_GPU_DESCRIPTOR_HANDLE
 SrvManager::GetGpuHandle(UINT index) const {
-    if (index >= maxSrvCount_) {
-        throw std::out_of_range("SRV descriptor index out of range");
-    }
+    ValidateAllocatedIndex(index, "SrvManager::GetGpuHandle");
 
     return CD3DX12_GPU_DESCRIPTOR_HANDLE(
         heap_->GetGPUDescriptorHandleForHeapStart(), index, descriptorSize_);

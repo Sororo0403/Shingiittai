@@ -19,6 +19,8 @@ constexpr float kSlashFollowThroughMaxSurge = 0.26f;
 constexpr float kSlashFollowThroughMaxStretch = 0.14f;
 constexpr float kSlashFollowThroughMinDirLengthSq = 0.01f;
 constexpr float kSlashFollowThroughMinAngle = 0.001f;
+constexpr float kSwordMotionSlashSpeedThreshold = 3.2f;
+constexpr float kSwordMotionSlashMinDelta = 0.025f;
 constexpr float kCounterAxisMinComponent = 0.24f;
 constexpr float kCounterAxisDominanceRatio = 1.8f;
 
@@ -51,16 +53,23 @@ void Sword::Initialize(uint32_t modelId) {
     slashFollowThroughAngles_ = {};
     slashFollowThroughRoll_ = 0.0f;
     slashFollowThroughSurge_ = 0.0f;
+    motionSlashState_ = {};
 }
 
 void Sword::Update(const Transform &transform, const SwordPose &pose,
-                   float deltaTime) {
+                   float deltaTime, bool allowMotionSlash) {
     previousTf_ = hasPreviousTransform_ ? tf_ : transform;
+    const bool hadPreviousTransform = hasPreviousTransform_;
     hasPreviousTransform_ = true;
     tf_ = transform;
-    isSlashMode_ = pose.isSlashMode;
     slashDir_ = pose.slashDir;
     orientation_ = pose.orientation;
+    UpdateMotionSlash(hadPreviousTransform ? deltaTime : 0.0f,
+                      allowMotionSlash);
+    if (motionSlashState_.isSlashMode) {
+        slashDir_ = motionSlashState_.slashDir;
+    }
+    isSlashMode_ = pose.isSlashMode || motionSlashState_.isSlashMode;
     UpdateSlashFollowThrough(deltaTime);
 }
 
@@ -221,6 +230,50 @@ void Sword::UpdateSlashFollowThrough(float deltaTime) {
     if (slashFollowThroughTimer_ < 0.0f) {
         slashFollowThroughTimer_ = 0.0f;
     }
+}
+
+void Sword::UpdateMotionSlash(float deltaTime, bool allowMotionSlash) {
+    if (!allowMotionSlash || deltaTime <= 0.0001f) {
+        motionSlashState_.UpdateSlash(0.0f, deltaTime,
+                                      kSwordMotionSlashSpeedThreshold);
+        return;
+    }
+
+    const XMFLOAT3 previousRoot = GetBladePointWorld(previousTf_, 0.25f);
+    const XMFLOAT3 previousTip = GetBladePointWorld(previousTf_, 1.05f);
+    const XMFLOAT3 currentRoot = GetBladePointWorld(tf_, 0.25f);
+    const XMFLOAT3 currentTip = GetBladePointWorld(tf_, 1.05f);
+
+    const XMVECTOR previousBlade =
+        XMLoadFloat3(&previousTip) - XMLoadFloat3(&previousRoot);
+    const XMVECTOR currentBlade =
+        XMLoadFloat3(&currentTip) - XMLoadFloat3(&currentRoot);
+    const XMVECTOR bladeDelta = currentBlade - previousBlade;
+
+    XMFLOAT3 delta{};
+    XMStoreFloat3(&delta, bladeDelta);
+    const float distance =
+        std::sqrt(delta.x * delta.x + delta.y * delta.y + delta.z * delta.z);
+    const float speed = distance / deltaTime;
+
+    if (distance >= kSwordMotionSlashMinDelta) {
+        const XMVECTOR previousRotation =
+            XMQuaternionNormalize(XMLoadFloat4(&previousTf_.rotation));
+        const XMVECTOR right =
+            XMVector3Rotate(XMVectorSet(1, 0, 0, 0), previousRotation);
+        const XMVECTOR up =
+            XMVector3Rotate(XMVectorSet(0, 1, 0, 0), previousRotation);
+        const float dirX = XMVectorGetX(XMVector3Dot(bladeDelta, right));
+        const float dirY = XMVectorGetX(XMVector3Dot(bladeDelta, up));
+        const float dirLen = std::sqrt(dirX * dirX + dirY * dirY);
+        if (dirLen > 0.0001f) {
+            motionSlashState_.slashDir = {dirX / dirLen, dirY / dirLen};
+        }
+    }
+
+    motionSlashState_.UpdateSlash(
+        distance >= kSwordMotionSlashMinDelta ? speed : 0.0f, deltaTime,
+        kSwordMotionSlashSpeedThreshold);
 }
 
 void Sword::ApplySlashFollowThrough(Transform &drawTransform) const {

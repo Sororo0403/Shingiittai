@@ -1,67 +1,11 @@
 #include "texture/TextureManager.h"
-#include "core/AssetManager.h"
 #include "graphics/DirectXCommon.h"
 #include "graphics/DxHelpers.h"
 #include "graphics/DxUtils.h"
 #include "graphics/SrvManager.h"
 #include "texture/Texture.h"
-#include <algorithm>
-#include <chrono>
-#include <cwctype>
-#include <filesystem>
-#include <future>
 #include <limits>
 #include <stdexcept>
-#include <vector>
-
-static std::filesystem::path ResolveTexturePath(const std::wstring &path) {
-    return AssetManager::ResolvePath(std::filesystem::path(path));
-}
-
-static std::wstring NormalizePathKey(const std::filesystem::path &path) {
-    std::wstring key = path.lexically_normal().wstring();
-
-#ifdef _WIN32
-    std::transform(key.begin(), key.end(), key.begin(),
-                   [](wchar_t c) { return static_cast<wchar_t>(towlower(c)); });
-#endif
-
-    return key;
-}
-
-static TextureManager::DecodedTexture DecodeTextureFileForAsync(
-    const std::wstring &filePath) {
-    const std::filesystem::path resolvedPath = ResolveTexturePath(filePath);
-    if (!std::filesystem::exists(resolvedPath)) {
-        throw std::runtime_error("Texture file not found. requested=" +
-                                 std::filesystem::path(filePath).string() +
-                                 " resolved=" + resolvedPath.string());
-    }
-
-    TextureManager::DecodedTexture decoded{};
-    decoded.pathKey = NormalizePathKey(resolvedPath);
-    const std::wstring ext = resolvedPath.extension().wstring();
-
-    if (_wcsicmp(ext.c_str(), L".dds") == 0) {
-        const std::string message =
-            "LoadFromDDSFile failed: " + resolvedPath.string();
-        DxUtils::ThrowIfFailed(
-            DirectX::LoadFromDDSFile(resolvedPath.c_str(),
-                                      DirectX::DDS_FLAGS_NONE,
-                                      &decoded.metadata, decoded.scratch),
-            message.c_str());
-    } else {
-        const std::string message =
-            "LoadFromWICFile failed: " + resolvedPath.string();
-        DxUtils::ThrowIfFailed(
-            DirectX::LoadFromWICFile(resolvedPath.c_str(),
-                                      DirectX::WIC_FLAGS_IGNORE_SRGB,
-                                      &decoded.metadata, decoded.scratch),
-            message.c_str());
-    }
-
-    return decoded;
-}
 
 using namespace DirectX;
 using namespace DxUtils;
@@ -75,10 +19,12 @@ class UploadPassScope {
                     bool active)
         : dxCommon_(dxCommon), textureManager_(textureManager), active_(active) {}
 
-    ~UploadPassScope() noexcept {
-        try {
-            Finish();
-        } catch (...) {
+    ~UploadPassScope() {
+        if (active_ && dxCommon_ != nullptr) {
+            dxCommon_->AbortFrame();
+            if (textureManager_ != nullptr) {
+                textureManager_->ReleaseUploadBuffers();
+            }
         }
     }
 
@@ -101,8 +47,6 @@ class UploadPassScope {
 
 } // namespace
 
-
-
 uint32_t TextureManager::CreateFromRgbaPixels(uint32_t width, uint32_t height,
                                                const uint8_t *pixels) {
     return CreateTexture2D(width, height, DXGI_FORMAT_R8G8B8A8_UNORM, pixels,
@@ -115,6 +59,22 @@ uint32_t TextureManager::CreateTexture2D(uint32_t width, uint32_t height,
                                          size_t rowPitch) {
     if (width == 0 || height == 0 || !pixels || rowPitch == 0) {
         throw std::runtime_error("CreateTexture2D received invalid pixel data");
+    }
+    if (DirectX::IsCompressed(format) || DirectX::IsDepthStencil(format)) {
+        throw std::runtime_error("CreateTexture2D supports only plain color formats");
+    }
+    const size_t bitsPerPixel = DirectX::BitsPerPixel(format);
+    if (bitsPerPixel == 0) {
+        throw std::runtime_error("CreateTexture2D unsupported texture format");
+    }
+    if (static_cast<size_t>(width) >
+        ((std::numeric_limits<size_t>::max)() - 7u) / bitsPerPixel) {
+        throw std::runtime_error("CreateTexture2D row pitch overflow");
+    }
+    const size_t minimumRowPitch =
+        (static_cast<size_t>(width) * bitsPerPixel + 7u) / 8u;
+    if (rowPitch < minimumRowPitch) {
+        throw std::runtime_error("CreateTexture2D row pitch is too small");
     }
     if (rowPitch > (std::numeric_limits<size_t>::max)() / height) {
         throw std::runtime_error("CreateTexture2D slice pitch overflow");
@@ -145,7 +105,7 @@ void TextureManager::UpdateTexture2D(uint32_t textureId, const uint8_t *pixels,
     if (!dxCommon_) {
         throw std::runtime_error("UpdateTexture2D requires DirectXCommon");
     }
-    if (!pixels || rowPitch == 0 || textureId >= textures_.size()) {
+    if (!pixels || rowPitch == 0 || !IsValidTextureId(textureId)) {
         throw std::runtime_error("UpdateTexture2D received invalid input");
     }
 
@@ -168,9 +128,32 @@ void TextureManager::UpdateTexture2D(uint32_t textureId, const uint8_t *pixels,
     }
 
     D3D12_RESOURCE_DESC textureDesc = texture.resource->GetDesc();
-    const size_t expectedRowPitch =
-        static_cast<size_t>(texture.width) *
-        DirectX::BitsPerPixel(textureDesc.Format) / 8u;
+    if (textureDesc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D ||
+        textureDesc.DepthOrArraySize != 1 || textureDesc.MipLevels != 1) {
+        throw std::runtime_error("UpdateTexture2D target must be a single 2D texture");
+    }
+    if (textureDesc.Width >
+            static_cast<UINT64>((std::numeric_limits<int>::max)()) ||
+        textureDesc.Height >
+            static_cast<UINT>((std::numeric_limits<int>::max)()) ||
+        static_cast<int>(textureDesc.Width) != texture.width ||
+        static_cast<int>(textureDesc.Height) != texture.height) {
+        throw std::runtime_error("UpdateTexture2D target size mismatch");
+    }
+    const size_t bitsPerPixel = DirectX::BitsPerPixel(textureDesc.Format);
+    if (bitsPerPixel == 0) {
+        throw std::runtime_error("UpdateTexture2D unsupported texture format");
+    }
+    if (DirectX::IsCompressed(textureDesc.Format) ||
+        DirectX::IsDepthStencil(textureDesc.Format)) {
+        throw std::runtime_error("UpdateTexture2D supports only plain color formats");
+    }
+    const size_t width = static_cast<size_t>(texture.width);
+    if (width >
+        ((std::numeric_limits<size_t>::max)() - 7u) / bitsPerPixel) {
+        throw std::runtime_error("UpdateTexture2D rowPitch overflow");
+    }
+    const size_t expectedRowPitch = (width * bitsPerPixel + 7u) / 8u;
     if (rowPitch < expectedRowPitch) {
         throw std::runtime_error("UpdateTexture2D rowPitch is too small");
     }
@@ -205,6 +188,12 @@ void TextureManager::UpdateTexture2D(uint32_t textureId, const uint8_t *pixels,
                       IID_PPV_ARGS(&uploadBuffer)),
                   "Create texture update upload buffer failed");
 
+    if (frameIndex < frameUploadBuffers_.size()) {
+        frameUploadBuffers_[frameIndex].push_back(uploadBuffer);
+    } else {
+        uploadBuffers_.push_back(uploadBuffer);
+    }
+
     ID3D12GraphicsCommandList *cmdList = dxCommon_->GetCommandList();
     if (texture.state != D3D12_RESOURCE_STATE_COPY_DEST) {
         auto toCopyDest = CD3DX12_RESOURCE_BARRIER::Transition(
@@ -222,12 +211,6 @@ void TextureManager::UpdateTexture2D(uint32_t textureId, const uint8_t *pixels,
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     cmdList->ResourceBarrier(1, &toShaderResource);
     texture.state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-
-    if (frameIndex < frameUploadBuffers_.size()) {
-        frameUploadBuffers_[frameIndex].push_back(uploadBuffer);
-    } else {
-        uploadBuffers_.push_back(uploadBuffer);
-    }
 
     uploadPass.Finish();
 }

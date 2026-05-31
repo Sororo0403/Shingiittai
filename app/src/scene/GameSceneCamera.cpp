@@ -147,6 +147,33 @@ void GameScene::UpdateReadyPreviewCamera(float deltaTime) {
     camera_.UpdateMatrices();
 }
 
+void GameScene::ApplyGameplayCameraPose(const XMFLOAT3 &cameraPos,
+                                        const XMFLOAT3 &lookAt,
+                                        float positionLerpSpeed,
+                                        float lookAtLerpSpeed) {
+    if (!gameplayCameraPoseInitialized_) {
+        gameplayCameraPos_ = cameraPos;
+        gameplayCameraLookAt_ = lookAt;
+        gameplayCameraPoseInitialized_ = true;
+    } else {
+        const float positionAlpha =
+            SaturatedAlpha(positionLerpSpeed, ctx_->frame.deltaTime);
+        const float lookAtAlpha =
+            SaturatedAlpha(lookAtLerpSpeed, ctx_->frame.deltaTime);
+        gameplayCameraPos_ = Lerp(gameplayCameraPos_, cameraPos, positionAlpha);
+        gameplayCameraLookAt_ =
+            Lerp(gameplayCameraLookAt_, lookAt, lookAtAlpha);
+    }
+
+    XMFLOAT3 finalCameraPos = gameplayCameraPos_;
+    XMFLOAT3 finalLookAt = gameplayCameraLookAt_;
+    combatFeedback_.ApplyCameraImpulse(finalCameraPos, finalLookAt,
+                                       sceneLightTime_);
+
+    camera_.SetPosition(finalCameraPos);
+    AppLookAt(camera_, finalLookAt);
+}
+
 void GameScene::UpdateBattleCamera() {
     const auto &playerTf = player_.GetTransform();
     const auto &enemyTf = enemy_.GetTransform();
@@ -187,6 +214,9 @@ void GameScene::UpdateBattleCamera() {
         currentFovDeg_ += (targetFovDeg_ - currentFovDeg_) *
                           SaturatedAlpha(5.8f, ctx_->frame.deltaTime);
         camera_.SetPerspectiveFovDeg(currentFovDeg_);
+        gameplayCameraPoseInitialized_ = true;
+        gameplayCameraPos_ = lockOnOrbitCameraPos_;
+        gameplayCameraLookAt_ = lockOnLookAt_;
         camera_.SetPosition(lockOnOrbitCameraPos_);
         AppLookAt(camera_, lockOnLookAt_);
         return;
@@ -248,6 +278,9 @@ void GameScene::UpdateBattleCamera() {
         const float heroFov = 58.0f - 4.0f * revealEase + 2.0f * flashKick;
         currentFovDeg_ = heroFov + (66.0f - heroFov) * settleEase;
         camera_.SetPerspectiveFovDeg(currentFovDeg_);
+        gameplayCameraPoseInitialized_ = true;
+        gameplayCameraPos_ = desiredCameraPos;
+        gameplayCameraLookAt_ = desiredLookAt;
         combatFeedback_.ApplyCameraImpulse(desiredCameraPos, desiredLookAt,
                                            sceneLightTime_);
         camera_.SetPosition(desiredCameraPos);
@@ -289,6 +322,9 @@ void GameScene::UpdateBattleCamera() {
         currentFovDeg_ += (targetFovDeg_ - currentFovDeg_) *
                           SaturatedAlpha(5.8f, ctx_->frame.deltaTime);
         camera_.SetPerspectiveFovDeg(currentFovDeg_);
+        gameplayCameraPoseInitialized_ = true;
+        gameplayCameraPos_ = lockOnOrbitCameraPos_;
+        gameplayCameraLookAt_ = lockOnLookAt_;
         camera_.SetPosition(lockOnOrbitCameraPos_);
         AppLookAt(camera_, lockOnLookAt_);
         return;
@@ -426,6 +462,9 @@ void GameScene::UpdateBattleCamera() {
                               SaturatedAlpha(7.0f, ctx_->frame.deltaTime);
             camera_.SetPerspectiveFovDeg(currentFovDeg_ +
                                          combatFeedback_.GetFovKickDeg());
+            gameplayCameraPoseInitialized_ = true;
+            gameplayCameraPos_ = cameraPos;
+            gameplayCameraLookAt_ = lookAt;
             combatFeedback_.ApplyCameraImpulse(cameraPos, lookAt,
                                                sceneLightTime_);
             camera_.SetPosition(cameraPos);
@@ -479,6 +518,9 @@ void GameScene::UpdateBattleCamera() {
                           SaturatedAlpha(7.0f, ctx_->frame.deltaTime);
         camera_.SetPerspectiveFovDeg(currentFovDeg_ +
                                      combatFeedback_.GetFovKickDeg());
+        gameplayCameraPoseInitialized_ = true;
+        gameplayCameraPos_ = cameraPos;
+        gameplayCameraLookAt_ = lookAt;
         combatFeedback_.ApplyCameraImpulse(cameraPos, lookAt, sceneLightTime_);
         camera_.SetPosition(cameraPos);
         AppLookAt(camera_, lookAt);
@@ -497,10 +539,10 @@ void GameScene::UpdateBattleCamera() {
                                enemyActionStep == ActionStep::Recovery);
     const bool isEnemyPhaseTransition = enemy_.IsPhaseTransitionActive();
     const float enemyPhaseTransitionRatio = enemy_.GetPhaseTransitionRatio();
+    const bool tripleIaiCameraFocus = enemy_.IsTripleIaiCenterCameraHold();
     const DirectX::XMFLOAT3 enemyCameraPos =
-        enemy_.IsTripleIaiCenterCameraHold()
-            ? enemy_.GetTripleIaiCenterFocusPosition()
-            : enemyPos;
+        tripleIaiCameraFocus ? enemy_.GetTripleIaiCenterFocusPosition()
+                             : enemyPos;
     // =========================
     // FOV繧�E�繝ｼ繧�E�繝�Eヨ豎ｺ螳・
     // =========================
@@ -574,6 +616,9 @@ void GameScene::UpdateBattleCamera() {
             playerShoulder.z * 0.34f + mid.z * 0.66f +
                 line.y * (0.20f + 0.34f * enemyPressure)};
         cameraYaw_ = std::atan2f(line.x, line.y);
+        gameplayCameraPoseInitialized_ = true;
+        gameplayCameraPos_ = cameraPos;
+        gameplayCameraLookAt_ = lookAt;
         combatFeedback_.ApplyCameraImpulse(cameraPos, lookAt, sceneLightTime_);
         camera_.SetPosition(cameraPos);
         AppLookAt(camera_, lookAt);
@@ -601,9 +646,12 @@ void GameScene::UpdateBattleCamera() {
             }
 
             const float assistScale = inputMagnitude > 0.0f ? 0.42f : 1.0f;
+            const float tripleIaiTurnBoost = tripleIaiCameraFocus ? 2.45f : 1.0f;
             const float applied = Clamp(
-                diff * 7.2f * assistScale * ctx_->frame.deltaTime,
-                -8.0f * ctx_->frame.deltaTime, 8.0f * ctx_->frame.deltaTime);
+                diff * 7.2f * tripleIaiTurnBoost * assistScale *
+                    ctx_->frame.deltaTime,
+                -8.0f * tripleIaiTurnBoost * ctx_->frame.deltaTime,
+                8.0f * tripleIaiTurnBoost * ctx_->frame.deltaTime);
             cameraYaw_ += applied;
         }
 
@@ -651,9 +699,9 @@ void GameScene::UpdateBattleCamera() {
                            enemyPhaseTransitionRatio;
             lookAt = Lerp(lookAt, transitionLookAt, enemyPhaseTransitionRatio);
         }
-        combatFeedback_.ApplyCameraImpulse(cameraPos, lookAt, sceneLightTime_);
-        camera_.SetPosition(cameraPos);
-        AppLookAt(camera_, lookAt);
+        ApplyGameplayCameraPose(cameraPos, lookAt,
+                                playerViewCameraPositionLerpSpeed_,
+                                playerViewCameraLookAtLerpSpeed_);
         return;
     }
 
@@ -669,6 +717,10 @@ void GameScene::UpdateBattleCamera() {
         if (isEnemyPhaseTransition) {
             assistStrength = lockOnAssistStrength_ * 1.35f;
             assistMaxStep = lockOnAssistMaxStep_ * 1.35f;
+        }
+        if (tripleIaiCameraFocus) {
+            assistStrength *= 2.35f;
+            assistMaxStep *= 2.35f;
         }
 
         float dx = assistTarget.x - playerPos.x;
@@ -835,7 +887,9 @@ void GameScene::UpdateBattleCamera() {
                 enemyCameraPos.z * lockOnLookEnemyWeight_};
 
         const float lookAlpha =
-            SaturatedAlpha(lockOnLookAtLerpSpeed_, ctx_->frame.deltaTime);
+            SaturatedAlpha(lockOnLookAtLerpSpeed_ *
+                               (tripleIaiCameraFocus ? 2.0f : 1.0f),
+                           ctx_->frame.deltaTime);
         lockOnLookAt_ = Lerp(lockOnLookAt_, desiredLookAt, lookAlpha);
 
         lookAt = lockOnLookAt_;
@@ -861,8 +915,6 @@ void GameScene::UpdateBattleCamera() {
         float blend = enemyPhaseTransitionRatio;
         lookAt = Lerp(lookAt, transitionLookAt, blend);
     }
-    combatFeedback_.ApplyCameraImpulse(cameraPos, lookAt, sceneLightTime_);
-
-    camera_.SetPosition(cameraPos);
-    AppLookAt(camera_, lookAt);
+    ApplyGameplayCameraPose(cameraPos, lookAt, gameplayCameraPositionLerpSpeed_,
+                            gameplayCameraLookAtLerpSpeed_);
 }

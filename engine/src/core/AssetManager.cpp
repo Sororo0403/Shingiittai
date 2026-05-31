@@ -30,14 +30,16 @@ AssetManager::ResolvePath(const std::filesystem::path &relativePath) {
     }
 
     const std::filesystem::path rooted = gAssetRoot / normalized;
-    if (std::filesystem::exists(rooted)) {
+    std::error_code ec;
+    if (std::filesystem::exists(rooted, ec)) {
         return Canonicalize(rooted);
     }
 
     for (std::filesystem::path dir = gAssetRoot; !dir.empty();
          dir = dir.parent_path()) {
         const std::filesystem::path candidate = dir / normalized;
-        if (std::filesystem::exists(candidate)) {
+        ec.clear();
+        if (std::filesystem::exists(candidate, ec)) {
             return Canonicalize(candidate);
         }
 

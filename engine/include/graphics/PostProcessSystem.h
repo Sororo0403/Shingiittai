@@ -8,10 +8,13 @@ class SrvManager;
 
 class PostProcessSystem {
   public:
-    ~PostProcessSystem() noexcept;
+    ~PostProcessSystem();
 
     void Initialize(DirectXCommon *dxCommon, SrvManager *srvManager, int width,
                     int height);
+    /// <summary>
+    /// Finalizeを実行する
+    /// </summary>
     void Finalize();
 
     void Resize(int width, int height);
@@ -19,16 +22,28 @@ class PostProcessSystem {
     void Draw(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle,
               D3D12_GPU_DESCRIPTOR_HANDLE depthHandle);
 
+    /// <summary>
+    /// Profileを設定する
+    /// </summary>
     void SetProfile(const PostProcessProfile &profile);
 
     const PostProcessProfile &GetProfile() const { return profile_; }
+    /// <summary>
+    /// RequiresPostProcessを実行する
+    /// </summary>
     bool RequiresPostProcess() const;
 
   private:
+    /// <summary>
+    /// RootSignatureを生成する
+    /// </summary>
     void CreateRootSignature();
 
     void CreatePipelineState();
 
+    /// <summary>
+    /// ConstantBufferを生成する
+    /// </summary>
     void CreateConstantBuffer();
 
     void UpdateConstantBuffer();

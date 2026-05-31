@@ -100,29 +100,6 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     UpdateWeaponRules(input, leftPose, rightPose,
                       useUdpSword || useKeyboardMouse, deltaTime);
 
-    if (bladeClashPoseActive_) {
-        const float push = std::clamp(bladeClashPosePushRatio_, 0.0f, 1.0f);
-        const float leanPitch = -0.11f - 0.15f * push;
-        auto makeClashOrientation = [&](bool isLeft) {
-            const float inwardYaw = isLeft ? 0.28f + 0.10f * push
-                                           : -0.28f - 0.10f * push;
-            const float roll = isLeft ? -0.22f : 0.22f;
-            XMVECTOR qPitch =
-                XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), leanPitch);
-            XMVECTOR qYaw =
-                XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), inwardYaw);
-            XMVECTOR qRoll =
-                XMQuaternionRotationAxis(XMVectorSet(0, 0, 1, 0), roll);
-            XMFLOAT4 result{};
-            XMStoreFloat4(&result, XMQuaternionNormalize(XMQuaternionMultiply(
-                                       XMQuaternionMultiply(qPitch, qYaw),
-                                       qRoll)));
-            return result;
-        };
-        leftPose.orientation = makeClashOrientation(true);
-        rightPose.orientation = makeClashOrientation(false);
-    }
-
     if (suppressCameraSwordSlash_ && controlType == InputControlType::Hand) {
         leftPose.isSlashMode = false;
         rightPose.isSlashMode = false;
@@ -131,14 +108,22 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
         leftPose.isSlashMode = false;
         rightPose.isSlashMode = false;
     }
+    if (useKeyboardMouse) {
+        leftPose.isSlashMode = false;
+        rightPose.isSlashMode = false;
+    }
 
+    const bool allowMotionSlash =
+        !useUdpSword &&
+        !(suppressCameraSwordSlash_ && controlType == InputControlType::Hand) &&
+        !IsChargingRangedAttack();
     leftSword_.Update(BuildSwordTransform(leftPose, true), leftPose,
-                      inputDeltaTime);
+                      inputDeltaTime, allowMotionSlash);
     rightSword_.Update(BuildSwordTransform(rightPose, false), rightPose,
-                       inputDeltaTime);
+                       inputDeltaTime, allowMotionSlash);
 
-    leftSwordSlashMode_ = leftPose.isSlashMode;
-    rightSwordSlashMode_ = rightPose.isSlashMode;
+    leftSwordSlashMode_ = leftSword_.IsSlashMode();
+    rightSwordSlashMode_ = rightSword_.IsSlashMode();
     leftSwordVisible_ = true;
     rightSwordVisible_ = true;
 }
@@ -161,8 +146,8 @@ void Player::UpdateDebugSwordPoses(const SwordPose &leftPoseInput,
     rightSword_.Update(BuildSwordTransform(rightPose, false), rightPose,
                        deltaTime);
 
-    leftSwordSlashMode_ = leftPose.isSlashMode;
-    rightSwordSlashMode_ = rightPose.isSlashMode;
+    leftSwordSlashMode_ = leftSword_.IsSlashMode();
+    rightSwordSlashMode_ = rightSword_.IsSlashMode();
     leftSwordVisible_ = true;
     rightSwordVisible_ = true;
 }

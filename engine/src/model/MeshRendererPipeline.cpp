@@ -11,6 +11,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <limits>
+#include <stdexcept>
 
 using namespace DirectX;
 using namespace DxUtils;
@@ -58,14 +60,13 @@ XMMATRIX MakeWorldMatrix(const Transform &transform) {
 }
 
 XMMATRIX MakeWorldInverseTranspose(const XMMATRIX &world) {
-    XMVECTOR determinant{};
-    XMMATRIX inverse = XMMatrixInverse(&determinant, world);
+    const XMVECTOR determinant = XMMatrixDeterminant(world);
     const float determinantValue = XMVectorGetX(determinant);
     if (!std::isfinite(determinantValue) ||
         std::abs(determinantValue) <= 0.000001f) {
         return XMMatrixIdentity();
     }
-    return XMMatrixTranspose(inverse);
+    return XMMatrixTranspose(XMMatrixInverse(nullptr, world));
 }
 
 bool IsTransparentMaterial(const Material &material) {
@@ -341,6 +342,10 @@ uint32_t MeshRenderer::CreatePipeline(const MeshPipelineDesc &desc) {
         dxCommon_->GetDevice(), rootSignature_.Get(), desc,
         {baseLayout, _countof(baseLayout)}, DirectXCommon::kSceneColorFormat,
         DirectXCommon::kDepthStencilFormat);
+    if (customPipelines_.size() >=
+        static_cast<size_t>((std::numeric_limits<uint32_t>::max)())) {
+        throw std::runtime_error("MeshRenderer custom pipeline id overflow");
+    }
     const uint32_t pipelineId = static_cast<uint32_t>(customPipelines_.size());
     customPipelines_.push_back(std::move(pipelineSet));
     return pipelineId;
@@ -507,6 +512,11 @@ uint32_t MeshRenderer::CreateInstancedPipeline(
                       IID_PPV_ARGS(&pipelineSet.shadowPipelineState)),
                   "CreateGraphicsPipelineState(CustomInstancedShadow) failed");
 
+    if (customInstancedPipelines_.size() >=
+        static_cast<size_t>((std::numeric_limits<uint32_t>::max)())) {
+        throw std::runtime_error(
+            "MeshRenderer custom instanced pipeline id overflow");
+    }
     const uint32_t pipelineId =
         static_cast<uint32_t>(customInstancedPipelines_.size());
     customInstancedPipelines_.push_back(std::move(pipelineSet));

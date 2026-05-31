@@ -5,11 +5,32 @@
 #include <cstring>
 #include <limits>
 #include <stdexcept>
+#include <utility>
 
 using namespace DxUtils;
 using Microsoft::WRL::ComPtr;
 
-void MeshManager::Initialize(DirectXCommon *dxCommon) { dxCommon_ = dxCommon; }
+MeshManager::~MeshManager() {
+    Finalize();
+}
+
+void MeshManager::Initialize(DirectXCommon *dxCommon) {
+    if (!dxCommon) {
+        throw std::runtime_error("MeshManager::Initialize null argument");
+    }
+    Finalize();
+    dxCommon_ = dxCommon;
+}
+
+void MeshManager::Finalize() {
+    if (dxCommon_ && !dxCommon_->IsDeviceRemoved() &&
+        !dxCommon_->IsCommandListRecording()) {
+        dxCommon_->WaitForGpuIfPossible();
+    }
+
+    meshes_.clear();
+    dxCommon_ = nullptr;
+}
 
 uint32_t MeshManager::CreateMesh(const void *vertexData, uint32_t vertexStride,
                                  uint32_t vertexCount,
@@ -80,12 +101,23 @@ uint32_t MeshManager::CreateMesh(const void *vertexData, uint32_t vertexStride,
     mesh.ibView.Format = DXGI_FORMAT_R32_UINT;
     mesh.ibView.SizeInBytes = ibSize;
 
-    meshes_.push_back(mesh);
+    if (meshes_.size() >=
+        static_cast<size_t>((std::numeric_limits<uint32_t>::max)())) {
+        throw std::runtime_error("MeshManager mesh id overflow");
+    }
+    meshes_.push_back(std::move(mesh));
     uint32_t meshId = static_cast<uint32_t>(meshes_.size() - 1);
 
     return meshId;
 }
 
 const Mesh &MeshManager::GetMesh(uint32_t meshId) const {
-    return meshes_.at(meshId);
+    if (!IsValidMeshId(meshId)) {
+        throw std::out_of_range("MeshManager mesh id out of range");
+    }
+    return meshes_[meshId];
+}
+
+bool MeshManager::IsValidMeshId(uint32_t meshId) const {
+    return meshId < meshes_.size();
 }

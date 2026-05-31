@@ -4,9 +4,11 @@
 #include "core/FrameTimer.h"
 #include "core/WinApp.h"
 #include "graphics/DirectXCommon.h"
+#include "graphics/PipelineManager.h"
 #include "graphics/PostEffectManager.h"
 #include "graphics/PostProcessSystem.h"
 #include "graphics/RenderPassController.h"
+#include "graphics/RenderTexture.h"
 #include "graphics/ShadowMapRenderer.h"
 #include "graphics/SrvManager.h"
 #include "graphics/TransparentRenderQueue.h"
@@ -14,6 +16,7 @@
 #include "model/ModelManager.h"
 #include "model/MeshManager.h"
 #include "model/MeshRenderer.h"
+#include "model/SkyboxRenderer.h"
 #include "particle/GPUParticleSystem.h"
 #include "scene/AbstractSceneFactory.h"
 #include "scene/BaseScene.h"
@@ -30,13 +33,6 @@
 #include <algorithm>
 
 namespace {
-
-template <typename Func> void TryCleanup(Func &&func) noexcept {
-    try {
-        func();
-    } catch (...) {
-    }
-}
 
 class FrameAbortScope {
   public:
@@ -68,8 +64,11 @@ struct EngineRuntime::Systems {
     MeshRenderer meshRenderer;
     ModelManager modelManager;
     SpriteManager *spriteManager = nullptr;
+    PipelineManager pipelineManager;
     PostProcessSystem postProcessSystem;
     PostEffectManager postEffectManager;
+    RenderTexture renderTexture;
+    SkyboxRenderer skyboxRenderer;
     ShadowMapRenderer shadowMapRenderer;
     TransparentRenderQueue transparentQueue;
     RenderPassController renderPassController;
@@ -91,15 +90,19 @@ EngineRuntime::~EngineRuntime() {
         return;
     }
 
-    TryCleanup([] { SoundManager::GetInstance().StopAll(); });
-    TryCleanup([&] { systems_->winApp.SetCursorVisible(true); });
-    TryCleanup([&] { systems_->dxCommon.WaitForGpu(); });
-    TryCleanup([&] { systems_->postProcessSystem.Finalize(); });
-    TryCleanup([&] { systems_->modelManager.Finalize(); });
-    TryCleanup([&] { systems_->textureManager.Finalize(); });
-    TryCleanup([] { GPUParticleSystem::ReleaseSharedResources(); });
-    TryCleanup([] { CameraManager::SetActiveInstance(nullptr); });
-    TryCleanup([&] { systems_->dxCommon.ReleaseRegisteredSrvs(); });
+    SoundManager::GetInstance().StopAll();
+    systems_->winApp.SetCursorVisible(true);
+    systems_->dxCommon.WaitForGpuIfPossible();
+    systems_->sceneManager.Finalize();
+    systems_->renderTexture.Release();
+    systems_->skyboxRenderer.Finalize();
+    systems_->postProcessSystem.Finalize();
+    systems_->pipelineManager.Clear();
+    systems_->modelManager.Finalize();
+    systems_->textureManager.Finalize();
+    GPUParticleSystem::ReleaseSharedResources();
+    CameraManager::SetActiveInstance(nullptr);
+    systems_->dxCommon.ReleaseRegisteredSrvs();
 }
 
 int EngineRuntime::Run(HINSTANCE instance, int showCommand,
@@ -118,7 +121,7 @@ int EngineRuntime::Run(HINSTANCE instance, int showCommand,
         RenderFrame();
     }
 
-    systems_->dxCommon.WaitForGpu();
+    systems_->dxCommon.WaitForGpuIfPossible();
     return 0;
 }
 
@@ -158,6 +161,9 @@ void EngineRuntime::Initialize(HINSTANCE instance, int showCommand,
     systems_->dxCommon.RegisterSceneColorSRV(&systems_->srvManager);
 
     systems_->textureManager.Initialize(&systems_->dxCommon, &systems_->srvManager);
+    systems_->pipelineManager.Initialize(&systems_->dxCommon);
+    systems_->renderTexture.Initialize(&systems_->dxCommon, &systems_->srvManager,
+                                       currentWidth_, currentHeight_);
 
     systems_->meshManager.Initialize(&systems_->dxCommon);
     systems_->meshRenderer.Initialize(&systems_->dxCommon, &systems_->srvManager, &systems_->textureManager);
@@ -172,6 +178,8 @@ void EngineRuntime::Initialize(HINSTANCE instance, int showCommand,
     systems_->postProcessSystem.Initialize(&systems_->dxCommon, &systems_->srvManager, currentWidth_,
                                    currentHeight_);
     systems_->postEffectManager.Initialize(&systems_->postProcessSystem);
+    systems_->skyboxRenderer.Initialize(&systems_->dxCommon, &systems_->srvManager,
+                                        &systems_->textureManager);
     systems_->shadowMapRenderer.Initialize(&systems_->dxCommon, &systems_->srvManager);
     systems_->renderPassController.Initialize(&systems_->dxCommon, &systems_->srvManager);
     systems_->input.Initialize(instance, systems_->winApp.GetHwnd());
@@ -195,10 +203,16 @@ void EngineRuntime::Initialize(HINSTANCE instance, int showCommand,
     systems_->sceneContext.rendering.modelRenderer =
         systems_->modelManager.GetRenderer();
     systems_->sceneContext.rendering.sprite = systems_->spriteManager;
+    systems_->sceneContext.rendering.spriteRenderer =
+        systems_->spriteManager != nullptr ? systems_->spriteManager->GetRenderer()
+                                           : nullptr;
     systems_->sceneContext.rendering.texture = &systems_->textureManager;
     systems_->sceneContext.rendering.dxCommon = &systems_->dxCommon;
     systems_->sceneContext.rendering.srv = &systems_->srvManager;
+    systems_->sceneContext.rendering.pipeline = &systems_->pipelineManager;
+    systems_->sceneContext.rendering.renderTexture = &systems_->renderTexture;
     systems_->sceneContext.rendering.postEffectManager = &systems_->postEffectManager;
+    systems_->sceneContext.rendering.skyboxRenderer = &systems_->skyboxRenderer;
     systems_->sceneContext.rendering.shadowMapRenderer = &systems_->shadowMapRenderer;
     systems_->sceneContext.rendering.transparentQueue = &systems_->transparentQueue;
     systems_->sceneContext.render = systems_->renderPassController.GetContextPtr();
@@ -228,6 +242,7 @@ void EngineRuntime::ResizeIfNeeded() {
     currentWidth_ = width;
     currentHeight_ = height;
     systems_->dxCommon.Resize(currentWidth_, currentHeight_);
+    systems_->renderTexture.Resize(currentWidth_, currentHeight_);
     systems_->postProcessSystem.Resize(currentWidth_, currentHeight_);
     if (systems_->spriteManager != nullptr) {
         systems_->spriteManager->Resize(currentWidth_, currentHeight_);

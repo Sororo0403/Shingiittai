@@ -19,14 +19,23 @@ struct PostEffectLayerDesc {
 
 class PostEffectManager {
   public:
+    /// <summary>
+    /// 必要なリソースを初期化する
+    /// </summary>
     void Initialize(PostProcessSystem *system);
 
     PostEffectLayerId CreateLayer(const PostEffectLayerDesc &desc = {});
+    /// <summary>
+    /// DestroyLayerを実行する
+    /// </summary>
     void DestroyLayer(PostEffectLayerId id);
 
     void SetBaseProfile(const PostProcessProfile &profile);
     void SetLayerProfile(PostEffectLayerId id,
                          const PostProcessProfile &profile);
+    /// <summary>
+    /// ClearLayerを実行する
+    /// </summary>
     void ClearLayer(PostEffectLayerId id);
     void ClearLayers();
     void SetLayerEnabled(PostEffectLayerId id, bool enabled);
@@ -48,6 +57,10 @@ class PostEffectManager {
 
     Layer *FindLayer(PostEffectLayerId id);
     const Layer *FindLayer(PostEffectLayerId id) const;
+    PostEffectLayerId AllocateLayerId();
+    /// <summary>
+    /// Rebuildを実行する
+    /// </summary>
     void Rebuild();
 
     PostProcessSystem *system_ = nullptr;

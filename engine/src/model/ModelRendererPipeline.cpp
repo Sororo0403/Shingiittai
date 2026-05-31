@@ -80,6 +80,8 @@ size_t PipelineVariantIndex(const Material &material,
         } else if (effect.blendOverride ==
                    ModelDrawEffectBlendOverride::Alpha) {
             blendMode = ModelBlendMode::Alpha;
+        } else if (effect.alphaMultiplier < 0.999f) {
+            blendMode = ModelBlendMode::Alpha;
         }
     }
 

@@ -36,6 +36,9 @@ class ModelRenderer {
                     MeshManager *meshManager, TextureManager *textureManager,
                     MaterialManager *materialManager);
 
+    /// <summary>
+    /// Frameを開始する
+    /// </summary>
     void BeginFrame();
 
     /// <summary>
@@ -196,6 +199,9 @@ class ModelRenderer {
     D3D12_GPU_VIRTUAL_ADDRESS WriteObjectConstants(
         const DirectX::XMMATRIX &wvp, const DirectX::XMMATRIX &world,
         const DirectX::XMMATRIX &worldInverseTranspose);
+    /// <summary>
+    /// データを書き込む
+    /// </summary>
     D3D12_GPU_VIRTUAL_ADDRESS WriteSceneConstants(const Camera &camera);
     D3D12_GPU_VIRTUAL_ADDRESS WriteDrawEffectConstants();
     D3D12_VERTEX_BUFFER_VIEW WriteInstances(const Model &model,
@@ -204,6 +210,9 @@ class ModelRenderer {
     D3D12_VERTEX_BUFFER_VIEW WriteInstances(const Model &model,
                                             const InstanceData *instances,
                                             uint32_t instanceCount);
+    /// <summary>
+    /// PipelineForMaterialを設定する
+    /// </summary>
     void SetPipelineForMaterial(const Material &material);
     void SetInstancedPipelineForMaterial(const Material &material);
 
@@ -213,6 +222,9 @@ class ModelRenderer {
     void DispatchSkinningBatch(const Model &model);
     void DispatchSkinningBatch(const std::vector<const Model *> &models);
     void DispatchSkinningJobs(const std::vector<const ModelSubMesh *> &jobs);
+    /// <summary>
+    /// DispatchSkinningを実行する
+    /// </summary>
     void DispatchSkinning(const ModelSubMesh &subMesh);
     bool NeedsSkinningDispatch(const ModelSubMesh &subMesh) const;
 

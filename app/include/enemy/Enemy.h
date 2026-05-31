@@ -77,6 +77,7 @@ struct EnemyAfterimageGhost {
 
 struct EnemyTripleIaiClone {
     Transform visual{};
+    DirectX::XMFLOAT3 targetPosition = {0.0f, 0.0f, 0.0f};
     ActionKind slashKind = ActionKind::Smash;
     bool isActive = false;
 };
@@ -224,7 +225,7 @@ struct EnemyRuntimeState {
     float warpTrailEmitTimer = 0.0f;
     static constexpr int kAfterimageGhostCount = 8;
     EnemyAfterimageGhost afterimageGhosts[kAfterimageGhostCount]{};
-    static constexpr int kTripleIaiCloneCount = 3;
+    static constexpr int kTripleIaiCloneCount = 4;
     EnemyTripleIaiClone tripleIaiClones[kTripleIaiCloneCount]{};
 
     TacticState tactic = TacticState::Chase;
@@ -246,9 +247,13 @@ struct EnemyRuntimeState {
     bool tripleIaiSlashActive = false;
     int tripleIaiSlashesRemaining = 0;
     int tripleIaiSlashIndex = 0;
-    int tripleIaiSlashOrder[kTripleIaiCloneCount] = {0, 1, 2};
+    int tripleIaiSlashOrder[kTripleIaiCloneCount] = {0, 1, 2, 3};
     DirectX::XMFLOAT3 tripleIaiCenterFocusPosition = {0.0f, 0.0f, 0.0f};
     bool tripleIaiReturnCameraToCenter = false;
+    bool tripleIaiIntroActive = false;
+    float tripleIaiIntroTimer = 0.0f;
+    DirectX::XMFLOAT3 tripleIaiIntroStartPosition = {0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT3 tripleIaiIntroLiftPosition = {0.0f, 0.0f, 0.0f};
     float phantomFinalLockTimer = 0.0f;
     float arcaneLaserCooldown = 0.0f;
     DirectX::XMFLOAT3 arcaneLaserDirection = {0.0f, 0.0f, 1.0f};
@@ -358,6 +363,9 @@ class Enemy {
     bool IsTripleIaiCenterCameraHold() const {
         if (!runtime_.tripleIaiSlashActive) {
             return false;
+        }
+        if (runtime_.tripleIaiIntroActive) {
+            return true;
         }
         if (runtime_.action.kind == ActionKind::Warp &&
             runtime_.warp.farSlashFollowup) {
@@ -540,6 +548,12 @@ class Enemy {
         runtime_.tripleIaiClones;
     int (&tripleIaiSlashOrder_)[kTripleIaiCloneCount_] =
         runtime_.tripleIaiSlashOrder;
+    bool &tripleIaiIntroActive_ = runtime_.tripleIaiIntroActive;
+    float &tripleIaiIntroTimer_ = runtime_.tripleIaiIntroTimer;
+    DirectX::XMFLOAT3 &tripleIaiIntroStartPosition_ =
+        runtime_.tripleIaiIntroStartPosition;
+    DirectX::XMFLOAT3 &tripleIaiIntroLiftPosition_ =
+        runtime_.tripleIaiIntroLiftPosition;
     float &phantomFinalLockTimer_ = runtime_.phantomFinalLockTimer;
     float &arcaneLaserCooldown_ = runtime_.arcaneLaserCooldown;
     DirectX::XMFLOAT3 &arcaneLaserDirection_ =
@@ -594,6 +608,8 @@ class Enemy {
     float tripleIaiSlashChance_ = 0.30f;
     float tripleIaiSlashCooldownDuration_ = 8.8f;
     float tripleIaiCloneLife_ = 1.35f;
+    float tripleIaiIntroDuration_ = 1.24f;
+    float tripleIaiIntroLiftHeight_ = 8.4f;
     float phantomFinalLockDuration_ = 0.26f;
     float bladeClashChance_ = 0.26f;
     float arcaneLaserChance_ = 0.32f;
@@ -666,6 +682,8 @@ class Enemy {
     void BeginPhantomWarpStep(int viewWarpsRemaining, bool finalBehind,
                               ActionKind followupKind);
     void PrepareTripleIaiSlashClones();
+    void BeginTripleIaiSlashIntro();
+    void UpdateTripleIaiSlashIntro(float deltaTime);
     void BeginTripleIaiSlashStep();
     bool TryContinueTripleIaiSlash();
     void ResetTripleIaiSlashClones();
@@ -707,6 +725,8 @@ class Enemy {
     void EmitWarpTrailGhost(const DirectX::XMFLOAT3 &position, float scale,
                             float lifeOverride = -1.0f);
     void ResetWarpTrails();
+    float GetCurrentWarpStartTime() const;
+    float GetWarpVisualAlpha() const;
     bool PrepareWarpContext();
     bool DecideWarpTargetNearPlayer(DirectX::XMFLOAT3 &outTarget);
     bool DecideWarpTargetFarSlash(DirectX::XMFLOAT3 &outTarget);

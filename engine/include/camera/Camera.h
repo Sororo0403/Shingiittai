@@ -19,9 +19,15 @@ class Camera {
     void UpdateMatrices();
 
     void SetPosition(const DirectX::XMFLOAT3 &position);
+    /// <summary>
+    /// Rotationを設定する
+    /// </summary>
     void SetRotation(const DirectX::XMFLOAT3 &rotation);
     void SetAspect(float aspect);
     void SetPerspectiveFovDeg(float fovDeg);
+    /// <summary>
+    /// PerspectiveFovRadを設定する
+    /// </summary>
     void SetPerspectiveFovRad(float fovRad);
     void SetOrthographicHeight(float height);
     void SetClipRange(float nearZ, float farZ);
@@ -46,6 +52,9 @@ class Camera {
         Orthographic,
     };
 
+    /// <summary>
+    /// SanitizeProjectionを実行する
+    /// </summary>
     void SanitizeProjection();
 
     DirectX::XMFLOAT3 position_{0.0f, 0.0f, -5.0f};

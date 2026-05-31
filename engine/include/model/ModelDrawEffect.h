@@ -27,4 +27,5 @@ struct ModelDrawEffect {
     float baseDim = 0.0f;
     float alphaBoost = 0.55f;
     float surfaceTint = 0.0f;
+    float alphaMultiplier = 1.0f;
 };

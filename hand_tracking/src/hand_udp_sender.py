@@ -123,6 +123,23 @@ def create_hands_detector(mp, model_path):
     }
 
 
+def create_pose_detector(mp):
+    if not (hasattr(mp, "solutions") and hasattr(mp.solutions, "pose")):
+        log_warn("mp.solutions.pose not available. Body tilt disabled.")
+        return None
+    log_info("Pose: solutions API")
+    return {
+        "type": "solutions",
+        "detector": mp.solutions.pose.Pose(
+            static_image_mode=False,
+            model_complexity=1,
+            smooth_landmarks=True,
+            min_detection_confidence=0.45,
+            min_tracking_confidence=0.45,
+        ),
+    }
+
+
 def close_detector(detector):
     if detector is not None and detector.get("detector") is not None:
         detector["detector"].close()
@@ -220,6 +237,49 @@ def detect_hands(detector, frame, timestamp_ms):
     return hands
 
 
+def detect_body(detector, frame):
+    if detector is None:
+        return None
+
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    result = detector["detector"].process(rgb)
+    landmarks = getattr(result, "pose_landmarks", None)
+    if landmarks is None:
+        return None
+
+    points = landmarks.landmark
+    if len(points) <= 24:
+        return None
+
+    left_shoulder = landmark_xy(points[11])
+    right_shoulder = landmark_xy(points[12])
+    left_hip = landmark_xy(points[23])
+    right_hip = landmark_xy(points[24])
+    shoulder_center = average_point((left_shoulder, right_shoulder))
+    hip_center = average_point((left_hip, right_hip))
+    shoulder_delta = (
+        right_shoulder[0] - left_shoulder[0],
+        right_shoulder[1] - left_shoulder[1],
+    )
+    shoulder_width = math.hypot(shoulder_delta[0], shoulder_delta[1])
+    if shoulder_width < 0.05:
+        return None
+
+    tilt_radians = math.atan2(shoulder_delta[1], shoulder_delta[0])
+    visibility = min(
+        float(getattr(points[11], "visibility", 0.0)),
+        float(getattr(points[12], "visibility", 0.0)),
+    )
+    return {
+        "tracked": True,
+        "tiltRadians": round(float(tilt_radians), 6),
+        "shoulderCenter01": rounded_point(shoulder_center),
+        "hipCenter01": rounded_point(hip_center),
+        "shoulderWidth01": round(float(shoulder_width), 6),
+        "visibility": round(max(0.0, min(1.0, visibility)), 6),
+    }
+
+
 def build_raw_packet(frame_index, timestamp_ms, dt, frame, hands, body, args):
     height, width = frame.shape[:2]
     debug = {
@@ -308,7 +368,7 @@ def send_preview(sock, target, frame, state, args, now):
     state["last_time"] = now
 
 
-def print_startup_log(args, cap, backend, hands_detector):
+def print_startup_log(args, cap, backend, hands_detector, pose_detector):
     actual_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     actual_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     actual_fps = cap.get(cv2.CAP_PROP_FPS)
@@ -324,6 +384,9 @@ def print_startup_log(args, cap, backend, hands_detector):
     log_info(f"Hands model: {args.model}")
     log_info(
         f"Hands API: {hands_detector['type'] if hands_detector else 'disabled'}"
+    )
+    log_info(
+        f"Pose API: {pose_detector['type'] if pose_detector else 'disabled'}"
     )
     log_info("Mode: HAND_RAW only.")
     log_info(f"UDP: {args.udp_host}:{args.udp_port}")
@@ -379,7 +442,7 @@ def parse_args():
     )
     args, _unknown = parser.parse_known_args()
     if args.pose_model:
-        log_warn("--pose-model is ignored. Face the camera straight for hand mode.")
+        log_warn("--pose-model is ignored. Using MediaPipe solutions pose.")
     return args
 
 
@@ -403,7 +466,8 @@ def main():
         log_error("Hands detector is unavailable.")
         cap.release()
         return 1
-    print_startup_log(args, cap, camera_backend, hands_detector)
+    pose_detector = create_pose_detector(mp)
+    print_startup_log(args, cap, camera_backend, hands_detector, pose_detector)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     target = (args.udp_host, args.udp_port)
@@ -420,6 +484,7 @@ def main():
     frame_index = 0
     log_info("Raw hand sender started")
     atexit.register(close_detector, hands_detector)
+    atexit.register(close_detector, pose_detector)
     atexit.register(sock.close)
     if args.show_window:
         atexit.register(cv2.destroyAllWindows)
@@ -437,7 +502,7 @@ def main():
             frame_index += 1
 
             hands = detect_hands(hands_detector, frame, timestamp_ms)
-            body = None
+            body = detect_body(pose_detector, frame)
             if args.raw_json:
                 raw_packet = build_raw_packet(
                     frame_index, timestamp_ms, dt, frame, hands, body, args

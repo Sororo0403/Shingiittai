@@ -41,13 +41,26 @@ class SwordUdpController {
         uint32_t handCount = 0;
         bool bodyTracked = false;
         bool bodyCorrected = false;
+        float bodyTiltRadians = 0.0f;
+        float handTiltRadians = 0.0f;
+        float appliedTiltRadians = 0.0f;
         bool packetChanged = false;
         uint64_t packetDeltaMs = 0;
         DirectX::XMFLOAT2 packetDeltaPalm{};
         float packetMotionSpeed = 0.0f;
+        DirectX::XMFLOAT2 gameNetDelta{};
+        DirectX::XMFLOAT2 gameNetDirection{};
+        float gameNetDistance = 0.0f;
+        float gameStableSpeed = 0.0f;
+        float gameSlashThreshold = 0.0f;
+        float gameSlashNetDistanceThreshold = 0.0f;
+        float gameGatedSlashSpeed = 0.0f;
+        bool slashTriggeredThisFrame = false;
+        float visualScale = 0.095f;
         bool nearEdge = false;
         std::string sourceLabel{};
         float sourceScore = 0.0f;
+        float tiltRadians = 0.0f;
     };
 
     DebugHandState GetDebugHandState(size_t handIndex = 0) const;
@@ -67,6 +80,13 @@ class SwordUdpController {
         std::array<std::string, 2> sourceLabel = {"", ""};
         std::array<float, 2> sourceScore = {0.0f, 0.0f};
         std::array<float, 2> handScale = {0.095f, 0.095f};
+        std::array<bool, 2> hasHandTilt = {false, false};
+        std::array<float, 2> handTiltRadians = {0.0f, 0.0f};
+        bool bodyTracked = false;
+        float bodyTiltRadians = 0.0f;
+        float bodyVisibility = 0.0f;
+        bool hasTilt = false;
+        float tiltRadians = 0.0f;
         std::array<DirectX::XMFLOAT2, 2> palm = {
             DirectX::XMFLOAT2{0.5f, 0.5f},
             DirectX::XMFLOAT2{0.5f, 0.5f}};
@@ -84,6 +104,7 @@ class SwordUdpController {
     void ReceivePackets();
     void ApplyRawInput(float dt);
     void CloseSocket();
+    void UpdateTiltEstimate(float dt);
     size_t ChooseSingleHandSlot(const DirectX::XMFLOAT2 &palm) const;
     DirectX::XMFLOAT2 TransformCameraPalmForSword(
         size_t handIndex, const DirectX::XMFLOAT2 &palm) const;
@@ -109,6 +130,16 @@ class SwordUdpController {
     std::array<DirectX::XMFLOAT2, 2> packetDeltaPalm_ = {
         DirectX::XMFLOAT2{0.0f, 0.0f}, DirectX::XMFLOAT2{0.0f, 0.0f}};
     std::array<float, 2> packetMotionSpeed_ = {0.0f, 0.0f};
+    std::array<DirectX::XMFLOAT2, 2> debugGameNetDelta_ = {
+        DirectX::XMFLOAT2{0.0f, 0.0f}, DirectX::XMFLOAT2{0.0f, 0.0f}};
+    std::array<DirectX::XMFLOAT2, 2> debugGameNetDirection_ = {
+        DirectX::XMFLOAT2{0.0f, 0.0f}, DirectX::XMFLOAT2{0.0f, 0.0f}};
+    std::array<float, 2> debugGameNetDistance_ = {0.0f, 0.0f};
+    std::array<float, 2> debugGameStableSpeed_ = {0.0f, 0.0f};
+    std::array<float, 2> debugGameSlashThreshold_ = {0.0f, 0.0f};
+    std::array<float, 2> debugGameSlashNetDistanceThreshold_ = {0.0f, 0.0f};
+    std::array<float, 2> debugGameGatedSlashSpeed_ = {0.0f, 0.0f};
+    std::array<bool, 2> debugSlashTriggeredThisFrame_ = {false, false};
     uint32_t lastAppliedPacketSequence_ = 0;
     bool packetChangedThisUpdate_ = false;
     std::array<float, 2> motionSpeed_ = {0.0f, 0.0f};
@@ -128,6 +159,8 @@ class SwordUdpController {
     std::array<float, 2> lastMotionSpeed_ = {0.0f, 0.0f};
     std::array<float, 2> lastMotionAge_ = {999.0f, 999.0f};
     std::array<float, 2> syntheticLostSlashTimer_ = {0.0f, 0.0f};
+    float smoothedTiltRadians_ = 0.0f;
+    bool hasSmoothedTilt_ = false;
     static constexpr size_t kMotionHistorySize = 8;
     std::array<std::array<DirectX::XMFLOAT2, kMotionHistorySize>, 2>
         motionHistoryPalm_{};

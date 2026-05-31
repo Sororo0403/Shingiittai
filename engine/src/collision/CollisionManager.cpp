@@ -1,6 +1,9 @@
 #include "collision/CollisionManager.h"
 #include <algorithm>
 #include <cfloat>
+#include <cmath>
+#include <limits>
+#include <stdexcept>
 
 using namespace DirectX;
 
@@ -76,10 +79,7 @@ void CollisionManager::Clear() {
 CollisionManager::BodyId
 CollisionManager::AddBody(const CollisionManager::BodyDesc &desc) {
     Body body = CreateBody(desc);
-    body.id = nextBodyId_++;
-    if (nextBodyId_ == kInvalidBodyId) {
-        nextBodyId_ = 1;
-    }
+    body.id = AllocateBodyId();
     bodies_.push_back(body);
     return body.id;
 }
@@ -249,12 +249,15 @@ AABB CollisionManager::ComputeBounds(const Shape &shape) const {
     const XMVECTOR center = XMLoadFloat3(&box.center);
     const XMVECTOR rotation = NormalizeQuaternion(box.rotation);
     const XMVECTOR axes[3] = {
-        XMVector3Rotate(XMVectorSet(box.size.x * 0.5f, 0.0f, 0.0f, 0.0f),
-                        rotation),
-        XMVector3Rotate(XMVectorSet(0.0f, box.size.y * 0.5f, 0.0f, 0.0f),
-                        rotation),
-        XMVector3Rotate(XMVectorSet(0.0f, 0.0f, box.size.z * 0.5f, 0.0f),
-                        rotation),
+        XMVector3Rotate(
+            XMVectorSet(std::fabs(box.size.x) * 0.5f, 0.0f, 0.0f, 0.0f),
+            rotation),
+        XMVector3Rotate(
+            XMVectorSet(0.0f, std::fabs(box.size.y) * 0.5f, 0.0f, 0.0f),
+            rotation),
+        XMVector3Rotate(
+            XMVectorSet(0.0f, 0.0f, std::fabs(box.size.z) * 0.5f, 0.0f),
+            rotation),
     };
 
     AABB bounds{};
@@ -293,4 +296,21 @@ CollisionManager::CreateBody(const CollisionManager::BodyDesc &desc) {
     body.desc = desc;
     body.bounds = ComputeBounds(desc.shape);
     return body;
+}
+
+CollisionManager::BodyId CollisionManager::AllocateBodyId() {
+    if (bodies_.size() >=
+        static_cast<size_t>((std::numeric_limits<BodyId>::max)()) - 1u) {
+        throw std::runtime_error("CollisionManager body id exhausted");
+    }
+
+    for (;;) {
+        if (nextBodyId_ == kInvalidBodyId) {
+            nextBodyId_ = 1;
+        }
+        const BodyId candidate = nextBodyId_++;
+        if (FindBody(candidate) == nullptr) {
+            return candidate;
+        }
+    }
 }

@@ -5,6 +5,7 @@
 #include <Objbase.h>
 #include <algorithm>
 #include <filesystem>
+#include <limits>
 #include <mfapi.h>
 #include <mfidl.h>
 #include <mfreadwrite.h>
@@ -165,6 +166,11 @@ bool ReadPcmData(IMFSourceReader *reader, std::vector<BYTE> &decodedPcm) {
             return false;
         }
         const size_t oldSize = decodedPcm.size();
+        if (locked.Size() >
+            (std::numeric_limits<size_t>::max)() - oldSize) {
+            decodedPcm.clear();
+            return false;
+        }
         decodedPcm.resize(oldSize + locked.Size());
         std::copy_n(locked.Data(), locked.Size(), decodedPcm.data() + oldSize);
     }
@@ -181,7 +187,8 @@ AudioFileLoader::SoundData AudioFileLoader::Load(const std::wstring &path) {
     }
 
     const std::filesystem::path resolvedPath = ResolveAudioPath(path);
-    if (!std::filesystem::exists(resolvedPath)) {
+    std::error_code ec;
+    if (!std::filesystem::exists(resolvedPath, ec)) {
         throw std::runtime_error("Audio file not found. requested=" +
                                  std::filesystem::path(path).string() +
                                  " resolved=" + resolvedPath.string());
@@ -194,7 +201,8 @@ bool AudioFileLoader::TryLoad(const std::wstring &path, SoundData &outData) {
     outData = {};
 
     const std::filesystem::path resolvedPath = ResolveAudioPath(path);
-    if (!std::filesystem::exists(resolvedPath)) {
+    std::error_code ec;
+    if (!std::filesystem::exists(resolvedPath, ec)) {
         return false;
     }
 

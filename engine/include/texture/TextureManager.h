@@ -27,7 +27,7 @@ class TextureManager {
     };
 
   public:
-    ~TextureManager() noexcept;
+    ~TextureManager();
 
     /// <summary>
     /// TextureManagerの共有インスタンスを取得する
@@ -100,6 +100,9 @@ class TextureManager {
     /// <param name="data">画像データの先頭アドレス</param>
     /// <param name="size">画像データのバイトサイズ</param>
     /// <returns>生成されたテクスチャのID</returns>
+    /// <summary>
+    /// FromMemoryを読み込む
+    /// </summary>
     uint32_t LoadFromMemory(const uint8_t *data, size_t size);
 
     /// <summary>
@@ -135,7 +138,13 @@ class TextureManager {
 
     uint32_t GetWhiteTextureId() const { return whiteTextureId_; }
     uint32_t GetWhiteCubeTextureId() const { return whiteCubeTextureId_; }
+    uint32_t GetBlackCubeTextureId() const { return blackCubeTextureId_; }
     uint32_t GetDefaultNormalTextureId() const { return defaultNormalTextureId_; }
+
+    /// <summary>
+    /// 指定IDが有効なテクスチャを指しているかを取得する
+    /// </summary>
+    bool IsValidTextureId(uint32_t textureId) const;
 
     /// <summary>
     /// テクスチャリソースを取得する
@@ -186,6 +195,8 @@ class TextureManager {
     };
 
   private:
+    uint32_t AllocateAsyncRequestId();
+
     DirectXCommon *dxCommon_ = nullptr;
     SrvManager *srvManager_ = nullptr;
 
@@ -198,6 +209,7 @@ class TextureManager {
     uint32_t nextAsyncRequestId_ = 1;
     uint32_t whiteTextureId_ = 0;
     uint32_t whiteCubeTextureId_ = 0;
+    uint32_t blackCubeTextureId_ = 0;
     uint32_t defaultNormalTextureId_ = 0;
     UINT lastDynamicUploadFrameIndex_ = UINT_MAX;
 };

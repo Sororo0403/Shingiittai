@@ -59,6 +59,10 @@ bool TryParseEmbeddedTextureIndex(const std::string &name, unsigned int &index) 
 void AssimpMeshLoader::Initialize(TextureManager *textureManager,
                                   MeshManager *meshManager,
                                   MaterialManager *materialManager) {
+    if (!textureManager || !meshManager || !materialManager) {
+        throw std::runtime_error("AssimpMeshLoader::Initialize null argument");
+    }
+
     textureManager_ = textureManager;
     meshManager_ = meshManager;
     materialManager_ = materialManager;
@@ -258,7 +262,31 @@ void AssimpMeshLoader::LoadMeshes(const aiScene *scene, const std::string &path,
                         return true;
                     }
 
-                    return false;
+                    if (tex->mWidth == 0 || tex->mHeight == 0 ||
+                        tex->pcData == nullptr) {
+                        return false;
+                    }
+                    const size_t pixelCount =
+                        static_cast<size_t>(tex->mWidth) * tex->mHeight;
+                    if (pixelCount >
+                        (std::numeric_limits<size_t>::max)() / 4u) {
+                        throw std::runtime_error(
+                            "Assimp embedded texture size overflow");
+                    }
+
+                    std::vector<uint8_t> pixels(pixelCount * 4u);
+                    for (size_t pixelIndex = 0; pixelIndex < pixelCount;
+                         ++pixelIndex) {
+                        const aiTexel &src = tex->pcData[pixelIndex];
+                        const size_t dst = pixelIndex * 4u;
+                        pixels[dst + 0u] = src.r;
+                        pixels[dst + 1u] = src.g;
+                        pixels[dst + 2u] = src.b;
+                        pixels[dst + 3u] = src.a;
+                    }
+                    outTextureId = textureManager_->CreateFromRgbaPixels(
+                        tex->mWidth, tex->mHeight, pixels.data());
+                    return true;
                 }
 
                 std::filesystem::path modelPath(path);
