@@ -49,6 +49,11 @@ if ($LASTEXITCODE -ne 0) {
     throw "Failed to upgrade pip in hand tracking virtual environment."
 }
 
+& $venvPython -m pip uninstall -y opencv-python opencv-python-headless opencv-contrib-python-headless
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to remove conflicting OpenCV packages."
+}
+
 & $venvPython -m pip install -r $requirements
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to install hand tracking dependencies."

@@ -9,7 +9,6 @@
 #include <mfapi.h>
 #include <mfidl.h>
 #include <mfreadwrite.h>
-#include <stdexcept>
 #include <utility>
 #include <wrl.h>
 

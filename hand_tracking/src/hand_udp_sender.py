@@ -41,6 +41,18 @@ def parse_camera(value):
     return int(text) if text.isdigit() else text
 
 
+def camera_candidates(parsed):
+    if not isinstance(parsed, int):
+        return [parsed]
+
+    scan_count = 5
+    candidates = [parsed]
+    for index in range(scan_count):
+        if index not in candidates:
+            candidates.append(index)
+    return candidates
+
+
 def point_to_px(point, width, height):
     return [
         int(round(clamp01(point[0]) * max(0, width - 1))),
@@ -66,16 +78,35 @@ def log_error(message):
 
 def open_camera(source, width, height):
     parsed = parse_camera(source)
+    sources = camera_candidates(parsed)
     attempts = [("MSMF", cv2.CAP_MSMF), ("DEFAULT", 0), ("DSHOW", cv2.CAP_DSHOW)]
-    for name, backend in attempts:
-        cap = cv2.VideoCapture(parsed, backend) if backend else cv2.VideoCapture(parsed)
-        if not cap.isOpened():
-            cap.release()
-            continue
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-        cap.set(cv2.CAP_PROP_FPS, 30)
-        return cap, name
+    log_info(
+        f"OpenCV: {cv2.__version__} source={source!r} parsed={parsed!r} "
+        f"candidates={sources!r} requested={width}x{height}@30"
+    )
+    for candidate in sources:
+        for name, backend in attempts:
+            log_info(f"Camera open attempt: backend={name} source={candidate!r}")
+            cap = (
+                cv2.VideoCapture(candidate, backend)
+                if backend
+                else cv2.VideoCapture(candidate)
+            )
+            if not cap.isOpened():
+                log_warn(f"Camera open failed: backend={name} source={candidate!r}")
+                cap.release()
+                continue
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+            cap.set(cv2.CAP_PROP_FPS, 30)
+            actual_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            actual_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            actual_fps = cap.get(cv2.CAP_PROP_FPS)
+            log_info(
+                f"Camera open succeeded: backend={name} source={candidate!r} "
+                f"{actual_width}x{actual_height} fps={actual_fps:.2f}"
+            )
+            return cap, name
     return cv2.VideoCapture(), "none"
 
 

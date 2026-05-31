@@ -1,14 +1,11 @@
 #include "texture/TextureManager.h"
 #include "graphics/DirectXCommon.h"
 #include "graphics/DxHelpers.h"
-#include "graphics/DxUtils.h"
 #include "graphics/SrvManager.h"
 #include "texture/Texture.h"
 #include <limits>
-#include <stdexcept>
 
 using namespace DirectX;
-using namespace DxUtils;
 using Microsoft::WRL::ComPtr;
 
 namespace {
@@ -104,7 +101,7 @@ uint32_t TextureManager::CreateTexture2D(uint32_t width, uint32_t height,
 
 void TextureManager::UpdateTexture2D(uint32_t textureId, const uint8_t *pixels,
                                      size_t rowPitch) {
-    if (!dxCommon_) {
+    if (!dxCommon_ || !dxCommon_->GetDevice()) {
         return;
     }
     if (!pixels || rowPitch == 0 || !IsValidTextureId(textureId)) {
@@ -184,11 +181,19 @@ void TextureManager::UpdateTexture2D(uint32_t textureId, const uint8_t *pixels,
     ComPtr<ID3D12Resource> uploadBuffer;
     CD3DX12_HEAP_PROPERTIES uploadHeap(D3D12_HEAP_TYPE_UPLOAD);
     auto uploadDesc = CD3DX12_RESOURCE_DESC::Buffer(uploadSize);
-    ThrowIfFailed(dxCommon_->GetDevice()->CreateCommittedResource(
-                      &uploadHeap, D3D12_HEAP_FLAG_NONE, &uploadDesc,
-                      D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-                      IID_PPV_ARGS(&uploadBuffer)),
-                  "Create texture update upload buffer failed");
+    const HRESULT uploadResult =
+        dxCommon_->GetDevice()->CreateCommittedResource(
+            &uploadHeap, D3D12_HEAP_FLAG_NONE, &uploadDesc,
+            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+            IID_PPV_ARGS(&uploadBuffer));
+    if (FAILED(uploadResult) || !uploadBuffer) {
+        return;
+    }
+
+    ID3D12GraphicsCommandList *cmdList = dxCommon_->GetCommandList();
+    if (cmdList == nullptr) {
+        return;
+    }
 
     if (frameIndex < frameUploadBuffers_.size()) {
         frameUploadBuffers_[frameIndex].push_back(uploadBuffer);
@@ -196,7 +201,6 @@ void TextureManager::UpdateTexture2D(uint32_t textureId, const uint8_t *pixels,
         uploadBuffers_.push_back(uploadBuffer);
     }
 
-    ID3D12GraphicsCommandList *cmdList = dxCommon_->GetCommandList();
     if (texture.state != D3D12_RESOURCE_STATE_COPY_DEST) {
         auto toCopyDest = CD3DX12_RESOURCE_BARRIER::Transition(
             texture.resource.Get(), texture.state,

@@ -2,7 +2,6 @@
 #include "core/AssetManager.h"
 #include "graphics/DirectXCommon.h"
 #include "graphics/DxHelpers.h"
-#include "graphics/DxUtils.h"
 #include "graphics/SrvManager.h"
 #include "texture/Texture.h"
 #include <algorithm>
@@ -11,7 +10,6 @@
 #include <filesystem>
 #include <future>
 #include <limits>
-#include <stdexcept>
 #include <vector>
 
 static std::filesystem::path ResolveTexturePath(const std::wstring &path) {
@@ -118,7 +116,6 @@ static TextureManager::DecodedTexture DecodeTextureFileForAsync(
 }
 
 using namespace DirectX;
-using namespace DxUtils;
 using Microsoft::WRL::ComPtr;
 
 namespace {
@@ -135,6 +132,9 @@ class ScopedSrvAllocation {
     }
 
     uint32_t Allocate() {
+        if (srvManager_ == nullptr || !srvManager_->CanAllocate()) {
+            return UINT32_MAX;
+        }
         index_ = srvManager_->Allocate();
         return index_;
     }
@@ -333,7 +333,7 @@ uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
                                        const TexMetadata &metadata) {
     const uint32_t fallbackTextureId =
         IsValidTextureId(whiteTextureId_) ? whiteTextureId_ : UINT32_MAX;
-    if (!dxCommon_ || !srvManager_) {
+    if (!dxCommon_ || !dxCommon_->GetDevice() || !srvManager_) {
         return fallbackTextureId;
     }
     if (!images || imageCount == 0 || metadata.width == 0 ||
@@ -361,6 +361,9 @@ uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
         return fallbackTextureId;
     }
     if (imageCount > (std::numeric_limits<UINT>::max)()) {
+        return fallbackTextureId;
+    }
+    if (!srvManager_->CanAllocate()) {
         return fallbackTextureId;
     }
     for (size_t imageIndex = 0; imageIndex < imageCount; ++imageIndex) {
@@ -393,11 +396,14 @@ uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
 
     CD3DX12_HEAP_PROPERTIES defaultHeap(D3D12_HEAP_TYPE_DEFAULT);
 
-    ThrowIfFailed(dxCommon_->GetDevice()->CreateCommittedResource(
-                      &defaultHeap, D3D12_HEAP_FLAG_NONE, &texDesc,
-                      D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
-                      IID_PPV_ARGS(&texture.resource)),
-                  "Create texture resource failed");
+    const HRESULT textureResult =
+        dxCommon_->GetDevice()->CreateCommittedResource(
+            &defaultHeap, D3D12_HEAP_FLAG_NONE, &texDesc,
+            D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+            IID_PPV_ARGS(&texture.resource));
+    if (FAILED(textureResult) || !texture.resource) {
+        return fallbackTextureId;
+    }
 
     std::vector<D3D12_SUBRESOURCE_DATA> subresources(imageCount);
     for (size_t imageIndex = 0; imageIndex < imageCount; ++imageIndex) {
@@ -414,11 +420,14 @@ uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
     CD3DX12_HEAP_PROPERTIES uploadHeap(D3D12_HEAP_TYPE_UPLOAD);
     auto uploadDesc = CD3DX12_RESOURCE_DESC::Buffer(uploadSize);
 
-    ThrowIfFailed(dxCommon_->GetDevice()->CreateCommittedResource(
-                      &uploadHeap, D3D12_HEAP_FLAG_NONE, &uploadDesc,
-                      D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-                      IID_PPV_ARGS(&uploadBuffer)),
-                  "Create upload buffer failed");
+    const HRESULT uploadResult =
+        dxCommon_->GetDevice()->CreateCommittedResource(
+            &uploadHeap, D3D12_HEAP_FLAG_NONE, &uploadDesc,
+            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+            IID_PPV_ARGS(&uploadBuffer));
+    if (FAILED(uploadResult) || !uploadBuffer) {
+        return fallbackTextureId;
+    }
 
     if (ownsUploadPass) {
         uploadBuffers_.push_back(uploadBuffer);
@@ -436,6 +445,9 @@ uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
     }
 
     ID3D12GraphicsCommandList *cmdList = dxCommon_->GetCommandList();
+    if (cmdList == nullptr) {
+        return fallbackTextureId;
+    }
 
     UpdateSubresources(cmdList, texture.resource.Get(), uploadBuffer.Get(), 0,
                        0, static_cast<UINT>(subresources.size()),
@@ -449,6 +461,9 @@ uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
 
     ScopedSrvAllocation srvAllocation(srvManager_);
     uint32_t srvIndex = srvAllocation.Allocate();
+    if (srvIndex == UINT32_MAX) {
+        return fallbackTextureId;
+    }
 
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
@@ -478,8 +493,13 @@ uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
         srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
     }
 
-    dxCommon_->GetDevice()->CreateShaderResourceView(
-        texture.resource.Get(), &srvDesc, srvManager_->GetCpuHandle(srvIndex));
+    const D3D12_CPU_DESCRIPTOR_HANDLE srvHandle =
+        srvManager_->GetCpuHandle(srvIndex);
+    if (srvHandle.ptr == 0) {
+        return fallbackTextureId;
+    }
+    dxCommon_->GetDevice()->CreateShaderResourceView(texture.resource.Get(),
+                                                     &srvDesc, srvHandle);
 
     texture.width = static_cast<uint32_t>(metadata.width);
     texture.height = static_cast<uint32_t>(metadata.height);

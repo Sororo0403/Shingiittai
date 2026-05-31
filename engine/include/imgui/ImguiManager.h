@@ -41,6 +41,8 @@ class ImguiManager {
     void End(ID3D12GraphicsCommandList *commandList);
 
   private:
+    bool IsReady() const;
+
     SrvManager *srvManager_ = nullptr;
     std::unordered_map<SIZE_T, UINT> allocatedSrvIndices_;
     bool contextCreated_ = false;

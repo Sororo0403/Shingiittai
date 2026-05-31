@@ -49,7 +49,13 @@ void ShadowMapRenderer::Initialize(DirectXCommon *dxCommon,
     dxCommon_ = dxCommon;
     srvManager_ = srvManager;
     ShadowMapInitializationGuard initializeGuard(*this);
+    if (!srvManager_->CanAllocate()) {
+        return;
+    }
     srvIndex_ = srvManager_->Allocate();
+    if (srvIndex_ == UINT32_MAX) {
+        return;
+    }
     srvGpuHandle_ = srvManager_->GetGpuHandle(srvIndex_);
     Resize(width, height);
     initializeGuard.Commit();
@@ -213,7 +219,13 @@ void ShadowMapRenderer::UpdateSrv() {
     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     srvDesc.Texture2D.MipLevels = 1;
 
-    dxCommon_->GetDevice()->CreateShaderResourceView(
-        depthTexture_.Get(), &srvDesc, srvManager_->GetCpuHandle(srvIndex_));
+    const D3D12_CPU_DESCRIPTOR_HANDLE srvHandle =
+        srvManager_->GetCpuHandle(srvIndex_);
+    if (srvHandle.ptr == 0) {
+        srvGpuHandle_ = {};
+        return;
+    }
+    dxCommon_->GetDevice()->CreateShaderResourceView(depthTexture_.Get(),
+                                                     &srvDesc, srvHandle);
     srvGpuHandle_ = srvManager_->GetGpuHandle(srvIndex_);
 }

@@ -1,13 +1,10 @@
 #include "model/MeshManager.h"
 #include "graphics/DirectXCommon.h"
 #include "graphics/DxHelpers.h"
-#include "graphics/DxUtils.h"
 #include <cstring>
 #include <limits>
-#include <stdexcept>
 #include <utility>
 
-using namespace DxUtils;
 using Microsoft::WRL::ComPtr;
 
 namespace {
@@ -44,7 +41,7 @@ uint32_t MeshManager::CreateMesh(const void *vertexData, uint32_t vertexStride,
                                  uint32_t vertexCount,
                                  const uint32_t *indexData, uint32_t indexCount,
                                  D3D12_PRIMITIVE_TOPOLOGY primitiveTopology) {
-    if (!dxCommon_) {
+    if (!dxCommon_ || !dxCommon_->GetDevice()) {
         return UINT32_MAX;
     }
     if (vertexStride == 0 || vertexCount == 0 || indexCount == 0) {
@@ -73,15 +70,21 @@ uint32_t MeshManager::CreateMesh(const void *vertexData, uint32_t vertexStride,
     CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_UPLOAD);
     auto vbDesc = CD3DX12_RESOURCE_DESC::Buffer(vbSize);
 
-    ThrowIfFailed(dxCommon_->GetDevice()->CreateCommittedResource(
-                      &heapProps, D3D12_HEAP_FLAG_NONE, &vbDesc,
-                      D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-                      IID_PPV_ARGS(&mesh.vertexBuffer)),
-                  "Create VertexBuffer failed");
+    const HRESULT vertexBufferResult =
+        dxCommon_->GetDevice()->CreateCommittedResource(
+            &heapProps, D3D12_HEAP_FLAG_NONE, &vbDesc,
+            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+            IID_PPV_ARGS(&mesh.vertexBuffer));
+    if (FAILED(vertexBufferResult) || !mesh.vertexBuffer) {
+        return UINT32_MAX;
+    }
 
     void *vbMapped = nullptr;
-    ThrowIfFailed(mesh.vertexBuffer->Map(0, nullptr, &vbMapped),
-                  "Map VertexBuffer failed");
+    const HRESULT vertexMapResult =
+        mesh.vertexBuffer->Map(0, nullptr, &vbMapped);
+    if (FAILED(vertexMapResult) || vbMapped == nullptr) {
+        return UINT32_MAX;
+    }
     memcpy(vbMapped, vertexData, vbSize);
     mesh.vertexBuffer->Unmap(0, nullptr);
 
@@ -92,15 +95,21 @@ uint32_t MeshManager::CreateMesh(const void *vertexData, uint32_t vertexStride,
 
     auto ibDesc = CD3DX12_RESOURCE_DESC::Buffer(ibSize);
 
-    ThrowIfFailed(dxCommon_->GetDevice()->CreateCommittedResource(
-                      &heapProps, D3D12_HEAP_FLAG_NONE, &ibDesc,
-                      D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-                      IID_PPV_ARGS(&mesh.indexBuffer)),
-                  "Create IndexBuffer failed");
+    const HRESULT indexBufferResult =
+        dxCommon_->GetDevice()->CreateCommittedResource(
+            &heapProps, D3D12_HEAP_FLAG_NONE, &ibDesc,
+            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+            IID_PPV_ARGS(&mesh.indexBuffer));
+    if (FAILED(indexBufferResult) || !mesh.indexBuffer) {
+        return UINT32_MAX;
+    }
 
     void *ibMapped = nullptr;
-    ThrowIfFailed(mesh.indexBuffer->Map(0, nullptr, &ibMapped),
-                  "Map IndexBuffer failed");
+    const HRESULT indexMapResult =
+        mesh.indexBuffer->Map(0, nullptr, &ibMapped);
+    if (FAILED(indexMapResult) || ibMapped == nullptr) {
+        return UINT32_MAX;
+    }
     memcpy(ibMapped, indexData, ibSize);
     mesh.indexBuffer->Unmap(0, nullptr);
 
@@ -127,5 +136,7 @@ const Mesh &MeshManager::GetMesh(uint32_t meshId) const {
 }
 
 bool MeshManager::IsValidMeshId(uint32_t meshId) const {
-    return meshId < meshes_.size();
+    return meshId < meshes_.size() && meshes_[meshId].vertexBuffer &&
+           meshes_[meshId].indexBuffer && meshes_[meshId].indexCount > 0 &&
+           meshes_[meshId].vertexStride > 0;
 }

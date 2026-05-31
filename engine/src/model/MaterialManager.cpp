@@ -1,12 +1,9 @@
 #include "model/MaterialManager.h"
 #include "graphics/DirectXCommon.h"
 #include "graphics/DxHelpers.h"
-#include "graphics/DxUtils.h"
 #include <limits>
-#include <stdexcept>
 
 using namespace DirectX;
-using namespace DxUtils;
 using Microsoft::WRL::ComPtr;
 
 namespace {
@@ -43,28 +40,34 @@ void MaterialManager::Finalize() {
 }
 
 uint32_t MaterialManager::CreateMaterial(const Material &material) {
-    if (!dxCommon_) {
+    if (!dxCommon_ || !dxCommon_->GetDevice()) {
         return UINT32_MAX;
     }
 
     MaterialResource matRes;
     matRes.material = NormalizeMaterialForDraw(material);
 
-    UINT size = Align256(sizeof(Material));
+    const UINT size =
+        static_cast<UINT>((sizeof(Material) + 0xFFu) & ~size_t{0xFFu});
 
     CD3DX12_HEAP_PROPERTIES heapProp(D3D12_HEAP_TYPE_UPLOAD);
     auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(size);
 
-    ThrowIfFailed(dxCommon_->GetDevice()->CreateCommittedResource(
-                      &heapProp, D3D12_HEAP_FLAG_NONE, &resourceDesc,
-                      D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-                      IID_PPV_ARGS(&matRes.resource)),
-                  "CreateCommittedResource(Material) failed");
+    const HRESULT resourceResult =
+        dxCommon_->GetDevice()->CreateCommittedResource(
+            &heapProp, D3D12_HEAP_FLAG_NONE, &resourceDesc,
+            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+            IID_PPV_ARGS(&matRes.resource));
+    if (FAILED(resourceResult) || !matRes.resource) {
+        return UINT32_MAX;
+    }
 
-    ThrowIfFailed(
+    const HRESULT mapResult =
         matRes.resource->Map(0, nullptr,
-                             reinterpret_cast<void **>(&matRes.mappedData)),
-        "Material resource Map failed");
+                             reinterpret_cast<void **>(&matRes.mappedData));
+    if (FAILED(mapResult) || matRes.mappedData == nullptr) {
+        return UINT32_MAX;
+    }
 
     std::memcpy(matRes.mappedData, &matRes.material, sizeof(Material));
 

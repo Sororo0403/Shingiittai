@@ -3,18 +3,11 @@
 #include <cassert>
 #include <cmath>
 #include <filesystem>
-#include <stdexcept>
 #include <string>
 
 #pragma comment(lib, "xinput.lib")
 
 namespace {
-void ThrowIfFailed(HRESULT hr, const char *message) {
-    if (FAILED(hr)) {
-        throw std::runtime_error(message);
-    }
-}
-
 float NormalizeThumbAxis(SHORT value, SHORT deadZone) {
     const int intValue = static_cast<int>(value);
     const int absValue = std::abs(intValue);
@@ -59,42 +52,58 @@ Input::~Input() {
 }
 
 void Input::Initialize(HINSTANCE hInstance, HWND hwnd) {
-    HRESULT hr;
-
     if (replayDirectory_.empty()) {
         replayDirectory_ = GetDefaultReplayDirectory();
     }
 
-    hr = DirectInput8Create(
+    directInput_.Reset();
+    keyboard_.Reset();
+    mouse_.Reset();
+    keyNow_.fill(0);
+    keyPrev_.fill(0);
+    mouseState_ = {};
+    mousePrevState_ = {};
+
+    HRESULT hr = DirectInput8Create(
         hInstance, DIRECTINPUT_VERSION, IID_IDirectInput8,
         reinterpret_cast<void **>(directInput_.GetAddressOf()), nullptr);
-    ThrowIfFailed(hr, "DirectInput8Create failed");
+    if (FAILED(hr) || !directInput_) {
+        return;
+    }
 
     hr = directInput_->CreateDevice(GUID_SysKeyboard, keyboard_.GetAddressOf(),
                                     nullptr);
-    ThrowIfFailed(hr, "Create keyboard device failed");
-
-    hr = keyboard_->SetDataFormat(&c_dfDIKeyboard);
-    ThrowIfFailed(hr, "Set keyboard data format failed");
-
-    hr = keyboard_->SetCooperativeLevel(hwnd,
-                                        DISCL_FOREGROUND | DISCL_NONEXCLUSIVE);
-    ThrowIfFailed(hr, "Set keyboard cooperative level failed");
-
-    keyboard_->Acquire();
+    if (SUCCEEDED(hr) && keyboard_) {
+        hr = keyboard_->SetDataFormat(&c_dfDIKeyboard);
+        if (SUCCEEDED(hr)) {
+            hr = keyboard_->SetCooperativeLevel(
+                hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE);
+        }
+        if (SUCCEEDED(hr)) {
+            keyboard_->Acquire();
+        } else {
+            keyboard_.Reset();
+        }
+    } else {
+        keyboard_.Reset();
+    }
 
     hr = directInput_->CreateDevice(GUID_SysMouse, mouse_.GetAddressOf(),
                                     nullptr);
-    ThrowIfFailed(hr, "Create mouse device failed");
-
-    hr = mouse_->SetDataFormat(&c_dfDIMouse);
-    ThrowIfFailed(hr, "Set mouse data format failed");
-
-    hr = mouse_->SetCooperativeLevel(hwnd,
-                                     DISCL_FOREGROUND | DISCL_NONEXCLUSIVE);
-    ThrowIfFailed(hr, "Set mouse cooperative level failed");
-
-    mouse_->Acquire();
+    if (SUCCEEDED(hr) && mouse_) {
+        hr = mouse_->SetDataFormat(&c_dfDIMouse);
+        if (SUCCEEDED(hr)) {
+            hr = mouse_->SetCooperativeLevel(
+                hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE);
+        }
+        if (SUCCEEDED(hr)) {
+            mouse_->Acquire();
+        } else {
+            mouse_.Reset();
+        }
+    } else {
+        mouse_.Reset();
+    }
 }
 
 void Input::Update(float deltaTime) {

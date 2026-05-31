@@ -7,7 +7,6 @@
 #include "imgui_impl_dx12.h"
 #include "imgui_impl_win32.h"
 #include <cstdint>
-#include <stdexcept>
 
 namespace {
 class ImguiInitializationGuard {
@@ -62,7 +61,8 @@ ImguiManager::~ImguiManager() {
 void ImguiManager::Initialize(WinApp *winApp, DirectXCommon *dxCommon,
                               SrvManager *srvManager) {
     if (!winApp || !dxCommon || !srvManager) {
-        throw std::runtime_error("ImguiManager::Initialize null argument");
+        Finalize();
+        return;
     }
 
     Finalize();
@@ -76,9 +76,14 @@ void ImguiManager::Initialize(WinApp *winApp, DirectXCommon *dxCommon,
     ImGui::StyleColorsDark();
 
     if (!ImGui_ImplWin32_Init(winApp->GetHwnd())) {
-        throw std::runtime_error("ImGui_ImplWin32_Init failed");
+        return;
     }
     win32Initialized_ = true;
+
+    if (!dxCommon->GetDevice() || !dxCommon->GetCommandQueue() ||
+        dxCommon->GetSwapChainBufferCount() == 0 || !srvManager_->GetHeap()) {
+        return;
+    }
 
     ImGui_ImplDX12_InitInfo init_info{};
     init_info.Device = dxCommon->GetDevice();
@@ -92,7 +97,21 @@ void ImguiManager::Initialize(WinApp *winApp, DirectXCommon *dxCommon,
     init_info.SrvDescriptorAllocFn = [](ImGui_ImplDX12_InitInfo *info,
                                         D3D12_CPU_DESCRIPTOR_HANDLE *out_cpu,
                                         D3D12_GPU_DESCRIPTOR_HANDLE *out_gpu) {
+        if (out_cpu == nullptr || out_gpu == nullptr) {
+            return;
+        }
+        *out_cpu = {};
+        *out_gpu = {};
+
+        if (info == nullptr || info->UserData == nullptr) {
+            return;
+        }
         auto *manager = static_cast<ImguiManager *>(info->UserData);
+        if (manager->srvManager_ == nullptr ||
+            !manager->srvManager_->CanAllocate()) {
+            return;
+        }
+
         uint32_t index = manager->srvManager_->Allocate();
         ImguiDescriptorAllocationGuard allocationGuard(*manager->srvManager_,
                                                        index);
@@ -119,7 +138,7 @@ void ImguiManager::Initialize(WinApp *winApp, DirectXCommon *dxCommon,
     };
 
     if (!ImGui_ImplDX12_Init(&init_info)) {
-        throw std::runtime_error("ImGui_ImplDX12_Init failed");
+        return;
     }
     dx12Initialized_ = true;
     initializeGuard.Commit();
@@ -149,7 +168,16 @@ void ImguiManager::Finalize() {
     srvManager_ = nullptr;
 }
 
+bool ImguiManager::IsReady() const {
+    return srvManager_ != nullptr && srvManager_->GetHeap() != nullptr &&
+           contextCreated_ && win32Initialized_ && dx12Initialized_;
+}
+
 void ImguiManager::Begin(ID3D12GraphicsCommandList *commandList) {
+    if (!IsReady() || commandList == nullptr) {
+        return;
+    }
+
     ID3D12DescriptorHeap *heaps[] = {srvManager_->GetHeap()};
     commandList->SetDescriptorHeaps(1, heaps);
 
@@ -159,6 +187,10 @@ void ImguiManager::Begin(ID3D12GraphicsCommandList *commandList) {
 }
 
 void ImguiManager::End(ID3D12GraphicsCommandList *commandList) {
+    if (!IsReady() || commandList == nullptr) {
+        return;
+    }
+
     ImGui::Render();
 
     ID3D12DescriptorHeap *heaps[] = {srvManager_->GetHeap()};

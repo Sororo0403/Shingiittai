@@ -282,6 +282,10 @@ uint32_t SoundManager::CreateStreamingVoice(const std::wstring &path,
     playingVoice.voice = voice;
     playingVoice.callback = std::move(callback);
     playingVoice.handle = AllocateVoiceHandle();
+    if (playingVoice.handle == kInvalidVoiceHandle) {
+        voice->DestroyVoice();
+        return kInvalidVoiceHandle;
+    }
     playingVoice.soundId = kInvalidSoundId;
     playingVoice.volume = ClampFinite(volume, 0.0f, 1.0f, 0.0f);
     playingVoice.loop = loop;

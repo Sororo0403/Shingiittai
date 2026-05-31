@@ -60,7 +60,13 @@ void RenderTexture::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
     dxCommon_ = dxCommon;
     srvManager_ = srvManager;
     RenderTextureInitializationGuard initializeGuard(*this);
+    if (!srvManager_->CanAllocate()) {
+        return;
+    }
     srvIndex_ = srvManager_->Allocate();
+    if (srvIndex_ == UINT_MAX) {
+        return;
+    }
     width_ = width;
     height_ = height;
 
@@ -117,6 +123,10 @@ void RenderTexture::BeginRender(const DirectX::XMFLOAT4 &clearColor) {
     }
 
     auto commandList = dxCommon_->GetCommandList();
+    auto dsvHandle = dxCommon_->GetDepthStencilView();
+    if (dsvHandle.ptr == 0) {
+        return;
+    }
 
     if (resourceState_ != D3D12_RESOURCE_STATE_RENDER_TARGET) {
         auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
@@ -141,7 +151,6 @@ void RenderTexture::BeginRender(const DirectX::XMFLOAT4 &clearColor) {
     scissorRect.bottom = height_;
 
     auto rtvHandle = rtvHeap_->GetCPUDescriptorHandleForHeapStart();
-    auto dsvHandle = dxCommon_->GetDepthStencilView();
 
     commandList->RSSetViewports(1, &viewport);
     commandList->RSSetScissorRects(1, &scissorRect);
@@ -225,6 +234,10 @@ void RenderTexture::CreateResources() {
     srvDesc.Format = DirectXCommon::kSceneColorFormat;
     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     srvDesc.Texture2D.MipLevels = 1;
-    device->CreateShaderResourceView(resource_.Get(), &srvDesc,
-                                     srvManager_->GetCpuHandle(srvIndex_));
+    const D3D12_CPU_DESCRIPTOR_HANDLE srvHandle =
+        srvManager_->GetCpuHandle(srvIndex_);
+    if (srvHandle.ptr == 0) {
+        return;
+    }
+    device->CreateShaderResourceView(resource_.Get(), &srvDesc, srvHandle);
 }

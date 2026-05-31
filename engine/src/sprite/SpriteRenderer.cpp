@@ -171,18 +171,30 @@ void SpriteRenderer::PreDraw(bool backBufferTarget) {
         return;
     }
     auto cmd = dxCommon_->GetCommandList();
+    ID3D12DescriptorHeap *srvHeap = srvManager_->GetHeap();
+    if (cmd == nullptr || srvHeap == nullptr) {
+        queuedDraws_.clear();
+        batchVertices_.clear();
+        return;
+    }
 
-    ID3D12DescriptorHeap *heaps[] = {srvManager_->GetHeap()};
+    ID3D12DescriptorHeap *heaps[] = {srvHeap};
     cmd->SetDescriptorHeaps(1, heaps);
 
     activeRenderTargetKind_ = backBufferTarget
                                   ? RenderTargetKind::BackBuffer
                                   : RenderTargetKind::SceneColor;
     activePipelineKind_ = PipelineKind::Alpha;
-    cmd->SetPipelineState(
+    ID3D12PipelineState *pipelineState =
         pipelineStates_[static_cast<uint32_t>(activeRenderTargetKind_)]
                        [static_cast<uint32_t>(activePipelineKind_)]
-                           .Get());
+                           .Get();
+    if (pipelineState == nullptr) {
+        queuedDraws_.clear();
+        batchVertices_.clear();
+        return;
+    }
+    cmd->SetPipelineState(pipelineState);
     cmd->SetGraphicsRootSignature(rootSignature_.Get());
 
     SpriteConstBuffer constants{};
@@ -213,6 +225,11 @@ void SpriteRenderer::FlushQueuedDraws() {
     }
 
     auto cmd = dxCommon_->GetCommandList();
+    if (cmd == nullptr) {
+        queuedDraws_.clear();
+        batchVertices_.clear();
+        return;
+    }
     size_t runStart = 0;
     while (runStart < queuedDraws_.size()) {
         const QueuedDraw &first = queuedDraws_[runStart];
@@ -225,10 +242,15 @@ void SpriteRenderer::FlushQueuedDraws() {
 
         if (activePipelineKind_ != first.pipelineKind) {
             activePipelineKind_ = first.pipelineKind;
-            cmd->SetPipelineState(
+            ID3D12PipelineState *pipelineState =
                 pipelineStates_[static_cast<uint32_t>(activeRenderTargetKind_)]
                                [static_cast<uint32_t>(activePipelineKind_)]
-                                   .Get());
+                                   .Get();
+            if (pipelineState == nullptr) {
+                runStart = runEnd;
+                continue;
+            }
+            cmd->SetPipelineState(pipelineState);
         }
 
         batchVertices_.clear();
@@ -258,8 +280,13 @@ void SpriteRenderer::FlushQueuedDraws() {
             runStart = runEnd;
             continue;
         }
-        cmd->SetGraphicsRootDescriptorTable(
-            1, textureManager_->GetGpuHandle(boundTextureId));
+        const D3D12_GPU_DESCRIPTOR_HANDLE textureHandle =
+            textureManager_->GetGpuHandle(boundTextureId);
+        if (textureHandle.ptr == 0) {
+            runStart = runEnd;
+            continue;
+        }
+        cmd->SetGraphicsRootDescriptorTable(1, textureHandle);
         cmd->DrawInstanced(static_cast<UINT>(batchVertices_.size()), 1, 0, 0);
 
         runStart = runEnd;

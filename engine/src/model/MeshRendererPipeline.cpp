@@ -333,6 +333,10 @@ void MeshRenderer::CreatePipelineStates() {
 }
 
 uint32_t MeshRenderer::CreatePipeline(const MeshPipelineDesc &desc) {
+    if (!dxCommon_ || !rootSignature_) {
+        return UINT32_MAX;
+    }
+
     D3D12_INPUT_ELEMENT_DESC baseLayout[] = {
         {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
@@ -392,6 +396,10 @@ uint32_t MeshRenderer::CreateInstancedPipeline(
     const std::wstring &vertexShaderPath, const std::wstring &pixelShaderPath,
     const std::wstring &shadowVertexShaderPath,
     const std::wstring &shadowPixelShaderPath) {
+    if (!dxCommon_ || !rootSignature_ || !shadowRootSignature_) {
+        return UINT32_MAX;
+    }
+
     auto *device = dxCommon_->GetDevice();
     InstancedPipelineSet pipelineSet{};
     auto instancedVs =

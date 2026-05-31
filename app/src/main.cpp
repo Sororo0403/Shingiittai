@@ -19,6 +19,7 @@
 #include <Windows.h>
 #include <filesystem>
 #include <memory>
+#include <system_error>
 #include <string>
 
 namespace {
@@ -93,6 +94,9 @@ class HandUdpSenderProcess {
         const std::filesystem::path sourceDir = HandTrackingSourceDir(runtimeRoot);
         const std::filesystem::path modelPath =
             sourceDir / L"models" / L"hand_landmarker.task";
+        const std::filesystem::path modelArg =
+            std::filesystem::path(L"hand_tracking") / L"models" /
+            L"hand_landmarker.task";
         if (!std::filesystem::exists(modelPath)) {
             return false;
         }
@@ -128,16 +132,16 @@ class HandUdpSenderProcess {
             std::filesystem::exists(venvPython)) {
             scriptCommand = L"\"" + venvPython.wstring() + L"\" \"" +
                             scriptPath.wstring() + L"\" --model \"" +
-                            modelPath.wstring() + L"\"";
+                            modelArg.wstring() + L"\"";
         } else if (std::filesystem::exists(scriptPath)) {
             scriptCommand = L"py -3.11 \"" + scriptPath.wstring() +
-                            L"\" --model \"" + modelPath.wstring() + L"\"";
+                            L"\" --model \"" + modelArg.wstring() + L"\"";
         }
         appendCameraArg(scriptCommand, L"SHINGIITTAI_MAIN_CAMERA", L"--camera");
         std::wstring packagedCommand;
         if (std::filesystem::exists(packagedExe)) {
             packagedCommand = L"\"" + packagedExe.wstring() + L"\" --model \"" +
-                              modelPath.wstring() + L"\"";
+                              modelArg.wstring() + L"\"";
         }
         appendCameraArg(packagedCommand, L"SHINGIITTAI_MAIN_CAMERA", L"--camera");
 
@@ -165,16 +169,63 @@ class HandUdpSenderProcess {
             }
         }
 
+        std::error_code logDirError;
+        const std::filesystem::path logDir =
+            runtimeRoot / L"hand_tracking" / L"logs";
+        std::filesystem::create_directories(logDir, logDirError);
+
+        SECURITY_ATTRIBUTES inheritHandleAttributes{};
+        inheritHandleAttributes.nLength = sizeof(inheritHandleAttributes);
+        inheritHandleAttributes.bInheritHandle = TRUE;
+
+        HANDLE childStdOut = CreateFileW(
+            (logDir / L"hand_udp_sender.out.log").wstring().c_str(),
+            GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+            &inheritHandleAttributes, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL,
+            nullptr);
+        HANDLE childStdErr = CreateFileW(
+            (logDir / L"hand_udp_sender.err.log").wstring().c_str(),
+            GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+            &inheritHandleAttributes, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL,
+            nullptr);
+        HANDLE childStdIn = CreateFileW(
+            L"NUL", GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+            &inheritHandleAttributes, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL,
+            nullptr);
+        const bool redirectLogs =
+            childStdOut != INVALID_HANDLE_VALUE &&
+            childStdErr != INVALID_HANDLE_VALUE &&
+            childStdIn != INVALID_HANDLE_VALUE;
+        if (redirectLogs) {
+            SetFilePointer(childStdOut, 0, nullptr, FILE_END);
+            SetFilePointer(childStdErr, 0, nullptr, FILE_END);
+        }
+
         STARTUPINFOW startupInfo{};
         startupInfo.cb = sizeof(startupInfo);
         startupInfo.dwFlags = STARTF_USESHOWWINDOW;
         startupInfo.wShowWindow = SW_HIDE;
+        if (redirectLogs) {
+            startupInfo.dwFlags |= STARTF_USESTDHANDLES;
+            startupInfo.hStdOutput = childStdOut;
+            startupInfo.hStdError = childStdErr;
+            startupInfo.hStdInput = childStdIn;
+        }
         PROCESS_INFORMATION processInfo{};
         const BOOL started = CreateProcessW(
-            nullptr, command.data(), nullptr, nullptr, FALSE,
+            nullptr, command.data(), nullptr, nullptr, redirectLogs ? TRUE : FALSE,
             CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr,
             runtimeRoot.wstring().c_str(),
             &startupInfo, &processInfo);
+        if (childStdOut != INVALID_HANDLE_VALUE) {
+            CloseHandle(childStdOut);
+        }
+        if (childStdErr != INVALID_HANDLE_VALUE) {
+            CloseHandle(childStdErr);
+        }
+        if (childStdIn != INVALID_HANDLE_VALUE) {
+            CloseHandle(childStdIn);
+        }
         if (!started) {
             if (jobHandle != nullptr) {
                 CloseHandle(jobHandle);

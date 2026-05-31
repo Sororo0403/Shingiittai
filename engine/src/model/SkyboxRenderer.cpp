@@ -9,7 +9,6 @@
 #include <array>
 #include <cmath>
 #include <cstring>
-#include <stdexcept>
 
 using namespace DirectX;
 using namespace DxUtils;
@@ -122,7 +121,7 @@ void SkyboxRenderer::Finalize() {
 void SkyboxRenderer::Draw(uint32_t textureId, const Camera &camera) {
     if (!dxCommon_ || !srvManager_ || !textureManager_ || !pipelineState_ ||
         !rootSignature_ || !vertexBuffer_ || !indexBuffer_ || !constBuffer_ ||
-        mappedCB_ == nullptr) {
+        mappedCB_ == nullptr || indexCount_ == 0) {
         return;
     }
 
@@ -133,8 +132,17 @@ void SkyboxRenderer::Draw(uint32_t textureId, const Camera &camera) {
     }
 
     auto *cmd = dxCommon_->GetCommandList();
+    ID3D12DescriptorHeap *srvHeap = srvManager_->GetHeap();
+    const D3D12_GPU_VIRTUAL_ADDRESS constBufferAddress =
+        constBuffer_->GetGPUVirtualAddress();
+    const D3D12_GPU_DESCRIPTOR_HANDLE textureHandle =
+        textureManager_->GetGpuHandle(boundTextureId);
+    if (cmd == nullptr || srvHeap == nullptr || constBufferAddress == 0 ||
+        textureHandle.ptr == 0) {
+        return;
+    }
 
-    ID3D12DescriptorHeap *heaps[] = {srvManager_->GetHeap()};
+    ID3D12DescriptorHeap *heaps[] = {srvHeap};
     cmd->SetDescriptorHeaps(1, heaps);
 
     cmd->SetPipelineState(pipelineState_.Get());
@@ -169,10 +177,8 @@ void SkyboxRenderer::Draw(uint32_t textureId, const Camera &camera) {
         hasCachedCameraState_ = true;
     }
 
-    cmd->SetGraphicsRootConstantBufferView(
-        0, constBuffer_->GetGPUVirtualAddress());
-    cmd->SetGraphicsRootDescriptorTable(
-        1, textureManager_->GetGpuHandle(boundTextureId));
+    cmd->SetGraphicsRootConstantBufferView(0, constBufferAddress);
+    cmd->SetGraphicsRootDescriptorTable(1, textureHandle);
     cmd->DrawIndexedInstanced(indexCount_, 1, 0, 0, 0);
 }
 

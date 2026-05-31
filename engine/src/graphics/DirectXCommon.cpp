@@ -89,9 +89,15 @@ void DirectXCommon::BeginFrame() {
 
 void DirectXCommon::BeginScenePass() {
     TrackGpuPhase("BeginScenePass");
+    if (!commandList_ || !dsvHeap_ || !depthBuffer_) {
+        return;
+    }
     TransitionSceneColor(D3D12_RESOURCE_STATE_RENDER_TARGET);
 
     auto sceneRtv = GetSceneRtvHandle();
+    if (sceneRtv.ptr == 0) {
+        return;
+    }
     auto dsvHandle = dsvHeap_->GetCPUDescriptorHandleForHeapStart();
 
     ApplySceneViewportAndScissor();
@@ -103,9 +109,15 @@ void DirectXCommon::BeginScenePass() {
 
 void DirectXCommon::RestoreSceneRenderState(bool clearDepth) {
     TrackGpuPhase("RestoreSceneRenderState");
+    if (!commandList_ || !dsvHeap_ || !depthBuffer_) {
+        return;
+    }
     TransitionSceneColor(D3D12_RESOURCE_STATE_RENDER_TARGET);
 
     auto sceneRtv = GetSceneRtvHandle();
+    if (sceneRtv.ptr == 0) {
+        return;
+    }
     auto dsvHandle = dsvHeap_->GetCPUDescriptorHandleForHeapStart();
 
     ApplySceneViewportAndScissor();
@@ -373,7 +385,15 @@ void DirectXCommon::CreateDepthStencilSrv(SrvManager *srvManager) {
 
     srvManager_ = srvManager;
     if (depthSrvIndex_ == UINT_MAX) {
+        if (!srvManager_->CanAllocate()) {
+            depthSrvGpuHandle_ = {};
+            return;
+        }
         depthSrvIndex_ = srvManager_->Allocate();
+    }
+    if (depthSrvIndex_ == UINT_MAX) {
+        depthSrvGpuHandle_ = {};
+        return;
     }
     depthSrvGpuHandle_ = srvManager_->GetGpuHandle(depthSrvIndex_);
     UpdateDepthStencilSrv();
@@ -386,7 +406,13 @@ void DirectXCommon::RegisterSceneColorSRV(SrvManager *srvManager) {
 
     srvManager_ = srvManager;
     if (sceneSrvIndex_ == UINT_MAX) {
+        if (!srvManager_->CanAllocate()) {
+            return;
+        }
         sceneSrvIndex_ = srvManager_->Allocate();
+    }
+    if (sceneSrvIndex_ == UINT_MAX) {
+        return;
     }
     UpdateSceneColorSrv();
 }
@@ -615,8 +641,11 @@ void DirectXCommon::CreateSceneRenderTarget(int width, int height) {
     rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
     rtvDesc.Format = kSceneColorFormat;
 
-    device_->CreateRenderTargetView(sceneColorBuffer_.Get(), &rtvDesc,
-                                    GetSceneRtvHandle());
+    const D3D12_CPU_DESCRIPTOR_HANDLE sceneRtv = GetSceneRtvHandle();
+    if (sceneRtv.ptr != 0) {
+        device_->CreateRenderTargetView(sceneColorBuffer_.Get(), &rtvDesc,
+                                        sceneRtv);
+    }
 }
 
 void DirectXCommon::CreateViewport(int width, int height) {
@@ -690,9 +719,13 @@ void DirectXCommon::UpdateDepthStencilSrv() {
     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     srvDesc.Texture2D.MipLevels = 1;
 
-    device_->CreateShaderResourceView(
-        depthBuffer_.Get(), &srvDesc,
-        srvManager_->GetCpuHandle(depthSrvIndex_));
+    const D3D12_CPU_DESCRIPTOR_HANDLE srvHandle =
+        srvManager_->GetCpuHandle(depthSrvIndex_);
+    if (srvHandle.ptr == 0) {
+        depthSrvGpuHandle_ = {};
+        return;
+    }
+    device_->CreateShaderResourceView(depthBuffer_.Get(), &srvDesc, srvHandle);
 }
 
 void DirectXCommon::UpdateSceneColorSrv() {
@@ -706,9 +739,13 @@ void DirectXCommon::UpdateSceneColorSrv() {
     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     srvDesc.Texture2D.MipLevels = 1;
 
-    device_->CreateShaderResourceView(
-        sceneColorBuffer_.Get(), &srvDesc,
-        srvManager_->GetCpuHandle(sceneSrvIndex_));
+    const D3D12_CPU_DESCRIPTOR_HANDLE srvHandle =
+        srvManager_->GetCpuHandle(sceneSrvIndex_);
+    if (srvHandle.ptr == 0) {
+        return;
+    }
+    device_->CreateShaderResourceView(sceneColorBuffer_.Get(), &srvDesc,
+                                      srvHandle);
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE DirectXCommon::GetBackBufferRtvHandle() const {

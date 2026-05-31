@@ -269,7 +269,30 @@ void ModelRenderer::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
                                MaterialManager *materialManager) {
     if (!dxCommon || !srvManager || !meshManager || !textureManager ||
         !materialManager) {
-        throw std::runtime_error("ModelRenderer::Initialize null argument");
+        dxCommon_ = nullptr;
+        srvManager_ = nullptr;
+        meshManager_ = nullptr;
+        textureManager_ = nullptr;
+        materialManager_ = nullptr;
+        rootSignature_.Reset();
+        shadowRootSignature_.Reset();
+        skinningRootSignature_.Reset();
+        for (auto &pipeline : pipelineStates_) {
+            pipeline.Reset();
+        }
+        for (auto &pipeline : instancedPipelineStates_) {
+            pipeline.Reset();
+        }
+        shadowPSO_.Reset();
+        instancedShadowPSO_.Reset();
+        skinningPSO_.Reset();
+        uploadBuffer_.Reset();
+        drawIndex_ = 0;
+        currentGraphicsRootSignature_ = nullptr;
+        currentGraphicsPipelineState_ = nullptr;
+        hasEnvironmentTexture_ = false;
+        shadowMapGpuHandle_ = {};
+        return;
     }
 
     dxCommon_ = dxCommon;
@@ -297,6 +320,10 @@ void ModelRenderer::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
 }
 
 void ModelRenderer::BeginFrame() {
+    if (!dxCommon_) {
+        drawIndex_ = 0;
+        return;
+    }
     uploadBuffer_.BeginFrame(dxCommon_->GetBackBufferIndex());
     drawIndex_ = 0;
     ++skinningFrameId_;
@@ -306,6 +333,12 @@ void ModelRenderer::BeginFrame() {
 }
 
 void ModelRenderer::PreDraw() {
+    if (!dxCommon_ || !srvManager_ || !rootSignature_) {
+        currentGraphicsRootSignature_ = nullptr;
+        currentGraphicsPipelineState_ = nullptr;
+        drawIndex_ = 0;
+        return;
+    }
     auto cmd = dxCommon_->GetCommandList();
 
     ID3D12DescriptorHeap *heaps[] = {srvManager_->GetHeap()};
@@ -320,7 +353,8 @@ void ModelRenderer::PreDraw() {
 
 void ModelRenderer::Draw(const Model &model, const Transform &transform,
                          const Camera &camera, uint32_t environmentTextureId) {
-    if (drawIndex_ >= kMaxDraws) {
+    if (!dxCommon_ || !meshManager_ || !textureManager_ ||
+        !materialManager_ || !rootSignature_ || drawIndex_ >= kMaxDraws) {
         return;
     }
 
@@ -349,6 +383,9 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
     const D3D12_GPU_VIRTUAL_ADDRESS sceneCbAddr = WriteSceneConstants(camera);
     const D3D12_GPU_VIRTUAL_ADDRESS effectCbAddr =
         WriteDrawEffectConstants();
+    if (objectCbAddr == 0 || sceneCbAddr == 0 || effectCbAddr == 0) {
+        return;
+    }
 
     DispatchSkinningBatch(model);
 
@@ -426,7 +463,9 @@ void ModelRenderer::DrawInstanced(const Model &model,
                                   uint32_t instanceCount,
                                   const Camera &camera,
                                   uint32_t environmentTextureId) {
-    if (!transforms || instanceCount == 0) {
+    if (!dxCommon_ || !meshManager_ || !textureManager_ ||
+        !materialManager_ || !rootSignature_ || !transforms ||
+        instanceCount == 0) {
         return;
     }
 
@@ -440,6 +479,10 @@ void ModelRenderer::DrawInstanced(const Model &model,
         WriteDrawEffectConstants();
     const D3D12_VERTEX_BUFFER_VIEW instanceView =
         WriteInstances(model, transforms, instanceCount);
+    if (objectCbAddr == 0 || sceneCbAddr == 0 || effectCbAddr == 0 ||
+        instanceView.BufferLocation == 0) {
+        return;
+    }
 
     DispatchSkinningBatch(model);
 
@@ -516,7 +559,9 @@ void ModelRenderer::DrawInstanced(const Model &model,
                                   uint32_t instanceCount,
                                   const Camera &camera,
                                   uint32_t environmentTextureId) {
-    if (!instances || instanceCount == 0) {
+    if (!dxCommon_ || !meshManager_ || !textureManager_ ||
+        !materialManager_ || !rootSignature_ || !instances ||
+        instanceCount == 0) {
         return;
     }
 
@@ -530,6 +575,10 @@ void ModelRenderer::DrawInstanced(const Model &model,
         WriteDrawEffectConstants();
     const D3D12_VERTEX_BUFFER_VIEW instanceView =
         WriteInstances(model, instances, instanceCount);
+    if (objectCbAddr == 0 || sceneCbAddr == 0 || effectCbAddr == 0 ||
+        instanceView.BufferLocation == 0) {
+        return;
+    }
 
     DispatchSkinningBatch(model);
 
@@ -607,6 +656,13 @@ void ModelRenderer::SetShadowMap(
     D3D12_GPU_DESCRIPTOR_HANDLE shadowMap,
     const DirectX::XMFLOAT4X4 &lightViewProjection,
     const SceneShadowSettings &settings) {
+    if (!textureManager_) {
+        shadowMapGpuHandle_ = {};
+        shadowLightViewProjection_ = lightViewProjection;
+        shadowParams_ = {};
+        shadowFilterParams_ = {};
+        return;
+    }
     const bool hasShadowMap = shadowMap.ptr != 0;
     shadowMapGpuHandle_ =
         hasShadowMap
@@ -624,6 +680,11 @@ void ModelRenderer::SetShadowMap(
 }
 
 void ModelRenderer::PreDrawShadow() {
+    if (!dxCommon_ || !srvManager_ || !shadowRootSignature_ || !shadowPSO_) {
+        currentGraphicsRootSignature_ = nullptr;
+        currentGraphicsPipelineState_ = nullptr;
+        return;
+    }
     auto cmd = dxCommon_->GetCommandList();
     ID3D12DescriptorHeap *heaps[] = {srvManager_->GetHeap()};
     cmd->SetDescriptorHeaps(1, heaps);
@@ -636,7 +697,9 @@ void ModelRenderer::PreDrawShadow() {
 void ModelRenderer::DrawShadow(
     const Model &model, const Transform &transform,
     const DirectX::XMFLOAT4X4 &lightViewProjection) {
-    if (drawIndex_ >= kMaxDraws) {
+    if (!dxCommon_ || !meshManager_ || !textureManager_ ||
+        !materialManager_ || !shadowRootSignature_ || !shadowPSO_ ||
+        drawIndex_ >= kMaxDraws) {
         return;
     }
 
@@ -659,6 +722,9 @@ void ModelRenderer::DrawShadow(
     const XMMATRIX wvp = world * lightVP;
     const D3D12_GPU_VIRTUAL_ADDRESS objectCbAddr =
         WriteObjectConstants(wvp, world, XMMatrixIdentity());
+    if (objectCbAddr == 0) {
+        return;
+    }
 
     DispatchSkinningBatch(model);
 
@@ -707,7 +773,9 @@ void ModelRenderer::DrawShadow(
 void ModelRenderer::DrawInstancedShadow(
     const Model &model, const Transform *transforms, uint32_t instanceCount,
     const DirectX::XMFLOAT4X4 &lightViewProjection) {
-    if (!transforms || instanceCount == 0 || drawIndex_ >= kMaxDraws) {
+    if (!dxCommon_ || !meshManager_ || !textureManager_ ||
+        !materialManager_ || !shadowRootSignature_ || !instancedShadowPSO_ ||
+        !transforms || instanceCount == 0 || drawIndex_ >= kMaxDraws) {
         return;
     }
 
@@ -717,6 +785,9 @@ void ModelRenderer::DrawInstancedShadow(
         WriteObjectConstants(lightVP, XMMatrixIdentity(), XMMatrixIdentity());
     const D3D12_VERTEX_BUFFER_VIEW instanceView =
         WriteInstances(model, transforms, instanceCount);
+    if (objectCbAddr == 0 || instanceView.BufferLocation == 0) {
+        return;
+    }
 
     DispatchSkinningBatch(model);
 
@@ -766,7 +837,9 @@ void ModelRenderer::DrawInstancedShadow(
 void ModelRenderer::DrawInstancedShadow(
     const Model &model, const InstanceData *instances, uint32_t instanceCount,
     const DirectX::XMFLOAT4X4 &lightViewProjection) {
-    if (!instances || instanceCount == 0 || drawIndex_ >= kMaxDraws) {
+    if (!dxCommon_ || !meshManager_ || !textureManager_ ||
+        !materialManager_ || !shadowRootSignature_ || !instancedShadowPSO_ ||
+        !instances || instanceCount == 0 || drawIndex_ >= kMaxDraws) {
         return;
     }
 
@@ -776,6 +849,9 @@ void ModelRenderer::DrawInstancedShadow(
         WriteObjectConstants(lightVP, XMMatrixIdentity(), XMMatrixIdentity());
     const D3D12_VERTEX_BUFFER_VIEW instanceView =
         WriteInstances(model, instances, instanceCount);
+    if (objectCbAddr == 0 || instanceView.BufferLocation == 0) {
+        return;
+    }
 
     DispatchSkinningBatch(model);
 

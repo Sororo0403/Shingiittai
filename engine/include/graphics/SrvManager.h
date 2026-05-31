@@ -24,6 +24,7 @@ class SrvManager {
     /// <returns>割り当てられたSRVインデックス</returns>
     UINT Allocate();
     UINT AllocateRange(UINT count);
+    bool CanAllocate(UINT count = 1) const;
 
     /// <summary>
     /// SRVを1つ割り当て、型付きハンドルで返す

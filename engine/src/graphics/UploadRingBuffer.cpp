@@ -1,12 +1,8 @@
 #include "graphics/UploadRingBuffer.h"
 
 #include "graphics/DxHelpers.h"
-#include "graphics/DxUtils.h"
 #include <limits>
-#include <stdexcept>
 #include <utility>
-
-using namespace DxUtils;
 
 UploadRingBuffer::~UploadRingBuffer() { Reset(); }
 
@@ -21,7 +17,10 @@ void UploadRingBuffer::Initialize(ID3D12Device *device, size_t bytesPerFrame,
     const size_t alignedBytesPerFrame = AlignUp(bytesPerFrame, 256);
     std::vector<FrameResource> newFrames(frameCount);
     for (FrameResource &frame : newFrames) {
-        CreateFrameResource(frame, device, alignedBytesPerFrame);
+        if (!CreateFrameResource(frame, device, alignedBytesPerFrame)) {
+            Reset();
+            return;
+        }
     }
     device_ = device;
     bytesPerFrame_ = alignedBytesPerFrame;
@@ -98,19 +97,26 @@ size_t UploadRingBuffer::AlignUp(size_t value, size_t alignment) {
     return ((value + addend) / alignment) * alignment;
 }
 
-void UploadRingBuffer::CreateFrameResource(FrameResource &frame,
+bool UploadRingBuffer::CreateFrameResource(FrameResource &frame,
                                            ID3D12Device *device,
                                            size_t bytesPerFrame) {
     CD3DX12_HEAP_PROPERTIES heap(D3D12_HEAP_TYPE_UPLOAD);
     auto desc = CD3DX12_RESOURCE_DESC::Buffer(bytesPerFrame);
-    ThrowIfFailed(device->CreateCommittedResource(
-                      &heap, D3D12_HEAP_FLAG_NONE, &desc,
-                      D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-                      IID_PPV_ARGS(&frame.resource)),
-                  "CreateCommittedResource(UploadRingBuffer) failed");
+    const HRESULT resourceResult = device->CreateCommittedResource(
+        &heap, D3D12_HEAP_FLAG_NONE, &desc,
+        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+        IID_PPV_ARGS(&frame.resource));
+    if (FAILED(resourceResult) || !frame.resource) {
+        frame.Reset();
+        return false;
+    }
     frame.resource->SetName(L"UploadRingBuffer.FrameResource");
-    ThrowIfFailed(frame.resource->Map(
-                      0, nullptr, reinterpret_cast<void **>(&frame.mapped)),
-                  "Map(UploadRingBuffer) failed");
+    const HRESULT mapResult =
+        frame.resource->Map(0, nullptr, reinterpret_cast<void **>(&frame.mapped));
+    if (FAILED(mapResult) || frame.mapped == nullptr) {
+        frame.Reset();
+        return false;
+    }
     frame.offset = 0;
+    return true;
 }

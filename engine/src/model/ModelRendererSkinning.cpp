@@ -26,21 +26,23 @@ namespace {
 constexpr UINT kSkinningThreadCount = 1024u;
 
 uint32_t CheckedUint32Count(size_t count, const char *message) {
+    (void)message;
     if (count > (std::numeric_limits<uint32_t>::max)()) {
-        throw std::runtime_error(message);
+        return UINT32_MAX;
     }
     return static_cast<uint32_t>(count);
 }
 
 UINT CheckedBufferSize(size_t elementSize, uint32_t count,
                        const char *message) {
+    (void)message;
     if (count == 0 ||
         elementSize > (std::numeric_limits<size_t>::max)() / count) {
-        throw std::runtime_error(message);
+        return 0;
     }
     const size_t bytes = elementSize * count;
     if (bytes > (std::numeric_limits<UINT>::max)()) {
-        throw std::runtime_error(message);
+        return 0;
     }
     return static_cast<UINT>(bytes);
 }
@@ -64,7 +66,13 @@ class ScopedSrvAllocations {
     }
 
     UINT Allocate() {
+        if (srvManager_ == nullptr || !srvManager_->CanAllocate()) {
+            return UINT_MAX;
+        }
         const UINT index = srvManager_->Allocate();
+        if (index == UINT_MAX) {
+            return UINT_MAX;
+        }
         indices_.push_back(index);
         return index;
     }
@@ -237,7 +245,13 @@ struct SceneConstBufferData {
 };
 
 void ModelRenderer::CreateSkinClusters(Model &model) {
+    if (!dxCommon_ || !srvManager_ || !meshManager_) {
+        return;
+    }
     auto *device = dxCommon_->GetDevice();
+    if (device == nullptr) {
+        return;
+    }
     ScopedSrvAllocations srvAllocations(srvManager_);
     SkinClusterMapGuard mapGuard(model);
 
@@ -253,15 +267,28 @@ void ModelRenderer::CreateSkinClusters(Model &model) {
             std::max<uint32_t>(1, CheckedUint32Count(
                                       model.bones.size(),
                                       "ModelRenderer bone count overflow"));
+        if (jointCount == UINT32_MAX) {
+            continue;
+        }
+
+        const bool needsSkinnedBuffers =
+            subMesh.vertexCount > 0 && !subMesh.skinClusterData.empty();
+        const UINT requiredSrvCount = needsSkinnedBuffers ? 4u : 1u;
+        if (!srvManager_->CanAllocate(requiredSrvCount)) {
+            return;
+        }
 
         skinCluster.inverseBindPoseMatrices.assign(
             jointCount, StoreMatrix(XMMatrixIdentity()));
 
-        if (subMesh.vertexCount > 0 && !subMesh.skinClusterData.empty()) {
+        if (needsSkinnedBuffers) {
             const Mesh &mesh = meshManager_->GetMesh(subMesh.meshId);
             const UINT influenceBufferSize =
                 CheckedBufferSize(sizeof(VertexInfluence), subMesh.vertexCount,
                                   "ModelRenderer influence buffer size overflow");
+            if (influenceBufferSize == 0) {
+                continue;
+            }
 
             CD3DX12_HEAP_PROPERTIES uploadHeap(D3D12_HEAP_TYPE_UPLOAD);
             auto influenceDesc =
@@ -284,11 +311,18 @@ void ModelRenderer::CreateSkinClusters(Model &model) {
                         influenceBufferSize);
 
             const UINT inputVertexSrvIndex = srvAllocations.Allocate();
+            if (inputVertexSrvIndex == UINT_MAX) {
+                return;
+            }
             skinCluster.inputVertexSrvIndex = inputVertexSrvIndex;
             skinCluster.inputVertexSrvCpuHandle =
                 srvManager_->GetCpuHandle(inputVertexSrvIndex);
             skinCluster.inputVertexSrvGpuHandle =
                 srvManager_->GetGpuHandle(inputVertexSrvIndex);
+            if (skinCluster.inputVertexSrvCpuHandle.ptr == 0 ||
+                skinCluster.inputVertexSrvGpuHandle.ptr == 0) {
+                return;
+            }
 
             D3D12_SHADER_RESOURCE_VIEW_DESC vertexSrvDesc{};
             vertexSrvDesc.Format = DXGI_FORMAT_UNKNOWN;
@@ -304,11 +338,18 @@ void ModelRenderer::CreateSkinClusters(Model &model) {
                 skinCluster.inputVertexSrvCpuHandle);
 
             const UINT influenceSrvIndex = srvAllocations.Allocate();
+            if (influenceSrvIndex == UINT_MAX) {
+                return;
+            }
             skinCluster.influenceSrvIndex = influenceSrvIndex;
             skinCluster.influenceSrvCpuHandle =
                 srvManager_->GetCpuHandle(influenceSrvIndex);
             skinCluster.influenceSrvGpuHandle =
                 srvManager_->GetGpuHandle(influenceSrvIndex);
+            if (skinCluster.influenceSrvCpuHandle.ptr == 0 ||
+                skinCluster.influenceSrvGpuHandle.ptr == 0) {
+                return;
+            }
 
             D3D12_SHADER_RESOURCE_VIEW_DESC influenceSrvDesc{};
             influenceSrvDesc.Format = DXGI_FORMAT_UNKNOWN;
@@ -327,6 +368,9 @@ void ModelRenderer::CreateSkinClusters(Model &model) {
             const UINT skinnedVertexBufferSize =
                 CheckedBufferSize(sizeof(Vertex), subMesh.vertexCount,
                                   "ModelRenderer skinned vertex buffer size overflow");
+            if (skinnedVertexBufferSize == 0) {
+                continue;
+            }
             CD3DX12_HEAP_PROPERTIES defaultHeap(D3D12_HEAP_TYPE_DEFAULT);
             auto skinnedVertexDesc = CD3DX12_RESOURCE_DESC::Buffer(
                 skinnedVertexBufferSize,
@@ -350,11 +394,18 @@ void ModelRenderer::CreateSkinClusters(Model &model) {
             skinCluster.skinningValid = false;
 
             const UINT skinnedVertexUavIndex = srvAllocations.Allocate();
+            if (skinnedVertexUavIndex == UINT_MAX) {
+                return;
+            }
             skinCluster.skinnedVertexUavIndex = skinnedVertexUavIndex;
             skinCluster.skinnedVertexUavCpuHandle =
                 srvManager_->GetCpuHandle(skinnedVertexUavIndex);
             skinCluster.skinnedVertexUavGpuHandle =
                 srvManager_->GetGpuHandle(skinnedVertexUavIndex);
+            if (skinCluster.skinnedVertexUavCpuHandle.ptr == 0 ||
+                skinCluster.skinnedVertexUavGpuHandle.ptr == 0) {
+                return;
+            }
 
             D3D12_UNORDERED_ACCESS_VIEW_DESC skinnedVertexUavDesc{};
             skinnedVertexUavDesc.Format = DXGI_FORMAT_UNKNOWN;
@@ -412,6 +463,9 @@ void ModelRenderer::CreateSkinClusters(Model &model) {
         const UINT paletteBufferSize =
             CheckedBufferSize(sizeof(WellForGPU), jointCount,
                               "ModelRenderer palette buffer size overflow");
+        if (paletteBufferSize == 0) {
+            continue;
+        }
 
         CD3DX12_HEAP_PROPERTIES uploadHeap(D3D12_HEAP_TYPE_UPLOAD);
         auto paletteDesc = CD3DX12_RESOURCE_DESC::Buffer(paletteBufferSize);
@@ -438,9 +492,16 @@ void ModelRenderer::CreateSkinClusters(Model &model) {
         }
 
         const UINT srvIndex = srvAllocations.Allocate();
+        if (srvIndex == UINT_MAX) {
+            return;
+        }
         skinCluster.paletteSrvIndex = srvIndex;
         skinCluster.paletteSrvCpuHandle = srvManager_->GetCpuHandle(srvIndex);
         skinCluster.paletteSrvGpuHandle = srvManager_->GetGpuHandle(srvIndex);
+        if (skinCluster.paletteSrvCpuHandle.ptr == 0 ||
+            skinCluster.paletteSrvGpuHandle.ptr == 0) {
+            return;
+        }
 
         D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
         srvDesc.Format = DXGI_FORMAT_UNKNOWN;

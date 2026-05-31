@@ -7,6 +7,7 @@
 #include "Sprite.h"
 #include "SpriteManager.h"
 #include "TextureManager.h"
+#include "WeaponSelectScene.h"
 #include "WinApp.h"
 #include <algorithm>
 #include <cstring>
@@ -20,6 +21,7 @@ constexpr float kPreviewStaleSeconds = 0.75f;
 constexpr float kCalibrationHoldSeconds = 3.0f;
 constexpr float kStillMotionSpeed = 0.16f;
 constexpr float kPreviewDimAlpha = 0.18f;
+constexpr float kCameraStartupTimeoutSeconds = 8.0f;
 
 XMFLOAT4 Color(float r, float g, float b, float a = 1.0f) {
     return {r, g, b, a};
@@ -85,6 +87,14 @@ void HandLoadingScene::Update() {
     const auto left = handController_.GetDebugHandState(0);
     const auto right = handController_.GetDebugHandState(1);
     const bool previewReady = previewReceiver_.HasFreshFrame(kPreviewStaleSeconds);
+    const bool cameraStartupTimedOut =
+        sceneTimer_ >= kCameraStartupTimeoutSeconds && !previewReady;
+    if (cameraStartupTimedOut) {
+        inputCalibration_.controlType = InputControlType::KeyboardMouse;
+        sceneManager_->ChangeScene(std::make_unique<WeaponSelectScene>());
+        return;
+    }
+
     if (UsesPreviewLoadingOnly(destinationMode_)) {
         if (previewReady) {
             inputCalibration_.controlType = InputControlType::Hand;

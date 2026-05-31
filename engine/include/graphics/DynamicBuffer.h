@@ -7,7 +7,6 @@
 #include <d3d12.h>
 #include <cstring>
 #include <limits>
-#include <stdexcept>
 #include <wrl.h>
 
 class DynamicBuffer {
@@ -75,7 +74,7 @@ class DynamicBuffer {
     /// AlignUpを実行する
     /// </summary>
     static size_t AlignUp(size_t value, size_t alignment);
-    void CreateResource(size_t capacity);
+    bool CreateResource(size_t capacity);
     void UnmapResource();
 
     ID3D12Device *device_ = nullptr;

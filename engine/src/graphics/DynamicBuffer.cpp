@@ -1,13 +1,9 @@
 #include "graphics/DynamicBuffer.h"
 
 #include "graphics/DxHelpers.h"
-#include "graphics/DxUtils.h"
 
 #include <limits>
-#include <stdexcept>
 #include <utility>
-
-using namespace DxUtils;
 
 DynamicBuffer::~DynamicBuffer() { Reset(); }
 
@@ -21,7 +17,9 @@ void DynamicBuffer::Initialize(ID3D12Device *device, size_t capacity,
     Reset();
     device_ = device;
     defaultAlignment_ = defaultAlignment == 0 ? 1 : defaultAlignment;
-    CreateResource(capacity);
+    if (!CreateResource(capacity)) {
+        Reset();
+    }
 }
 
 void DynamicBuffer::Reset() {
@@ -92,26 +90,34 @@ size_t DynamicBuffer::AlignUp(size_t value, size_t alignment) {
     return ((value + addend) / alignment) * alignment;
 }
 
-void DynamicBuffer::CreateResource(size_t capacity) {
+bool DynamicBuffer::CreateResource(size_t capacity) {
     const size_t alignedCapacity = AlignUp(capacity, defaultAlignment_);
+    if (alignedCapacity == 0 ||
+        alignedCapacity == (std::numeric_limits<size_t>::max)()) {
+        return false;
+    }
     CD3DX12_HEAP_PROPERTIES heap(D3D12_HEAP_TYPE_UPLOAD);
     auto desc = CD3DX12_RESOURCE_DESC::Buffer(alignedCapacity);
     Microsoft::WRL::ComPtr<ID3D12Resource> newResource;
     uint8_t *newMapped = nullptr;
-    ThrowIfFailed(device_->CreateCommittedResource(
-                      &heap, D3D12_HEAP_FLAG_NONE, &desc,
-                      D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-                      IID_PPV_ARGS(&newResource)),
-                  "CreateCommittedResource(DynamicBuffer) failed");
-    ThrowIfFailed(newResource->Map(0, nullptr,
-                                   reinterpret_cast<void **>(&newMapped)),
-                  "Map(DynamicBuffer) failed");
+    const HRESULT resourceResult = device_->CreateCommittedResource(
+        &heap, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr, IID_PPV_ARGS(&newResource));
+    if (FAILED(resourceResult) || !newResource) {
+        return false;
+    }
+    const HRESULT mapResult =
+        newResource->Map(0, nullptr, reinterpret_cast<void **>(&newMapped));
+    if (FAILED(mapResult) || newMapped == nullptr) {
+        return false;
+    }
     UnmapResource();
     resource_.Reset();
     resource_ = std::move(newResource);
     mapped_ = newMapped;
     capacity_ = alignedCapacity;
     offset_ = 0;
+    return true;
 }
 
 void DynamicBuffer::UnmapResource() {

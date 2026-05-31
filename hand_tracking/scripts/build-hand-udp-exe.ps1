@@ -62,6 +62,7 @@ if (-not (Test-Python311 $venvPython)) {
 }
 
 Invoke-VenvPython -m pip install --upgrade pip
+Invoke-VenvPython -m pip uninstall -y opencv-python opencv-python-headless opencv-contrib-python-headless
 Invoke-VenvPython -m pip install -r $requirements
 Invoke-VenvPython -m pip install pyinstaller
 

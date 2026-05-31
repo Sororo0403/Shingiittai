@@ -62,15 +62,17 @@ XMFLOAT4X4 ToMatrix(const aiMatrix4x4 &m) {
 }
 
 uint32_t CheckedUint32Size(size_t value, const char *message) {
+    (void)message;
     if (value > (std::numeric_limits<uint32_t>::max)()) {
-        throw std::runtime_error(message);
+        return UINT32_MAX;
     }
     return static_cast<uint32_t>(value);
 }
 
 int CheckedIntSize(size_t value, const char *message) {
+    (void)message;
     if (value > static_cast<size_t>((std::numeric_limits<int>::max)())) {
-        throw std::runtime_error(message);
+        return (std::numeric_limits<int>::max)();
     }
     return static_cast<int>(value);
 }
@@ -98,7 +100,10 @@ void AssimpMeshLoader::Initialize(TextureManager *textureManager,
                                   MeshManager *meshManager,
                                   MaterialManager *materialManager) {
     if (!textureManager || !meshManager || !materialManager) {
-        throw std::runtime_error("AssimpMeshLoader::Initialize null argument");
+        textureManager_ = nullptr;
+        meshManager_ = nullptr;
+        materialManager_ = nullptr;
+        return;
     }
 
     textureManager_ = textureManager;
@@ -113,7 +118,7 @@ bool AssimpMeshLoader::IsInitialized() const {
 void AssimpMeshLoader::LoadMeshes(const aiScene *scene, const std::string &path,
                                   Model &model) const {
     if (!IsInitialized()) {
-        throw std::runtime_error("AssimpMeshLoader is not initialized");
+        return;
     }
     if (!scene) {
         return;
@@ -139,7 +144,7 @@ void AssimpMeshLoader::LoadMeshes(const aiScene *scene, const std::string &path,
         vertices.reserve(mesh->mNumVertices);
         if (static_cast<size_t>(mesh->mNumFaces) >
             (std::numeric_limits<size_t>::max)() / 3u) {
-            throw std::runtime_error("AssimpMeshLoader face count overflow");
+            continue;
         }
         indices.reserve(static_cast<size_t>(mesh->mNumFaces) * 3u);
 
@@ -195,9 +200,13 @@ void AssimpMeshLoader::LoadMeshes(const aiScene *scene, const std::string &path,
         }
 
         ModelSubMesh subMesh{};
-        subMesh.vertexCount =
-            CheckedUint32Size(vertices.size(),
-                              "AssimpMeshLoader vertex count overflow");
+        if (vertices.size() >
+                static_cast<size_t>((std::numeric_limits<uint32_t>::max)()) ||
+            indices.size() >
+                static_cast<size_t>((std::numeric_limits<uint32_t>::max)())) {
+            continue;
+        }
+        subMesh.vertexCount = static_cast<uint32_t>(vertices.size());
         subMesh.sourcePositions.reserve(vertices.size());
         subMesh.sourceBoundsMin = vertices.front().position;
         subMesh.sourceBoundsMax = vertices.front().position;
@@ -234,10 +243,12 @@ void AssimpMeshLoader::LoadMeshes(const aiScene *scene, const std::string &path,
                     boneIndex =
                         CheckedUint32Size(model.bones.size(),
                                           "AssimpMeshLoader bone count overflow");
+                    if (boneIndex == UINT32_MAX) {
+                        continue;
+                    }
                     if (boneIndex >
                         static_cast<uint32_t>((std::numeric_limits<int>::max)())) {
-                        throw std::runtime_error(
-                            "AssimpMeshLoader bone count exceeds parent index range");
+                        continue;
                     }
 
                     model.boneMap[boneName] = boneIndex;
@@ -318,12 +329,17 @@ void AssimpMeshLoader::LoadMeshes(const aiScene *scene, const std::string &path,
                         tex->pcData == nullptr) {
                         return false;
                     }
+                    if (static_cast<size_t>(tex->mWidth) >
+                        (std::numeric_limits<size_t>::max)() /
+                            static_cast<size_t>(tex->mHeight)) {
+                        return false;
+                    }
                     const size_t pixelCount =
-                        static_cast<size_t>(tex->mWidth) * tex->mHeight;
+                        static_cast<size_t>(tex->mWidth) *
+                        static_cast<size_t>(tex->mHeight);
                     if (pixelCount >
                         (std::numeric_limits<size_t>::max)() / 4u) {
-                        throw std::runtime_error(
-                            "Assimp embedded texture size overflow");
+                        return false;
                     }
 
                     std::vector<uint8_t> pixels(pixelCount * 4u);
@@ -355,12 +371,11 @@ void AssimpMeshLoader::LoadMeshes(const aiScene *scene, const std::string &path,
         }
 
         uint32_t meshId = meshManager_->CreateMesh(
-            vertices.data(), sizeof(Vertex),
-            CheckedUint32Size(vertices.size(),
-                              "AssimpMeshLoader vertex count overflow"),
-            indices.data(),
-            CheckedUint32Size(indices.size(),
-                              "AssimpMeshLoader index count overflow"));
+            vertices.data(), sizeof(Vertex), subMesh.vertexCount,
+            indices.data(), static_cast<uint32_t>(indices.size()));
+        if (meshId == UINT32_MAX) {
+            continue;
+        }
 
         Material material{};
         material.color = {1, 1, 1, 1};
@@ -400,7 +415,7 @@ void AssimpMeshLoader::LoadMeshes(const aiScene *scene, const std::string &path,
     }
 
     if (model.subMeshes.empty()) {
-        throw std::runtime_error("Mesh is null");
+        return;
     }
 
     model.meshId = model.subMeshes[0].meshId;
@@ -479,7 +494,7 @@ void AssimpMeshLoader::ReorderBonesParentFirst(Model &model) const {
         return;
     }
     if (boneCount > static_cast<size_t>((std::numeric_limits<int>::max)())) {
-        throw std::runtime_error("AssimpMeshLoader bone count overflow");
+        return;
     }
 
     std::vector<std::vector<size_t>> children(boneCount);

@@ -182,7 +182,25 @@ uint32_t ResolveNormalTextureId(TextureManager *textureManager,
 void MeshRenderer::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
                               TextureManager *textureManager) {
     if (!dxCommon || !srvManager || !textureManager) {
-        throw std::runtime_error("MeshRenderer::Initialize null argument");
+        dxCommon_ = nullptr;
+        srvManager_ = nullptr;
+        textureManager_ = nullptr;
+        rootSignature_.Reset();
+        shadowRootSignature_.Reset();
+        for (auto &pipeline : pipelineStates_) {
+            pipeline.Reset();
+        }
+        for (auto &pipeline : instancedPipelineStates_) {
+            pipeline.Reset();
+        }
+        shadowPSO_.Reset();
+        instancedShadowPSO_.Reset();
+        customPipelines_.clear();
+        customInstancedPipelines_.clear();
+        uploadBuffer_.Reset();
+        drawIndex_ = 0;
+        shadowMapGpuHandle_ = {};
+        return;
     }
 
     dxCommon_ = dxCommon;
@@ -199,10 +217,18 @@ void MeshRenderer::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
 }
 
 void MeshRenderer::BeginFrame() {
+    if (!dxCommon_) {
+        drawIndex_ = 0;
+        return;
+    }
     uploadBuffer_.BeginFrame(dxCommon_->GetBackBufferIndex());
 }
 
 void MeshRenderer::PreDraw() {
+    if (!dxCommon_ || !srvManager_ || !rootSignature_) {
+        drawIndex_ = 0;
+        return;
+    }
     auto *cmd = dxCommon_->GetCommandList();
     ID3D12DescriptorHeap *heaps[] = {srvManager_->GetHeap()};
     cmd->SetDescriptorHeaps(1, heaps);
@@ -213,6 +239,10 @@ void MeshRenderer::PreDraw() {
 void MeshRenderer::PostDraw() {}
 
 void MeshRenderer::PreDrawShadow() {
+    if (!dxCommon_ || !srvManager_ || !shadowRootSignature_) {
+        drawIndex_ = 0;
+        return;
+    }
     auto *cmd = dxCommon_->GetCommandList();
     ID3D12DescriptorHeap *heaps[] = {srvManager_->GetHeap()};
     cmd->SetDescriptorHeaps(1, heaps);
@@ -223,7 +253,8 @@ void MeshRenderer::PreDrawShadow() {
 void MeshRenderer::DrawMesh(const Mesh &mesh, const Material &material,
                             const Transform &transform, const Camera &camera,
                             uint32_t textureId, uint32_t normalTextureId) {
-    if (drawIndex_ >= kMaxDraws) {
+    if (!dxCommon_ || !textureManager_ || !rootSignature_ ||
+        drawIndex_ >= kMaxDraws) {
         return;
     }
 
@@ -238,6 +269,9 @@ void MeshRenderer::DrawMesh(const Mesh &mesh, const Material &material,
     const D3D12_GPU_VIRTUAL_ADDRESS sceneCbAddr = WriteSceneConstants(camera);
     const D3D12_GPU_VIRTUAL_ADDRESS materialCbAddr =
         WriteMaterialConstants(drawMaterial);
+    if (objectCbAddr == 0 || sceneCbAddr == 0 || materialCbAddr == 0) {
+        return;
+    }
 
     SetPipelineForMaterial(drawMaterial);
     cmd->SetGraphicsRootConstantBufferView(0, objectCbAddr);
@@ -264,7 +298,8 @@ void MeshRenderer::DrawMeshWithPipeline(
     uint32_t pipelineId, const Mesh &mesh, const Material &material,
     const Transform &transform, const Camera &camera, uint32_t textureId,
     uint32_t normalTextureId) {
-    if (pipelineId >= customPipelines_.size() || drawIndex_ >= kMaxDraws) {
+    if (!dxCommon_ || !textureManager_ || !rootSignature_ ||
+        pipelineId >= customPipelines_.size() || drawIndex_ >= kMaxDraws) {
         return;
     }
 
@@ -279,6 +314,9 @@ void MeshRenderer::DrawMeshWithPipeline(
     const D3D12_GPU_VIRTUAL_ADDRESS sceneCbAddr = WriteSceneConstants(camera);
     const D3D12_GPU_VIRTUAL_ADDRESS materialCbAddr =
         WriteMaterialConstants(drawMaterial);
+    if (objectCbAddr == 0 || sceneCbAddr == 0 || materialCbAddr == 0) {
+        return;
+    }
 
     SetPipelineForMaterial(customPipelines_[pipelineId].pipelineStates,
                            drawMaterial);
@@ -307,7 +345,8 @@ void MeshRenderer::DrawMeshWithPipelineHandles(
     const Transform &transform, const Camera &camera,
     D3D12_GPU_DESCRIPTOR_HANDLE textureHandle,
     D3D12_GPU_DESCRIPTOR_HANDLE normalTextureHandle) {
-    if (pipelineId >= customPipelines_.size() || drawIndex_ >= kMaxDraws) {
+    if (!dxCommon_ || !textureManager_ || !rootSignature_ ||
+        pipelineId >= customPipelines_.size() || drawIndex_ >= kMaxDraws) {
         return;
     }
 
@@ -322,6 +361,9 @@ void MeshRenderer::DrawMeshWithPipelineHandles(
     const D3D12_GPU_VIRTUAL_ADDRESS sceneCbAddr = WriteSceneConstants(camera);
     const D3D12_GPU_VIRTUAL_ADDRESS materialCbAddr =
         WriteMaterialConstants(drawMaterial);
+    if (objectCbAddr == 0 || sceneCbAddr == 0 || materialCbAddr == 0) {
+        return;
+    }
 
     SetPipelineForMaterial(customPipelines_[pipelineId].pipelineStates,
                            drawMaterial);
@@ -354,7 +396,8 @@ void MeshRenderer::DrawMeshInstanced(const Mesh &mesh, const Material &material,
                                      const Camera &camera,
                                      uint32_t textureId,
                                      uint32_t normalTextureId) {
-    if (!instances || instanceCount == 0 || drawIndex_ >= kMaxDraws) {
+    if (!dxCommon_ || !textureManager_ || !rootSignature_ || !instances ||
+        instanceCount == 0 || drawIndex_ >= kMaxDraws) {
         return;
     }
 
@@ -369,6 +412,10 @@ void MeshRenderer::DrawMeshInstanced(const Mesh &mesh, const Material &material,
         WriteMaterialConstants(drawMaterial);
     const D3D12_VERTEX_BUFFER_VIEW instanceView =
         WriteInstances(instances, instanceCount);
+    if (objectCbAddr == 0 || sceneCbAddr == 0 || materialCbAddr == 0 ||
+        instanceView.BufferLocation == 0) {
+        return;
+    }
 
     SetInstancedPipelineForMaterial(drawMaterial);
     cmd->SetGraphicsRootConstantBufferView(0, objectCbAddr);
@@ -396,7 +443,8 @@ void MeshRenderer::DrawMeshInstancedWithPipeline(
     uint32_t pipelineId, const Mesh &mesh, const Material &material,
     const InstanceData *instances, uint32_t instanceCount, const Camera &camera,
     uint32_t textureId, uint32_t normalTextureId) {
-    if (pipelineId >= customInstancedPipelines_.size() || !instances ||
+    if (!dxCommon_ || !textureManager_ || !rootSignature_ ||
+        pipelineId >= customInstancedPipelines_.size() || !instances ||
         instanceCount == 0 || drawIndex_ >= kMaxDraws) {
         return;
     }
@@ -412,6 +460,10 @@ void MeshRenderer::DrawMeshInstancedWithPipeline(
         WriteMaterialConstants(drawMaterial);
     const D3D12_VERTEX_BUFFER_VIEW instanceView =
         WriteInstances(instances, instanceCount);
+    if (objectCbAddr == 0 || sceneCbAddr == 0 || materialCbAddr == 0 ||
+        instanceView.BufferLocation == 0) {
+        return;
+    }
 
     SetInstancedPipelineForMaterial(
         customInstancedPipelines_[pipelineId].pipelineStates, drawMaterial);
@@ -445,7 +497,8 @@ void MeshRenderer::DrawMeshShadow(
 void MeshRenderer::DrawMeshShadow(
     const Mesh &mesh, const Material &material, const Transform &transform,
     const DirectX::XMFLOAT4X4 &lightViewProjection, uint32_t textureId) {
-    if (drawIndex_ >= kMaxDraws) {
+    if (!dxCommon_ || !textureManager_ || !shadowRootSignature_ ||
+        !shadowPSO_ || drawIndex_ >= kMaxDraws) {
         return;
     }
 
@@ -461,6 +514,9 @@ void MeshRenderer::DrawMeshShadow(
         WriteShadowSceneConstants(lightViewProjection);
     const D3D12_GPU_VIRTUAL_ADDRESS materialCbAddr =
         WriteMaterialConstants(drawMaterial);
+    if (objectCbAddr == 0 || sceneCbAddr == 0 || materialCbAddr == 0) {
+        return;
+    }
     cmd->SetGraphicsRootSignature(shadowRootSignature_.Get());
     cmd->SetPipelineState(shadowPSO_.Get());
     cmd->SetGraphicsRootConstantBufferView(0, objectCbAddr);
@@ -488,7 +544,9 @@ void MeshRenderer::DrawMeshInstancedShadow(
     const Mesh &mesh, const Material &material, const InstanceData *instances,
     uint32_t instanceCount, const DirectX::XMFLOAT4X4 &lightViewProjection,
     uint32_t textureId) {
-    if (!instances || instanceCount == 0 || drawIndex_ >= kMaxDraws) {
+    if (!dxCommon_ || !textureManager_ || !shadowRootSignature_ ||
+        !instancedShadowPSO_ || !instances || instanceCount == 0 ||
+        drawIndex_ >= kMaxDraws) {
         return;
     }
 
@@ -504,6 +562,10 @@ void MeshRenderer::DrawMeshInstancedShadow(
         WriteMaterialConstants(drawMaterial);
     const D3D12_VERTEX_BUFFER_VIEW instanceView =
         WriteInstances(instances, instanceCount);
+    if (objectCbAddr == 0 || sceneCbAddr == 0 || materialCbAddr == 0 ||
+        instanceView.BufferLocation == 0) {
+        return;
+    }
 
     cmd->SetGraphicsRootSignature(shadowRootSignature_.Get());
     cmd->SetPipelineState(instancedShadowPSO_.Get());
@@ -527,7 +589,8 @@ void MeshRenderer::DrawMeshInstancedShadowWithPipeline(
     uint32_t pipelineId, const Mesh &mesh, const Material &material,
     const InstanceData *instances, uint32_t instanceCount,
     const DirectX::XMFLOAT4X4 &lightViewProjection, uint32_t textureId) {
-    if (pipelineId >= customInstancedPipelines_.size() || !instances ||
+    if (!dxCommon_ || !textureManager_ || !shadowRootSignature_ ||
+        pipelineId >= customInstancedPipelines_.size() || !instances ||
         instanceCount == 0 || drawIndex_ >= kMaxDraws) {
         return;
     }
@@ -544,6 +607,10 @@ void MeshRenderer::DrawMeshInstancedShadowWithPipeline(
         WriteMaterialConstants(drawMaterial);
     const D3D12_VERTEX_BUFFER_VIEW instanceView =
         WriteInstances(instances, instanceCount);
+    if (objectCbAddr == 0 || sceneCbAddr == 0 || materialCbAddr == 0 ||
+        instanceView.BufferLocation == 0) {
+        return;
+    }
 
     cmd->SetGraphicsRootSignature(shadowRootSignature_.Get());
     cmd->SetPipelineState(
@@ -596,6 +663,13 @@ void MeshRenderer::SetShadowMap(
     D3D12_GPU_DESCRIPTOR_HANDLE shadowMap,
     const DirectX::XMFLOAT4X4 &lightViewProjection,
     const SceneShadowSettings &settings) {
+    if (!textureManager_) {
+        shadowMapGpuHandle_ = {};
+        shadowLightViewProjection_ = lightViewProjection;
+        shadowParams_ = {};
+        shadowFilterParams_ = {};
+        return;
+    }
     const bool hasShadowMap = shadowMap.ptr != 0;
     shadowMapGpuHandle_ =
         hasShadowMap

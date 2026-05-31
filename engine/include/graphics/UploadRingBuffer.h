@@ -4,7 +4,6 @@
 #include <d3d12.h>
 #include <cstring>
 #include <limits>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 #include <wrl.h>
@@ -124,7 +123,7 @@ class UploadRingBuffer {
     /// AlignUpを実行する
     /// </summary>
     static size_t AlignUp(size_t value, size_t alignment);
-    static void CreateFrameResource(FrameResource &frame, ID3D12Device *device,
+    static bool CreateFrameResource(FrameResource &frame, ID3D12Device *device,
                                     size_t bytesPerFrame);
 
     ID3D12Device *device_ = nullptr;
