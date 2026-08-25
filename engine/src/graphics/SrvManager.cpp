@@ -3,6 +3,7 @@
 #include "graphics/DxHelpers.h"
 #include "graphics/DxUtils.h"
 #include <algorithm>
+#include <limits>
 #include <utility>
 
 using namespace DxUtils;
@@ -151,20 +152,24 @@ void SrvManager::ValidateAllocatedIndex(UINT index,
 
 D3D12_CPU_DESCRIPTOR_HANDLE
 SrvManager::GetCpuHandle(UINT index) const {
-    if (!IsAllocated(index) || !heap_ || descriptorSize_ == 0) {
+    if (!IsAllocated(index) || !heap_ || descriptorSize_ == 0 ||
+        index > static_cast<UINT>((std::numeric_limits<INT>::max)())) {
         return {};
     }
 
     return CD3DX12_CPU_DESCRIPTOR_HANDLE(
-        heap_->GetCPUDescriptorHandleForHeapStart(), index, descriptorSize_);
+        heap_->GetCPUDescriptorHandleForHeapStart(), static_cast<INT>(index),
+        descriptorSize_);
 }
 
 D3D12_GPU_DESCRIPTOR_HANDLE
 SrvManager::GetGpuHandle(UINT index) const {
-    if (!IsAllocated(index) || !heap_ || descriptorSize_ == 0) {
+    if (!IsAllocated(index) || !heap_ || descriptorSize_ == 0 ||
+        index > static_cast<UINT>((std::numeric_limits<INT>::max)())) {
         return {};
     }
 
     return CD3DX12_GPU_DESCRIPTOR_HANDLE(
-        heap_->GetGPUDescriptorHandleForHeapStart(), index, descriptorSize_);
+        heap_->GetGPUDescriptorHandleForHeapStart(), static_cast<INT>(index),
+        descriptorSize_);
 }

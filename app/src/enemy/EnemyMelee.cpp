@@ -131,30 +131,45 @@ void Enemy::UpdateSmashCharge(float deltaTime) {
         trackingEnd = currentChargeTime;
     }
 
-    if (!tellActive_ && stateTimer_ <= 0.0001f) {
-        EnterTell(ActionKind::Smash);
-    }
-
-    if (tellActive_) {
-        UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_ * 0.55f);
-        if (!IsTellFinished()) {
-            return;
-        }
-
-        tellActive_ = false;
-        stateTimer_ = 0.0f;
-    }
-
-    if (!quickSlashActive_ && !farSlashActive_ &&
-        TryApplyDirectionFeint(ActionKind::Smash)) {
+    if (UpdateChargeTell(ActionKind::Smash, deltaTime, 0.55f)) {
         return;
     }
-    if (!quickSlashActive_ && !farSlashActive_ &&
-        TryBeginChargeWarpFeint(ActionKind::Smash)) {
+    if (TryChargeFeint(ActionKind::Smash)) {
         return;
     }
 
     const float stanceTime = (std::min)(trackingEnd, 0.30f);
+    UpdateChargeTracking(deltaTime, trackingEnd, stanceTime);
+    IssueReleaseCueIfReady();
+    FinishSmashCharge(currentChargeTime);
+}
+
+bool Enemy::UpdateChargeTell(ActionKind kind, float deltaTime,
+                             float turnSpeedScale) {
+    if (!tellActive_ && stateTimer_ <= 0.0001f) {
+        EnterTell(kind);
+    }
+    if (!tellActive_) {
+        return false;
+    }
+    UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_ * turnSpeedScale);
+    if (!IsTellFinished()) {
+        return true;
+    }
+    tellActive_ = false;
+    stateTimer_ = 0.0f;
+    return false;
+}
+
+bool Enemy::TryChargeFeint(ActionKind kind) {
+    if (quickSlashActive_ || farSlashActive_) {
+        return false;
+    }
+    return TryApplyDirectionFeint(kind) || TryBeginChargeWarpFeint(kind);
+}
+
+void Enemy::UpdateChargeTracking(float deltaTime, float trackingEnd,
+                                 float stanceTime) {
     if (stateTimer_ < trackingEnd) {
         UpdateFacingToPlayerWithSpeed(
             deltaTime,
@@ -164,22 +179,23 @@ void Enemy::UpdateSmashCharge(float deltaTime) {
         LockCurrentFacing();
         hasTrackingLocked_ = true;
     }
+}
 
-    IssueReleaseCueIfReady();
-
-    if (stateTimer_ >= currentChargeTime) {
-        if (!hasTrackingLocked_) {
-            LockCurrentFacing();
-            hasTrackingLocked_ = true;
-        }
-        if (ShouldEnterSmashHold()) {
-            ChangeActionStep(ActionStep::Hold);
-            EnterHold(RandomRange(config_.attacks.smash.melee.holdTime.min,
-                                  config_.attacks.smash.melee.holdTime.max));
-            return;
-        }
-        ChangeActionStep(ActionStep::Active);
+void Enemy::FinishSmashCharge(float currentChargeTime) {
+    if (stateTimer_ < currentChargeTime) {
+        return;
     }
+    if (!hasTrackingLocked_) {
+        LockCurrentFacing();
+        hasTrackingLocked_ = true;
+    }
+    if (ShouldEnterSmashHold()) {
+        ChangeActionStep(ActionStep::Hold);
+        EnterHold(RandomRange(config_.attacks.smash.melee.holdTime.min,
+                              config_.attacks.smash.melee.holdTime.max));
+        return;
+    }
+    ChangeActionStep(ActionStep::Active);
 }
 
 void Enemy::UpdateSmashHold(float deltaTime) {
@@ -261,55 +277,34 @@ void Enemy::UpdateSweepCharge(float deltaTime) {
         trackingEnd = currentChargeTime;
     }
 
-    if (!tellActive_ && stateTimer_ <= 0.0001f) {
-        EnterTell(ActionKind::Sweep);
-    }
-
-    if (tellActive_) {
-        UpdateFacingToPlayerWithSpeed(deltaTime, chargeTurnSpeed_ * 0.50f);
-        if (!IsTellFinished()) {
-            return;
-        }
-
-        tellActive_ = false;
-        stateTimer_ = 0.0f;
-    }
-
-    if (!quickSlashActive_ && !farSlashActive_ &&
-        TryApplyDirectionFeint(ActionKind::Sweep)) {
+    if (UpdateChargeTell(ActionKind::Sweep, deltaTime, 0.50f)) {
         return;
     }
-    if (!quickSlashActive_ && !farSlashActive_ &&
-        TryBeginChargeWarpFeint(ActionKind::Sweep)) {
+    if (TryChargeFeint(ActionKind::Sweep)) {
         return;
     }
 
     const float stanceTime = (std::min)(trackingEnd, 0.28f);
-    if (stateTimer_ < trackingEnd) {
-        UpdateFacingToPlayerWithSpeed(
-            deltaTime,
-            chargeTurnSpeed_ *
-                ChargeTurnScaleAfterStance(stateTimer_, stanceTime));
-    } else if (!hasTrackingLocked_) {
+    UpdateChargeTracking(deltaTime, trackingEnd, stanceTime);
+    IssueReleaseCueIfReady();
+    FinishSweepCharge(currentChargeTime);
+}
+
+void Enemy::FinishSweepCharge(float currentChargeTime) {
+    if (stateTimer_ < currentChargeTime) {
+        return;
+    }
+    if (!hasTrackingLocked_) {
         LockCurrentFacing();
         hasTrackingLocked_ = true;
     }
-
-    IssueReleaseCueIfReady();
-
-    if (stateTimer_ >= currentChargeTime) {
-        if (!hasTrackingLocked_) {
-            LockCurrentFacing();
-            hasTrackingLocked_ = true;
-        }
-        if (ShouldEnterSweepHold()) {
-            ChangeActionStep(ActionStep::Hold);
-            EnterHold(RandomRange(config_.attacks.sweep.melee.holdTime.min,
-                                  config_.attacks.sweep.melee.holdTime.max));
-            return;
-        }
-        ChangeActionStep(ActionStep::Active);
+    if (ShouldEnterSweepHold()) {
+        ChangeActionStep(ActionStep::Hold);
+        EnterHold(RandomRange(config_.attacks.sweep.melee.holdTime.min,
+                              config_.attacks.sweep.melee.holdTime.max));
+        return;
     }
+    ChangeActionStep(ActionStep::Active);
 }
 
 void Enemy::UpdateSweepHold(float deltaTime) {

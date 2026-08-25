@@ -88,60 +88,65 @@ void ImguiManager::Initialize(WinApp *winApp, DirectXCommon *dxCommon,
     ImGui_ImplDX12_InitInfo init_info{};
     init_info.Device = dxCommon->GetDevice();
     init_info.CommandQueue = dxCommon->GetCommandQueue();
-    init_info.NumFramesInFlight = dxCommon->GetSwapChainBufferCount();
+    init_info.NumFramesInFlight =
+        static_cast<int>(dxCommon->GetSwapChainBufferCount());
     init_info.RTVFormat = DirectXCommon::kBackBufferFormat;
     init_info.DSVFormat = DXGI_FORMAT_UNKNOWN;
     init_info.UserData = this;
     init_info.SrvDescriptorHeap = srvManager_->GetHeap();
 
-    init_info.SrvDescriptorAllocFn = [](ImGui_ImplDX12_InitInfo *info,
-                                        D3D12_CPU_DESCRIPTOR_HANDLE *out_cpu,
-                                        D3D12_GPU_DESCRIPTOR_HANDLE *out_gpu) {
-        if (out_cpu == nullptr || out_gpu == nullptr) {
-            return;
-        }
-        *out_cpu = {};
-        *out_gpu = {};
-
-        if (info == nullptr || info->UserData == nullptr) {
-            return;
-        }
-        auto *manager = static_cast<ImguiManager *>(info->UserData);
-        if (manager->srvManager_ == nullptr ||
-            !manager->srvManager_->CanAllocate()) {
-            return;
-        }
-
-        uint32_t index = manager->srvManager_->Allocate();
-        ImguiDescriptorAllocationGuard allocationGuard(*manager->srvManager_,
-                                                       index);
-        const D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle =
-            manager->srvManager_->GetCpuHandle(index);
-        const D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle =
-            manager->srvManager_->GetGpuHandle(index);
-        manager->allocatedSrvIndices_.emplace(cpuHandle.ptr, index);
-        *out_cpu = cpuHandle;
-        *out_gpu = gpuHandle;
-        allocationGuard.Commit();
-    };
-
-    init_info.SrvDescriptorFreeFn = [](ImGui_ImplDX12_InitInfo *info,
-                                       D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
-                                       D3D12_GPU_DESCRIPTOR_HANDLE) {
-        auto *manager = static_cast<ImguiManager *>(info->UserData);
-        auto it = manager->allocatedSrvIndices_.find(cpuHandle.ptr);
-        if (it == manager->allocatedSrvIndices_.end()) {
-            return;
-        }
-        manager->srvManager_->FreeIfAllocated(it->second);
-        manager->allocatedSrvIndices_.erase(it);
-    };
+    init_info.SrvDescriptorAllocFn = &ImguiManager::AllocateSrvDescriptor;
+    init_info.SrvDescriptorFreeFn = &ImguiManager::FreeSrvDescriptor;
 
     if (!ImGui_ImplDX12_Init(&init_info)) {
         return;
     }
     dx12Initialized_ = true;
     initializeGuard.Commit();
+}
+
+void ImguiManager::AllocateSrvDescriptor(
+    ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HANDLE *outCpu,
+    D3D12_GPU_DESCRIPTOR_HANDLE *outGpu) {
+    if (outCpu == nullptr || outGpu == nullptr) {
+        return;
+    }
+    *outCpu = {};
+    *outGpu = {};
+    if (info == nullptr || info->UserData == nullptr) {
+        return;
+    }
+    auto *manager = static_cast<ImguiManager *>(info->UserData);
+    if (manager->srvManager_ == nullptr ||
+        !manager->srvManager_->CanAllocate()) {
+        return;
+    }
+
+    const uint32_t index = manager->srvManager_->Allocate();
+    ImguiDescriptorAllocationGuard allocationGuard(*manager->srvManager_, index);
+    const D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle =
+        manager->srvManager_->GetCpuHandle(index);
+    const D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle =
+        manager->srvManager_->GetGpuHandle(index);
+    manager->allocatedSrvIndices_.emplace(cpuHandle.ptr, index);
+    *outCpu = cpuHandle;
+    *outGpu = gpuHandle;
+    allocationGuard.Commit();
+}
+
+void ImguiManager::FreeSrvDescriptor(
+    ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
+    D3D12_GPU_DESCRIPTOR_HANDLE) {
+    if (info == nullptr || info->UserData == nullptr) {
+        return;
+    }
+    auto *manager = static_cast<ImguiManager *>(info->UserData);
+    auto it = manager->allocatedSrvIndices_.find(cpuHandle.ptr);
+    if (it == manager->allocatedSrvIndices_.end()) {
+        return;
+    }
+    manager->srvManager_->FreeIfAllocated(it->second);
+    manager->allocatedSrvIndices_.erase(it);
 }
 
 void ImguiManager::Finalize() {

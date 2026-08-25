@@ -55,6 +55,37 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
         ToggleGamepadControlMode();
     }
 
+    UpdateBodyState(deltaTime, lookTarget, suppressLookAt, suppressMovement);
+
+    const InputControlType controlType = inputCalibration_.controlType;
+    const bool useKeyboardMouse =
+        controlType == InputControlType::KeyboardMouse;
+    const bool useUdpSword = controlType == InputControlType::Hand;
+    if (useUdpSword) {
+        swordUdpController_.Update(inputDeltaTime);
+    }
+    (void)cameraYaw;
+
+    SwordPose leftPose = MakeIdleSwordPose(true);
+    SwordPose rightPose = MakeIdleSwordPose(false);
+    ResolveInputSwordPoses(input, inputDeltaTime, useUdpSword,
+                           useKeyboardMouse, leftPose, rightPose);
+
+    UpdateWeaponRules(input, leftPose, rightPose,
+                      useUdpSword || useKeyboardMouse, deltaTime);
+
+    ApplySwordPoseRestrictions(controlType, leftPose, rightPose);
+
+    const bool slashSuppressed =
+        (suppressCameraSwordSlash_ && controlType == InputControlType::Hand) ||
+        IsChargingRangedAttack();
+    const bool allowMotionSlash =
+        (useUdpSword || !useKeyboardMouse) && !slashSuppressed;
+    UpdateSwords(leftPose, rightPose, inputDeltaTime, allowMotionSlash);
+}
+
+void Player::UpdateBodyState(float deltaTime, const XMFLOAT3 &lookTarget,
+                             bool suppressLookAt, bool suppressMovement) {
     if (suppressMovement) {
         velocity_ = {0.0f, 0.0f, 0.0f};
         knockbackVelocity_ = {0.0f, 0.0f, 0.0f};
@@ -68,57 +99,45 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
     if (damageFlashTimer_ > 0.0f) {
         damageFlashTimer_ = (std::max)(0.0f, damageFlashTimer_ - deltaTime);
     }
+}
 
-    const InputControlType controlType = inputCalibration_.controlType;
-    const bool useKeyboardMouse =
-        controlType == InputControlType::KeyboardMouse;
-    const bool useUdpSword = controlType == InputControlType::Hand;
-    const bool useMouseRightSword = useKeyboardMouse;
-    if (useUdpSword) {
-        swordUdpController_.Update(inputDeltaTime);
-    }
-    (void)cameraYaw;
-
-    SwordPose leftPose = MakeIdleSwordPose(true);
+void Player::ResolveInputSwordPoses(Input *input, float inputDeltaTime,
+                                    bool useUdpSword, bool useKeyboardMouse,
+                                    SwordPose &leftPose,
+                                    SwordPose &rightPose) {
     if (useUdpSword && swordUdpController_.IsActive(0)) {
         leftPose = swordUdpController_.GetPose(0);
     } else if (useKeyboardMouse) {
         leftPose = UpdateKeyboardLeftSword(input, inputDeltaTime);
     }
-
-    SwordPose rightPose = MakeIdleSwordPose(false);
-    if (useUdpSword) {
-        if (swordUdpController_.IsActive(1)) {
-            rightPose = swordUdpController_.GetPose(1);
-        }
-    } else if (useMouseRightSword) {
+    if (useUdpSword && swordUdpController_.IsActive(1)) {
+        rightPose = swordUdpController_.GetPose(1);
+    } else if (useKeyboardMouse) {
         swordMouseController_.Update(input, inputDeltaTime,
                                      rightSword_.GetTransform());
         rightPose = swordMouseController_.GetPose();
     }
+}
 
-    UpdateWeaponRules(input, leftPose, rightPose,
-                      useUdpSword || useKeyboardMouse, deltaTime);
-
-    if (suppressCameraSwordSlash_ && controlType == InputControlType::Hand) {
-        leftPose.isSlashMode = false;
-        rightPose.isSlashMode = false;
-    }
-    if (IsChargingRangedAttack()) {
-        leftPose.isSlashMode = false;
-        rightPose.isSlashMode = false;
-    }
-
-    const bool slashSuppressed =
+void Player::ApplySwordPoseRestrictions(InputControlType controlType,
+                                        SwordPose &leftPose,
+                                        SwordPose &rightPose) const {
+    const bool suppressSlash =
         (suppressCameraSwordSlash_ && controlType == InputControlType::Hand) ||
         IsChargingRangedAttack();
-    const bool allowMotionSlash =
-        (useUdpSword || !useKeyboardMouse) && !slashSuppressed;
+    if (suppressSlash) {
+        leftPose.isSlashMode = false;
+        rightPose.isSlashMode = false;
+    }
+}
+
+void Player::UpdateSwords(const SwordPose &leftPose,
+                          const SwordPose &rightPose, float inputDeltaTime,
+                          bool allowMotionSlash) {
     leftSword_.Update(BuildSwordTransform(leftPose, true), leftPose,
                       inputDeltaTime, allowMotionSlash);
     rightSword_.Update(BuildSwordTransform(rightPose, false), rightPose,
                        inputDeltaTime, allowMotionSlash);
-
     leftSwordSlashMode_ = leftSword_.IsSlashMode();
     rightSwordSlashMode_ = rightSword_.IsSlashMode();
     leftSwordVisible_ = true;
@@ -185,92 +204,105 @@ void Player::Draw(ModelManager *modelManager, const Camera &camera,
             : 0.0f;
     const bool isDamageFlashing = flashGate > 0.0f;
 
-    auto makeFlashEffect = [&]() {
-        ModelDrawEffect effect{};
-        effect.enabled = true;
-        effect.forceOpaqueMaterial = forceOpaque;
-        effect.color = {1.0f, 0.96f, 0.82f, 0.92f};
-        effect.intensity = 0.72f + 0.42f * flashRatio;
-        effect.fresnelPower = 1.45f;
-        effect.noiseAmount = 0.06f;
-        effect.time = damageFlashDuration_ - damageFlashTimer_;
-        effect.surfaceTint = 0.66f + 0.28f * flashRatio;
-        effect.alphaBoost = 0.80f;
-        return effect;
-    };
-
-    Transform playerVisual = tf_;
-    playerVisual.scale.x *= kPlayerVisualScaleMultiplier * visualScale;
-    playerVisual.scale.y *= kPlayerVisualScaleMultiplier * visualScale;
-    playerVisual.scale.z *= kPlayerVisualScaleMultiplier * visualScale;
-    if (bladeClashPoseActive_) {
-        const float push = std::clamp(bladeClashPosePushRatio_, 0.0f, 1.0f);
-        const float leanDirection = 1.0f;
-        const float lean =
-            (bladeClashPoseForwardLean_ ? 0.28f + 0.46f * push
-                                        : 0.12f + 0.34f * push) *
-            leanDirection;
-        XMVECTOR baseRot = XMLoadFloat4(&playerVisual.rotation);
-        XMVECTOR qLean =
-            XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), lean);
-        XMStoreFloat4(&playerVisual.rotation,
-                      XMQuaternionNormalize(XMQuaternionMultiply(qLean, baseRot)));
-        playerVisual.position.y -=
-            (bladeClashPoseForwardLean_ ? 0.04f : 0.10f) * push;
-        const float forwardShift = bladeClashPoseForwardLean_ ? 0.18f : 0.10f;
-        playerVisual.position.z += std::cosf(yaw_) * forwardShift * push;
-        playerVisual.position.x += std::sinf(yaw_) * forwardShift * push;
-    }
-    if (defeatPoseRatio_ > 0.0f) {
-        const float fall = std::clamp(defeatPoseRatio_, 0.0f, 1.0f);
-        const float eased = fall * fall * (3.0f - 2.0f * fall);
-        XMVECTOR baseRot = XMLoadFloat4(&playerVisual.rotation);
-        XMVECTOR qFall =
-            XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), -1.34f * eased);
-        XMStoreFloat4(&playerVisual.rotation,
-                      XMQuaternionNormalize(XMQuaternionMultiply(qFall, baseRot)));
-        playerVisual.position.y -= 0.48f * eased;
-        playerVisual.scale.x *= 1.0f + 0.08f * eased;
-        playerVisual.scale.y *= 1.0f - 0.24f * eased;
-        playerVisual.scale.z *= 1.0f + 0.10f * eased;
-    }
+    const Transform playerVisual = BuildPlayerVisual(visualScale);
 
     if (drawBody) {
-        if (isDamageFlashing) {
-            modelManager->SetDrawEffect(makeFlashEffect());
-        } else if (forceOpaque) {
-            ModelDrawEffect opaqueEffect{};
-            opaqueEffect.enabled = true;
-            opaqueEffect.forceOpaqueMaterial = true;
-            modelManager->SetDrawEffect(opaqueEffect);
-        }
+        SetPlayerDrawEffect(modelManager, isDamageFlashing, forceOpaque,
+                            flashRatio);
         modelManager->Draw(modelId_, playerVisual, camera);
         modelManager->ClearDrawEffect();
     }
 
-    auto drawSword = [&](Sword &sword) {
-        if (isDamageFlashing) {
-            modelManager->SetDrawEffect(makeFlashEffect());
-        } else if (forceOpaque) {
-            ModelDrawEffect opaqueEffect{};
-            opaqueEffect.enabled = true;
-            opaqueEffect.forceOpaqueMaterial = true;
-            modelManager->SetDrawEffect(opaqueEffect);
-        }
-        sword.Draw(modelManager, camera, visualScale);
-        if (isDamageFlashing || forceOpaque) {
-            modelManager->ClearDrawEffect();
-        }
-    };
-
     if (leftSwordVisible_) {
-        drawSword(leftSword_);
+        DrawSwordWithEffect(leftSword_, modelManager, camera, isDamageFlashing,
+                            forceOpaque, flashRatio, visualScale);
     }
     if (rightSwordVisible_) {
-        drawSword(rightSword_);
+        DrawSwordWithEffect(rightSword_, modelManager, camera, isDamageFlashing,
+                            forceOpaque, flashRatio, visualScale);
     }
 
     modelManager->ClearDrawEffect();
+}
+
+Transform Player::BuildPlayerVisual(float visualScale) const {
+    Transform visual = tf_;
+    visual.scale.x *= kPlayerVisualScaleMultiplier * visualScale;
+    visual.scale.y *= kPlayerVisualScaleMultiplier * visualScale;
+    visual.scale.z *= kPlayerVisualScaleMultiplier * visualScale;
+    if (bladeClashPoseActive_) {
+        const float push = std::clamp(bladeClashPosePushRatio_, 0.0f, 1.0f);
+        const float lean = bladeClashPoseForwardLean_ ? 0.28f + 0.46f * push
+                                                      : 0.12f + 0.34f * push;
+        XMVECTOR baseRotation = XMLoadFloat4(&visual.rotation);
+        XMVECTOR leanRotation =
+            XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), lean);
+        XMStoreFloat4(
+            &visual.rotation,
+            XMQuaternionNormalize(
+                XMQuaternionMultiply(leanRotation, baseRotation)));
+        visual.position.y -=
+            (bladeClashPoseForwardLean_ ? 0.04f : 0.10f) * push;
+        const float forwardShift = bladeClashPoseForwardLean_ ? 0.18f : 0.10f;
+        visual.position.z += std::cosf(yaw_) * forwardShift * push;
+        visual.position.x += std::sinf(yaw_) * forwardShift * push;
+    }
+    if (defeatPoseRatio_ > 0.0f) {
+        const float fall = std::clamp(defeatPoseRatio_, 0.0f, 1.0f);
+        const float eased = fall * fall * (3.0f - 2.0f * fall);
+        XMVECTOR baseRotation = XMLoadFloat4(&visual.rotation);
+        XMVECTOR fallRotation = XMQuaternionRotationAxis(
+            XMVectorSet(1, 0, 0, 0), -1.34f * eased);
+        XMStoreFloat4(
+            &visual.rotation,
+            XMQuaternionNormalize(
+                XMQuaternionMultiply(fallRotation, baseRotation)));
+        visual.position.y -= 0.48f * eased;
+        visual.scale.x *= 1.0f + 0.08f * eased;
+        visual.scale.y *= 1.0f - 0.24f * eased;
+        visual.scale.z *= 1.0f + 0.10f * eased;
+    }
+    return visual;
+}
+
+ModelDrawEffect Player::MakeDamageFlashEffect(bool forceOpaque,
+                                               float flashRatio) const {
+    ModelDrawEffect effect{};
+    effect.enabled = true;
+    effect.forceOpaqueMaterial = forceOpaque;
+    effect.color = {1.0f, 0.96f, 0.82f, 0.92f};
+    effect.intensity = 0.72f + 0.42f * flashRatio;
+    effect.fresnelPower = 1.45f;
+    effect.noiseAmount = 0.06f;
+    effect.time = damageFlashDuration_ - damageFlashTimer_;
+    effect.surfaceTint = 0.66f + 0.28f * flashRatio;
+    effect.alphaBoost = 0.80f;
+    return effect;
+}
+
+void Player::SetPlayerDrawEffect(ModelManager *modelManager,
+                                 bool damageFlashing, bool forceOpaque,
+                                 float flashRatio) const {
+    if (damageFlashing) {
+        modelManager->SetDrawEffect(
+            MakeDamageFlashEffect(forceOpaque, flashRatio));
+    } else if (forceOpaque) {
+        ModelDrawEffect opaqueEffect{};
+        opaqueEffect.enabled = true;
+        opaqueEffect.forceOpaqueMaterial = true;
+        modelManager->SetDrawEffect(opaqueEffect);
+    }
+}
+
+void Player::DrawSwordWithEffect(Sword &sword, ModelManager *modelManager,
+                                 const Camera &camera, bool damageFlashing,
+                                 bool forceOpaque, float flashRatio,
+                                 float visualScale) const {
+    SetPlayerDrawEffect(modelManager, damageFlashing, forceOpaque, flashRatio);
+    sword.Draw(modelManager, camera, visualScale);
+    if (damageFlashing || forceOpaque) {
+        modelManager->ClearDrawEffect();
+    }
 }
 
 OBB Player::GetOBB() const {
@@ -448,12 +480,15 @@ void Player::UpdateMovement(float deltaTime, const XMFLOAT3 &lookTarget) {
     knockbackVelocity_.y *= 0.85f;
     knockbackVelocity_.z *= 0.85f;
 
-    if (std::fabs(knockbackVelocity_.x) < 0.01f)
+    if (std::fabs(knockbackVelocity_.x) < 0.01f) {
         knockbackVelocity_.x = 0.0f;
-    if (std::fabs(knockbackVelocity_.y) < 0.01f)
+    }
+    if (std::fabs(knockbackVelocity_.y) < 0.01f) {
         knockbackVelocity_.y = 0.0f;
-    if (std::fabs(knockbackVelocity_.z) < 0.01f)
+    }
+    if (std::fabs(knockbackVelocity_.z) < 0.01f) {
         knockbackVelocity_.z = 0.0f;
+    }
 }
 
 void Player::AddKnockback(const DirectX::XMFLOAT3 &velocity) {

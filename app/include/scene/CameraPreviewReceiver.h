@@ -42,8 +42,8 @@ class CameraPreviewReceiver {
     void UploadTextureIfNeeded(TextureManager *texture);
 
     Frame frame_{};
-    std::vector<uint8_t> jpegBuffer_{};
-    std::vector<bool> chunkReceived_{};
+    std::vector<uint8_t> jpegBuffer_;
+    std::vector<bool> chunkReceived_;
     uintptr_t socket_ = UINTPTR_MAX;
     uint32_t frameId_ = 0;
     size_t receivedChunks_ = 0;

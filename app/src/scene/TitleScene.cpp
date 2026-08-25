@@ -13,6 +13,7 @@
 #include "WinApp.h"
 #include <Xinput.h>
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <memory>
 
@@ -36,26 +37,12 @@ float Smooth01(float t) {
 }
 
 bool IsTitleStartKey(int key) {
-    switch (key) {
-    case DIK_ESCAPE:
-    case DIK_LWIN:
-    case DIK_RWIN:
-    case DIK_APPS:
-    case DIK_LCONTROL:
-    case DIK_RCONTROL:
-    case DIK_LSHIFT:
-    case DIK_RSHIFT:
-    case DIK_LMENU:
-    case DIK_RMENU:
-    case DIK_CAPITAL:
-    case DIK_NUMLOCK:
-    case DIK_SCROLL:
-    case DIK_SYSRQ:
-    case DIK_PAUSE:
-        return false;
-    default:
-        return true;
-    }
+    constexpr std::array kIgnoredKeys = {
+        DIK_ESCAPE, DIK_LWIN,    DIK_RWIN,  DIK_APPS,   DIK_LCONTROL,
+        DIK_RCONTROL, DIK_LSHIFT, DIK_RSHIFT, DIK_LMENU, DIK_RMENU,
+        DIK_CAPITAL, DIK_NUMLOCK, DIK_SCROLL, DIK_SYSRQ, DIK_PAUSE,
+    };
+    return std::ranges::find(kIgnoredKeys, key) == kIgnoredKeys.end();
 }
 } // namespace
 
@@ -471,25 +458,23 @@ bool TitleScene::IsAnyButtonTriggered(const Input &input) const {
         }
     }
 
-    const bool gamepadTriggered =
-        input.IsGamepadConnected() &&
-        (input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_UP) ||
-         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_DOWN) ||
-         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_LEFT) ||
-         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_RIGHT) ||
-         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_START) ||
-         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_BACK) ||
-         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_LEFT_THUMB) ||
-         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_RIGHT_THUMB) ||
-         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_LEFT_SHOULDER) ||
-         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_RIGHT_SHOULDER) ||
-         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_A) ||
-         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_B) ||
-         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_X) ||
-         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_Y) ||
-         input.IsGamepadLeftTriggerTrigger() ||
-         input.IsGamepadRightTriggerTrigger());
-    return gamepadTriggered;
+    if (!input.IsGamepadConnected()) {
+        return false;
+    }
+    constexpr std::array<WORD, 14> kGamepadButtons = {
+        XINPUT_GAMEPAD_DPAD_UP,       XINPUT_GAMEPAD_DPAD_DOWN,
+        XINPUT_GAMEPAD_DPAD_LEFT,     XINPUT_GAMEPAD_DPAD_RIGHT,
+        XINPUT_GAMEPAD_START,         XINPUT_GAMEPAD_BACK,
+        XINPUT_GAMEPAD_LEFT_THUMB,    XINPUT_GAMEPAD_RIGHT_THUMB,
+        XINPUT_GAMEPAD_LEFT_SHOULDER, XINPUT_GAMEPAD_RIGHT_SHOULDER,
+        XINPUT_GAMEPAD_A,             XINPUT_GAMEPAD_B,
+        XINPUT_GAMEPAD_X,             XINPUT_GAMEPAD_Y,
+    };
+    return std::ranges::any_of(kGamepadButtons, [&](WORD button) {
+               return input.IsGamepadButtonTrigger(button);
+           }) ||
+           input.IsGamepadLeftTriggerTrigger() ||
+           input.IsGamepadRightTriggerTrigger();
 }
 
 void TitleScene::StartTitleBgm() {

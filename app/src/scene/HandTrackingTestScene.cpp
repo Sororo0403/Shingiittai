@@ -237,7 +237,7 @@ void HandTrackingTestScene::HandlePreviewPacket(const uint8_t *data,
     size_t totalSize = 0;
     if (!(stream >> magic >> frameId >> chunkIndex >> chunkCount >> totalSize) ||
         magic != "SGCAM" || chunkCount == 0 || chunkIndex >= chunkCount ||
-        totalSize == 0 || totalSize > 1024u * 1024u) {
+        totalSize == 0 || totalSize > size_t{1024} * 1024u) {
         return;
     }
 
@@ -381,6 +381,15 @@ void HandTrackingTestScene::UpdateRangedGesture() {
         rangedGestureAim_ = {aimX, -std::sqrt((std::max)(0.0f, 1.0f - aimX * aimX))};
     }
 
+    UpdateRangedGestureState(pressed, released, joined);
+
+    rangedGesturePulse_ =
+        (std::max)(0.0f, rangedGesturePulse_ - ctx_->frame.deltaTime * 2.5f);
+}
+
+void HandTrackingTestScene::UpdateRangedGestureState(bool pressed,
+                                                     bool released,
+                                                     bool joined) {
     switch (rangedGestureState_) {
     case RangedGestureState::Idle:
         rangedGestureChargeRatio_ = 0.0f;
@@ -424,9 +433,6 @@ void HandTrackingTestScene::UpdateRangedGesture() {
         }
         break;
     }
-
-    rangedGesturePulse_ =
-        (std::max)(0.0f, rangedGesturePulse_ - ctx_->frame.deltaTime * 2.5f);
 }
 
 void HandTrackingTestScene::CalibrateNeutralFromCurrentHands() {

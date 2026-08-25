@@ -145,7 +145,7 @@ void BlendTexturePixels(const std::vector<uint8_t> &from,
 
 struct EnemyPhaseMaterialProfile {
     uint32_t textureId = 0;
-    std::vector<XMFLOAT4> palette{};
+    std::vector<XMFLOAT4> palette;
     float reflection = 0.0f;
     float fresnel = 0.0f;
     float roughness = 0.0f;
@@ -322,7 +322,9 @@ void ApplyEnemyPhaseMaterial(ModelManager *modelManager,
                            materials.blendPixels, SmoothStep01(transitionRatio));
         textureManager->UpdateTexture2D(materials.blendTextureId,
                                         materials.blendPixels.data(),
-                                        EnemyPhaseMaterialSet::kTextureSize * 4u);
+                                        static_cast<size_t>(
+                                            EnemyPhaseMaterialSet::kTextureSize) *
+                                            4u);
     }
 
     materials.currentTextureId = profile.textureId;

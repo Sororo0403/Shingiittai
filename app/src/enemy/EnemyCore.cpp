@@ -3,6 +3,22 @@
 #include <algorithm>
 #include <cmath>
 
+namespace {
+bool SupportsMeleeAttackCue(ActionKind kind) {
+    return kind == ActionKind::Smash || kind == ActionKind::Sweep ||
+           kind == ActionKind::BladeClash;
+}
+
+bool UsesLockedAttackYaw(ActionKind kind) {
+    return SupportsMeleeAttackCue(kind) || kind == ActionKind::ArcaneLaser ||
+           kind == ActionKind::CataclysmLaser;
+}
+
+void TickNonNegative(float &timer, float deltaTime) {
+    timer = (std::max)(0.0f, timer - deltaTime);
+}
+} // namespace
+
 void Enemy::Initialize(uint32_t modelId) {
     modelId_ = modelId;
     runtime_.hp = config_.core.maxHp;
@@ -46,65 +62,51 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
     runtime_.playerPos = playerObs.position;
     UpdateBossPhase();
     UpdateWarpTrails(deltaTime);
-    if (phantomWarpCooldown_ > 0.0f) {
-        phantomWarpCooldown_ -= deltaTime;
-        if (phantomWarpCooldown_ < 0.0f) {
-            phantomWarpCooldown_ = 0.0f;
-        }
-    }
-    if (tripleIaiSlashCooldown_ > 0.0f) {
-        tripleIaiSlashCooldown_ -= deltaTime;
-        if (tripleIaiSlashCooldown_ < 0.0f) {
-            tripleIaiSlashCooldown_ = 0.0f;
-        }
-    }
-    if (phantomFinalLockTimer_ > 0.0f) {
-        phantomFinalLockTimer_ -= deltaTime;
-        if (phantomFinalLockTimer_ < 0.0f) {
-            phantomFinalLockTimer_ = 0.0f;
-        }
-    }
-    if (arcaneLaserCooldown_ > 0.0f) {
-        arcaneLaserCooldown_ -= deltaTime;
-        if (arcaneLaserCooldown_ < 0.0f) {
-            arcaneLaserCooldown_ = 0.0f;
-        }
-    }
-    if (cataclysmLaserCooldown_ > 0.0f) {
-        cataclysmLaserCooldown_ -= deltaTime;
-        if (cataclysmLaserCooldown_ < 0.0f) {
-            cataclysmLaserCooldown_ = 0.0f;
-        }
-    }
-    if (sharedRangedAttackCooldown_ > 0.0f) {
-        sharedRangedAttackCooldown_ -= deltaTime;
-        if (sharedRangedAttackCooldown_ < 0.0f) {
-            sharedRangedAttackCooldown_ = 0.0f;
-        }
-    }
-    if (rangedAttackLockoutTimer_ > 0.0f) {
-        rangedAttackLockoutTimer_ -= deltaTime;
-        if (rangedAttackLockoutTimer_ < 0.0f) {
-            rangedAttackLockoutTimer_ = 0.0f;
-        }
+    UpdateCooldowns(deltaTime);
+    if (UpdateDeathSequence(deltaTime) ||
+        UpdatePhaseTransition(deltaTime)) {
+        return;
     }
 
-    if (counterRecoilTimer_ > 0.0f) {
-        counterRecoilTimer_ -= deltaTime;
-        if (counterRecoilTimer_ < 0.0f) {
-            counterRecoilTimer_ = 0.0f;
-        }
-    }
-    if (damageFlashTimer_ > 0.0f) {
-        damageFlashTimer_ = (std::max)(0.0f, damageFlashTimer_ - deltaTime);
+    if (action_.kind == ActionKind::None) {
+        UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_);
     }
 
-    if (isDying_) {
+    stateTimer_ += deltaTime;
+    isAttackActive_ = false;
+    if (UpdateHitReaction(deltaTime)) {
+        return;
+    }
+    if (tripleIaiIntroActive_) {
+        UpdateTripleIaiSlashIntro(deltaTime);
+        UpdateParts();
+        return;
+    }
+    UpdateByAction(deltaTime);
+    UpdateParts();
+}
+
+void Enemy::UpdateCooldowns(float deltaTime) {
+    float *timers[] = {&phantomWarpCooldown_,
+                       &tripleIaiSlashCooldown_,
+                       &phantomFinalLockTimer_,
+                       &arcaneLaserCooldown_,
+                       &cataclysmLaserCooldown_,
+                       &sharedRangedAttackCooldown_,
+                       &rangedAttackLockoutTimer_,
+                       &counterRecoilTimer_,
+                       &damageFlashTimer_};
+    for (float *timer : timers) {
+        TickNonNegative(*timer, deltaTime);
+    }
+}
+
+bool Enemy::UpdateDeathSequence(float deltaTime) {
+    if (!isDying_) {
+        return false;
+    }
         deathTimer_ += deltaTime;
-        float t = deathTimer_ / deathDuration_;
-        if (t > 1.0f) {
-            t = 1.0f;
-        }
+        const float t = (std::min)(deathTimer_ / deathDuration_, 1.0f);
 
         tf_.position.y = deathStartY_ - deathSinkDistance_ * t;
         tf_.scale.x = 1.0f - 0.25f * t;
@@ -116,10 +118,13 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
         if (deathTimer_ >= deathDuration_) {
             deathFinished_ = true;
         }
-        return;
-    }
+        return true;
+}
 
-    if (phaseTransitionActive_) {
+bool Enemy::UpdatePhaseTransition(float deltaTime) {
+    if (!phaseTransitionActive_) {
+        return false;
+    }
         phaseTransitionTimer_ += deltaTime;
         isAttackActive_ = false;
 
@@ -144,17 +149,13 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
                 runtime_.phase2BladeClashPending = false;
             }
         }
-        return;
+        return true;
+}
+
+bool Enemy::UpdateHitReaction(float deltaTime) {
+    if (hitReactionTimer_ <= 0.0f) {
+        return false;
     }
-
-    if (action_.kind == ActionKind::None) {
-        UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_);
-    }
-
-    stateTimer_ += deltaTime;
-    isAttackActive_ = false;
-
-    if (hitReactionTimer_ > 0.0f) {
         stateTimer_ -= deltaTime;
         if (stateTimer_ < 0.0f) {
             stateTimer_ = 0.0f;
@@ -165,18 +166,8 @@ void Enemy::Update(const PlayerCombatObservation &playerObs, float deltaTime) {
             hitReactionTimer_ = 0.0f;
         }
 
-        UpdateParts();
-        return;
-    }
-
-    if (tripleIaiIntroActive_) {
-        UpdateTripleIaiSlashIntro(deltaTime);
-        UpdateParts();
-        return;
-    }
-
-    UpdateByAction(deltaTime);
     UpdateParts();
+    return true;
 }
 
 void Enemy::UpdateTutorial(const PlayerCombatObservation &playerObs,
@@ -388,8 +379,7 @@ void Enemy::UpdateByAction(float deltaTime) {
 void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     lastActionKind_ = kind;
 
-    if (kind == ActionKind::Smash || kind == ActionKind::Sweep ||
-        kind == ActionKind::BladeClash) {
+    if (SupportsMeleeAttackCue(kind)) {
         rangedReengagePending_ = false;
     }
 
@@ -425,9 +415,11 @@ void Enemy::BeginAction(ActionKind kind, ActionStep step) {
     cinematicRoll_ = 0.0f;
     ResetPreAttackPresentationState();
 
-    const bool supportsAttackCue = kind == ActionKind::Smash ||
-                                   kind == ActionKind::Sweep ||
-                                   kind == ActionKind::BladeClash;
+    IssueBeginActionCue(kind, step);
+}
+
+void Enemy::IssueBeginActionCue(ActionKind kind, ActionStep step) {
+    const bool supportsAttackCue = SupportsMeleeAttackCue(kind);
     if (supportsAttackCue && step == ActionStep::Charge) {
         const float chargeTime =
             kind == ActionKind::Smash
@@ -456,11 +448,7 @@ void Enemy::ChangeActionStep(ActionStep step) {
     isAttackActive_ = false;
     stateTimer_ = 0.0f;
 
-    const bool usesLockedAttackYaw =
-        action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
-        action_.kind == ActionKind::BladeClash ||
-        action_.kind == ActionKind::ArcaneLaser ||
-        action_.kind == ActionKind::CataclysmLaser;
+    const bool usesLockedAttackYaw = UsesLockedAttackYaw(action_.kind);
     const bool enteringActive =
         step == ActionStep::Active && previousStep != ActionStep::Active;
     if (enteringActive && usesLockedAttackYaw && !hasTrackingLocked_) {
@@ -480,9 +468,7 @@ void Enemy::ChangeActionStep(ActionStep step) {
         ResetPreAttackPresentationState();
     }
 
-    if ((action_.kind == ActionKind::Smash ||
-         action_.kind == ActionKind::Sweep ||
-         action_.kind == ActionKind::BladeClash) &&
+    if (SupportsMeleeAttackCue(action_.kind) &&
         step == ActionStep::Active && previousStep != ActionStep::Active &&
         !attackReleaseCueIssued_) {
         IssueAttackCue(EnemyAttackCueType::Release, action_.kind, 0.0f);
@@ -557,8 +543,8 @@ void Enemy::IssueAttackCue(EnemyAttackCueType type, ActionKind kind,
         return;
     }
 
-    if (!(kind == ActionKind::Smash || kind == ActionKind::Sweep ||
-          kind == ActionKind::BladeClash)) {
+    if (kind != ActionKind::Smash && kind != ActionKind::Sweep &&
+        kind != ActionKind::BladeClash) {
         return;
     }
 
@@ -576,12 +562,12 @@ void Enemy::IssueReleaseCueIfReady() {
     if (attackReleaseCueIssued_) {
         return;
     }
-    if (!(action_.kind == ActionKind::Smash ||
-          action_.kind == ActionKind::Sweep)) {
+    if (action_.kind != ActionKind::Smash &&
+        action_.kind != ActionKind::Sweep) {
         return;
     }
-    if (!(action_.step == ActionStep::Charge ||
-          action_.step == ActionStep::Hold)) {
+    if (action_.step != ActionStep::Charge &&
+        action_.step != ActionStep::Hold) {
         return;
     }
 

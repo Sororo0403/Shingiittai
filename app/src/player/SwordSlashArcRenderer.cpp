@@ -11,6 +11,10 @@ using namespace DxUtils;
 using Microsoft::WRL::ComPtr;
 
 namespace {
+float CueValue(bool releaseCounterCueVisible, float releaseValue,
+               float normalValue) {
+    return releaseCounterCueVisible ? releaseValue : normalValue;
+}
 constexpr float kPi = 3.14159265f;
 
 XMFLOAT3 Add(const XMFLOAT3 &a, const XMFLOAT3 &b) {
@@ -93,7 +97,6 @@ void SwordSlashArcRenderer::Emit(const XMFLOAT3 &root, const XMFLOAT3 &tip,
                                  size_t swordIndex) {
     ArcInstance &arc = AcquireTransientArc();
 
-    const XMFLOAT3 bladeDir = NormalizeSafe(Sub(tip, root), {0.0f, 1.0f, 0.0f});
     const XMFLOAT3 bladeCenter = Scale(Add(root, tip), 0.5f);
     XMFLOAT3 attackDir = Sub(targetPosition, playerPosition);
     attackDir.y = 0.0f;
@@ -318,28 +321,28 @@ void SwordSlashArcRenderer::EmitDirectionCueLine(
     };
 
     XMFLOAT4 glow = color;
-    glow.w *= releaseCounterCueVisible ? 0.54f : 0.62f;
+    glow.w *= CueValue(releaseCounterCueVisible, 0.54f, 0.62f);
     XMFLOAT4 core = color;
-    core.w *= releaseCounterCueVisible ? 0.94f : 1.0f;
+    core.w *= CueValue(releaseCounterCueVisible, 0.94f, 1.0f);
     XMFLOAT4 outer = color;
-    outer.w *= releaseCounterCueVisible ? 0.28f : 0.34f;
+    outer.w *= CueValue(releaseCounterCueVisible, 0.28f, 0.34f);
     XMFLOAT4 hot = color;
-    hot.x = hot.x + 0.42f > 1.0f ? 1.0f : hot.x + 0.42f;
-    hot.y = hot.y + 0.32f > 1.0f ? 1.0f : hot.y + 0.32f;
-    hot.z = hot.z + 0.22f > 1.0f ? 1.0f : hot.z + 0.22f;
-    hot.w *= releaseCounterCueVisible ? 1.08f : 1.0f;
+    hot.x = (std::min)(1.0f, hot.x + 0.42f);
+    hot.y = (std::min)(1.0f, hot.y + 0.32f);
+    hot.z = (std::min)(1.0f, hot.z + 0.22f);
+    hot.w *= CueValue(releaseCounterCueVisible, 1.08f, 1.0f);
 
-    emitStroke(releaseCounterCueVisible ? 1.62f : 1.50f,
-               releaseCounterCueVisible ? 0.30f : 0.34f,
+    emitStroke(CueValue(releaseCounterCueVisible, 1.62f, 1.50f),
+               CueValue(releaseCounterCueVisible, 0.30f, 0.34f),
                outer, 0.0f, 0.0f);
-    emitStroke(releaseCounterCueVisible ? 1.44f : 1.32f,
-               releaseCounterCueVisible ? 0.18f : 0.21f,
+    emitStroke(CueValue(releaseCounterCueVisible, 1.44f, 1.32f),
+               CueValue(releaseCounterCueVisible, 0.18f, 0.21f),
                glow, -0.04f, 0.0f);
-    emitStroke(releaseCounterCueVisible ? 1.30f : 1.18f,
-               releaseCounterCueVisible ? 0.074f : 0.088f,
+    emitStroke(CueValue(releaseCounterCueVisible, 1.30f, 1.18f),
+               CueValue(releaseCounterCueVisible, 0.074f, 0.088f),
                core, 0.03f, 0.0f);
-    emitStroke(releaseCounterCueVisible ? 1.04f : 0.92f,
-               releaseCounterCueVisible ? 0.034f : 0.042f,
+    emitStroke(CueValue(releaseCounterCueVisible, 1.04f, 0.92f),
+               CueValue(releaseCounterCueVisible, 0.034f, 0.042f),
                hot, 0.10f, 0.0f);
 }
 

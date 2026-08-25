@@ -5,6 +5,7 @@
 #include "texture/TextureManager.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -137,7 +138,7 @@ void ReadNamedMaterialParams(const json &material, ParticleLayerDesc &desc) {
             continue;
         }
 
-        const std::string name = it.key();
+        const std::string &name = it.key();
         std::string target = name;
         if (bindings.contains(name) && bindings.at(name).is_string()) {
             target = bindings.at(name).get<std::string>();
@@ -189,53 +190,30 @@ DirectX::XMFLOAT3 NormalizeOr(const DirectX::XMFLOAT3 &value,
 
 DirectX::XMFLOAT4 ThemeColor(EffectManager::PlushColorTheme theme,
                              const std::string &slot) {
-    switch (theme) {
-    case EffectManager::PlushColorTheme::TeddyBear:
-        if (slot == "main") {
-            return {1.0f, 0.86f, 0.58f, 0.78f};
-        }
-        if (slot == "fiber") {
-            return {0.95f, 0.84f, 0.65f, 0.70f};
-        }
-        if (slot == "accent") {
-            return {0.74f, 0.50f, 0.30f, 0.78f};
-        }
-        return {1.0f, 0.78f, 0.52f, 0.62f};
-    case EffectManager::PlushColorTheme::PastelToy:
-        if (slot == "main") {
-            return {0.92f, 0.98f, 1.0f, 0.80f};
-        }
-        if (slot == "fiber") {
-            return {0.76f, 0.92f, 1.0f, 0.72f};
-        }
-        if (slot == "accent") {
-            return {1.0f, 0.94f, 0.50f, 0.78f};
-        }
-        return {0.96f, 0.78f, 1.0f, 0.62f};
-    case EffectManager::PlushColorTheme::DarkPlush:
-        if (slot == "main") {
-            return {0.58f, 0.55f, 0.64f, 0.76f};
-        }
-        if (slot == "fiber") {
-            return {0.54f, 0.52f, 0.58f, 0.66f};
-        }
-        if (slot == "accent") {
-            return {0.50f, 0.22f, 0.42f, 0.74f};
-        }
-        return {0.46f, 0.34f, 0.58f, 0.55f};
-    case EffectManager::PlushColorTheme::Default:
-    default:
-        if (slot == "main") {
-            return {1.0f, 0.92f, 0.96f, 0.82f};
-        }
-        if (slot == "fiber") {
-            return {0.92f, 0.98f, 1.0f, 0.72f};
-        }
-        if (slot == "accent") {
-            return {1.0f, 0.92f, 0.72f, 0.76f};
-        }
-        return {1.0f, 0.82f, 0.88f, 0.62f};
+    using Color = DirectX::XMFLOAT4;
+    constexpr std::array<std::array<Color, 4>, 4> kThemePalettes = {{
+        {{{1.0f, 0.92f, 0.96f, 0.82f}, {0.92f, 0.98f, 1.0f, 0.72f},
+          {1.0f, 0.92f, 0.72f, 0.76f}, {1.0f, 0.82f, 0.88f, 0.62f}}},
+        {{{1.0f, 0.86f, 0.58f, 0.78f}, {0.95f, 0.84f, 0.65f, 0.70f},
+          {0.74f, 0.50f, 0.30f, 0.78f}, {1.0f, 0.78f, 0.52f, 0.62f}}},
+        {{{0.92f, 0.98f, 1.0f, 0.80f}, {0.76f, 0.92f, 1.0f, 0.72f},
+          {1.0f, 0.94f, 0.50f, 0.78f}, {0.96f, 0.78f, 1.0f, 0.62f}}},
+        {{{0.58f, 0.55f, 0.64f, 0.76f}, {0.54f, 0.52f, 0.58f, 0.66f},
+          {0.50f, 0.22f, 0.42f, 0.74f}, {0.46f, 0.34f, 0.58f, 0.55f}}},
+    }};
+    const size_t rawThemeIndex = static_cast<size_t>(theme);
+    const size_t themeIndex = rawThemeIndex < kThemePalettes.size()
+                                  ? rawThemeIndex
+                                  : 0;
+    size_t slotIndex = 3;
+    if (slot == "main") {
+        slotIndex = 0;
+    } else if (slot == "fiber") {
+        slotIndex = 1;
+    } else if (slot == "accent") {
+        slotIndex = 2;
     }
+    return kThemePalettes[themeIndex][slotIndex];
 }
 
 ParticleLayerDesc ParseParticleLayer(const json &layer,

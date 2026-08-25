@@ -46,6 +46,22 @@ InputControlType RankingModeFromToken(const std::string &token) {
     return token == "hand" ? InputControlType::Hand
                            : InputControlType::KeyboardMouse;
 }
+
+bool IsPreviousControlInput(const Input &input, bool gamepadConnected) {
+    return input.IsKeyTrigger(DIK_A) || input.IsKeyTrigger(DIK_LEFT) ||
+           (gamepadConnected &&
+            input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_LEFT));
+}
+
+bool IsNextControlInput(const Input &input, bool gamepadConnected) {
+    return input.IsKeyTrigger(DIK_D) || input.IsKeyTrigger(DIK_RIGHT) ||
+           (gamepadConnected &&
+            input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_RIGHT));
+}
+
+bool IsRankingReturnInput(const Input &input) {
+    return input.IsKeyTrigger(DIK_ESCAPE) || input.IsKeyTrigger(DIK_SPACE);
+}
 } // namespace
 
 RankingScene::RankingScene(ReturnTarget returnTarget)
@@ -139,22 +155,17 @@ void RankingScene::Update() {
     }
 
     Input *input = ctx_->systems.input;
-    if (input != nullptr) {
-        const bool gamepad = input->IsGamepadConnected();
-        if (input->IsKeyTrigger(DIK_A) || input->IsKeyTrigger(DIK_LEFT) ||
-            (gamepad &&
-             input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_LEFT))) {
-            ChangeControlType(InputControlType::KeyboardMouse);
-        }
-        if (input->IsKeyTrigger(DIK_D) || input->IsKeyTrigger(DIK_RIGHT) ||
-            (gamepad &&
-             input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_RIGHT))) {
-            ChangeControlType(InputControlType::Hand);
-        }
+    if (input == nullptr) {
+        return;
     }
-
-    if (input != nullptr &&
-        (input->IsKeyTrigger(DIK_ESCAPE) || input->IsKeyTrigger(DIK_SPACE))) {
+    const bool gamepadConnected = input->IsGamepadConnected();
+    if (IsPreviousControlInput(*input, gamepadConnected)) {
+        ChangeControlType(InputControlType::KeyboardMouse);
+    }
+    if (IsNextControlInput(*input, gamepadConnected)) {
+        ChangeControlType(InputControlType::Hand);
+    }
+    if (IsRankingReturnInput(*input)) {
         AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
         BeginReturn();
     }

@@ -101,150 +101,12 @@ class HandUdpSenderProcess {
             return false;
         }
 
-        const std::filesystem::path packagedExe = PackagedExePath(runtimeRoot);
-        const std::filesystem::path scriptPath =
-            sourceDir / L"src" / L"hand_udp_sender.py";
-        const std::filesystem::path venvPython = VenvPythonPath(runtimeRoot);
-        const auto appendCameraArg = [](std::wstring& command,
-                                        const wchar_t* envName,
-                                        const wchar_t* argName) {
-            wchar_t cameraSource[1024]{};
-            constexpr DWORD kCameraSourceCapacity =
-                static_cast<DWORD>(sizeof(cameraSource) /
-                                   sizeof(cameraSource[0]));
-            const DWORD length =
-                GetEnvironmentVariableW(envName, cameraSource,
-                                        kCameraSourceCapacity);
-            if (!command.empty() && length > 0 &&
-                length < kCameraSourceCapacity) {
-                command += L" ";
-                command += argName;
-                command += L" \"";
-                command += std::wstring(cameraSource, length);
-                command += L"\"";
-                return true;
-            }
-            return false;
-        };
-
-        std::wstring scriptCommand;
-        if (std::filesystem::exists(scriptPath) &&
-            std::filesystem::exists(venvPython)) {
-            scriptCommand = L"\"" + venvPython.wstring() + L"\" \"" +
-                            scriptPath.wstring() + L"\" --model \"" +
-                            modelArg.wstring() + L"\"";
-        } else if (std::filesystem::exists(scriptPath)) {
-            scriptCommand = L"py -3.11 \"" + scriptPath.wstring() +
-                            L"\" --model \"" + modelArg.wstring() + L"\"";
-        }
-        appendCameraArg(scriptCommand, L"SHINGIITTAI_MAIN_CAMERA", L"--camera");
-        std::wstring packagedCommand;
-        if (std::filesystem::exists(packagedExe)) {
-            packagedCommand = L"\"" + packagedExe.wstring() + L"\" --model \"" +
-                              modelArg.wstring() + L"\"";
-        }
-        appendCameraArg(packagedCommand, L"SHINGIITTAI_MAIN_CAMERA", L"--camera");
-
-        std::wstring command;
-        if (!packagedCommand.empty()) {
-            command = packagedCommand;
-        } else {
-            command = scriptCommand;
-        }
-
+        const std::wstring command = BuildCommand(runtimeRoot, sourceDir,
+                                                   modelArg);
         if (command.empty()) {
             return false;
         }
-
-        HANDLE jobHandle = CreateJobObjectW(nullptr, nullptr);
-        if (jobHandle != nullptr) {
-            JOBOBJECT_EXTENDED_LIMIT_INFORMATION limitInfo{};
-            limitInfo.BasicLimitInformation.LimitFlags =
-                JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-            if (!SetInformationJobObject(jobHandle,
-                                         JobObjectExtendedLimitInformation,
-                                         &limitInfo, sizeof(limitInfo))) {
-                CloseHandle(jobHandle);
-                jobHandle = nullptr;
-            }
-        }
-
-        std::error_code logDirError;
-        const std::filesystem::path logDir =
-            runtimeRoot / L"hand_tracking" / L"logs";
-        std::filesystem::create_directories(logDir, logDirError);
-
-        SECURITY_ATTRIBUTES inheritHandleAttributes{};
-        inheritHandleAttributes.nLength = sizeof(inheritHandleAttributes);
-        inheritHandleAttributes.bInheritHandle = TRUE;
-
-        HANDLE childStdOut = CreateFileW(
-            (logDir / L"hand_udp_sender.out.log").wstring().c_str(),
-            GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
-            &inheritHandleAttributes, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL,
-            nullptr);
-        HANDLE childStdErr = CreateFileW(
-            (logDir / L"hand_udp_sender.err.log").wstring().c_str(),
-            GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
-            &inheritHandleAttributes, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL,
-            nullptr);
-        HANDLE childStdIn = CreateFileW(
-            L"NUL", GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
-            &inheritHandleAttributes, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL,
-            nullptr);
-        const bool redirectLogs =
-            childStdOut != INVALID_HANDLE_VALUE &&
-            childStdErr != INVALID_HANDLE_VALUE &&
-            childStdIn != INVALID_HANDLE_VALUE;
-        if (redirectLogs) {
-            SetFilePointer(childStdOut, 0, nullptr, FILE_END);
-            SetFilePointer(childStdErr, 0, nullptr, FILE_END);
-        }
-
-        STARTUPINFOW startupInfo{};
-        startupInfo.cb = sizeof(startupInfo);
-        startupInfo.dwFlags = STARTF_USESHOWWINDOW;
-        startupInfo.wShowWindow = SW_HIDE;
-        if (redirectLogs) {
-            startupInfo.dwFlags |= STARTF_USESTDHANDLES;
-            startupInfo.hStdOutput = childStdOut;
-            startupInfo.hStdError = childStdErr;
-            startupInfo.hStdInput = childStdIn;
-        }
-        PROCESS_INFORMATION processInfo{};
-        const BOOL started = CreateProcessW(
-            nullptr, command.data(), nullptr, nullptr, redirectLogs ? TRUE : FALSE,
-            CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr,
-            runtimeRoot.wstring().c_str(),
-            &startupInfo, &processInfo);
-        if (childStdOut != INVALID_HANDLE_VALUE) {
-            CloseHandle(childStdOut);
-        }
-        if (childStdErr != INVALID_HANDLE_VALUE) {
-            CloseHandle(childStdErr);
-        }
-        if (childStdIn != INVALID_HANDLE_VALUE) {
-            CloseHandle(childStdIn);
-        }
-        if (!started) {
-            if (jobHandle != nullptr) {
-                CloseHandle(jobHandle);
-            }
-            return false;
-        }
-
-        if (jobHandle != nullptr &&
-            !AssignProcessToJobObject(jobHandle, processInfo.hProcess)) {
-            CloseHandle(jobHandle);
-            jobHandle = nullptr;
-        }
-
-        ResumeThread(processInfo.hThread);
-
-        processInfo_ = processInfo;
-        jobHandle_ = jobHandle;
-        isRunning_ = true;
-        return true;
+        return LaunchProcess(command, runtimeRoot);
     }
 
     bool IsRunning() {
@@ -253,6 +115,154 @@ class HandUdpSenderProcess {
     }
 
   private:
+    struct ChildLogHandles {
+        HANDLE output = INVALID_HANDLE_VALUE;
+        HANDLE error = INVALID_HANDLE_VALUE;
+        HANDLE input = INVALID_HANDLE_VALUE;
+
+        bool AreValid() const {
+            return output != INVALID_HANDLE_VALUE &&
+                   error != INVALID_HANDLE_VALUE &&
+                   input != INVALID_HANDLE_VALUE;
+        }
+    };
+
+    static ChildLogHandles
+    OpenChildLogs(const std::filesystem::path &runtimeRoot) {
+        std::error_code ignoredError;
+        const std::filesystem::path directory =
+            runtimeRoot / L"hand_tracking" / L"logs";
+        std::filesystem::create_directories(directory, ignoredError);
+        SECURITY_ATTRIBUTES attributes{};
+        attributes.nLength = sizeof(attributes);
+        attributes.bInheritHandle = TRUE;
+        ChildLogHandles handles{};
+        handles.output = CreateFileW(
+            (directory / L"hand_udp_sender.out.log").wstring().c_str(),
+            GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, &attributes,
+            OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+        handles.error = CreateFileW(
+            (directory / L"hand_udp_sender.err.log").wstring().c_str(),
+            GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, &attributes,
+            OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+        handles.input = CreateFileW(
+            L"NUL", GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+            &attributes, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (handles.AreValid()) {
+            SetFilePointer(handles.output, 0, nullptr, FILE_END);
+            SetFilePointer(handles.error, 0, nullptr, FILE_END);
+        }
+        return handles;
+    }
+
+    static void CloseChildLogs(const ChildLogHandles &handles) {
+        const HANDLE values[] = {handles.output, handles.error, handles.input};
+        for (HANDLE value : values) {
+            if (value != INVALID_HANDLE_VALUE) {
+                CloseHandle(value);
+            }
+        }
+    }
+
+    static void AppendCameraArgument(std::wstring &command) {
+        wchar_t cameraSource[1024]{};
+        constexpr DWORD capacity = static_cast<DWORD>(std::size(cameraSource));
+        const DWORD length = GetEnvironmentVariableW(
+            L"SHINGIITTAI_MAIN_CAMERA", cameraSource, capacity);
+        if (!command.empty() && length > 0 && length < capacity) {
+            command += L" --camera \"";
+            command += std::wstring(cameraSource, length);
+            command += L"\"";
+        }
+    }
+
+    static std::wstring BuildCommand(
+        const std::filesystem::path &runtimeRoot,
+        const std::filesystem::path &sourceDir,
+        const std::filesystem::path &modelArgument) {
+        const std::filesystem::path scriptPath =
+            sourceDir / L"src" / L"hand_udp_sender.py";
+        const std::filesystem::path venvPython = VenvPythonPath(runtimeRoot);
+        std::wstring scriptCommand;
+        if (std::filesystem::exists(scriptPath) &&
+            std::filesystem::exists(venvPython)) {
+            scriptCommand = L"\"" + venvPython.wstring() + L"\" \"" +
+                            scriptPath.wstring() + L"\" --model \"" +
+                            modelArgument.wstring() + L"\"";
+        } else if (std::filesystem::exists(scriptPath)) {
+            scriptCommand = L"py -3.11 \"" + scriptPath.wstring() +
+                            L"\" --model \"" + modelArgument.wstring() +
+                            L"\"";
+        }
+        AppendCameraArgument(scriptCommand);
+
+        std::wstring packagedCommand;
+        const std::filesystem::path packagedExe = PackagedExePath(runtimeRoot);
+        if (std::filesystem::exists(packagedExe)) {
+            packagedCommand = L"\"" + packagedExe.wstring() +
+                              L"\" --model \"" + modelArgument.wstring() +
+                              L"\"";
+            AppendCameraArgument(packagedCommand);
+        }
+        return packagedCommand.empty() ? scriptCommand : packagedCommand;
+    }
+
+    static HANDLE CreateKillOnCloseJob() {
+        HANDLE job = CreateJobObjectW(nullptr, nullptr);
+        if (job == nullptr) {
+            return nullptr;
+        }
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
+        limits.BasicLimitInformation.LimitFlags =
+            JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation,
+                                     &limits, sizeof(limits))) {
+            CloseHandle(job);
+            return nullptr;
+        }
+        return job;
+    }
+
+    bool LaunchProcess(const std::wstring &command,
+                       const std::filesystem::path &runtimeRoot) {
+        std::wstring mutableCommand = command;
+        HANDLE job = CreateKillOnCloseJob();
+        const ChildLogHandles logs = OpenChildLogs(runtimeRoot);
+        const bool redirectLogs = logs.AreValid();
+        STARTUPINFOW startup{};
+        startup.cb = sizeof(startup);
+        startup.dwFlags = STARTF_USESHOWWINDOW;
+        startup.wShowWindow = SW_HIDE;
+        if (redirectLogs) {
+            startup.dwFlags |= STARTF_USESTDHANDLES;
+            startup.hStdOutput = logs.output;
+            startup.hStdError = logs.error;
+            startup.hStdInput = logs.input;
+        }
+        PROCESS_INFORMATION process{};
+        const BOOL started = CreateProcessW(
+            nullptr, mutableCommand.data(), nullptr, nullptr,
+            redirectLogs ? TRUE : FALSE,
+            CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr,
+            runtimeRoot.wstring().c_str(), &startup, &process);
+        CloseChildLogs(logs);
+        if (!started) {
+            if (job != nullptr) {
+                CloseHandle(job);
+            }
+            return false;
+        }
+        if (job != nullptr && !AssignProcessToJobObject(job, process.hProcess)) {
+            CloseHandle(job);
+            job = nullptr;
+        }
+        ResumeThread(process.hThread);
+        processInfo_ = process;
+        jobHandle_ = job;
+        isRunning_ = true;
+        return true;
+    }
+
     void RefreshProcessState() {
         if (!isRunning_) {
             return;
@@ -299,7 +309,7 @@ class HandUdpSenderProcess {
 
     static std::filesystem::path PackagedExePath(
         const std::filesystem::path &root) {
-        const std::filesystem::path runtimePackagedExe =
+        std::filesystem::path runtimePackagedExe =
             HandTrackingSourceDir(root) / L"hand_udp_sender" /
             L"hand_udp_sender.exe";
         if (std::filesystem::exists(runtimePackagedExe)) {
@@ -311,7 +321,7 @@ class HandUdpSenderProcess {
     }
 
     static std::filesystem::path ResolveRuntimeRoot() {
-        const std::filesystem::path executableDir = ResolveExecutableDirectory();
+        std::filesystem::path executableDir = ResolveExecutableDirectory();
         const auto hasSender = [](const std::filesystem::path &root) {
             const std::filesystem::path sourceDir = HandTrackingSourceDir(root);
             return std::filesystem::exists(sourceDir / L"src" /
@@ -560,6 +570,6 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
     return 0;
 }
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
-    return RunApp(hInstance, nCmdShow);
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nShowCmd) {
+    return RunApp(hInstance, nShowCmd);
 }

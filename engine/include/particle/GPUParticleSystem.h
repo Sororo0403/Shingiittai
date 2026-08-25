@@ -181,6 +181,15 @@ class GPUParticleSystem {
 
     EmitterForGPU BuildEmitterForGPU(const ParticleEmitterSettings &settings,
                                      uint32_t emit) const;
+    void RestorePendingEmitters(
+        std::vector<ParticleEmitterSettings> pendingSettings);
+    std::vector<ParticleForGPU> CreateInitialParticles() const;
+    bool HasInitializedResources() const;
+    bool IsReadyToDraw() const;
+    bool HasDrawWork() const;
+    void UpdateDrawConstants(const Camera &camera);
+    void ReleaseSrvDescriptors();
+    void UnmapConstantBuffers();
 
     /// <summary>
     /// 保持しているGPUリソースを解放する

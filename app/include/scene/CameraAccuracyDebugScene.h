@@ -12,6 +12,8 @@
 #include <cstdint>
 #include <string>
 
+class Input;
+
 class CameraAccuracyDebugScene : public BaseScene {
   public:
     enum class ReturnTarget {
@@ -41,6 +43,8 @@ class CameraAccuracyDebugScene : public BaseScene {
     bool RequestHandTrackingStartOnce();
     Image LoadTextureImage(const std::wstring &path);
     void UpdateCamera();
+    void ReturnToPreviousScene();
+    void UpdateSensitivityInput(Input &input);
     void AdjustSelectedSensitivity(int direction);
     int SensitivityItemCount() const;
     float GetSensitivityValue(size_t index) const;
@@ -88,9 +92,9 @@ class CameraAccuracyDebugScene : public BaseScene {
                   const DirectX::XMFLOAT4 &color);
 
     SwordInputCalibration calibration_{};
-    SwordUdpController controller_{};
+    SwordUdpController controller_;
     CameraPreviewReceiver previewReceiver_{};
-    Camera camera_{};
+    Camera camera_;
     Player gamePreviewPlayer_{};
     uint32_t playerModelId_ = 0;
     uint32_t swordModelId_ = 0;

@@ -61,6 +61,8 @@ class SkyboxRenderer {
     /// 定数バッファを生成する
     /// </summary>
     void CreateConstantBuffer();
+    bool IsReadyToDraw() const;
+    void UpdateCameraConstants(const Camera &camera);
 
   private:
     struct ConstBufferData {

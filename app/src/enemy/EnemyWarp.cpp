@@ -255,8 +255,9 @@ void Enemy::FinalizeWarpTargetFacing(DirectX::XMFLOAT3 &target) {
 }
 
 void Enemy::ConfigureFarSlashLungeTarget() {
-    if (!farSlashActive_ || !(action_.kind == ActionKind::Smash ||
-                              action_.kind == ActionKind::Sweep)) {
+    if (!farSlashActive_ ||
+        (action_.kind != ActionKind::Smash &&
+         action_.kind != ActionKind::Sweep)) {
         hasFarSlashLungeTarget_ = false;
         farSlashLungeDuration_ = 0.0f;
         return;
@@ -490,33 +491,9 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
     isVisible_ = true;
     warp_.collisionDisabled = false;
     RefreshLiveBehindWarpTarget();
-    if ((warp_.faceLivePlayerOnEnd || warp_.followupKind == ActionKind::Smash ||
-         warp_.followupKind == ActionKind::Sweep ||
-         warp_.followupKind == ActionKind::ArcaneLaser ||
-         warp_.followupKind == ActionKind::CataclysmLaser)) {
-        UpdateFacingToPlayer();
-        LockCurrentFacing();
-    } else if (warp_.hasTargetYaw) {
-        facingYaw_ = NormalizeAngle(warp_.targetYaw);
-        LockCurrentFacing();
-    } else {
-        UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_ * 0.75f);
-    }
+    UpdateWarpEndFacing(deltaTime);
 
-    float endTime = config_.warp.endTime;
-    if (warp_.phantomChain) {
-        endTime = PhantomWarpEndTime(warp_.phantomFinal);
-    } else if (warp_.isFeint) {
-        endTime = config_.warp.endTime * warpFeintEndTimeScale_;
-    } else if (warp_.followupKind == ActionKind::ArcaneLaser ||
-               warp_.followupKind == ActionKind::CataclysmLaser) {
-        endTime = config_.warp.endTime * 0.42f;
-    } else if (warp_.farSlashFollowup && tripleIaiSlashActive_) {
-        endTime = config_.warp.endTime * 0.08f;
-    } else if (warp_.farSlashFollowup) {
-        endTime = config_.warp.endTime * 0.38f;
-    }
-    if (stateTimer_ < endTime) {
+    if (stateTimer_ < GetWarpEndDuration()) {
         return;
     }
 
@@ -530,7 +507,62 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
     const bool phantomFinal = warp_.phantomFinal;
     const int phantomRemaining = warp_.phantomViewWarpsRemaining;
     EndAttack();
-    if (phantomChain && !phantomFinal) {
+    if (phantomChain && !phantomFinal &&
+        ContinuePhantomWarp(phantomRemaining)) {
+        return;
+    }
+    if (isFeint) {
+        BeginStalkAction();
+        return;
+    }
+    if (BeginWarpMeleeFollowup(followupKind, followupStep, immediateFollowup,
+                               farSlashFollowup, feintFollowup, phantomChain,
+                               phantomFinal)) {
+        return;
+    }
+    if (followupKind == ActionKind::ArcaneLaser ||
+        followupKind == ActionKind::CataclysmLaser) {
+        UpdateFacingToPlayer();
+        LockCurrentFacing();
+        BeginAction(followupKind, ActionStep::Charge);
+        return;
+    }
+    BeginChaseAction();
+}
+
+void Enemy::UpdateWarpEndFacing(float deltaTime) {
+    if ((warp_.faceLivePlayerOnEnd || warp_.followupKind == ActionKind::Smash ||
+         warp_.followupKind == ActionKind::Sweep ||
+         warp_.followupKind == ActionKind::ArcaneLaser ||
+         warp_.followupKind == ActionKind::CataclysmLaser)) {
+        UpdateFacingToPlayer();
+        LockCurrentFacing();
+    } else if (warp_.hasTargetYaw) {
+        facingYaw_ = NormalizeAngle(warp_.targetYaw);
+        LockCurrentFacing();
+    } else {
+        UpdateFacingToPlayerWithSpeed(deltaTime, idleTurnSpeed_ * 0.75f);
+    }
+}
+
+float Enemy::GetWarpEndDuration() const {
+    float endTime = config_.warp.endTime;
+    if (warp_.phantomChain) {
+        endTime = PhantomWarpEndTime(warp_.phantomFinal);
+    } else if (warp_.isFeint) {
+        endTime = config_.warp.endTime * warpFeintEndTimeScale_;
+    } else if (warp_.followupKind == ActionKind::ArcaneLaser ||
+               warp_.followupKind == ActionKind::CataclysmLaser) {
+        endTime = config_.warp.endTime * 0.42f;
+    } else if (warp_.farSlashFollowup && tripleIaiSlashActive_) {
+        endTime = config_.warp.endTime * 0.08f;
+    } else if (warp_.farSlashFollowup) {
+        endTime = config_.warp.endTime * 0.38f;
+    }
+    return endTime;
+}
+
+bool Enemy::ContinuePhantomWarp(int phantomRemaining) {
         const float earlyStrikeChance =
             0.18f + 0.42f * TechniqueUnlock(BossPhase::Phase3);
         const bool canCutInEarly = phantomRemaining > 1;
@@ -539,7 +571,7 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
                 (std::rand() % 2 == 0) ? ActionKind::Smash
                                        : ActionKind::Sweep;
             BeginPhantomWarpStep(0, true, finisher);
-            return;
+            return true;
         }
         if (phantomRemaining > 1) {
             BeginPhantomWarpStep(phantomRemaining - 1, false,
@@ -550,19 +582,23 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
                                        : ActionKind::Sweep;
             BeginPhantomWarpStep(0, true, finisher);
         }
-        return;
-    }
-    if (isFeint) {
-        BeginStalkAction();
-        return;
-    }
+        return true;
+}
 
-    if (followupKind == ActionKind::Smash || followupKind == ActionKind::Sweep) {
+bool Enemy::BeginWarpMeleeFollowup(ActionKind followupKind,
+                                   ActionStep followupStep,
+                                   bool immediateFollowup,
+                                   bool farSlashFollowup, bool feintFollowup,
+                                   bool phantomChain, bool phantomFinal) {
+    if (followupKind != ActionKind::Smash &&
+        followupKind != ActionKind::Sweep) {
+        return false;
+    }
         UpdateFacingToPlayer();
         LockCurrentFacing();
         if (!farSlashFollowup && !IsPlayerInMeleeFront()) {
             BeginChaseAction();
-            return;
+            return true;
         }
         BeginAction(followupKind, followupStep);
         quickSlashActive_ = immediateFollowup || (phantomChain && phantomFinal);
@@ -586,24 +622,7 @@ void Enemy::UpdateWarpEnd(float deltaTime) {
             warpFeintDecisionMade_ = true;
             directionFeintDecisionMade_ = true;
         }
-        return;
-    }
-
-    if (followupKind == ActionKind::ArcaneLaser) {
-        UpdateFacingToPlayer();
-        LockCurrentFacing();
-        BeginAction(ActionKind::ArcaneLaser, ActionStep::Charge);
-        return;
-    }
-
-    if (followupKind == ActionKind::CataclysmLaser) {
-        UpdateFacingToPlayer();
-        LockCurrentFacing();
-        BeginAction(ActionKind::CataclysmLaser, ActionStep::Charge);
-        return;
-    }
-
-    BeginChaseAction();
+    return true;
 }
 
 void Enemy::UpdateWarpTrails(float deltaTime) {

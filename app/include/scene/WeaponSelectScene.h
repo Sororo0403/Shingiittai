@@ -39,6 +39,9 @@ class WeaponSelectScene : public BaseScene {
     static constexpr int kSelectableCount = kButtonCount;
 
     Image LoadTextureImage(const std::wstring &path);
+    bool UpdateReturnTransition();
+    bool UpdateUtilityTransition();
+    bool UpdateStartTransition();
     void UpdateSelection(Input *input);
     void UpdateDeviceAvailability();
     void BeginStart();

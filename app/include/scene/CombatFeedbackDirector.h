@@ -39,6 +39,9 @@ class CombatFeedbackDirector {
     void AddCameraShake(float duration, float horizontal, float vertical);
 
   private:
+    void UpdateHitStopTimer(float deltaTime);
+    void UpdateShakeTimer(float deltaTime);
+    void UpdatePostTimer(float deltaTime);
     void AddHitStop(float duration, float timeScale);
     void AddPostFlash(float duration, float blurStrength, float noiseStrength,
                       float vignetteBoost, float primaryTintStrength = 0.0f,

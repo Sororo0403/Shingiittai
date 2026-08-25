@@ -70,33 +70,9 @@ void CombatFeedbackDirector::Reset() {
 }
 
 void CombatFeedbackDirector::Update(float deltaTime, float sceneTime) {
-    if (hitStopTimer_ > 0.0f) {
-        hitStopTimer_ = (std::max)(0.0f, hitStopTimer_ - deltaTime);
-    }
-    if (hitStopTimer_ <= 0.0f) {
-        hitStopDuration_ = 0.0f;
-        hitStopTimeScale_ = 1.0f;
-    }
-    if (shakeTimer_ > 0.0f) {
-        shakeTimer_ = (std::max)(0.0f, shakeTimer_ - deltaTime);
-    }
-    if (shakeTimer_ <= 0.0f) {
-        shakeDuration_ = 0.0f;
-        shakeHorizontal_ = 0.0f;
-        shakeVertical_ = 0.0f;
-    }
-    if (postTimer_ > 0.0f) {
-        postTimer_ = (std::max)(0.0f, postTimer_ - deltaTime);
-    }
-    if (postTimer_ <= 0.0f) {
-        postDuration_ = 0.0f;
-        radialBlurStrength_ = 0.0f;
-        randomStrength_ = 0.0f;
-        vignetteBoost_ = 0.0f;
-        primaryTintStrength_ = 0.0f;
-        secondaryTintStrength_ = 0.0f;
-        fovKickDeg_ = 0.0f;
-    }
+    UpdateHitStopTimer(deltaTime);
+    UpdateShakeTimer(deltaTime);
+    UpdatePostTimer(deltaTime);
 
     if (!postEffectManager_ || postEffectLayer_ == 0) {
         return;
@@ -147,6 +123,42 @@ void CombatFeedbackDirector::Update(float deltaTime, float sceneTime) {
         postEffectManager_->SetLayerProfile(postEffectLayer_, profile);
     } else {
         postEffectManager_->ClearLayer(postEffectLayer_);
+    }
+}
+
+void CombatFeedbackDirector::UpdateHitStopTimer(float deltaTime) {
+    if (hitStopTimer_ > 0.0f) {
+        hitStopTimer_ = (std::max)(0.0f, hitStopTimer_ - deltaTime);
+    }
+    if (hitStopTimer_ <= 0.0f) {
+        hitStopDuration_ = 0.0f;
+        hitStopTimeScale_ = 1.0f;
+    }
+}
+
+void CombatFeedbackDirector::UpdateShakeTimer(float deltaTime) {
+    if (shakeTimer_ > 0.0f) {
+        shakeTimer_ = (std::max)(0.0f, shakeTimer_ - deltaTime);
+    }
+    if (shakeTimer_ <= 0.0f) {
+        shakeDuration_ = 0.0f;
+        shakeHorizontal_ = 0.0f;
+        shakeVertical_ = 0.0f;
+    }
+}
+
+void CombatFeedbackDirector::UpdatePostTimer(float deltaTime) {
+    if (postTimer_ > 0.0f) {
+        postTimer_ = (std::max)(0.0f, postTimer_ - deltaTime);
+    }
+    if (postTimer_ <= 0.0f) {
+        postDuration_ = 0.0f;
+        radialBlurStrength_ = 0.0f;
+        randomStrength_ = 0.0f;
+        vignetteBoost_ = 0.0f;
+        primaryTintStrength_ = 0.0f;
+        secondaryTintStrength_ = 0.0f;
+        fovKickDeg_ = 0.0f;
     }
 }
 

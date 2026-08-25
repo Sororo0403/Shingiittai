@@ -66,7 +66,7 @@ bool Frustum::IntersectsAABB(const XMFLOAT3 &min, const XMFLOAT3 &max) const {
         (std::max)(FiniteOr(min.z, 0.0f), FiniteOr(max.z, 0.0f)),
     };
 
-    for (const XMFLOAT4 &plane : planes_) {
+    return std::ranges::all_of(planes_, [&](const XMFLOAT4 &plane) {
         const XMFLOAT3 positive = {
             plane.x >= 0.0f ? safeMax.x : safeMin.x,
             plane.y >= 0.0f ? safeMax.y : safeMin.y,
@@ -75,12 +75,8 @@ bool Frustum::IntersectsAABB(const XMFLOAT3 &min, const XMFLOAT3 &max) const {
 
         const float distance = plane.x * positive.x + plane.y * positive.y +
                                plane.z * positive.z + plane.w;
-        if (std::isfinite(distance) && distance < 0.0f) {
-            return false;
-        }
-    }
-
-    return true;
+        return !std::isfinite(distance) || distance >= 0.0f;
+    });
 }
 
 uint32_t LODSelector::Select(float distance, const LODRange *ranges,

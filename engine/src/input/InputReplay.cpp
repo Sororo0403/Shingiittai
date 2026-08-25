@@ -98,46 +98,55 @@ bool TryConvertInteger(int64_t value, T &outValue) {
     return true;
 }
 
+std::string JsonScalarOr(const nlohmann::json &value,
+                         const std::string &fallback) {
+    const std::string *text = value.get_ptr<const std::string *>();
+    return text != nullptr ? *text : fallback;
+}
+
+bool JsonScalarOr(const nlohmann::json &value, bool fallback) {
+    const bool *boolean = value.get_ptr<const bool *>();
+    return boolean != nullptr ? *boolean : fallback;
+}
+
 template <typename T>
-T JsonValueOr(const nlohmann::json &object, const char *key, T fallback) {
+    requires std::is_floating_point_v<T>
+T JsonScalarOr(const nlohmann::json &jsonValue, T fallback) {
+    if (!jsonValue.is_number()) {
+        return fallback;
+    }
+    const double value = jsonValue.get<double>();
+    if (!std::isfinite(value) ||
+        value < static_cast<double>((std::numeric_limits<T>::lowest)()) ||
+        value > static_cast<double>((std::numeric_limits<T>::max)())) {
+        return fallback;
+    }
+    return static_cast<T>(value);
+}
+
+template <typename T>
+    requires(std::is_integral_v<T> && !std::is_same_v<T, bool>)
+T JsonScalarOr(const nlohmann::json &value, T fallback) {
+    T converted{};
+    if (value.is_number_unsigned()) {
+        return TryConvertInteger(value.get<uint64_t>(), converted) ? converted
+                                                                   : fallback;
+    }
+    if (value.is_number_integer()) {
+        return TryConvertInteger(value.get<int64_t>(), converted) ? converted
+                                                                  : fallback;
+    }
+    return fallback;
+}
+
+template <typename T>
+T JsonValueOr(const nlohmann::json &object, const char *key,
+              const T &fallback) {
     const auto it = object.find(key);
     if (it == object.end() || it->is_null()) {
         return fallback;
     }
-    if constexpr (std::is_same_v<T, std::string>) {
-        const std::string *value = it->get_ptr<const std::string *>();
-        return value != nullptr ? *value : fallback;
-    } else if constexpr (std::is_same_v<T, bool>) {
-        const bool *value = it->get_ptr<const bool *>();
-        return value != nullptr ? *value : fallback;
-    } else if constexpr (std::is_floating_point_v<T>) {
-        if (it->is_number()) {
-            const double value = it->get<double>();
-            if (std::isfinite(value) &&
-                value >= static_cast<double>(
-                             (std::numeric_limits<T>::lowest)()) &&
-                value <=
-                    static_cast<double>((std::numeric_limits<T>::max)())) {
-                return static_cast<T>(value);
-            }
-        }
-        return fallback;
-    } else if constexpr (std::is_integral_v<T>) {
-        T converted{};
-        if (it->is_number_unsigned()) {
-            return TryConvertInteger(it->get<uint64_t>(), converted)
-                       ? converted
-                       : fallback;
-        }
-        if (it->is_number_integer()) {
-            return TryConvertInteger(it->get<int64_t>(), converted)
-                       ? converted
-                       : fallback;
-        }
-        return fallback;
-    } else {
-        return fallback;
-    }
+    return JsonScalarOr(*it, fallback);
 }
 
 float JsonClampedFloat(const nlohmann::json &object, const char *key,
@@ -356,7 +365,7 @@ bool Input::LoadReplay(const std::wstring &path) {
     if (!root.contains("frames") || !root["frames"].is_array()) {
         return false;
     }
-    if (root["frames"].size() == 0 ||
+    if (root["frames"].empty() ||
         root["frames"].size() > kMaxReplayFrames) {
         return false;
     }

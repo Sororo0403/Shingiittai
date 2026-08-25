@@ -8,8 +8,8 @@ namespace {
 constexpr float kEpsilon = 1.0e-5f;
 
 struct OBBBasis {
-    DirectX::XMVECTOR axes[3];
-    float extent[3];
+    DirectX::XMVECTOR axes[3]{};
+    float extent[3]{};
 };
 
 float AbsDot(DirectX::FXMVECTOR a, DirectX::FXMVECTOR b) {
@@ -146,12 +146,15 @@ bool CollisionUtil::CheckOBB(const OBB &a, const OBB &b) {
 }
 
 bool CollisionUtil::CheckAABB(const AABB &a, const AABB &b) {
-    if (a.max.x < b.min.x || a.min.x > b.max.x)
+    if (a.max.x < b.min.x || a.min.x > b.max.x) {
         return false;
-    if (a.max.y < b.min.y || a.min.y > b.max.y)
+    }
+    if (a.max.y < b.min.y || a.min.y > b.max.y) {
         return false;
-    if (a.max.z < b.min.z || a.min.z > b.max.z)
+    }
+    if (a.max.z < b.min.z || a.min.z > b.max.z) {
         return false;
+    }
 
     return true;
 }

@@ -74,6 +74,9 @@ void DirectXCommon::Initialize(HWND hwnd, int width, int height) {
 void DirectXCommon::BeginFrame() {
     ++diagnosticFrameId_;
     TrackGpuPhase("BeginFrame");
+    if (backBufferIndex_ >= kSwapChainBufferCount) {
+        throw std::runtime_error("Invalid swap-chain back-buffer index");
+    }
     WaitForFrame(backBufferIndex_);
     ID3D12CommandAllocator* commandAllocator =
         commandAllocators_[backBufferIndex_].Get();
@@ -243,6 +246,9 @@ void DirectXCommon::BeginUpload() {
         return;
     }
 
+    if (backBufferIndex_ >= kSwapChainBufferCount) {
+        throw std::runtime_error("Invalid swap-chain back-buffer index");
+    }
     WaitForFrame(backBufferIndex_);
     ID3D12CommandAllocator* commandAllocator =
         commandAllocators_[backBufferIndex_].Get();

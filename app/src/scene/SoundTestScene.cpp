@@ -573,7 +573,8 @@ void SoundTestScene::DrawSpeakerIcon(float centerX, float centerY, float size,
                              pulse * 9.0f) *
                             s;
         DrawRect(centerX + waveX, centerY - waveH * 0.5f, 6.0f * s, waveH,
-                 Color(0.00f, 0.86f, 0.78f, (0.54f - i * 0.10f) * alpha));
+                 Color(0.00f, 0.86f, 0.78f,
+                       (0.54f - static_cast<float>(i) * 0.10f) * alpha));
     }
 }
 

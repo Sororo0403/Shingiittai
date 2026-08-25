@@ -8,6 +8,7 @@
 #include <cstdint>
 
 class ModelManager;
+struct ModelDrawEffect;
 
 enum class ActionStep {
     None,
@@ -651,7 +652,61 @@ class Enemy {
         runtime_.afterimageGhosts;
 
   private:
+    struct PartPresentationContext {
+        float usedYaw = 0.0f;
+        float visualYaw = 0.0f;
+        float visualPitch = 0.0f;
+        float visualRoll = 0.0f;
+        float pulse = 0.0f;
+        float forwardX = 0.0f;
+        float forwardZ = 0.0f;
+        float rightX = 0.0f;
+        float rightZ = 0.0f;
+        bool suppressAttackBodyMotion = false;
+        bool suppressActionPresentation = false;
+        bool isTelegraphCharge = false;
+        bool isFarSlashFlashHold = false;
+        bool isFarSlashPostPierceSlash = false;
+    };
     void UpdateParts();
+    void InitializePartTransforms(const PartPresentationContext &pose);
+    void ApplyHitPartPresentation(PartPresentationContext &pose);
+    void ApplyChargePartPresentation(const PartPresentationContext &pose);
+    void ApplyPhasePartPresentation(PartPresentationContext &pose);
+    void ApplyEnemyActionPartPresentation(PartPresentationContext &pose);
+    void ApplySmashPartPresentation(PartPresentationContext &pose);
+    void ApplySweepPartPresentation(PartPresentationContext &pose);
+    void ApplyBladeClashPartPresentation(PartPresentationContext &pose);
+    void ApplyArcaneLaserPartPresentation(PartPresentationContext &pose);
+    void ApplyCataclysmLaserPartPresentation(PartPresentationContext &pose);
+    void ApplyStalkPartPresentation(PartPresentationContext &pose);
+    void ApplyWarpPartPresentation(PartPresentationContext &pose);
+    void FinalizePartTransforms(PartPresentationContext &pose);
+    void ResolveActionDrawStyle(float actionPulse,
+                                DirectX::XMFLOAT4 &actionTint,
+                                float &actionIntensity,
+                                float &actionNoise) const;
+    void ApplyActionDrawStyleModifiers(float actionPulse,
+                                       DirectX::XMFLOAT4 &actionTint,
+                                       float &actionIntensity,
+                                       float &actionNoise) const;
+    ModelDrawEffect BuildEnemyHitEffect(bool &isHitFlashing) const;
+    ModelDrawEffect BuildEnemyBaseEffect(
+        const ModelDrawEffect &hitEffect, bool isHitFlashing,
+        const DirectX::XMFLOAT4 &actionTint, float actionIntensity,
+        float actionNoise) const;
+    void DrawEnemyVisual(ModelManager *modelManager, const Camera &camera,
+                         const Transform &visual, float alpha,
+                         float visualScale, float actionPulse,
+                         bool isHitFlashing,
+                         const ModelDrawEffect &baseEffect) const;
+    void DrawEnemyAfterimages(ModelManager *modelManager,
+                              const Camera &camera,
+                              float visualScale) const;
+    void UpdateCooldowns(float deltaTime);
+    bool UpdateDeathSequence(float deltaTime);
+    bool UpdatePhaseTransition(float deltaTime);
+    bool UpdateHitReaction(float deltaTime);
     OBB MakeOBB(const Transform &tf, const DirectX::XMFLOAT3 &size) const;
 
     void UpdateByAction(float deltaTime);
@@ -690,8 +745,18 @@ class Enemy {
     void ResetTripleIaiSlashClones();
     void BeginPressureAction();
     void BeginChaseAction();
+    bool ExecutePressureBasicDecision(int decision);
+    void ExecutePressureComplexDecision(int decision, bool phase3);
+    void ExecuteChaseDecision(int decision);
 
     void UpdateSmashCharge(float deltaTime);
+    bool UpdateChargeTell(ActionKind kind, float deltaTime,
+                          float turnSpeedScale);
+    bool TryChargeFeint(ActionKind kind);
+    void UpdateChargeTracking(float deltaTime, float trackingEnd,
+                              float stanceTime);
+    void FinishSmashCharge(float currentChargeTime);
+    void FinishSweepCharge(float currentChargeTime);
     void UpdateSmashHold(float deltaTime);
     void UpdateSmashAttack(float deltaTime);
     void UpdateSmashRecovery(float deltaTime);
@@ -720,6 +785,13 @@ class Enemy {
     void UpdateWarpStart(float deltaTime);
     void UpdateWarpMove(float deltaTime);
     void UpdateWarpEnd(float deltaTime);
+    void UpdateWarpEndFacing(float deltaTime);
+    float GetWarpEndDuration() const;
+    bool ContinuePhantomWarp(int remaining);
+    bool BeginWarpMeleeFollowup(ActionKind kind, ActionStep step,
+                                bool immediate, bool farSlash,
+                                bool feintFollowup, bool phantomChain,
+                                bool phantomFinal);
     void ConfigureFarSlashLungeTarget();
     void UpdateFarSlashLunge(float deltaTime);
     void UpdateWarpTrails(float deltaTime);
@@ -765,6 +837,7 @@ class Enemy {
     bool ShouldUseLockedAttackYaw() const;
 
     void BeginAction(ActionKind kind, ActionStep step);
+    void IssueBeginActionCue(ActionKind kind, ActionStep step);
     void ChangeActionStep(ActionStep step);
     void EndAttack();
 
@@ -778,6 +851,8 @@ class Enemy {
     bool ShouldEnterSmashHold() const;
     bool ShouldEnterSweepHold() const;
     void EnterHold(float duration);
+    bool CanBeginChargeWarpFeint(ActionKind kind) const;
+    bool CanApplyDirectionFeint(ActionKind kind) const;
     bool TryBeginChargeWarpFeint(ActionKind kind);
     bool TryApplyDirectionFeint(ActionKind kind);
     float TechniqueUnlock(BossPhase requiredPhase) const;

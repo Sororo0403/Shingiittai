@@ -16,6 +16,7 @@
 #include "WinApp.h"
 #include <Xinput.h>
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -274,6 +275,45 @@ PostProcessProfile MakeVictoryPostProcessProfile(float stylizeStrength,
     return profile;
 }
 
+bool IsVictorySkipTriggered(const Input *input) {
+    return input != nullptr &&
+           (input->IsKeyTrigger(DIK_SPACE) ||
+            input->IsKeyTrigger(DIK_RETURN) ||
+            (input->IsGamepadConnected() &&
+             input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_A)));
+}
+
+float DigitInkTop(int digit) {
+    constexpr std::array kRaisedDigits = {1, 3, 4, 5, 7};
+    return std::ranges::find(kRaisedDigits, digit) != kRaisedDigits.end()
+               ? 21.0f
+               : 20.0f;
+}
+
+bool IsResultLeftTriggered(const Input &input) {
+    return input.IsKeyTrigger(DIK_A) || input.IsKeyTrigger(DIK_LEFT) ||
+           (input.IsGamepadConnected() &&
+            input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_LEFT));
+}
+
+bool IsResultRightTriggered(const Input &input) {
+    return input.IsKeyTrigger(DIK_D) || input.IsKeyTrigger(DIK_RIGHT) ||
+           (input.IsGamepadConnected() &&
+            input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_RIGHT));
+}
+
+bool IsResultCancelTriggered(const Input &input) {
+    return input.IsKeyTrigger(DIK_TAB) || input.IsKeyTrigger(DIK_ESCAPE) ||
+           (input.IsGamepadConnected() &&
+            input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_B));
+}
+
+bool IsResultConfirmTriggered(const Input &input, bool rankingVisible) {
+    return input.IsKeyTrigger(DIK_RETURN) ||
+           (rankingVisible && input.IsKeyTrigger(DIK_SPACE)) ||
+           (input.IsGamepadConnected() &&
+            input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_A));
+}
 } // namespace
 
 GameVictoryScene::GameVictoryScene(
@@ -435,9 +475,7 @@ void GameVictoryScene::Initialize(const SceneContext &ctx) {
         Image &digit = digitImages_[static_cast<size_t>(i)];
         digit.inkLeft = digitInkLeft[i];
         digit.inkRight = digitInkRight[i];
-        digit.inkTop = (i == 1 || i == 3 || i == 4 || i == 5 || i == 7)
-                           ? 21.0f
-                           : 20.0f;
+        digit.inkTop = DigitInkTop(i);
         digit.inkBottom = 67.0f;
     }
     colonImage_.inkLeft = 19.0f;
@@ -489,33 +527,8 @@ void GameVictoryScene::Initialize(const SceneContext &ctx) {
 void GameVictoryScene::Update() {
     const float deltaTime = ctx_->frame.deltaTime;
     Input *input = ctx_->systems.input;
-    const bool skip =
-        input != nullptr &&
-        (input->IsKeyTrigger(DIK_SPACE) || input->IsKeyTrigger(DIK_RETURN) ||
-         (input->IsGamepadConnected() &&
-          input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_A)));
-    if (resultMode_) {
-        resultTimer_ += deltaTime;
-        if (exitRequested_) {
-            exitTimer_ += deltaTime;
-            if (exitTimer_ >= kResultExitFadeDuration && sceneManager_ != nullptr) {
-                StopResultCrowdAudio();
-                if (exitTargetIndex_ == 0) {
-                    sceneManager_->ChangeScene(std::make_unique<GameScene>(
-                        inputCalibration_, combatDifficulty_));
-                } else {
-                    sceneManager_->ChangeScene(
-                        std::make_unique<CreditScene>(
-                            CreditScene::ReturnTarget::Title));
-                }
-                return;
-            }
-        }
-        const float w = static_cast<float>(ctx_->systems.winApp->GetWidth());
-        const float h = static_cast<float>(ctx_->systems.winApp->GetHeight());
-        UpdateVictoryConfetti(deltaTime, w, h);
-        UpdateResultPostProcess();
-        UpdateResultInput();
+    const bool skip = IsVictorySkipTriggered(input);
+    if (UpdateResultMode(deltaTime)) {
         return;
     }
 
@@ -534,6 +547,33 @@ void GameVictoryScene::Update() {
     if (skip || sceneTime_ >= kDuration) {
         BeginResult();
     }
+}
+
+bool GameVictoryScene::UpdateResultMode(float deltaTime) {
+    if (!resultMode_) {
+        return false;
+    }
+    resultTimer_ += deltaTime;
+    if (exitRequested_) {
+        exitTimer_ += deltaTime;
+        if (exitTimer_ >= kResultExitFadeDuration && sceneManager_ != nullptr) {
+            StopResultCrowdAudio();
+            if (exitTargetIndex_ == 0) {
+                sceneManager_->ChangeScene(std::make_unique<GameScene>(
+                    inputCalibration_, combatDifficulty_));
+            } else {
+                sceneManager_->ChangeScene(std::make_unique<CreditScene>(
+                    CreditScene::ReturnTarget::Title));
+            }
+            return true;
+        }
+    }
+    const float width = static_cast<float>(ctx_->systems.winApp->GetWidth());
+    const float height = static_cast<float>(ctx_->systems.winApp->GetHeight());
+    UpdateVictoryConfetti(deltaTime, width, height);
+    UpdateResultPostProcess();
+    UpdateResultInput();
+    return true;
 }
 
 void GameVictoryScene::Draw() {
@@ -1014,12 +1054,12 @@ void GameVictoryScene::DrawPreExplosionCharge() {
     }
 
     struct ChargePatch {
-        uint32_t modelId;
-        XMFLOAT3 offset;
-        XMFLOAT2 scale;
-        float roll;
-        XMFLOAT4 color;
-        bool additive;
+        uint32_t modelId = 0;
+        XMFLOAT3 offset{};
+        XMFLOAT2 scale{};
+        float roll = 0.0f;
+        XMFLOAT4 color{};
+        bool additive = false;
     };
 
     const ChargePatch patches[] = {
@@ -1196,10 +1236,10 @@ void GameVictoryScene::DrawExplosionBillboards() {
     const float yaw = std::atan2f(cameraPos.x - center.x, cameraPos.z - center.z);
 
     struct SmokePatch {
-        XMFLOAT3 offset;
-        XMFLOAT2 scale;
-        float roll;
-        float delay;
+        XMFLOAT3 offset{};
+        XMFLOAT2 scale{};
+        float roll = 0.0f;
+        float delay = 0.0f;
     };
 
     const SmokePatch patches[] = {
@@ -1488,13 +1528,8 @@ void GameVictoryScene::UpdateResultInput() {
     }
 
     Input &input = *ctx_->systems.input;
-    const bool left = input.IsKeyTrigger(DIK_A) || input.IsKeyTrigger(DIK_LEFT) ||
-                      (input.IsGamepadConnected() &&
-                       input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_LEFT));
-    const bool right =
-        input.IsKeyTrigger(DIK_D) || input.IsKeyTrigger(DIK_RIGHT) ||
-        (input.IsGamepadConnected() &&
-         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_RIGHT));
+    const bool left = IsResultLeftTriggered(input);
+    const bool right = IsResultRightTriggered(input);
 
     if (left && actionButtonIndex_ != 0) {
         actionButtonIndex_ = 0;
@@ -1505,9 +1540,7 @@ void GameVictoryScene::UpdateResultInput() {
         AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
     }
 
-    if (input.IsKeyTrigger(DIK_TAB) || input.IsKeyTrigger(DIK_ESCAPE) ||
-        (input.IsGamepadConnected() &&
-         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_B))) {
+    if (IsResultCancelTriggered(input)) {
         actionButtonIndex_ = 1;
     }
 
@@ -1519,11 +1552,7 @@ void GameVictoryScene::UpdateResultInput() {
         return;
     }
 
-    const bool confirm =
-        input.IsKeyTrigger(DIK_RETURN) ||
-        (rankingVisible_ && input.IsKeyTrigger(DIK_SPACE)) ||
-        (input.IsGamepadConnected() &&
-         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_A));
+    const bool confirm = IsResultConfirmTriggered(input, rankingVisible_);
     if (!confirm || exitRequested_) {
         return;
     }

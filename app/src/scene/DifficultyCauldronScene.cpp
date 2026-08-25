@@ -331,19 +331,55 @@ void DifficultyCauldronScene::UpdateSelection() {
     }
 
     const bool gamepad = input->IsGamepadConnected();
-    int nextDifficultyTenths = selectedDifficultyTenths_;
+    int nextDifficultyTenths =
+        UpdateHeldDifficulty(*input, gamepad, selectedDifficultyTenths_);
+    nextDifficultyTenths =
+        ApplyDigitSelection(*input, nextDifficultyTenths);
+    nextDifficultyTenths = ApplyHandSelection(nextDifficultyTenths);
+    CommitDifficultySelection(nextDifficultyTenths);
+    HandleSelectionActions(*input, gamepad);
+}
+
+bool IsDirectionTriggered(Input &input, int primaryKey, int secondaryKey,
+                          bool gamepad, WORD gamepadButton) {
+    return input.IsKeyTrigger(primaryKey) ||
+           input.IsKeyTrigger(secondaryKey) ||
+           (gamepad && input.IsGamepadButtonTrigger(gamepadButton));
+}
+
+bool IsDirectionHeld(Input &input, int primaryKey, int secondaryKey,
+                     bool gamepad, WORD gamepadButton) {
+    return input.IsKeyPress(primaryKey) || input.IsKeyPress(secondaryKey) ||
+           (gamepad && input.IsGamepadButtonPress(gamepadButton));
+}
+
+bool IsFreshDirectionTrigger(int direction, bool decreaseTrigger,
+                             bool increaseTrigger) {
+    return direction < 0 ? decreaseTrigger && !increaseTrigger
+                         : increaseTrigger && !decreaseTrigger;
+}
+
+float DifficultyRepeatInterval(float holdTime) {
+    if (holdTime >= 1.10f) {
+        return 0.032f;
+    }
+    return holdTime >= 0.40f ? 0.050f : 0.076f;
+}
+
+int DifficultyCauldronScene::UpdateHeldDifficulty(Input &input, bool gamepad,
+                                                   int currentValue) {
     const bool decreaseTrigger =
-        input->IsKeyTrigger(DIK_A) || input->IsKeyTrigger(DIK_LEFT) ||
-        (gamepad && input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_LEFT));
+        IsDirectionTriggered(input, DIK_A, DIK_LEFT, gamepad,
+                             XINPUT_GAMEPAD_DPAD_LEFT);
     const bool increaseTrigger =
-        input->IsKeyTrigger(DIK_D) || input->IsKeyTrigger(DIK_RIGHT) ||
-        (gamepad && input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_DPAD_RIGHT));
+        IsDirectionTriggered(input, DIK_D, DIK_RIGHT, gamepad,
+                             XINPUT_GAMEPAD_DPAD_RIGHT);
     const bool decreaseHold =
-        input->IsKeyPress(DIK_A) || input->IsKeyPress(DIK_LEFT) ||
-        (gamepad && input->IsGamepadButtonPress(XINPUT_GAMEPAD_DPAD_LEFT));
+        IsDirectionHeld(input, DIK_A, DIK_LEFT, gamepad,
+                        XINPUT_GAMEPAD_DPAD_LEFT);
     const bool increaseHold =
-        input->IsKeyPress(DIK_D) || input->IsKeyPress(DIK_RIGHT) ||
-        (gamepad && input->IsGamepadButtonPress(XINPUT_GAMEPAD_DPAD_RIGHT));
+        IsDirectionHeld(input, DIK_D, DIK_RIGHT, gamepad,
+                        XINPUT_GAMEPAD_DPAD_RIGHT);
 
     int holdDirection = 0;
     if (decreaseHold && !increaseHold) {
@@ -365,43 +401,48 @@ void DifficultyCauldronScene::UpdateSelection() {
 
         selectionHoldTimer_ += ctx_->frame.deltaTime;
         selectionRepeatTimer_ -= ctx_->frame.deltaTime;
-        const bool freshTrigger =
-            (holdDirection < 0 && decreaseTrigger && !increaseTrigger) ||
-            (holdDirection > 0 && increaseTrigger && !decreaseTrigger);
+        const bool freshTrigger = IsFreshDirectionTrigger(
+            holdDirection, decreaseTrigger, increaseTrigger);
         const float repeatInterval =
-            selectionHoldTimer_ >= 1.10f
-                ? 0.032f
-                : (selectionHoldTimer_ >= 0.40f ? 0.050f : 0.076f);
+            DifficultyRepeatInterval(selectionHoldTimer_);
         const float initialRepeatDelay = 0.30f;
         const int step =
             selectionHoldTimer_ >= 1.10f ? 2 : 1;
         if (freshTrigger) {
-            nextDifficultyTenths += holdDirection;
+            currentValue += holdDirection;
             selectionRepeatTimer_ = initialRepeatDelay;
         } else if (selectionHoldTimer_ >= initialRepeatDelay &&
                    selectionRepeatTimer_ <= 0.0f) {
-            nextDifficultyTenths += holdDirection * step;
+            currentValue += holdDirection * step;
             selectionRepeatTimer_ = repeatInterval;
         }
     }
 
+    return currentValue;
+}
+
+int DifficultyCauldronScene::ApplyDigitSelection(Input &input,
+                                                  int currentValue) {
     for (int i = 0; i < 10; ++i) {
-        if (input->IsKeyTrigger(kDigitKeys[static_cast<size_t>(i)]) ||
-            input->IsKeyTrigger(kNumpadDigitKeys[static_cast<size_t>(i)])) {
-            nextDifficultyTenths = i * 10;
+        if (input.IsKeyTrigger(kDigitKeys[static_cast<size_t>(i)]) ||
+            input.IsKeyTrigger(kNumpadDigitKeys[static_cast<size_t>(i)])) {
+            currentValue = i * 10;
             selectionHoldTimer_ = 0.0f;
             selectionRepeatTimer_ = 0.0f;
             selectionHoldDirection_ = 0;
         }
     }
+    return currentValue;
+}
 
+int DifficultyCauldronScene::ApplyHandSelection(int currentValue) {
     if (IsHandControl(inputCalibration_.controlType)) {
         const float speed =
             (std::max)(handController_.GetMotionSpeed(0),
                        handController_.GetMotionSpeed(1));
         if (handSwingArmed_ && speed >= kHandSwingStartSpeed &&
             handSwingCooldown_ <= 0.0f) {
-            nextDifficultyTenths = selectedDifficultyTenths_ + 1;
+            currentValue = selectedDifficultyTenths_ + 1;
             handSwingArmed_ = false;
             handSwingCooldown_ = 0.22f;
         }
@@ -409,28 +450,32 @@ void DifficultyCauldronScene::UpdateSelection() {
             handSwingArmed_ = true;
         }
     }
+    return currentValue;
+}
 
-    nextDifficultyTenths = std::clamp(nextDifficultyTenths,
-                                      kDifficultyMinTenths,
-                                      kDifficultyMaxTenths);
-    if (nextDifficultyTenths != selectedDifficultyTenths_) {
-        selectedDifficultyTenths_ = nextDifficultyTenths;
+void DifficultyCauldronScene::CommitDifficultySelection(int value) {
+    value = std::clamp(value, kDifficultyMinTenths, kDifficultyMaxTenths);
+    if (value != selectedDifficultyTenths_) {
+        selectedDifficultyTenths_ = value;
         selectionPulse_ = 1.0f;
         ApplyHeatPostProcess();
         AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
     }
+}
 
-    if (input->IsKeyTrigger(DIK_ESCAPE) ||
-        (gamepad && input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_B))) {
+void DifficultyCauldronScene::HandleSelectionActions(Input &input,
+                                                      bool gamepad) {
+    if (input.IsKeyTrigger(DIK_ESCAPE) ||
+        (gamepad && input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_B))) {
         AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
         BeginReturnToWeaponSelect();
         return;
     }
 
     const bool confirm =
-        input->IsKeyTrigger(DIK_SPACE) || input->IsKeyTrigger(DIK_RETURN) ||
-        input->IsMouseTrigger(0) ||
-        (gamepad && input->IsGamepadButtonTrigger(XINPUT_GAMEPAD_A));
+        input.IsKeyTrigger(DIK_SPACE) || input.IsKeyTrigger(DIK_RETURN) ||
+        input.IsMouseTrigger(0) ||
+        (gamepad && input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_A));
     if (confirm) {
         AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Selected);
         BeginStartGame();

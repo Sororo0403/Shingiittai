@@ -88,7 +88,7 @@ class RankingScene : public BaseScene {
     Image dotImage_{};
     Image dashImage_{};
     Image secondImage_{};
-    std::vector<RankingEntry> rankingEntries_{};
+    std::vector<RankingEntry> rankingEntries_;
     InputControlType selectedControlType_ = InputControlType::KeyboardMouse;
     float introTimer_ = 0.0f;
     float transitionTimer_ = 0.0f;

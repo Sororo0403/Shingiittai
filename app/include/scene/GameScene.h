@@ -105,6 +105,12 @@ class GameScene : public BaseScene {
     void ExecutePauseMenuSelection();
     void DrawPauseMenu();
     void DrawTutorialOverlay();
+    int ResolveTutorialMessageIndex(ActionKind actionKind,
+                                    ActionStep actionStep,
+                                    float releaseRatio) const;
+    void DrawTutorialMessagePanel(float width, float height,
+                                  int messageIndex);
+    void DrawTutorialExcellent(float width, float height);
     void DrawTutorialEntryFade();
     void DrawTutorialSlashCounter(float x, float y, float scale, float alpha);
     void DrawTutorialCounterDigit(int digit, float x, float y, float scale,
@@ -134,31 +140,253 @@ class GameScene : public BaseScene {
     void UpdateDefeatSequence(float deltaTime);
     void SyncEnemyAnimation();
     void UpdateBladeClashEnemyAnimation(float deltaTime);
+    void SelectBladeClashStartupClip(bool hasTeleport, bool hasSweep,
+                                     std::string &clip,
+                                     float &clipRatio) const;
+    void SelectBladeClashGuardBreakClip(bool hasTeleport, bool hasSweep,
+                                        std::string &clip,
+                                        float &clipRatio) const;
+    void SelectBladeClashWinClip(bool hasTeleport, bool hasSweep,
+                                 bool hasSmash, std::string &clip,
+                                 float &clipRatio) const;
+    void SelectBladeClashLossClip(bool hasTeleport, bool hasSweep,
+                                  bool hasSmash, std::string &clip,
+                                  float &clipRatio) const;
     void UpdateBattleIntroEnemyAnimation(float deltaTime);
     void UpdateReadyPreviewEnemyAnimation();
     void UpdatePhaseTransitionEnemyAnimation(float deltaTime);
     void ApplyEnemyProceduralAnimation();
     void SetEnemyAnimationFrozen(bool frozen);
     void UpdateCombat(float gameplayDeltaTime);
+    void InitializePostEffects(const SceneContext &ctx);
+    void LoadBattleSounds(const SceneContext &ctx);
+    void InitializeBattleCameraState(ModelManager *model);
+    void InitializeHandTracking(const SceneContext &ctx);
+    void InitializeSceneMode();
+    struct GameplayTiming {
+        float gameplayDeltaTime = 0.0f;
+        float playerDeltaTime = 0.0f;
+        float enemyDeltaTime = 0.0f;
+        bool cataclysmProjectilePreviewSlow = false;
+    };
+    bool UpdatePreviewOrTutorialMode(float baseDeltaTime);
+    bool UpdatePauseOrIntro(Input *input, float baseDeltaTime);
+    bool UpdateBattleSequenceMode(Input *input, float baseDeltaTime);
+    bool UpdateBladeClashFinishMode(Input *input, float baseDeltaTime);
+    GameplayTiming ComputeGameplayTiming(float baseDeltaTime) const;
+    void UpdateGameplayPlayer(Input *input, const GameplayTiming &timing,
+                              float baseDeltaTime);
+    void UpdateGameplayEnemy(float enemyDeltaTime);
+    void UpdateGameplayEnemyAnimation(float enemyDeltaTime,
+                                      float baseDeltaTime);
+    void UpdateGameplayCombat(float gameplayDeltaTime);
+    bool UpdateGameplayEndState(float baseDeltaTime);
+    void UpdateGameplayParticles(float gameplayDeltaTime);
+    bool UpdateTutorialExit(float deltaTime);
+    bool HandleTutorialNavigationInput(Input *input);
+    void UpdateTutorialFrame(Input *input, float deltaTime);
+    void UpdateTutorialTimers(float deltaTime);
+    bool UpdateTutorialBasicStep(float deltaTime);
+    void UpdateTutorialHandPresence(float deltaTime);
+    void UpdateTutorialOperationStep(float deltaTime);
+    void UpdateTutorialIdlePresentation(float deltaTime);
+    ActionKind GetTutorialAttackKind() const;
+    bool IsTutorialRedWaitStep() const;
+    bool IsTutorialGreenCutStep() const;
+    void BeginTutorialAttackIfReady(float deltaTime);
+    bool DidTutorialSlashStart(
+        const std::array<bool, 2> &slashStates) const;
+    void HandleTutorialRedEarlySlash(
+        const std::array<bool, 2> &swordSlashStatesBeforeCombat,
+        bool tutorialSlashStarted);
+    void UpdateTutorialEnemyAttack(
+        float deltaTime,
+        const std::array<bool, 2> &swordSlashStatesBeforeCombat);
+    float ComputeTutorialEnemyDeltaTime(float deltaTime) const;
+    void UpdateTutorialRedWait(
+        float deltaTime,
+        const std::array<bool, 2> &swordSlashStatesBeforeCombat);
+    void HandleTutorialEnemyActionTransition(
+        ActionKind previousKind, ActionStep previousStep,
+        ActionKind currentKind, ActionStep currentStep);
+    void UpdateTutorialEnemyAnimation(float deltaTime);
+    void UpdateTutorialCombat(
+        float deltaTime,
+        const std::array<bool, 2> &swordSlashStatesBeforeCombat);
+    void FinishTutorialAttackState(
+        float deltaTime,
+        const std::array<bool, 2> &swordSlashStatesBeforeCombat);
+    void UpdateTutorialGreenCutTimeout(
+        float deltaTime,
+        const std::array<bool, 2> &swordSlashStatesBeforeCombat);
+    void ResolveFinishedTutorialAttack();
+    void UpdateTutorialCounterCinematic(float deltaTime);
+    struct BattleCameraContext {
+        DirectX::XMFLOAT3 playerPos{};
+        DirectX::XMFLOAT3 enemyPos{};
+        DirectX::XMFLOAT3 enemyCameraPos{};
+        ActionKind enemyActionKind = ActionKind::None;
+        ActionStep enemyActionStep = ActionStep::None;
+        bool enemyMeleeAction = false;
+        bool enemyPressureAction = false;
+        bool enemyPhaseTransition = false;
+        bool tripleIaiCameraFocus = false;
+        float enemyPhaseTransitionRatio = 0.0f;
+    };
+    bool UpdateVictoryBattleCamera(const BattleCameraContext &cameraContext);
+    bool UpdateIntroBattleCamera(const BattleCameraContext &cameraContext);
+    bool UpdateDefeatBattleCamera(const BattleCameraContext &cameraContext);
+    bool UpdateBladeClashFinishCamera(
+        const BattleCameraContext &cameraContext);
+    void ConfigureBattleCameraFov(const BattleCameraContext &cameraContext);
+    bool UpdateActiveBladeClashCamera(
+        const BattleCameraContext &cameraContext);
+    bool UpdatePlayerViewBattleCamera(
+        const BattleCameraContext &cameraContext);
+    void UpdateThirdPersonBattleCamera(
+        const BattleCameraContext &cameraContext);
+    void UpdateThirdPersonLockAssist(
+        const BattleCameraContext &cameraContext);
+    DirectX::XMFLOAT3 ComputeThirdPersonCameraPosition(
+        const BattleCameraContext &cameraContext,
+        const DirectX::XMFLOAT3 &forward,
+        const DirectX::XMFLOAT3 &right);
+    DirectX::XMFLOAT3 ComputeThirdPersonLookAt(
+        const BattleCameraContext &cameraContext,
+        const DirectX::XMFLOAT3 &cameraTargetBase,
+        const DirectX::XMFLOAT3 &forward);
+    struct CombatFrameContext {
+        std::array<CollisionManager::BodyId, 3> enemyHurtBodies{};
+        ActionKind enemyActionKind = ActionKind::None;
+        ActionStep enemyActionStep = ActionStep::None;
+        std::array<const Sword *, 2> swords{};
+        std::array<bool, 2> swordSlashStates{};
+        std::array<float, 2> swordAttackDamages{};
+        OBB enemyAttackBox{};
+        CollisionManager::BodyId enemyAttackBody =
+            CollisionManager::kInvalidBodyId;
+        float enemyAttackDamage = 0.0f;
+        float enemyAttackKnockback = 0.0f;
+        bool enemyMeleeActive = false;
+        bool enemyAttackCommitted = false;
+        bool enemyBladeClashCounterWindow = false;
+        bool enemyCounterWindow = false;
+        bool enemyMeleeDamagePending = false;
+        bool startCounterCinematic = false;
+        bool stopCounterCinematic = false;
+        bool forceSyncEnemyAnimation = false;
+        bool counterTriggered = false;
+        bool projectileReflected = false;
+    };
+    void InitializeCombatFrame(float gameplayDeltaTime,
+                               CombatFrameContext &combat);
+    void ConfigureCombatWindows(CombatFrameContext &combat);
+    void ConfigureMeleeCombatWindows(CombatFrameContext &combat);
+    bool ConfigureCounterCombatWindows(CombatFrameContext &combat);
+    void ConfigureEnemyAttackCollision(CombatFrameContext &combat,
+                                       bool attackCommitted);
+    void TriggerSuccessfulCounter(CombatFrameContext &combat,
+                                  size_t swordIndex, float enemyDamage,
+                                  float hitCooldown);
+    bool IsEnemyHurtBodyHit(const CombatFrameContext &combat,
+                            CollisionManager::BodyId attackBody) const;
+    bool IsProjectileInDeflectRange(
+        const ArcaneProjectileState &projectile) const;
+    bool IsProjectileSlashAligned(const ArcaneProjectileState &projectile,
+                                  const Sword &sword) const;
+    void HandleBadSlashPunish(CombatFrameContext &combat);
+    void ProcessSwordAttacks(CombatFrameContext &combat);
+    bool ProcessSwordAttack(CombatFrameContext &combat, size_t swordIndex);
+    bool TrySwordCounter(CombatFrameContext &combat, size_t swordIndex,
+                         const Sword &sword);
+    bool TryReflectProjectiles(CombatFrameContext &combat,
+                               size_t swordIndex, const Sword &sword);
+    bool TryReflectProjectile(CombatFrameContext &combat,
+                              size_t swordIndex, const Sword &sword,
+                              ArcaneProjectileState &projectile,
+                              bool slashStarted);
+    bool TryNormalSwordHit(CombatFrameContext &combat, size_t swordIndex,
+                           const Sword &sword, bool hitBody);
+    bool ProcessReflectedProjectileHit(CombatFrameContext &combat,
+                                       ArcaneProjectileState &projectile);
+    bool ProcessHostileProjectileHit(CombatFrameContext &combat,
+                                     ArcaneProjectileState &projectile);
+    void ResolveEnemyMeleeDamage(CombatFrameContext &combat);
+    void FinishCombatFrame(CombatFrameContext &combat);
     void BeginBladeClash(size_t swordIndex);
     void UpdateBladeClash(float gameplayDeltaTime);
     void FinishBladeClash(bool playerWon);
     void DrawBladeClashOverlay();
     void UpdateBladeClashFinish(float deltaTime);
+    void EmitBladeClashWinGuardBreak();
+    void UpdateBladeClashWinFinish(float bladeClashWinActionTimer);
+    void UpdateBladeClashLossFinish();
     float AdvanceBladeClashFinishTimer(float deltaTime);
     void ApplyBladeClashFinishPostProcess();
     void CompleteBladeClashFinish();
     void DrawBladeClashFinishFrame();
     void DispatchCombatFeedback(const CombatFeedbackEvent &event);
+    void PrepareCombatFeedback(const CombatFeedbackEvent &event,
+                               bool suppressSwordVfx);
+    void EmitCombatFeedbackVfx(const CombatFeedbackEvent &event,
+                               bool suppressSwordVfx);
+    void PlayCombatFeedbackSound(const CombatFeedbackEvent &event);
     void EmitCombatParticles(const CombatFeedbackEvent &event);
     void EmitEnemyActionParticles(ActionKind kind, ActionStep step);
     void EmitArcaneLaserParticles(float deltaTime);
+    void EmitArcaneLaserChargeParticles(bool cataclysmLaser,
+                                         const DirectX::XMFLOAT3 &muzzle,
+                                         const DirectX::XMFLOAT3 &direction);
+    void EmitArcaneProjectileTrail(const ArcaneProjectileState &projectile,
+                                   const DirectX::XMFLOAT3 &fallbackDirection);
+    void EmitArcaneProjectileTrailBursts(
+        const ArcaneProjectileState &projectile,
+        const DirectX::XMFLOAT3 &projectileDir);
+    void EmitArcaneProjectileTrailSmoke(
+        const ArcaneProjectileState &projectile,
+        const DirectX::XMFLOAT3 &projectileDir);
+    bool HasReflectedArcaneProjectiles() const;
     void EmitEnemyCueParticles(float deltaTime);
+    bool EmitArcaneProjectileCue(const ArcaneProjectileState &projectile);
+    bool EmitArcaneProjectileCues();
+    void EmitTripleIaiCueLines();
+    void UpdateFarSlashCueParticles(float deltaTime, ActionStep step,
+                                    bool farWarpSlashActive);
+    bool AdjustTutorialReleaseCue(ActionKind kind,
+                                  bool &releaseCounterCueVisible) const;
+    bool SupportsEnemyChargeCue(ActionKind kind, ActionStep step,
+                                bool farWarpSlashActive) const;
+    bool ShouldSuppressEnemyAttackCue(bool releaseCounterCueVisible,
+                                      bool farWarpSlashActive) const;
+    void EmitEnemyAttackCueLine(ActionKind kind,
+                                bool releaseCounterCueVisible);
     void BeginArcaneProjectileVolley();
     void UpdateArcaneProjectileVolley(float deltaTime);
+    bool FireCataclysmVolleyProjectile();
+    bool HasActiveArcaneProjectiles() const;
     void SpawnArcaneProjectile();
+    ArcaneProjectileState *FindFreeArcaneProjectile(bool cataclysmShot);
+    void ConfigureCataclysmProjectileAim(DirectX::XMFLOAT3 &muzzle,
+                                         DirectX::XMFLOAT3 &direction) const;
+    void ConfigureArcaneArcProjectileAim(DirectX::XMFLOAT3 &muzzle,
+                                         DirectX::XMFLOAT3 &direction) const;
+    void InitializeArcaneProjectileState(ArcaneProjectileState &projectile,
+                                         bool cataclysmShot,
+                                         bool arcaneArcShot,
+                                         const DirectX::XMFLOAT3 &muzzle,
+                                         const DirectX::XMFLOAT3 &direction);
     void ResetArcaneProjectile();
     void UpdateArcaneProjectile(float deltaTime);
+    void UpdateSingleArcaneProjectile(ArcaneProjectileState &projectile,
+                                      float deltaTime);
+    void UpdateReflectedArcaneProjectile(ArcaneProjectileState &projectile,
+                                         float deltaTime);
+    void UpdateArcingArcaneProjectile(ArcaneProjectileState &projectile,
+                                      float deltaTime);
+    void UpdateHomingArcaneProjectile(ArcaneProjectileState &projectile,
+                                      float deltaTime);
+    void FinishArcaneProjectileFrame(ArcaneProjectileState &projectile,
+                                     float deltaTime);
     void UpdatePlayerChargedProjectile(float deltaTime);
     void ReflectArcaneProjectile(size_t swordIndex);
     void ReflectArcaneProjectile(ArcaneProjectileState &projectile,
@@ -308,7 +536,7 @@ class GameScene : public BaseScene {
     float arcaneLaserParticleTimer_ = 0.0f;
     float farSlashChargeParticleTimer_ = 0.0f;
     uint32_t arenaNoiseTextureId_ = 0;
-    std::string enemyAnimationName_{};
+    std::string enemyAnimationName_;
     bool enemyAnimationLoop_ = true;
 
     float playerHitCooldown_ = 0.0f;

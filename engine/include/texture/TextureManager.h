@@ -177,6 +177,9 @@ class TextureManager {
     /// <returns>生成されたテクスチャID</returns>
     uint32_t CreateTexture(const DirectX::Image *images, size_t imageCount,
                            const DirectX::TexMetadata &metadata);
+    void TrackUploadBuffer(
+        const Microsoft::WRL::ComPtr<ID3D12Resource> &uploadBuffer,
+        bool ownsUploadPass);
 
   public:
     struct DecodedTexture {

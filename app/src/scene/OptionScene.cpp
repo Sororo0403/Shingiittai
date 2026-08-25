@@ -108,54 +108,39 @@ void OptionScene::Update() {
         return;
     }
 
-    if (input->IsKeyTrigger(DIK_ESCAPE) || input->IsKeyTrigger(DIK_TAB)) {
-        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
-        BeginReturn();
+    if (UpdateNavigationInput(*input)) {
         return;
     }
-    if (input->IsKeyTrigger(DIK_W) || input->IsKeyTrigger(DIK_UP)) {
+    UpdateAdjustmentInput(*input);
+}
+
+bool OptionScene::UpdateNavigationInput(Input &input) {
+    if (input.IsKeyTrigger(DIK_ESCAPE) || input.IsKeyTrigger(DIK_TAB)) {
+        AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
+        BeginReturn();
+        return true;
+    }
+    if (input.IsKeyTrigger(DIK_W) || input.IsKeyTrigger(DIK_UP)) {
         selectedIndex_ = (selectedIndex_ + kOptionCount - 1) % kOptionCount;
         AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
     }
-    if (input->IsKeyTrigger(DIK_S) || input->IsKeyTrigger(DIK_DOWN)) {
+    if (input.IsKeyTrigger(DIK_S) || input.IsKeyTrigger(DIK_DOWN)) {
         selectedIndex_ = (selectedIndex_ + 1) % kOptionCount;
         AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
     }
+    return false;
+}
 
-    const bool leftTrigger =
-        input->IsKeyTrigger(DIK_A) || input->IsKeyTrigger(DIK_LEFT);
-    const bool rightTrigger =
-        input->IsKeyTrigger(DIK_D) || input->IsKeyTrigger(DIK_RIGHT);
-    const bool leftPress = input->IsKeyPress(DIK_A) || input->IsKeyPress(DIK_LEFT);
-    const bool rightPress =
-        input->IsKeyPress(DIK_D) || input->IsKeyPress(DIK_RIGHT);
-
-    int holdDirection = 0;
-    if (leftPress && !rightPress) {
-        holdDirection = -1;
-    } else if (rightPress && !leftPress) {
-        holdDirection = 1;
-    }
-
-    if (leftTrigger && !rightPress) {
-        AdjustSelectedOption(-1);
-        adjustHoldDirection_ = -1;
-        adjustHoldTimer_ = 0.0f;
-        adjustRepeatTimer_ = 0.0f;
-        return;
-    }
-    if (rightTrigger && !leftPress) {
-        AdjustSelectedOption(1);
-        adjustHoldDirection_ = 1;
-        adjustHoldTimer_ = 0.0f;
-        adjustRepeatTimer_ = 0.0f;
+void OptionScene::UpdateAdjustmentInput(Input &input) {
+    const int triggerDirection = GetAdjustmentTriggerDirection(input);
+    if (triggerDirection != 0) {
+        BeginAdjustment(triggerDirection);
         return;
     }
 
+    const int holdDirection = GetHeldAdjustmentDirection(input);
     if (holdDirection == 0) {
-        adjustHoldDirection_ = 0;
-        adjustHoldTimer_ = 0.0f;
-        adjustRepeatTimer_ = 0.0f;
+        ResetAdjustmentRepeat();
         return;
     }
 
@@ -176,6 +161,42 @@ void OptionScene::Update() {
         adjustRepeatTimer_ -= kAdjustRepeatInterval;
         AdjustSelectedOption(adjustHoldDirection_);
     }
+}
+
+int OptionScene::GetAdjustmentTriggerDirection(Input &input) const {
+    const bool leftTrigger =
+        input.IsKeyTrigger(DIK_A) || input.IsKeyTrigger(DIK_LEFT);
+    const bool rightTrigger =
+        input.IsKeyTrigger(DIK_D) || input.IsKeyTrigger(DIK_RIGHT);
+    const bool leftPress = input.IsKeyPress(DIK_A) || input.IsKeyPress(DIK_LEFT);
+    const bool rightPress =
+        input.IsKeyPress(DIK_D) || input.IsKeyPress(DIK_RIGHT);
+    if (leftTrigger && !rightPress) {
+        return -1;
+    }
+    return rightTrigger && !leftPress ? 1 : 0;
+}
+
+int OptionScene::GetHeldAdjustmentDirection(Input &input) const {
+    const bool left = input.IsKeyPress(DIK_A) || input.IsKeyPress(DIK_LEFT);
+    const bool right = input.IsKeyPress(DIK_D) || input.IsKeyPress(DIK_RIGHT);
+    if (left == right) {
+        return 0;
+    }
+    return left ? -1 : 1;
+}
+
+void OptionScene::BeginAdjustment(int direction) {
+    AdjustSelectedOption(direction);
+    adjustHoldDirection_ = direction;
+    adjustHoldTimer_ = 0.0f;
+    adjustRepeatTimer_ = 0.0f;
+}
+
+void OptionScene::ResetAdjustmentRepeat() {
+    adjustHoldDirection_ = 0;
+    adjustHoldTimer_ = 0.0f;
+    adjustRepeatTimer_ = 0.0f;
 }
 
 void OptionScene::Draw() {

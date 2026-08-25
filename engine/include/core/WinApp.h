@@ -81,6 +81,10 @@ class WinApp {
     /// </summary>
     static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam,
                                        LPARAM lParam);
+    static LRESULT HandleSetCursor(HWND hwnd, LPARAM lParam);
+    static void HandleActivation(WPARAM wParam);
+    static void HandleSystemKey(WPARAM wParam);
+    static void HandleSystemCommand(WPARAM wParam);
     static void ApplyHiddenCursorState(HWND hwnd, bool lockToClient);
     static void ApplyVisibleCursorState();
     static void ApplyRequestedCursorState(HWND hwnd);

@@ -42,6 +42,20 @@ CollisionManager::BodyId AddCollisionBody(
     desc.filter.mask = mask;
     return collisionManager.AddBody(desc);
 }
+
+bool IsBasicSlashAction(ActionKind kind) {
+    return kind == ActionKind::Smash || kind == ActionKind::Sweep;
+}
+
+bool IsCounterPreparationStep(ActionStep step) {
+    return step == ActionStep::Charge || step == ActionStep::Hold ||
+           step == ActionStep::Active;
+}
+
+bool ShouldClearRedPunish(ActionKind kind, ActionStep step) {
+    return !IsBasicSlashAction(kind) || step == ActionStep::Recovery ||
+           step == ActionStep::None;
+}
 } // namespace
 
 static XMFLOAT2 NormalizeXZ(float x, float z) {
@@ -496,36 +510,50 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
         return;
     }
 
-    collisionManager_.Clear();
+    CombatFrameContext combat{};
+    InitializeCombatFrame(gameplayDeltaTime, combat);
+    ConfigureCombatWindows(combat);
+    HandleBadSlashPunish(combat);
+    ProcessSwordAttacks(combat);
 
-    const auto enemyBodyBox = enemy_.GetBodyOBB();
-    const auto enemyLeftHandBox = enemy_.GetLeftHandOBB();
-    const auto enemyRightHandBox = enemy_.GetRightHandOBB();
-    const bool enemyCollisionDisabled = enemy_.IsWarpCollisionDisabled();
-    const CollisionManager::BodyId enemyBody =
-        enemyCollisionDisabled
-            ? CollisionManager::kInvalidBodyId
-            : AddCollisionBody(collisionManager_, enemyBodyBox, kLayerEnemy,
-                               kLayerPlayerAttack);
-    const CollisionManager::BodyId enemyLeftHandBody =
-        enemyCollisionDisabled
-            ? CollisionManager::kInvalidBodyId
-            : AddCollisionBody(collisionManager_, enemyLeftHandBox,
-                               kLayerEnemy, kLayerPlayerAttack);
-    const CollisionManager::BodyId enemyRightHandBody =
-        enemyCollisionDisabled
-            ? CollisionManager::kInvalidBodyId
-            : AddCollisionBody(collisionManager_, enemyRightHandBox,
-                               kLayerEnemy, kLayerPlayerAttack);
-    const std::array<CollisionManager::BodyId, 3> enemyHurtBodies = {
-        enemyBody, enemyLeftHandBody, enemyRightHandBody};
-    const ActionKind enemyActionKind = enemy_.GetActionKind();
-    const ActionStep enemyActionStep = enemy_.GetActionStep();
-    const auto swords = player_.GetSwords();
-    const auto swordSlashStates = player_.GetSwordSlashStates();
-    const auto swordAttackDamages = player_.GetSwordAttackDamages();
-    for (size_t i = 0; i < swordSlashStates.size(); ++i) {
-        if (swordSlashStates[i]) {
+    ProcessReflectedProjectileHit(combat, arcaneProjectile_);
+    for (ArcaneProjectileState &projectile : cataclysmProjectiles_) {
+        if (ProcessReflectedProjectileHit(combat, projectile)) {
+            break;
+        }
+    }
+    ProcessHostileProjectileHit(combat, arcaneProjectile_);
+    for (ArcaneProjectileState &projectile : cataclysmProjectiles_) {
+        if (ProcessHostileProjectileHit(combat, projectile)) {
+            break;
+        }
+    }
+
+    ResolveEnemyMeleeDamage(combat);
+    FinishCombatFrame(combat);
+}
+
+void GameScene::InitializeCombatFrame(
+    float gameplayDeltaTime, CombatFrameContext &combat) {
+    collisionManager_.Clear();
+    const bool collisionDisabled = enemy_.IsWarpCollisionDisabled();
+    const std::array<OBB, 3> hurtBoxes{
+        enemy_.GetBodyOBB(), enemy_.GetLeftHandOBB(),
+        enemy_.GetRightHandOBB()};
+    for (size_t i = 0; i < hurtBoxes.size(); ++i) {
+        combat.enemyHurtBodies[i] =
+            collisionDisabled
+                ? CollisionManager::kInvalidBodyId
+                : AddCollisionBody(collisionManager_, hurtBoxes[i],
+                                   kLayerEnemy, kLayerPlayerAttack);
+    }
+    combat.enemyActionKind = enemy_.GetActionKind();
+    combat.enemyActionStep = enemy_.GetActionStep();
+    combat.swords = player_.GetSwords();
+    combat.swordSlashStates = player_.GetSwordSlashStates();
+    combat.swordAttackDamages = player_.GetSwordAttackDamages();
+    for (size_t i = 0; i < combat.swordSlashStates.size(); ++i) {
+        if (combat.swordSlashStates[i]) {
             normalSlashRearmTimers_[i] = 0.0f;
         } else {
             normalSlashRearmTimers_[i] += gameplayDeltaTime;
@@ -534,545 +562,531 @@ void GameScene::UpdateCombat(float gameplayDeltaTime) {
             normalSlashHitConsumed_[i] = false;
         }
     }
-    bool startCounterCinematicThisFrame = false;
-    bool stopCounterCinematicThisFrame = false;
-    bool forceSyncEnemyAnimationThisFrame = false;
-    auto triggerSuccessfulCounter = [&](size_t swordIndex, float enemyDamage,
-                                        float hitCooldown) {
-        const bool isTripleIaiCounter =
-            enemy_.IsTripleIaiSlashActive() && enemy_.IsFarWarpSlashActive() &&
-            (enemyActionKind == ActionKind::Smash ||
-             enemyActionKind == ActionKind::Sweep);
-        const float counterDamage =
-            (std::max)(enemyDamage * player_.GetCounterDamageMultiplier(),
-                       130.0f) *
-            (isTripleIaiCounter ? kTripleIaiCounterDamageScale : 1.0f);
-        const float vulnerabilityDuration = GetCounterVulnerabilityDuration();
-        const bool suppressCounterStagger =
-            enemy_.ShouldSuppressCounterStagger();
-        if (enemy_.IsFarWarpSlashActive() && !suppressCounterStagger) {
-            const XMFLOAT3 start = enemy_.GetTransform().position;
-            const XMFLOAT3 playerPos = player_.GetTransform().position;
-            XMFLOAT2 rushDir =
-                NormalizeXZ(playerPos.x - start.x, playerPos.z - start.z);
-            const float stopDistance = 1.45f;
-            XMFLOAT3 target{playerPos.x - rushDir.x * stopDistance,
-                            playerPos.y,
-                            playerPos.z - rushDir.y * stopDistance};
-            const float rushYaw = std::atan2(rushDir.x, rushDir.y);
-            XMFLOAT3 mid = Lerp3(start, target, 0.50f);
-            mid.y += 1.00f;
-            XMFLOAT3 rushParticleDir{rushDir.x, 0.06f, rushDir.y};
-
-            for (int p = 0; p < 4; ++p) {
-                const float t = static_cast<float>(p + 1) / 5.0f;
-                XMFLOAT3 trail = Lerp3(start, target, t);
-                trail.y += 1.0f;
-                EmitParticleBurst(sparkParticles_, trail, 34, 0.16f,
-                                  AppParticleBurstStyle::SlashLine,
-                                  {1.0f, 0.94f, 0.62f, 0.78f},
-                                  rushParticleDir, 1.15f + 0.25f * p);
-                EmitParticleBurst(smokeParticles_, trail, 14, 0.22f,
-                                  AppParticleBurstStyle::SpiritSparkle,
-                                  {1.0f, 0.90f, 0.56f, 0.38f},
-                                  rushParticleDir, 0.72f);
-            }
-            EmitParticleBurst(swordFlashParticles_, mid, 18, 0.20f,
-                              AppParticleBurstStyle::Flash,
-                              {1.0f, 0.98f, 0.72f, 0.74f},
-                              rushParticleDir, 0.45f);
-            enemy_.SetCinematicTransform(target, rushYaw);
-        }
-        if (enemy_.NotifyCountered(vulnerabilityDuration)) {
-            forceSyncEnemyAnimationThisFrame = true;
-        }
-        const float appliedDamage =
-            ApplyEnemyDamage(counterDamage, false, !suppressCounterStagger);
-        CombatFeedbackEvent feedback{};
-        feedback.type = CombatFeedbackEventType::CounterSuccess;
-        feedback.position = enemy_.GetTransform().position;
-        feedback.position.y += 1.0f;
-        feedback.direction =
-            DirectionFromTo(player_.GetTransform().position,
-                            enemy_.GetTransform().position);
-        feedback.power = appliedDamage / 10.0f;
-        feedback.swordIndex = swordIndex;
-        DispatchCombatFeedback(feedback);
-        playerHitCooldown_ = GetCounterPlayerHitCooldown(hitCooldown);
-        startCounterCinematicThisFrame = true;
-        counterCinematicTimer_ = GetCounterCinematicDuration();
-    };
-    auto isEnemyHurtBodyHit = [&](CollisionManager::BodyId attackBody) {
-        for (CollisionManager::BodyId targetBody : enemyHurtBodies) {
-            if (targetBody == CollisionManager::kInvalidBodyId) {
-                continue;
-            }
-            if (collisionManager_.Test(attackBody, targetBody)) {
-                return true;
-            }
-        }
-        return false;
-    };
-    auto isProjectileInDeflectRange =
-        [&](const ArcaneProjectileState &projectile) {
-            if (!projectile.active || projectile.reflected ||
-                (projectile.waitingToFire && !projectile.cataclysm)) {
-                return false;
-            }
-            const XMFLOAT3 playerPos = player_.GetTransform().position;
-            if (projectile.fromAbove &&
-                projectile.position.y >
-                    playerPos.y + kCataclysmProjectileDeflectHeight) {
-                return false;
-            }
-            return DistanceSqXZ(projectile.position, playerPos) <=
-                   kArcaneProjectileDeflectRange *
-                       kArcaneProjectileDeflectRange;
-        };
-    auto isProjectileSlashAligned =
-        [&](const ArcaneProjectileState &projectile, const Sword &sword) {
-            if (!sword.CanSlashCounter()) {
-                return false;
-            }
-
-            const XMFLOAT2 slashDir = sword.GetSlashDirection();
-            const XMFLOAT2 cueDir = projectile.cueDirection;
-            const float slashLenSq =
-                slashDir.x * slashDir.x + slashDir.y * slashDir.y;
-            if (slashLenSq < 0.010f) {
-                return false;
-            }
-
-            const float invSlashLen = 1.0f / std::sqrt(slashLenSq);
-            const float dot = (slashDir.x * invSlashLen) * cueDir.x +
-                              (slashDir.y * invSlashLen) * cueDir.y;
-            return projectile.cataclysm
-                       ? dot >= kArcaneProjectileSlashDot
-                       : std::fabs(dot) >= kArcaneProjectileSlashDot;
-        };
     TickCooldown(enemyHitCooldown_, gameplayDeltaTime);
     TickCooldown(playerHitCooldown_, gameplayDeltaTime);
+}
 
-    const bool isEnemySmashCommitted =
-        (enemyActionKind == ActionKind::Smash &&
-         enemyActionStep == ActionStep::Active);
-    const bool isEnemySweepCommitted =
-        (enemyActionKind == ActionKind::Sweep &&
-         enemyActionStep == ActionStep::Active);
-    const bool isEnemyBladeClashCommitted =
-        (enemyActionKind == ActionKind::BladeClash &&
-         (enemyActionStep == ActionStep::Charge ||
-          enemyActionStep == ActionStep::Active));
-    const bool isEnemySmashMeleeWindow =
-        isEnemySmashCommitted && enemy_.IsAttackActive();
-    const bool isEnemySweepMeleeWindow =
-        isEnemySweepCommitted && enemy_.IsAttackActive();
-    const bool isEnemyBladeClashMeleeWindow =
-        enemyActionKind == ActionKind::BladeClash &&
-        enemyActionStep == ActionStep::Active && enemy_.IsBladeClashWindow();
-    const bool isEnemyBladeClashCounterWindow =
-        isEnemyBladeClashCommitted;
-    const bool isEnemyMeleeActive =
-        isEnemySmashMeleeWindow || isEnemySweepMeleeWindow ||
-        isEnemyBladeClashMeleeWindow;
-    if (!isEnemyMeleeActive) {
+void GameScene::ConfigureCombatWindows(CombatFrameContext &combat) {
+    ConfigureMeleeCombatWindows(combat);
+    const bool preReleaseCounterWindow =
+        ConfigureCounterCombatWindows(combat);
+    const bool laserCommitted =
+        combat.enemyActionKind == ActionKind::ArcaneLaser &&
+        combat.enemyActionStep == ActionStep::Active;
+    ConfigureEnemyAttackCollision(
+        combat, combat.enemyAttackCommitted ||
+                    preReleaseCounterWindow || laserCommitted);
+}
+
+void GameScene::ConfigureMeleeCombatWindows(
+    CombatFrameContext &combat) {
+    const bool smashCommitted =
+        combat.enemyActionKind == ActionKind::Smash &&
+        combat.enemyActionStep == ActionStep::Active;
+    const bool sweepCommitted =
+        combat.enemyActionKind == ActionKind::Sweep &&
+        combat.enemyActionStep == ActionStep::Active;
+    const bool bladeClashCommitted =
+        combat.enemyActionKind == ActionKind::BladeClash &&
+        (combat.enemyActionStep == ActionStep::Charge ||
+         combat.enemyActionStep == ActionStep::Active);
+    combat.enemyAttackCommitted =
+        smashCommitted || sweepCommitted || bladeClashCommitted;
+    combat.enemyBladeClashCounterWindow = bladeClashCommitted;
+    const bool bladeClashWindow =
+        combat.enemyActionKind == ActionKind::BladeClash &&
+        combat.enemyActionStep == ActionStep::Active &&
+        enemy_.IsBladeClashWindow();
+    combat.enemyMeleeActive =
+        (smashCommitted && enemy_.IsAttackActive()) ||
+        (sweepCommitted && enemy_.IsAttackActive()) ||
+        bladeClashWindow;
+    if (!combat.enemyMeleeActive) {
         enemyMeleeHitConsumed_ = false;
     }
-    const bool isEnemyMeleeCommitted =
-        isEnemySmashCommitted || isEnemySweepCommitted ||
-        isEnemyBladeClashCommitted;
-    const bool isEnemyLaserCommitted =
-        enemyActionKind == ActionKind::ArcaneLaser &&
-        enemyActionStep == ActionStep::Active;
     enemyLaserHitConsumed_ = false;
+}
+
+bool GameScene::ConfigureCounterCombatWindows(
+    CombatFrameContext &combat) {
     if (enemyRedPunishUncounterable_ &&
-        (!(enemyActionKind == ActionKind::Smash ||
-           enemyActionKind == ActionKind::Sweep) ||
-         enemyActionStep == ActionStep::Recovery ||
-         enemyActionStep == ActionStep::None)) {
+        ShouldClearRedPunish(combat.enemyActionKind,
+                             combat.enemyActionStep)) {
         enemyRedPunishUncounterable_ = false;
     }
-    const bool isEnemyMeleePreparationOrRelease =
-        (enemyActionKind == ActionKind::Smash ||
-         enemyActionKind == ActionKind::Sweep) &&
-        (enemyActionStep == ActionStep::Charge ||
-         enemyActionStep == ActionStep::Hold ||
-         enemyActionStep == ActionStep::Active);
-    const bool isPreReleaseCounterWindow =
-        (enemyActionKind == ActionKind::Smash ||
-         enemyActionKind == ActionKind::Sweep) &&
-        isEnemyMeleePreparationOrRelease &&
-        !enemy_.IsFarWarpSlashActive() &&
-        enemyActionStep != ActionStep::Active &&
+    const bool meleePreparationOrRelease =
+        IsBasicSlashAction(combat.enemyActionKind) &&
+        IsCounterPreparationStep(combat.enemyActionStep);
+    const bool preReleaseCounterWindow =
+        meleePreparationOrRelease && !enemy_.IsFarWarpSlashActive() &&
+        combat.enemyActionStep != ActionStep::Active &&
         enemy_.GetReleaseAnticipationRatio() > 0.0f;
-    const bool isFarWarpDashCounterWindow =
+    const bool farWarpDashCounterWindow =
         !enemyRedPunishUncounterable_ && enemy_.IsFarWarpSlashActive() &&
-        (enemyActionKind == ActionKind::Smash ||
-         enemyActionKind == ActionKind::Sweep) &&
-        enemyActionStep == ActionStep::Active &&
-        enemy_.GetActionTimerForPresentation() <= kFarSlashCounterFlashDuration;
-    const bool isReleaseCounterWindow =
-        !enemyRedPunishUncounterable_ && isPreReleaseCounterWindow;
-    const float enemyAttackDamage = enemy_.GetCurrentAttackDamage();
-    const float enemyAttackKnockback = enemy_.GetCurrentAttackKnockback();
-    const bool isEnemyCounterWindow =
-        isReleaseCounterWindow || isFarWarpDashCounterWindow;
-    OBB enemyAttackBox{};
-    CollisionManager::BodyId enemyAttackBody =
-        CollisionManager::kInvalidBodyId;
-    if (isEnemyMeleeCommitted || isPreReleaseCounterWindow ||
-        isEnemyLaserCommitted) {
-        enemyAttackBox = enemy_.GetAttackOBB();
-        enemyAttackBody =
-            AddCollisionBody(collisionManager_, enemyAttackBox,
-                             kLayerEnemyAttack,
-                             kLayerPlayer | kLayerPlayerAttack);
-    }
+        IsBasicSlashAction(combat.enemyActionKind) &&
+        combat.enemyActionStep == ActionStep::Active &&
+        enemy_.GetActionTimerForPresentation() <=
+            kFarSlashCounterFlashDuration;
+    combat.enemyCounterWindow =
+        (!enemyRedPunishUncounterable_ && preReleaseCounterWindow) ||
+        farWarpDashCounterWindow;
+    return preReleaseCounterWindow;
+}
 
-    const bool enemyMeleeDamagePending =
-        isEnemyMeleeActive &&
-        enemyAttackBody != CollisionManager::kInvalidBodyId &&
-        IsNearXZ(player_.GetTransform().position, enemyAttackBox.center,
-                 GetReadableMeleeRadius(enemyAttackBox)) &&
+void GameScene::ConfigureEnemyAttackCollision(
+    CombatFrameContext &combat, bool attackCommitted) {
+    combat.enemyAttackDamage = enemy_.GetCurrentAttackDamage();
+    combat.enemyAttackKnockback = enemy_.GetCurrentAttackKnockback();
+    if (attackCommitted) {
+        combat.enemyAttackBox = enemy_.GetAttackOBB();
+        combat.enemyAttackBody = AddCollisionBody(
+            collisionManager_, combat.enemyAttackBox, kLayerEnemyAttack,
+            kLayerPlayer | kLayerPlayerAttack);
+    }
+    combat.enemyMeleeDamagePending =
+        combat.enemyMeleeActive &&
+        combat.enemyAttackBody != CollisionManager::kInvalidBodyId &&
+        IsNearXZ(player_.GetTransform().position,
+                 combat.enemyAttackBox.center,
+                 GetReadableMeleeRadius(combat.enemyAttackBox)) &&
         playerHitCooldown_ <= 0.0f && !enemyMeleeHitConsumed_ &&
         !enemyRedPunishUncounterable_;
-    const bool isEnemyMeleePreparation =
-        (enemyActionKind == ActionKind::Smash ||
-         enemyActionKind == ActionKind::Sweep) &&
-        (enemyActionStep == ActionStep::Charge ||
-         enemyActionStep == ActionStep::Hold);
-    const bool isBadSlashPunishWindow =
-        isEnemyMeleePreparation &&
-        !enemy_.IsFarWarpSlashActive() &&
-        !isReleaseCounterWindow &&
-        !isFarWarpDashCounterWindow &&
-        !enemyRedPunishUncounterable_;
-    if (isBadSlashPunishWindow && playerHitCooldown_ <= 0.0f) {
-        for (size_t i = 0; i < swordSlashStates.size(); ++i) {
-            if (!swordSlashStates[i] || previousCombatSlashStates_[i]) {
-                continue;
-            }
-            const Sword *sword = swords[i];
-            if (sword == nullptr || !sword->CanSlashCounter()) {
-                continue;
-            }
+}
 
-            enemy_.ForcePunishRelease();
-            enemyRedPunishUncounterable_ = true;
-            forceSyncEnemyAnimationThisFrame = true;
+bool GameScene::IsEnemyHurtBodyHit(
+    const CombatFrameContext &combat,
+    CollisionManager::BodyId attackBody) const {
+    return std::ranges::any_of(
+        combat.enemyHurtBodies,
+        [&](CollisionManager::BodyId targetBody) {
+            return targetBody != CollisionManager::kInvalidBodyId &&
+                   collisionManager_.Test(attackBody, targetBody);
+        });
+}
 
-            const XMFLOAT2 knockbackDir = NormalizeXZ(
-                player_.GetTransform().position.x -
-                    enemy_.GetTransform().position.x,
-                player_.GetTransform().position.z -
-                    enemy_.GetTransform().position.z);
-            player_.AddKnockback(
-                {knockbackDir.x * enemyAttackKnockback, 0.0f,
-                 knockbackDir.y * enemyAttackKnockback});
-            const float appliedDamage = ApplyPlayerDamage(enemyAttackDamage);
-
-            CombatFeedbackEvent feedback{};
-            feedback.type = CombatFeedbackEventType::MistimedCounterSlash;
-            feedback.position = sword->GetOBB().center;
-            feedback.direction =
-                DirectionFromTo(player_.GetTransform().position,
-                                enemy_.GetTransform().position);
-            feedback.power = (std::max)(appliedDamage / 8.0f,
-                                        enemyAttackDamage / 8.0f);
-            feedback.swordIndex = i;
-            mistimedCounterSlashThisFrame_ = true;
-            normalSlashHitConsumed_[i] = true;
-            DispatchCombatFeedback(feedback);
-            playerHitCooldown_ = 0.45f;
-            break;
-        }
+bool GameScene::IsProjectileInDeflectRange(
+    const ArcaneProjectileState &projectile) const {
+    if (!projectile.active || projectile.reflected ||
+        (projectile.waitingToFire && !projectile.cataclysm)) {
+        return false;
     }
+    const XMFLOAT3 playerPos = player_.GetTransform().position;
+    if (projectile.fromAbove &&
+        projectile.position.y >
+            playerPos.y + kCataclysmProjectileDeflectHeight) {
+        return false;
+    }
+    return DistanceSqXZ(projectile.position, playerPos) <=
+           kArcaneProjectileDeflectRange * kArcaneProjectileDeflectRange;
+}
 
-    bool counterTriggeredThisFrame = false;
-    bool arcaneProjectileReflectedThisFrame = false;
-    for (size_t i = 0; i < swords.size(); ++i) {
-        const Sword *sword = swords[i];
-        if (sword == nullptr || !swordSlashStates[i]) {
+bool GameScene::IsProjectileSlashAligned(
+    const ArcaneProjectileState &projectile, const Sword &sword) const {
+    if (!sword.CanSlashCounter()) {
+        return false;
+    }
+    const XMFLOAT2 slashDir = sword.GetSlashDirection();
+    const float slashLenSq =
+        slashDir.x * slashDir.x + slashDir.y * slashDir.y;
+    if (slashLenSq < 0.010f) {
+        return false;
+    }
+    const float invSlashLen = 1.0f / std::sqrt(slashLenSq);
+    const float dot = (slashDir.x * invSlashLen) * projectile.cueDirection.x +
+                      (slashDir.y * invSlashLen) * projectile.cueDirection.y;
+    return projectile.cataclysm ? dot >= kArcaneProjectileSlashDot
+                                : std::fabs(dot) >=
+                                      kArcaneProjectileSlashDot;
+}
+
+void GameScene::TriggerSuccessfulCounter(
+    CombatFrameContext &combat, size_t swordIndex, float enemyDamage,
+    float hitCooldown) {
+    const bool tripleIaiCounter =
+        enemy_.IsTripleIaiSlashActive() && enemy_.IsFarWarpSlashActive() &&
+        IsBasicSlashAction(combat.enemyActionKind);
+    const float counterDamage =
+        (std::max)(enemyDamage * player_.GetCounterDamageMultiplier(),
+                   130.0f) *
+        (tripleIaiCounter ? kTripleIaiCounterDamageScale : 1.0f);
+    const float vulnerabilityDuration = GetCounterVulnerabilityDuration();
+    const bool suppressCounterStagger = enemy_.ShouldSuppressCounterStagger();
+    if (enemy_.IsFarWarpSlashActive() && !suppressCounterStagger) {
+        const XMFLOAT3 start = enemy_.GetTransform().position;
+        const XMFLOAT3 playerPos = player_.GetTransform().position;
+        const XMFLOAT2 rushDir =
+            NormalizeXZ(playerPos.x - start.x, playerPos.z - start.z);
+        const float stopDistance = 1.45f;
+        const XMFLOAT3 target{playerPos.x - rushDir.x * stopDistance,
+                              playerPos.y,
+                              playerPos.z - rushDir.y * stopDistance};
+        const float rushYaw = std::atan2(rushDir.x, rushDir.y);
+        XMFLOAT3 mid = Lerp3(start, target, 0.50f);
+        mid.y += 1.00f;
+        const XMFLOAT3 rushParticleDir{rushDir.x, 0.06f, rushDir.y};
+        for (int p = 0; p < 4; ++p) {
+            const float t = static_cast<float>(p + 1) / 5.0f;
+            XMFLOAT3 trail = Lerp3(start, target, t);
+            trail.y += 1.0f;
+            EmitParticleBurst(sparkParticles_, trail, 34, 0.16f,
+                              AppParticleBurstStyle::SlashLine,
+                              {1.0f, 0.94f, 0.62f, 0.78f}, rushParticleDir,
+                              1.15f + 0.25f * static_cast<float>(p));
+            EmitParticleBurst(smokeParticles_, trail, 14, 0.22f,
+                              AppParticleBurstStyle::SpiritSparkle,
+                              {1.0f, 0.90f, 0.56f, 0.38f}, rushParticleDir,
+                              0.72f);
+        }
+        EmitParticleBurst(swordFlashParticles_, mid, 18, 0.20f,
+                          AppParticleBurstStyle::Flash,
+                          {1.0f, 0.98f, 0.72f, 0.74f}, rushParticleDir,
+                          0.45f);
+        enemy_.SetCinematicTransform(target, rushYaw);
+    }
+    if (enemy_.NotifyCountered(vulnerabilityDuration)) {
+        combat.forceSyncEnemyAnimation = true;
+    }
+    const float appliedDamage =
+        ApplyEnemyDamage(counterDamage, false, !suppressCounterStagger);
+    CombatFeedbackEvent feedback{};
+    feedback.type = CombatFeedbackEventType::CounterSuccess;
+    feedback.position = enemy_.GetTransform().position;
+    feedback.position.y += 1.0f;
+    feedback.direction = DirectionFromTo(player_.GetTransform().position,
+                                         enemy_.GetTransform().position);
+    feedback.power = appliedDamage / 10.0f;
+    feedback.swordIndex = swordIndex;
+    DispatchCombatFeedback(feedback);
+    playerHitCooldown_ = GetCounterPlayerHitCooldown(hitCooldown);
+    combat.startCounterCinematic = true;
+    counterCinematicTimer_ = GetCounterCinematicDuration();
+}
+
+void GameScene::HandleBadSlashPunish(CombatFrameContext &combat) {
+    const bool meleePreparation =
+        IsBasicSlashAction(combat.enemyActionKind) &&
+        (combat.enemyActionStep == ActionStep::Charge ||
+         combat.enemyActionStep == ActionStep::Hold);
+    const bool badSlashWindow =
+        meleePreparation && !enemy_.IsFarWarpSlashActive() &&
+        !combat.enemyCounterWindow && !enemyRedPunishUncounterable_;
+    if (!badSlashWindow || playerHitCooldown_ > 0.0f) {
+        return;
+    }
+    for (size_t i = 0; i < combat.swordSlashStates.size(); ++i) {
+        if (!combat.swordSlashStates[i] || previousCombatSlashStates_[i]) {
             continue;
         }
-        const auto swordHitBox = sword->GetOBB();
-        const auto swordHitSamples = sword->GetOBBSamples();
-        bool hitBody = false;
-        for (const OBB &sampleBox : swordHitSamples) {
-            const CollisionManager::BodyId swordHitBody =
-                AddCollisionBody(collisionManager_, sampleBox,
-                                 kLayerPlayerAttack,
-                                 kLayerEnemy | kLayerEnemyAttack);
-            hitBody = isEnemyHurtBodyHit(swordHitBody);
-            if (hitBody) {
-                break;
-            }
+        const Sword *sword = combat.swords[i];
+        if (sword == nullptr || !sword->CanSlashCounter()) {
+            continue;
         }
-        const bool isFarWarpSlashCommit = enemy_.IsFarWarpSlashActive();
-        const float counterDistanceBonus =
-            isFarWarpSlashCommit ? 100.0f : 0.0f;
-        const bool canSlashCounter =
-            isEnemyCounterWindow &&
-            playerHitCooldown_ <= 0.0f &&
-            enemyAttackBody != CollisionManager::kInvalidBodyId &&
-            IsNearXZ(player_.GetTransform().position, enemyAttackBox.center,
-                     GetReadableMeleeRadius(enemyAttackBox) + 0.85f +
-                         counterDistanceBonus) &&
-            IsSlashAxisMatched(*sword,
-                               RequiredCounterAxisForAction(enemyActionKind));
-        const bool canBladeClashCounter =
-            isEnemyBladeClashCounterWindow && playerHitCooldown_ <= 0.0f &&
-            enemyAttackBody != CollisionManager::kInvalidBodyId &&
-            (IsNearXZ(player_.GetTransform().position, enemyAttackBox.center,
-                      GetReadableMeleeRadius(enemyAttackBox) + 1.75f) ||
-             IsNearXZ(player_.GetTransform().position,
-                      enemy_.GetTransform().position, 4.15f)) &&
-            IsSlashAxisMatched(*sword,
-                               RequiredCounterAxisForAction(enemyActionKind));
+        enemy_.ForcePunishRelease();
+        enemyRedPunishUncounterable_ = true;
+        combat.forceSyncEnemyAnimation = true;
+        const XMFLOAT2 knockbackDir = NormalizeXZ(
+            player_.GetTransform().position.x -
+                enemy_.GetTransform().position.x,
+            player_.GetTransform().position.z -
+                enemy_.GetTransform().position.z);
+        player_.AddKnockback(
+            {knockbackDir.x * combat.enemyAttackKnockback, 0.0f,
+             knockbackDir.y * combat.enemyAttackKnockback});
+        const float appliedDamage =
+            ApplyPlayerDamage(combat.enemyAttackDamage);
+        CombatFeedbackEvent feedback{};
+        feedback.type = CombatFeedbackEventType::MistimedCounterSlash;
+        feedback.position = sword->GetOBB().center;
+        feedback.direction = DirectionFromTo(player_.GetTransform().position,
+                                             enemy_.GetTransform().position);
+        feedback.power = (std::max)(appliedDamage / 8.0f,
+                                    combat.enemyAttackDamage / 8.0f);
+        feedback.swordIndex = i;
+        mistimedCounterSlashThisFrame_ = true;
+        normalSlashHitConsumed_[i] = true;
+        DispatchCombatFeedback(feedback);
+        playerHitCooldown_ = 0.45f;
+        break;
+    }
+}
 
-        if (canBladeClashCounter) {
-            BeginBladeClash(i);
-            counterTriggeredThisFrame = true;
-            break;
-        }
-
-        if (canSlashCounter) {
-            triggerSuccessfulCounter(i, enemyAttackDamage, 0.2f);
-            counterTriggeredThisFrame = true;
-            break;
-        }
-
-        const bool projectileSlashStarted =
-            swordSlashStates[i] && !previousCombatSlashStates_[i];
-        const bool projectileCueSlashActive =
-            swordSlashStates[i] &&
-            isProjectileSlashAligned(arcaneProjectile_, *sword);
-        const bool canReflectArcaneProjectile =
-            arcaneProjectile_.active && !arcaneProjectile_.reflected &&
-            (projectileSlashStarted || projectileCueSlashActive) &&
-            playerHitCooldown_ <= 0.0f &&
-            isProjectileInDeflectRange(arcaneProjectile_) &&
-            isProjectileSlashAligned(arcaneProjectile_, *sword);
-        if (canReflectArcaneProjectile) {
-            ReflectArcaneProjectile(arcaneProjectile_, i);
-            playerHitCooldown_ = 0.14f;
-            arcaneProjectileReflectedThisFrame = true;
-            break;
-        }
-        bool reflectedCataclysmProjectile = false;
-        for (ArcaneProjectileState &projectile : cataclysmProjectiles_) {
-            const bool cataclysmCueSlashActive =
-                swordSlashStates[i] &&
-                isProjectileSlashAligned(projectile, *sword);
-            if ((projectileSlashStarted || cataclysmCueSlashActive) &&
-                playerHitCooldown_ <= 0.0f &&
-                isProjectileInDeflectRange(projectile) &&
-                isProjectileSlashAligned(projectile, *sword)) {
-                ReflectArcaneProjectile(projectile, i);
-                playerHitCooldown_ = 0.14f;
-                arcaneProjectileReflectedThisFrame = true;
-                reflectedCataclysmProjectile = true;
-                break;
-            }
-        }
-        if (reflectedCataclysmProjectile) {
-            break;
-        }
-
-        if (!mistimedCounterSlashThisFrame_ &&
-            !counterSuccessSlashThisFrame_ && enemyHitCooldown_ <= 0.0f &&
-            !normalSlashHitConsumed_[i]) {
-            if (hitBody) {
-                const float swordDamage = swordAttackDamages[i];
-                const float appliedDamage =
-                    ApplyEnemyDamage(swordDamage, false, false);
-                if (appliedDamage <= 0.0f) {
-                    break;
-                }
-                normalSlashHitConsumed_[i] = true;
-                CombatFeedbackEvent feedback{};
-                feedback.type = CombatFeedbackEventType::PlayerSlashHit;
-                feedback.position = swordHitBox.center;
-                feedback.direction =
-                    DirectionFromTo(player_.GetTransform().position,
-                                    enemy_.GetTransform().position);
-                feedback.power = appliedDamage / 10.0f;
-                feedback.swordIndex = i;
-                DispatchCombatFeedback(feedback);
-                if (soundsLoaded_ && ctx_ != nullptr &&
-                    ctx_->systems.sound != nullptr) {
-                    ctx_->systems.sound->PlayFrom(
-                        normalHitSlashSoundId_, kNormalHitSlashSoundStartSeconds,
-                        kNormalHitSlashSoundVolume *
-                            AppSceneServices::GetSeVolume());
-                }
-                enemyHitCooldown_ = GetEnemyNormalHitCooldown();
-                if (counterCinematicActive_) {
-                    stopCounterCinematicThisFrame = true;
-                }
-            }
-        }
-
-        if (enemyHitCooldown_ > 0.0f) {
+void GameScene::ProcessSwordAttacks(CombatFrameContext &combat) {
+    for (size_t i = 0; i < combat.swords.size(); ++i) {
+        if (ProcessSwordAttack(combat, i)) {
             break;
         }
     }
+}
 
-    auto processReflectedProjectileHit =
-        [&](ArcaneProjectileState &projectile) {
-            if (!projectile.active || !projectile.reflected ||
-                enemyHitCooldown_ > 0.0f) {
-                return false;
-            }
-        const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
-        const float enemyHitRangeSq =
-            kArcaneProjectileEnemyHitRange * kArcaneProjectileEnemyHitRange;
-        if (DistanceSqXZ(projectile.position, enemyPos) <= enemyHitRangeSq ||
-            DistancePointToSegmentSqXZ(enemyPos, projectile.previousPosition,
-                                       projectile.position) <=
-                enemyHitRangeSq) {
-            ++arcaneProjectileVolleyReflectedHits_;
-            const int requiredHits = arcaneProjectileVolleyCataclysm_
-                                         ? kCataclysmProjectileVolleyRequiredHits
-                                         : kArcaneProjectileVolleyRequiredHits;
-            const bool volleyComplete = arcaneProjectileVolleyReflectedHits_ >=
-                                        requiredHits;
-            projectile = {};
-            const float reflectedDamage =
-                kReflectedProjectileVolleyDamage /
-                static_cast<float>((std::max)(requiredHits, 1));
-            ApplyEnemyDamage(reflectedDamage);
-            if (volleyComplete) {
-                const float vulnerabilityDuration =
-                    GetCounterVulnerabilityDuration();
-                if (enemy_.NotifyCountered(vulnerabilityDuration)) {
-                    forceSyncEnemyAnimationThisFrame = true;
-                }
-                arcaneProjectileVolleyActive_ = false;
-                arcaneProjectileVolleyCataclysm_ = false;
-                counterTriggeredThisFrame = true;
-                playerHitCooldown_ = GetCounterPlayerHitCooldown(0.22f);
-            } else {
-                enemyHitCooldown_ = 0.10f;
-            }
+bool GameScene::ProcessSwordAttack(
+    CombatFrameContext &combat, size_t swordIndex) {
+    const Sword *sword = combat.swords[swordIndex];
+    if (sword == nullptr || !combat.swordSlashStates[swordIndex]) {
+        return false;
+    }
+    bool hitBody = false;
+    for (const OBB &sampleBox : sword->GetOBBSamples()) {
+        const CollisionManager::BodyId swordHitBody = AddCollisionBody(
+            collisionManager_, sampleBox, kLayerPlayerAttack,
+            kLayerEnemy | kLayerEnemyAttack);
+        if (IsEnemyHurtBodyHit(combat, swordHitBody)) {
+            hitBody = true;
+            break;
+        }
+    }
+    if (TrySwordCounter(combat, swordIndex, *sword) ||
+        TryReflectProjectiles(combat, swordIndex, *sword)) {
+        return true;
+    }
+    if (TryNormalSwordHit(combat, swordIndex, *sword, hitBody)) {
+        return true;
+    }
+    return enemyHitCooldown_ > 0.0f;
+}
+
+bool GameScene::TrySwordCounter(
+    CombatFrameContext &combat, size_t swordIndex, const Sword &sword) {
+    const float counterDistanceBonus =
+        enemy_.IsFarWarpSlashActive() ? 100.0f : 0.0f;
+    const bool attackBodyValid =
+        combat.enemyAttackBody != CollisionManager::kInvalidBodyId;
+    const bool axisMatched = IsSlashAxisMatched(
+        sword, RequiredCounterAxisForAction(combat.enemyActionKind));
+    const bool canSlashCounter =
+        combat.enemyCounterWindow && playerHitCooldown_ <= 0.0f &&
+        attackBodyValid &&
+        IsNearXZ(player_.GetTransform().position,
+                 combat.enemyAttackBox.center,
+                 GetReadableMeleeRadius(combat.enemyAttackBox) + 0.85f +
+                     counterDistanceBonus) &&
+        axisMatched;
+    const bool bladeClashInRange =
+        IsNearXZ(player_.GetTransform().position,
+                 combat.enemyAttackBox.center,
+                 GetReadableMeleeRadius(combat.enemyAttackBox) + 1.75f) ||
+        IsNearXZ(player_.GetTransform().position,
+                 enemy_.GetTransform().position, 4.15f);
+    const bool canBladeClashCounter =
+        combat.enemyBladeClashCounterWindow &&
+        playerHitCooldown_ <= 0.0f && attackBodyValid &&
+        bladeClashInRange && axisMatched;
+    if (canBladeClashCounter) {
+        BeginBladeClash(swordIndex);
+        combat.counterTriggered = true;
+        return true;
+    }
+    if (canSlashCounter) {
+        TriggerSuccessfulCounter(combat, swordIndex,
+                                 combat.enemyAttackDamage, 0.2f);
+        combat.counterTriggered = true;
+        return true;
+    }
+    return false;
+}
+
+bool GameScene::TryReflectProjectiles(
+    CombatFrameContext &combat, size_t swordIndex, const Sword &sword) {
+    const bool slashStarted = combat.swordSlashStates[swordIndex] &&
+                              !previousCombatSlashStates_[swordIndex];
+    if (TryReflectProjectile(combat, swordIndex, sword,
+                             arcaneProjectile_, slashStarted)) {
+        return true;
+    }
+    for (ArcaneProjectileState &projectile : cataclysmProjectiles_) {
+        if (TryReflectProjectile(combat, swordIndex, sword,
+                                 projectile, slashStarted)) {
             return true;
         }
+    }
+    return false;
+}
+
+bool GameScene::TryReflectProjectile(
+    CombatFrameContext &combat, size_t swordIndex, const Sword &sword,
+    ArcaneProjectileState &projectile, bool slashStarted) {
+    const bool cueSlash = combat.swordSlashStates[swordIndex] &&
+                          IsProjectileSlashAligned(projectile, sword);
+    const bool canReflect =
+        projectile.active && !projectile.reflected &&
+        (slashStarted || cueSlash) && playerHitCooldown_ <= 0.0f &&
+        IsProjectileInDeflectRange(projectile) &&
+        IsProjectileSlashAligned(projectile, sword);
+    if (!canReflect) {
         return false;
-    };
-
-    processReflectedProjectileHit(arcaneProjectile_);
-    for (ArcaneProjectileState &projectile : cataclysmProjectiles_) {
-        if (processReflectedProjectileHit(projectile)) {
-            break;
-        }
     }
+    ReflectArcaneProjectile(projectile, swordIndex);
+    playerHitCooldown_ = 0.14f;
+    combat.projectileReflected = true;
+    return true;
+}
 
-    auto processHostileProjectileHit =
-        [&](ArcaneProjectileState &projectile) {
-            if (!projectile.active || projectile.reflected ||
-                projectile.waitingToFire ||
-                arcaneProjectileReflectedThisFrame ||
-                playerHitCooldown_ > 0.0f) {
-                return false;
-            }
-        const bool playerHitByProjectile =
-            projectile.fromAbove
-                ? (DistanceSqXZ(player_.GetTransform().position,
-                                projectile.position) <=
-                       (kArcaneProjectilePlayerHitRange + 0.22f) *
-                           (kArcaneProjectilePlayerHitRange + 0.22f) &&
-                   std::fabs(projectile.position.y -
-                             (player_.GetTransform().position.y + 0.78f)) <=
-                       1.10f)
-                : DistanceSqXZ(player_.GetTransform().position,
-                               projectile.position) <=
-                      kArcaneProjectilePlayerHitRange *
-                          kArcaneProjectilePlayerHitRange;
-        if (playerHitByProjectile) {
-            const XMFLOAT3 impact = projectile.position;
-            const XMFLOAT3 projectileVelocity = projectile.velocity;
-            const XMFLOAT3 impactDirection =
-                NormalizeParticleCompatVec3(projectileVelocity,
-                                            {0.0f, 0.0f, 1.0f});
-            const float projectileDamage =
-                projectile.damage * kHostileProjectilePlayerDamageScale;
-            const float projectileKnockback =
-                projectile.knockback * kHostileProjectilePlayerKnockbackScale;
-            const ArcaneProjectileState impactProjectile = projectile;
-            projectile = {};
-            EmitArcaneProjectileExplosion(impactProjectile, impact,
-                                          impactDirection, false);
-            const XMFLOAT2 knockbackDir =
-                NormalizeXZ(projectileVelocity.x, projectileVelocity.z);
-            player_.AddKnockback({knockbackDir.x * projectileKnockback, 0.0f,
-                                  knockbackDir.y * projectileKnockback});
-            const float appliedDamage = ApplyPlayerDamage(projectileDamage);
-            CombatFeedbackEvent feedback{};
-            feedback.type = CombatFeedbackEventType::PlayerDamaged;
-            feedback.position = player_.GetTransform().position;
-            feedback.position.y += 1.0f;
-            feedback.direction = {projectileVelocity.x, 0.0f,
-                                  projectileVelocity.z};
-            feedback.power = (std::max)(appliedDamage / 8.0f,
-                                        projectileDamage / 8.0f);
-            DispatchCombatFeedback(feedback);
-            playerHitCooldown_ = 0.52f;
-            return true;
-        }
+bool GameScene::TryNormalSwordHit(
+    CombatFrameContext &combat, size_t swordIndex, const Sword &sword,
+    bool hitBody) {
+    const bool canHit = !mistimedCounterSlashThisFrame_ &&
+                        !counterSuccessSlashThisFrame_ &&
+                        enemyHitCooldown_ <= 0.0f &&
+                        !normalSlashHitConsumed_[swordIndex] && hitBody;
+    if (!canHit) {
         return false;
-    };
-
-    processHostileProjectileHit(arcaneProjectile_);
-    for (ArcaneProjectileState &projectile : cataclysmProjectiles_) {
-        if (processHostileProjectileHit(projectile)) {
-            break;
-        }
     }
-
-    if (isEnemyMeleeActive && !counterTriggeredThisFrame) {
-        if (enemyMeleeDamagePending) {
-            enemyMeleeHitConsumed_ = true;
-            const XMFLOAT2 knockbackDir = NormalizeXZ(
-                player_.GetTransform().position.x -
-                    enemy_.GetTransform().position.x,
-                player_.GetTransform().position.z -
-                    enemy_.GetTransform().position.z);
-
-            player_.AddKnockback(
-                {knockbackDir.x * enemyAttackKnockback, 0.0f,
-                 knockbackDir.y * enemyAttackKnockback});
-            const float appliedDamage = ApplyPlayerDamage(enemyAttackDamage);
-            enemy_.NotifyTripleIaiAttackResolvedForCamera();
-            CombatFeedbackEvent feedback{};
-            feedback.type = CombatFeedbackEventType::PlayerDamaged;
-            feedback.position = player_.GetTransform().position;
-            feedback.position.y += 1.0f;
-            feedback.direction =
-                DirectionFromTo(enemy_.GetTransform().position,
-                                player_.GetTransform().position);
-            feedback.power = (std::max)(appliedDamage / 10.0f,
-                                        enemyAttackDamage / 10.0f);
-            DispatchCombatFeedback(feedback);
-            playerHitCooldown_ = 0.4f;
-        }
+    const float appliedDamage = ApplyEnemyDamage(
+        combat.swordAttackDamages[swordIndex], false, false);
+    if (appliedDamage <= 0.0f) {
+        return true;
     }
+    normalSlashHitConsumed_[swordIndex] = true;
+    CombatFeedbackEvent feedback{};
+    feedback.type = CombatFeedbackEventType::PlayerSlashHit;
+    feedback.position = sword.GetOBB().center;
+    feedback.direction = DirectionFromTo(player_.GetTransform().position,
+                                         enemy_.GetTransform().position);
+    feedback.power = appliedDamage / 10.0f;
+    feedback.swordIndex = swordIndex;
+    DispatchCombatFeedback(feedback);
+    if (soundsLoaded_ && ctx_ != nullptr &&
+        ctx_->systems.sound != nullptr) {
+        ctx_->systems.sound->PlayFrom(
+            normalHitSlashSoundId_, kNormalHitSlashSoundStartSeconds,
+            kNormalHitSlashSoundVolume * AppSceneServices::GetSeVolume());
+    }
+    enemyHitCooldown_ = GetEnemyNormalHitCooldown();
+    if (counterCinematicActive_) {
+        combat.stopCounterCinematic = true;
+    }
+    return true;
+}
 
-    previousCombatSlashStates_ = swordSlashStates;
+bool GameScene::ProcessReflectedProjectileHit(
+    CombatFrameContext &combat, ArcaneProjectileState &projectile) {
+    if (!projectile.active || !projectile.reflected ||
+        enemyHitCooldown_ > 0.0f) {
+        return false;
+    }
+    const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
+    const float hitRangeSq =
+        kArcaneProjectileEnemyHitRange * kArcaneProjectileEnemyHitRange;
+    const bool hit =
+        DistanceSqXZ(projectile.position, enemyPos) <= hitRangeSq ||
+        DistancePointToSegmentSqXZ(enemyPos, projectile.previousPosition,
+                                   projectile.position) <= hitRangeSq;
+    if (!hit) {
+        return false;
+    }
+    ++arcaneProjectileVolleyReflectedHits_;
+    const int requiredHits =
+        arcaneProjectileVolleyCataclysm_
+            ? kCataclysmProjectileVolleyRequiredHits
+            : kArcaneProjectileVolleyRequiredHits;
+    const bool volleyComplete =
+        arcaneProjectileVolleyReflectedHits_ >= requiredHits;
+    projectile = {};
+    const float reflectedDamage =
+        kReflectedProjectileVolleyDamage /
+        static_cast<float>((std::max)(requiredHits, 1));
+    ApplyEnemyDamage(reflectedDamage);
+    if (volleyComplete) {
+        if (enemy_.NotifyCountered(GetCounterVulnerabilityDuration())) {
+            combat.forceSyncEnemyAnimation = true;
+        }
+        arcaneProjectileVolleyActive_ = false;
+        arcaneProjectileVolleyCataclysm_ = false;
+        combat.counterTriggered = true;
+        playerHitCooldown_ = GetCounterPlayerHitCooldown(0.22f);
+    } else {
+        enemyHitCooldown_ = 0.10f;
+    }
+    return true;
+}
 
-    if (startCounterCinematicThisFrame) {
+bool GameScene::ProcessHostileProjectileHit(
+    CombatFrameContext &combat, ArcaneProjectileState &projectile) {
+    if (!projectile.active || projectile.reflected ||
+        projectile.waitingToFire || combat.projectileReflected ||
+        playerHitCooldown_ > 0.0f) {
+        return false;
+    }
+    const XMFLOAT3 playerPos = player_.GetTransform().position;
+    const float horizontalDistanceSq =
+        DistanceSqXZ(playerPos, projectile.position);
+    const float hitRange = projectile.fromAbove
+                               ? kArcaneProjectilePlayerHitRange + 0.22f
+                               : kArcaneProjectilePlayerHitRange;
+    const bool heightMatched =
+        !projectile.fromAbove ||
+        std::fabs(projectile.position.y - (playerPos.y + 0.78f)) <= 1.10f;
+    if (horizontalDistanceSq > hitRange * hitRange || !heightMatched) {
+        return false;
+    }
+    const XMFLOAT3 impact = projectile.position;
+    const XMFLOAT3 velocity = projectile.velocity;
+    const XMFLOAT3 impactDirection = NormalizeParticleCompatVec3(
+        velocity, {0.0f, 0.0f, 1.0f});
+    const float damage =
+        projectile.damage * kHostileProjectilePlayerDamageScale;
+    const float knockback =
+        projectile.knockback * kHostileProjectilePlayerKnockbackScale;
+    const ArcaneProjectileState impactProjectile = projectile;
+    projectile = {};
+    EmitArcaneProjectileExplosion(impactProjectile, impact,
+                                  impactDirection, false);
+    const XMFLOAT2 knockbackDir = NormalizeXZ(velocity.x, velocity.z);
+    player_.AddKnockback({knockbackDir.x * knockback, 0.0f,
+                          knockbackDir.y * knockback});
+    const float appliedDamage = ApplyPlayerDamage(damage);
+    CombatFeedbackEvent feedback{};
+    feedback.type = CombatFeedbackEventType::PlayerDamaged;
+    feedback.position = playerPos;
+    feedback.position.y += 1.0f;
+    feedback.direction = {velocity.x, 0.0f, velocity.z};
+    feedback.power = (std::max)(appliedDamage / 8.0f, damage / 8.0f);
+    DispatchCombatFeedback(feedback);
+    playerHitCooldown_ = 0.52f;
+    return true;
+}
+
+void GameScene::ResolveEnemyMeleeDamage(CombatFrameContext &combat) {
+    if (!combat.enemyMeleeActive || combat.counterTriggered ||
+        !combat.enemyMeleeDamagePending) {
+        return;
+    }
+    enemyMeleeHitConsumed_ = true;
+    const XMFLOAT2 knockbackDir = NormalizeXZ(
+        player_.GetTransform().position.x - enemy_.GetTransform().position.x,
+        player_.GetTransform().position.z - enemy_.GetTransform().position.z);
+    player_.AddKnockback(
+        {knockbackDir.x * combat.enemyAttackKnockback, 0.0f,
+         knockbackDir.y * combat.enemyAttackKnockback});
+    const float appliedDamage = ApplyPlayerDamage(combat.enemyAttackDamage);
+    enemy_.NotifyTripleIaiAttackResolvedForCamera();
+    CombatFeedbackEvent feedback{};
+    feedback.type = CombatFeedbackEventType::PlayerDamaged;
+    feedback.position = player_.GetTransform().position;
+    feedback.position.y += 1.0f;
+    feedback.direction = DirectionFromTo(enemy_.GetTransform().position,
+                                         player_.GetTransform().position);
+    feedback.power = (std::max)(appliedDamage / 10.0f,
+                                combat.enemyAttackDamage / 10.0f);
+    DispatchCombatFeedback(feedback);
+    playerHitCooldown_ = 0.4f;
+}
+
+void GameScene::FinishCombatFrame(CombatFrameContext &combat) {
+    previousCombatSlashStates_ = combat.swordSlashStates;
+    if (combat.startCounterCinematic) {
         counterCinematicActive_ = true;
         counterCinematicTimer_ = GetCounterCinematicDuration();
         SetEnemyAnimationFrozen(true);
     }
-    if (stopCounterCinematicThisFrame) {
+    if (combat.stopCounterCinematic) {
         counterCinematicActive_ = false;
         counterCinematicTimer_ = 0.0f;
         enemy_.FinishCounterRecoil();
         SetEnemyAnimationFrozen(false);
     }
-    if (forceSyncEnemyAnimationThisFrame) {
+    if (combat.forceSyncEnemyAnimation) {
         SyncEnemyAnimation();
-        if (counterCinematicActive_ || startCounterCinematicThisFrame) {
+        if (counterCinematicActive_ || combat.startCounterCinematic) {
             SetEnemyAnimationFrozen(true);
         }
     }

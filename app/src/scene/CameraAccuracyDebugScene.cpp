@@ -75,6 +75,53 @@ constexpr std::array<SettingRange, kDetailedSensitivityCount> kSettingRanges = {
     SettingRange{0.90f, 1.50f, 0.01f},
 };
 
+using AdvancedSettings = AppSceneServices::CameraAdvancedSettings;
+constexpr std::array<float AdvancedSettings::*,
+                     kDetailedSensitivityCount - kHandSensitivityCount>
+    kAdvancedSettingMembers = {
+        &AdvancedSettings::handControlGainX,
+        &AdvancedSettings::handControlGainY,
+        &AdvancedSettings::handReachCompensationMin,
+        &AdvancedSettings::handReachCompensationMax,
+        &AdvancedSettings::handMinReachForCompensation,
+        &AdvancedSettings::handSlashThreshold,
+        &AdvancedSettings::handSlashResetThreshold,
+        &AdvancedSettings::handVerticalSlashThresholdScale,
+        &AdvancedSettings::handHardSensitivityGainScale,
+        &AdvancedSettings::handEasySensitivityGainScale,
+        &AdvancedSettings::handHardSensitivityThresholdScale,
+        &AdvancedSettings::handEasySensitivityThresholdScale,
+        &AdvancedSettings::handSlashRearmNeutralRadius,
+        &AdvancedSettings::handSlashNeutralRearmSeconds,
+        &AdvancedSettings::handSlashCooldownSeconds,
+        &AdvancedSettings::handControlSmoothing,
+        &AdvancedSettings::handFastControlSmoothing,
+        &AdvancedSettings::handFastMotionDistance,
+        &AdvancedSettings::handTiltMaxRadians,
+        &AdvancedSettings::handTiltSmoothing,
+        &AdvancedSettings::handTiltMinWidth,
+        &AdvancedSettings::handReacquireSuppressSeconds,
+        &AdvancedSettings::handReacquireSlashThreshold,
+        &AdvancedSettings::handEdgeExitSuppressSeconds,
+        &AdvancedSettings::handTrackingJumpThreshold,
+        &AdvancedSettings::handTrackingTeleportThreshold,
+        &AdvancedSettings::handJumpSlashDistanceThreshold,
+        &AdvancedSettings::handPreLossDirectionThreshold,
+        &AdvancedSettings::handPreLossNetDistanceThreshold,
+        &AdvancedSettings::handPreLossDirectionMaxAgeSeconds,
+        &AdvancedSettings::syntheticLostSlashSeconds,
+        &AdvancedSettings::handMotionWindowSeconds,
+        &AdvancedSettings::handStableNetDistanceThreshold,
+        &AdvancedSettings::handSlashNetDistanceThreshold,
+        &AdvancedSettings::handVelocitySlashNetDistanceThreshold,
+        &AdvancedSettings::handStableConsistencyThreshold,
+        &AdvancedSettings::handReferenceVisualScale,
+        &AdvancedSettings::handMinVisualScale,
+        &AdvancedSettings::handMaxVisualScale,
+        &AdvancedSettings::handFarThresholdScale,
+        &AdvancedSettings::handNearThresholdScale,
+    };
+
 XMFLOAT4 Color(float r, float g, float b, float a = 1.0f) {
     return {r, g, b, a};
 }
@@ -89,8 +136,8 @@ const std::array<const char *, 7> &GlyphRows(char c) {
         for (auto &rows : out) {
             rows = blank;
         }
-        auto set = [&](char ch, std::array<const char *, 7> rows) {
-            out[static_cast<size_t>(ch)] = rows;
+        auto set = [&](char ch, const std::array<const char *, 7> &rows) {
+            out[static_cast<unsigned char>(ch)] = rows;
         };
         set('A', {"01110", "10001", "10001", "11111", "10001", "10001", "10001"});
         set('B', {"11110", "10001", "10001", "11110", "10001", "10001", "11110"});
@@ -255,26 +302,7 @@ void CameraAccuracyDebugScene::Update() {
         return;
     }
     if (input->IsKeyTrigger(DIK_ESCAPE)) {
-        switch (returnTarget_) {
-        case ReturnTarget::WeaponSelect:
-            sceneManager_->ChangeScene(std::make_unique<WeaponSelectScene>());
-            break;
-        case ReturnTarget::TutorialSelect:
-            sceneManager_->ChangeScene(std::make_unique<TutorialSelectScene>());
-            break;
-        case ReturnTarget::WeaponOption:
-            sceneManager_->ChangeScene(std::make_unique<OptionScene>(
-                OptionScene::ReturnTarget::WeaponSelect));
-            break;
-        case ReturnTarget::TutorialOption:
-            sceneManager_->ChangeScene(std::make_unique<OptionScene>(
-                OptionScene::ReturnTarget::TutorialSelect));
-            break;
-        case ReturnTarget::Title:
-        default:
-            sceneManager_->ChangeScene(std::make_unique<TitleScene>());
-            break;
-        }
+        ReturnToPreviousScene();
         return;
     }
     if (input->IsKeyTrigger(DIK_C)) {
@@ -283,27 +311,54 @@ void CameraAccuracyDebugScene::Update() {
     if (input->IsKeyTrigger(DIK_R)) {
         ResetNeutral();
     }
-    if (input->IsKeyTrigger(DIK_TAB)) {
+    UpdateSensitivityInput(*input);
+}
+
+void CameraAccuracyDebugScene::ReturnToPreviousScene() {
+    switch (returnTarget_) {
+    case ReturnTarget::WeaponSelect:
+        sceneManager_->ChangeScene(std::make_unique<WeaponSelectScene>());
+        break;
+    case ReturnTarget::TutorialSelect:
+        sceneManager_->ChangeScene(std::make_unique<TutorialSelectScene>());
+        break;
+    case ReturnTarget::WeaponOption:
+        sceneManager_->ChangeScene(std::make_unique<OptionScene>(
+            OptionScene::ReturnTarget::WeaponSelect));
+        break;
+    case ReturnTarget::TutorialOption:
+        sceneManager_->ChangeScene(std::make_unique<OptionScene>(
+            OptionScene::ReturnTarget::TutorialSelect));
+        break;
+    case ReturnTarget::Title:
+    default:
+        sceneManager_->ChangeScene(std::make_unique<TitleScene>());
+        break;
+    }
+}
+
+void CameraAccuracyDebugScene::UpdateSensitivityInput(Input &input) {
+    if (input.IsKeyTrigger(DIK_TAB)) {
         detailedSensitivityMode_ = !detailedSensitivityMode_;
         selectedSensitivityIndex_ =
             std::clamp(selectedSensitivityIndex_, 0, SensitivityItemCount() - 1);
         AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
     }
-    if (input->IsKeyTrigger(DIK_W) || input->IsKeyTrigger(DIK_UP)) {
+    if (input.IsKeyTrigger(DIK_W) || input.IsKeyTrigger(DIK_UP)) {
         selectedSensitivityIndex_ =
             (selectedSensitivityIndex_ + SensitivityItemCount() - 1) %
             SensitivityItemCount();
         AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
     }
-    if (input->IsKeyTrigger(DIK_S) || input->IsKeyTrigger(DIK_DOWN)) {
+    if (input.IsKeyTrigger(DIK_S) || input.IsKeyTrigger(DIK_DOWN)) {
         selectedSensitivityIndex_ =
             (selectedSensitivityIndex_ + 1) % SensitivityItemCount();
         AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
     }
-    if (input->IsKeyTrigger(DIK_A) || input->IsKeyTrigger(DIK_LEFT)) {
+    if (input.IsKeyTrigger(DIK_A) || input.IsKeyTrigger(DIK_LEFT)) {
         AdjustSelectedSensitivity(-1);
     }
-    if (input->IsKeyTrigger(DIK_D) || input->IsKeyTrigger(DIK_RIGHT)) {
+    if (input.IsKeyTrigger(DIK_D) || input.IsKeyTrigger(DIK_RIGHT)) {
         AdjustSelectedSensitivity(1);
     }
 }
@@ -385,50 +440,11 @@ float CameraAccuracyDebugScene::GetSensitivityValue(size_t index) const {
         }
     }
 
-    switch (index - kHandSensitivityCount) {
-    case 0: return advanced.handControlGainX;
-    case 1: return advanced.handControlGainY;
-    case 2: return advanced.handReachCompensationMin;
-    case 3: return advanced.handReachCompensationMax;
-    case 4: return advanced.handMinReachForCompensation;
-    case 5: return advanced.handSlashThreshold;
-    case 6: return advanced.handSlashResetThreshold;
-    case 7: return advanced.handVerticalSlashThresholdScale;
-    case 8: return advanced.handHardSensitivityGainScale;
-    case 9: return advanced.handEasySensitivityGainScale;
-    case 10: return advanced.handHardSensitivityThresholdScale;
-    case 11: return advanced.handEasySensitivityThresholdScale;
-    case 12: return advanced.handSlashRearmNeutralRadius;
-    case 13: return advanced.handSlashNeutralRearmSeconds;
-    case 14: return advanced.handSlashCooldownSeconds;
-    case 15: return advanced.handControlSmoothing;
-    case 16: return advanced.handFastControlSmoothing;
-    case 17: return advanced.handFastMotionDistance;
-    case 18: return advanced.handTiltMaxRadians;
-    case 19: return advanced.handTiltSmoothing;
-    case 20: return advanced.handTiltMinWidth;
-    case 21: return advanced.handReacquireSuppressSeconds;
-    case 22: return advanced.handReacquireSlashThreshold;
-    case 23: return advanced.handEdgeExitSuppressSeconds;
-    case 24: return advanced.handTrackingJumpThreshold;
-    case 25: return advanced.handTrackingTeleportThreshold;
-    case 26: return advanced.handJumpSlashDistanceThreshold;
-    case 27: return advanced.handPreLossDirectionThreshold;
-    case 28: return advanced.handPreLossNetDistanceThreshold;
-    case 29: return advanced.handPreLossDirectionMaxAgeSeconds;
-    case 30: return advanced.syntheticLostSlashSeconds;
-    case 31: return advanced.handMotionWindowSeconds;
-    case 32: return advanced.handStableNetDistanceThreshold;
-    case 33: return advanced.handSlashNetDistanceThreshold;
-    case 34: return advanced.handVelocitySlashNetDistanceThreshold;
-    case 35: return advanced.handStableConsistencyThreshold;
-    case 36: return advanced.handReferenceVisualScale;
-    case 37: return advanced.handMinVisualScale;
-    case 38: return advanced.handMaxVisualScale;
-    case 39: return advanced.handFarThresholdScale;
-    case 40: return advanced.handNearThresholdScale;
-    default: return 0.0f;
+    const size_t advancedIndex = index - kHandSensitivityCount;
+    if (advancedIndex >= kAdvancedSettingMembers.size()) {
+        return 0.0f;
     }
+    return advanced.*kAdvancedSettingMembers[advancedIndex];
 }
 
 float CameraAccuracyDebugScene::GetSensitivityMin(size_t index) const {
@@ -450,49 +466,9 @@ void CameraAccuracyDebugScene::SetSensitivityValue(size_t index, float value) {
     const size_t kind = index % kBasicSensitivityCount;
 
     if (index >= kHandSensitivityCount) {
-        switch (index - kHandSensitivityCount) {
-        case 0: advanced.handControlGainX = value; break;
-        case 1: advanced.handControlGainY = value; break;
-        case 2: advanced.handReachCompensationMin = value; break;
-        case 3: advanced.handReachCompensationMax = value; break;
-        case 4: advanced.handMinReachForCompensation = value; break;
-        case 5: advanced.handSlashThreshold = value; break;
-        case 6: advanced.handSlashResetThreshold = value; break;
-        case 7: advanced.handVerticalSlashThresholdScale = value; break;
-        case 8: advanced.handHardSensitivityGainScale = value; break;
-        case 9: advanced.handEasySensitivityGainScale = value; break;
-        case 10: advanced.handHardSensitivityThresholdScale = value; break;
-        case 11: advanced.handEasySensitivityThresholdScale = value; break;
-        case 12: advanced.handSlashRearmNeutralRadius = value; break;
-        case 13: advanced.handSlashNeutralRearmSeconds = value; break;
-        case 14: advanced.handSlashCooldownSeconds = value; break;
-        case 15: advanced.handControlSmoothing = value; break;
-        case 16: advanced.handFastControlSmoothing = value; break;
-        case 17: advanced.handFastMotionDistance = value; break;
-        case 18: advanced.handTiltMaxRadians = value; break;
-        case 19: advanced.handTiltSmoothing = value; break;
-        case 20: advanced.handTiltMinWidth = value; break;
-        case 21: advanced.handReacquireSuppressSeconds = value; break;
-        case 22: advanced.handReacquireSlashThreshold = value; break;
-        case 23: advanced.handEdgeExitSuppressSeconds = value; break;
-        case 24: advanced.handTrackingJumpThreshold = value; break;
-        case 25: advanced.handTrackingTeleportThreshold = value; break;
-        case 26: advanced.handJumpSlashDistanceThreshold = value; break;
-        case 27: advanced.handPreLossDirectionThreshold = value; break;
-        case 28: advanced.handPreLossNetDistanceThreshold = value; break;
-        case 29: advanced.handPreLossDirectionMaxAgeSeconds = value; break;
-        case 30: advanced.syntheticLostSlashSeconds = value; break;
-        case 31: advanced.handMotionWindowSeconds = value; break;
-        case 32: advanced.handStableNetDistanceThreshold = value; break;
-        case 33: advanced.handSlashNetDistanceThreshold = value; break;
-        case 34: advanced.handVelocitySlashNetDistanceThreshold = value; break;
-        case 35: advanced.handStableConsistencyThreshold = value; break;
-        case 36: advanced.handReferenceVisualScale = value; break;
-        case 37: advanced.handMinVisualScale = value; break;
-        case 38: advanced.handMaxVisualScale = value; break;
-        case 39: advanced.handFarThresholdScale = value; break;
-        case 40: advanced.handNearThresholdScale = value; break;
-        default: break;
+        const size_t advancedIndex = index - kHandSensitivityCount;
+        if (advancedIndex < kAdvancedSettingMembers.size()) {
+            advanced.*kAdvancedSettingMembers[advancedIndex] = value;
         }
         return;
     }
@@ -678,7 +654,8 @@ void CameraAccuracyDebugScene::DrawSensitivityPanel(float screenWidth) {
                  Color(0.96f, 0.88f, 0.54f, 0.92f));
 
         for (int row = 0; row < kVisibleDetailedRows; ++row) {
-            const size_t i = static_cast<size_t>(firstRow + row);
+            const size_t i = static_cast<size_t>(firstRow) +
+                             static_cast<size_t>(row);
             const size_t kind = i < kHandSensitivityCount
                                     ? i % kBasicSensitivityCount
                                     : (i - kHandSensitivityCount + 2) % 4;
@@ -688,7 +665,9 @@ void CameraAccuracyDebugScene::DrawSensitivityPanel(float screenWidth) {
                                       : kind == 2 ? Color(0.58f, 1.0f, 0.30f, 1.0f)
                                                   : Color(1.0f, 0.58f, 0.18f, 1.0f);
             DrawSettingGaugeRow(i, settingLabelImages_[i], color, panelX,
-                                panelY + 62.0f + rowGap * row, panelW);
+                                panelY + 62.0f +
+                                    rowGap * static_cast<float>(row),
+                                panelW);
         }
         return;
     }

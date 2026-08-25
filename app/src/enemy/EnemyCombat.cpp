@@ -142,7 +142,6 @@ bool Enemy::IsPunishableRecovery() const {
     case ActionKind::Sweep:
     case ActionKind::BladeClash:
     case ActionKind::ArcaneLaser:
-        return action_.step == ActionStep::Recovery && hitReactionTimer_ <= 0.0f;
     case ActionKind::CataclysmLaser:
         return action_.step == ActionStep::Recovery && hitReactionTimer_ <= 0.0f;
     default:
@@ -384,13 +383,13 @@ void Enemy::ResolveDeferredDamageTransitions() {
 }
 
 void Enemy::ForcePunishRelease() {
-    if (!(action_.kind == ActionKind::Smash ||
-          action_.kind == ActionKind::Sweep)) {
+    if (action_.kind != ActionKind::Smash &&
+        action_.kind != ActionKind::Sweep) {
         return;
     }
-    if (!(action_.step == ActionStep::Charge ||
-          action_.step == ActionStep::Hold ||
-          action_.step == ActionStep::Active)) {
+    if (action_.step != ActionStep::Charge &&
+        action_.step != ActionStep::Hold &&
+        action_.step != ActionStep::Active) {
         return;
     }
 

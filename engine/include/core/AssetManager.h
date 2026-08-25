@@ -6,7 +6,7 @@ class AssetManager {
     /// <summary>
     /// AssetRootを設定する
     /// </summary>
-    static void SetAssetRoot(std::filesystem::path assetRoot);
+    static void SetAssetRoot(const std::filesystem::path &assetRoot);
     static const std::filesystem::path &GetAssetRoot();
     static std::filesystem::path
     ResolvePath(const std::filesystem::path &relativePath);

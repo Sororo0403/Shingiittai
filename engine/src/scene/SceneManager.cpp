@@ -124,7 +124,8 @@ void SceneManager::ApplySceneChange(std::unique_ptr<BaseScene> nextScene) {
 
 void SceneManager::Update() {
     if (pendingScene_) {
-        ApplySceneChange(std::move(pendingScene_));
+        auto nextScene = std::move(pendingScene_);
+        ApplySceneChange(std::move(nextScene));
     }
 
     if (currentScene_) {
@@ -133,7 +134,8 @@ void SceneManager::Update() {
     }
 
     if (pendingScene_) {
-        ApplySceneChange(std::move(pendingScene_));
+        auto nextScene = std::move(pendingScene_);
+        ApplySceneChange(std::move(nextScene));
     }
 }
 

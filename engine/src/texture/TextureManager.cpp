@@ -5,6 +5,7 @@
 #include "graphics/SrvManager.h"
 #include "texture/Texture.h"
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cwctype>
 #include <filesystem>
@@ -148,6 +149,110 @@ class ScopedSrvAllocation {
     SrvManager *srvManager_ = nullptr;
     uint32_t index_ = UINT32_MAX;
 };
+
+bool IsTextureMetadataValid(const TexMetadata &metadata, size_t imageCount) {
+    if (metadata.mipLevels == 0 || metadata.arraySize >
+        (std::numeric_limits<size_t>::max)() / metadata.mipLevels) {
+        return false;
+    }
+    const size_t expectedImageCount =
+        static_cast<size_t>(metadata.arraySize) *
+        static_cast<size_t>(metadata.mipLevels);
+    const std::array<bool, 11> valid = {
+        metadata.width != 0,
+        metadata.height != 0,
+        metadata.arraySize != 0,
+        metadata.mipLevels != 0,
+        metadata.dimension == TEX_DIMENSION_TEXTURE2D,
+        metadata.depth == 1,
+        imageCount == expectedImageCount,
+        metadata.height <= (std::numeric_limits<UINT>::max)(),
+        metadata.arraySize <= (std::numeric_limits<UINT16>::max)(),
+        metadata.mipLevels <= (std::numeric_limits<UINT16>::max)(),
+        imageCount <= (std::numeric_limits<UINT>::max)(),
+    };
+    const bool dimensionsFitInt =
+        metadata.width <=
+            static_cast<size_t>((std::numeric_limits<int>::max)()) &&
+        metadata.height <=
+            static_cast<size_t>((std::numeric_limits<int>::max)());
+    return dimensionsFitInt &&
+           std::all_of(valid.begin(), valid.end(), [](bool value) {
+               return value;
+           });
+}
+
+bool AreTextureImagesValid(const Image *images, size_t imageCount) {
+    const size_t maxPitch =
+        static_cast<size_t>((std::numeric_limits<LONG_PTR>::max)());
+    for (size_t index = 0; index < imageCount; ++index) {
+        const std::array<bool, 5> valid = {
+            images[index].pixels != nullptr,
+            images[index].rowPitch != 0,
+            images[index].slicePitch != 0,
+            images[index].rowPitch <= maxPitch,
+            images[index].slicePitch <= maxPitch,
+        };
+        if (!std::all_of(valid.begin(), valid.end(), [](bool value) {
+                return value;
+            })) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool CanCreateTexture(DirectXCommon *dxCommon, SrvManager *srvManager,
+                      const Image *images, size_t imageCount,
+                      const TexMetadata &metadata) {
+    const std::array<bool, 5> valid = {
+        dxCommon != nullptr,
+        dxCommon != nullptr && dxCommon->GetDevice() != nullptr,
+        srvManager != nullptr,
+        images != nullptr,
+        imageCount != 0,
+    };
+    if (!std::all_of(valid.begin(), valid.end(), [](bool value) {
+            return value;
+        })) {
+        return false;
+    }
+    return IsTextureMetadataValid(metadata, imageCount) &&
+           AreTextureImagesValid(images, imageCount) &&
+           srvManager->CanAllocate();
+}
+
+D3D12_SHADER_RESOURCE_VIEW_DESC
+MakeTextureSrvDescription(const TexMetadata &metadata) {
+    D3D12_SHADER_RESOURCE_VIEW_DESC description{};
+    description.Shader4ComponentMapping =
+        D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    description.Format = metadata.format;
+    if (metadata.IsCubemap()) {
+        description.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+        description.TextureCube.MostDetailedMip = 0;
+        description.TextureCube.MipLevels =
+            static_cast<UINT>(metadata.mipLevels);
+        description.TextureCube.ResourceMinLODClamp = 0.0f;
+    } else if (metadata.arraySize > 1) {
+        description.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+        description.Texture2DArray.MostDetailedMip = 0;
+        description.Texture2DArray.MipLevels =
+            static_cast<UINT>(metadata.mipLevels);
+        description.Texture2DArray.FirstArraySlice = 0;
+        description.Texture2DArray.ArraySize =
+            static_cast<UINT>(metadata.arraySize);
+        description.Texture2DArray.PlaneSlice = 0;
+        description.Texture2DArray.ResourceMinLODClamp = 0.0f;
+    } else {
+        description.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        description.Texture2D.MostDetailedMip = 0;
+        description.Texture2D.MipLevels = static_cast<UINT>(metadata.mipLevels);
+        description.Texture2D.PlaneSlice = 0;
+        description.Texture2D.ResourceMinLODClamp = 0.0f;
+    }
+    return description;
+}
 }
 
 TextureManager &TextureManager::GetInstance() {
@@ -333,50 +438,9 @@ uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
                                        const TexMetadata &metadata) {
     const uint32_t fallbackTextureId =
         IsValidTextureId(whiteTextureId_) ? whiteTextureId_ : UINT32_MAX;
-    if (!dxCommon_ || !dxCommon_->GetDevice() || !srvManager_) {
+    if (!CanCreateTexture(dxCommon_, srvManager_, images, imageCount,
+                          metadata)) {
         return fallbackTextureId;
-    }
-    if (!images || imageCount == 0 || metadata.width == 0 ||
-        metadata.height == 0 || metadata.arraySize == 0 ||
-        metadata.mipLevels == 0) {
-        return fallbackTextureId;
-    }
-    if (metadata.dimension != TEX_DIMENSION_TEXTURE2D || metadata.depth != 1) {
-        return fallbackTextureId;
-    }
-    if (metadata.arraySize >
-        (std::numeric_limits<size_t>::max)() / metadata.mipLevels) {
-        return fallbackTextureId;
-    }
-    const size_t expectedImageCount =
-        static_cast<size_t>(metadata.arraySize) *
-        static_cast<size_t>(metadata.mipLevels);
-    if (imageCount != expectedImageCount) {
-        return fallbackTextureId;
-    }
-    if (metadata.height > (std::numeric_limits<UINT>::max)() ||
-        metadata.arraySize > (std::numeric_limits<UINT16>::max)() ||
-        metadata.mipLevels > (std::numeric_limits<UINT16>::max)() ||
-        metadata.width > (std::numeric_limits<uint32_t>::max)()) {
-        return fallbackTextureId;
-    }
-    if (imageCount > (std::numeric_limits<UINT>::max)()) {
-        return fallbackTextureId;
-    }
-    if (!srvManager_->CanAllocate()) {
-        return fallbackTextureId;
-    }
-    for (size_t imageIndex = 0; imageIndex < imageCount; ++imageIndex) {
-        if (!images[imageIndex].pixels || images[imageIndex].rowPitch == 0 ||
-            images[imageIndex].slicePitch == 0) {
-            return fallbackTextureId;
-        }
-        if (images[imageIndex].rowPitch >
-                static_cast<size_t>((std::numeric_limits<LONG_PTR>::max)()) ||
-            images[imageIndex].slicePitch >
-                static_cast<size_t>((std::numeric_limits<LONG_PTR>::max)())) {
-            return fallbackTextureId;
-        }
     }
 
     const bool ownsUploadPass =
@@ -408,8 +472,10 @@ uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
     std::vector<D3D12_SUBRESOURCE_DATA> subresources(imageCount);
     for (size_t imageIndex = 0; imageIndex < imageCount; ++imageIndex) {
         subresources[imageIndex].pData = images[imageIndex].pixels;
-        subresources[imageIndex].RowPitch = images[imageIndex].rowPitch;
-        subresources[imageIndex].SlicePitch = images[imageIndex].slicePitch;
+        subresources[imageIndex].RowPitch =
+            static_cast<LONG_PTR>(images[imageIndex].rowPitch);
+        subresources[imageIndex].SlicePitch =
+            static_cast<LONG_PTR>(images[imageIndex].slicePitch);
     }
 
     UINT64 uploadSize = GetRequiredIntermediateSize(
@@ -429,20 +495,7 @@ uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
         return fallbackTextureId;
     }
 
-    if (ownsUploadPass) {
-        uploadBuffers_.push_back(uploadBuffer);
-    } else {
-        const UINT frameIndex = dxCommon_->GetBackBufferIndex();
-        if (frameIndex < frameUploadBuffers_.size()) {
-            if (lastDynamicUploadFrameIndex_ != frameIndex) {
-                frameUploadBuffers_[frameIndex].clear();
-                lastDynamicUploadFrameIndex_ = frameIndex;
-            }
-            frameUploadBuffers_[frameIndex].push_back(uploadBuffer);
-        } else {
-            uploadBuffers_.push_back(uploadBuffer);
-        }
-    }
+    TrackUploadBuffer(uploadBuffer, ownsUploadPass);
 
     ID3D12GraphicsCommandList *cmdList = dxCommon_->GetCommandList();
     if (cmdList == nullptr) {
@@ -465,33 +518,8 @@ uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
         return fallbackTextureId;
     }
 
-    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
-    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-
-    srvDesc.Format = metadata.format;
-    if (metadata.IsCubemap()) {
-        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
-        srvDesc.TextureCube.MostDetailedMip = 0;
-        srvDesc.TextureCube.MipLevels = static_cast<UINT>(metadata.mipLevels);
-        srvDesc.TextureCube.ResourceMinLODClamp = 0.0f;
-    } else if (metadata.dimension == TEX_DIMENSION_TEXTURE2D &&
-               metadata.arraySize > 1) {
-        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
-        srvDesc.Texture2DArray.MostDetailedMip = 0;
-        srvDesc.Texture2DArray.MipLevels =
-            static_cast<UINT>(metadata.mipLevels);
-        srvDesc.Texture2DArray.FirstArraySlice = 0;
-        srvDesc.Texture2DArray.ArraySize =
-            static_cast<UINT>(metadata.arraySize);
-        srvDesc.Texture2DArray.PlaneSlice = 0;
-        srvDesc.Texture2DArray.ResourceMinLODClamp = 0.0f;
-    } else {
-        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-        srvDesc.Texture2D.MostDetailedMip = 0;
-        srvDesc.Texture2D.MipLevels = static_cast<UINT>(metadata.mipLevels);
-        srvDesc.Texture2D.PlaneSlice = 0;
-        srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
-    }
+    const D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc =
+        MakeTextureSrvDescription(metadata);
 
     const D3D12_CPU_DESCRIPTOR_HANDLE srvHandle =
         srvManager_->GetCpuHandle(srvIndex);
@@ -501,8 +529,8 @@ uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
     dxCommon_->GetDevice()->CreateShaderResourceView(texture.resource.Get(),
                                                      &srvDesc, srvHandle);
 
-    texture.width = static_cast<uint32_t>(metadata.width);
-    texture.height = static_cast<uint32_t>(metadata.height);
+    texture.width = static_cast<int>(metadata.width);
+    texture.height = static_cast<int>(metadata.height);
     texture.state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 
     if (textures_.size() >=
@@ -517,6 +545,24 @@ uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
     uploadPass.Finish();
 
     return textureId;
+}
+
+void TextureManager::TrackUploadBuffer(
+    const ComPtr<ID3D12Resource> &uploadBuffer, bool ownsUploadPass) {
+    if (ownsUploadPass) {
+        uploadBuffers_.push_back(uploadBuffer);
+        return;
+    }
+    const UINT frameIndex = dxCommon_->GetBackBufferIndex();
+    if (frameIndex >= frameUploadBuffers_.size()) {
+        uploadBuffers_.push_back(uploadBuffer);
+        return;
+    }
+    if (lastDynamicUploadFrameIndex_ != frameIndex) {
+        frameUploadBuffers_[frameIndex].clear();
+        lastDynamicUploadFrameIndex_ = frameIndex;
+    }
+    frameUploadBuffers_[frameIndex].push_back(uploadBuffer);
 }
 
 void TextureManager::ReleaseUploadBuffers() {

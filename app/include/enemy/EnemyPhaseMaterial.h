@@ -17,10 +17,10 @@ struct EnemyPhaseMaterialSet {
     uint32_t blendTextureId = 0;
     uint32_t currentTextureId = 0;
 
-    std::vector<uint8_t> rustPixels{};
-    std::vector<uint8_t> cleanMetalPixels{};
-    std::vector<uint8_t> goldMetalPixels{};
-    std::vector<uint8_t> blendPixels{};
+    std::vector<uint8_t> rustPixels;
+    std::vector<uint8_t> cleanMetalPixels;
+    std::vector<uint8_t> goldMetalPixels;
+    std::vector<uint8_t> blendPixels;
 };
 
 void InitializeEnemyPhaseMaterialSet(TextureManager *texture,

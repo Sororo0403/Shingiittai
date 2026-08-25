@@ -21,7 +21,7 @@ constexpr DWORD kAllStreams = static_cast<DWORD>(MF_SOURCE_READER_ALL_STREAMS);
 constexpr DWORD kFirstAudioStream =
     static_cast<DWORD>(MF_SOURCE_READER_FIRST_AUDIO_STREAM);
 constexpr UINT32 kStreamQueuedBuffers = 3;
-constexpr size_t kStreamBufferBytes = 64 * 1024;
+constexpr size_t kStreamBufferBytes = size_t{64} * 1024;
 
 std::filesystem::path ResolveAudioPath(const std::wstring &path) {
     return AssetManager::ResolvePath(std::filesystem::path(path));
@@ -41,6 +41,18 @@ float ClampFinite(float value, float minimum, float maximum, float fallback) {
         return fallback;
     }
     return std::clamp(value, minimum, maximum);
+}
+
+const WAVEFORMATEX *GetValidWaveFormat(const std::vector<BYTE> &waveFormat) {
+    if (waveFormat.size() < sizeof(WAVEFORMATEX)) {
+        return nullptr;
+    }
+    const auto *format =
+        reinterpret_cast<const WAVEFORMATEX *>(waveFormat.data());
+    if (format->nSamplesPerSec == 0 || format->nBlockAlign == 0) {
+        return nullptr;
+    }
+    return format;
 }
 
 XMVECTOR LoadFloat3OrDefault(const XMFLOAT3 &value, FXMVECTOR fallback) {
@@ -258,12 +270,8 @@ uint32_t SoundManager::CreateStreamingVoice(const std::wstring &path,
     if (!GetWaveFormat(mediaType.Get(), waveFormat)) {
         return kInvalidVoiceHandle;
     }
-    if (waveFormat.size() < sizeof(WAVEFORMATEX)) {
-        return kInvalidVoiceHandle;
-    }
-    const WAVEFORMATEX *format =
-        reinterpret_cast<const WAVEFORMATEX *>(waveFormat.data());
-    if (!format || format->nSamplesPerSec == 0 || format->nBlockAlign == 0) {
+    const WAVEFORMATEX *format = GetValidWaveFormat(waveFormat);
+    if (format == nullptr) {
         return kInvalidVoiceHandle;
     }
 
@@ -326,17 +334,8 @@ bool SoundManager::SubmitNextStreamBuffer(PlayingVoice &playingVoice) {
         return false;
     }
 
-    if (pcm.empty() && reachedEnd && playingVoice.loop) {
-        if (!SeekStreamToStart(playingVoice.streamReader.Get())) {
-            playingVoice.streamSourceEnded = true;
-            return false;
-        }
-        reachedEnd = false;
-        if (!ReadNextStreamChunk(playingVoice.streamReader.Get(), reachedEnd,
-                                 pcm)) {
-            playingVoice.streamSourceEnded = true;
-            return false;
-        }
+    if (!RestartLoopingStream(playingVoice, reachedEnd, pcm)) {
+        return false;
     }
 
     if (pcm.empty()) {
@@ -373,6 +372,24 @@ bool SoundManager::SubmitNextStreamBuffer(PlayingVoice &playingVoice) {
         return false;
     }
 
+    return true;
+}
+
+bool SoundManager::RestartLoopingStream(PlayingVoice &playingVoice,
+                                        bool &reachedEnd,
+                                        std::vector<BYTE> &pcm) {
+    if (!pcm.empty() || !reachedEnd || !playingVoice.loop) {
+        return true;
+    }
+    if (!SeekStreamToStart(playingVoice.streamReader.Get())) {
+        playingVoice.streamSourceEnded = true;
+        return false;
+    }
+    reachedEnd = false;
+    if (!ReadNextStreamChunk(playingVoice.streamReader.Get(), reachedEnd, pcm)) {
+        playingVoice.streamSourceEnded = true;
+        return false;
+    }
     return true;
 }
 

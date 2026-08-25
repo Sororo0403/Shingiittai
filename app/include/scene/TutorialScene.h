@@ -36,8 +36,8 @@ class TutorialScene : public BaseScene {
                    float alpha = 1.0f);
 
     SwordInputCalibration inputCalibration_{};
-    std::unique_ptr<GameScene> backgroundScene_{};
-    SwordUdpController handController_{};
+    std::unique_ptr<GameScene> backgroundScene_;
+    SwordUdpController handController_;
     CameraPreviewReceiver previewReceiver_{};
     Image titleImage_{};
     std::array<Image, 2> bodyImages_{};

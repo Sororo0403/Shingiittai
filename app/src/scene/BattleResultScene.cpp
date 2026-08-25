@@ -196,6 +196,19 @@ void ResetModelToBindPose(ModelManager *modelManager, uint32_t modelId) {
     model->animationFinished = false;
     modelManager->UpdateAnimation(modelId, 0.0f);
 }
+bool IsResultConfirmInput(const Input &input) {
+    return input.IsKeyTrigger(DIK_SPACE) || input.IsKeyTrigger(DIK_RETURN) ||
+           (input.IsGamepadConnected() &&
+            input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_A));
+}
+
+bool IsResultLeftInput(const Input &input) {
+    return input.IsKeyTrigger(DIK_A) || input.IsKeyTrigger(DIK_LEFT);
+}
+
+bool IsResultRightInput(const Input &input) {
+    return input.IsKeyTrigger(DIK_D) || input.IsKeyTrigger(DIK_RIGHT);
+}
 } // namespace
 
 BattleResultScene::BattleResultScene(
@@ -369,10 +382,7 @@ void BattleResultScene::Update() {
 
 void BattleResultScene::UpdateClearActionButtons(Input &input) {
     if (clearRevealPhase_ != ClearRevealPhase::Ranking) {
-        const bool skip =
-            input.IsKeyTrigger(DIK_SPACE) || input.IsKeyTrigger(DIK_RETURN) ||
-            (input.IsGamepadConnected() &&
-             input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_A));
+        const bool skip = IsResultConfirmInput(input);
         if (!skip) {
             return;
         }
@@ -400,14 +410,14 @@ void BattleResultScene::UpdateClearActionButtons(Input &input) {
         return;
     }
 
-    if (input.IsKeyTrigger(DIK_A) || input.IsKeyTrigger(DIK_LEFT)) {
+    if (IsResultLeftInput(input)) {
         if (clearActionButtonIndex_ != 0) {
             clearActionButtonIndex_ = 0;
             AppSceneServices::PlayMenuSe(*ctx_,
                                          AppSceneServices::MenuSe::Select);
         }
     }
-    if (input.IsKeyTrigger(DIK_D) || input.IsKeyTrigger(DIK_RIGHT)) {
+    if (IsResultRightInput(input)) {
         if (clearActionButtonIndex_ != 1) {
             clearActionButtonIndex_ = 1;
             AppSceneServices::PlayMenuSe(*ctx_,
@@ -415,10 +425,7 @@ void BattleResultScene::UpdateClearActionButtons(Input &input) {
         }
     }
 
-    const bool confirm =
-        input.IsKeyTrigger(DIK_RETURN) || input.IsKeyTrigger(DIK_SPACE) ||
-        (input.IsGamepadConnected() &&
-         input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_A));
+    const bool confirm = IsResultConfirmInput(input);
     if (!confirm) {
         return;
     }
@@ -1202,69 +1209,66 @@ void BattleResultScene::DrawRanking(float x, float y, float w, float h,
     }
     const size_t rows = (std::min)(rankingEntries_.size(), kRankingDrawCount);
     for (size_t i = 0; i < rows; ++i) {
-        const RankingEntry &entry = rankingEntries_[i];
         const float rowY = rowStartY + static_cast<float>(i) * rowGap;
-        const bool highlight = entry.isCurrent;
-        DrawRect(x + w * 0.07f, rowY - rowGap * 0.12f, w * 0.86f,
-                 rowGap * 0.82f,
-                 Color(1.0f, 1.0f, 1.0f, (i % 2 == 0 ? 0.030f : 0.015f)));
-        if (highlight) {
-            DrawRect(x + w * 0.07f, rowY - rowGap * 0.12f, w * 0.86f,
-                     rowGap * 0.82f, Color(0.95f, 0.72f, 0.28f, 0.20f));
-            DrawFrame(x + w * 0.07f, rowY - rowGap * 0.12f, w * 0.86f,
-                      rowGap * 0.82f, 1.0f,
-                      Color(0.95f, 0.72f, 0.28f, 0.46f));
-        }
+        DrawRankingRow(i, x, w, rowY, rowGap, rankX, scoreRightX, timeRightX,
+                       difficultyRightX, rankColumnW, scoreColumnW, timeColumnW,
+                       difficultyColumnW, fullDetail);
+    }
+}
 
-        std::ostringstream rank;
-        rank << (i + 1) << ":";
-        const std::string score = FormatScore(entry.score);
-        const std::string time = FormatTime(entry.clearTime);
-        const std::string difficulty = FormatDifficulty(entry.difficulty);
-        const float alpha = highlight ? 1.0f : 0.86f;
-        const float rowFrameY = rowY - rowGap * 0.12f;
-        const float rowFrameH = rowGap * 0.82f;
-        const float rankScale =
-            std::clamp(rankColumnW / MeasureTextLine(rank.str(), 1.0f),
-                       fullDetail ? 0.42f : 0.34f,
-                       fullDetail ? 0.58f : 0.44f);
-        const float scoreScale =
-            std::clamp(scoreColumnW / MeasureTextLine(score, 1.0f),
-                       fullDetail ? 0.42f : 0.30f,
-                       fullDetail ? 0.58f : 0.44f);
-        const float timeScale =
-            std::clamp(timeColumnW / MeasureTextLine(time, 1.0f),
-                       fullDetail ? 0.42f : 0.30f,
-                       fullDetail ? 0.58f : 0.44f);
-        const float timeBaselineY =
-            rowFrameY + rowFrameH * 0.5f +
-            MeasureTextInkCenterOffset("00:00.00s", timeScale);
-        const float difficultyScale =
-            std::clamp(difficultyColumnW / MeasureTextLine(difficulty, 1.0f),
-                       0.42f, 0.58f);
-
+void BattleResultScene::DrawRankingRow(
+    size_t index, float x, float w, float rowY, float rowGap, float rankX,
+    float scoreRightX, float timeRightX, float difficultyRightX,
+    float rankColumnW, float scoreColumnW, float timeColumnW,
+    float difficultyColumnW, bool fullDetail) {
+    const RankingEntry &entry = rankingEntries_[index];
+    const bool highlight = entry.isCurrent;
+    const float rowFrameY = rowY - rowGap * 0.12f;
+    const float rowFrameH = rowGap * 0.82f;
+    DrawRect(x + w * 0.07f, rowFrameY, w * 0.86f, rowFrameH,
+             Color(1.0f, 1.0f, 1.0f,
+                   index % 2 == 0 ? 0.030f : 0.015f));
+    if (highlight) {
+        DrawRect(x + w * 0.07f, rowFrameY, w * 0.86f, rowFrameH,
+                 Color(0.95f, 0.72f, 0.28f, 0.20f));
+        DrawFrame(x + w * 0.07f, rowFrameY, w * 0.86f, rowFrameH, 1.0f,
+                  Color(0.95f, 0.72f, 0.28f, 0.46f));
+    }
+    std::ostringstream rank;
+    rank << (index + 1) << ":";
+    const std::string score = FormatScore(entry.score);
+    const std::string time = FormatTime(entry.clearTime);
+    const std::string difficulty = FormatDifficulty(entry.difficulty);
+    const float alpha = highlight ? 1.0f : 0.86f;
+    const float rankScale = std::clamp(
+        rankColumnW / MeasureTextLine(rank.str(), 1.0f),
+        fullDetail ? 0.42f : 0.34f, fullDetail ? 0.58f : 0.44f);
+    const float scoreScale = std::clamp(
+        scoreColumnW / MeasureTextLine(score, 1.0f),
+        fullDetail ? 0.42f : 0.30f, fullDetail ? 0.58f : 0.44f);
+    const float timeScale = std::clamp(
+        timeColumnW / MeasureTextLine(time, 1.0f),
+        fullDetail ? 0.42f : 0.30f, fullDetail ? 0.58f : 0.44f);
+    const float difficultyScale = std::clamp(
+        difficultyColumnW / MeasureTextLine(difficulty, 1.0f), 0.42f, 0.58f);
+    const auto baseline = [this, rowFrameY, rowFrameH](float scale) {
+        return rowFrameY + rowFrameH * 0.5f +
+               MeasureTextInkCenterOffset("00:00.00s", scale);
+    };
+    DrawTextLineLeftBaseline(rank.str(), rankX, baseline(rankScale), rankScale,
+                             alpha);
+    DrawTextLineLeftBaseline(
+        score, scoreRightX - MeasureTextLine(score, scoreScale),
+        baseline(scoreScale), scoreScale, alpha);
+    DrawTextLineLeftBaseline(
+        time, timeRightX - MeasureTextLine(time, timeScale),
+        baseline(timeScale), timeScale, highlight ? 1.0f : 0.90f);
+    if (fullDetail) {
         DrawTextLineLeftBaseline(
-            rank.str(), rankX,
-            rowFrameY + rowFrameH * 0.5f +
-                MeasureTextInkCenterOffset("00:00.00s", rankScale),
-            rankScale, alpha);
-        DrawTextLineLeftBaseline(
-            score, scoreRightX - MeasureTextLine(score, scoreScale),
-            rowFrameY + rowFrameH * 0.5f +
-                MeasureTextInkCenterOffset("00:00.00s", scoreScale),
-            scoreScale, alpha);
-        DrawTextLineLeftBaseline(time,
-                                 timeRightX - MeasureTextLine(time, timeScale),
-                                 timeBaselineY, timeScale,
-                                 highlight ? 1.0f : 0.90f);
-        if (fullDetail) {
-            DrawTextLineLeftBaseline(
-                difficulty,
-                difficultyRightX - MeasureTextLine(difficulty, difficultyScale),
-                rowFrameY + rowFrameH * 0.5f +
-                    MeasureTextInkCenterOffset("00:00.00s", difficultyScale),
-                difficultyScale, highlight ? 1.0f : 0.90f);
-        }
+            difficulty,
+            difficultyRightX - MeasureTextLine(difficulty, difficultyScale),
+            baseline(difficultyScale), difficultyScale,
+            highlight ? 1.0f : 0.90f);
     }
 }
 
@@ -1617,7 +1621,9 @@ std::string BattleResultScene::FormatAnimatedTime() const {
     const float progress =
         std::clamp(clearRevealTimer_ / kTimeRevealDuration, 0.0f, 1.0f);
     const int lockedDigits =
-        (std::min)(digitCount, static_cast<int>(progress * digitCount + 0.001f));
+        (std::min)(digitCount,
+                   static_cast<int>(progress * static_cast<float>(digitCount) +
+                                    0.001f));
     const uint32_t frame = static_cast<uint32_t>(sceneTime_ * 42.0f);
 
     int digitsFromRight = 0;
@@ -1648,7 +1654,9 @@ std::string BattleResultScene::FormatAnimatedScore() const {
     const float progress =
         std::clamp(clearRevealTimer_ / kScoreRevealDuration, 0.0f, 1.0f);
     const int lockedDigits =
-        (std::min)(digitCount, static_cast<int>(progress * digitCount + 0.001f));
+        (std::min)(digitCount,
+                   static_cast<int>(progress * static_cast<float>(digitCount) +
+                                    0.001f));
     const uint32_t frame = static_cast<uint32_t>(sceneTime_ * 34.0f);
 
     for (int i = digitCount - 1; i >= 0; --i) {

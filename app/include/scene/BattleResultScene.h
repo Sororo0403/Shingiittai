@@ -73,6 +73,12 @@ class BattleResultScene : public BaseScene {
     void DrawRankingScreen(float screenWidth, float screenHeight);
     void DrawGameOver(float screenWidth, float screenHeight);
     void DrawRanking(float x, float y, float w, float h, bool fullDetail);
+    void DrawRankingRow(size_t index, float x, float w, float rowY,
+                        float rowGap, float rankX, float scoreRightX,
+                        float timeRightX, float difficultyRightX,
+                        float rankColumnW, float scoreColumnW,
+                        float timeColumnW, float difficultyColumnW,
+                        bool fullDetail);
     void DrawClearActionButtons(float screenWidth, float screenHeight);
     void DrawControlsHint(float screenWidth, float screenHeight);
     void DrawHandInputStatus(float screenWidth, float screenHeight);
@@ -147,7 +153,7 @@ class BattleResultScene : public BaseScene {
     Image dotImage_{};
     Image dashImage_{};
     Image secondImage_{};
-    std::vector<RankingEntry> rankingEntries_{};
+    std::vector<RankingEntry> rankingEntries_;
 
     uint32_t playerModelId_ = 0;
     uint32_t swordModelId_ = 0;

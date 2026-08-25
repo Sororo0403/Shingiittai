@@ -1,9 +1,13 @@
 <Solution>
   <Configurations>
+    <BuildType Name="Debug" />
+    <BuildType Name="Release" />
     <Platform Name="x64" />
   </Configurations>
   <Folder Name="/ソリューション項目/">
     <File Path=".clang-format" />
+    <File Path=".clang-tidy" />
+    <File Path="Directory.Build.props" />
     <File Path=".editorconfig" />
   </Folder>
   <Project Path="app/App.vcxproj" Id="7f7e8d20-0e95-4e5a-b1a9-5df7d0d1f4e2" />
@@ -11,4 +15,5 @@
   <Project Path="engine/externals/DirectXTex/DirectXTex_Desktop_2022.vcxproj" Id="371b9fa9-4c90-4ac6-a123-aced756d6c77" />
   <Project Path="engine/externals/imgui/imgui.vcxproj" Id="f6ba9c36-46d4-4c55-9c90-d016c833a837" />
   <Project Path="hand_tracking/HandUdpSender.vcxproj" Id="4c4f36ff-80bb-4eaf-a1a0-86fd79a93b61" />
+  <Project Path="tests/EngineTests/EngineTests.vcxproj" Id="fe45cd78-0bd5-43a8-a3e7-ecc2dc5e97b1" />
 </Solution>

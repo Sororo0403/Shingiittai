@@ -68,7 +68,7 @@ class SpriteRenderer {
 
     static constexpr uint32_t kVerticesPerSprite = 6;
     static constexpr uint32_t kMaxSpriteDraws = 4096;
-    static constexpr size_t kUploadBytesPerFrame = 4 * 1024 * 1024;
+    static constexpr size_t kUploadBytesPerFrame = size_t{4} * 1024 * 1024;
 
     struct SpriteVertex {
         DirectX::XMFLOAT3 pos;
@@ -97,6 +97,8 @@ class SpriteRenderer {
     /// FlushQueuedDrawsを実行する
     /// </summary>
     void FlushQueuedDraws();
+    void DrawQueuedRun(ID3D12GraphicsCommandList *commandList,
+                       size_t runStart, size_t runEnd);
 
   private:
     DirectXCommon *dxCommon_ = nullptr;

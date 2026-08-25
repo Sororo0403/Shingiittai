@@ -38,6 +38,8 @@ class TutorialSelectScene : public BaseScene {
     static constexpr int kBackButtonIndex = 2;
 
     Image LoadTextureImage(const std::wstring &path);
+    bool UpdateStartTransition();
+    bool UpdateUtilityTransition();
     void UpdateSelection(Input *input);
     void UpdateDeviceAvailability();
     void BeginStart();

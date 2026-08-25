@@ -83,6 +83,7 @@ class GameVictoryScene : public BaseScene {
     void DrawForegroundEnemy();
     void DrawOverlay(float screenWidth, float screenHeight);
     void BeginResult();
+    bool UpdateResultMode(float deltaTime);
     void UpdateResultPostProcess();
     void UpdateResultInput();
     void DrawResultOverlay(float screenWidth, float screenHeight);
@@ -185,6 +186,6 @@ class GameVictoryScene : public BaseScene {
     Image dotImage_{};
     Image dashImage_{};
     Image secondImage_{};
-    std::vector<RankingEntry> rankingEntries_{};
+    std::vector<RankingEntry> rankingEntries_;
     int actionButtonIndex_ = 1;
 };

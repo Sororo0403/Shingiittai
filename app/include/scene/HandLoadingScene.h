@@ -33,6 +33,7 @@ class HandLoadingScene : public BaseScene {
 
     bool RequestHandTrackingStartOnce();
     bool IsHandTrackingReady() const;
+    bool TryAdvancePreviewDestination(bool previewReady);
     Image LoadTextureImage(const std::wstring &path);
     void DrawRect(float x, float y, float w, float h,
                   const DirectX::XMFLOAT4 &color);
@@ -67,7 +68,7 @@ class HandLoadingScene : public BaseScene {
     bool destinationSensitivityAdjust_ = false;
     bool handTrackingStartRequested_ = false;
     CameraPreviewReceiver previewReceiver_{};
-    SwordUdpController handController_{};
+    SwordUdpController handController_;
     Image gameLogoImage_{};
     Image faceCameraMessageImage_{};
     float stillTimer_ = 0.0f;

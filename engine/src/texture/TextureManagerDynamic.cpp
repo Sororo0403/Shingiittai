@@ -3,6 +3,8 @@
 #include "graphics/DxHelpers.h"
 #include "graphics/SrvManager.h"
 #include "texture/Texture.h"
+#include <array>
+#include <algorithm>
 #include <limits>
 
 using namespace DirectX;
@@ -41,6 +43,86 @@ class UploadPassScope {
     TextureManager *textureManager_ = nullptr;
     bool active_ = false;
 };
+
+bool MatchesSingleTexture2D(const Texture &texture,
+                            const D3D12_RESOURCE_DESC &description) {
+    const std::array<bool, 7> valid = {
+        description.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+        description.DepthOrArraySize == 1,
+        description.MipLevels == 1,
+        description.Width <=
+            static_cast<UINT64>((std::numeric_limits<int>::max)()),
+        description.Height <=
+            static_cast<UINT>((std::numeric_limits<int>::max)()),
+        static_cast<int>(description.Width) == texture.width,
+        static_cast<int>(description.Height) == texture.height,
+    };
+    return std::all_of(valid.begin(), valid.end(), [](bool value) {
+        return value;
+    });
+}
+
+bool TryBuildSubresource(const Texture &texture, const uint8_t *pixels,
+                         size_t rowPitch, D3D12_SUBRESOURCE_DATA &subresource) {
+    const D3D12_RESOURCE_DESC description = texture.resource->GetDesc();
+    if (!MatchesSingleTexture2D(texture, description)) {
+        return false;
+    }
+    const size_t bitsPerPixel = DirectX::BitsPerPixel(description.Format);
+    const bool unsupportedFormat = bitsPerPixel == 0 ||
+                                   DirectX::IsCompressed(description.Format) ||
+                                   DirectX::IsDepthStencil(description.Format);
+    if (unsupportedFormat) {
+        return false;
+    }
+    const size_t width = static_cast<size_t>(texture.width);
+    if (width > ((std::numeric_limits<size_t>::max)() - 7u) / bitsPerPixel) {
+        return false;
+    }
+    const size_t expectedRowPitch = (width * bitsPerPixel + 7u) / 8u;
+    const size_t height = static_cast<size_t>(texture.height);
+    const bool invalidPitch =
+        rowPitch < expectedRowPitch ||
+        rowPitch > static_cast<size_t>((std::numeric_limits<LONG_PTR>::max)()) ||
+        rowPitch > (std::numeric_limits<size_t>::max)() / height;
+    if (invalidPitch) {
+        return false;
+    }
+    const size_t slicePitch = rowPitch * height;
+    if (slicePitch >
+        static_cast<size_t>((std::numeric_limits<LONG_PTR>::max)())) {
+        return false;
+    }
+    subresource.pData = pixels;
+    subresource.RowPitch = static_cast<LONG_PTR>(rowPitch);
+    subresource.SlicePitch = static_cast<LONG_PTR>(slicePitch);
+    return true;
+}
+
+bool CanUpdateTexture(DirectXCommon *dxCommon, const uint8_t *pixels,
+                      size_t rowPitch, bool validTextureId) {
+    const std::array<bool, 5> valid = {
+        dxCommon != nullptr,
+        dxCommon != nullptr && dxCommon->GetDevice() != nullptr,
+        pixels != nullptr,
+        rowPitch != 0,
+        validTextureId,
+    };
+    return std::all_of(valid.begin(), valid.end(), [](bool value) {
+        return value;
+    });
+}
+
+bool IsUsableDynamicTexture(const Texture &texture) {
+    const std::array<bool, 3> valid = {
+        texture.resource != nullptr,
+        texture.width > 0,
+        texture.height > 0,
+    };
+    return std::all_of(valid.begin(), valid.end(), [](bool value) {
+        return value;
+    });
+}
 
 } // namespace
 
@@ -101,67 +183,20 @@ uint32_t TextureManager::CreateTexture2D(uint32_t width, uint32_t height,
 
 void TextureManager::UpdateTexture2D(uint32_t textureId, const uint8_t *pixels,
                                      size_t rowPitch) {
-    if (!dxCommon_ || !dxCommon_->GetDevice()) {
-        return;
-    }
-    if (!pixels || rowPitch == 0 || !IsValidTextureId(textureId)) {
+    if (!CanUpdateTexture(dxCommon_, pixels, rowPitch,
+                          IsValidTextureId(textureId))) {
         return;
     }
 
     Texture &texture = textures_[textureId].texture;
-    if (!texture.resource || texture.width <= 0 || texture.height <= 0) {
-        return;
-    }
-
-    D3D12_RESOURCE_DESC textureDesc = texture.resource->GetDesc();
-    if (textureDesc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D ||
-        textureDesc.DepthOrArraySize != 1 || textureDesc.MipLevels != 1) {
-        return;
-    }
-    if (textureDesc.Width >
-            static_cast<UINT64>((std::numeric_limits<int>::max)()) ||
-        textureDesc.Height >
-            static_cast<UINT>((std::numeric_limits<int>::max)()) ||
-        static_cast<int>(textureDesc.Width) != texture.width ||
-        static_cast<int>(textureDesc.Height) != texture.height) {
-        return;
-    }
-    const size_t bitsPerPixel = DirectX::BitsPerPixel(textureDesc.Format);
-    if (bitsPerPixel == 0) {
-        return;
-    }
-    if (DirectX::IsCompressed(textureDesc.Format) ||
-        DirectX::IsDepthStencil(textureDesc.Format)) {
-        return;
-    }
-    const size_t width = static_cast<size_t>(texture.width);
-    if (width >
-        ((std::numeric_limits<size_t>::max)() - 7u) / bitsPerPixel) {
-        return;
-    }
-    const size_t expectedRowPitch = (width * bitsPerPixel + 7u) / 8u;
-    if (rowPitch < expectedRowPitch) {
+    if (!IsUsableDynamicTexture(texture)) {
         return;
     }
 
     D3D12_SUBRESOURCE_DATA subresource{};
-    subresource.pData = pixels;
-    if (rowPitch >
-        static_cast<size_t>((std::numeric_limits<LONG_PTR>::max)())) {
+    if (!TryBuildSubresource(texture, pixels, rowPitch, subresource)) {
         return;
     }
-    if (rowPitch > (std::numeric_limits<size_t>::max)() /
-                       static_cast<size_t>(texture.height)) {
-        return;
-    }
-    const size_t slicePitch = rowPitch * static_cast<size_t>(texture.height);
-    if (slicePitch >
-        static_cast<size_t>((std::numeric_limits<LONG_PTR>::max)())) {
-        return;
-    }
-    subresource.RowPitch = static_cast<LONG_PTR>(rowPitch);
-    subresource.SlicePitch = static_cast<LONG_PTR>(slicePitch);
-
     const bool ownsUploadPass = !dxCommon_->IsCommandListRecording();
     if (ownsUploadPass) {
         dxCommon_->BeginUpload();

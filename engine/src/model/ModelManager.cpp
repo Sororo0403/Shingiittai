@@ -34,6 +34,34 @@ constexpr std::array<uint32_t, 6> kPlaneIndices = {0, 1, 2, 2, 1, 3};
 constexpr uint32_t kMaxProceduralSegments = 4096;
 constexpr uint32_t kMaxTerrainGrid = 1024;
 
+void FreeDescriptor(SrvManager &srvManager, uint32_t &index) {
+    if (index == UINT32_MAX) {
+        return;
+    }
+    srvManager.FreeIfAllocated(index);
+    index = UINT32_MAX;
+}
+
+template <typename T>
+void UnmapIfMapped(ID3D12Resource *resource, T *&mappedData) {
+    if (resource == nullptr || mappedData == nullptr) {
+        return;
+    }
+    resource->Unmap(0, nullptr);
+    mappedData = nullptr;
+}
+
+void ReleaseSkinClusterMappings(SrvManager &srvManager,
+                                SkinCluster &skinCluster) {
+    FreeDescriptor(srvManager, skinCluster.inputVertexSrvIndex);
+    FreeDescriptor(srvManager, skinCluster.influenceSrvIndex);
+    FreeDescriptor(srvManager, skinCluster.skinnedVertexUavIndex);
+    FreeDescriptor(srvManager, skinCluster.paletteSrvIndex);
+    UnmapIfMapped(skinCluster.influenceResource.Get(),
+                  skinCluster.mappedInfluence);
+    UnmapIfMapped(skinCluster.paletteResource.Get(), skinCluster.mappedPalette);
+}
+
 float Hash01(int32_t x, int32_t z, uint32_t seed) {
     uint32_t h = static_cast<uint32_t>(x) * 374761393u ^
                  static_cast<uint32_t>(z) * 668265263u ^ seed * 2246822519u;
@@ -190,32 +218,7 @@ void ModelManager::Finalize() {
         for (Model &model : models_) {
             for (ModelSubMesh &subMesh : model.subMeshes) {
                 SkinCluster &skinCluster = subMesh.skinCluster;
-                if (skinCluster.inputVertexSrvIndex != UINT32_MAX) {
-                    srvManager_->FreeIfAllocated(skinCluster.inputVertexSrvIndex);
-                    skinCluster.inputVertexSrvIndex = UINT32_MAX;
-                }
-                if (skinCluster.influenceSrvIndex != UINT32_MAX) {
-                    srvManager_->FreeIfAllocated(skinCluster.influenceSrvIndex);
-                    skinCluster.influenceSrvIndex = UINT32_MAX;
-                }
-                if (skinCluster.skinnedVertexUavIndex != UINT32_MAX) {
-                    srvManager_->FreeIfAllocated(skinCluster.skinnedVertexUavIndex);
-                    skinCluster.skinnedVertexUavIndex = UINT32_MAX;
-                }
-                if (skinCluster.paletteSrvIndex != UINT32_MAX) {
-                    srvManager_->FreeIfAllocated(skinCluster.paletteSrvIndex);
-                    skinCluster.paletteSrvIndex = UINT32_MAX;
-                }
-                if (skinCluster.influenceResource &&
-                    skinCluster.mappedInfluence != nullptr) {
-                    skinCluster.influenceResource->Unmap(0, nullptr);
-                    skinCluster.mappedInfluence = nullptr;
-                }
-                if (skinCluster.paletteResource &&
-                    skinCluster.mappedPalette != nullptr) {
-                    skinCluster.paletteResource->Unmap(0, nullptr);
-                    skinCluster.mappedPalette = nullptr;
-                }
+                ReleaseSkinClusterMappings(*srvManager_, skinCluster);
             }
         }
     }

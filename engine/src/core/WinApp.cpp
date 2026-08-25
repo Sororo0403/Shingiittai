@@ -25,19 +25,9 @@ LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wParam,
 
     switch (msg) {
     case WM_SETCURSOR:
-        if (!requestedCursorVisible_ && LOWORD(lParam) == HTCLIENT &&
-            ShouldHideCursor(hwnd)) {
-            SetCursor(nullptr);
-            return TRUE;
-        }
-        SetCursor(LoadCursor(nullptr, IDC_ARROW));
-        return TRUE;
+        return HandleSetCursor(hwnd, lParam);
     case WM_ACTIVATEAPP:
-        if (wParam == FALSE) {
-            ApplyVisibleCursorState();
-        } else {
-            RestoreCursorForAppInteraction();
-        }
+        HandleActivation(wParam);
         break;
     case WM_SETFOCUS:
         RestoreCursorForAppInteraction();
@@ -47,25 +37,49 @@ LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wParam,
         break;
     case WM_KEYDOWN:
     case WM_SYSKEYDOWN:
-        if (wParam == VK_LWIN || wParam == VK_RWIN || wParam == VK_MENU ||
-            wParam == VK_APPS) {
-            if (requestedCursorVisible_) {
-                ApplyVisibleCursorState();
-            }
-        }
+        HandleSystemKey(wParam);
         break;
     case WM_SYSCOMMAND:
-        if ((wParam & 0xFFF0) == SC_MINIMIZE ||
-            (wParam & 0xFFF0) == SC_TASKLIST) {
-            ApplyVisibleCursorState();
-        }
+        HandleSystemCommand(wParam);
         break;
     case WM_DESTROY:
         PostQuitMessage(0);
         return 0;
+    default:
+        break;
     }
 
     return DefWindowProc(hwnd, msg, wParam, lParam);
+}
+
+LRESULT WinApp::HandleSetCursor(HWND hwnd, LPARAM lParam) {
+    const bool shouldHide = !requestedCursorVisible_ &&
+                            LOWORD(lParam) == HTCLIENT && ShouldHideCursor(hwnd);
+    SetCursor(shouldHide ? nullptr : LoadCursor(nullptr, IDC_ARROW));
+    return TRUE;
+}
+
+void WinApp::HandleActivation(WPARAM wParam) {
+    if (wParam == FALSE) {
+        ApplyVisibleCursorState();
+        return;
+    }
+    RestoreCursorForAppInteraction();
+}
+
+void WinApp::HandleSystemKey(WPARAM wParam) {
+    const bool cursorReleaseKey = wParam == VK_LWIN || wParam == VK_RWIN ||
+                                  wParam == VK_MENU || wParam == VK_APPS;
+    if (cursorReleaseKey && requestedCursorVisible_) {
+        ApplyVisibleCursorState();
+    }
+}
+
+void WinApp::HandleSystemCommand(WPARAM wParam) {
+    const WPARAM command = wParam & 0xFFF0;
+    if (command == SC_MINIMIZE || command == SC_TASKLIST) {
+        ApplyVisibleCursorState();
+    }
 }
 
 void WinApp::Initialize(HINSTANCE hInstance, int nCmdShow, int width,

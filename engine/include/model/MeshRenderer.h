@@ -112,7 +112,7 @@ class MeshRenderer {
 
   private:
     static constexpr uint32_t kMaxDraws = 4096;
-    static constexpr size_t kUploadBytesPerFrame = 16 * 1024 * 1024;
+    static constexpr size_t kUploadBytesPerFrame = size_t{16} * 1024 * 1024;
     static constexpr size_t kPipelineVariantCount = kMeshPipelineVariantCount;
 
     /// <summary>

@@ -88,7 +88,8 @@ std::wstring NormalizePathKey(const std::filesystem::path &path) {
     return key;
 }
 
-std::wstring NormalizeCacheKey(std::wstring key) {
+std::wstring NormalizeCacheKey(const std::wstring &value) {
+    std::wstring key = value;
 #ifdef _WIN32
     std::transform(key.begin(), key.end(), key.begin(),
                    [](wchar_t c) { return static_cast<wchar_t>(towlower(c)); });
@@ -101,6 +102,58 @@ float ClampFinite(float value, float minimum, float maximum, float fallback) {
         return fallback;
     }
     return std::clamp(value, minimum, maximum);
+}
+
+bool HasReadablePcm(const AudioFileLoader::SoundData &sound,
+                    const WAVEFORMATEX *format) {
+    return format != nullptr && IsSupportedPcmReadFormat(*format) &&
+           !sound.decodedPcm.empty();
+}
+
+bool IsValidVoiceSound(const AudioFileLoader::SoundData &sound,
+                       const WAVEFORMATEX *format) {
+    return format != nullptr && format->nSamplesPerSec != 0 &&
+           format->nBlockAlign != 0 && !sound.decodedPcm.empty() &&
+           sound.decodedPcm.size() <=
+               static_cast<size_t>((std::numeric_limits<UINT32>::max)());
+}
+
+bool TryReadPcmSample(const BYTE *base, size_t byteOffset, uint16_t bits,
+                      float &value) {
+    if (bits == 16) {
+        int16_t sample = 0;
+        std::memcpy(&sample, base + byteOffset, sizeof(sample));
+        value = static_cast<float>(sample) / 32768.0f;
+        return true;
+    }
+    if (bits == 8) {
+        const uint8_t sample = *(base + byteOffset);
+        value = (static_cast<float>(sample) - 128.0f) / 128.0f;
+        return true;
+    }
+    return false;
+}
+
+float ReadPcmFrame(const AudioFileLoader::SoundData &sound,
+                   const WAVEFORMATEX &format, size_t frame) {
+    const BYTE *base =
+        sound.decodedPcm.data() + frame * format.nBlockAlign;
+    const uint16_t channels = (std::max<uint16_t>)(format.nChannels, 1);
+    const size_t bytesPerSample = static_cast<size_t>(format.wBitsPerSample) / 8u;
+    float total = 0.0f;
+    size_t count = 0;
+    for (uint16_t channel = 0; channel < channels; ++channel) {
+        const size_t byteOffset = static_cast<size_t>(channel) * bytesPerSample;
+        if (byteOffset + bytesPerSample > format.nBlockAlign) {
+            continue;
+        }
+        float value = 0.0f;
+        if (TryReadPcmSample(base, byteOffset, format.wBitsPerSample, value)) {
+            total += value;
+            ++count;
+        }
+    }
+    return count > 0 ? total / static_cast<float>(count) : 0.0f;
 }
 
 } // namespace
@@ -267,7 +320,7 @@ uint32_t SoundManager::CreatePcm16Sound(const std::wstring &cacheKey,
     resource.data.info.channels = channels;
     resource.data.info.bitsPerSample = 16;
     resource.data.info.durationSeconds =
-        static_cast<float>(pcmSamples.size() / channels) /
+        static_cast<float>(pcmSamples.size()) / static_cast<float>(channels) /
         static_cast<float>(sampleRate);
     resource.data.info.decodedBytes = resource.data.decodedPcm.size();
 
@@ -466,8 +519,7 @@ float SoundManager::GetAmplitudeAt(uint32_t soundId, float playbackSeconds,
 
     const AudioFileLoader::SoundData &sound = sounds_[soundId].data;
     const WAVEFORMATEX *format = sound.GetFormat();
-    if (!format || !IsSupportedPcmReadFormat(*format) ||
-        sound.decodedPcm.empty()) {
+    if (!HasReadablePcm(sound, format)) {
         return 0.0f;
     }
 
@@ -502,8 +554,10 @@ float SoundManager::GetAmplitudeAt(uint32_t soundId, float playbackSeconds,
         static_cast<double>(safeWindowSeconds) *
         static_cast<double>(format->nSamplesPerSec) * 0.5;
 
-    const size_t centerFrame =
-        static_cast<size_t>(sampleTime * format->nSamplesPerSec) % frameCount;
+    const size_t centerFrame = static_cast<size_t>(
+                                   static_cast<double>(sampleTime) *
+                                   format->nSamplesPerSec) %
+                               frameCount;
     const size_t halfWindowFrames = (std::max<size_t>)(
         1, (std::min)(frameCount,
                       static_cast<size_t>(halfWindowFramesDouble)));
@@ -528,14 +582,7 @@ float SoundManager::GetAmplitudeAt(uint32_t soundId, float playbackSeconds,
             }
 
             float value = 0.0f;
-            if (bits == 16) {
-                int16_t sample = 0;
-                std::memcpy(&sample, base + byteOffset, sizeof(sample));
-                value = static_cast<float>(sample) / 32768.0f;
-            } else if (bits == 8) {
-                const uint8_t sample = *(base + byteOffset);
-                value = (static_cast<float>(sample) - 128.0f) / 128.0f;
-            } else {
+            if (!TryReadPcmSample(base, byteOffset, bits, value)) {
                 continue;
             }
             sumSquares += static_cast<double>(value * value);
@@ -547,8 +594,10 @@ float SoundManager::GetAmplitudeAt(uint32_t soundId, float playbackSeconds,
         return 0.0f;
     }
 
-    return std::clamp(static_cast<float>(std::sqrt(sumSquares / valueCount)),
-                      0.0f, 1.0f);
+    return std::clamp(
+        static_cast<float>(
+            std::sqrt(sumSquares / static_cast<double>(valueCount))),
+        0.0f, 1.0f);
 }
 
 void SoundManager::FillSpectrumBands(uint32_t soundId, float playbackSeconds,
@@ -565,8 +614,7 @@ void SoundManager::FillSpectrumBands(uint32_t soundId, float playbackSeconds,
 
     const AudioFileLoader::SoundData &sound = sounds_[soundId].data;
     const WAVEFORMATEX *format = sound.GetFormat();
-    if (!format || !IsSupportedPcmReadFormat(*format) ||
-        sound.decodedPcm.empty()) {
+    if (!HasReadablePcm(sound, format)) {
         return;
     }
 
@@ -594,38 +642,11 @@ void SoundManager::FillSpectrumBands(uint32_t soundId, float playbackSeconds,
     }
 
     constexpr size_t kWindowFrames = 768;
-    const size_t centerFrame =
-        static_cast<size_t>(sampleTime * format->nSamplesPerSec) % frameCount;
-    const uint16_t channels = (std::max<uint16_t>)(format->nChannels, 1);
-    const uint16_t bits = format->wBitsPerSample;
-    const size_t bytesPerSample = static_cast<size_t>(bits) / 8u;
+    const size_t centerFrame = static_cast<size_t>(
+                                   static_cast<double>(sampleTime) *
+                                   format->nSamplesPerSec) %
+                               frameCount;
     const float sampleRate = static_cast<float>(format->nSamplesPerSec);
-
-    auto readFrame = [&](size_t frame) {
-        const BYTE *base =
-            sound.decodedPcm.data() + frame * format->nBlockAlign;
-        float total = 0.0f;
-        size_t count = 0;
-        for (uint16_t ch = 0; ch < channels; ++ch) {
-            const size_t byteOffset =
-                static_cast<size_t>(ch) * bytesPerSample;
-            if (byteOffset + bytesPerSample > format->nBlockAlign) {
-                continue;
-            }
-
-            if (bits == 16) {
-                int16_t sample = 0;
-                std::memcpy(&sample, base + byteOffset, sizeof(sample));
-                total += static_cast<float>(sample) / 32768.0f;
-                ++count;
-            } else if (bits == 8) {
-                const uint8_t sample = *(base + byteOffset);
-                total += (static_cast<float>(sample) - 128.0f) / 128.0f;
-                ++count;
-            }
-        }
-        return count > 0 ? total / static_cast<float>(count) : 0.0f;
-    };
 
     for (size_t band = 0; band < bandCount; ++band) {
         const float t = bandCount > 1
@@ -647,7 +668,7 @@ void SoundManager::FillSpectrumBands(uint32_t soundId, float playbackSeconds,
                            std::cos(2.0f * 3.1415926535f *
                                     static_cast<float>(i) /
                                     static_cast<float>(kWindowFrames - 1));
-            const float sample = readFrame(frame) * window;
+            const float sample = ReadPcmFrame(sound, *format, frame) * window;
             const float phase = omega * static_cast<float>(i);
             real += static_cast<double>(sample * std::cos(phase));
             imag -= static_cast<double>(sample * std::sin(phase));
@@ -677,12 +698,7 @@ uint32_t SoundManager::CreateSourceVoice(uint32_t soundId, float volume,
                                          bool loop, float startSeconds) {
     const AudioFileLoader::SoundData &sound = sounds_[soundId].data;
     const WAVEFORMATEX *format = sound.GetFormat();
-    if (!format || format->nSamplesPerSec == 0 || format->nBlockAlign == 0 ||
-        sound.decodedPcm.empty()) {
-        return kInvalidVoiceHandle;
-    }
-    if (sound.decodedPcm.size() >
-        (std::numeric_limits<UINT32>::max)()) {
+    if (!IsValidVoiceSound(sound, format)) {
         return kInvalidVoiceHandle;
     }
 
@@ -721,11 +737,6 @@ uint32_t SoundManager::CreateSourceVoice(uint32_t soundId, float volume,
 
     XAUDIO2_BUFFER buffer{};
     buffer.pAudioData = sound.decodedPcm.data();
-    if (sound.decodedPcm.size() >
-        static_cast<size_t>((std::numeric_limits<UINT32>::max)())) {
-        voice->DestroyVoice();
-        return kInvalidVoiceHandle;
-    }
     buffer.AudioBytes = static_cast<UINT32>(sound.decodedPcm.size());
     buffer.Flags = XAUDIO2_END_OF_STREAM;
     buffer.PlayBegin = startFrame;

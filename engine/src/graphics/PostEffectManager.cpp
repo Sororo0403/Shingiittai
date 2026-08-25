@@ -25,7 +25,8 @@ bool HasToon(const PostProcessProfile &profile) {
     return profile.toon.enabled && profile.toon.strength > 0.0f;
 }
 
-void MergeOverlay(PostProcessProfile &dst, const PostProcessProfile &overlay) {
+void MergeBasicOverlay(PostProcessProfile &dst,
+                       const PostProcessProfile &overlay) {
     if (overlay.colorGrade.mode != PostProcessColorMode::None) {
         dst.colorGrade = overlay.colorGrade;
     }
@@ -53,7 +54,10 @@ void MergeOverlay(PostProcessProfile &dst, const PostProcessProfile &overlay) {
     if (overlay.lensFlare.enabled) {
         dst.lensFlare = overlay.lensFlare;
     }
+}
 
+void MergeStrengthOverlay(PostProcessProfile &dst,
+                          const PostProcessProfile &overlay) {
     if (overlay.radialBlur.strength > dst.radialBlur.strength) {
         dst.radialBlur = overlay.radialBlur;
     }
@@ -67,7 +71,10 @@ void MergeOverlay(PostProcessProfile &dst, const PostProcessProfile &overlay) {
     if (HasToon(overlay)) {
         dst.toon = overlay.toon;
     }
+}
 
+void MergeVignetteOverlay(PostProcessProfile &dst,
+                          const PostProcessProfile &overlay) {
     if (HasVignette(overlay)) {
         if (!dst.vignette.enabled ||
             overlay.vignette.strength >= dst.vignette.strength) {
@@ -95,6 +102,12 @@ void MergeOverlay(PostProcessProfile &dst, const PostProcessProfile &overlay) {
                       std::begin(dst.vignette.secondaryTintColor));
         }
     }
+}
+
+void MergeOverlay(PostProcessProfile &dst, const PostProcessProfile &overlay) {
+    MergeBasicOverlay(dst, overlay);
+    MergeStrengthOverlay(dst, overlay);
+    MergeVignetteOverlay(dst, overlay);
 }
 
 void MergeOverride(PostProcessProfile &dst, const PostProcessProfile &overlay) {

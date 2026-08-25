@@ -234,35 +234,6 @@ static std::vector<uint8_t> CreateDissolveNoisePixels(uint32_t width,
     return pixels;
 }
 
-struct PerObjectConstBufferData {
-    XMFLOAT4X4 matWVP;
-    XMFLOAT4X4 matWorld;
-    XMFLOAT4X4 matWorldInverseTranspose;
-};
-
-struct SceneConstBufferData {
-    struct PointLightData {
-        XMFLOAT4 positionRange;
-        XMFLOAT4 colorIntensity;
-    };
-
-    XMFLOAT4 cameraPos;
-    XMFLOAT4 keyLightDirection;
-    XMFLOAT4 keyLightColor;
-    XMFLOAT4 fillLightDirection;
-    XMFLOAT4 fillLightColor;
-    XMFLOAT4 ambientColor;
-    PointLightData pointLights[2];
-    XMFLOAT4 lightingParams;
-    XMFLOAT4 lightingModeParams;
-    XMFLOAT4 fogColor;
-    XMFLOAT4 fogParams;
-    XMFLOAT4X4 viewProjection;
-    XMFLOAT4X4 lightViewProjection;
-    XMFLOAT4 shadowParams;
-    XMFLOAT4 shadowFilterParams;
-};
-
 void ModelRenderer::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
                                MeshManager *meshManager,
                                TextureManager *textureManager,
@@ -339,8 +310,7 @@ void ModelRenderer::PreDraw() {
         drawIndex_ = 0;
         return;
     }
-    auto cmd = dxCommon_->GetCommandList();
-
+    auto *cmd = dxCommon_->GetCommandList();
     ID3D12DescriptorHeap *heaps[] = {srvManager_->GetHeap()};
     cmd->SetDescriptorHeaps(1, heaps);
 
@@ -357,8 +327,6 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
         !materialManager_ || !rootSignature_ || drawIndex_ >= kMaxDraws) {
         return;
     }
-
-    auto cmd = dxCommon_->GetCommandList();
 
     const Transform safeTransform = SanitizeTransformForDraw(transform);
     XMVECTOR q = LoadNormalizedQuaternionOrIdentity(safeTransform.rotation);
@@ -389,71 +357,11 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
 
     DispatchSkinningBatch(model);
 
-    auto drawSubMesh = [&](const ModelSubMesh &subMesh) {
+    for (const auto &subMesh : model.subMeshes) {
+        DrawForwardSubMesh(subMesh, objectCbAddr, sceneCbAddr, effectCbAddr,
+                           environmentTextureId);
         if (drawIndex_ >= kMaxDraws) {
-            return;
-        }
-        if (!IsForwardDrawableSubMesh(subMesh, meshManager_,
-                                      materialManager_)) {
-            return;
-        }
-
-        const Material &material =
-            materialManager_->GetMaterial(subMesh.materialId);
-
-        SetPipelineForMaterial(material);
-
-        const Mesh &mesh = meshManager_->GetMesh(subMesh.meshId);
-        const D3D12_VERTEX_BUFFER_VIEW vertexBufferView =
-            subMesh.skinCluster.skinnedVertexResource
-                ? subMesh.skinCluster.skinnedVertexBufferView
-                : mesh.vbView;
-
-        cmd->SetGraphicsRootConstantBufferView(0, objectCbAddr);
-        cmd->SetGraphicsRootConstantBufferView(1, sceneCbAddr);
-        cmd->SetGraphicsRootConstantBufferView(
-            2, materialManager_->GetGPUVirtualAddress(subMesh.materialId));
-        cmd->SetGraphicsRootDescriptorTable(
-            3, textureManager_->GetGpuHandle(
-                   ResolveBaseColorTextureId(textureManager_, material,
-                                             subMesh.textureId)));
-        cmd->SetGraphicsRootDescriptorTable(
-            4, subMesh.skinCluster.paletteSrvGpuHandle);
-        const bool hasPerDrawEnvironmentTexture =
-            (environmentTextureId != UINT32_MAX);
-        const uint32_t boundEnvironmentTextureId = hasPerDrawEnvironmentTexture
-                                                       ? environmentTextureId
-                                                       : hasEnvironmentTexture_
-                                                             ? environmentTextureId_
-                                                             : textureManager_->GetBlackCubeTextureId();
-        const uint32_t safeEnvironmentTextureId =
-            textureManager_->IsValidTextureId(boundEnvironmentTextureId)
-                ? boundEnvironmentTextureId
-                : textureManager_->GetBlackCubeTextureId();
-        cmd->SetGraphicsRootDescriptorTable(
-            5, textureManager_->GetGpuHandle(safeEnvironmentTextureId));
-        cmd->SetGraphicsRootDescriptorTable(6, shadowMapGpuHandle_);
-        cmd->SetGraphicsRootDescriptorTable(
-            7, textureManager_->GetGpuHandle(ResolveNormalTextureId(
-                   textureManager_, material, subMesh.normalTextureId)));
-        cmd->SetGraphicsRootConstantBufferView(8, effectCbAddr);
-        cmd->SetGraphicsRootDescriptorTable(
-            9, textureManager_->GetGpuHandle(dissolveNoiseTextureId_));
-
-        cmd->IASetVertexBuffers(0, 1, &vertexBufferView);
-        cmd->IASetIndexBuffer(&mesh.ibView);
-        cmd->IASetPrimitiveTopology(mesh.primitiveTopology);
-        cmd->DrawIndexedInstanced(mesh.indexCount, 1, 0, 0, 0);
-
-        drawIndex_++;
-    };
-
-    if (!model.subMeshes.empty()) {
-        for (const auto &subMesh : model.subMeshes) {
-            drawSubMesh(subMesh);
-            if (drawIndex_ >= kMaxDraws) {
-                break;
-            }
+            break;
         }
     }
 }
@@ -468,8 +376,6 @@ void ModelRenderer::DrawInstanced(const Model &model,
         instanceCount == 0) {
         return;
     }
-
-    auto cmd = dxCommon_->GetCommandList();
 
     const D3D12_GPU_VIRTUAL_ADDRESS objectCbAddr =
         WriteObjectConstants(XMMatrixIdentity(), XMMatrixIdentity(),
@@ -486,72 +392,8 @@ void ModelRenderer::DrawInstanced(const Model &model,
 
     DispatchSkinningBatch(model);
 
-    auto drawSubMesh = [&](const ModelSubMesh &subMesh) {
-        if (drawIndex_ >= kMaxDraws) {
-            return;
-        }
-        if (!IsForwardDrawableSubMesh(subMesh, meshManager_,
-                                      materialManager_)) {
-            return;
-        }
-
-        const Material &material =
-            materialManager_->GetMaterial(subMesh.materialId);
-        SetInstancedPipelineForMaterial(material);
-
-        const Mesh &mesh = meshManager_->GetMesh(subMesh.meshId);
-        const D3D12_VERTEX_BUFFER_VIEW vertexBufferView =
-            subMesh.skinCluster.skinnedVertexResource
-                ? subMesh.skinCluster.skinnedVertexBufferView
-                : mesh.vbView;
-        D3D12_VERTEX_BUFFER_VIEW views[] = {vertexBufferView, instanceView};
-
-        cmd->SetGraphicsRootConstantBufferView(0, objectCbAddr);
-        cmd->SetGraphicsRootConstantBufferView(1, sceneCbAddr);
-        cmd->SetGraphicsRootConstantBufferView(
-            2, materialManager_->GetGPUVirtualAddress(subMesh.materialId));
-        cmd->SetGraphicsRootDescriptorTable(
-            3, textureManager_->GetGpuHandle(
-                   ResolveBaseColorTextureId(textureManager_, material,
-                                             subMesh.textureId)));
-        cmd->SetGraphicsRootDescriptorTable(
-            4, subMesh.skinCluster.paletteSrvGpuHandle);
-
-        const bool hasPerDrawEnvironmentTexture =
-            (environmentTextureId != UINT32_MAX);
-        const uint32_t boundEnvironmentTextureId = hasPerDrawEnvironmentTexture
-                                                       ? environmentTextureId
-                                                       : hasEnvironmentTexture_
-                                                             ? environmentTextureId_
-                                                             : textureManager_->GetBlackCubeTextureId();
-        const uint32_t safeEnvironmentTextureId =
-            textureManager_->IsValidTextureId(boundEnvironmentTextureId)
-                ? boundEnvironmentTextureId
-                : textureManager_->GetBlackCubeTextureId();
-        cmd->SetGraphicsRootDescriptorTable(
-            5, textureManager_->GetGpuHandle(safeEnvironmentTextureId));
-        cmd->SetGraphicsRootDescriptorTable(6, shadowMapGpuHandle_);
-        cmd->SetGraphicsRootDescriptorTable(
-            7, textureManager_->GetGpuHandle(ResolveNormalTextureId(
-                   textureManager_, material, subMesh.normalTextureId)));
-        cmd->SetGraphicsRootConstantBufferView(8, effectCbAddr);
-        cmd->SetGraphicsRootDescriptorTable(
-            9, textureManager_->GetGpuHandle(dissolveNoiseTextureId_));
-
-        cmd->IASetVertexBuffers(0, 2, views);
-        cmd->IASetIndexBuffer(&mesh.ibView);
-        cmd->IASetPrimitiveTopology(mesh.primitiveTopology);
-        cmd->DrawIndexedInstanced(mesh.indexCount, instanceCount, 0, 0, 0);
-
-        ++drawIndex_;
-    };
-
-    for (const auto &subMesh : model.subMeshes) {
-        drawSubMesh(subMesh);
-        if (drawIndex_ >= kMaxDraws) {
-            break;
-        }
-    }
+    DrawInstancedSubMeshes(model, instanceView, objectCbAddr, sceneCbAddr,
+                           effectCbAddr, environmentTextureId, instanceCount);
 }
 
 void ModelRenderer::DrawInstanced(const Model &model,
@@ -564,8 +406,6 @@ void ModelRenderer::DrawInstanced(const Model &model,
         instanceCount == 0) {
         return;
     }
-
-    auto cmd = dxCommon_->GetCommandList();
 
     const D3D12_GPU_VIRTUAL_ADDRESS objectCbAddr =
         WriteObjectConstants(XMMatrixIdentity(), XMMatrixIdentity(),
@@ -582,75 +422,128 @@ void ModelRenderer::DrawInstanced(const Model &model,
 
     DispatchSkinningBatch(model);
 
-    auto drawSubMesh = [&](const ModelSubMesh &subMesh) {
+    DrawInstancedSubMeshes(model, instanceView, objectCbAddr, sceneCbAddr,
+                           effectCbAddr, environmentTextureId, instanceCount);
+}
+
+void ModelRenderer::PostDraw() {}
+
+void ModelRenderer::DrawForwardSubMesh(
+    const ModelSubMesh &subMesh,
+    D3D12_GPU_VIRTUAL_ADDRESS objectConstantAddress,
+    D3D12_GPU_VIRTUAL_ADDRESS sceneConstantAddress,
+    D3D12_GPU_VIRTUAL_ADDRESS effectConstantAddress,
+    uint32_t environmentTextureId) {
+    if (drawIndex_ >= kMaxDraws ||
+        !IsForwardDrawableSubMesh(subMesh, meshManager_, materialManager_)) {
+        return;
+    }
+
+    const Material &material = materialManager_->GetMaterial(subMesh.materialId);
+    SetPipelineForMaterial(material);
+    const Mesh &mesh = meshManager_->GetMesh(subMesh.meshId);
+    const D3D12_VERTEX_BUFFER_VIEW vertexBufferView =
+        subMesh.skinCluster.skinnedVertexResource
+            ? subMesh.skinCluster.skinnedVertexBufferView
+            : mesh.vbView;
+    const uint32_t requestedEnvironmentTextureId =
+        environmentTextureId != UINT32_MAX
+            ? environmentTextureId
+            : hasEnvironmentTexture_
+                  ? environmentTextureId_
+                  : textureManager_->GetBlackCubeTextureId();
+    const uint32_t safeEnvironmentTextureId =
+        textureManager_->IsValidTextureId(requestedEnvironmentTextureId)
+            ? requestedEnvironmentTextureId
+            : textureManager_->GetBlackCubeTextureId();
+
+    auto *cmd = dxCommon_->GetCommandList();
+    cmd->SetGraphicsRootConstantBufferView(0, objectConstantAddress);
+    cmd->SetGraphicsRootConstantBufferView(1, sceneConstantAddress);
+    cmd->SetGraphicsRootConstantBufferView(
+        2, materialManager_->GetGPUVirtualAddress(subMesh.materialId));
+    cmd->SetGraphicsRootDescriptorTable(
+        3, textureManager_->GetGpuHandle(ResolveBaseColorTextureId(
+               textureManager_, material, subMesh.textureId)));
+    cmd->SetGraphicsRootDescriptorTable(4,
+                                        subMesh.skinCluster.paletteSrvGpuHandle);
+    cmd->SetGraphicsRootDescriptorTable(
+        5, textureManager_->GetGpuHandle(safeEnvironmentTextureId));
+    cmd->SetGraphicsRootDescriptorTable(6, shadowMapGpuHandle_);
+    cmd->SetGraphicsRootDescriptorTable(
+        7, textureManager_->GetGpuHandle(ResolveNormalTextureId(
+               textureManager_, material, subMesh.normalTextureId)));
+    cmd->SetGraphicsRootConstantBufferView(8, effectConstantAddress);
+    cmd->SetGraphicsRootDescriptorTable(
+        9, textureManager_->GetGpuHandle(dissolveNoiseTextureId_));
+    cmd->IASetVertexBuffers(0, 1, &vertexBufferView);
+    cmd->IASetIndexBuffer(&mesh.ibView);
+    cmd->IASetPrimitiveTopology(mesh.primitiveTopology);
+    cmd->DrawIndexedInstanced(mesh.indexCount, 1, 0, 0, 0);
+    ++drawIndex_;
+}
+
+void ModelRenderer::DrawInstancedSubMeshes(
+    const Model &model, const D3D12_VERTEX_BUFFER_VIEW &instanceView,
+    D3D12_GPU_VIRTUAL_ADDRESS objectConstantAddress,
+    D3D12_GPU_VIRTUAL_ADDRESS sceneConstantAddress,
+    D3D12_GPU_VIRTUAL_ADDRESS effectConstantAddress,
+    uint32_t environmentTextureId, uint32_t instanceCount) {
+    for (const auto &subMesh : model.subMeshes) {
         if (drawIndex_ >= kMaxDraws) {
-            return;
+            break;
         }
         if (!IsForwardDrawableSubMesh(subMesh, meshManager_,
                                       materialManager_)) {
-            return;
+            continue;
         }
 
         const Material &material =
             materialManager_->GetMaterial(subMesh.materialId);
         SetInstancedPipelineForMaterial(material);
-
         const Mesh &mesh = meshManager_->GetMesh(subMesh.meshId);
         const D3D12_VERTEX_BUFFER_VIEW vertexBufferView =
             subMesh.skinCluster.skinnedVertexResource
                 ? subMesh.skinCluster.skinnedVertexBufferView
                 : mesh.vbView;
         D3D12_VERTEX_BUFFER_VIEW views[] = {vertexBufferView, instanceView};
+        const uint32_t requestedEnvironmentTextureId =
+            environmentTextureId != UINT32_MAX
+                ? environmentTextureId
+                : hasEnvironmentTexture_
+                      ? environmentTextureId_
+                      : textureManager_->GetBlackCubeTextureId();
+        const uint32_t safeEnvironmentTextureId =
+            textureManager_->IsValidTextureId(requestedEnvironmentTextureId)
+                ? requestedEnvironmentTextureId
+                : textureManager_->GetBlackCubeTextureId();
 
-        cmd->SetGraphicsRootConstantBufferView(0, objectCbAddr);
-        cmd->SetGraphicsRootConstantBufferView(1, sceneCbAddr);
+        auto *cmd = dxCommon_->GetCommandList();
+        cmd->SetGraphicsRootConstantBufferView(0, objectConstantAddress);
+        cmd->SetGraphicsRootConstantBufferView(1, sceneConstantAddress);
         cmd->SetGraphicsRootConstantBufferView(
             2, materialManager_->GetGPUVirtualAddress(subMesh.materialId));
         cmd->SetGraphicsRootDescriptorTable(
-            3, textureManager_->GetGpuHandle(
-                   ResolveBaseColorTextureId(textureManager_, material,
-                                             subMesh.textureId)));
+            3, textureManager_->GetGpuHandle(ResolveBaseColorTextureId(
+                   textureManager_, material, subMesh.textureId)));
         cmd->SetGraphicsRootDescriptorTable(
             4, subMesh.skinCluster.paletteSrvGpuHandle);
-
-        const bool hasPerDrawEnvironmentTexture =
-            (environmentTextureId != UINT32_MAX);
-        const uint32_t boundEnvironmentTextureId = hasPerDrawEnvironmentTexture
-                                                       ? environmentTextureId
-                                                       : hasEnvironmentTexture_
-                                                             ? environmentTextureId_
-                                                             : textureManager_->GetBlackCubeTextureId();
-        const uint32_t safeEnvironmentTextureId =
-            textureManager_->IsValidTextureId(boundEnvironmentTextureId)
-                ? boundEnvironmentTextureId
-                : textureManager_->GetBlackCubeTextureId();
         cmd->SetGraphicsRootDescriptorTable(
             5, textureManager_->GetGpuHandle(safeEnvironmentTextureId));
         cmd->SetGraphicsRootDescriptorTable(6, shadowMapGpuHandle_);
         cmd->SetGraphicsRootDescriptorTable(
             7, textureManager_->GetGpuHandle(ResolveNormalTextureId(
                    textureManager_, material, subMesh.normalTextureId)));
-        cmd->SetGraphicsRootConstantBufferView(8, effectCbAddr);
+        cmd->SetGraphicsRootConstantBufferView(8, effectConstantAddress);
         cmd->SetGraphicsRootDescriptorTable(
             9, textureManager_->GetGpuHandle(dissolveNoiseTextureId_));
-
         cmd->IASetVertexBuffers(0, 2, views);
         cmd->IASetIndexBuffer(&mesh.ibView);
         cmd->IASetPrimitiveTopology(mesh.primitiveTopology);
         cmd->DrawIndexedInstanced(mesh.indexCount, instanceCount, 0, 0, 0);
-
         ++drawIndex_;
-    };
-
-    for (const auto &subMesh : model.subMeshes) {
-        drawSubMesh(subMesh);
-        if (drawIndex_ >= kMaxDraws) {
-            break;
-        }
     }
 }
-
-void ModelRenderer::PostDraw() {}
 
 void ModelRenderer::SetShadowMap(
     D3D12_GPU_DESCRIPTOR_HANDLE shadowMap,
@@ -779,7 +672,6 @@ void ModelRenderer::DrawInstancedShadow(
         return;
     }
 
-    auto cmd = dxCommon_->GetCommandList();
     const XMMATRIX lightVP = XMLoadFloat4x4(&lightViewProjection);
     const D3D12_GPU_VIRTUAL_ADDRESS objectCbAddr =
         WriteObjectConstants(lightVP, XMMatrixIdentity(), XMMatrixIdentity());
@@ -790,48 +682,8 @@ void ModelRenderer::DrawInstancedShadow(
     }
 
     DispatchSkinningBatch(model);
-
-    auto drawSubMesh = [&](const ModelSubMesh &subMesh) {
-        if (drawIndex_ >= kMaxDraws) {
-            return;
-        }
-        if (!IsDrawableSubMeshWithValidVertexSource(
-                subMesh, meshManager_, materialManager_)) {
-            return;
-        }
-
-        cmd->SetGraphicsRootSignature(shadowRootSignature_.Get());
-        cmd->SetPipelineState(instancedShadowPSO_.Get());
-        const Mesh &mesh = meshManager_->GetMesh(subMesh.meshId);
-        const D3D12_VERTEX_BUFFER_VIEW vertexBufferView =
-            subMesh.skinCluster.skinnedVertexResource
-                ? subMesh.skinCluster.skinnedVertexBufferView
-                : mesh.vbView;
-        D3D12_VERTEX_BUFFER_VIEW views[] = {vertexBufferView, instanceView};
-
-        const Material &material =
-            materialManager_->GetMaterial(subMesh.materialId);
-        const D3D12_GPU_VIRTUAL_ADDRESS materialCbAddr =
-            materialManager_->GetGPUVirtualAddress(subMesh.materialId);
-        cmd->SetGraphicsRootConstantBufferView(0, objectCbAddr);
-        cmd->SetGraphicsRootConstantBufferView(1, materialCbAddr);
-        cmd->SetGraphicsRootDescriptorTable(
-            2, textureManager_->GetGpuHandle(
-                   ResolveBaseColorTextureId(textureManager_, material,
-                                             subMesh.textureId)));
-        cmd->IASetVertexBuffers(0, 2, views);
-        cmd->IASetIndexBuffer(&mesh.ibView);
-        cmd->IASetPrimitiveTopology(mesh.primitiveTopology);
-        cmd->DrawIndexedInstanced(mesh.indexCount, instanceCount, 0, 0, 0);
-        ++drawIndex_;
-    };
-
-    for (const auto &subMesh : model.subMeshes) {
-        drawSubMesh(subMesh);
-        if (drawIndex_ >= kMaxDraws) {
-            break;
-        }
-    }
+    DrawInstancedShadowSubMeshes(model, instanceView, objectCbAddr,
+                                 instanceCount);
 }
 
 void ModelRenderer::DrawInstancedShadow(
@@ -843,7 +695,6 @@ void ModelRenderer::DrawInstancedShadow(
         return;
     }
 
-    auto cmd = dxCommon_->GetCommandList();
     const XMMATRIX lightVP = XMLoadFloat4x4(&lightViewProjection);
     const D3D12_GPU_VIRTUAL_ADDRESS objectCbAddr =
         WriteObjectConstants(lightVP, XMMatrixIdentity(), XMMatrixIdentity());
@@ -854,18 +705,25 @@ void ModelRenderer::DrawInstancedShadow(
     }
 
     DispatchSkinningBatch(model);
+    DrawInstancedShadowSubMeshes(model, instanceView, objectCbAddr,
+                                 instanceCount);
+}
 
-    auto drawSubMesh = [&](const ModelSubMesh &subMesh) {
+void ModelRenderer::DrawInstancedShadowSubMeshes(
+    const Model &model, const D3D12_VERTEX_BUFFER_VIEW &instanceView,
+    D3D12_GPU_VIRTUAL_ADDRESS objectConstantAddress, uint32_t instanceCount) {
+    auto commandList = dxCommon_->GetCommandList();
+    for (const ModelSubMesh &subMesh : model.subMeshes) {
         if (drawIndex_ >= kMaxDraws) {
-            return;
+            break;
         }
         if (!IsDrawableSubMeshWithValidVertexSource(
                 subMesh, meshManager_, materialManager_)) {
-            return;
+            continue;
         }
 
-        cmd->SetGraphicsRootSignature(shadowRootSignature_.Get());
-        cmd->SetPipelineState(instancedShadowPSO_.Get());
+        commandList->SetGraphicsRootSignature(shadowRootSignature_.Get());
+        commandList->SetPipelineState(instancedShadowPSO_.Get());
         const Mesh &mesh = meshManager_->GetMesh(subMesh.meshId);
         const D3D12_VERTEX_BUFFER_VIEW vertexBufferView =
             subMesh.skinCluster.skinnedVertexResource
@@ -877,24 +735,19 @@ void ModelRenderer::DrawInstancedShadow(
             materialManager_->GetMaterial(subMesh.materialId);
         const D3D12_GPU_VIRTUAL_ADDRESS materialCbAddr =
             materialManager_->GetGPUVirtualAddress(subMesh.materialId);
-        cmd->SetGraphicsRootConstantBufferView(0, objectCbAddr);
-        cmd->SetGraphicsRootConstantBufferView(1, materialCbAddr);
-        cmd->SetGraphicsRootDescriptorTable(
+        commandList->SetGraphicsRootConstantBufferView(0,
+                                                       objectConstantAddress);
+        commandList->SetGraphicsRootConstantBufferView(1, materialCbAddr);
+        commandList->SetGraphicsRootDescriptorTable(
             2, textureManager_->GetGpuHandle(
                    ResolveBaseColorTextureId(textureManager_, material,
                                              subMesh.textureId)));
-        cmd->IASetVertexBuffers(0, 2, views);
-        cmd->IASetIndexBuffer(&mesh.ibView);
-        cmd->IASetPrimitiveTopology(mesh.primitiveTopology);
-        cmd->DrawIndexedInstanced(mesh.indexCount, instanceCount, 0, 0, 0);
+        commandList->IASetVertexBuffers(0, 2, views);
+        commandList->IASetIndexBuffer(&mesh.ibView);
+        commandList->IASetPrimitiveTopology(mesh.primitiveTopology);
+        commandList->DrawIndexedInstanced(mesh.indexCount, instanceCount, 0, 0,
+                                          0);
         ++drawIndex_;
-    };
-
-    for (const auto &subMesh : model.subMeshes) {
-        drawSubMesh(subMesh);
-        if (drawIndex_ >= kMaxDraws) {
-            break;
-        }
     }
 }
 

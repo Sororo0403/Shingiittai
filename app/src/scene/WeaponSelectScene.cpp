@@ -22,6 +22,10 @@
 using namespace DirectX;
 
 namespace {
+template <typename T>
+T PickButtonValue(bool condition, const T &trueValue, const T &falseValue) {
+    return condition ? trueValue : falseValue;
+}
 constexpr float kTransitionDuration = 0.16f;
 constexpr float kIntroDuration = 0.46f;
 constexpr float kIntroButtonDelay = 0.075f;
@@ -170,15 +174,31 @@ void WeaponSelectScene::Update() {
         static_cast<float>(ctx_->systems.winApp->GetHeight());
     Layout(screenWidth, screenHeight);
 
-    if (titleReturnRequested_) {
+    if (UpdateReturnTransition() || UpdateUtilityTransition() ||
+        UpdateStartTransition()) {
+        return;
+    }
+
+    if (introTimer_ >= kIntroInputDelay) {
+        UpdateSelection(ctx_->systems.input);
+    }
+}
+
+bool WeaponSelectScene::UpdateReturnTransition() {
+    if (!titleReturnRequested_) {
+        return false;
+    }
         transitionTimer_ += ctx_->frame.deltaTime;
         if (transitionTimer_ >= kTransitionDuration) {
             sceneManager_->ChangeScene(std::make_unique<TitleScene>());
         }
-        return;
-    }
+        return true;
+}
 
-    if (menuActionRequested_) {
+bool WeaponSelectScene::UpdateUtilityTransition() {
+    if (!menuActionRequested_) {
+        return false;
+    }
         transitionTimer_ += ctx_->frame.deltaTime;
         if (transitionTimer_ >= kTransitionDuration) {
             switch (utilityMenuIndex_) {
@@ -204,12 +224,17 @@ void WeaponSelectScene::Update() {
                 sceneManager_->ChangeScene(std::make_unique<OptionScene>(
                     OptionScene::ReturnTarget::WeaponSelect));
                 break;
+            default:
+                break;
             }
         }
-        return;
-    }
+        return true;
+}
 
-    if (startRequested_) {
+bool WeaponSelectScene::UpdateStartTransition() {
+    if (!startRequested_) {
+        return false;
+    }
         if (selectedIndex_ == kTutorialButtonIndex) {
             transitionTimer_ += ctx_->frame.deltaTime;
             if (transitionTimer_ >= kTransitionDuration) {
@@ -217,7 +242,7 @@ void WeaponSelectScene::Update() {
                 sceneManager_->ChangeScene(
                     std::make_unique<TutorialSelectScene>());
             }
-            return;
+            return true;
         }
 
         const InputControlType selectedType = SelectedControlType();
@@ -227,7 +252,7 @@ void WeaponSelectScene::Update() {
                 transitionTimer_ =
                     (std::min)(transitionTimer_ + ctx_->frame.deltaTime,
                                kTransitionDuration * 0.72f);
-                return;
+                return true;
             }
 
             RequestHandTrackingStartOnce();
@@ -249,12 +274,7 @@ void WeaponSelectScene::Update() {
                     std::make_unique<DifficultyCauldronScene>(calibration));
             }
         }
-        return;
-    }
-
-    if (introTimer_ >= kIntroInputDelay) {
-        UpdateSelection(ctx_->systems.input);
-    }
+        return true;
 }
 
 void WeaponSelectScene::Draw() {
@@ -560,15 +580,10 @@ void WeaponSelectScene::UpdateHandCameraConfirm(Input *input) {
 }
 
 bool WeaponSelectScene::IsModeAvailable(int index) const {
-    switch (index) {
-    case 1:
+    if (index == 1) {
         return cameraAvailable_;
-    case kTutorialButtonIndex:
-        return true;
-    case 0:
-    default:
-        return true;
     }
+    return true;
 }
 
 void WeaponSelectScene::ShowUnavailableMessage() {
@@ -649,22 +664,24 @@ void WeaponSelectScene::DrawButtonIllustration(int index,
     const float centerX = rect.x + rect.w * 0.5f;
     const bool tutorialButton = index == kTutorialButtonIndex;
     const ImageContentBounds &bounds = kButtonIllustrationBounds[index];
-    const float iconAreaW = rect.w * (tutorialButton ? 0.70f : 0.76f);
-    const float iconAreaH = rect.h * (tutorialButton ? 0.42f : 0.48f);
+    const float iconAreaW =
+        rect.w * PickButtonValue(tutorialButton, 0.70f, 0.76f);
+    const float iconAreaH =
+        rect.h * PickButtonValue(tutorialButton, 0.42f, 0.48f);
     const float iconCenterY =
-        rect.y + rect.h * (tutorialButton ? 0.40f : 0.42f) - lift;
+        rect.y + rect.h * PickButtonValue(tutorialButton, 0.40f, 0.42f) - lift;
     const float scale =
         (std::min)(iconAreaW / (std::max)(bounds.Width(), 1.0f),
                    iconAreaH / (std::max)(bounds.Height(), 1.0f));
-    const XMFLOAT4 selectedLine =
-        tutorialButton ? MakeColor(0.06f, 0.95f, 0.86f, 1.0f * alpha)
-                       : MakeColor(1.0f, 0.80f, 0.36f, 1.0f * alpha);
-    const XMFLOAT4 line = selected
-                              ? selectedLine
-                              : MakeColor(0.82f, 0.86f, 0.92f, 0.66f * alpha);
-    const XMFLOAT4 fill = selected
-                              ? MakeColor(0.16f, 0.12f, 0.070f, 0.54f * alpha)
-                              : MakeColor(0.10f, 0.11f, 0.13f, 0.44f * alpha);
+    const XMFLOAT4 selectedLine = PickButtonValue(
+        tutorialButton, MakeColor(0.06f, 0.95f, 0.86f, 1.0f * alpha),
+        MakeColor(1.0f, 0.80f, 0.36f, 1.0f * alpha));
+    const XMFLOAT4 line = PickButtonValue(
+        selected, selectedLine,
+        MakeColor(0.82f, 0.86f, 0.92f, 0.66f * alpha));
+    const XMFLOAT4 fill = PickButtonValue(
+        selected, MakeColor(0.16f, 0.12f, 0.070f, 0.54f * alpha),
+        MakeColor(0.10f, 0.11f, 0.13f, 0.44f * alpha));
     auto sx = [&](float value) {
         return centerX + (value - bounds.CenterX()) * scale;
     };
@@ -751,7 +768,8 @@ void WeaponSelectScene::DrawButtonIllustration(int index,
         const float handY = 38.0f;
         const float palmBuild = part(delay);
         if (palmBuild > 0.0f) {
-            const float palmX = thumbRight ? handX + 20.0f : handX + 48.0f;
+            const float palmX =
+                PickButtonValue(thumbRight, handX + 20.0f, handX + 48.0f);
             rectAt(palmX, handY + 35.0f, 72.0f, 64.0f * palmBuild,
                    ScaleAlpha(fill, palmBuild));
             frameAt(palmX, handY + 35.0f, 72.0f, 64.0f * palmBuild, 4.0f,
@@ -764,17 +782,17 @@ void WeaponSelectScene::DrawButtonIllustration(int index,
             if (fingerBuild <= 0.0f) {
                 continue;
             }
-            const float fingerX = thumbRight
-                                      ? handX + 22.0f +
-                                            static_cast<float>(i) * 20.0f
-                                      : handX + 44.0f +
-                                            static_cast<float>(i) * 20.0f;
+            const float fingerX = PickButtonValue(
+                thumbRight,
+                handX + 22.0f + static_cast<float>(i) * 20.0f,
+                handX + 44.0f + static_cast<float>(i) * 20.0f);
             rectAt(fingerX, handY + static_cast<float>(i % 2) * 7.0f, 14.0f,
                    52.0f * fingerBuild, ScaleAlpha(line, fingerBuild));
         }
 
         const float thumbBuild = part(delay + 0.13f);
-        const float thumbX = thumbRight ? handX + 84.0f : handX + 20.0f;
+        const float thumbX =
+            PickButtonValue(thumbRight, handX + 84.0f, handX + 20.0f);
         rectAt(thumbX, handY + 58.0f, 36.0f * thumbBuild, 18.0f,
                ScaleAlpha(line, thumbBuild));
     };

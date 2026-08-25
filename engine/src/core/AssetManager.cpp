@@ -20,7 +20,7 @@ std::filesystem::path ResolveRoot(const std::filesystem::path &path) {
 
 } // namespace
 
-void AssetManager::SetAssetRoot(std::filesystem::path assetRoot) {
+void AssetManager::SetAssetRoot(const std::filesystem::path &assetRoot) {
     gAssetRoot = ResolveRoot(assetRoot);
 }
 
@@ -60,7 +60,7 @@ AssetManager::ResolvePath(const std::filesystem::path &relativePath) {
 std::filesystem::path
 AssetManager::Canonicalize(const std::filesystem::path &path) {
     std::error_code ec;
-    const std::filesystem::path canonical =
+    std::filesystem::path canonical =
         std::filesystem::weakly_canonical(path, ec);
     if (!ec) {
         return canonical;

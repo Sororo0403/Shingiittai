@@ -78,9 +78,8 @@ size_t PipelineVariantIndex(const Material &material,
             effect.blendOverride == ModelDrawEffectBlendOverride::Additive) {
             blendMode = ModelBlendMode::Additive;
         } else if (effect.blendOverride ==
-                   ModelDrawEffectBlendOverride::Alpha) {
-            blendMode = ModelBlendMode::Alpha;
-        } else if (effect.alphaMultiplier < 0.999f) {
+                       ModelDrawEffectBlendOverride::Alpha ||
+                   effect.alphaMultiplier < 0.999f) {
             blendMode = ModelBlendMode::Alpha;
         }
     }
@@ -146,35 +145,6 @@ static void NormalizeInfluence(VertexInfluence &influence) {
         weight /= totalWeight;
     }
 }
-
-struct PerObjectConstBufferData {
-    XMFLOAT4X4 matWVP;
-    XMFLOAT4X4 matWorld;
-    XMFLOAT4X4 matWorldInverseTranspose;
-};
-
-struct SceneConstBufferData {
-    struct PointLightData {
-        XMFLOAT4 positionRange;
-        XMFLOAT4 colorIntensity;
-    };
-
-    XMFLOAT4 cameraPos;
-    XMFLOAT4 keyLightDirection;
-    XMFLOAT4 keyLightColor;
-    XMFLOAT4 fillLightDirection;
-    XMFLOAT4 fillLightColor;
-    XMFLOAT4 ambientColor;
-    PointLightData pointLights[2];
-    XMFLOAT4 lightingParams;
-    XMFLOAT4 lightingModeParams;
-    XMFLOAT4 fogColor;
-    XMFLOAT4 fogParams;
-    XMFLOAT4X4 viewProjection;
-    XMFLOAT4X4 lightViewProjection;
-    XMFLOAT4 shadowParams;
-    XMFLOAT4 shadowFilterParams;
-};
 
 void ModelRenderer::SetPipelineForMaterial(const Material &material) {
     auto *cmd = dxCommon_->GetCommandList();

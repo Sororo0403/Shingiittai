@@ -119,9 +119,7 @@ void SkyboxRenderer::Finalize() {
 }
 
 void SkyboxRenderer::Draw(uint32_t textureId, const Camera &camera) {
-    if (!dxCommon_ || !srvManager_ || !textureManager_ || !pipelineState_ ||
-        !rootSignature_ || !vertexBuffer_ || !indexBuffer_ || !constBuffer_ ||
-        mappedCB_ == nullptr || indexCount_ == 0) {
+    if (!IsReadyToDraw()) {
         return;
     }
 
@@ -151,6 +149,20 @@ void SkyboxRenderer::Draw(uint32_t textureId, const Camera &camera) {
     cmd->IASetVertexBuffers(0, 1, &vbView_);
     cmd->IASetIndexBuffer(&ibView_);
 
+    UpdateCameraConstants(camera);
+
+    cmd->SetGraphicsRootConstantBufferView(0, constBufferAddress);
+    cmd->SetGraphicsRootDescriptorTable(1, textureHandle);
+    cmd->DrawIndexedInstanced(indexCount_, 1, 0, 0, 0);
+}
+
+bool SkyboxRenderer::IsReadyToDraw() const {
+    return dxCommon_ && srvManager_ && textureManager_ && pipelineState_ &&
+           rootSignature_ && vertexBuffer_ && indexBuffer_ && constBuffer_ &&
+           mappedCB_ != nullptr && indexCount_ != 0;
+}
+
+void SkyboxRenderer::UpdateCameraConstants(const Camera &camera) {
     XMFLOAT4X4 currentView{};
     XMFLOAT4X4 currentProj{};
     XMStoreFloat4x4(&currentView, camera.GetView());
@@ -177,9 +189,6 @@ void SkyboxRenderer::Draw(uint32_t textureId, const Camera &camera) {
         hasCachedCameraState_ = true;
     }
 
-    cmd->SetGraphicsRootConstantBufferView(0, constBufferAddress);
-    cmd->SetGraphicsRootDescriptorTable(1, textureHandle);
-    cmd->DrawIndexedInstanced(indexCount_, 1, 0, 0, 0);
 }
 
 void SkyboxRenderer::CreateRootSignature() {

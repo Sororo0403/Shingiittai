@@ -232,6 +232,8 @@ class SoundManager {
     /// SubmitNextStreamBufferを実行する
     /// </summary>
     bool SubmitNextStreamBuffer(PlayingVoice &playingVoice);
+    bool RestartLoopingStream(PlayingVoice &playingVoice, bool &reachedEnd,
+                              std::vector<BYTE> &pcm);
     void ReleaseFinishedStreamBuffers(PlayingVoice &playingVoice);
     void Apply3D(PlayingVoice &playingVoice);
     uint32_t CreateSilentSound(const std::wstring &cacheKey,

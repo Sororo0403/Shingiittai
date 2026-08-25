@@ -35,6 +35,46 @@ float SmoothStep01(float t) {
 bool UsesPreviewLoadingOnly(GameScene::Mode mode) {
     return mode == GameScene::Mode::Tutorial;
 }
+
+bool AreBothHandsReady(const SwordUdpController::DebugHandState &left,
+                       const SwordUdpController::DebugHandState &right) {
+    return left.fresh && right.fresh && left.active && right.active;
+}
+
+bool IsCalibrationStill(bool previewReady, bool handsReady, float maxSpeed) {
+    return previewReady && handsReady && maxSpeed <= kStillMotionSpeed;
+}
+
+XMFLOAT4 CalibrationGuideColor(bool still, float pulse) {
+    return still ? Color(0.25f, 1.0f, 0.58f, 0.92f)
+                 : Color(1.0f, 0.78f, 0.30f, 0.86f + 0.10f * pulse);
+}
+
+const std::array<const char *, 7> &BlockGlyphRows(char glyph) {
+    static const auto glyphs = [] {
+        std::array<std::array<const char *, 7>, 128> rows{};
+        rows['A'] = {"01110", "10001", "10001", "11111", "10001", "10001", "10001"};
+        rows['B'] = {"11110", "10001", "10001", "11110", "10001", "10001", "11110"};
+        rows['C'] = {"01111", "10000", "10000", "10000", "10000", "10000", "01111"};
+        rows['D'] = {"11110", "10001", "10001", "10001", "10001", "10001", "11110"};
+        rows['E'] = {"11111", "10000", "10000", "11110", "10000", "10000", "11111"};
+        rows['F'] = {"11111", "10000", "10000", "11110", "10000", "10000", "10000"};
+        rows['G'] = {"01110", "10001", "10000", "10111", "10001", "10001", "01110"};
+        rows['H'] = {"10001", "10001", "10001", "11111", "10001", "10001", "10001"};
+        rows['I'] = {"11111", "00100", "00100", "00100", "00100", "00100", "11111"};
+        rows['L'] = {"10000", "10000", "10000", "10000", "10000", "10000", "11111"};
+        rows['M'] = {"10001", "11011", "10101", "10101", "10001", "10001", "10001"};
+        rows['N'] = {"10001", "11001", "10101", "10011", "10001", "10001", "10001"};
+        rows['O'] = {"01110", "10001", "10001", "10001", "10001", "10001", "01110"};
+        rows['R'] = {"11110", "10001", "10001", "11110", "10100", "10010", "10001"};
+        rows['S'] = {"01111", "10000", "10000", "01110", "00001", "00001", "11110"};
+        rows['T'] = {"11111", "00100", "00100", "00100", "00100", "00100", "00100"};
+        rows['W'] = {"10001", "10001", "10001", "10101", "10101", "10101", "01010"};
+        return rows;
+    }();
+    const size_t index = static_cast<unsigned char>(glyph);
+    return index < glyphs.size() ? glyphs[index] : glyphs[0];
+}
 } // namespace
 
 HandLoadingScene::HandLoadingScene(
@@ -95,35 +135,13 @@ void HandLoadingScene::Update() {
         return;
     }
 
-    if (UsesPreviewLoadingOnly(destinationMode_)) {
-        if (previewReady) {
-            inputCalibration_.controlType = InputControlType::Hand;
-            sceneManager_->ChangeScene(
-                std::make_unique<GameScene>(inputCalibration_,
-                                            destinationMode_));
-        }
-        return;
-    }
-    if (destinationSensitivityAdjust_) {
-        if (previewReady) {
-            sceneManager_->ChangeScene(
-                std::make_unique<CameraAccuracyDebugScene>(
-                    sensitivityReturnTarget_));
-        }
-        return;
-    }
-    if (destinationDifficultySelect_) {
-        if (previewReady) {
-            inputCalibration_.controlType = InputControlType::Hand;
-            sceneManager_->ChangeScene(
-                std::make_unique<DifficultyCauldronScene>(inputCalibration_));
-        }
+    if (TryAdvancePreviewDestination(previewReady)) {
         return;
     }
 
-    const bool handsReady = left.fresh && right.fresh && left.active && right.active;
+    const bool handsReady = AreBothHandsReady(left, right);
     const float maxSpeed = (std::max)(left.motionSpeed, right.motionSpeed);
-    const bool still = previewReady && handsReady && maxSpeed <= kStillMotionSpeed;
+    const bool still = IsCalibrationStill(previewReady, handsReady, maxSpeed);
 
     if (still) {
         stillTimer_ = (std::min)(stillTimer_ + deltaTime,
@@ -163,6 +181,33 @@ void HandLoadingScene::Update() {
                                             destinationMode_));
         }
     }
+}
+
+bool HandLoadingScene::TryAdvancePreviewDestination(bool previewReady) {
+    if (UsesPreviewLoadingOnly(destinationMode_)) {
+        if (previewReady) {
+            inputCalibration_.controlType = InputControlType::Hand;
+            sceneManager_->ChangeScene(
+                std::make_unique<GameScene>(inputCalibration_, destinationMode_));
+        }
+        return true;
+    }
+    if (destinationSensitivityAdjust_) {
+        if (previewReady) {
+            sceneManager_->ChangeScene(std::make_unique<CameraAccuracyDebugScene>(
+                sensitivityReturnTarget_));
+        }
+        return true;
+    }
+    if (destinationDifficultySelect_) {
+        if (previewReady) {
+            inputCalibration_.controlType = InputControlType::Hand;
+            sceneManager_->ChangeScene(
+                std::make_unique<DifficultyCauldronScene>(inputCalibration_));
+        }
+        return true;
+    }
+    return false;
 }
 
 void HandLoadingScene::Draw() {
@@ -306,9 +351,7 @@ void HandLoadingScene::DrawCalibrationOverlay(float screenWidth,
     const float progress =
         std::clamp(stillTimer_ / kCalibrationHoldSeconds, 0.0f, 1.0f);
     const float pulse = 0.5f + 0.5f * std::sinf(sceneTimer_ * 8.0f);
-    const XMFLOAT4 guideColor =
-        still ? Color(0.25f, 1.0f, 0.58f, 0.92f)
-              : Color(1.0f, 0.78f, 0.30f, 0.86f + 0.10f * pulse);
+    const XMFLOAT4 guideColor = CalibrationGuideColor(still, pulse);
 
     DrawFrame(18.0f, 18.0f, screenWidth - 36.0f, screenHeight - 36.0f, 4.0f,
               Color(0.92f, 0.96f, 1.0f, previewReady ? 0.56f : 0.26f));
@@ -427,13 +470,27 @@ void HandLoadingScene::DrawSevenSegmentDigit(int value, float x, float y,
     const float w = 74.0f * scale;
     const float h = 124.0f * scale;
     const float midY = y + h * 0.5f - t * 0.5f;
-    if (segments[value][0]) DrawRect(x + t, y, w - t * 2.0f, t, color);
-    if (segments[value][1]) DrawRect(x + w - t, y + t, t, h * 0.5f - t, color);
-    if (segments[value][2]) DrawRect(x + w - t, midY + t, t, h * 0.5f - t, color);
-    if (segments[value][3]) DrawRect(x + t, y + h - t, w - t * 2.0f, t, color);
-    if (segments[value][4]) DrawRect(x, midY + t, t, h * 0.5f - t, color);
-    if (segments[value][5]) DrawRect(x, y + t, t, h * 0.5f - t, color);
-    if (segments[value][6]) DrawRect(x + t, midY, w - t * 2.0f, t, color);
+    if (segments[value][0]) {
+        DrawRect(x + t, y, w - t * 2.0f, t, color);
+    }
+    if (segments[value][1]) {
+        DrawRect(x + w - t, y + t, t, h * 0.5f - t, color);
+    }
+    if (segments[value][2]) {
+        DrawRect(x + w - t, midY + t, t, h * 0.5f - t, color);
+    }
+    if (segments[value][3]) {
+        DrawRect(x + t, y + h - t, w - t * 2.0f, t, color);
+    }
+    if (segments[value][4]) {
+        DrawRect(x, midY + t, t, h * 0.5f - t, color);
+    }
+    if (segments[value][5]) {
+        DrawRect(x, y + t, t, h * 0.5f - t, color);
+    }
+    if (segments[value][6]) {
+        DrawRect(x + t, midY, w - t * 2.0f, t, color);
+    }
 }
 
 float HandLoadingScene::MeasureBlockText(const char *text, float scale) const {
@@ -471,77 +528,8 @@ void HandLoadingScene::DrawBlockText(const char *text, float x, float y,
 
 void HandLoadingScene::DrawBlockGlyph(char glyph, float x, float y,
                                       float scale, const XMFLOAT4 &color) {
-    const char *rows[7] = {};
-    switch (glyph) {
-    case 'A':
-        rows[0] = "01110"; rows[1] = "10001"; rows[2] = "10001";
-        rows[3] = "11111"; rows[4] = "10001"; rows[5] = "10001";
-        rows[6] = "10001"; break;
-    case 'B':
-        rows[0] = "11110"; rows[1] = "10001"; rows[2] = "10001";
-        rows[3] = "11110"; rows[4] = "10001"; rows[5] = "10001";
-        rows[6] = "11110"; break;
-    case 'C':
-        rows[0] = "01111"; rows[1] = "10000"; rows[2] = "10000";
-        rows[3] = "10000"; rows[4] = "10000"; rows[5] = "10000";
-        rows[6] = "01111"; break;
-    case 'D':
-        rows[0] = "11110"; rows[1] = "10001"; rows[2] = "10001";
-        rows[3] = "10001"; rows[4] = "10001"; rows[5] = "10001";
-        rows[6] = "11110"; break;
-    case 'E':
-        rows[0] = "11111"; rows[1] = "10000"; rows[2] = "10000";
-        rows[3] = "11110"; rows[4] = "10000"; rows[5] = "10000";
-        rows[6] = "11111"; break;
-    case 'F':
-        rows[0] = "11111"; rows[1] = "10000"; rows[2] = "10000";
-        rows[3] = "11110"; rows[4] = "10000"; rows[5] = "10000";
-        rows[6] = "10000"; break;
-    case 'G':
-        rows[0] = "01110"; rows[1] = "10001"; rows[2] = "10000";
-        rows[3] = "10111"; rows[4] = "10001"; rows[5] = "10001";
-        rows[6] = "01110"; break;
-    case 'H':
-        rows[0] = "10001"; rows[1] = "10001"; rows[2] = "10001";
-        rows[3] = "11111"; rows[4] = "10001"; rows[5] = "10001";
-        rows[6] = "10001"; break;
-    case 'I':
-        rows[0] = "11111"; rows[1] = "00100"; rows[2] = "00100";
-        rows[3] = "00100"; rows[4] = "00100"; rows[5] = "00100";
-        rows[6] = "11111"; break;
-    case 'L':
-        rows[0] = "10000"; rows[1] = "10000"; rows[2] = "10000";
-        rows[3] = "10000"; rows[4] = "10000"; rows[5] = "10000";
-        rows[6] = "11111"; break;
-    case 'M':
-        rows[0] = "10001"; rows[1] = "11011"; rows[2] = "10101";
-        rows[3] = "10101"; rows[4] = "10001"; rows[5] = "10001";
-        rows[6] = "10001"; break;
-    case 'N':
-        rows[0] = "10001"; rows[1] = "11001"; rows[2] = "10101";
-        rows[3] = "10011"; rows[4] = "10001"; rows[5] = "10001";
-        rows[6] = "10001"; break;
-    case 'O':
-        rows[0] = "01110"; rows[1] = "10001"; rows[2] = "10001";
-        rows[3] = "10001"; rows[4] = "10001"; rows[5] = "10001";
-        rows[6] = "01110"; break;
-    case 'R':
-        rows[0] = "11110"; rows[1] = "10001"; rows[2] = "10001";
-        rows[3] = "11110"; rows[4] = "10100"; rows[5] = "10010";
-        rows[6] = "10001"; break;
-    case 'S':
-        rows[0] = "01111"; rows[1] = "10000"; rows[2] = "10000";
-        rows[3] = "01110"; rows[4] = "00001"; rows[5] = "00001";
-        rows[6] = "11110"; break;
-    case 'T':
-        rows[0] = "11111"; rows[1] = "00100"; rows[2] = "00100";
-        rows[3] = "00100"; rows[4] = "00100"; rows[5] = "00100";
-        rows[6] = "00100"; break;
-    case 'W':
-        rows[0] = "10001"; rows[1] = "10001"; rows[2] = "10001";
-        rows[3] = "10101"; rows[4] = "10101"; rows[5] = "10101";
-        rows[6] = "01010"; break;
-    default:
+    const auto &rows = BlockGlyphRows(glyph);
+    if (rows[0] == nullptr) {
         return;
     }
 

@@ -7,6 +7,7 @@
 #include "graphics/SrvManager.h"
 #include "texture/TextureManager.h"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <map>
@@ -417,36 +418,8 @@ void GPUParticleSystem::Initialize(DirectXCommon *dxCommon,
     if (!srvManager_->CanAllocate(kRequiredSrvDescriptors)) {
         return;
     }
-    totalTime_ = 0.0f;
-    emitterFrequencyTime_ = 0.0f;
-    activeTimeRemaining_ = 0.0f;
-    emitterSettings_ = NormalizeParticleEmitterSettings(ParticleEmitterSettings{});
-    pendingEmitSettings_ = std::move(pendingBeforeInitialize);
-    for (const ParticleEmitterSettings &settings : pendingEmitSettings_) {
-        emitterSettings_ = settings;
-        activeTimeRemaining_ =
-            (std::max)(activeTimeRemaining_,
-                       EstimateParticleActiveDuration(settings));
-    }
-
-    std::mt19937 randomEngine{std::random_device{}()};
-    std::uniform_real_distribution<float> dist01(0.0f, 1.0f);
-
-    std::vector<ParticleForGPU> particles(maxParticles_);
-    for (ParticleForGPU &particle : particles) {
-        particle.translate = emitterSettings_.position;
-        particle.velocity = {};
-        particle.lifeTime = 1.0f;
-        particle.currentTime = particle.lifeTime;
-        particle.color = {1.0f, 1.0f, 1.0f, 0.0f};
-        particle.scale = {0.0f, 0.0f};
-        particle.seed = dist01(randomEngine) * 10000.0f;
-        particle.isActive = 0;
-        particle.params0 = {};
-        particle.params1 = {};
-        particle.params2 = {};
-        particle.params3 = {};
-    }
+    RestorePendingEmitters(std::move(pendingBeforeInitialize));
+    const std::vector<ParticleForGPU> particles = CreateInitialParticles();
 
     CreateRootSignatures();
     CreatePipelineStates();
@@ -463,18 +436,7 @@ void GPUParticleSystem::Initialize(DirectXCommon *dxCommon,
 
     CreateConstantBuffers();
 
-    if (!particleResource_ || !freeListResource_ ||
-        !freeListIndexResource_ || !activeIndexResource_ ||
-        !activeCountResource_ || !drawArgsResource_ ||
-        !updateConstantBuffer_ || !drawConstantBuffer_ ||
-        mappedUpdateCB_ == nullptr || mappedDrawCB_ == nullptr ||
-        particleSrvGpuHandle_.ptr == 0 || particleUavGpuHandle_.ptr == 0 ||
-        freeListUavGpuHandle_.ptr == 0 ||
-        freeListIndexUavGpuHandle_.ptr == 0 ||
-        activeIndexSrvGpuHandle_.ptr == 0 ||
-        activeIndexUavGpuHandle_.ptr == 0 ||
-        activeCountUavGpuHandle_.ptr == 0 ||
-        drawArgsUavGpuHandle_.ptr == 0) {
+    if (!HasInitializedResources()) {
         return;
     }
 
@@ -615,16 +577,10 @@ void GPUParticleSystem::Update(float deltaTime) {
 }
 
 void GPUParticleSystem::Draw(const Camera &camera) {
-    if (!dxCommon_ || !srvManager_ || !textureManager_ ||
-        !particleResource_ || !activeIndexResource_ || !drawArgsResource_ ||
-        !drawCommandSignature_ || !drawRootSignature_ || !drawPSO_ ||
-        !drawConstantBuffer_ || mappedDrawCB_ == nullptr ||
-        particleSrvGpuHandle_.ptr == 0 || activeIndexSrvGpuHandle_.ptr == 0) {
+    if (!IsReadyToDraw()) {
         return;
     }
-    if (!updatePending_ && pendingEmitSettings_.empty() &&
-        activeTimeRemaining_ <= 0.0f &&
-        !IsContinuousEmitter(emitterSettings_)) {
+    if (!HasDrawWork()) {
         return;
     }
 
@@ -636,7 +592,31 @@ void GPUParticleSystem::Draw(const Camera &camera) {
         DispatchUpdate();
     }
 
-    XMMATRIX viewProjection = camera.GetView() * camera.GetProj();
+    UpdateDrawConstants(camera);
+
+    const uint32_t whiteTextureId = textureManager_->GetWhiteTextureId();
+    const uint32_t noiseTextureId = ResolveTextureId(
+        textureManager_, materialSettings_.noiseTextureId, whiteTextureId);
+    const uint32_t baseTextureId =
+        ResolveTextureId(textureManager_, textureId_, whiteTextureId);
+
+    cmd->SetGraphicsRootSignature(drawRootSignature_.Get());
+    cmd->SetPipelineState(drawPSO_.Get());
+    cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    cmd->SetGraphicsRootConstantBufferView(
+        0, drawConstantBuffer_->GetGPUVirtualAddress());
+    cmd->SetGraphicsRootDescriptorTable(1, particleSrvGpuHandle_);
+    cmd->SetGraphicsRootDescriptorTable(
+        2, textureManager_->GetGpuHandle(baseTextureId));
+    cmd->SetGraphicsRootDescriptorTable(
+        3, textureManager_->GetGpuHandle(noiseTextureId));
+    cmd->SetGraphicsRootDescriptorTable(4, activeIndexSrvGpuHandle_);
+    cmd->ExecuteIndirect(drawCommandSignature_.Get(), 1, drawArgsResource_.Get(),
+                         0, nullptr, 0);
+}
+
+void GPUParticleSystem::UpdateDrawConstants(const Camera &camera) {
+    const XMMATRIX viewProjection = camera.GetView() * camera.GetProj();
     XMStoreFloat4x4(&mappedDrawCB_->viewProjection,
                     XMMatrixTranspose(viewProjection));
 
@@ -666,25 +646,6 @@ void GPUParticleSystem::Draw(const Camera &camera) {
     mappedDrawCB_->materialParams0 = materialSettings_.params0;
     mappedDrawCB_->materialParams1 = materialSettings_.params1;
 
-    const uint32_t whiteTextureId = textureManager_->GetWhiteTextureId();
-    const uint32_t noiseTextureId = ResolveTextureId(
-        textureManager_, materialSettings_.noiseTextureId, whiteTextureId);
-    const uint32_t baseTextureId =
-        ResolveTextureId(textureManager_, textureId_, whiteTextureId);
-
-    cmd->SetGraphicsRootSignature(drawRootSignature_.Get());
-    cmd->SetPipelineState(drawPSO_.Get());
-    cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    cmd->SetGraphicsRootConstantBufferView(
-        0, drawConstantBuffer_->GetGPUVirtualAddress());
-    cmd->SetGraphicsRootDescriptorTable(1, particleSrvGpuHandle_);
-    cmd->SetGraphicsRootDescriptorTable(
-        2, textureManager_->GetGpuHandle(baseTextureId));
-    cmd->SetGraphicsRootDescriptorTable(
-        3, textureManager_->GetGpuHandle(noiseTextureId));
-    cmd->SetGraphicsRootDescriptorTable(4, activeIndexSrvGpuHandle_);
-    cmd->ExecuteIndirect(drawCommandSignature_.Get(), 1, drawArgsResource_.Get(),
-                         0, nullptr, 0);
 }
 
 void GPUParticleSystem::DispatchPendingUpdate() {
@@ -1315,6 +1276,116 @@ void GPUParticleSystem::CreateConstantBuffers() {
                   "GPUParticleDrawCB Map failed");
 }
 
+void GPUParticleSystem::RestorePendingEmitters(
+    std::vector<ParticleEmitterSettings> pendingSettings) {
+    totalTime_ = 0.0f;
+    emitterFrequencyTime_ = 0.0f;
+    activeTimeRemaining_ = 0.0f;
+    emitterSettings_ = NormalizeParticleEmitterSettings(ParticleEmitterSettings{});
+    pendingEmitSettings_ = std::move(pendingSettings);
+    for (const ParticleEmitterSettings &settings : pendingEmitSettings_) {
+        emitterSettings_ = settings;
+        activeTimeRemaining_ =
+            (std::max)(activeTimeRemaining_,
+                       EstimateParticleActiveDuration(settings));
+    }
+}
+
+std::vector<GPUParticleSystem::ParticleForGPU>
+GPUParticleSystem::CreateInitialParticles() const {
+    std::mt19937 randomEngine{std::random_device{}()};
+    std::uniform_real_distribution<float> dist01(0.0f, 1.0f);
+    std::vector<ParticleForGPU> particles(maxParticles_);
+    for (ParticleForGPU &particle : particles) {
+        particle.translate = emitterSettings_.position;
+        particle.velocity = {};
+        particle.lifeTime = 1.0f;
+        particle.currentTime = particle.lifeTime;
+        particle.color = {1.0f, 1.0f, 1.0f, 0.0f};
+        particle.scale = {0.0f, 0.0f};
+        particle.seed = dist01(randomEngine) * 10000.0f;
+        particle.isActive = 0;
+        particle.params0 = {};
+        particle.params1 = {};
+        particle.params2 = {};
+        particle.params3 = {};
+    }
+    return particles;
+}
+
+bool GPUParticleSystem::HasInitializedResources() const {
+    const std::array<bool, 18> ready = {
+        particleResource_ != nullptr,       freeListResource_ != nullptr,
+        freeListIndexResource_ != nullptr, activeIndexResource_ != nullptr,
+        activeCountResource_ != nullptr,   drawArgsResource_ != nullptr,
+        updateConstantBuffer_ != nullptr,  drawConstantBuffer_ != nullptr,
+        mappedUpdateCB_ != nullptr,        mappedDrawCB_ != nullptr,
+        particleSrvGpuHandle_.ptr != 0,    particleUavGpuHandle_.ptr != 0,
+        freeListUavGpuHandle_.ptr != 0,    freeListIndexUavGpuHandle_.ptr != 0,
+        activeIndexSrvGpuHandle_.ptr != 0, activeIndexUavGpuHandle_.ptr != 0,
+        activeCountUavGpuHandle_.ptr != 0, drawArgsUavGpuHandle_.ptr != 0,
+    };
+    return std::all_of(ready.begin(), ready.end(), [](bool value) {
+        return value;
+    });
+}
+
+bool GPUParticleSystem::IsReadyToDraw() const {
+    const std::array<bool, 13> ready = {
+        dxCommon_ != nullptr,
+        srvManager_ != nullptr,
+        textureManager_ != nullptr,
+        particleResource_ != nullptr,
+        activeIndexResource_ != nullptr,
+        drawArgsResource_ != nullptr,
+        drawCommandSignature_ != nullptr,
+        drawRootSignature_ != nullptr,
+        drawPSO_ != nullptr,
+        drawConstantBuffer_ != nullptr,
+        mappedDrawCB_ != nullptr,
+        particleSrvGpuHandle_.ptr != 0,
+        activeIndexSrvGpuHandle_.ptr != 0,
+    };
+    return std::all_of(ready.begin(), ready.end(), [](bool value) {
+        return value;
+    });
+}
+
+bool GPUParticleSystem::HasDrawWork() const {
+    return updatePending_ || !pendingEmitSettings_.empty() ||
+           activeTimeRemaining_ > 0.0f ||
+           IsContinuousEmitter(emitterSettings_);
+}
+
+void GPUParticleSystem::ReleaseSrvDescriptors() {
+    if (!srvManager_) {
+        return;
+    }
+    uint32_t *indices[] = {
+        &particleSrvIndex_,       &particleUavIndex_,
+        &freeListUavIndex_,       &freeListIndexUavIndex_,
+        &activeIndexSrvIndex_,    &activeIndexUavIndex_,
+        &activeCountUavIndex_,    &drawArgsUavIndex_,
+    };
+    for (uint32_t *index : indices) {
+        if (*index != UINT32_MAX) {
+            srvManager_->FreeIfAllocated(*index);
+            *index = UINT32_MAX;
+        }
+    }
+}
+
+void GPUParticleSystem::UnmapConstantBuffers() {
+    if (updateConstantBuffer_ && mappedUpdateCB_) {
+        updateConstantBuffer_->Unmap(0, nullptr);
+        mappedUpdateCB_ = nullptr;
+    }
+    if (drawConstantBuffer_ && mappedDrawCB_) {
+        drawConstantBuffer_->Unmap(0, nullptr);
+        mappedDrawCB_ = nullptr;
+    }
+}
+
 void GPUParticleSystem::ReleaseResources() {
 
     const bool hasGpuResources =
@@ -1328,49 +1399,8 @@ void GPUParticleSystem::ReleaseResources() {
         dxCommon_->WaitForGpuIfPossible();
     }
 
-    if (srvManager_) {
-        if (particleSrvIndex_ != UINT32_MAX) {
-            srvManager_->FreeIfAllocated(particleSrvIndex_);
-            particleSrvIndex_ = UINT32_MAX;
-        }
-        if (particleUavIndex_ != UINT32_MAX) {
-            srvManager_->FreeIfAllocated(particleUavIndex_);
-            particleUavIndex_ = UINT32_MAX;
-        }
-        if (freeListUavIndex_ != UINT32_MAX) {
-            srvManager_->FreeIfAllocated(freeListUavIndex_);
-            freeListUavIndex_ = UINT32_MAX;
-        }
-        if (freeListIndexUavIndex_ != UINT32_MAX) {
-            srvManager_->FreeIfAllocated(freeListIndexUavIndex_);
-            freeListIndexUavIndex_ = UINT32_MAX;
-        }
-        if (activeIndexSrvIndex_ != UINT32_MAX) {
-            srvManager_->FreeIfAllocated(activeIndexSrvIndex_);
-            activeIndexSrvIndex_ = UINT32_MAX;
-        }
-        if (activeIndexUavIndex_ != UINT32_MAX) {
-            srvManager_->FreeIfAllocated(activeIndexUavIndex_);
-            activeIndexUavIndex_ = UINT32_MAX;
-        }
-        if (activeCountUavIndex_ != UINT32_MAX) {
-            srvManager_->FreeIfAllocated(activeCountUavIndex_);
-            activeCountUavIndex_ = UINT32_MAX;
-        }
-        if (drawArgsUavIndex_ != UINT32_MAX) {
-            srvManager_->FreeIfAllocated(drawArgsUavIndex_);
-            drawArgsUavIndex_ = UINT32_MAX;
-        }
-    }
-
-    if (updateConstantBuffer_ && mappedUpdateCB_) {
-        updateConstantBuffer_->Unmap(0, nullptr);
-        mappedUpdateCB_ = nullptr;
-    }
-    if (drawConstantBuffer_ && mappedDrawCB_) {
-        drawConstantBuffer_->Unmap(0, nullptr);
-        mappedDrawCB_ = nullptr;
-    }
+    ReleaseSrvDescriptors();
+    UnmapConstantBuffers();
 
     updateConstantBuffer_.Reset();
     drawConstantBuffer_.Reset();

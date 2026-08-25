@@ -34,6 +34,12 @@ class OptionScene : public BaseScene {
     Image LoadTextureImage(const std::wstring &path);
     void BeginReturn();
     void AdjustSelectedOption(int direction);
+    bool UpdateNavigationInput(Input &input);
+    void UpdateAdjustmentInput(Input &input);
+    void ResetAdjustmentRepeat();
+    int GetAdjustmentTriggerDirection(Input &input) const;
+    int GetHeldAdjustmentDirection(Input &input) const;
+    void BeginAdjustment(int direction);
     void DrawOverlay(float screenWidth, float screenHeight);
     void DrawPanel(float screenWidth, float screenHeight);
     void DrawControlsPrompt(float screenWidth, float screenHeight);

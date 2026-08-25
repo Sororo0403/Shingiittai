@@ -61,7 +61,7 @@ class CreditScene : public BaseScene {
         float centerY = 0.0f;
         float scale = 1.0f;
     };
-    std::vector<CreditLine> creditLines_{};
+    std::vector<CreditLine> creditLines_;
     float sceneTime_ = 0.0f;
     float creditRollDistance_ = 0.0f;
     float introTimer_ = 0.0f;

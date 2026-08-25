@@ -12,6 +12,26 @@ const Mesh &FallbackMesh() {
     static const Mesh fallback{};
     return fallback;
 }
+
+bool CreateUploadBuffer(ID3D12Device *device, const void *data, UINT size,
+                        ComPtr<ID3D12Resource> &resource) {
+    const CD3DX12_HEAP_PROPERTIES heapProperties(D3D12_HEAP_TYPE_UPLOAD);
+    const auto resourceDescription = CD3DX12_RESOURCE_DESC::Buffer(size);
+    const HRESULT createResult = device->CreateCommittedResource(
+        &heapProperties, D3D12_HEAP_FLAG_NONE, &resourceDescription,
+        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&resource));
+    if (FAILED(createResult) || !resource) {
+        return false;
+    }
+    void *mapped = nullptr;
+    const HRESULT mapResult = resource->Map(0, nullptr, &mapped);
+    if (FAILED(mapResult) || mapped == nullptr) {
+        return false;
+    }
+    std::memcpy(mapped, data, size);
+    resource->Unmap(0, nullptr);
+    return true;
+}
 } // namespace
 
 MeshManager::~MeshManager() {
@@ -67,51 +87,20 @@ uint32_t MeshManager::CreateMesh(const void *vertexData, uint32_t vertexStride,
     const UINT vbSize = static_cast<UINT>(vbSize64);
     const UINT ibSize = static_cast<UINT>(ibSize64);
 
-    CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_UPLOAD);
-    auto vbDesc = CD3DX12_RESOURCE_DESC::Buffer(vbSize);
-
-    const HRESULT vertexBufferResult =
-        dxCommon_->GetDevice()->CreateCommittedResource(
-            &heapProps, D3D12_HEAP_FLAG_NONE, &vbDesc,
-            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-            IID_PPV_ARGS(&mesh.vertexBuffer));
-    if (FAILED(vertexBufferResult) || !mesh.vertexBuffer) {
+    if (!CreateUploadBuffer(dxCommon_->GetDevice(), vertexData, vbSize,
+                            mesh.vertexBuffer)) {
         return UINT32_MAX;
     }
-
-    void *vbMapped = nullptr;
-    const HRESULT vertexMapResult =
-        mesh.vertexBuffer->Map(0, nullptr, &vbMapped);
-    if (FAILED(vertexMapResult) || vbMapped == nullptr) {
-        return UINT32_MAX;
-    }
-    memcpy(vbMapped, vertexData, vbSize);
-    mesh.vertexBuffer->Unmap(0, nullptr);
 
     mesh.vbView.BufferLocation = mesh.vertexBuffer->GetGPUVirtualAddress();
 
     mesh.vbView.SizeInBytes = vbSize;
     mesh.vbView.StrideInBytes = vertexStride;
 
-    auto ibDesc = CD3DX12_RESOURCE_DESC::Buffer(ibSize);
-
-    const HRESULT indexBufferResult =
-        dxCommon_->GetDevice()->CreateCommittedResource(
-            &heapProps, D3D12_HEAP_FLAG_NONE, &ibDesc,
-            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-            IID_PPV_ARGS(&mesh.indexBuffer));
-    if (FAILED(indexBufferResult) || !mesh.indexBuffer) {
+    if (!CreateUploadBuffer(dxCommon_->GetDevice(), indexData, ibSize,
+                            mesh.indexBuffer)) {
         return UINT32_MAX;
     }
-
-    void *ibMapped = nullptr;
-    const HRESULT indexMapResult =
-        mesh.indexBuffer->Map(0, nullptr, &ibMapped);
-    if (FAILED(indexMapResult) || ibMapped == nullptr) {
-        return UINT32_MAX;
-    }
-    memcpy(ibMapped, indexData, ibSize);
-    mesh.indexBuffer->Unmap(0, nullptr);
 
     mesh.ibView.BufferLocation = mesh.indexBuffer->GetGPUVirtualAddress();
 

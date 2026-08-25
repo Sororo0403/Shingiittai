@@ -1,6 +1,7 @@
 #include "Enemy.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdlib>
 #include <initializer_list>
@@ -137,16 +138,26 @@ void Enemy::EnterHold(float duration) {
                    currentHoldDuration_);
 }
 
-bool Enemy::TryBeginChargeWarpFeint(ActionKind kind) {
-    if (phase_ == BossPhase::Phase3) {
-        return false;
-    }
+bool Enemy::CanBeginChargeWarpFeint(ActionKind kind) const {
+    return phase_ != BossPhase::Phase3 && !warpFeintFollowupLocked_ &&
+           !warpFeintDecisionMade_ &&
+           (kind == ActionKind::Smash || kind == ActionKind::Sweep) &&
+           action_.kind == kind &&
+           (action_.step == ActionStep::Charge ||
+            action_.step == ActionStep::Hold);
+}
 
-    if (warpFeintFollowupLocked_ || warpFeintDecisionMade_ ||
-        !(kind == ActionKind::Smash || kind == ActionKind::Sweep) ||
-        action_.kind != kind ||
-        !(action_.step == ActionStep::Charge ||
-          action_.step == ActionStep::Hold)) {
+bool AllConditions(std::initializer_list<bool> conditions) {
+    return std::all_of(conditions.begin(), conditions.end(),
+                       [](bool value) { return value; });
+}
+
+int EnabledWeight(bool enabled, int weight) {
+    return enabled ? weight : 0;
+}
+
+bool Enemy::TryBeginChargeWarpFeint(ActionKind kind) {
+    if (!CanBeginChargeWarpFeint(kind)) {
         return false;
     }
 
@@ -192,14 +203,15 @@ bool Enemy::TryBeginChargeWarpFeint(ActionKind kind) {
     return true;
 }
 
-bool Enemy::TryApplyDirectionFeint(ActionKind kind) {
-    if (phase_ == BossPhase::Phase3) {
-        return false;
-    }
+bool Enemy::CanApplyDirectionFeint(ActionKind kind) const {
+    return phase_ != BossPhase::Phase3 && !warpFeintFollowupLocked_ &&
+           !directionFeintDecisionMade_ &&
+           (kind == ActionKind::Smash || kind == ActionKind::Sweep) &&
+           action_.kind == kind && action_.step == ActionStep::Charge;
+}
 
-    if (warpFeintFollowupLocked_ || directionFeintDecisionMade_ ||
-        !(kind == ActionKind::Smash || kind == ActionKind::Sweep) ||
-        action_.kind != kind || action_.step != ActionStep::Charge) {
+bool Enemy::TryApplyDirectionFeint(ActionKind kind) {
+    if (!CanApplyDirectionFeint(kind)) {
         return false;
     }
 
@@ -1000,31 +1012,26 @@ void Enemy::BeginPressureAction() {
     const bool phase3Unlocked = TechniqueUnlock(BossPhase::Phase3) > 0.0f;
     const bool isPhase3 = phase_ == BossPhase::Phase3;
     const bool canQuickSlash = phase2Unlocked;
-    const bool canBladeClash = false;
     const bool canWarp = phase2Unlocked;
     const bool canFarWarpSlash =
         phase2Unlocked && IsRangedAttackAvailable() && !rangedReengagePending_;
-    const bool canPhantomWarp =
-        phase3Unlocked && phantomWarpCooldown_ <= 0.0f && !deathFinished_ &&
-        !isDying_ && !phaseTransitionActive_ && distance >= 1.65f &&
-        distance <= 9.8f;
-    const bool canTripleIaiSlash =
-        phase3Unlocked && tripleIaiSlashCooldown_ <= 0.0f &&
-        IsRangedAttackAvailable() &&
-        (isPhase3 || distance >= 4.2f) && !deathFinished_ && !isDying_ &&
-        !phaseTransitionActive_;
-    const bool canArcaneLaser =
-        phase2Unlocked && !isPhase3 && arcaneLaserCooldown_ <= 0.0f &&
-        IsRangedAttackAvailable() &&
-        !rangedReengagePending_;
-    const bool canCataclysmLaser =
-        phase3Unlocked && cataclysmLaserCooldown_ <= 0.0f &&
-        IsRangedAttackAvailable() &&
-        !rangedReengagePending_;
+    const bool canPhantomWarp = AllConditions(
+        {phase3Unlocked, phantomWarpCooldown_ <= 0.0f, !deathFinished_,
+         !isDying_, !phaseTransitionActive_, distance >= 1.65f,
+         distance <= 9.8f});
+    const bool canTripleIaiSlash = AllConditions(
+        {phase3Unlocked, tripleIaiSlashCooldown_ <= 0.0f,
+         IsRangedAttackAvailable(), isPhase3 || distance >= 4.2f,
+         !deathFinished_, !isDying_, !phaseTransitionActive_});
+    const bool canArcaneLaser = AllConditions(
+        {phase2Unlocked, !isPhase3, arcaneLaserCooldown_ <= 0.0f,
+         IsRangedAttackAvailable(), !rangedReengagePending_});
+    const bool canCataclysmLaser = AllConditions(
+        {phase3Unlocked, cataclysmLaserCooldown_ <= 0.0f,
+         IsRangedAttackAvailable(), !rangedReengagePending_});
     int smashWeight = 55;
     int sweepWeight = 45;
     int quickSlashWeight = 0;
-    int bladeClashWeight = 0;
     int warpWeight = 0;
     int farWarpSlashWeight = 0;
     int phantomWarpWeight = 0;
@@ -1036,7 +1043,6 @@ void Enemy::BeginPressureAction() {
         smashWeight = 0;
         sweepWeight = 0;
         quickSlashWeight = 0;
-        bladeClashWeight = 0;
         warpWeight = 0;
         farWarpSlashWeight = 24;
         phantomWarpWeight = 24;
@@ -1047,7 +1053,6 @@ void Enemy::BeginPressureAction() {
         smashWeight = 5;
         sweepWeight = 5;
         quickSlashWeight = 6;
-        bladeClashWeight = 0;
         warpWeight = 28;
         farWarpSlashWeight = 52;
         arcaneLaserWeight = 64;
@@ -1057,88 +1062,99 @@ void Enemy::BeginPressureAction() {
         {{BossDecisionAction::Smash, smashWeight},
          {BossDecisionAction::Sweep, sweepWeight},
          {BossDecisionAction::QuickSlash,
-          canQuickSlash ? quickSlashWeight : 0},
-         {BossDecisionAction::BladeClash,
-          canBladeClash ? bladeClashWeight : 0},
-         {BossDecisionAction::Warp, canWarp ? warpWeight : 0},
+          EnabledWeight(canQuickSlash, quickSlashWeight)},
+        {BossDecisionAction::BladeClash, 0},
+         {BossDecisionAction::Warp, EnabledWeight(canWarp, warpWeight)},
          {BossDecisionAction::FarWarpSlash,
-          canFarWarpSlash ? farWarpSlashWeight : 0},
+          EnabledWeight(canFarWarpSlash, farWarpSlashWeight)},
          {BossDecisionAction::PhantomWarp,
-          canPhantomWarp ? phantomWarpWeight : 0},
+          EnabledWeight(canPhantomWarp, phantomWarpWeight)},
          {BossDecisionAction::TripleIaiSlash,
-          canTripleIaiSlash ? tripleIaiSlashWeight : 0},
+          EnabledWeight(canTripleIaiSlash, tripleIaiSlashWeight)},
          {BossDecisionAction::ArcaneLaser,
-          canArcaneLaser ? arcaneLaserWeight : 0},
+          EnabledWeight(canArcaneLaser, arcaneLaserWeight)},
          {BossDecisionAction::CataclysmLaser,
-          canCataclysmLaser ? cataclysmLaserWeight : 0}},
+          EnabledWeight(canCataclysmLaser, cataclysmLaserWeight)}},
         isPhase3 ? BossDecisionAction::Stalk : BossDecisionAction::Smash);
 
-    auto beginFallback = [&]() {
-        if (isPhase3) {
-            BeginStalkAction();
-            return;
-        }
-        RegisterNonRangedAttackCommit(ActionKind::Smash);
-        BeginAction(SelectNearPressureAction(), ActionStep::Charge);
-    };
+    if (!ExecutePressureBasicDecision(static_cast<int>(selected))) {
+        ExecutePressureComplexDecision(static_cast<int>(selected), isPhase3);
+    }
+}
 
-    switch (selected) {
+bool Enemy::ExecutePressureBasicDecision(int decision) {
+    switch (static_cast<BossDecisionAction>(decision)) {
     case BossDecisionAction::Smash:
         RegisterNonRangedAttackCommit(ActionKind::Smash);
         BeginAction(ActionKind::Smash, ActionStep::Charge);
-        return;
+        return true;
     case BossDecisionAction::Sweep:
         RegisterNonRangedAttackCommit(ActionKind::Sweep);
         BeginAction(ActionKind::Sweep, ActionStep::Charge);
-        return;
+        return true;
     case BossDecisionAction::QuickSlash:
         RegisterNonRangedAttackCommit(ActionKind::Smash);
         BeginAction(SelectNearPressureAction(), ActionStep::Charge);
         quickSlashActive_ = true;
         warpFeintDecisionMade_ = true;
         directionFeintDecisionMade_ = true;
-        return;
+        return true;
     case BossDecisionAction::BladeClash:
         RegisterNonRangedAttackCommit(ActionKind::BladeClash);
         BeginAction(ActionKind::BladeClash, ActionStep::Charge);
-        return;
+        return true;
+    case BossDecisionAction::PhantomWarp:
+        BeginPhantomWarpStep(2, false, ActionKind::None);
+        phantomWarpCooldown_ = phantomWarpCooldownDuration_;
+        return true;
+    default:
+        return false;
+    }
+}
+
+void Enemy::ExecutePressureComplexDecision(int decision, bool phase3) {
+    const auto fallback = [this, phase3]() {
+        if (phase3) {
+            BeginStalkAction();
+        } else {
+            RegisterNonRangedAttackCommit(ActionKind::Smash);
+            BeginAction(SelectNearPressureAction(), ActionStep::Charge);
+        }
+    };
+    switch (static_cast<BossDecisionAction>(decision)) {
     case BossDecisionAction::Warp:
         if (PrepareWarpContext()) {
             BeginAction(ActionKind::Warp, ActionStep::Start);
             return;
         }
-        beginFallback();
+        fallback();
         return;
     case BossDecisionAction::FarWarpSlash:
         if (TryBeginFarWarpSlash(1.0f)) {
             return;
         }
-        beginFallback();
-        return;
-    case BossDecisionAction::PhantomWarp:
-        BeginPhantomWarpStep(2, false, ActionKind::None);
-        phantomWarpCooldown_ = phantomWarpCooldownDuration_;
+        fallback();
         return;
     case BossDecisionAction::TripleIaiSlash:
         if (TryBeginTripleIaiSlash(1.0f)) {
             return;
         }
-        beginFallback();
+        fallback();
         return;
     case BossDecisionAction::ArcaneLaser:
         if (TryBeginArcaneLaser(1.0f)) {
             return;
         }
-        beginFallback();
+        fallback();
         return;
     case BossDecisionAction::CataclysmLaser:
         if (TryBeginCataclysmLaser(1.0f)) {
             return;
         }
-        beginFallback();
+        fallback();
         return;
     default:
-        beginFallback();
+        fallback();
         return;
     }
 }
@@ -1159,25 +1175,23 @@ void Enemy::BeginChaseAction() {
     const bool canFarWarpSlash =
         phase2Unlocked && distance >= warpCutInDistance_ &&
         IsRangedAttackAvailable() && !rangedReengagePending_;
-    const bool canPhantomWarp =
-        phase3Unlocked && phantomWarpCooldown_ <= 0.0f && !deathFinished_ &&
-        !isDying_ && !phaseTransitionActive_ && distance >= 1.65f &&
-        distance <= 9.8f;
+    const bool canPhantomWarp = AllConditions(
+        {phase3Unlocked, phantomWarpCooldown_ <= 0.0f, !deathFinished_,
+         !isDying_, !phaseTransitionActive_, distance >= 1.65f,
+         distance <= 9.8f});
     const bool mustReengageAfterRanged =
         rangedReengagePending_ &&
         distance > config_.core.nearAttackDistance + 0.75f;
-    const bool canTripleIaiSlash =
-        phase3Unlocked && tripleIaiSlashCooldown_ <= 0.0f &&
-        IsRangedAttackAvailable() && distance >= 4.2f && !deathFinished_ &&
-        !isDying_ && !phaseTransitionActive_ && !mustReengageAfterRanged;
-    const bool canArcaneLaser =
-        phase2Unlocked && !isPhase3 && arcaneLaserCooldown_ <= 0.0f &&
-        IsRangedAttackAvailable() &&
-        !mustReengageAfterRanged;
-    const bool canCataclysmLaser =
-        phase3Unlocked && cataclysmLaserCooldown_ <= 0.0f &&
-        IsRangedAttackAvailable() &&
-        !mustReengageAfterRanged;
+    const bool canTripleIaiSlash = AllConditions(
+        {phase3Unlocked, tripleIaiSlashCooldown_ <= 0.0f,
+         IsRangedAttackAvailable(), distance >= 4.2f, !deathFinished_,
+         !isDying_, !phaseTransitionActive_, !mustReengageAfterRanged});
+    const bool canArcaneLaser = AllConditions(
+        {phase2Unlocked, !isPhase3, arcaneLaserCooldown_ <= 0.0f,
+         IsRangedAttackAvailable(), !mustReengageAfterRanged});
+    const bool canCataclysmLaser = AllConditions(
+        {phase3Unlocked, cataclysmLaserCooldown_ <= 0.0f,
+         IsRangedAttackAvailable(), !mustReengageAfterRanged});
     int stalkWeight = 100;
     int warpWeight = 0;
     int farWarpSlashWeight = 0;
@@ -1213,20 +1227,24 @@ void Enemy::BeginChaseAction() {
 
     const BossDecisionAction selected = PickWeightedAction(
         {{BossDecisionAction::Stalk, stalkWeight},
-         {BossDecisionAction::Warp, canWarp ? warpWeight : 0},
+         {BossDecisionAction::Warp, EnabledWeight(canWarp, warpWeight)},
          {BossDecisionAction::FarWarpSlash,
-          canFarWarpSlash ? farWarpSlashWeight : 0},
+          EnabledWeight(canFarWarpSlash, farWarpSlashWeight)},
          {BossDecisionAction::PhantomWarp,
-          canPhantomWarp ? phantomWarpWeight : 0},
+          EnabledWeight(canPhantomWarp, phantomWarpWeight)},
          {BossDecisionAction::TripleIaiSlash,
-          canTripleIaiSlash ? tripleIaiSlashWeight : 0},
+          EnabledWeight(canTripleIaiSlash, tripleIaiSlashWeight)},
          {BossDecisionAction::ArcaneLaser,
-          canArcaneLaser ? arcaneLaserWeight : 0},
+          EnabledWeight(canArcaneLaser, arcaneLaserWeight)},
          {BossDecisionAction::CataclysmLaser,
-          canCataclysmLaser ? cataclysmLaserWeight : 0}},
+          EnabledWeight(canCataclysmLaser, cataclysmLaserWeight)}},
         BossDecisionAction::Stalk);
 
-    switch (selected) {
+    ExecuteChaseDecision(static_cast<int>(selected));
+}
+
+void Enemy::ExecuteChaseDecision(int decision) {
+    switch (static_cast<BossDecisionAction>(decision)) {
     case BossDecisionAction::Warp:
         if (PrepareWarpContext()) {
             BeginAction(ActionKind::Warp, ActionStep::Start);

@@ -51,6 +51,7 @@ class HandTrackingTestScene : public BaseScene {
     void UploadPreviewTextureIfNeeded();
     void UpdateHand(size_t handIndex);
     void UpdateRangedGesture();
+    void UpdateRangedGestureState(bool pressed, bool released, bool joined);
     void CalibrateNeutralFromCurrentHands();
     void ResetCalibration();
     bool IsHandTrackingReady() const;

@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup Condition="'$(EnableProjectClangTidy)' == 'true'">
+    <EnableMicrosoftCodeAnalysis>false</EnableMicrosoftCodeAnalysis>
+    <EnableClangTidyCodeAnalysis>true</EnableClangTidyCodeAnalysis>
+    <ClangTidyChecks>-*,clang-analyzer-*,bugprone-*,performance-*,readability-avoid-const-params-in-decls,readability-braces-around-statements,readability-const-return-type,readability-container-size-empty,readability-delete-null-pointer,readability-duplicate-include,readability-inconsistent-declaration-parameter-name,readability-make-member-function-const,readability-misleading-indentation,readability-non-const-parameter,readability-redundant-control-flow,readability-redundant-declaration,readability-redundant-function-ptr-dereference,readability-redundant-member-init,readability-redundant-preprocessor,readability-redundant-smartptr-get,readability-simplify-boolean-expr,readability-simplify-subscript-expr,readability-static-definition-in-anonymous-namespace,readability-use-anyofallof,-bugprone-easily-swappable-parameters,-bugprone-exception-escape,-bugprone-invalid-enum-default-initialization,-bugprone-throwing-static-initialization,-clang-analyzer-optin.performance.Padding,-performance-enum-size</ClangTidyChecks>
+  </PropertyGroup>
+</Project>

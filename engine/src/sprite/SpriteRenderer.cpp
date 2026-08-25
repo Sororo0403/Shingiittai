@@ -239,61 +239,60 @@ void SpriteRenderer::FlushQueuedDraws() {
                queuedDraws_[runEnd].textureId == first.textureId) {
             ++runEnd;
         }
-
-        if (activePipelineKind_ != first.pipelineKind) {
-            activePipelineKind_ = first.pipelineKind;
-            ID3D12PipelineState *pipelineState =
-                pipelineStates_[static_cast<uint32_t>(activeRenderTargetKind_)]
-                               [static_cast<uint32_t>(activePipelineKind_)]
-                                   .Get();
-            if (pipelineState == nullptr) {
-                runStart = runEnd;
-                continue;
-            }
-            cmd->SetPipelineState(pipelineState);
-        }
-
-        batchVertices_.clear();
-        batchVertices_.reserve((runEnd - runStart) * kVerticesPerSprite);
-        for (size_t index = runStart; index < runEnd; ++index) {
-            const auto &vertices = queuedDraws_[index].vertices;
-            batchVertices_.insert(batchVertices_.end(), vertices.begin(),
-                                  vertices.end());
-        }
-
-        const UploadAllocation allocation = uploadBuffer_.WriteArray(
-            batchVertices_.data(), batchVertices_.size(),
-            alignof(SpriteVertex));
-        if (allocation.gpu == 0) {
-            runStart = runEnd;
-            continue;
-        }
-        D3D12_VERTEX_BUFFER_VIEW view{};
-        view.BufferLocation = allocation.gpu;
-        view.SizeInBytes =
-            static_cast<UINT>(batchVertices_.size() * sizeof(SpriteVertex));
-        view.StrideInBytes = sizeof(SpriteVertex);
-        cmd->IASetVertexBuffers(0, 1, &view);
-        const uint32_t boundTextureId =
-            ResolveSpriteTextureId(textureManager_, first.textureId);
-        if (boundTextureId == UINT32_MAX) {
-            runStart = runEnd;
-            continue;
-        }
-        const D3D12_GPU_DESCRIPTOR_HANDLE textureHandle =
-            textureManager_->GetGpuHandle(boundTextureId);
-        if (textureHandle.ptr == 0) {
-            runStart = runEnd;
-            continue;
-        }
-        cmd->SetGraphicsRootDescriptorTable(1, textureHandle);
-        cmd->DrawInstanced(static_cast<UINT>(batchVertices_.size()), 1, 0, 0);
-
+        DrawQueuedRun(cmd, runStart, runEnd);
         runStart = runEnd;
     }
 
     queuedDraws_.clear();
     batchVertices_.clear();
+}
+
+void SpriteRenderer::DrawQueuedRun(ID3D12GraphicsCommandList *commandList,
+                                   size_t runStart, size_t runEnd) {
+    const QueuedDraw &first = queuedDraws_[runStart];
+    if (activePipelineKind_ != first.pipelineKind) {
+        activePipelineKind_ = first.pipelineKind;
+        ID3D12PipelineState *pipelineState =
+            pipelineStates_[static_cast<uint32_t>(activeRenderTargetKind_)]
+                           [static_cast<uint32_t>(activePipelineKind_)]
+                               .Get();
+        if (pipelineState == nullptr) {
+            return;
+        }
+        commandList->SetPipelineState(pipelineState);
+    }
+
+    batchVertices_.clear();
+    batchVertices_.reserve((runEnd - runStart) * kVerticesPerSprite);
+    for (size_t index = runStart; index < runEnd; ++index) {
+        const auto &vertices = queuedDraws_[index].vertices;
+        batchVertices_.insert(batchVertices_.end(), vertices.begin(),
+                              vertices.end());
+    }
+    const UploadAllocation allocation = uploadBuffer_.WriteArray(
+        batchVertices_.data(), batchVertices_.size(), alignof(SpriteVertex));
+    if (allocation.gpu == 0) {
+        return;
+    }
+
+    D3D12_VERTEX_BUFFER_VIEW view{};
+    view.BufferLocation = allocation.gpu;
+    view.SizeInBytes =
+        static_cast<UINT>(batchVertices_.size() * sizeof(SpriteVertex));
+    view.StrideInBytes = sizeof(SpriteVertex);
+    commandList->IASetVertexBuffers(0, 1, &view);
+    const uint32_t boundTextureId =
+        ResolveSpriteTextureId(textureManager_, first.textureId);
+    if (boundTextureId == UINT32_MAX) {
+        return;
+    }
+    const D3D12_GPU_DESCRIPTOR_HANDLE textureHandle =
+        textureManager_->GetGpuHandle(boundTextureId);
+    if (textureHandle.ptr == 0) {
+        return;
+    }
+    commandList->SetGraphicsRootDescriptorTable(1, textureHandle);
+    commandList->DrawInstanced(static_cast<UINT>(batchVertices_.size()), 1, 0, 0);
 }
 
 void SpriteRenderer::CreateUploadBuffer() {

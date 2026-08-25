@@ -10,6 +10,7 @@
 #include <cstdint>
 
 class ModelManager;
+struct ModelDrawEffect;
 class Input;
 
 class Player {
@@ -97,6 +98,15 @@ class Player {
     }
     bool UsesGamepadCameraLook() const { return useGamepadCameraLook_; }
   private:
+    Transform BuildPlayerVisual(float visualScale) const;
+    ModelDrawEffect MakeDamageFlashEffect(bool forceOpaque,
+                                          float flashRatio) const;
+    void SetPlayerDrawEffect(ModelManager *modelManager, bool damageFlashing,
+                             bool forceOpaque, float flashRatio) const;
+    void DrawSwordWithEffect(Sword &sword, ModelManager *modelManager,
+                             const Camera &camera, bool damageFlashing,
+                             bool forceOpaque, float flashRatio,
+                             float visualScale) const;
     Transform BuildSwordTransform(const SwordPose &pose, bool isLeft) const;
     SwordPose MakeIdleSwordPose(bool isLeft) const;
     SwordPose MakeMirroredSwordPose(const SwordPose &source) const;
@@ -108,6 +118,17 @@ class Player {
     void UpdateWeaponRules(Input *input, SwordPose &leftPose,
                            SwordPose &rightPose, bool useDualControls,
                            float deltaTime);
+    void UpdateBodyState(float deltaTime,
+                         const DirectX::XMFLOAT3 &lookTarget,
+                         bool suppressLookAt, bool suppressMovement);
+    void ResolveInputSwordPoses(Input *input, float inputDeltaTime,
+                                bool useUdpSword, bool useKeyboardMouse,
+                                SwordPose &leftPose, SwordPose &rightPose);
+    void ApplySwordPoseRestrictions(InputControlType controlType,
+                                    SwordPose &leftPose,
+                                    SwordPose &rightPose) const;
+    void UpdateSwords(const SwordPose &leftPose, const SwordPose &rightPose,
+                      float inputDeltaTime, bool allowMotionSlash);
   private:
     static constexpr float kHandHeight = 1.0f;
     static constexpr float kArmLength = 1.0f;

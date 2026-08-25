@@ -168,7 +168,9 @@ void SoundManager::Apply3D(PlayingVoice &playingVoice) {
         (std::numeric_limits<UINT32>::max)() / sourceChannels) {
         return;
     }
-    std::vector<float> matrix(sourceChannels * destinationChannels, volume);
+    std::vector<float> matrix(static_cast<size_t>(sourceChannels) *
+                                  destinationChannels,
+                              volume);
 
     if (destinationChannels >= 2 && distance > 0.0001f) {
         XMVECTOR forward = LoadFloat3OrDefault(

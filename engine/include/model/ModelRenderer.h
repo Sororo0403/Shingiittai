@@ -215,6 +215,18 @@ class ModelRenderer {
     /// </summary>
     void SetPipelineForMaterial(const Material &material);
     void SetInstancedPipelineForMaterial(const Material &material);
+    void DrawForwardSubMesh(
+        const ModelSubMesh &subMesh,
+        D3D12_GPU_VIRTUAL_ADDRESS objectConstantAddress,
+        D3D12_GPU_VIRTUAL_ADDRESS sceneConstantAddress,
+        D3D12_GPU_VIRTUAL_ADDRESS effectConstantAddress,
+        uint32_t environmentTextureId);
+    void DrawInstancedSubMeshes(
+        const Model &model, const D3D12_VERTEX_BUFFER_VIEW &instanceView,
+        D3D12_GPU_VIRTUAL_ADDRESS objectConstantAddress,
+        D3D12_GPU_VIRTUAL_ADDRESS sceneConstantAddress,
+        D3D12_GPU_VIRTUAL_ADDRESS effectConstantAddress,
+        uint32_t environmentTextureId, uint32_t instanceCount);
 
     /// <summary>
     /// ComputeShaderで必要なスキニング済み頂点をまとめて書き込む
@@ -227,10 +239,14 @@ class ModelRenderer {
     /// </summary>
     void DispatchSkinning(const ModelSubMesh &subMesh);
     bool NeedsSkinningDispatch(const ModelSubMesh &subMesh) const;
+    void DrawInstancedShadowSubMeshes(
+        const Model &model, const D3D12_VERTEX_BUFFER_VIEW &instanceView,
+        D3D12_GPU_VIRTUAL_ADDRESS objectConstantAddress,
+        uint32_t instanceCount);
 
   private:
     static constexpr uint32_t kMaxDraws = 4096;
-    static constexpr size_t kUploadBytesPerFrame = 16 * 1024 * 1024;
+    static constexpr size_t kUploadBytesPerFrame = size_t{16} * 1024 * 1024;
     static constexpr size_t kPipelineVariantCount = 18;
 
     DirectXCommon *dxCommon_ = nullptr;

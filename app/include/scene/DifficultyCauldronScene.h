@@ -11,6 +11,7 @@
 #include <string>
 
 class GameScene;
+class Input;
 
 class DifficultyCauldronScene : public BaseScene {
   public:
@@ -35,6 +36,12 @@ class DifficultyCauldronScene : public BaseScene {
     bool RequestHandTrackingStartOnce();
     void UpdateCameraPreview(float deltaTime);
     void UpdateSelection();
+    int UpdateHeldDifficulty(Input &input, bool gamepad,
+                             int currentValue);
+    int ApplyDigitSelection(Input &input, int currentValue);
+    int ApplyHandSelection(int currentValue);
+    void CommitDifficultySelection(int value);
+    void HandleSelectionActions(Input &input, bool gamepad);
     float SelectedDifficultyValue() const;
     void BeginReturnToWeaponSelect();
     void BeginStartGame();
@@ -62,7 +69,7 @@ class DifficultyCauldronScene : public BaseScene {
                          float uvLeft = 0.0f);
 
     SwordInputCalibration inputCalibration_{};
-    std::unique_ptr<GameScene> backgroundScene_{};
+    std::unique_ptr<GameScene> backgroundScene_;
     SwordUdpController handController_;
     CameraPreviewReceiver previewReceiver_{};
     std::array<Image, 10> digitImages_{};
