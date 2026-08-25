@@ -176,8 +176,7 @@ void SwordTrailRenderer::UpdateOneSword(size_t index, const Sword *sword,
         const XMFLOAT3 tip = sword->GetVisualBladeTipWorld();
 
         if (justStarted) {
-            const XMFLOAT3 ghostOffset =
-                MakeSlashGhostOffset(*sword);
+            const XMFLOAT3 ghostOffset = MakeSlashGhostOffset(*sword);
             AddSample(trail, Add(root, ghostOffset), Add(tip, ghostOffset),
                       true);
         }
@@ -246,10 +245,10 @@ void SwordTrailRenderer::BuildVertices() {
             constexpr float rootBias = 0.58f;
             constexpr float tipExtension = 0.08f;
 
-            const XMFLOAT3 dirA = NormalizeSafe(Sub(a.tip, a.root),
-                                                {0.0f, 1.0f, 0.0f});
-            const XMFLOAT3 dirB = NormalizeSafe(Sub(b.tip, b.root),
-                                                {0.0f, 1.0f, 0.0f});
+            const XMFLOAT3 dirA =
+                NormalizeSafe(Sub(a.tip, a.root), {0.0f, 1.0f, 0.0f});
+            const XMFLOAT3 dirB =
+                NormalizeSafe(Sub(b.tip, b.root), {0.0f, 1.0f, 0.0f});
             const XMFLOAT3 rootA = Lerp(a.root, a.tip, rootBias);
             const XMFLOAT3 tipA = Add(a.tip, Scale(dirA, tipExtension));
             const XMFLOAT3 rootB = Lerp(b.root, b.tip, rootBias);

@@ -65,13 +65,11 @@ bool HasToon(const PostProcessProfile &profile) {
 }
 } // namespace
 
-PostProcessSystem::~PostProcessSystem() {
-    Finalize();
-}
+PostProcessSystem::~PostProcessSystem() { Finalize(); }
 
 void PostProcessSystem::Initialize(DirectXCommon *dxCommon,
-                                    SrvManager *srvManager, int width,
-                                    int height) {
+                                   SrvManager *srvManager, int width,
+                                   int height) {
     if (!dxCommon || !srvManager) {
         Finalize();
         return;
@@ -142,14 +140,12 @@ bool PostProcessSystem::RequiresPostProcess() const {
            profile_.tonemap.enabled || profile_.bloom.enabled ||
            profile_.noise.enabled || HasSpecial(profile_) ||
            profile_.lensFlare.enabled || HasVignette(profile_) ||
-           HasRandomNoise(profile_) ||
-           profile_.radialBlur.strength > 0.0f ||
-           profile_.sceneDim.strength > 0.0f ||
-           HasToon(profile_);
+           HasRandomNoise(profile_) || profile_.radialBlur.strength > 0.0f ||
+           profile_.sceneDim.strength > 0.0f || HasToon(profile_);
 }
 
 void PostProcessSystem::Draw(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle,
-                              D3D12_GPU_DESCRIPTOR_HANDLE depthHandle) {
+                             D3D12_GPU_DESCRIPTOR_HANDLE depthHandle) {
     if (!dxCommon_ || !srvManager_ || !rootSignature_ || !pipelineState_ ||
         !copyPipelineState_ || !constBuffer_) {
         return;
@@ -165,8 +161,9 @@ void PostProcessSystem::Draw(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle,
 
     commandList->RSSetViewports(1, &viewport_);
     commandList->RSSetScissorRects(1, &scissorRect_);
-    commandList->SetPipelineState(
-        RequiresPostProcess() ? pipelineState_.Get() : copyPipelineState_.Get());
+    commandList->SetPipelineState(RequiresPostProcess()
+                                      ? pipelineState_.Get()
+                                      : copyPipelineState_.Get());
     commandList->SetGraphicsRootSignature(rootSignature_.Get());
     commandList->SetGraphicsRootDescriptorTable(0, textureHandle);
     commandList->SetGraphicsRootDescriptorTable(1, depthHandle);
@@ -295,17 +292,17 @@ void PostProcessSystem::UpdateConstantBuffer() {
         farZ = (std::max)(defaults.edge.farZ, nearZ + 0.0001f);
     }
 
-    mappedConstBuffer_->colorMode =
-        ValidModeOrNone(color.mode, 0, static_cast<int32_t>(PostProcessColorMode::Sepia));
-    mappedConstBuffer_->filterMode =
-        ValidModeOrNone(filter.mode, 0, static_cast<int32_t>(PostProcessFilterMode::GaussianBlur7x7));
+    mappedConstBuffer_->colorMode = ValidModeOrNone(
+        color.mode, 0, static_cast<int32_t>(PostProcessColorMode::Sepia));
+    mappedConstBuffer_->filterMode = ValidModeOrNone(
+        filter.mode, 0,
+        static_cast<int32_t>(PostProcessFilterMode::GaussianBlur7x7));
     mappedConstBuffer_->texelSize[0] = 1.0f / static_cast<float>(width_);
     mappedConstBuffer_->texelSize[1] = 1.0f / static_cast<float>(height_);
-    mappedConstBuffer_->edgeMode =
-        ValidModeOrNone(edge.mode, 0, static_cast<int32_t>(PostProcessEdgeMode::Depth));
-    mappedConstBuffer_->luminanceEdgeThreshold =
-        AtLeastFinite(edge.luminanceThreshold,
-                      defaults.edge.luminanceThreshold, 0.0f);
+    mappedConstBuffer_->edgeMode = ValidModeOrNone(
+        edge.mode, 0, static_cast<int32_t>(PostProcessEdgeMode::Depth));
+    mappedConstBuffer_->luminanceEdgeThreshold = AtLeastFinite(
+        edge.luminanceThreshold, defaults.edge.luminanceThreshold, 0.0f);
     mappedConstBuffer_->depthEdgeThreshold =
         AtLeastFinite(edge.depthThreshold, defaults.edge.depthThreshold, 0.0f);
     mappedConstBuffer_->nearZ = nearZ;
@@ -327,10 +324,12 @@ void PostProcessSystem::UpdateConstantBuffer() {
     mappedConstBuffer_->noiseEnabled = noise.enabled ? 1 : 0;
     mappedConstBuffer_->noiseStrength =
         AtLeastFinite(noise.strength, defaults.noise.strength, 0.0f);
-    mappedConstBuffer_->noiseScale = FiniteOr(noise.scale, defaults.noise.scale);
+    mappedConstBuffer_->noiseScale =
+        FiniteOr(noise.scale, defaults.noise.scale);
     mappedConstBuffer_->noiseTime = FiniteOr(noise.time, defaults.noise.time);
     mappedConstBuffer_->specialMode =
-        ValidModeOrNone(special.mode, 0, static_cast<int32_t>(PostProcessSpecialMode::Dissolve));
+        ValidModeOrNone(special.mode, 0,
+                        static_cast<int32_t>(PostProcessSpecialMode::Dissolve));
     mappedConstBuffer_->vignetteStrength =
         AtLeastFinite(vignette.strength, defaults.vignette.strength, 0.0f);
     mappedConstBuffer_->vignetteRadius =
@@ -344,9 +343,8 @@ void PostProcessSystem::UpdateConstantBuffer() {
     mappedConstBuffer_->dissolveScale =
         FiniteOr(dissolve.scale, defaults.dissolve.scale);
     mappedConstBuffer_->lensFlareEnabled = lensFlare.enabled ? 1 : 0;
-    mappedConstBuffer_->lensFlareVisibility =
-        ClampFinite(lensFlare.visibility, defaults.lensFlare.visibility,
-                    0.0f, 1.0f);
+    mappedConstBuffer_->lensFlareVisibility = ClampFinite(
+        lensFlare.visibility, defaults.lensFlare.visibility, 0.0f, 1.0f);
     mappedConstBuffer_->lensFlareSunUv[0] =
         FiniteOr(lensFlare.sunUv[0], defaults.lensFlare.sunUv[0]);
     mappedConstBuffer_->lensFlareSunUv[1] =
@@ -355,44 +353,37 @@ void PostProcessSystem::UpdateConstantBuffer() {
         FiniteOr(lensFlare.sunDepth, defaults.lensFlare.sunDepth);
     mappedConstBuffer_->lensFlareOcclusionBias =
         FiniteOr(lensFlare.occlusionBias, defaults.lensFlare.occlusionBias);
-    mappedConstBuffer_->lensFlareGlareRadius =
-        AtLeastFinite(lensFlare.glareRadius,
-                      defaults.lensFlare.glareRadius, 0.0001f);
-    mappedConstBuffer_->lensFlareGlareIntensity =
-        AtLeastFinite(lensFlare.glareIntensity,
-                      defaults.lensFlare.glareIntensity, 0.0f);
-    mappedConstBuffer_->lensFlareGhostIntensity =
-        AtLeastFinite(lensFlare.ghostIntensity,
-                      defaults.lensFlare.ghostIntensity, 0.0f);
-    mappedConstBuffer_->lensFlareStreakIntensity =
-        AtLeastFinite(lensFlare.streakIntensity,
-                      defaults.lensFlare.streakIntensity, 0.0f);
-    mappedConstBuffer_->lensFlareStreakWidth =
-        AtLeastFinite(lensFlare.streakWidth,
-                      defaults.lensFlare.streakWidth, 0.0001f);
+    mappedConstBuffer_->lensFlareGlareRadius = AtLeastFinite(
+        lensFlare.glareRadius, defaults.lensFlare.glareRadius, 0.0001f);
+    mappedConstBuffer_->lensFlareGlareIntensity = AtLeastFinite(
+        lensFlare.glareIntensity, defaults.lensFlare.glareIntensity, 0.0f);
+    mappedConstBuffer_->lensFlareGhostIntensity = AtLeastFinite(
+        lensFlare.ghostIntensity, defaults.lensFlare.ghostIntensity, 0.0f);
+    mappedConstBuffer_->lensFlareStreakIntensity = AtLeastFinite(
+        lensFlare.streakIntensity, defaults.lensFlare.streakIntensity, 0.0f);
+    mappedConstBuffer_->lensFlareStreakWidth = AtLeastFinite(
+        lensFlare.streakWidth, defaults.lensFlare.streakWidth, 0.0001f);
     mappedConstBuffer_->lensFlarePadding0 = 0.0f;
     mappedConstBuffer_->lensFlarePadding0b = 0.0f;
-    CopyFinite(mappedConstBuffer_->lensFlareGlareColor,
-               lensFlare.glareColor, defaults.lensFlare.glareColor);
+    CopyFinite(mappedConstBuffer_->lensFlareGlareColor, lensFlare.glareColor,
+               defaults.lensFlare.glareColor);
     CopyFinite(mappedConstBuffer_->lensFlareGhostWarmColor,
                lensFlare.ghostWarmColor, defaults.lensFlare.ghostWarmColor);
     CopyFinite(mappedConstBuffer_->lensFlareGhostCoolColor,
                lensFlare.ghostCoolColor, defaults.lensFlare.ghostCoolColor);
-    CopyFinite(mappedConstBuffer_->lensFlareStreakColor,
-               lensFlare.streakColor, defaults.lensFlare.streakColor);
-    mappedConstBuffer_->lensFlareGlareAlpha =
-        ClampFinite(lensFlare.glareAlpha, defaults.lensFlare.glareAlpha,
-                    0.0f, 1.0f);
-    mappedConstBuffer_->lensFlareGhostAlpha =
-        ClampFinite(lensFlare.ghostAlpha, defaults.lensFlare.ghostAlpha,
-                    0.0f, 1.0f);
-    mappedConstBuffer_->lensFlareStreakAlpha =
-        ClampFinite(lensFlare.streakAlpha, defaults.lensFlare.streakAlpha,
-                    0.0f, 1.0f);
+    CopyFinite(mappedConstBuffer_->lensFlareStreakColor, lensFlare.streakColor,
+               defaults.lensFlare.streakColor);
+    mappedConstBuffer_->lensFlareGlareAlpha = ClampFinite(
+        lensFlare.glareAlpha, defaults.lensFlare.glareAlpha, 0.0f, 1.0f);
+    mappedConstBuffer_->lensFlareGhostAlpha = ClampFinite(
+        lensFlare.ghostAlpha, defaults.lensFlare.ghostAlpha, 0.0f, 1.0f);
+    mappedConstBuffer_->lensFlareStreakAlpha = ClampFinite(
+        lensFlare.streakAlpha, defaults.lensFlare.streakAlpha, 0.0f, 1.0f);
     mappedConstBuffer_->lensFlarePadding1 = 0.0f;
     mappedConstBuffer_->enableVignetting = vignette.enabled ? 1 : 0;
-    mappedConstBuffer_->randomMode =
-        ValidModeOrNone(randomNoise.mode, 0, static_cast<int32_t>(PostProcessRandomMode::OverlayNoise));
+    mappedConstBuffer_->randomMode = ValidModeOrNone(
+        randomNoise.mode, 0,
+        static_cast<int32_t>(PostProcessRandomMode::OverlayNoise));
     mappedConstBuffer_->radialBlurSampleCount =
         std::clamp(radialBlur.sampleCount, 0, 32);
     mappedConstBuffer_->vignettingScale =
@@ -403,9 +394,8 @@ void PostProcessSystem::UpdateConstantBuffer() {
         FiniteOr(radialBlur.center[0], defaults.radialBlur.center[0]);
     mappedConstBuffer_->radialBlurCenter[1] =
         FiniteOr(radialBlur.center[1], defaults.radialBlur.center[1]);
-    mappedConstBuffer_->randomStrength =
-        AtLeastFinite(randomNoise.strength, defaults.randomNoise.strength,
-                      0.0f);
+    mappedConstBuffer_->randomStrength = AtLeastFinite(
+        randomNoise.strength, defaults.randomNoise.strength, 0.0f);
     mappedConstBuffer_->randomScale =
         FiniteOr(randomNoise.scale, defaults.randomNoise.scale);
     mappedConstBuffer_->randomTime =
@@ -423,8 +413,7 @@ void PostProcessSystem::UpdateConstantBuffer() {
         ClampFinite(vignette.secondaryTintStrength,
                     defaults.vignette.secondaryTintStrength, 0.0f, 1.0f);
     CopyFinite(mappedConstBuffer_->primaryVignetteTintColor,
-               vignette.primaryTintColor,
-               defaults.vignette.primaryTintColor);
+               vignette.primaryTintColor, defaults.vignette.primaryTintColor);
     CopyFinite(mappedConstBuffer_->secondaryVignetteTintColor,
                vignette.secondaryTintColor,
                defaults.vignette.secondaryTintColor);

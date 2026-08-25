@@ -36,7 +36,7 @@ XMFLOAT3 GetBladePointWorld(const Transform &tf, float forwardDistance) {
     XMStoreFloat3(&result, point);
     return result;
 }
-}
+} // namespace
 
 void Sword::Initialize(uint32_t modelId) {
     modelId_ = modelId;
@@ -107,13 +107,12 @@ Transform Sword::InterpolateTransform(float alpha) const {
     }
 
     alpha = std::clamp(alpha, 0.0f, 1.0f);
-    result.position = {
-        previousTf_.position.x +
-            (tf_.position.x - previousTf_.position.x) * alpha,
-        previousTf_.position.y +
-            (tf_.position.y - previousTf_.position.y) * alpha,
-        previousTf_.position.z +
-            (tf_.position.z - previousTf_.position.z) * alpha};
+    result.position = {previousTf_.position.x +
+                           (tf_.position.x - previousTf_.position.x) * alpha,
+                       previousTf_.position.y +
+                           (tf_.position.y - previousTf_.position.y) * alpha,
+                       previousTf_.position.z +
+                           (tf_.position.z - previousTf_.position.z) * alpha};
     result.scale = {
         previousTf_.scale.x + (tf_.scale.x - previousTf_.scale.x) * alpha,
         previousTf_.scale.y + (tf_.scale.y - previousTf_.scale.y) * alpha,
@@ -165,8 +164,7 @@ void Sword::UpdateSlashFollowThrough(float deltaTime) {
     if (isSlashMode_ && !slashFollowThroughStarted_ &&
         dirLenSq > kSlashFollowThroughMinDirLengthSq) {
         const float invLen = 1.0f / std::sqrt(dirLenSq);
-        slashFollowThroughDir_ = {slashDir_.x * invLen,
-                                  -slashDir_.y * invLen};
+        slashFollowThroughDir_ = {slashDir_.x * invLen, -slashDir_.y * invLen};
         slashFollowThroughTimer_ = kSlashFollowThroughDuration;
         slashFollowThroughStarted_ = true;
         slashFollowThroughAngles_ = {};
@@ -175,9 +173,8 @@ void Sword::UpdateSlashFollowThrough(float deltaTime) {
     }
 
     auto returnFollowThrough = [&]() {
-        const float decay =
-            std::clamp(1.0f - kSlashFollowThroughReturnSpeed * deltaTime,
-                       0.0f, 1.0f);
+        const float decay = std::clamp(
+            1.0f - kSlashFollowThroughReturnSpeed * deltaTime, 0.0f, 1.0f);
         slashFollowThroughAngles_.x *= decay;
         slashFollowThroughAngles_.y *= decay;
         slashFollowThroughRoll_ *= decay;
@@ -210,9 +207,8 @@ void Sword::UpdateSlashFollowThrough(float deltaTime) {
         return;
     }
 
-    const float ratio =
-        std::clamp(slashFollowThroughTimer_ / kSlashFollowThroughDuration,
-                   0.0f, 1.0f);
+    const float ratio = std::clamp(
+        slashFollowThroughTimer_ / kSlashFollowThroughDuration, 0.0f, 1.0f);
     const float angleStep = kSlashFollowThroughPixelsPerSecond *
                             kSlashFollowThroughMouseSensitivity * ratio *
                             deltaTime;
@@ -271,16 +267,15 @@ void Sword::UpdateMotionSlash(float deltaTime, bool allowMotionSlash) {
         }
     }
 
-    motionSlashState_.UpdateSlash(
-        distance >= kSwordMotionSlashMinDelta ? speed : 0.0f, deltaTime,
-        kSwordMotionSlashSpeedThreshold);
+    motionSlashState_.UpdateSlash(distance >= kSwordMotionSlashMinDelta ? speed
+                                                                        : 0.0f,
+                                  deltaTime, kSwordMotionSlashSpeedThreshold);
 }
 
 void Sword::ApplySlashFollowThrough(Transform &drawTransform) const {
     if (slashFollowThroughAngles_.x == 0.0f &&
         slashFollowThroughAngles_.y == 0.0f &&
-        slashFollowThroughRoll_ == 0.0f &&
-        slashFollowThroughSurge_ == 0.0f) {
+        slashFollowThroughRoll_ == 0.0f && slashFollowThroughSurge_ == 0.0f) {
         return;
     }
 
@@ -289,8 +284,7 @@ void Sword::ApplySlashFollowThrough(Transform &drawTransform) const {
     const float roll = slashFollowThroughRoll_;
 
     XMVECTOR qYaw = XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), yaw);
-    XMVECTOR qPitch =
-        XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), pitch);
+    XMVECTOR qPitch = XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), pitch);
     XMVECTOR qRoll = XMQuaternionRotationAxis(XMVectorSet(0, 0, 1, 0), roll);
     XMVECTOR followRot = XMQuaternionNormalize(
         XMQuaternionMultiply(XMQuaternionMultiply(qRoll, qPitch), qYaw));
@@ -299,20 +293,17 @@ void Sword::ApplySlashFollowThrough(Transform &drawTransform) const {
         XMQuaternionNormalize(XMQuaternionMultiply(followRot, baseRot));
 
     XMVECTOR basePos = XMLoadFloat3(&drawTransform.position);
-    XMVECTOR baseForward =
-        XMVector3Rotate(XMVectorSet(0, 0, 1, 0), baseRot);
-    XMVECTOR finalForward =
-        XMVector3Rotate(XMVectorSet(0, 0, 1, 0), finalRot);
-    XMVECTOR pivot =
-        XMVectorSubtract(basePos, baseForward * kSlashFollowThroughPivotDistance);
+    XMVECTOR baseForward = XMVector3Rotate(XMVectorSet(0, 0, 1, 0), baseRot);
+    XMVECTOR finalForward = XMVector3Rotate(XMVectorSet(0, 0, 1, 0), finalRot);
+    XMVECTOR pivot = XMVectorSubtract(
+        basePos, baseForward * kSlashFollowThroughPivotDistance);
     XMVECTOR finalPos =
         XMVectorAdd(pivot, finalForward * kSlashFollowThroughPivotDistance);
     finalPos = XMVectorAdd(finalPos, finalForward * slashFollowThroughSurge_);
 
-    const float stretch =
-        std::clamp((std::fabs(yaw) + std::fabs(pitch) + std::fabs(roll)) *
-                       0.10f,
-                   0.0f, kSlashFollowThroughMaxStretch);
+    const float stretch = std::clamp(
+        (std::fabs(yaw) + std::fabs(pitch) + std::fabs(roll)) * 0.10f, 0.0f,
+        kSlashFollowThroughMaxStretch);
     drawTransform.scale.z *= 1.0f + stretch;
     drawTransform.scale.x *= 1.0f - stretch * 0.18f;
     drawTransform.scale.y *= 1.0f - stretch * 0.18f;

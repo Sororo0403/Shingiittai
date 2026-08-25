@@ -1,8 +1,8 @@
 #pragma once
 #include "core/AssetManager.h"
 #include "graphics/DxUtils.h"
-#include <dxcapi.h>
 #include <Windows.h>
+#include <dxcapi.h>
 #include <filesystem>
 #include <stdexcept>
 #include <string>
@@ -56,9 +56,9 @@ inline std::string NarrowAscii(const std::wstring &value) {
 /// <summary>
 /// HLSLシェーダーをDXCでShader Model 6.6へコンパイルする
 /// </summary>
-inline Microsoft::WRL::ComPtr<IDxcBlob>
-Compile(const std::wstring &path, const std::string &entry,
-        const std::string &target) {
+inline Microsoft::WRL::ComPtr<IDxcBlob> Compile(const std::wstring &path,
+                                                const std::string &entry,
+                                                const std::string &target) {
     using Microsoft::WRL::ComPtr;
 
     const std::wstring resolvedPath = ResolveShaderPath(path);
@@ -87,9 +87,14 @@ Compile(const std::wstring &path, const std::string &entry,
     sourceBuffer.Size = source->GetBufferSize();
     sourceBuffer.Encoding = DXC_CP_UTF8;
 
-    std::vector<LPCWSTR> arguments = {
-        resolvedPath.c_str(), L"-E", wideEntry.c_str(), L"-T",
-        normalizedTarget.c_str(), L"-HV", L"2021", L"-all_resources_bound"};
+    std::vector<LPCWSTR> arguments = {resolvedPath.c_str(),
+                                      L"-E",
+                                      wideEntry.c_str(),
+                                      L"-T",
+                                      normalizedTarget.c_str(),
+                                      L"-HV",
+                                      L"2021",
+                                      L"-all_resources_bound"};
 #ifdef _DEBUG
     arguments.push_back(L"-Zi");
     arguments.push_back(L"-Qembed_debug");
@@ -114,8 +119,8 @@ Compile(const std::wstring &path, const std::string &entry,
     HRESULT status = S_OK;
     DxUtils::ThrowIfFailed(result->GetStatus(&status), "DXC GetStatus failed");
     if (FAILED(status)) {
-        throw std::runtime_error(errorMessage.empty() ? "DXC shader compile failed"
-                                                     : errorMessage);
+        throw std::runtime_error(
+            errorMessage.empty() ? "DXC shader compile failed" : errorMessage);
     }
 
     ComPtr<IDxcBlob> shader;

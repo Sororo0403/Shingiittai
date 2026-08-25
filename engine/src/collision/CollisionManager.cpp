@@ -276,20 +276,19 @@ AABB CollisionManager::ComputeBounds(const Shape &shape) const {
 
     const OBB &box = shape.obb;
     const XMVECTOR center =
-        XMVectorSet(FiniteOr(box.center.x, 0.0f),
-                    FiniteOr(box.center.y, 0.0f),
+        XMVectorSet(FiniteOr(box.center.x, 0.0f), FiniteOr(box.center.y, 0.0f),
                     FiniteOr(box.center.z, 0.0f), 0.0f);
     const XMVECTOR rotation = NormalizeQuaternion(box.rotation);
     const XMVECTOR axes[3] = {
-        XMVector3Rotate(XMVectorSet(FiniteHalfExtent(box.size.x), 0.0f, 0.0f,
-                                    0.0f),
-                        rotation),
-        XMVector3Rotate(XMVectorSet(0.0f, FiniteHalfExtent(box.size.y), 0.0f,
-                                    0.0f),
-                        rotation),
-        XMVector3Rotate(XMVectorSet(0.0f, 0.0f, FiniteHalfExtent(box.size.z),
-                                    0.0f),
-                        rotation),
+        XMVector3Rotate(
+            XMVectorSet(FiniteHalfExtent(box.size.x), 0.0f, 0.0f, 0.0f),
+            rotation),
+        XMVector3Rotate(
+            XMVectorSet(0.0f, FiniteHalfExtent(box.size.y), 0.0f, 0.0f),
+            rotation),
+        XMVector3Rotate(
+            XMVectorSet(0.0f, 0.0f, FiniteHalfExtent(box.size.z), 0.0f),
+            rotation),
     };
 
     AABB bounds{};

@@ -1,17 +1,17 @@
-#include <WinSock2.h>
-#include <WS2tcpip.h>
 #include "HandTrackingTestScene.h"
 #include "AppSceneServices.h"
 #include "DirectXCommon.h"
 #include "GameScene.h"
-#include "PostEffectManager.h"
 #include "Input.h"
+#include "PostEffectManager.h"
 #include "SceneManager.h"
 #include "SpriteManager.h"
 #include "TextureManager.h"
 #include "TitleScene.h"
 #include "WinApp.h"
 #include <DirectXTex.h>
+#include <WS2tcpip.h>
+#include <WinSock2.h>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -39,13 +39,11 @@ XMFLOAT4 Color(float r, float g, float b, float a = 1.0f) {
     return {r, g, b, a};
 }
 
-SOCKET ToSocket(uintptr_t value) {
-    return static_cast<SOCKET>(value);
-}
+SOCKET ToSocket(uintptr_t value) { return static_cast<SOCKET>(value); }
 
 bool IsRangedGesturePose(float dx, float dy, bool alreadyHeld) {
-    const float maxDistance =
-        alreadyHeld ? kRangedGestureReleaseDistance : kRangedGestureJoinDistance;
+    const float maxDistance = alreadyHeld ? kRangedGestureReleaseDistance
+                                          : kRangedGestureJoinDistance;
     const float maxAxisOffset = alreadyHeld ? kRangedGestureReleaseMaxAxisOffset
                                             : kRangedGestureJoinMaxAxisOffset;
     return std::sqrt(dx * dx + dy * dy) < maxDistance &&
@@ -67,8 +65,8 @@ void HandTrackingTestScene::Initialize(const SceneContext &ctx) {
     calibration_.controlType = InputControlType::Hand;
     handController_.SetCalibration(calibration_);
     previewFrame_ = {};
-    previewFrame_.rgbaPixels.resize(
-        static_cast<size_t>(previewFrame_.width) * previewFrame_.height * 4u);
+    previewFrame_.rgbaPixels.resize(static_cast<size_t>(previewFrame_.width) *
+                                    previewFrame_.height * 4u);
     previewFrame_.textureId = ctx_->rendering.texture->CreateFromRgbaPixels(
         previewFrame_.width, previewFrame_.height,
         previewFrame_.rgbaPixels.data());
@@ -207,11 +205,10 @@ void HandTrackingTestScene::ReceivePreviewPackets() {
     for (;;) {
         sockaddr_in from{};
         int fromLength = sizeof(from);
-        const int bytes = recvfrom(ToSocket(previewSocket_),
-                                   reinterpret_cast<char *>(buffer.data()),
-                                   static_cast<int>(buffer.size()), 0,
-                                   reinterpret_cast<sockaddr *>(&from),
-                                   &fromLength);
+        const int bytes = recvfrom(
+            ToSocket(previewSocket_), reinterpret_cast<char *>(buffer.data()),
+            static_cast<int>(buffer.size()), 0,
+            reinterpret_cast<sockaddr *>(&from), &fromLength);
         if (bytes == SOCKET_ERROR) {
             return;
         }
@@ -235,7 +232,8 @@ void HandTrackingTestScene::HandlePreviewPacket(const uint8_t *data,
     size_t chunkIndex = 0;
     size_t chunkCount = 0;
     size_t totalSize = 0;
-    if (!(stream >> magic >> frameId >> chunkIndex >> chunkCount >> totalSize) ||
+    if (!(stream >> magic >> frameId >> chunkIndex >> chunkCount >>
+          totalSize) ||
         magic != "SGCAM" || chunkCount == 0 || chunkIndex >= chunkCount ||
         totalSize == 0 || totalSize > size_t{1024} * 1024u) {
         return;
@@ -276,9 +274,9 @@ void HandTrackingTestScene::DecodePreviewJpeg(
 
     DirectX::ScratchImage scratch;
     DirectX::TexMetadata metadata{};
-    HRESULT hr = DirectX::LoadFromWICMemory(
-        jpegData.data(), jpegData.size(), DirectX::WIC_FLAGS_FORCE_RGB,
-        &metadata, scratch);
+    HRESULT hr = DirectX::LoadFromWICMemory(jpegData.data(), jpegData.size(),
+                                            DirectX::WIC_FLAGS_FORCE_RGB,
+                                            &metadata, scratch);
     if (FAILED(hr)) {
         return;
     }
@@ -301,7 +299,8 @@ void HandTrackingTestScene::DecodePreviewJpeg(
     }
 
     const size_t rowBytes = static_cast<size_t>(previewFrame_.width) * 4u;
-    const size_t imageBytes = rowBytes * static_cast<size_t>(previewFrame_.height);
+    const size_t imageBytes =
+        rowBytes * static_cast<size_t>(previewFrame_.height);
     if (previewFrame_.rgbaPixels.size() != imageBytes) {
         previewFrame_.rgbaPixels.resize(imageBytes);
     }
@@ -344,7 +343,8 @@ void HandTrackingTestScene::UpdateHand(size_t handIndex) {
     if (!wasSlash && debug.slash) {
         debug.pulse = 1.0f;
     } else {
-        debug.pulse = (std::max)(0.0f, debug.pulse - ctx_->frame.deltaTime * 3.6f);
+        debug.pulse =
+            (std::max)(0.0f, debug.pulse - ctx_->frame.deltaTime * 3.6f);
     }
 
     if (debug.hasCenter) {
@@ -366,8 +366,7 @@ void HandTrackingTestScene::UpdateRangedGesture() {
     const float dx = left.x - right.x;
     const float dy = left.y - right.y;
     const bool joined =
-        bothHands &&
-        IsRangedGesturePose(dx, dy, rangedGestureHeld_);
+        bothHands && IsRangedGesturePose(dx, dy, rangedGestureHeld_);
     const bool pressed = joined && !rangedGestureHeld_;
     const bool released = !joined && rangedGestureHeld_;
     rangedGestureHeld_ = joined;
@@ -376,9 +375,10 @@ void HandTrackingTestScene::UpdateRangedGesture() {
     if (bothHands) {
         rangedGestureCenter_ = {(left.x + right.x) * 0.5f,
                                 (left.y + right.y) * 0.5f};
-        const float aimX = std::clamp((rangedGestureCenter_.x - 0.5f) * 2.0f,
-                                      -1.0f, 1.0f);
-        rangedGestureAim_ = {aimX, -std::sqrt((std::max)(0.0f, 1.0f - aimX * aimX))};
+        const float aimX =
+            std::clamp((rangedGestureCenter_.x - 0.5f) * 2.0f, -1.0f, 1.0f);
+        rangedGestureAim_ = {aimX,
+                             -std::sqrt((std::max)(0.0f, 1.0f - aimX * aimX))};
     }
 
     UpdateRangedGestureState(pressed, released, joined);
@@ -504,7 +504,8 @@ void HandTrackingTestScene::DrawCameraPreview(float screenWidth,
     const float drawX = fieldX + (fieldW - drawW) * 0.5f;
     const float drawY = fieldY + (fieldH - drawH) * 0.5f;
 
-    DrawRect(fieldX, fieldY, fieldW, fieldH, Color(0.01f, 0.012f, 0.014f, 1.0f));
+    DrawRect(fieldX, fieldY, fieldW, fieldH,
+             Color(0.01f, 0.012f, 0.014f, 1.0f));
     if (previewFrame_.valid) {
         Sprite sprite{};
         sprite.position = {drawX, drawY};
@@ -576,9 +577,9 @@ void HandTrackingTestScene::DrawHand(size_t handIndex, float screenWidth,
         const size_t index =
             (hand.trailCursor + hand.trail.size() - count + i) %
             hand.trail.size();
-        const XMFLOAT2 point = ToFieldPosition(screenWidth, screenHeight,
-                                               hand.trail[index].x,
-                                               hand.trail[index].y);
+        const XMFLOAT2 point =
+            ToFieldPosition(screenWidth, screenHeight, hand.trail[index].x,
+                            hand.trail[index].y);
         const float alpha = static_cast<float>(i + 1) /
                             static_cast<float>((std::max)(count, size_t{1}));
         DrawRect(point.x - 3.0f, point.y - 3.0f, 6.0f, 6.0f,
@@ -613,8 +614,9 @@ void HandTrackingTestScene::DrawRangedGesture(float screenWidth,
         return;
     }
 
-    const XMFLOAT2 center = ToFieldPosition(
-        screenWidth, screenHeight, rangedGestureCenter_.x, rangedGestureCenter_.y);
+    const XMFLOAT2 center =
+        ToFieldPosition(screenWidth, screenHeight, rangedGestureCenter_.x,
+                        rangedGestureCenter_.y);
     const XMFLOAT2 left =
         ToFieldPosition(screenWidth, screenHeight, hands_[0].x, hands_[0].y);
     const XMFLOAT2 right =
@@ -632,10 +634,8 @@ void HandTrackingTestScene::DrawRangedGesture(float screenWidth,
     }
 
     const float ring = 26.0f + ready * 38.0f + rangedGesturePulse_ * 42.0f;
-    DrawRect(center.x - ring, center.y - 3.0f, ring * 2.0f, 6.0f,
-             chargeColor);
-    DrawRect(center.x - 3.0f, center.y - ring, 6.0f, ring * 2.0f,
-             chargeColor);
+    DrawRect(center.x - ring, center.y - 3.0f, ring * 2.0f, 6.0f, chargeColor);
+    DrawRect(center.x - 3.0f, center.y - ring, 6.0f, ring * 2.0f, chargeColor);
     DrawRect(center.x - 14.0f, center.y - 14.0f, 28.0f, 28.0f,
              Color(1.0f, 0.86f, 0.24f, 0.62f + ready * 0.30f));
 
@@ -651,8 +651,9 @@ void HandTrackingTestScene::DrawRangedGesture(float screenWidth,
     DrawRect(meterX, meterY, meterW, 12.0f, Color(0.16f, 0.13f, 0.08f, 0.92f));
     DrawRect(meterX, meterY, meterW * ready, 12.0f, chargeColor);
     if (rangedGestureReleased_) {
-        DrawRect(meterX - 18.0f, meterY - 7.0f, meterW + 36.0f, 26.0f,
-                 Color(1.0f, 0.90f, 0.22f, 0.32f + rangedGesturePulse_ * 0.38f));
+        DrawRect(
+            meterX - 18.0f, meterY - 7.0f, meterW + 36.0f, 26.0f,
+            Color(1.0f, 0.90f, 0.22f, 0.32f + rangedGesturePulse_ * 0.38f));
     }
 }
 
@@ -679,9 +680,9 @@ void HandTrackingTestScene::DrawHandMeter(size_t handIndex, float x, float y,
              hand.slash ? Color(1.0f, 0.18f, 0.10f, 0.95f) : color);
 
     DrawRect(x, y - 15.0f, hand.active ? 44.0f : 16.0f, 8.0f, color);
-    DrawRect(x + width - 70.0f, y - 15.0f, hand.slash ? 70.0f : 20.0f,
-             8.0f, hand.slash ? Color(1.0f, 0.18f, 0.10f, 0.95f)
-                               : Color(0.22f, 0.24f, 0.26f, 0.70f));
+    DrawRect(x + width - 70.0f, y - 15.0f, hand.slash ? 70.0f : 20.0f, 8.0f,
+             hand.slash ? Color(1.0f, 0.18f, 0.10f, 0.95f)
+                        : Color(0.22f, 0.24f, 0.26f, 0.70f));
 }
 
 void HandTrackingTestScene::DrawCameraBadge(float, float) {
@@ -722,8 +723,7 @@ void HandTrackingTestScene::DrawRect(float x, float y, float w, float h,
 }
 
 void HandTrackingTestScene::DrawLine(float x0, float y0, float x1, float y1,
-                                     float thickness,
-                                     const XMFLOAT4 &color) {
+                                     float thickness, const XMFLOAT4 &color) {
     const float dx = x1 - x0;
     const float dy = y1 - y0;
     const int steps =
@@ -744,4 +744,3 @@ XMFLOAT4 HandTrackingTestScene::HandColor(size_t handIndex, float alpha) const {
     }
     return Color(0.22f, 1.0f, 0.48f, alpha);
 }
-

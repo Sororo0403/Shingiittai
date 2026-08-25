@@ -56,8 +56,6 @@ class MeshPipelineFactory {
   public:
     static MeshPipelineSet CreatePipelineSet(
         ID3D12Device *device, ID3D12RootSignature *rootSignature,
-        const MeshPipelineDesc &desc,
-        D3D12_INPUT_LAYOUT_DESC inputLayout,
-        DXGI_FORMAT renderTargetFormat,
-        DXGI_FORMAT depthStencilFormat);
+        const MeshPipelineDesc &desc, D3D12_INPUT_LAYOUT_DESC inputLayout,
+        DXGI_FORMAT renderTargetFormat, DXGI_FORMAT depthStencilFormat);
 };

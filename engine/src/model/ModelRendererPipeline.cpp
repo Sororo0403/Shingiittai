@@ -1,4 +1,3 @@
-#include "model/ModelRenderer.h"
 #include "graphics/DirectXCommon.h"
 #include "graphics/DxHelpers.h"
 #include "graphics/DxUtils.h"
@@ -7,6 +6,7 @@
 #include "graphics/SrvManager.h"
 #include "model/MaterialManager.h"
 #include "model/MeshManager.h"
+#include "model/ModelRenderer.h"
 #include "model/Vertex.h"
 #include "texture/TextureManager.h"
 #include <algorithm>
@@ -112,7 +112,7 @@ uint32_t ResolveNormalTextureId(TextureManager *textureManager,
     return ResolveNormalTextureId(textureManager, textureId);
 }
 
-}
+} // namespace
 
 static XMFLOAT4X4 StoreMatrix(const XMMATRIX &matrix) {
     XMFLOAT4X4 result{};
@@ -265,14 +265,11 @@ void ModelRenderer::CreateShadowRootSignature() {
 void ModelRenderer::CreatePipelineState() {
     auto device = dxCommon_->GetDevice();
 
-    auto vs =
-        ShaderCompiler::Compile(ShaderPaths::ModelVS, "main", "vs_6_6");
-    auto instancedVs =
-        ShaderCompiler::Compile(ShaderPaths::ModelInstancedVS, "main",
-                                "vs_6_6");
+    auto vs = ShaderCompiler::Compile(ShaderPaths::ModelVS, "main", "vs_6_6");
+    auto instancedVs = ShaderCompiler::Compile(ShaderPaths::ModelInstancedVS,
+                                               "main", "vs_6_6");
 
-    auto ps =
-        ShaderCompiler::Compile(ShaderPaths::ModelPS, "main", "ps_6_6");
+    auto ps = ShaderCompiler::Compile(ShaderPaths::ModelPS, "main", "ps_6_6");
 
     D3D12_INPUT_ELEMENT_DESC baseLayout[] = {
         {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
@@ -289,8 +286,7 @@ void ModelRenderer::CreatePipelineState() {
         {"TANGENT", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
          D3D12_APPEND_ALIGNED_ELEMENT,
          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-        {"CUSTOM", 0, DXGI_FORMAT_R32_FLOAT, 0,
-         D3D12_APPEND_ALIGNED_ELEMENT,
+        {"CUSTOM", 0, DXGI_FORMAT_R32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
         {"BINDPOS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
          D3D12_APPEND_ALIGNED_ELEMENT,
@@ -329,9 +325,8 @@ void ModelRenderer::CreatePipelineState() {
 
     auto makePso = [&](D3D12_SHADER_BYTECODE vertexShader,
                        D3D12_INPUT_LAYOUT_DESC inputLayout,
-                       ModelBlendMode blendMode,
-                       MaterialCullMode cullMode, bool depthWrite,
-                       ComPtr<ID3D12PipelineState> &psoOut) {
+                       ModelBlendMode blendMode, MaterialCullMode cullMode,
+                       bool depthWrite, ComPtr<ID3D12PipelineState> &psoOut) {
         D3D12_GRAPHICS_PIPELINE_STATE_DESC pso{};
         pso.pRootSignature = rootSignature_.Get();
         pso.VS = vertexShader;
@@ -350,9 +345,9 @@ void ModelRenderer::CreatePipelineState() {
         blend.RenderTarget[0].BlendEnable =
             blendMode == ModelBlendMode::Opaque ? FALSE : TRUE;
         blend.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
-        blend.RenderTarget[0].DestBlend =
-            blendMode == ModelBlendMode::Additive ? D3D12_BLEND_ONE
-                                                  : D3D12_BLEND_INV_SRC_ALPHA;
+        blend.RenderTarget[0].DestBlend = blendMode == ModelBlendMode::Additive
+                                              ? D3D12_BLEND_ONE
+                                              : D3D12_BLEND_INV_SRC_ALPHA;
         blend.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
         blend.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
         blend.RenderTarget[0].DestBlendAlpha =
@@ -371,9 +366,9 @@ void ModelRenderer::CreatePipelineState() {
         depth.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
         pso.DepthStencilState = depth;
 
-        ThrowIfFailed(device->CreateGraphicsPipelineState(
-                          &pso, IID_PPV_ARGS(&psoOut)),
-                      "CreateGraphicsPipelineState(ModelRenderer) failed");
+        ThrowIfFailed(
+            device->CreateGraphicsPipelineState(&pso, IID_PPV_ARGS(&psoOut)),
+            "CreateGraphicsPipelineState(ModelRenderer) failed");
     };
 
     for (ModelBlendMode blendMode :
@@ -386,13 +381,12 @@ void ModelRenderer::CreatePipelineState() {
                 const size_t index =
                     PipelineVariantIndex(blendMode, cullMode, depthWrite);
                 makePso({vs->GetBufferPointer(), vs->GetBufferSize()},
-                        {baseLayout, _countof(baseLayout)}, blendMode,
-                        cullMode, depthWrite, pipelineStates_[index]);
+                        {baseLayout, _countof(baseLayout)}, blendMode, cullMode,
+                        depthWrite, pipelineStates_[index]);
                 makePso({instancedVs->GetBufferPointer(),
                          instancedVs->GetBufferSize()},
                         {instancedLayout, _countof(instancedLayout)}, blendMode,
-                        cullMode, depthWrite,
-                        instancedPipelineStates_[index]);
+                        cullMode, depthWrite, instancedPipelineStates_[index]);
             }
         }
     }
@@ -422,8 +416,7 @@ void ModelRenderer::CreateShadowPipelineState() {
         {"TANGENT", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
          D3D12_APPEND_ALIGNED_ELEMENT,
          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-        {"CUSTOM", 0, DXGI_FORMAT_R32_FLOAT, 0,
-         D3D12_APPEND_ALIGNED_ELEMENT,
+        {"CUSTOM", 0, DXGI_FORMAT_R32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
         {"BINDPOS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
          D3D12_APPEND_ALIGNED_ELEMENT,
@@ -485,14 +478,13 @@ void ModelRenderer::CreateShadowPipelineState() {
         depth.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
         pso.DepthStencilState = depth;
 
-        ThrowIfFailed(device->CreateGraphicsPipelineState(
-                          &pso, IID_PPV_ARGS(&psoOut)),
-                      "CreateGraphicsPipelineState(ModelShadow) failed");
+        ThrowIfFailed(
+            device->CreateGraphicsPipelineState(&pso, IID_PPV_ARGS(&psoOut)),
+            "CreateGraphicsPipelineState(ModelShadow) failed");
     };
 
     makePso({vs->GetBufferPointer(), vs->GetBufferSize()},
             {baseLayout, _countof(baseLayout)}, shadowPSO_);
     makePso({instancedVs->GetBufferPointer(), instancedVs->GetBufferSize()},
-            {instancedLayout, _countof(instancedLayout)},
-            instancedShadowPSO_);
+            {instancedLayout, _countof(instancedLayout)}, instancedShadowPSO_);
 }

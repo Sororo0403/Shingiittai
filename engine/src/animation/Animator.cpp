@@ -34,7 +34,8 @@ const AnimationClip *FindPlayableClip(Model &model) {
         return nullptr;
     }
     const auto clipIt = model.animations.find(model.currentAnimation);
-    if (clipIt == model.animations.end() || !std::isfinite(clipIt->second.duration) ||
+    if (clipIt == model.animations.end() ||
+        !std::isfinite(clipIt->second.duration) ||
         clipIt->second.duration <= 0.0f) {
         return nullptr;
     }
@@ -79,10 +80,10 @@ void ApplyRootNodeAnimation(Model &model, const AnimationClip &clip) {
                              ? XMFLOAT3{0.0f, 0.0f, 0.0f}
                              : AnimationSampler::SampleVec3(
                                    rootAnim.translate, model.animationTime);
-    const XMFLOAT3 scl = rootAnim.scale.keyframes.empty()
-                             ? XMFLOAT3{1.0f, 1.0f, 1.0f}
-                             : AnimationSampler::SampleVec3(
-                                   rootAnim.scale, model.animationTime);
+    const XMFLOAT3 scl =
+        rootAnim.scale.keyframes.empty()
+            ? XMFLOAT3{1.0f, 1.0f, 1.0f}
+            : AnimationSampler::SampleVec3(rootAnim.scale, model.animationTime);
     const XMFLOAT4 rot = rootAnim.rotate.keyframes.empty()
                              ? XMFLOAT4{0.0f, 0.0f, 0.0f, 1.0f}
                              : AnimationSampler::SampleQuat(

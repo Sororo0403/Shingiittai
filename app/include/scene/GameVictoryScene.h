@@ -68,7 +68,8 @@ class GameVictoryScene : public BaseScene {
                                 float screenHeight, size_t index, bool initial);
     void UpdateVictoryConfetti(float deltaTime, float screenWidth,
                                float screenHeight);
-    void DrawVictoryConfetti(float screenWidth, float screenHeight, float alpha);
+    void DrawVictoryConfetti(float screenWidth, float screenHeight,
+                             float alpha);
     void StartResultCrowdAudio();
     void StopResultCrowdAudio();
     void EmitPreImpactBurst();
@@ -96,8 +97,8 @@ class GameVictoryScene : public BaseScene {
     std::string FormatTime(float seconds) const;
     std::string FormatDifficulty(float difficulty) const;
     std::string FormatScore(int score) const;
-    void DrawImage(const Image &image, float x, float y,
-                   float scale = 1.0f, float alpha = 1.0f);
+    void DrawImage(const Image &image, float x, float y, float scale = 1.0f,
+                   float alpha = 1.0f);
     void DrawImage(const Image &image, float x, float y, float scale,
                    const DirectX::XMFLOAT4 &color);
     void DrawRect(float x, float y, float w, float h,

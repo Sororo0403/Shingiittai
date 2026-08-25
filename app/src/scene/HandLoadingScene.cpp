@@ -53,23 +53,40 @@ XMFLOAT4 CalibrationGuideColor(bool still, float pulse) {
 const std::array<const char *, 7> &BlockGlyphRows(char glyph) {
     static const auto glyphs = [] {
         std::array<std::array<const char *, 7>, 128> rows{};
-        rows['A'] = {"01110", "10001", "10001", "11111", "10001", "10001", "10001"};
-        rows['B'] = {"11110", "10001", "10001", "11110", "10001", "10001", "11110"};
-        rows['C'] = {"01111", "10000", "10000", "10000", "10000", "10000", "01111"};
-        rows['D'] = {"11110", "10001", "10001", "10001", "10001", "10001", "11110"};
-        rows['E'] = {"11111", "10000", "10000", "11110", "10000", "10000", "11111"};
-        rows['F'] = {"11111", "10000", "10000", "11110", "10000", "10000", "10000"};
-        rows['G'] = {"01110", "10001", "10000", "10111", "10001", "10001", "01110"};
-        rows['H'] = {"10001", "10001", "10001", "11111", "10001", "10001", "10001"};
-        rows['I'] = {"11111", "00100", "00100", "00100", "00100", "00100", "11111"};
-        rows['L'] = {"10000", "10000", "10000", "10000", "10000", "10000", "11111"};
-        rows['M'] = {"10001", "11011", "10101", "10101", "10001", "10001", "10001"};
-        rows['N'] = {"10001", "11001", "10101", "10011", "10001", "10001", "10001"};
-        rows['O'] = {"01110", "10001", "10001", "10001", "10001", "10001", "01110"};
-        rows['R'] = {"11110", "10001", "10001", "11110", "10100", "10010", "10001"};
-        rows['S'] = {"01111", "10000", "10000", "01110", "00001", "00001", "11110"};
-        rows['T'] = {"11111", "00100", "00100", "00100", "00100", "00100", "00100"};
-        rows['W'] = {"10001", "10001", "10001", "10101", "10101", "10101", "01010"};
+        rows['A'] = {"01110", "10001", "10001", "11111",
+                     "10001", "10001", "10001"};
+        rows['B'] = {"11110", "10001", "10001", "11110",
+                     "10001", "10001", "11110"};
+        rows['C'] = {"01111", "10000", "10000", "10000",
+                     "10000", "10000", "01111"};
+        rows['D'] = {"11110", "10001", "10001", "10001",
+                     "10001", "10001", "11110"};
+        rows['E'] = {"11111", "10000", "10000", "11110",
+                     "10000", "10000", "11111"};
+        rows['F'] = {"11111", "10000", "10000", "11110",
+                     "10000", "10000", "10000"};
+        rows['G'] = {"01110", "10001", "10000", "10111",
+                     "10001", "10001", "01110"};
+        rows['H'] = {"10001", "10001", "10001", "11111",
+                     "10001", "10001", "10001"};
+        rows['I'] = {"11111", "00100", "00100", "00100",
+                     "00100", "00100", "11111"};
+        rows['L'] = {"10000", "10000", "10000", "10000",
+                     "10000", "10000", "11111"};
+        rows['M'] = {"10001", "11011", "10101", "10101",
+                     "10001", "10001", "10001"};
+        rows['N'] = {"10001", "11001", "10101", "10011",
+                     "10001", "10001", "10001"};
+        rows['O'] = {"01110", "10001", "10001", "10001",
+                     "10001", "10001", "01110"};
+        rows['R'] = {"11110", "10001", "10001", "11110",
+                     "10100", "10010", "10001"};
+        rows['S'] = {"01111", "10000", "10000", "01110",
+                     "00001", "00001", "11110"};
+        rows['T'] = {"11111", "00100", "00100", "00100",
+                     "00100", "00100", "00100"};
+        rows['W'] = {"10001", "10001", "10001", "10101",
+                     "10101", "10101", "01010"};
         return rows;
     }();
     const size_t index = static_cast<unsigned char>(glyph);
@@ -86,7 +103,8 @@ HandLoadingScene::HandLoadingScene(
     GameScene::Mode destinationMode)
     : inputCalibration_(inputCalibration), destinationMode_(destinationMode) {}
 
-HandLoadingScene::HandLoadingScene(const SwordInputCalibration &inputCalibration)
+HandLoadingScene::HandLoadingScene(
+    const SwordInputCalibration &inputCalibration)
     : inputCalibration_(inputCalibration), destinationDifficultySelect_(true) {}
 
 HandLoadingScene::HandLoadingScene(
@@ -126,7 +144,8 @@ void HandLoadingScene::Update() {
 
     const auto left = handController_.GetDebugHandState(0);
     const auto right = handController_.GetDebugHandState(1);
-    const bool previewReady = previewReceiver_.HasFreshFrame(kPreviewStaleSeconds);
+    const bool previewReady =
+        previewReceiver_.HasFreshFrame(kPreviewStaleSeconds);
     const bool cameraStartupTimedOut =
         sceneTimer_ >= kCameraStartupTimeoutSeconds && !previewReady;
     if (cameraStartupTimedOut) {
@@ -144,8 +163,8 @@ void HandLoadingScene::Update() {
     const bool still = IsCalibrationStill(previewReady, handsReady, maxSpeed);
 
     if (still) {
-        stillTimer_ = (std::min)(stillTimer_ + deltaTime,
-                                 kCalibrationHoldSeconds);
+        stillTimer_ =
+            (std::min)(stillTimer_ + deltaTime, kCalibrationHoldSeconds);
         neutralSum_[0].x += left.rawPalm.x;
         neutralSum_[0].y += left.rawPalm.y;
         neutralSum_[1].x += right.rawPalm.x;
@@ -176,9 +195,8 @@ void HandLoadingScene::Update() {
             sceneManager_->ChangeScene(
                 std::make_unique<GameScene>(inputCalibration_, difficulty_));
         } else {
-            sceneManager_->ChangeScene(
-                std::make_unique<GameScene>(inputCalibration_,
-                                            destinationMode_));
+            sceneManager_->ChangeScene(std::make_unique<GameScene>(
+                inputCalibration_, destinationMode_));
         }
     }
 }
@@ -187,15 +205,16 @@ bool HandLoadingScene::TryAdvancePreviewDestination(bool previewReady) {
     if (UsesPreviewLoadingOnly(destinationMode_)) {
         if (previewReady) {
             inputCalibration_.controlType = InputControlType::Hand;
-            sceneManager_->ChangeScene(
-                std::make_unique<GameScene>(inputCalibration_, destinationMode_));
+            sceneManager_->ChangeScene(std::make_unique<GameScene>(
+                inputCalibration_, destinationMode_));
         }
         return true;
     }
     if (destinationSensitivityAdjust_) {
         if (previewReady) {
-            sceneManager_->ChangeScene(std::make_unique<CameraAccuracyDebugScene>(
-                sensitivityReturnTarget_));
+            sceneManager_->ChangeScene(
+                std::make_unique<CameraAccuracyDebugScene>(
+                    sensitivityReturnTarget_));
         }
         return true;
     }
@@ -217,8 +236,7 @@ void HandLoadingScene::Draw() {
         static_cast<float>(ctx_->systems.winApp->GetHeight());
 
     ctx_->rendering.sprite->PreDraw();
-    DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
-             Color(0.0f, 0.0f, 0.0f));
+    DrawRect(0.0f, 0.0f, screenWidth, screenHeight, Color(0.0f, 0.0f, 0.0f));
     ctx_->rendering.sprite->PostDraw();
 }
 
@@ -335,19 +353,21 @@ void HandLoadingScene::DrawFacingInstruction(float screenWidth,
     constexpr const char *kText = "FACE CAMERA";
     const float scale = std::clamp(screenWidth / 1250.0f, 0.78f, 1.25f);
     const float textWidth = MeasureBlockText(kText, scale);
-    DrawBlockText(kText, (screenWidth - textWidth) * 0.5f,
-                  screenHeight * 0.42f, scale,
-                  Color(1.0f, 1.0f, 1.0f, 0.96f));
+    DrawBlockText(kText, (screenWidth - textWidth) * 0.5f, screenHeight * 0.42f,
+                  scale, Color(1.0f, 1.0f, 1.0f, 0.96f));
 }
 
 void HandLoadingScene::DrawCalibrationOverlay(float screenWidth,
                                               float screenHeight) {
     const auto left = handController_.GetDebugHandState(0);
     const auto right = handController_.GetDebugHandState(1);
-    const bool previewReady = previewReceiver_.HasFreshFrame(kPreviewStaleSeconds);
-    const bool handsReady = left.fresh && right.fresh && left.active && right.active;
+    const bool previewReady =
+        previewReceiver_.HasFreshFrame(kPreviewStaleSeconds);
+    const bool handsReady =
+        left.fresh && right.fresh && left.active && right.active;
     const float maxSpeed = (std::max)(left.motionSpeed, right.motionSpeed);
-    const bool still = previewReady && handsReady && maxSpeed <= kStillMotionSpeed;
+    const bool still =
+        previewReady && handsReady && maxSpeed <= kStillMotionSpeed;
     const float progress =
         std::clamp(stillTimer_ / kCalibrationHoldSeconds, 0.0f, 1.0f);
     const float pulse = 0.5f + 0.5f * std::sinf(sceneTimer_ * 8.0f);
@@ -383,8 +403,8 @@ void HandLoadingScene::DrawCalibrationOverlay(float screenWidth,
                    : Color(1.0f, 0.62f, 0.18f, 0.42f));
 
     const int countValue =
-        still ? (std::max)(1, static_cast<int>(
-                                  std::ceil(kCalibrationHoldSeconds - stillTimer_)))
+        still ? (std::max)(1, static_cast<int>(std::ceil(
+                                  kCalibrationHoldSeconds - stillTimer_)))
               : 3;
     DrawCountdownNumber(countValue, screenWidth * 0.5f, screenHeight * 0.52f,
                         std::clamp(screenHeight / 760.0f, 0.78f, 1.20f),
@@ -421,12 +441,10 @@ void HandLoadingScene::DrawHandGuide(
     const float corner = boxSize * 0.28f;
     DrawRect(boxX - 7.0f, boxY - 7.0f, corner, 5.0f, color);
     DrawRect(boxX - 7.0f, boxY - 7.0f, 5.0f, corner, color);
-    DrawRect(boxX + boxSize - corner + 7.0f, boxY - 7.0f, corner, 5.0f,
-             color);
+    DrawRect(boxX + boxSize - corner + 7.0f, boxY - 7.0f, corner, 5.0f, color);
     DrawRect(boxX + boxSize + 2.0f, boxY - 7.0f, 5.0f, corner, color);
     DrawRect(boxX - 7.0f, boxY + boxSize + 2.0f, corner, 5.0f, color);
-    DrawRect(boxX - 7.0f, boxY + boxSize - corner + 7.0f, 5.0f, corner,
-             color);
+    DrawRect(boxX - 7.0f, boxY + boxSize - corner + 7.0f, 5.0f, corner, color);
     DrawRect(boxX + boxSize - corner + 7.0f, boxY + boxSize + 2.0f, corner,
              5.0f, color);
     DrawRect(boxX + boxSize + 2.0f, boxY + boxSize - corner + 7.0f, 5.0f,
@@ -526,8 +544,8 @@ void HandLoadingScene::DrawBlockText(const char *text, float x, float y,
     }
 }
 
-void HandLoadingScene::DrawBlockGlyph(char glyph, float x, float y,
-                                      float scale, const XMFLOAT4 &color) {
+void HandLoadingScene::DrawBlockGlyph(char glyph, float x, float y, float scale,
+                                      const XMFLOAT4 &color) {
     const auto &rows = BlockGlyphRows(glyph);
     if (rows[0] == nullptr) {
         return;
@@ -541,8 +559,8 @@ void HandLoadingScene::DrawBlockGlyph(char glyph, float x, float y,
                 continue;
             }
             DrawRect(x + static_cast<float>(col) * (cell + gap),
-                     y + static_cast<float>(row) * (cell + gap),
-                     cell, cell, color);
+                     y + static_cast<float>(row) * (cell + gap), cell, cell,
+                     color);
         }
     }
 }

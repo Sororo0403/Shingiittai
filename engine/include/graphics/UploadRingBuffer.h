@@ -1,8 +1,8 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
-#include <d3d12.h>
 #include <cstring>
+#include <d3d12.h>
 #include <limits>
 #include <utility>
 #include <vector>
@@ -66,8 +66,7 @@ class UploadRingBuffer {
             return {};
         }
         const size_t bytes = sizeof(T) * count;
-        UploadAllocation allocation =
-            Allocate(bytes, alignment);
+        UploadAllocation allocation = Allocate(bytes, alignment);
         if (allocation.cpu != nullptr) {
             std::memcpy(allocation.cpu, values, bytes);
         }

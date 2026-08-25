@@ -48,9 +48,8 @@ bool Enemy::DecideWarpTargetNearPlayer(DirectX::XMFLOAT3 &outTarget) {
     forwardZ /= forwardLength;
 
     if (warp_.approachSlot == WarpApproachSlot::None) {
-        warp_.approachSlot = (std::rand() % 100 < 42)
-                                 ? WarpApproachSlot::Front
-                                 : WarpApproachSlot::Back;
+        warp_.approachSlot = (std::rand() % 100 < 42) ? WarpApproachSlot::Front
+                                                      : WarpApproachSlot::Back;
     }
 
     outTarget = playerPos_;
@@ -255,9 +254,8 @@ void Enemy::FinalizeWarpTargetFacing(DirectX::XMFLOAT3 &target) {
 }
 
 void Enemy::ConfigureFarSlashLungeTarget() {
-    if (!farSlashActive_ ||
-        (action_.kind != ActionKind::Smash &&
-         action_.kind != ActionKind::Sweep)) {
+    if (!farSlashActive_ || (action_.kind != ActionKind::Smash &&
+                             action_.kind != ActionKind::Sweep)) {
         hasFarSlashLungeTarget_ = false;
         farSlashLungeDuration_ = 0.0f;
         return;
@@ -277,8 +275,8 @@ void Enemy::ConfigureFarSlashLungeTarget() {
         forwardZ = toPlayerZ / toPlayerLength;
     }
 
-    float approachOffset = std::clamp(config_.core.nearAttackDistance * 0.42f, 1.1f,
-                                     2.1f);
+    float approachOffset =
+        std::clamp(config_.core.nearAttackDistance * 0.42f, 1.1f, 2.1f);
     if (toPlayerLength > 0.0001f) {
         approachOffset = toPlayerLength > 0.45f
                              ? std::clamp(approachOffset, 0.45f, toPlayerLength)
@@ -286,19 +284,19 @@ void Enemy::ConfigureFarSlashLungeTarget() {
     }
 
     const float pierceThroughDistance =
-        approachOffset + std::clamp(config_.core.nearAttackDistance * 0.88f,
-                                    2.4f, 4.2f);
+        approachOffset +
+        std::clamp(config_.core.nearAttackDistance * 0.88f, 2.4f, 4.2f);
     farSlashLungeTargetPos_.x = playerPos_.x + forwardX * pierceThroughDistance;
     farSlashLungeTargetPos_.z = playerPos_.z + forwardZ * pierceThroughDistance;
     farSlashLungeTargetPos_.y = tf_.position.y;
 
     float toTargetX = farSlashLungeTargetPos_.x - farSlashLungeStartPos_.x;
     float toTargetZ = farSlashLungeTargetPos_.z - farSlashLungeStartPos_.z;
-    const float targetDistance = std::sqrt(toTargetX * toTargetX + toTargetZ * toTargetZ);
-    const float lungeSpeed = farSlashLungeSpeed_ *
-                             (tripleIaiSlashActive_
-                                  ? tripleIaiSlashSpeedScale_
-                                  : 1.0f);
+    const float targetDistance =
+        std::sqrt(toTargetX * toTargetX + toTargetZ * toTargetZ);
+    const float lungeSpeed =
+        farSlashLungeSpeed_ *
+        (tripleIaiSlashActive_ ? tripleIaiSlashSpeedScale_ : 1.0f);
     const float travelDuration = targetDistance / std::max(1.0f, lungeSpeed);
     farSlashLungeDuration_ = std::max(travelDuration, 0.06f);
     hasFarSlashLungeTarget_ = true;
@@ -312,8 +310,7 @@ void Enemy::UpdateFarSlashLunge(float deltaTime) {
 
     const float lungeTimer =
         std::max(0.0f, stateTimer_ - kFarSlashCounterFlashDuration);
-    const float t =
-        std::clamp(lungeTimer / farSlashLungeDuration_, 0.0f, 1.0f);
+    const float t = std::clamp(lungeTimer / farSlashLungeDuration_, 0.0f, 1.0f);
     const float eased = 1.0f - std::pow(1.0f - t, 2.3f);
 
     tf_.position.x =
@@ -322,9 +319,9 @@ void Enemy::UpdateFarSlashLunge(float deltaTime) {
     tf_.position.z =
         farSlashLungeStartPos_.z +
         (farSlashLungeTargetPos_.z - farSlashLungeStartPos_.z) * eased;
-    tf_.position.y = farSlashLungeStartPos_.y +
-                     (farSlashLungeTargetPos_.y - farSlashLungeStartPos_.y) *
-                         eased;
+    tf_.position.y =
+        farSlashLungeStartPos_.y +
+        (farSlashLungeTargetPos_.y - farSlashLungeStartPos_.y) * eased;
 
     if (t >= 1.0f) {
         tf_.position = farSlashLungeTargetPos_;
@@ -441,27 +438,23 @@ void Enemy::UpdateWarpMove(float deltaTime) {
 
     float t = 1.0f;
     const float moveTime =
-        warp_.phantomChain
-            ? PhantomWarpMoveTime(warp_.phantomFinal)
-            : warp_.farSlashFollowup && tripleIaiSlashActive_
-                  ? config_.warp.moveTime * 0.34f
-                  : warp_.farSlashFollowup ? config_.warp.moveTime * 1.80f
-                                            : config_.warp.moveTime;
+        warp_.phantomChain ? PhantomWarpMoveTime(warp_.phantomFinal)
+        : warp_.farSlashFollowup && tripleIaiSlashActive_
+            ? config_.warp.moveTime * 0.34f
+        : warp_.farSlashFollowup ? config_.warp.moveTime * 1.80f
+                                 : config_.warp.moveTime;
     if (moveTime > 0.0001f) {
         t = stateTimer_ / moveTime;
     }
     t = std::clamp(t, 0.0f, 1.0f);
 
     const float eased = 1.0f - std::pow(1.0f - t, 2.6f);
-    tf_.position.x =
-        warp_.departurePos.x +
-        (warp_.targetPos.x - warp_.departurePos.x) * eased;
-    tf_.position.y =
-        warp_.departurePos.y +
-        (warp_.targetPos.y - warp_.departurePos.y) * eased;
-    tf_.position.z =
-        warp_.departurePos.z +
-        (warp_.targetPos.z - warp_.departurePos.z) * eased;
+    tf_.position.x = warp_.departurePos.x +
+                     (warp_.targetPos.x - warp_.departurePos.x) * eased;
+    tf_.position.y = warp_.departurePos.y +
+                     (warp_.targetPos.y - warp_.departurePos.y) * eased;
+    tf_.position.z = warp_.departurePos.z +
+                     (warp_.targetPos.z - warp_.departurePos.z) * eased;
 
     if (warp_.hasTargetYaw) {
         facingYaw_ = NormalizeAngle(warp_.targetYaw);
@@ -563,26 +556,23 @@ float Enemy::GetWarpEndDuration() const {
 }
 
 bool Enemy::ContinuePhantomWarp(int phantomRemaining) {
-        const float earlyStrikeChance =
-            0.18f + 0.42f * TechniqueUnlock(BossPhase::Phase3);
-        const bool canCutInEarly = phantomRemaining > 1;
-        if (canCutInEarly && Random01() < earlyStrikeChance) {
-            const ActionKind finisher =
-                (std::rand() % 2 == 0) ? ActionKind::Smash
-                                       : ActionKind::Sweep;
-            BeginPhantomWarpStep(0, true, finisher);
-            return true;
-        }
-        if (phantomRemaining > 1) {
-            BeginPhantomWarpStep(phantomRemaining - 1, false,
-                                 ActionKind::None);
-        } else {
-            const ActionKind finisher =
-                (std::rand() % 2 == 0) ? ActionKind::Smash
-                                       : ActionKind::Sweep;
-            BeginPhantomWarpStep(0, true, finisher);
-        }
+    const float earlyStrikeChance =
+        0.18f + 0.42f * TechniqueUnlock(BossPhase::Phase3);
+    const bool canCutInEarly = phantomRemaining > 1;
+    if (canCutInEarly && Random01() < earlyStrikeChance) {
+        const ActionKind finisher =
+            (std::rand() % 2 == 0) ? ActionKind::Smash : ActionKind::Sweep;
+        BeginPhantomWarpStep(0, true, finisher);
         return true;
+    }
+    if (phantomRemaining > 1) {
+        BeginPhantomWarpStep(phantomRemaining - 1, false, ActionKind::None);
+    } else {
+        const ActionKind finisher =
+            (std::rand() % 2 == 0) ? ActionKind::Smash : ActionKind::Sweep;
+        BeginPhantomWarpStep(0, true, finisher);
+    }
+    return true;
 }
 
 bool Enemy::BeginWarpMeleeFollowup(ActionKind followupKind,
@@ -594,34 +584,33 @@ bool Enemy::BeginWarpMeleeFollowup(ActionKind followupKind,
         followupKind != ActionKind::Sweep) {
         return false;
     }
-        UpdateFacingToPlayer();
+    UpdateFacingToPlayer();
+    LockCurrentFacing();
+    if (!farSlashFollowup && !IsPlayerInMeleeFront()) {
+        BeginChaseAction();
+        return true;
+    }
+    BeginAction(followupKind, followupStep);
+    quickSlashActive_ = immediateFollowup || (phantomChain && phantomFinal);
+    farSlashActive_ = farSlashFollowup;
+    if (farSlashActive_) {
+        ConfigureFarSlashLungeTarget();
+        const float chargeTime = followupKind == ActionKind::Smash
+                                     ? GetCurrentSmashChargeTime()
+                                     : GetCurrentSweepChargeTime();
+        const float tellTime =
+            followupKind == ActionKind::Smash ? smashTellTime_ : sweepTellTime_;
+        IssueAttackCue(EnemyAttackCueType::Telegraph, followupKind,
+                       chargeTime + tellTime);
+    }
+    warpFeintFollowupLocked_ = feintFollowup;
+    warpFeintImmediate_ = feintFollowup && immediateFollowup;
+    if (phantomChain && phantomFinal) {
         LockCurrentFacing();
-        if (!farSlashFollowup && !IsPlayerInMeleeFront()) {
-            BeginChaseAction();
-            return true;
-        }
-        BeginAction(followupKind, followupStep);
-        quickSlashActive_ = immediateFollowup || (phantomChain && phantomFinal);
-        farSlashActive_ = farSlashFollowup;
-        if (farSlashActive_) {
-            ConfigureFarSlashLungeTarget();
-            const float chargeTime =
-                followupKind == ActionKind::Smash ? GetCurrentSmashChargeTime()
-                                                  : GetCurrentSweepChargeTime();
-            const float tellTime = followupKind == ActionKind::Smash
-                                       ? smashTellTime_
-                                       : sweepTellTime_;
-            IssueAttackCue(EnemyAttackCueType::Telegraph, followupKind,
-                           chargeTime + tellTime);
-        }
-        warpFeintFollowupLocked_ = feintFollowup;
-        warpFeintImmediate_ = feintFollowup && immediateFollowup;
-        if (phantomChain && phantomFinal) {
-            LockCurrentFacing();
-            phantomFinalLockTimer_ = phantomFinalLockDuration_;
-            warpFeintDecisionMade_ = true;
-            directionFeintDecisionMade_ = true;
-        }
+        phantomFinalLockTimer_ = phantomFinalLockDuration_;
+        warpFeintDecisionMade_ = true;
+        directionFeintDecisionMade_ = true;
+    }
     return true;
 }
 

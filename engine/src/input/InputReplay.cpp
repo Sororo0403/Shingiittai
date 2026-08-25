@@ -52,24 +52,20 @@ std::array<BYTE, 256> DecodeKeys(const std::string &encoded) {
         }
 
         for (size_t bit = 0; bit < 4; ++bit) {
-            keys[index * 4 + bit] =
-                (nibble & (1u << bit)) != 0 ? 0x80 : 0;
+            keys[index * 4 + bit] = (nibble & (1u << bit)) != 0 ? 0x80 : 0;
         }
     }
     return keys;
 }
 
-template <typename T>
-bool TryConvertInteger(uint64_t value, T &outValue) {
+template <typename T> bool TryConvertInteger(uint64_t value, T &outValue) {
     static_assert(std::is_integral_v<T>);
     if constexpr (std::is_signed_v<T>) {
-        if (value >
-            static_cast<uint64_t>((std::numeric_limits<T>::max)())) {
+        if (value > static_cast<uint64_t>((std::numeric_limits<T>::max)())) {
             return false;
         }
     } else {
-        if (value >
-            static_cast<uint64_t>((std::numeric_limits<T>::max)())) {
+        if (value > static_cast<uint64_t>((std::numeric_limits<T>::max)())) {
             return false;
         }
     }
@@ -78,8 +74,7 @@ bool TryConvertInteger(uint64_t value, T &outValue) {
     return true;
 }
 
-template <typename T>
-bool TryConvertInteger(int64_t value, T &outValue) {
+template <typename T> bool TryConvertInteger(int64_t value, T &outValue) {
     static_assert(std::is_integral_v<T>);
     if constexpr (std::is_signed_v<T>) {
         if (value < static_cast<int64_t>((std::numeric_limits<T>::lowest)()) ||
@@ -164,8 +159,7 @@ bool Input::StartRecording(const std::wstring &path, float fixedDeltaTime) {
 
     replayPath_ = path;
     replayFixedDeltaTime_ =
-        std::isfinite(fixedDeltaTime) ? (std::max)(fixedDeltaTime, 0.0f)
-                                      : 0.0f;
+        std::isfinite(fixedDeltaTime) ? (std::max)(fixedDeltaTime, 0.0f) : 0.0f;
     recordedFrames_.clear();
     recordingDirty_ = true;
     replayMode_ = ReplayMode::Record;
@@ -266,16 +260,12 @@ void Input::ApplyReplayFrame(const InputFrame &frame) {
     gamepadLeftTrigger_ = std::clamp(frame.gamepadLeftTrigger, 0.0f, 1.0f);
     gamepadRightTrigger_ = std::clamp(frame.gamepadRightTrigger, 0.0f, 1.0f);
     gamepadState_.Gamepad.bLeftTrigger =
-        static_cast<BYTE>(std::clamp(gamepadLeftTrigger_, 0.0f, 1.0f) *
-                          255.0f);
-    gamepadState_.Gamepad.bRightTrigger =
-        static_cast<BYTE>(std::clamp(gamepadRightTrigger_, 0.0f, 1.0f) *
-                          255.0f);
+        static_cast<BYTE>(std::clamp(gamepadLeftTrigger_, 0.0f, 1.0f) * 255.0f);
+    gamepadState_.Gamepad.bRightTrigger = static_cast<BYTE>(
+        std::clamp(gamepadRightTrigger_, 0.0f, 1.0f) * 255.0f);
 }
 
-void Input::UpdateReplayHotkeys(float fixedDeltaTime) {
-    (void)fixedDeltaTime;
-}
+void Input::UpdateReplayHotkeys(float fixedDeltaTime) { (void)fixedDeltaTime; }
 
 std::wstring Input::MakeAutoReplayPath() const {
     const auto now = std::chrono::system_clock::now();
@@ -365,8 +355,7 @@ bool Input::LoadReplay(const std::wstring &path) {
     if (!root.contains("frames") || !root["frames"].is_array()) {
         return false;
     }
-    if (root["frames"].empty() ||
-        root["frames"].size() > kMaxReplayFrames) {
+    if (root["frames"].empty() || root["frames"].size() > kMaxReplayFrames) {
         return false;
     }
 

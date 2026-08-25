@@ -1,11 +1,11 @@
-#include "sound/SoundManager.h"
 #include "core/AssetManager.h"
+#include "sound/SoundManager.h"
 
 #include <Objbase.h>
 #include <algorithm>
-#include <cwctype>
-#include <cstring>
 #include <cmath>
+#include <cstring>
+#include <cwctype>
 #include <filesystem>
 #include <limits>
 #include <mfapi.h>
@@ -56,8 +56,6 @@ XMVECTOR NormalizeVectorOrDefault(FXMVECTOR value, FXMVECTOR fallback) {
 
 } // namespace
 
-
-
 uint32_t SoundManager::Play3D(uint32_t soundId,
                               const DirectX::XMFLOAT3 &sourcePosition,
                               float volume, bool loop) {
@@ -81,12 +79,11 @@ void SoundManager::SetListener(const DirectX::XMFLOAT3 &position,
                                const DirectX::XMFLOAT3 &forward,
                                const DirectX::XMFLOAT3 &up) {
     listenerPosition_ = position;
-    XMStoreFloat3(&listenerForward_,
-                  LoadFloat3OrDefault(forward,
-                                      XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f)));
+    XMStoreFloat3(
+        &listenerForward_,
+        LoadFloat3OrDefault(forward, XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f)));
     XMStoreFloat3(&listenerUp_,
-                  LoadFloat3OrDefault(up,
-                                      XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f)));
+                  LoadFloat3OrDefault(up, XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f)));
 
     for (PlayingVoice &playingVoice : playingVoices_) {
         if (playingVoice.is3D) {
@@ -95,8 +92,8 @@ void SoundManager::SetListener(const DirectX::XMFLOAT3 &position,
     }
 }
 
-void SoundManager::SetVoicePosition(
-    uint32_t voiceHandle, const DirectX::XMFLOAT3 &sourcePosition) {
+void SoundManager::SetVoicePosition(uint32_t voiceHandle,
+                                    const DirectX::XMFLOAT3 &sourcePosition) {
     for (PlayingVoice &playingVoice : playingVoices_) {
         if (playingVoice.handle == voiceHandle) {
             playingVoice.is3D = true;
@@ -111,14 +108,12 @@ void SoundManager::SetVoice3DRange(uint32_t voiceHandle, float minDistance,
                                    float maxDistance) {
     for (PlayingVoice &playingVoice : playingVoices_) {
         if (playingVoice.handle == voiceHandle) {
-            playingVoice.minDistance =
-                std::isfinite(minDistance)
-                    ? (std::max)(minDistance, 0.001f)
-                    : 0.001f;
+            playingVoice.minDistance = std::isfinite(minDistance)
+                                           ? (std::max)(minDistance, 0.001f)
+                                           : 0.001f;
             playingVoice.maxDistance =
                 std::isfinite(maxDistance)
-                    ? (std::max)(maxDistance,
-                                 playingVoice.minDistance + 0.001f)
+                    ? (std::max)(maxDistance, playingVoice.minDistance + 0.001f)
                     : playingVoice.minDistance + 0.001f;
             Apply3D(playingVoice);
             return;
@@ -140,10 +135,9 @@ void SoundManager::Apply3D(PlayingVoice &playingVoice) {
         return;
     }
 
-    const float minDistance =
-        std::isfinite(playingVoice.minDistance)
-            ? (std::max)(playingVoice.minDistance, 0.001f)
-            : 0.001f;
+    const float minDistance = std::isfinite(playingVoice.minDistance)
+                                  ? (std::max)(playingVoice.minDistance, 0.001f)
+                                  : 0.001f;
     const float maxDistance =
         std::isfinite(playingVoice.maxDistance)
             ? (std::max)(playingVoice.maxDistance, minDistance + 0.001f)
@@ -168,18 +162,16 @@ void SoundManager::Apply3D(PlayingVoice &playingVoice) {
         (std::numeric_limits<UINT32>::max)() / sourceChannels) {
         return;
     }
-    std::vector<float> matrix(static_cast<size_t>(sourceChannels) *
-                                  destinationChannels,
-                              volume);
+    std::vector<float> matrix(
+        static_cast<size_t>(sourceChannels) * destinationChannels, volume);
 
     if (destinationChannels >= 2 && distance > 0.0001f) {
         XMVECTOR forward = LoadFloat3OrDefault(
             listenerForward_, XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f));
-        XMVECTOR up = LoadFloat3OrDefault(
-            listenerUp_, XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
+        XMVECTOR up = LoadFloat3OrDefault(listenerUp_,
+                                          XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
         XMVECTOR right = NormalizeVectorOrDefault(
-            XMVector3Cross(up, forward),
-            XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f));
+            XMVector3Cross(up, forward), XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f));
         XMVECTOR direction = NormalizeVectorOrDefault(toSource, forward);
         const float pan = ClampFinite(
             XMVectorGetX(XMVector3Dot(direction, right)), -1.0f, 1.0f, 0.0f);
@@ -193,6 +185,6 @@ void SoundManager::Apply3D(PlayingVoice &playingVoice) {
         }
     }
 
-    playingVoice.voice->SetOutputMatrix(
-        masterVoice_, sourceChannels, destinationChannels, matrix.data());
+    playingVoice.voice->SetOutputMatrix(masterVoice_, sourceChannels,
+                                        destinationChannels, matrix.data());
 }

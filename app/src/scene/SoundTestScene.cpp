@@ -30,9 +30,7 @@ XMFLOAT4 Color(float r, float g, float b, float a = 1.0f) {
 
 float SmoothStep(float t) { return t * t * (3.0f - 2.0f * t); }
 
-float Smooth01(float t) {
-    return SmoothStep(std::clamp(t, 0.0f, 1.0f));
-}
+float Smooth01(float t) { return SmoothStep(std::clamp(t, 0.0f, 1.0f)); }
 } // namespace
 
 SoundTestScene::SoundTestScene(ReturnTarget returnTarget)
@@ -59,8 +57,7 @@ void SoundTestScene::Initialize(const SceneContext &ctx) {
         std::make_unique<GameScene>(GameScene::Mode::BackgroundOnly);
     backgroundScene_->Initialize(ctx);
 
-    titleImage_ =
-        LoadTextureImage(L"app/resources/ui/sound_test/title.png");
+    titleImage_ = LoadTextureImage(L"app/resources/ui/sound_test/title.png");
     controlsImage_ =
         LoadTextureImage(L"app/resources/ui/sound_test/controls.png");
     playingStatusImage_ =
@@ -93,17 +90,18 @@ void SoundTestScene::Initialize(const SceneContext &ctx) {
     }};
 
     for (Track &track : tracks_) {
-        track.soundId = ctx_->systems.sound != nullptr
-                            ? ctx_->systems.sound->LoadOrCreateSilent(track.path)
-                            : SoundManager::kInvalidSoundId;
+        track.soundId =
+            ctx_->systems.sound != nullptr
+                ? ctx_->systems.sound->LoadOrCreateSilent(track.path)
+                : SoundManager::kInvalidSoundId;
         track.label = LoadTextureImage(track.labelPath);
     }
 }
 
 void SoundTestScene::Update() {
     sceneTime_ += ctx_->frame.deltaTime;
-    introTimer_ = (std::min)(introTimer_ + ctx_->frame.deltaTime,
-                             kIntroDuration + 0.2f);
+    introTimer_ =
+        (std::min)(introTimer_ + ctx_->frame.deltaTime, kIntroDuration + 0.2f);
     if (backgroundScene_) {
         backgroundScene_->Update();
     }
@@ -128,9 +126,8 @@ void SoundTestScene::Update() {
         return;
     }
     if (input->IsKeyTrigger(DIK_A) || input->IsKeyTrigger(DIK_LEFT)) {
-        selectedIndex_ =
-            (selectedIndex_ + static_cast<int>(kTrackCount) - 1) %
-            static_cast<int>(kTrackCount);
+        selectedIndex_ = (selectedIndex_ + static_cast<int>(kTrackCount) - 1) %
+                         static_cast<int>(kTrackCount);
         StopPlayingTrack();
     }
     if (input->IsKeyTrigger(DIK_D) || input->IsKeyTrigger(DIK_RIGHT)) {
@@ -188,9 +185,9 @@ void SoundTestScene::PlaySelectedTrack() {
         return;
     }
 
-    const float volume = track.baseVolume *
-                         (track.loop ? AppSceneServices::GetBgmVolume()
-                                     : AppSceneServices::GetSeVolume());
+    const float volume =
+        track.baseVolume * (track.loop ? AppSceneServices::GetBgmVolume()
+                                       : AppSceneServices::GetSeVolume());
     playingVoiceHandle_ =
         ctx_->systems.sound->Play(track.soundId, volume, track.loop);
     playingIndex_ = selectedIndex_;
@@ -250,8 +247,7 @@ void SoundTestScene::UpdateVisualizer(float deltaTime) {
     const bool hasPlayingTrack =
         ctx_ != nullptr && ctx_->systems.sound != nullptr &&
         playingVoiceHandle_ != SoundManager::kInvalidVoiceHandle &&
-        playingIndex_ >= 0 &&
-        !playbackPaused_ &&
+        playingIndex_ >= 0 && !playbackPaused_ &&
         ctx_->systems.sound->IsPlaying(playingVoiceHandle_);
 
     float targetEnergy = 0.0f;
@@ -262,18 +258,16 @@ void SoundTestScene::UpdateVisualizer(float deltaTime) {
         const float volume =
             ctx_->systems.sound->GetVoiceVolume(playingVoiceHandle_);
         std::array<float, kVisualizerBarCount> spectrum{};
-        ctx_->systems.sound->FillSpectrumBands(track.soundId, position,
-                                               spectrum.data(),
-                                               spectrum.size());
+        ctx_->systems.sound->FillSpectrumBands(
+            track.soundId, position, spectrum.data(), spectrum.size());
         for (size_t i = 0; i < visualizerBars_.size(); ++i) {
             const float band = static_cast<float>(i) /
                                static_cast<float>(visualizerBars_.size() - 1);
             const float wave =
                 0.5f + 0.5f * std::sinf(sceneTime_ * (2.0f + band * 5.4f) +
-                                         band * 9.0f);
+                                        band * 9.0f);
             const float shaped = std::clamp(
-                std::pow(spectrum[i] * volume, 0.68f) *
-                    (1.65f + wave * 0.42f),
+                std::pow(spectrum[i] * volume, 0.68f) * (1.65f + wave * 0.42f),
                 0.0f, 1.0f);
             const float rise = std::clamp(deltaTime * 42.0f, 0.0f, 1.0f);
             const float fall = std::clamp(deltaTime * 10.0f, 0.0f, 1.0f);
@@ -288,17 +282,16 @@ void SoundTestScene::UpdateVisualizer(float deltaTime) {
         }
     }
 
-    visualizerEnergy_ +=
-        (targetEnergy - visualizerEnergy_) *
-        std::clamp(deltaTime * 7.5f, 0.0f, 1.0f);
+    visualizerEnergy_ += (targetEnergy - visualizerEnergy_) *
+                         std::clamp(deltaTime * 7.5f, 0.0f, 1.0f);
 }
 
 void SoundTestScene::DrawOverlay(float screenWidth, float screenHeight) {
     const float backgroundReveal =
         Smooth01(introTimer_ / kBackgroundRevealDuration);
-    DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
-             Color(0.0f, 0.0f, 0.0f,
-                   0.72f + (1.0f - backgroundReveal) * 0.22f));
+    DrawRect(
+        0.0f, 0.0f, screenWidth, screenHeight,
+        Color(0.0f, 0.0f, 0.0f, 0.72f + (1.0f - backgroundReveal) * 0.22f));
     DrawRect(0.0f, 0.0f, screenWidth, screenHeight * 0.20f,
              Color(0.0f, 0.0f, 0.0f, 0.32f * backgroundReveal));
     DrawRect(0.0f, screenHeight * 0.80f, screenWidth, screenHeight * 0.20f,
@@ -307,8 +300,8 @@ void SoundTestScene::DrawOverlay(float screenWidth, float screenHeight) {
 
 void SoundTestScene::DrawAudioVisualizer(float screenWidth,
                                          float screenHeight) {
-    const float intro = Smooth01((introTimer_ - kBarIntroDelay) /
-                                 kBarIntroDuration);
+    const float intro =
+        Smooth01((introTimer_ - kBarIntroDelay) / kBarIntroDuration);
     if (intro <= 0.0f) {
         return;
     }
@@ -324,16 +317,16 @@ void SoundTestScene::DrawAudioVisualizer(float screenWidth,
     const float maxH = screenHeight * 0.42f;
     for (size_t i = 0; i < visualizerBars_.size(); ++i) {
         const float mirror =
-            1.0f - std::abs(static_cast<float>(i) -
-                            static_cast<float>(visualizerBars_.size() - 1) *
-                                0.5f) /
-                       (static_cast<float>(visualizerBars_.size() - 1) * 0.5f);
+            1.0f -
+            std::abs(static_cast<float>(i) -
+                     static_cast<float>(visualizerBars_.size() - 1) * 0.5f) /
+                (static_cast<float>(visualizerBars_.size() - 1) * 0.5f);
         const float beat =
             playingCurrent
                 ? visualizerBars_[i]
-                : 0.018f + 0.020f *
-                             (0.5f + 0.5f * std::sinf(sceneTime_ * 1.8f +
-                                                      static_cast<float>(i)));
+                : 0.018f +
+                      0.020f * (0.5f + 0.5f * std::sinf(sceneTime_ * 1.8f +
+                                                        static_cast<float>(i)));
         const float height =
             std::clamp(maxH * (0.018f + std::pow(beat, 1.18f) * 1.46f) *
                            (0.58f + 0.62f * mirror),
@@ -345,10 +338,8 @@ void SoundTestScene::DrawAudioVisualizer(float screenWidth,
         const float x = startX + static_cast<float>(i) * (barW + barGap);
         const XMFLOAT4 color =
             i % 3 == 0
-                ? Color(1.0f, 0.62f, 0.18f,
-                        intro * (0.22f + beat * 0.62f))
-                : Color(0.00f, 0.86f, 0.78f,
-                        intro * (0.20f + beat * 0.70f));
+                ? Color(1.0f, 0.62f, 0.18f, intro * (0.22f + beat * 0.62f))
+                : Color(0.00f, 0.86f, 0.78f, intro * (0.20f + beat * 0.70f));
         DrawRect(x, baseY - height, barW, height, color);
         DrawRect(x, baseY + 10.0f, barW, height * 0.52f,
                  Color(color.x, color.y, color.z, color.w * 0.34f));
@@ -364,12 +355,12 @@ void SoundTestScene::DrawPanel(float screenWidth, float screenHeight) {
     const float panelW = std::clamp(screenWidth * 0.58f, 660.0f, 900.0f);
     const float panelH = std::clamp(screenHeight * 0.58f, 400.0f, 540.0f);
     const float x = (screenWidth - panelW) * 0.5f;
-    const float y =
-        (screenHeight - panelH) * 0.5f + (1.0f - intro) * 30.0f;
+    const float y = (screenHeight - panelH) * 0.5f + (1.0f - intro) * 30.0f;
 
     DrawRect(x + 12.0f, y + 14.0f, panelW, panelH,
              Color(0.0f, 0.0f, 0.0f, 0.34f * intro));
-    DrawRect(x, y, panelW, panelH, Color(0.016f, 0.019f, 0.023f, 0.88f * intro));
+    DrawRect(x, y, panelW, panelH,
+             Color(0.016f, 0.019f, 0.023f, 0.88f * intro));
     DrawFrame(x, y, panelW, panelH, 2.0f,
               Color(0.95f, 0.72f, 0.28f, 0.70f * intro));
     DrawRect(x + 12.0f, y + 12.0f, panelW - 24.0f, 2.0f,
@@ -386,14 +377,14 @@ void SoundTestScene::DrawPanel(float screenWidth, float screenHeight) {
     const float titleW = titleImage_.width * titleScale;
     const float titleH = titleImage_.height * titleScale;
     DrawImage(titleImage_, x + (panelW - titleW) * 0.5f,
-              titleAreaY + (titleAreaH - titleH) * 0.5f,
-              titleScale, 0.94f * intro);
+              titleAreaY + (titleAreaH - titleH) * 0.5f, titleScale,
+              0.94f * intro);
 
     const bool playingCurrent =
         playingIndex_ == selectedIndex_ && !playbackPaused_;
-    const XMFLOAT4 cardAccent =
-        playingCurrent ? Color(0.00f, 0.86f, 0.78f, 0.70f * intro)
-                       : Color(1.0f, 0.78f, 0.34f, 0.70f * intro);
+    const XMFLOAT4 cardAccent = playingCurrent
+                                    ? Color(0.00f, 0.86f, 0.78f, 0.70f * intro)
+                                    : Color(1.0f, 0.78f, 0.34f, 0.70f * intro);
     const XMFLOAT4 cardAccentDim =
         playingCurrent ? Color(0.00f, 0.86f, 0.78f, 0.34f * intro)
                        : Color(0.95f, 0.72f, 0.28f, 0.34f * intro);
@@ -409,8 +400,7 @@ void SoundTestScene::DrawPanel(float screenWidth, float screenHeight) {
     DrawRect(cardX, cardY, cardW, cardH * 0.18f,
              playingCurrent ? Color(0.00f, 0.16f, 0.15f, 0.28f * intro)
                             : Color(0.12f, 0.08f, 0.03f, 0.22f * intro));
-    DrawRect(cardX, cardY + cardH - 3.0f, cardW, 3.0f,
-             cardAccent);
+    DrawRect(cardX, cardY + cardH - 3.0f, cardW, 3.0f, cardAccent);
 
     const float iconSize = std::clamp(cardH * 0.58f, 82.0f, 118.0f);
     const float iconX = cardX + cardW * 0.24f;
@@ -433,15 +423,13 @@ void SoundTestScene::DrawPanel(float screenWidth, float screenHeight) {
 
     const Image &label = selectedTrack.label;
     const float labelScale =
-        (std::min)({1.0f,
-                    (cardH * 0.34f) / (std::max)(label.height, 1.0f),
+        (std::min)({1.0f, (cardH * 0.34f) / (std::max)(label.height, 1.0f),
                     (cardW * 0.46f) / (std::max)(label.width, 1.0f)});
     const float labelW = label.width * labelScale;
     const float labelH = label.height * labelScale;
     const float labelCenterX = cardX + cardW * 0.64f;
     DrawImage(label, labelCenterX - labelW * 0.5f,
-              cardY + cardH * 0.34f - labelH * 0.5f, labelScale,
-              0.96f * intro);
+              cardY + cardH * 0.34f - labelH * 0.5f, labelScale, 0.96f * intro);
 
     const float authorScale =
         (std::min)({0.56f,
@@ -453,20 +441,17 @@ void SoundTestScene::DrawPanel(float screenWidth, float screenHeight) {
               cardY + cardH * 0.55f - authorH * 0.5f, authorScale,
               0.74f * intro);
 
-    DrawRect(cardX + cardW * 0.45f, cardY + cardH * 0.67f, cardW * 0.36f,
-             2.0f,
+    DrawRect(cardX + cardW * 0.45f, cardY + cardH * 0.67f, cardW * 0.36f, 2.0f,
              playingCurrent ? cardAccentDim
                             : Color(0.62f, 0.66f, 0.72f, 0.20f * intro));
-    const float keyScale = std::clamp(cardH * 0.32f /
-                                          (std::max)(keyAImage_.height, 1.0f),
-                                      0.38f, 0.58f);
+    const float keyScale = std::clamp(
+        cardH * 0.32f / (std::max)(keyAImage_.height, 1.0f), 0.38f, 0.58f);
     const float keyW = keyAImage_.width * keyScale;
     const float keyH = keyAImage_.height * keyScale;
     const float keyY = cardY + cardH * 0.50f - keyH * 0.5f;
     const float keyGap = 18.0f;
     const float keyPanelPadding = 14.0f;
-    const float keyAX =
-        (std::max)(x + keyPanelPadding, cardX - keyW - keyGap);
+    const float keyAX = (std::max)(x + keyPanelPadding, cardX - keyW - keyGap);
     const float keyDX =
         (std::min)(x + panelW - keyPanelPadding - keyW, cardX + cardW + keyGap);
     DrawImage(keyAImage_, keyAX, keyY, keyScale, 0.74f * intro);
@@ -483,8 +468,8 @@ void SoundTestScene::DrawPanel(float screenWidth, float screenHeight) {
         const float statusH = playingStatusImage_.height * statusScale;
         const float statusX = labelCenterX - statusW * 0.5f;
         const float statusY = cardY + cardH * 0.80f - statusH * 0.5f;
-        DrawRect(statusX - 18.0f, statusY + statusH * 0.5f - 5.0f,
-                 10.0f, 10.0f, Color(0.00f, 0.86f, 0.78f, 0.86f * intro));
+        DrawRect(statusX - 18.0f, statusY + statusH * 0.5f - 5.0f, 10.0f, 10.0f,
+                 Color(0.00f, 0.86f, 0.78f, 0.86f * intro));
         DrawImage(playingStatusImage_, statusX, statusY, statusScale,
                   0.82f * intro);
     }
@@ -492,17 +477,14 @@ void SoundTestScene::DrawPanel(float screenWidth, float screenHeight) {
 
 void SoundTestScene::DrawMusicIcon(float centerX, float centerY, float size,
                                    float alpha, bool playing) {
-    const XMFLOAT4 line =
-        playing ? Color(0.00f, 0.86f, 0.78f, 0.90f * alpha)
-                : Color(1.0f, 0.78f, 0.34f, 0.82f * alpha);
-    const XMFLOAT4 fill =
-        playing ? Color(0.00f, 0.20f, 0.18f, 0.40f * alpha)
-                : Color(0.16f, 0.12f, 0.070f, 0.38f * alpha);
+    const XMFLOAT4 line = playing ? Color(0.00f, 0.86f, 0.78f, 0.90f * alpha)
+                                  : Color(1.0f, 0.78f, 0.34f, 0.82f * alpha);
+    const XMFLOAT4 fill = playing ? Color(0.00f, 0.20f, 0.18f, 0.40f * alpha)
+                                  : Color(0.16f, 0.12f, 0.070f, 0.38f * alpha);
     const float s = size / 100.0f;
     auto x = [&](float v) { return centerX + v * s; };
     auto y = [&](float v) { return centerY + v * s; };
-    auto r = [&](float px, float py, float w, float h,
-                 const XMFLOAT4 &color) {
+    auto r = [&](float px, float py, float w, float h, const XMFLOAT4 &color) {
         DrawRect(x(px), y(py), w * s, h * s, color);
     };
     auto f = [&](float px, float py, float w, float h) {
@@ -523,8 +505,7 @@ void SoundTestScene::DrawMusicIcon(float centerX, float centerY, float size,
 
     for (int i = 0; i < 5; ++i) {
         const float t = sceneTime_ * 4.5f + static_cast<float>(i) * 0.75f;
-        const float barH =
-            (14.0f + (std::sinf(t) * 0.5f + 0.5f) * 28.0f) * s;
+        const float barH = (14.0f + (std::sinf(t) * 0.5f + 0.5f) * 28.0f) * s;
         const float barX =
             centerX + (-34.0f + static_cast<float>(i) * 17.0f) * s;
         DrawRect(barX, centerY + 56.0f * s - barH, 7.0f * s, barH,
@@ -534,17 +515,14 @@ void SoundTestScene::DrawMusicIcon(float centerX, float centerY, float size,
 
 void SoundTestScene::DrawSpeakerIcon(float centerX, float centerY, float size,
                                      float alpha, bool playing) {
-    const XMFLOAT4 line =
-        playing ? Color(0.00f, 0.86f, 0.78f, 0.90f * alpha)
-                : Color(1.0f, 0.78f, 0.34f, 0.82f * alpha);
-    const XMFLOAT4 fill =
-        playing ? Color(0.00f, 0.20f, 0.18f, 0.40f * alpha)
-                : Color(0.16f, 0.12f, 0.070f, 0.38f * alpha);
+    const XMFLOAT4 line = playing ? Color(0.00f, 0.86f, 0.78f, 0.90f * alpha)
+                                  : Color(1.0f, 0.78f, 0.34f, 0.82f * alpha);
+    const XMFLOAT4 fill = playing ? Color(0.00f, 0.20f, 0.18f, 0.40f * alpha)
+                                  : Color(0.16f, 0.12f, 0.070f, 0.38f * alpha);
     const float s = size / 100.0f;
     auto x = [&](float v) { return centerX + v * s; };
     auto y = [&](float v) { return centerY + v * s; };
-    auto r = [&](float px, float py, float w, float h,
-                 const XMFLOAT4 &color) {
+    auto r = [&](float px, float py, float w, float h, const XMFLOAT4 &color) {
         DrawRect(x(px), y(py), w * s, h * s, color);
     };
     auto f = [&](float px, float py, float w, float h) {
@@ -569,17 +547,15 @@ void SoundTestScene::DrawSpeakerIcon(float centerX, float centerY, float size,
         const float t = sceneTime_ * 5.2f + static_cast<float>(i) * 0.65f;
         const float pulse = 0.5f + 0.5f * std::sinf(t);
         const float waveX = (50.0f + static_cast<float>(i) * 12.0f) * s;
-        const float waveH = (22.0f + static_cast<float>(i) * 18.0f +
-                             pulse * 9.0f) *
-                            s;
+        const float waveH =
+            (22.0f + static_cast<float>(i) * 18.0f + pulse * 9.0f) * s;
         DrawRect(centerX + waveX, centerY - waveH * 0.5f, 6.0f * s, waveH,
                  Color(0.00f, 0.86f, 0.78f,
                        (0.54f - static_cast<float>(i) * 0.10f) * alpha));
     }
 }
 
-void SoundTestScene::DrawControlsPrompt(float screenWidth,
-                                        float screenHeight) {
+void SoundTestScene::DrawControlsPrompt(float screenWidth, float screenHeight) {
     const float intro = Smooth01((introTimer_ - kContentFadeDelay - 0.10f) /
                                  (kContentFadeDuration * 0.72f));
     const float promptScale =

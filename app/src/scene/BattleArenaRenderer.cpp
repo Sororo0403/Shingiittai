@@ -50,12 +50,9 @@ uint32_t CreateBattleArenaStoneTexture(TextureManager *texture, uint32_t width,
             const XMFLOAT3 base{0.07f, 0.08f, 0.09f};
             const XMFLOAT3 accent{0.22f, 0.24f, 0.22f};
             const XMFLOAT3 color{
-                std::clamp(base.x + (accent.x - base.x) * t + fine, 0.0f,
-                           1.0f),
-                std::clamp(base.y + (accent.y - base.y) * t + fine, 0.0f,
-                           1.0f),
-                std::clamp(base.z + (accent.z - base.z) * t + fine, 0.0f,
-                           1.0f),
+                std::clamp(base.x + (accent.x - base.x) * t + fine, 0.0f, 1.0f),
+                std::clamp(base.y + (accent.y - base.y) * t + fine, 0.0f, 1.0f),
+                std::clamp(base.z + (accent.z - base.z) * t + fine, 0.0f, 1.0f),
             };
             const size_t index = (static_cast<size_t>(y) * width + x) * 4u;
             pixels[index + 0] = static_cast<uint8_t>(color.x * 255.0f);
@@ -79,62 +76,57 @@ Material MakeArenaMaterial(const XMFLOAT4 &color, bool useTexture = false,
 }
 
 std::vector<Transform> BuildFieldTiles(float tileBuild, float lineBuild) {
-        std::vector<Transform> fieldTiles;
-        fieldTiles.reserve(480u);
-        for (int z = -14; z <= 14; ++z) {
-            for (int x = -14; x <= 14; ++x) {
-                if ((std::abs(x) + std::abs(z)) % 2 != 0) {
-                    continue;
-                }
-                const float distance =
-                    (std::fabs(static_cast<float>(x)) +
-                     std::fabs(static_cast<float>(z))) /
-                    28.0f;
-                const float tileLocalBuild =
-                    SmoothStep01((tileBuild - distance * 0.34f) / 0.46f);
-                if (tileLocalBuild <= 0.0f) {
-                    continue;
-                }
-                Transform tile{};
-                tile.position = {static_cast<float>(x) * 3.55f, 0.004f,
-                                 static_cast<float>(z) * 3.55f};
-                tile.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
-                tile.scale = {2.26f * tileLocalBuild, 2.26f * tileLocalBuild,
-                              1.0f};
-                fieldTiles.push_back(tile);
-            }
-        }
-
-        if (tileBuild > 0.0f) {
-            Transform center{};
-            center.position = {0.0f, 0.012f, 0.0f};
-            center.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
-            center.scale = {4.8f * tileBuild, 4.8f * tileBuild, 1.0f};
-            fieldTiles.push_back(center);
-        }
-
-        for (int i = -13; i <= 13; ++i) {
-            const float laneLocalBuild =
-                SmoothStep01((lineBuild -
-                              std::fabs(static_cast<float>(i)) / 13.0f * 0.24f) /
-                             0.56f);
-            if (laneLocalBuild <= 0.0f) {
+    std::vector<Transform> fieldTiles;
+    fieldTiles.reserve(480u);
+    for (int z = -14; z <= 14; ++z) {
+        for (int x = -14; x <= 14; ++x) {
+            if ((std::abs(x) + std::abs(z)) % 2 != 0) {
                 continue;
             }
-            Transform laneX{};
-            laneX.position = {0.0f, 0.016f, static_cast<float>(i) * 4.25f};
-            laneX.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
-            laneX.scale = {168.0f * laneLocalBuild, i == 0 ? 0.080f : 0.034f,
-                           1.0f};
-            fieldTiles.push_back(laneX);
-
-            Transform laneZ{};
-            laneZ.position = {static_cast<float>(i) * 4.25f, 0.017f, 0.0f};
-            laneZ.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
-            laneZ.scale = {i == 0 ? 0.080f : 0.034f, 168.0f * laneLocalBuild,
-                           1.0f};
-            fieldTiles.push_back(laneZ);
+            const float distance = (std::fabs(static_cast<float>(x)) +
+                                    std::fabs(static_cast<float>(z))) /
+                                   28.0f;
+            const float tileLocalBuild =
+                SmoothStep01((tileBuild - distance * 0.34f) / 0.46f);
+            if (tileLocalBuild <= 0.0f) {
+                continue;
+            }
+            Transform tile{};
+            tile.position = {static_cast<float>(x) * 3.55f, 0.004f,
+                             static_cast<float>(z) * 3.55f};
+            tile.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
+            tile.scale = {2.26f * tileLocalBuild, 2.26f * tileLocalBuild, 1.0f};
+            fieldTiles.push_back(tile);
         }
+    }
+
+    if (tileBuild > 0.0f) {
+        Transform center{};
+        center.position = {0.0f, 0.012f, 0.0f};
+        center.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
+        center.scale = {4.8f * tileBuild, 4.8f * tileBuild, 1.0f};
+        fieldTiles.push_back(center);
+    }
+
+    for (int i = -13; i <= 13; ++i) {
+        const float laneLocalBuild = SmoothStep01(
+            (lineBuild - std::fabs(static_cast<float>(i)) / 13.0f * 0.24f) /
+            0.56f);
+        if (laneLocalBuild <= 0.0f) {
+            continue;
+        }
+        Transform laneX{};
+        laneX.position = {0.0f, 0.016f, static_cast<float>(i) * 4.25f};
+        laneX.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
+        laneX.scale = {168.0f * laneLocalBuild, i == 0 ? 0.080f : 0.034f, 1.0f};
+        fieldTiles.push_back(laneX);
+
+        Transform laneZ{};
+        laneZ.position = {static_cast<float>(i) * 4.25f, 0.017f, 0.0f};
+        laneZ.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
+        laneZ.scale = {i == 0 ? 0.080f : 0.034f, 168.0f * laneLocalBuild, 1.0f};
+        fieldTiles.push_back(laneZ);
+    }
     return fieldTiles;
 }
 
@@ -191,10 +183,10 @@ std::vector<Transform> BuildCityBlocks(float buildProgress) {
         wall.position = {offset * 1.72f, -0.76f,
                          72.0f + std::fabs(offset) * 0.42f};
         wall.rotation = MakeQuat(0.0f, 0.0f, 0.0f);
-        wall.scale = {
-            1.28f + 0.12f * static_cast<float>(index % 3),
-            (5.3f + static_cast<float>((index * 5) % 5) * 0.72f) * progress,
-            1.08f};
+        wall.scale = {1.28f + 0.12f * static_cast<float>(index % 3),
+                      (5.3f + static_cast<float>((index * 5) % 5) * 0.72f) *
+                          progress,
+                      1.08f};
         blocks.push_back(wall);
     }
     for (int side = 0; side < 2; ++side) {
@@ -211,9 +203,8 @@ std::vector<Transform> BuildCityBlocks(float buildProgress) {
                               2.25f + static_cast<float>(step) * 0.62f,
                               69.4f + static_cast<float>(step) * 1.55f};
             brace.rotation = MakeQuat(0.0f, sign * 0.12f, 0.0f);
-            brace.scale = {
-                (2.8f - static_cast<float>(step) * 0.22f) * progress, 0.30f,
-                0.78f};
+            brace.scale = {(2.8f - static_cast<float>(step) * 0.22f) * progress,
+                           0.30f, 0.78f};
             blocks.push_back(brace);
         }
     }
@@ -236,19 +227,17 @@ std::vector<Transform> BuildCityWindows(float buildProgress) {
             const float lane = (static_cast<float>(index) - 5.0f) * 4.0f;
             Transform panel{};
             panel.position =
-                alongX
-                    ? XMFLOAT3{lane,
-                               1.15f + static_cast<float>(index % 4) * 0.58f,
-                               sign * 47.35f + 8.0f}
-                    : XMFLOAT3{sign * 47.35f,
-                               1.15f + static_cast<float>(index % 4) * 0.58f,
-                               lane + 8.0f};
-            panel.rotation =
-                MakeQuat(0.0f, alongX ? 0.0f : kPi * 0.5f, 0.0f);
-            panel.scale = {
-                0.16f,
-                (1.05f + static_cast<float>(index % 2) * 0.40f) * progress,
-                1.0f};
+                alongX ? XMFLOAT3{lane,
+                                  1.15f + static_cast<float>(index % 4) * 0.58f,
+                                  sign * 47.35f + 8.0f}
+                       : XMFLOAT3{sign * 47.35f,
+                                  1.15f + static_cast<float>(index % 4) * 0.58f,
+                                  lane + 8.0f};
+            panel.rotation = MakeQuat(0.0f, alongX ? 0.0f : kPi * 0.5f, 0.0f);
+            panel.scale = {0.16f,
+                           (1.05f + static_cast<float>(index % 2) * 0.40f) *
+                               progress,
+                           1.0f};
             windows.push_back(panel);
         }
     }
@@ -320,10 +309,9 @@ const BattleArenaModelIds &EnsureBattleArenaModels(ModelManager *model,
     const uint32_t arenaStoneTextureId =
         CreateBattleArenaStoneTexture(texture, 1024, 1024);
     gBattleArenaModels.arenaNoiseTextureId = arenaStoneTextureId;
-    gBattleArenaModels.arenaFloorModelId =
-        model->CreatePlane(arenaStoneTextureId,
-                           MakeArenaMaterial({0.070f, 0.085f, 0.105f, 1.0f},
-                                             true, 0.025f, 0.84f));
+    gBattleArenaModels.arenaFloorModelId = model->CreatePlane(
+        arenaStoneTextureId,
+        MakeArenaMaterial({0.070f, 0.085f, 0.105f, 1.0f}, true, 0.025f, 0.84f));
     gBattleArenaModels.arenaLowPolyTerrainModelId = model->CreatePlane(
         arenaStoneTextureId,
         MakeArenaMaterial({0.075f, 0.10f, 0.13f, 1.0f}, true, 0.016f, 0.80f));
@@ -332,56 +320,55 @@ const BattleArenaModelIds &EnsureBattleArenaModels(ModelManager *model,
         MakeArenaMaterial({0.12f, 0.18f, 0.22f, 1.0f}, true, 0.02f, 0.88f));
     gBattleArenaModels.arenaHazardSpireModelId = model->CreateCylinder(
         arenaStoneTextureId,
-        MakeArenaMaterial({0.10f, 0.15f, 0.15f, 1.0f}, true, 0.025f, 0.88f),
-        7, 0.04f, 0.92f, 8.8f);
+        MakeArenaMaterial({0.10f, 0.15f, 0.15f, 1.0f}, true, 0.025f, 0.88f), 7,
+        0.04f, 0.92f, 8.8f);
     gBattleArenaModels.arenaHazardGlowRingModelId = model->CreateRing(
         0, MakeArenaMaterial({0.55f, 0.88f, 0.96f, 0.42f}, false, 0.0f, 0.46f),
         48, 2.45f, 0.34f);
     gBattleArenaModels.arenaCityTowerModelId = model->CreateCylinder(
         arenaStoneTextureId,
-        MakeArenaMaterial({0.18f, 0.24f, 0.29f, 1.0f}, true, 0.025f, 0.76f),
-        4, 0.72f, 0.72f, 1.0f);
+        MakeArenaMaterial({0.18f, 0.24f, 0.29f, 1.0f}, true, 0.025f, 0.76f), 4,
+        0.72f, 0.72f, 1.0f);
     gBattleArenaModels.arenaCityWindowModelId = model->CreatePlane(
         0, MakeArenaMaterial({0.72f, 0.90f, 0.96f, 0.58f}, false, 0.0f, 0.40f));
     gBattleArenaModels.arenaGiantBodyModelId = model->CreateCylinder(
         arenaStoneTextureId,
-        MakeArenaMaterial({0.055f, 0.10f, 0.11f, 1.0f}, true, 0.012f, 0.92f),
-        9, 0.78f, 1.18f, 5.8f);
+        MakeArenaMaterial({0.055f, 0.10f, 0.11f, 1.0f}, true, 0.012f, 0.92f), 9,
+        0.78f, 1.18f, 5.8f);
     gBattleArenaModels.arenaGiantHeadModelId = model->CreateCylinder(
         arenaStoneTextureId,
-        MakeArenaMaterial({0.05f, 0.09f, 0.10f, 1.0f}, true, 0.01f, 0.94f),
-        8, 0.92f, 1.05f, 1.15f);
+        MakeArenaMaterial({0.05f, 0.09f, 0.10f, 1.0f}, true, 0.01f, 0.94f), 8,
+        0.92f, 1.05f, 1.15f);
     gBattleArenaModels.arenaCenterDiskModelId = model->CreateRing(
         arenaStoneTextureId,
-        MakeArenaMaterial({0.72f, 0.58f, 0.30f, 1.0f}, false, 0.12f, 0.30f),
-        96, 1.95f, 0.0f);
+        MakeArenaMaterial({0.72f, 0.58f, 0.30f, 1.0f}, false, 0.12f, 0.30f), 96,
+        1.95f, 0.0f);
     gBattleArenaModels.arenaSpokeModelId = model->CreatePlane(
         arenaStoneTextureId,
         MakeArenaMaterial({0.28f, 0.21f, 0.12f, 1.0f}, false, 0.06f, 0.58f));
-    gBattleArenaModels.arenaTutorialSpokeModelId = model->CreatePlane(
-        arenaStoneTextureId, [] {
-            Material material =
-                MakeArenaMaterial({0.014f, 0.25f, 0.22f, 1.0f}, false, 0.045f,
-                                  0.62f);
+    gBattleArenaModels.arenaTutorialSpokeModelId =
+        model->CreatePlane(arenaStoneTextureId, [] {
+            Material material = MakeArenaMaterial({0.014f, 0.25f, 0.22f, 1.0f},
+                                                  false, 0.045f, 0.62f);
             material.cullMode = static_cast<int32_t>(MaterialCullMode::None);
             return material;
         }());
     gBattleArenaModels.arenaInnerRingModelId = model->CreateRing(
         arenaStoneTextureId,
-        MakeArenaMaterial({0.64f, 0.60f, 0.44f, 1.0f}, false, 0.12f, 0.32f),
-        96, 4.9f, 4.35f);
+        MakeArenaMaterial({0.64f, 0.60f, 0.44f, 1.0f}, false, 0.12f, 0.32f), 96,
+        4.9f, 4.35f);
     gBattleArenaModels.arenaOuterRingModelId = model->CreateRing(
         arenaStoneTextureId,
         MakeArenaMaterial({0.68f, 0.28f, 0.18f, 1.0f}, false, 0.10f, 0.38f),
         128, 12.3f, 11.6f);
     gBattleArenaModels.arenaColumnModelId = model->CreateCylinder(
         arenaStoneTextureId,
-        MakeArenaMaterial({0.22f, 0.26f, 0.30f, 1.0f}, true, 0.045f, 0.68f),
-        24, 0.26f, 0.38f, 5.4f);
+        MakeArenaMaterial({0.22f, 0.26f, 0.30f, 1.0f}, true, 0.045f, 0.68f), 24,
+        0.26f, 0.38f, 5.4f);
     gBattleArenaModels.arenaColumnCapModelId = model->CreateCylinder(
         arenaStoneTextureId,
-        MakeArenaMaterial({0.62f, 0.30f, 0.18f, 1.0f}, false, 0.10f, 0.38f),
-        32, 0.68f, 0.78f, 0.24f);
+        MakeArenaMaterial({0.62f, 0.30f, 0.18f, 1.0f}, false, 0.10f, 0.38f), 32,
+        0.68f, 0.78f, 0.24f);
     gBattleArenaModels.arenaDomeModelId = model->CreateCylinder(
         arenaStoneTextureId,
         MakeArenaMaterial({0.09f, 0.14f, 0.28f, 0.78f}, true, 0.00f, 0.72f),
@@ -391,8 +378,7 @@ const BattleArenaModelIds &EnsureBattleArenaModels(ModelManager *model,
         MakeArenaMaterial({0.24f, 0.30f, 0.46f, 0.42f}, false, 0.00f, 0.34f),
         128, 13.1f, 12.9f);
     gBattleArenaModels.chargeWeakPointModelId = model->CreatePlane(
-        0, MakeArenaMaterial({1.0f, 0.96f, 0.78f, 0.92f}, false, 0.02f,
-                             0.20f));
+        0, MakeArenaMaterial({1.0f, 0.96f, 0.78f, 0.92f}, false, 0.02f, 0.20f));
     gBattleArenaModelsInitialized = true;
     return gBattleArenaModels;
 }
@@ -431,8 +417,7 @@ void DrawBattleArena(ModelManager *model, const Camera &camera,
         model->SetDrawEffect(fieldEffect);
     }
 
-    std::vector<Transform> fieldTiles =
-        BuildFieldTiles(tileBuild, lineBuild);
+    std::vector<Transform> fieldTiles = BuildFieldTiles(tileBuild, lineBuild);
     if (!fieldTiles.empty()) {
         const uint32_t spokeModelId = tutorialBackgroundMode
                                           ? ids.arenaTutorialSpokeModelId
@@ -456,11 +441,9 @@ void DrawBattleArena(ModelManager *model, const Camera &camera,
         std::vector<Transform> glowLines;
         glowLines.reserve(62u);
         for (int i = -15; i <= 15; ++i) {
-            const float glowBuild =
-                SmoothStep01((lineBuild -
-                              std::fabs(static_cast<float>(i)) / 15.0f *
-                                  0.28f) /
-                             0.52f);
+            const float glowBuild = SmoothStep01(
+                (lineBuild - std::fabs(static_cast<float>(i)) / 15.0f * 0.28f) /
+                0.52f);
             if (glowBuild <= 0.0f) {
                 continue;
             }

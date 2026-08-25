@@ -165,7 +165,9 @@ inline float GetCameraSlashSensitivity(size_t handIndex) {
     return cameraHandSlashSensitivity[ClampCameraHandIndex(handIndex)];
 }
 
-inline float GetCameraVerticalSensitivity() { return cameraVerticalSensitivity; }
+inline float GetCameraVerticalSensitivity() {
+    return cameraVerticalSensitivity;
+}
 
 inline float GetCameraVerticalSensitivity(size_t handIndex) {
     return cameraHandVerticalSensitivity[ClampCameraHandIndex(handIndex)];
@@ -216,7 +218,8 @@ inline void SetCameraSensitivity(size_t handIndex, float sensitivity) {
 
 inline void SetCameraSlashSensitivity(float sensitivity) {
     cameraSlashSensitivity = std::clamp(sensitivity, 0.0f, 1.0f);
-    cameraHandSlashSensitivity = {cameraSlashSensitivity, cameraSlashSensitivity};
+    cameraHandSlashSensitivity = {cameraSlashSensitivity,
+                                  cameraSlashSensitivity};
 }
 
 inline void SetCameraSlashSensitivity(size_t handIndex, float sensitivity) {
@@ -246,13 +249,13 @@ inline void SetCameraHorizontalSensitivity(float sensitivity) {
                                        cameraHorizontalSensitivity};
 }
 
-inline void SetCameraHorizontalSensitivity(size_t handIndex, float sensitivity) {
+inline void SetCameraHorizontalSensitivity(size_t handIndex,
+                                           float sensitivity) {
     cameraHandHorizontalSensitivity[ClampCameraHandIndex(handIndex)] =
         std::clamp(sensitivity, 0.0f, 1.0f);
-    cameraHorizontalSensitivity =
-        (cameraHandHorizontalSensitivity[0] +
-         cameraHandHorizontalSensitivity[1]) *
-        0.5f;
+    cameraHorizontalSensitivity = (cameraHandHorizontalSensitivity[0] +
+                                   cameraHandHorizontalSensitivity[1]) *
+                                  0.5f;
 }
 
 inline void SetMouseSlashSensitivity(float sensitivity) {
@@ -266,9 +269,8 @@ inline void StartMenuBgm(const SceneContext &ctx) {
     }
 
     menuBgmSoundId = ctx.systems.sound->LoadOrCreateSilent(kMenuBgmPath);
-    menuBgmVoiceHandle =
-        ctx.systems.sound->Play(menuBgmSoundId,
-                                kMenuBgmBaseVolume * bgmVolume, true);
+    menuBgmVoiceHandle = ctx.systems.sound->Play(
+        menuBgmSoundId, kMenuBgmBaseVolume * bgmVolume, true);
 }
 
 inline void StopMenuBgm(const SceneContext *ctx) {
@@ -312,4 +314,4 @@ inline void PlayMenuSe(const SceneContext &ctx, MenuSe se,
     }
     ctx.systems.sound->Play(*soundId, volume * seVolume, false);
 }
-}
+} // namespace AppSceneServices

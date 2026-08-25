@@ -54,8 +54,8 @@ const RenderContext &RenderPassController::BeginPass(RenderPass pass) {
     return context_;
 }
 
-RenderPassController::PassScope RenderPassController::ScopedPass(
-    RenderPass pass) {
+RenderPassController::PassScope
+RenderPassController::ScopedPass(RenderPass pass) {
     return PassScope(*this, pass);
 }
 

@@ -47,9 +47,7 @@ std::wstring GetDefaultReplayDirectory() {
 
 } // namespace
 
-Input::~Input() {
-    FinishRecording();
-}
+Input::~Input() { FinishRecording(); }
 
 void Input::Initialize(HINSTANCE hInstance, HWND hwnd) {
     if (replayDirectory_.empty()) {
@@ -76,8 +74,8 @@ void Input::Initialize(HINSTANCE hInstance, HWND hwnd) {
     if (SUCCEEDED(hr) && keyboard_) {
         hr = keyboard_->SetDataFormat(&c_dfDIKeyboard);
         if (SUCCEEDED(hr)) {
-            hr = keyboard_->SetCooperativeLevel(
-                hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE);
+            hr = keyboard_->SetCooperativeLevel(hwnd, DISCL_FOREGROUND |
+                                                          DISCL_NONEXCLUSIVE);
         }
         if (SUCCEEDED(hr)) {
             keyboard_->Acquire();
@@ -93,8 +91,8 @@ void Input::Initialize(HINSTANCE hInstance, HWND hwnd) {
     if (SUCCEEDED(hr) && mouse_) {
         hr = mouse_->SetDataFormat(&c_dfDIMouse);
         if (SUCCEEDED(hr)) {
-            hr = mouse_->SetCooperativeLevel(
-                hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE);
+            hr = mouse_->SetCooperativeLevel(hwnd, DISCL_FOREGROUND |
+                                                       DISCL_NONEXCLUSIVE);
         }
         if (SUCCEEDED(hr)) {
             mouse_->Acquire();

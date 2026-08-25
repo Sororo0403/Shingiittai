@@ -66,9 +66,7 @@ uint32_t ResolveSkyboxTextureId(TextureManager *textureManager,
 
 } // namespace
 
-SkyboxRenderer::~SkyboxRenderer() {
-    Finalize();
-}
+SkyboxRenderer::~SkyboxRenderer() { Finalize(); }
 
 void SkyboxRenderer::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
                                 TextureManager *textureManager) {
@@ -90,8 +88,8 @@ void SkyboxRenderer::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
 }
 
 void SkyboxRenderer::Finalize() {
-    if ((constBuffer_ || indexBuffer_ || vertexBuffer_) && dxCommon_ != nullptr &&
-        !dxCommon_->IsDeviceRemoved() &&
+    if ((constBuffer_ || indexBuffer_ || vertexBuffer_) &&
+        dxCommon_ != nullptr && !dxCommon_->IsDeviceRemoved() &&
         !dxCommon_->IsCommandListRecording()) {
         dxCommon_->WaitForGpuIfPossible();
     }
@@ -176,10 +174,9 @@ void SkyboxRenderer::UpdateCameraConstants(const Camera &camera) {
         !IsSameMatrix(currentProj, cachedProj_);
 
     if (needsConstantBufferUpdate) {
-        XMMATRIX world =
-            XMMatrixScaling(50.0f, 50.0f, 50.0f) *
-            XMMatrixTranslation(cameraPosition.x, cameraPosition.y,
-                                cameraPosition.z);
+        XMMATRIX world = XMMatrixScaling(50.0f, 50.0f, 50.0f) *
+                         XMMatrixTranslation(cameraPosition.x, cameraPosition.y,
+                                             cameraPosition.z);
         XMMATRIX wvp = world * camera.GetView() * camera.GetProj();
         XMStoreFloat4x4(&mappedCB_->matWVP, XMMatrixTranspose(wvp));
 
@@ -188,7 +185,6 @@ void SkyboxRenderer::UpdateCameraConstants(const Camera &camera) {
         cachedProj_ = currentProj;
         hasCachedCameraState_ = true;
     }
-
 }
 
 void SkyboxRenderer::CreateRootSignature() {
@@ -218,10 +214,8 @@ void SkyboxRenderer::CreateRootSignature() {
 }
 
 void SkyboxRenderer::CreatePipelineState() {
-    auto vs =
-        ShaderCompiler::Compile(ShaderPaths::SkyboxVS, "main", "vs_6_6");
-    auto ps =
-        ShaderCompiler::Compile(ShaderPaths::SkyboxPS, "main", "ps_6_6");
+    auto vs = ShaderCompiler::Compile(ShaderPaths::SkyboxVS, "main", "vs_6_6");
+    auto ps = ShaderCompiler::Compile(ShaderPaths::SkyboxPS, "main", "ps_6_6");
 
     D3D12_INPUT_ELEMENT_DESC layout[] = {
         {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,

@@ -38,4 +38,3 @@ void DrawBattleArena(ModelManager *model, const Camera &camera,
                      float lineBuild = 1.0f, float distantBuild = 1.0f,
                      bool tutorialBackgroundMode = false,
                      bool backgroundOnlyMode = false);
-

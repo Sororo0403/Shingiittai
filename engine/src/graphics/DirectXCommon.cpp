@@ -36,9 +36,8 @@ PickHighPerformanceAdapter(IDXGIFactory7 *factory) {
         if ((desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0) {
             continue;
         }
-        if (SUCCEEDED(D3D12CreateDevice(candidate.Get(),
-                                        D3D_FEATURE_LEVEL_11_0, __uuidof(ID3D12Device),
-                                        nullptr))) {
+        if (SUCCEEDED(D3D12CreateDevice(candidate.Get(), D3D_FEATURE_LEVEL_11_0,
+                                        __uuidof(ID3D12Device), nullptr))) {
             adapter = candidate;
             break;
         }
@@ -78,10 +77,9 @@ void DirectXCommon::BeginFrame() {
         throw std::runtime_error("Invalid swap-chain back-buffer index");
     }
     WaitForFrame(backBufferIndex_);
-    ID3D12CommandAllocator* commandAllocator =
+    ID3D12CommandAllocator *commandAllocator =
         commandAllocators_[backBufferIndex_].Get();
-    ThrowIfFailed(commandAllocator->Reset(),
-                  "commandAllocator_->Reset failed");
+    ThrowIfFailed(commandAllocator->Reset(), "commandAllocator_->Reset failed");
     ThrowIfFailed(commandList_->Reset(commandAllocator, nullptr),
                   "commandList_->Reset failed");
     isCommandListRecording_ = true;
@@ -126,16 +124,16 @@ void DirectXCommon::RestoreSceneRenderState(bool clearDepth) {
     ApplySceneViewportAndScissor();
     commandList_->OMSetRenderTargets(1, &sceneRtv, FALSE, &dsvHandle);
     if (clearDepth) {
-        commandList_->ClearDepthStencilView(
-            dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+        commandList_->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH,
+                                            1.0f, 0, 0, nullptr);
     }
 }
 
 void DirectXCommon::ClearDepth() {
     TrackGpuPhase("ClearDepth");
     auto dsvHandle = dsvHeap_->GetCPUDescriptorHandleForHeapStart();
-    commandList_->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH,
-                                        1.0f, 0, 0, nullptr);
+    commandList_->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f,
+                                        0, 0, nullptr);
 }
 
 void DirectXCommon::EndScenePass() {
@@ -145,8 +143,7 @@ void DirectXCommon::EndScenePass() {
 
 void DirectXCommon::BeginBackBufferPass(bool bindDepth) {
     TrackGpuPhase("BeginBackBufferPass");
-    TransitionBackBuffer(backBufferIndex_,
-                         D3D12_RESOURCE_STATE_RENDER_TARGET);
+    TransitionBackBuffer(backBufferIndex_, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
     SetBackBufferRenderTarget(true, bindDepth);
 }
@@ -250,10 +247,9 @@ void DirectXCommon::BeginUpload() {
         throw std::runtime_error("Invalid swap-chain back-buffer index");
     }
     WaitForFrame(backBufferIndex_);
-    ID3D12CommandAllocator* commandAllocator =
+    ID3D12CommandAllocator *commandAllocator =
         commandAllocators_[backBufferIndex_].Get();
-    ThrowIfFailed(commandAllocator->Reset(),
-                  "commandAllocator_->Reset failed");
+    ThrowIfFailed(commandAllocator->Reset(), "commandAllocator_->Reset failed");
 
     ThrowIfFailed(commandList_->Reset(commandAllocator, nullptr),
                   "commandList_->Reset failed");
@@ -344,8 +340,7 @@ void DirectXCommon::SetBackBufferRenderTarget(bool clear, bool bindDepth) {
     commandList_->OMSetRenderTargets(1, &rtvHandle, FALSE, dsvHandlePtr);
 
     if (clear) {
-        commandList_->ClearRenderTargetView(rtvHandle, clearColor_, 0,
-                                            nullptr);
+        commandList_->ClearRenderTargetView(rtvHandle, clearColor_, 0, nullptr);
         if (bindDepth) {
             commandList_->ClearDepthStencilView(
                 dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
@@ -370,8 +365,8 @@ void DirectXCommon::TransitionSceneColor(D3D12_RESOURCE_STATES afterState) {
     sceneColorState_ = afterState;
 }
 
-void DirectXCommon::TransitionBackBuffer(
-    UINT index, D3D12_RESOURCE_STATES afterState) {
+void DirectXCommon::TransitionBackBuffer(UINT index,
+                                         D3D12_RESOURCE_STATES afterState) {
     if (index >= kSwapChainBufferCount || !backBuffers_[index] ||
         backBufferStates_[index] == afterState) {
         return;
@@ -537,10 +532,10 @@ void DirectXCommon::CreateCommandQueue() {
 
 void DirectXCommon::CreateCommandAllocator() {
     for (UINT i = 0; i < kSwapChainBufferCount; ++i) {
-        ThrowIfFailed(
-            device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
-                                            IID_PPV_ARGS(&commandAllocators_[i])),
-            "CreateCommandAllocator failed");
+        ThrowIfFailed(device_->CreateCommandAllocator(
+                          D3D12_COMMAND_LIST_TYPE_DIRECT,
+                          IID_PPV_ARGS(&commandAllocators_[i])),
+                      "CreateCommandAllocator failed");
         wchar_t name[64]{};
         swprintf_s(name, L"DirectXCommon.CommandAllocator[%u]", i);
         commandAllocators_[i]->SetName(name);
@@ -548,11 +543,11 @@ void DirectXCommon::CreateCommandAllocator() {
 }
 
 void DirectXCommon::CreateCommandList() {
-    ThrowIfFailed(device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
-                                             commandAllocators_[backBufferIndex_].Get(),
-                                             nullptr,
-                                             IID_PPV_ARGS(&commandList_)),
-                  "CreateCommandList failed");
+    ThrowIfFailed(
+        device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
+                                   commandAllocators_[backBufferIndex_].Get(),
+                                   nullptr, IID_PPV_ARGS(&commandList_)),
+        "CreateCommandList failed");
     commandList_->SetName(L"DirectXCommon.CommandList");
 
     ThrowIfFailed(commandList_->Close(), "commandList_->Close failed");
@@ -830,8 +825,7 @@ void DirectXCommon::WaitForFrame(UINT frameIndex) {
 
 void DirectXCommon::TrackGpuPhase(const char *phase) {
     recentGpuPhases_[recentGpuPhaseCursor_] = phase;
-    recentGpuPhaseCursor_ =
-        (recentGpuPhaseCursor_ + 1) % kRecentGpuPhaseCount;
+    recentGpuPhaseCursor_ = (recentGpuPhaseCursor_ + 1) % kRecentGpuPhaseCount;
     if (recentGpuPhaseSize_ < kRecentGpuPhaseCount) {
         ++recentGpuPhaseSize_;
     }

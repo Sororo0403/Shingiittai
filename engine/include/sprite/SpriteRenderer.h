@@ -1,12 +1,12 @@
 #pragma once
 #include "graphics/UploadRingBuffer.h"
 #include "sprite/Sprite.h"
-#include <array>
 #include <DirectXMath.h>
+#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <vector>
 #include <d3d12.h>
+#include <vector>
 #include <wrl.h>
 
 class DirectXCommon;
@@ -97,8 +97,8 @@ class SpriteRenderer {
     /// FlushQueuedDrawsを実行する
     /// </summary>
     void FlushQueuedDraws();
-    void DrawQueuedRun(ID3D12GraphicsCommandList *commandList,
-                       size_t runStart, size_t runEnd);
+    void DrawQueuedRun(ID3D12GraphicsCommandList *commandList, size_t runStart,
+                       size_t runEnd);
 
   private:
     DirectXCommon *dxCommon_ = nullptr;
@@ -106,9 +106,9 @@ class SpriteRenderer {
     SrvManager *srvManager_ = nullptr;
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineStates_
-        [static_cast<uint32_t>(RenderTargetKind::Count)]
-        [static_cast<uint32_t>(PipelineKind::Count)];
+    Microsoft::WRL::ComPtr<ID3D12PipelineState>
+        pipelineStates_[static_cast<uint32_t>(RenderTargetKind::Count)]
+                       [static_cast<uint32_t>(PipelineKind::Count)];
 
     UploadRingBuffer uploadBuffer_;
     uint32_t drawCursor_ = 0;

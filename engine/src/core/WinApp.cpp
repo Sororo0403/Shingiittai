@@ -54,7 +54,8 @@ LRESULT CALLBACK WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wParam,
 
 LRESULT WinApp::HandleSetCursor(HWND hwnd, LPARAM lParam) {
     const bool shouldHide = !requestedCursorVisible_ &&
-                            LOWORD(lParam) == HTCLIENT && ShouldHideCursor(hwnd);
+                            LOWORD(lParam) == HTCLIENT &&
+                            ShouldHideCursor(hwnd);
     SetCursor(shouldHide ? nullptr : LoadCursor(nullptr, IDC_ARROW));
     return TRUE;
 }
@@ -115,18 +116,14 @@ void WinApp::Initialize(HINSTANCE hInstance, int nCmdShow, int width,
         if (GetMonitorInfo(monitor, &monitorInfo)) {
             const RECT &monitorRect = monitorInfo.rcMonitor;
             windowedRect_ = {
-                monitorRect.left + (monitorRect.right - monitorRect.left -
-                                    restoredW) /
-                                       2,
-                monitorRect.top + (monitorRect.bottom - monitorRect.top -
-                                   restoredH) /
-                                      2,
-                monitorRect.left + (monitorRect.right - monitorRect.left +
-                                    restoredW) /
-                                       2,
-                monitorRect.top + (monitorRect.bottom - monitorRect.top +
-                                   restoredH) /
-                                      2,
+                monitorRect.left +
+                    (monitorRect.right - monitorRect.left - restoredW) / 2,
+                monitorRect.top +
+                    (monitorRect.bottom - monitorRect.top - restoredH) / 2,
+                monitorRect.left +
+                    (monitorRect.right - monitorRect.left + restoredW) / 2,
+                monitorRect.top +
+                    (monitorRect.bottom - monitorRect.top + restoredH) / 2,
             };
             windowX = monitorRect.left;
             windowY = monitorRect.top;
@@ -164,8 +161,8 @@ void WinApp::Initialize(HINSTANCE hInstance, int nCmdShow, int width,
     windowedStyle_ = WS_OVERLAPPEDWINDOW;
 
     hwnd_ = CreateWindowEx(exStyle, kClassName, title.c_str(), style, windowX,
-                           windowY, windowWidth, windowHeight, nullptr,
-                           nullptr, hInstance, nullptr);
+                           windowY, windowWidth, windowHeight, nullptr, nullptr,
+                           hInstance, nullptr);
 
     if (!hwnd_) {
         throw std::runtime_error("CreateWindowEx failed");
@@ -219,7 +216,8 @@ void WinApp::SetFullscreen(bool fullscreen) {
 
         MONITORINFO monitorInfo{};
         monitorInfo.cbSize = sizeof(monitorInfo);
-        const HMONITOR monitor = MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST);
+        const HMONITOR monitor =
+            MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST);
         if (!GetMonitorInfo(monitor, &monitorInfo)) {
             return;
         }
@@ -293,7 +291,8 @@ void WinApp::LockCursorToClient(HWND hwnd) {
 
     POINT topLeft{clientRect.left, clientRect.top};
     POINT bottomRight{clientRect.right, clientRect.bottom};
-    if (!ClientToScreen(hwnd, &topLeft) || !ClientToScreen(hwnd, &bottomRight)) {
+    if (!ClientToScreen(hwnd, &topLeft) ||
+        !ClientToScreen(hwnd, &bottomRight)) {
         return;
     }
 

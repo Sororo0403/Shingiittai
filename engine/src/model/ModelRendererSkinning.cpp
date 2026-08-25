@@ -1,4 +1,3 @@
-#include "model/ModelRenderer.h"
 #include "graphics/DirectXCommon.h"
 #include "graphics/DxHelpers.h"
 #include "graphics/DxUtils.h"
@@ -7,6 +6,7 @@
 #include "graphics/SrvManager.h"
 #include "model/MaterialManager.h"
 #include "model/MeshManager.h"
+#include "model/ModelRenderer.h"
 #include "model/Vertex.h"
 #include "texture/TextureManager.h"
 #include <algorithm>
@@ -174,7 +174,7 @@ uint32_t ResolveNormalTextureId(TextureManager *textureManager,
     return ResolveNormalTextureId(textureManager, textureId);
 }
 
-}
+} // namespace
 
 static XMFLOAT4X4 StoreMatrix(const XMMATRIX &matrix) {
     XMFLOAT4X4 result{};
@@ -215,14 +215,16 @@ static bool HasSkinningDescriptors(const SkinCluster &skinCluster) {
            skinCluster.skinnedVertexUavGpuHandle.ptr != 0;
 }
 
-static bool CreateSkinnedVertexResources(
-    ID3D12Device *device, SrvManager *srvManager, MeshManager *meshManager,
-    ScopedSrvAllocations &allocations, ModelSubMesh &subMesh) {
+static bool CreateSkinnedVertexResources(ID3D12Device *device,
+                                         SrvManager *srvManager,
+                                         MeshManager *meshManager,
+                                         ScopedSrvAllocations &allocations,
+                                         ModelSubMesh &subMesh) {
     SkinCluster &cluster = subMesh.skinCluster;
     const Mesh &mesh = meshManager->GetMesh(subMesh.meshId);
-    const UINT influenceBytes = CheckedBufferSize(
-        sizeof(VertexInfluence), subMesh.vertexCount,
-        "ModelRenderer influence buffer size overflow");
+    const UINT influenceBytes =
+        CheckedBufferSize(sizeof(VertexInfluence), subMesh.vertexCount,
+                          "ModelRenderer influence buffer size overflow");
     if (influenceBytes == 0) {
         return false;
     }
@@ -233,10 +235,10 @@ static bool CreateSkinnedVertexResources(
                       D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
                       IID_PPV_ARGS(&cluster.influenceResource)),
                   "CreateCommittedResource(InfluenceBuffer) failed");
-    ThrowIfFailed(cluster.influenceResource->Map(
-                      0, nullptr,
-                      reinterpret_cast<void **>(&cluster.mappedInfluence)),
-                  "InfluenceBuffer Map failed");
+    ThrowIfFailed(
+        cluster.influenceResource->Map(
+            0, nullptr, reinterpret_cast<void **>(&cluster.mappedInfluence)),
+        "InfluenceBuffer Map failed");
     cluster.influenceCount = subMesh.vertexCount;
     std::memset(cluster.mappedInfluence, 0, influenceBytes);
 
@@ -253,7 +255,8 @@ static bool CreateSkinnedVertexResources(
     }
     D3D12_SHADER_RESOURCE_VIEW_DESC vertexSrv{};
     vertexSrv.Format = DXGI_FORMAT_UNKNOWN;
-    vertexSrv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    vertexSrv.Shader4ComponentMapping =
+        D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     vertexSrv.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
     vertexSrv.Buffer.NumElements = subMesh.vertexCount;
     vertexSrv.Buffer.StructureByteStride = sizeof(Vertex);
@@ -277,9 +280,9 @@ static bool CreateSkinnedVertexResources(
                                      &influenceSrv,
                                      cluster.influenceSrvCpuHandle);
 
-    const UINT vertexBytes = CheckedBufferSize(
-        sizeof(Vertex), subMesh.vertexCount,
-        "ModelRenderer skinned vertex buffer size overflow");
+    const UINT vertexBytes =
+        CheckedBufferSize(sizeof(Vertex), subMesh.vertexCount,
+                          "ModelRenderer skinned vertex buffer size overflow");
     if (vertexBytes == 0) {
         return false;
     }
@@ -356,9 +359,9 @@ static void PopulateSkinInfluences(const Model &model, ModelSubMesh &subMesh) {
 static bool CreatePaletteResource(ID3D12Device *device, SrvManager *srvManager,
                                   ScopedSrvAllocations &allocations,
                                   uint32_t jointCount, SkinCluster &cluster) {
-    const UINT paletteBytes = CheckedBufferSize(
-        sizeof(WellForGPU), jointCount,
-        "ModelRenderer palette buffer size overflow");
+    const UINT paletteBytes =
+        CheckedBufferSize(sizeof(WellForGPU), jointCount,
+                          "ModelRenderer palette buffer size overflow");
     if (paletteBytes == 0) {
         return false;
     }
@@ -369,10 +372,10 @@ static bool CreatePaletteResource(ID3D12Device *device, SrvManager *srvManager,
                       D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
                       IID_PPV_ARGS(&cluster.paletteResource)),
                   "CreateCommittedResource(PaletteBuffer) failed");
-    ThrowIfFailed(cluster.paletteResource->Map(
-                      0, nullptr,
-                      reinterpret_cast<void **>(&cluster.mappedPalette)),
-                  "PaletteBuffer Map failed");
+    ThrowIfFailed(
+        cluster.paletteResource->Map(
+            0, nullptr, reinterpret_cast<void **>(&cluster.mappedPalette)),
+        "PaletteBuffer Map failed");
     cluster.paletteCount = jointCount;
     for (uint32_t index = 0; index < jointCount; ++index) {
         cluster.mappedPalette[index].skeletonSpaceMatrix =
@@ -430,8 +433,8 @@ void ModelRenderer::CreateSkinClusters(Model &model) {
         }
 
         SkinCluster &cluster = subMesh.skinCluster;
-        cluster.inverseBindPoseMatrices.assign(
-            jointCount, StoreMatrix(XMMatrixIdentity()));
+        cluster.inverseBindPoseMatrices.assign(jointCount,
+                                               StoreMatrix(XMMatrixIdentity()));
         if (needsSkinnedBuffers) {
             if (!CreateSkinnedVertexResources(device, srvManager_, meshManager_,
                                               allocations, subMesh)) {
@@ -551,8 +554,7 @@ void ModelRenderer::PrepareSkinning(const Model &model) {
     DispatchSkinningBatch(model);
 }
 
-void ModelRenderer::PrepareSkinning(
-    const std::vector<const Model *> &models) {
+void ModelRenderer::PrepareSkinning(const std::vector<const Model *> &models) {
     DispatchSkinningBatch(models);
 }
 
@@ -615,8 +617,7 @@ void ModelRenderer::DispatchSkinning(const ModelSubMesh &subMesh) {
             skinCluster.skinnedVertexState,
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         cmd->ResourceBarrier(1, &toUav);
-        skinCluster.skinnedVertexState =
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+        skinCluster.skinnedVertexState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     }
 
     cmd->SetPipelineState(skinningPSO_.Get());
@@ -626,8 +627,8 @@ void ModelRenderer::DispatchSkinning(const ModelSubMesh &subMesh) {
     cmd->SetComputeRootDescriptorTable(1, skinCluster.inputVertexSrvGpuHandle);
     cmd->SetComputeRootDescriptorTable(2, skinCluster.influenceSrvGpuHandle);
     cmd->SetComputeRootDescriptorTable(3, skinCluster.paletteSrvGpuHandle);
-    cmd->SetComputeRootDescriptorTable(
-        4, skinCluster.skinnedVertexUavGpuHandle);
+    cmd->SetComputeRootDescriptorTable(4,
+                                       skinCluster.skinnedVertexUavGpuHandle);
 
     const UINT threadGroupCount =
         (subMesh.vertexCount + kSkinningThreadCount - 1u) /
@@ -639,8 +640,7 @@ void ModelRenderer::DispatchSkinning(const ModelSubMesh &subMesh) {
     cmd->ResourceBarrier(1, &uavBarrier);
 
     auto toVertex = CD3DX12_RESOURCE_BARRIER::Transition(
-        skinCluster.skinnedVertexResource.Get(),
-        skinCluster.skinnedVertexState,
+        skinCluster.skinnedVertexResource.Get(), skinCluster.skinnedVertexState,
         D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
     cmd->ResourceBarrier(1, &toVertex);
     skinCluster.skinnedVertexState =

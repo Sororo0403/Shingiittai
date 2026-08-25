@@ -128,10 +128,10 @@ void ReadNamedMaterialParams(const json &material, ParticleLayerDesc &desc) {
 
     const json &params = material.at("params");
     const json emptyBindings = json::object();
-    const json &bindings =
-        material.contains("paramBindings") && material.at("paramBindings").is_object()
-            ? material.at("paramBindings")
-            : emptyBindings;
+    const json &bindings = material.contains("paramBindings") &&
+                                   material.at("paramBindings").is_object()
+                               ? material.at("paramBindings")
+                               : emptyBindings;
 
     for (auto it = params.begin(); it != params.end(); ++it) {
         if (!it.value().is_number()) {
@@ -192,19 +192,26 @@ DirectX::XMFLOAT4 ThemeColor(EffectManager::PlushColorTheme theme,
                              const std::string &slot) {
     using Color = DirectX::XMFLOAT4;
     constexpr std::array<std::array<Color, 4>, 4> kThemePalettes = {{
-        {{{1.0f, 0.92f, 0.96f, 0.82f}, {0.92f, 0.98f, 1.0f, 0.72f},
-          {1.0f, 0.92f, 0.72f, 0.76f}, {1.0f, 0.82f, 0.88f, 0.62f}}},
-        {{{1.0f, 0.86f, 0.58f, 0.78f}, {0.95f, 0.84f, 0.65f, 0.70f},
-          {0.74f, 0.50f, 0.30f, 0.78f}, {1.0f, 0.78f, 0.52f, 0.62f}}},
-        {{{0.92f, 0.98f, 1.0f, 0.80f}, {0.76f, 0.92f, 1.0f, 0.72f},
-          {1.0f, 0.94f, 0.50f, 0.78f}, {0.96f, 0.78f, 1.0f, 0.62f}}},
-        {{{0.58f, 0.55f, 0.64f, 0.76f}, {0.54f, 0.52f, 0.58f, 0.66f},
-          {0.50f, 0.22f, 0.42f, 0.74f}, {0.46f, 0.34f, 0.58f, 0.55f}}},
+        {{{1.0f, 0.92f, 0.96f, 0.82f},
+          {0.92f, 0.98f, 1.0f, 0.72f},
+          {1.0f, 0.92f, 0.72f, 0.76f},
+          {1.0f, 0.82f, 0.88f, 0.62f}}},
+        {{{1.0f, 0.86f, 0.58f, 0.78f},
+          {0.95f, 0.84f, 0.65f, 0.70f},
+          {0.74f, 0.50f, 0.30f, 0.78f},
+          {1.0f, 0.78f, 0.52f, 0.62f}}},
+        {{{0.92f, 0.98f, 1.0f, 0.80f},
+          {0.76f, 0.92f, 1.0f, 0.72f},
+          {1.0f, 0.94f, 0.50f, 0.78f},
+          {0.96f, 0.78f, 1.0f, 0.62f}}},
+        {{{0.58f, 0.55f, 0.64f, 0.76f},
+          {0.54f, 0.52f, 0.58f, 0.66f},
+          {0.50f, 0.22f, 0.42f, 0.74f},
+          {0.46f, 0.34f, 0.58f, 0.55f}}},
     }};
     const size_t rawThemeIndex = static_cast<size_t>(theme);
-    const size_t themeIndex = rawThemeIndex < kThemePalettes.size()
-                                  ? rawThemeIndex
-                                  : 0;
+    const size_t themeIndex =
+        rawThemeIndex < kThemePalettes.size() ? rawThemeIndex : 0;
     size_t slotIndex = 3;
     if (slot == "main") {
         slotIndex = 0;
@@ -221,8 +228,8 @@ ParticleLayerDesc ParseParticleLayer(const json &layer,
     ParticleLayerDesc desc{};
     desc.name = layer.value("name", std::string{});
     desc.renderer = layer.value("renderer", desc.renderer);
-    desc.texture =
-        ResolvePathRelativeToFile(effectPath, layer.value("texture", desc.texture));
+    desc.texture = ResolvePathRelativeToFile(
+        effectPath, layer.value("texture", desc.texture));
     desc.noiseTexture = ResolvePathRelativeToFile(
         effectPath, layer.value("noiseTexture", desc.noiseTexture));
 
@@ -244,8 +251,8 @@ ParticleLayerDesc ParseParticleLayer(const json &layer,
     }
 
     desc.burstCount = ReadUint(layer, "burstCount", desc.burstCount);
-    desc.maxParticles = ReadUint(
-        layer, "maxParticles", (std::max)(64u, desc.burstCount * 3u));
+    desc.maxParticles =
+        ReadUint(layer, "maxParticles", (std::max)(64u, desc.burstCount * 3u));
     desc.spawnShape =
         ParseSpawnShape(layer.value("spawnShape", std::string{"sphere"}));
     desc.spawnOffsetScale =
@@ -258,8 +265,7 @@ ParticleLayerDesc ParseParticleLayer(const json &layer,
     }
     desc.color = ReadFloat4(layer, "color", desc.color);
     desc.colorThemeSlot = layer.value("colorThemeSlot", desc.colorThemeSlot);
-    desc.directionSource =
-        layer.value("directionSource", desc.directionSource);
+    desc.directionSource = layer.value("directionSource", desc.directionSource);
     desc.lifetime = ReadFloat(layer, "lifetime", desc.lifetime);
     desc.lifetimeRandom =
         ReadFloat(layer, "lifetimeRandom", desc.lifetimeRandom);
@@ -344,7 +350,8 @@ void EffectManager::LoadEffect(const std::string &name,
     if (root.contains("particleLayers") &&
         root.at("particleLayers").is_array()) {
         for (const json &layer : root.at("particleLayers")) {
-            asset.particleLayers.push_back(ParseParticleLayer(layer, resolvedPath));
+            asset.particleLayers.push_back(
+                ParseParticleLayer(layer, resolvedPath));
         }
     }
 
@@ -504,8 +511,7 @@ void EffectManager::Draw(const Camera &camera) {
         return;
     }
 
-    for (const std::unique_ptr<ParticleLayerRuntime> &layer :
-         particleLayers_) {
+    for (const std::unique_ptr<ParticleLayerRuntime> &layer : particleLayers_) {
         layer->system.Draw(camera);
     }
 }
@@ -527,8 +533,9 @@ DirectX::XMFLOAT3 EffectManager::GetCameraShakeOffset() const {
     return offset;
 }
 
-ParticleEmitterSettings EffectManager::BuildEmitterSettings(
-    const ParticleLayerDesc &desc, const DirectX::XMFLOAT3 &position) {
+ParticleEmitterSettings
+EffectManager::BuildEmitterSettings(const ParticleLayerDesc &desc,
+                                    const DirectX::XMFLOAT3 &position) {
     ParticleEmitterSettings settings{};
     settings.position = position;
     settings.emissionType = ParticleEmissionType::Burst;
@@ -562,8 +569,9 @@ ParticleEmitterSettings EffectManager::BuildEmitterSettings(
     return settings;
 }
 
-ParticleEmitterSettings EffectManager::BuildEmitterSettings(
-    const ParticleLayerDesc &desc, const PlayDesc &playDesc) {
+ParticleEmitterSettings
+EffectManager::BuildEmitterSettings(const ParticleLayerDesc &desc,
+                                    const PlayDesc &playDesc) {
     using namespace DirectX;
 
     ParticleEmitterSettings settings =
@@ -572,10 +580,10 @@ ParticleEmitterSettings EffectManager::BuildEmitterSettings(
     const float power = std::clamp(playDesc.power, 0.0f, 1.0f);
     const float scale = (std::max)(0.001f, playDesc.scale);
     const float powerScale = 0.72f + power * 0.68f;
-    settings.burstCount = (std::max)(
-        1u, static_cast<uint32_t>(
-                std::round(static_cast<float>(desc.burstCount) *
-                           (0.55f + power * 1.05f))));
+    settings.burstCount =
+        (std::max)(1u, static_cast<uint32_t>(
+                           std::round(static_cast<float>(desc.burstCount) *
+                                      (0.55f + power * 1.05f))));
     settings.spawnOffsetScale.x *= scale * powerScale;
     settings.spawnOffsetScale.y *= scale * powerScale;
     settings.spawnOffsetScale.z *= scale * powerScale;
@@ -584,7 +592,8 @@ ParticleEmitterSettings EffectManager::BuildEmitterSettings(
     settings.scaleRandom *= scale * powerScale;
 
     if (!desc.colorThemeSlot.empty()) {
-        settings.tintColor = ThemeColor(playDesc.colorTheme, desc.colorThemeSlot);
+        settings.tintColor =
+            ThemeColor(playDesc.colorTheme, desc.colorThemeSlot);
     }
     settings.tintColor.w =
         std::clamp(settings.tintColor.w * (0.72f + power * 0.45f), 0.0f, 1.0f);
@@ -593,8 +602,8 @@ ParticleEmitterSettings EffectManager::BuildEmitterSettings(
     XMFLOAT3 slash = NormalizeOr(playDesc.slashDirection, {1.0f, 0.0f, 0.0f});
     XMVECTOR normalVector = LoadFloat3(normal);
     XMVECTOR slashVector = LoadFloat3(slash);
-    const float alignment = std::abs(XMVectorGetX(XMVector3Dot(normalVector,
-                                                               slashVector)));
+    const float alignment =
+        std::abs(XMVectorGetX(XMVector3Dot(normalVector, slashVector)));
     if (alignment > 0.95f) {
         slash = {1.0f, 0.0f, 0.0f};
         slashVector = LoadFloat3(slash);
@@ -605,13 +614,12 @@ ParticleEmitterSettings EffectManager::BuildEmitterSettings(
         }
     }
 
-    slashVector = XMVector3Normalize(
-        XMVectorSubtract(slashVector,
-                         XMVectorScale(normalVector,
-                                       XMVectorGetX(XMVector3Dot(
-                                           slashVector, normalVector)))));
-    XMVECTOR upVector = XMVector3Normalize(XMVector3Cross(normalVector,
-                                                          slashVector));
+    slashVector = XMVector3Normalize(XMVectorSubtract(
+        slashVector,
+        XMVectorScale(normalVector,
+                      XMVectorGetX(XMVector3Dot(slashVector, normalVector)))));
+    XMVECTOR upVector =
+        XMVector3Normalize(XMVector3Cross(normalVector, slashVector));
 
     settings.basisRight = StoreFloat3(slashVector);
     settings.basisUp = StoreFloat3(upVector);
@@ -635,8 +643,8 @@ ParticleEmitterSettings EffectManager::BuildEmitterSettings(
     return settings;
 }
 
-std::optional<size_t> EffectManager::FindAssetIndex(
-    const std::string &name) const {
+std::optional<size_t>
+EffectManager::FindAssetIndex(const std::string &name) const {
     for (size_t index = 0; index < assets_.size(); ++index) {
         if (assets_[index].name == name) {
             return index;
@@ -666,4 +674,3 @@ void EffectManager::BuildRuntimesFromLoadedAssets() {
         }
     }
 }
-

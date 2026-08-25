@@ -139,7 +139,9 @@ class TextureManager {
     uint32_t GetWhiteTextureId() const { return whiteTextureId_; }
     uint32_t GetWhiteCubeTextureId() const { return whiteCubeTextureId_; }
     uint32_t GetBlackCubeTextureId() const { return blackCubeTextureId_; }
-    uint32_t GetDefaultNormalTextureId() const { return defaultNormalTextureId_; }
+    uint32_t GetDefaultNormalTextureId() const {
+        return defaultNormalTextureId_;
+    }
 
     /// <summary>
     /// 指定IDが有効なテクスチャを指しているかを取得する

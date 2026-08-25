@@ -34,7 +34,7 @@ void SrvManager::Initialize(DirectXCommon *dxCommon, UINT maxSrvCount) {
 
     const UINT descriptorSize =
         dxCommon->GetDevice()->GetDescriptorHandleIncrementSize(
-        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
     heap_ = std::move(newHeap);
     descriptorSize_ = descriptorSize;
@@ -72,8 +72,8 @@ UINT SrvManager::AllocateRange(UINT count) {
         return Allocate();
     }
 
-    for (UINT startIndex = 0; count <= currentIndex_ &&
-                              startIndex <= currentIndex_ - count;
+    for (UINT startIndex = 0;
+         count <= currentIndex_ && startIndex <= currentIndex_ - count;
          ++startIndex) {
         bool available = true;
         for (UINT offset = 0; offset < count; ++offset) {

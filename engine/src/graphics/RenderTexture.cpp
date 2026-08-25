@@ -40,9 +40,7 @@ class RenderTextureInitializationGuard {
 };
 } // namespace
 
-RenderTexture::~RenderTexture() {
-    Release();
-}
+RenderTexture::~RenderTexture() { Release(); }
 
 void RenderTexture::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
                                int width, int height) {

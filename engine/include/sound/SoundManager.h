@@ -4,9 +4,9 @@
 #include <DirectXMath.h>
 #include <cstdint>
 #include <deque>
+#include <memory>
 #include <mfidl.h>
 #include <mfreadwrite.h>
-#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -37,7 +37,9 @@ class SoundManager {
     /// Media Foundation、COM、XAudio2エンジンとマスターボイスを初期化する
     /// </summary>
     void Initialize();
-    bool IsInitialized() const { return xAudio2_ != nullptr && masterVoice_ != nullptr; }
+    bool IsInitialized() const {
+        return xAudio2_ != nullptr && masterVoice_ != nullptr;
+    }
     const std::string &GetLastInitializeError() const {
         return lastInitializeError_;
     }
@@ -82,14 +84,13 @@ class SoundManager {
     /// <summary>
     /// 登録済み音声IDのデコード済みデータを指定秒から再生する
     /// </summary>
-    uint32_t PlayFrom(uint32_t soundId, float startSeconds,
-                      float volume = 1.0f, bool loop = false);
+    uint32_t PlayFrom(uint32_t soundId, float startSeconds, float volume = 1.0f,
+                      bool loop = false);
 
     /// <summary>
     /// 3D位置をもつ音声として再生する
     /// </summary>
-    uint32_t Play3D(uint32_t soundId,
-                    const DirectX::XMFLOAT3 &sourcePosition,
+    uint32_t Play3D(uint32_t soundId, const DirectX::XMFLOAT3 &sourcePosition,
                     float volume = 1.0f, bool loop = false);
 
     /// <summary>

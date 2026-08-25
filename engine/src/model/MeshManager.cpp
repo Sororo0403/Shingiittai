@@ -34,9 +34,7 @@ bool CreateUploadBuffer(ID3D12Device *device, const void *data, UINT size,
 }
 } // namespace
 
-MeshManager::~MeshManager() {
-    Finalize();
-}
+MeshManager::~MeshManager() { Finalize(); }
 
 void MeshManager::Initialize(DirectXCommon *dxCommon) {
     if (!dxCommon) {
@@ -76,8 +74,8 @@ uint32_t MeshManager::CreateMesh(const void *vertexData, uint32_t vertexStride,
     mesh.vertexStride = vertexStride;
     mesh.primitiveTopology = primitiveTopology;
 
-    const uint64_t vbSize64 =
-        static_cast<uint64_t>(vertexStride) * static_cast<uint64_t>(vertexCount);
+    const uint64_t vbSize64 = static_cast<uint64_t>(vertexStride) *
+                              static_cast<uint64_t>(vertexCount);
     const uint64_t ibSize64 =
         sizeof(uint32_t) * static_cast<uint64_t>(indexCount);
     if (vbSize64 > (std::numeric_limits<UINT>::max)() ||

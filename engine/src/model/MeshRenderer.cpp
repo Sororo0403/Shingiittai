@@ -155,8 +155,7 @@ uint32_t ResolveNormalTextureId(TextureManager *textureManager,
     const uint32_t fallbackTextureId =
         textureManager != nullptr ? textureManager->GetDefaultNormalTextureId()
                                   : UINT32_MAX;
-    return ResolveTextureId(textureManager, normalTextureId,
-                            fallbackTextureId);
+    return ResolveTextureId(textureManager, normalTextureId, fallbackTextureId);
 }
 
 uint32_t ResolveBaseColorTextureId(TextureManager *textureManager,
@@ -278,14 +277,12 @@ void MeshRenderer::DrawMesh(const Mesh &mesh, const Material &material,
     cmd->SetGraphicsRootConstantBufferView(1, sceneCbAddr);
     cmd->SetGraphicsRootConstantBufferView(2, materialCbAddr);
     cmd->SetGraphicsRootDescriptorTable(
-        3, textureManager_->GetGpuHandle(
-               ResolveBaseColorTextureId(textureManager_, drawMaterial,
-                                         textureId)));
+        3, textureManager_->GetGpuHandle(ResolveBaseColorTextureId(
+               textureManager_, drawMaterial, textureId)));
     cmd->SetGraphicsRootDescriptorTable(4, shadowMapGpuHandle_);
     cmd->SetGraphicsRootDescriptorTable(
-        5, textureManager_->GetGpuHandle(
-               ResolveNormalTextureId(textureManager_, drawMaterial,
-                                      normalTextureId)));
+        5, textureManager_->GetGpuHandle(ResolveNormalTextureId(
+               textureManager_, drawMaterial, normalTextureId)));
     cmd->IASetVertexBuffers(0, 1, &mesh.vbView);
     cmd->IASetIndexBuffer(&mesh.ibView);
     cmd->IASetPrimitiveTopology(mesh.primitiveTopology);
@@ -294,10 +291,12 @@ void MeshRenderer::DrawMesh(const Mesh &mesh, const Material &material,
     ++drawIndex_;
 }
 
-void MeshRenderer::DrawMeshWithPipeline(
-    uint32_t pipelineId, const Mesh &mesh, const Material &material,
-    const Transform &transform, const Camera &camera, uint32_t textureId,
-    uint32_t normalTextureId) {
+void MeshRenderer::DrawMeshWithPipeline(uint32_t pipelineId, const Mesh &mesh,
+                                        const Material &material,
+                                        const Transform &transform,
+                                        const Camera &camera,
+                                        uint32_t textureId,
+                                        uint32_t normalTextureId) {
     if (!dxCommon_ || !textureManager_ || !rootSignature_ ||
         pipelineId >= customPipelines_.size() || drawIndex_ >= kMaxDraws) {
         return;
@@ -324,14 +323,12 @@ void MeshRenderer::DrawMeshWithPipeline(
     cmd->SetGraphicsRootConstantBufferView(1, sceneCbAddr);
     cmd->SetGraphicsRootConstantBufferView(2, materialCbAddr);
     cmd->SetGraphicsRootDescriptorTable(
-        3, textureManager_->GetGpuHandle(
-               ResolveBaseColorTextureId(textureManager_, drawMaterial,
-                                         textureId)));
+        3, textureManager_->GetGpuHandle(ResolveBaseColorTextureId(
+               textureManager_, drawMaterial, textureId)));
     cmd->SetGraphicsRootDescriptorTable(4, shadowMapGpuHandle_);
     cmd->SetGraphicsRootDescriptorTable(
-        5, textureManager_->GetGpuHandle(
-               ResolveNormalTextureId(textureManager_, drawMaterial,
-                                      normalTextureId)));
+        5, textureManager_->GetGpuHandle(ResolveNormalTextureId(
+               textureManager_, drawMaterial, normalTextureId)));
     cmd->IASetVertexBuffers(0, 1, &mesh.vbView);
     cmd->IASetIndexBuffer(&mesh.ibView);
     cmd->IASetPrimitiveTopology(mesh.primitiveTopology);
@@ -371,9 +368,9 @@ void MeshRenderer::DrawMeshWithPipelineHandles(
     cmd->SetGraphicsRootConstantBufferView(1, sceneCbAddr);
     cmd->SetGraphicsRootConstantBufferView(2, materialCbAddr);
     const D3D12_GPU_DESCRIPTOR_HANDLE baseColorHandle =
-        textureHandle.ptr != 0
-            ? textureHandle
-            : textureManager_->GetGpuHandle(textureManager_->GetWhiteTextureId());
+        textureHandle.ptr != 0 ? textureHandle
+                               : textureManager_->GetGpuHandle(
+                                     textureManager_->GetWhiteTextureId());
     const D3D12_GPU_DESCRIPTOR_HANDLE normalHandle =
         normalTextureHandle.ptr != 0
             ? normalTextureHandle
@@ -393,8 +390,7 @@ void MeshRenderer::DrawMeshWithPipelineHandles(
 void MeshRenderer::DrawMeshInstanced(const Mesh &mesh, const Material &material,
                                      const InstanceData *instances,
                                      uint32_t instanceCount,
-                                     const Camera &camera,
-                                     uint32_t textureId,
+                                     const Camera &camera, uint32_t textureId,
                                      uint32_t normalTextureId) {
     if (!dxCommon_ || !textureManager_ || !rootSignature_ || !instances ||
         instanceCount == 0 || drawIndex_ >= kMaxDraws) {
@@ -404,9 +400,8 @@ void MeshRenderer::DrawMeshInstanced(const Mesh &mesh, const Material &material,
     auto *cmd = dxCommon_->GetCommandList();
     const Material drawMaterial = NormalizeMaterialForDraw(material);
 
-    const D3D12_GPU_VIRTUAL_ADDRESS objectCbAddr =
-        WriteObjectConstants(XMMatrixIdentity(), XMMatrixIdentity(),
-                             XMMatrixIdentity());
+    const D3D12_GPU_VIRTUAL_ADDRESS objectCbAddr = WriteObjectConstants(
+        XMMatrixIdentity(), XMMatrixIdentity(), XMMatrixIdentity());
     const D3D12_GPU_VIRTUAL_ADDRESS sceneCbAddr = WriteSceneConstants(camera);
     const D3D12_GPU_VIRTUAL_ADDRESS materialCbAddr =
         WriteMaterialConstants(drawMaterial);
@@ -422,14 +417,12 @@ void MeshRenderer::DrawMeshInstanced(const Mesh &mesh, const Material &material,
     cmd->SetGraphicsRootConstantBufferView(1, sceneCbAddr);
     cmd->SetGraphicsRootConstantBufferView(2, materialCbAddr);
     cmd->SetGraphicsRootDescriptorTable(
-        3, textureManager_->GetGpuHandle(
-               ResolveBaseColorTextureId(textureManager_, drawMaterial,
-                                         textureId)));
+        3, textureManager_->GetGpuHandle(ResolveBaseColorTextureId(
+               textureManager_, drawMaterial, textureId)));
     cmd->SetGraphicsRootDescriptorTable(4, shadowMapGpuHandle_);
     cmd->SetGraphicsRootDescriptorTable(
-        5, textureManager_->GetGpuHandle(
-               ResolveNormalTextureId(textureManager_, drawMaterial,
-                                      normalTextureId)));
+        5, textureManager_->GetGpuHandle(ResolveNormalTextureId(
+               textureManager_, drawMaterial, normalTextureId)));
     D3D12_VERTEX_BUFFER_VIEW views[] = {mesh.vbView, instanceView};
     cmd->IASetVertexBuffers(0, 2, views);
     cmd->IASetIndexBuffer(&mesh.ibView);
@@ -452,9 +445,8 @@ void MeshRenderer::DrawMeshInstancedWithPipeline(
     auto *cmd = dxCommon_->GetCommandList();
     const Material drawMaterial = NormalizeMaterialForDraw(material);
 
-    const D3D12_GPU_VIRTUAL_ADDRESS objectCbAddr =
-        WriteObjectConstants(XMMatrixIdentity(), XMMatrixIdentity(),
-                             XMMatrixIdentity());
+    const D3D12_GPU_VIRTUAL_ADDRESS objectCbAddr = WriteObjectConstants(
+        XMMatrixIdentity(), XMMatrixIdentity(), XMMatrixIdentity());
     const D3D12_GPU_VIRTUAL_ADDRESS sceneCbAddr = WriteSceneConstants(camera);
     const D3D12_GPU_VIRTUAL_ADDRESS materialCbAddr =
         WriteMaterialConstants(drawMaterial);
@@ -471,14 +463,12 @@ void MeshRenderer::DrawMeshInstancedWithPipeline(
     cmd->SetGraphicsRootConstantBufferView(1, sceneCbAddr);
     cmd->SetGraphicsRootConstantBufferView(2, materialCbAddr);
     cmd->SetGraphicsRootDescriptorTable(
-        3, textureManager_->GetGpuHandle(
-               ResolveBaseColorTextureId(textureManager_, drawMaterial,
-                                         textureId)));
+        3, textureManager_->GetGpuHandle(ResolveBaseColorTextureId(
+               textureManager_, drawMaterial, textureId)));
     cmd->SetGraphicsRootDescriptorTable(4, shadowMapGpuHandle_);
     cmd->SetGraphicsRootDescriptorTable(
-        5, textureManager_->GetGpuHandle(
-               ResolveNormalTextureId(textureManager_, drawMaterial,
-                                      normalTextureId)));
+        5, textureManager_->GetGpuHandle(ResolveNormalTextureId(
+               textureManager_, drawMaterial, normalTextureId)));
     D3D12_VERTEX_BUFFER_VIEW views[] = {mesh.vbView, instanceView};
     cmd->IASetVertexBuffers(0, 2, views);
     cmd->IASetIndexBuffer(&mesh.ibView);
@@ -523,9 +513,8 @@ void MeshRenderer::DrawMeshShadow(
     cmd->SetGraphicsRootConstantBufferView(1, sceneCbAddr);
     cmd->SetGraphicsRootConstantBufferView(2, materialCbAddr);
     cmd->SetGraphicsRootDescriptorTable(
-        3, textureManager_->GetGpuHandle(
-               ResolveBaseColorTextureId(textureManager_, drawMaterial,
-                                         textureId)));
+        3, textureManager_->GetGpuHandle(ResolveBaseColorTextureId(
+               textureManager_, drawMaterial, textureId)));
     cmd->IASetVertexBuffers(0, 1, &mesh.vbView);
     cmd->IASetIndexBuffer(&mesh.ibView);
     cmd->IASetPrimitiveTopology(mesh.primitiveTopology);
@@ -553,9 +542,8 @@ void MeshRenderer::DrawMeshInstancedShadow(
     auto *cmd = dxCommon_->GetCommandList();
     const Material drawMaterial = NormalizeMaterialForDraw(material);
 
-    const D3D12_GPU_VIRTUAL_ADDRESS objectCbAddr =
-        WriteObjectConstants(XMMatrixIdentity(), XMMatrixIdentity(),
-                             XMMatrixIdentity());
+    const D3D12_GPU_VIRTUAL_ADDRESS objectCbAddr = WriteObjectConstants(
+        XMMatrixIdentity(), XMMatrixIdentity(), XMMatrixIdentity());
     const D3D12_GPU_VIRTUAL_ADDRESS sceneCbAddr =
         WriteShadowSceneConstants(lightViewProjection);
     const D3D12_GPU_VIRTUAL_ADDRESS materialCbAddr =
@@ -573,9 +561,8 @@ void MeshRenderer::DrawMeshInstancedShadow(
     cmd->SetGraphicsRootConstantBufferView(1, sceneCbAddr);
     cmd->SetGraphicsRootConstantBufferView(2, materialCbAddr);
     cmd->SetGraphicsRootDescriptorTable(
-        3, textureManager_->GetGpuHandle(
-               ResolveBaseColorTextureId(textureManager_, drawMaterial,
-                                         textureId)));
+        3, textureManager_->GetGpuHandle(ResolveBaseColorTextureId(
+               textureManager_, drawMaterial, textureId)));
 
     D3D12_VERTEX_BUFFER_VIEW views[] = {mesh.vbView, instanceView};
     cmd->IASetVertexBuffers(0, 2, views);
@@ -598,9 +585,8 @@ void MeshRenderer::DrawMeshInstancedShadowWithPipeline(
     auto *cmd = dxCommon_->GetCommandList();
     const Material drawMaterial = NormalizeMaterialForDraw(material);
 
-    const D3D12_GPU_VIRTUAL_ADDRESS objectCbAddr =
-        WriteObjectConstants(XMMatrixIdentity(), XMMatrixIdentity(),
-                             XMMatrixIdentity());
+    const D3D12_GPU_VIRTUAL_ADDRESS objectCbAddr = WriteObjectConstants(
+        XMMatrixIdentity(), XMMatrixIdentity(), XMMatrixIdentity());
     const D3D12_GPU_VIRTUAL_ADDRESS sceneCbAddr =
         WriteShadowSceneConstants(lightViewProjection);
     const D3D12_GPU_VIRTUAL_ADDRESS materialCbAddr =
@@ -619,9 +605,8 @@ void MeshRenderer::DrawMeshInstancedShadowWithPipeline(
     cmd->SetGraphicsRootConstantBufferView(1, sceneCbAddr);
     cmd->SetGraphicsRootConstantBufferView(2, materialCbAddr);
     cmd->SetGraphicsRootDescriptorTable(
-        3, textureManager_->GetGpuHandle(
-               ResolveBaseColorTextureId(textureManager_, drawMaterial,
-                                         textureId)));
+        3, textureManager_->GetGpuHandle(ResolveBaseColorTextureId(
+               textureManager_, drawMaterial, textureId)));
 
     D3D12_VERTEX_BUFFER_VIEW views[] = {mesh.vbView, instanceView};
     cmd->IASetVertexBuffers(0, 2, views);
@@ -630,8 +615,6 @@ void MeshRenderer::DrawMeshInstancedShadowWithPipeline(
     cmd->DrawIndexedInstanced(mesh.indexCount, instanceCount, 0, 0, 0);
     ++drawIndex_;
 }
-
-
 
 void MeshRenderer::SetPipelineForMaterial(const Material &material) {
     dxCommon_->GetCommandList()->SetPipelineState(
@@ -659,10 +642,9 @@ void MeshRenderer::SetInstancedPipelineForMaterial(
         pipelineStates[PipelineVariantIndex(material)].Get());
 }
 
-void MeshRenderer::SetShadowMap(
-    D3D12_GPU_DESCRIPTOR_HANDLE shadowMap,
-    const DirectX::XMFLOAT4X4 &lightViewProjection,
-    const SceneShadowSettings &settings) {
+void MeshRenderer::SetShadowMap(D3D12_GPU_DESCRIPTOR_HANDLE shadowMap,
+                                const DirectX::XMFLOAT4X4 &lightViewProjection,
+                                const SceneShadowSettings &settings) {
     if (!textureManager_) {
         shadowMapGpuHandle_ = {};
         shadowLightViewProjection_ = lightViewProjection;
@@ -671,16 +653,16 @@ void MeshRenderer::SetShadowMap(
         return;
     }
     const bool hasShadowMap = shadowMap.ptr != 0;
-    shadowMapGpuHandle_ =
-        hasShadowMap
-            ? shadowMap
-            : textureManager_->GetGpuHandle(textureManager_->GetWhiteTextureId());
+    shadowMapGpuHandle_ = hasShadowMap
+                              ? shadowMap
+                              : textureManager_->GetGpuHandle(
+                                    textureManager_->GetWhiteTextureId());
     shadowLightViewProjection_ = lightViewProjection;
-    shadowParams_ = {
-        hasShadowMap ? 1.0f : 0.0f,
-        std::isfinite(settings.bias) ? settings.bias : 0.0f,
-        ClampFinite(settings.strength, 0.0f, 1.0f, 0.0f),
-        std::isfinite(settings.normalBias) ? settings.normalBias : 0.0f};
+    shadowParams_ = {hasShadowMap ? 1.0f : 0.0f,
+                     std::isfinite(settings.bias) ? settings.bias : 0.0f,
+                     ClampFinite(settings.strength, 0.0f, 1.0f, 0.0f),
+                     std::isfinite(settings.normalBias) ? settings.normalBias
+                                                        : 0.0f};
     shadowFilterParams_ = {ClampFiniteMin(settings.filterRadius, 0.0f),
                            ClampFiniteMin(settings.depthSoftness, 0.0001f),
                            ClampFiniteMin(settings.edgeFade, 0.0f), 0.0f};

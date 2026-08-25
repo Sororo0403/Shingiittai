@@ -27,10 +27,8 @@ inline DirectX::XMFLOAT4 FiniteFloat4(const DirectX::XMFLOAT4 &value,
 }
 
 inline DirectX::XMFLOAT4X4 IdentityMatrix() {
-    return {1.0f, 0.0f, 0.0f, 0.0f,
-            0.0f, 1.0f, 0.0f, 0.0f,
-            0.0f, 0.0f, 1.0f, 0.0f,
-            0.0f, 0.0f, 0.0f, 1.0f};
+    return {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f};
 }
 
 inline DirectX::XMFLOAT4X4 SanitizeMatrix(DirectX::XMFLOAT4X4 value) {
@@ -51,11 +49,10 @@ inline InstanceData SanitizeInstanceDataForDraw(InstanceData instance) {
     instance.color =
         InstanceDataDetail::FiniteFloat4(instance.color, fallback.color);
     instance.color.w = std::clamp(
-        InstanceDataDetail::FiniteOr(instance.color.w, fallback.color.w),
-        0.0f, 1.0f);
-    instance.fade = std::clamp(
-        InstanceDataDetail::FiniteOr(instance.fade, fallback.fade), 0.0f,
+        InstanceDataDetail::FiniteOr(instance.color.w, fallback.color.w), 0.0f,
         1.0f);
+    instance.fade = std::clamp(
+        InstanceDataDetail::FiniteOr(instance.fade, fallback.fade), 0.0f, 1.0f);
     instance.padding.x = 0.0f;
     instance.padding.y = 0.0f;
     return instance;

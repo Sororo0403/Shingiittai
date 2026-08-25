@@ -82,8 +82,7 @@ uint32_t ResolveNormalTextureId(TextureManager *textureManager,
     const uint32_t fallbackTextureId =
         textureManager != nullptr ? textureManager->GetDefaultNormalTextureId()
                                   : UINT32_MAX;
-    return ResolveTextureId(textureManager, normalTextureId,
-                            fallbackTextureId);
+    return ResolveTextureId(textureManager, normalTextureId, fallbackTextureId);
 }
 
 uint32_t ResolveBaseColorTextureId(TextureManager *textureManager,
@@ -131,9 +130,9 @@ bool HasRenderableVertexSource(const ModelSubMesh &subMesh) {
            skinCluster.skinnedVertexBufferView.StrideInBytes > 0;
 }
 
-bool IsDrawableSubMeshWithValidVertexSource(
-    const ModelSubMesh &subMesh, MeshManager *meshManager,
-    MaterialManager *materialManager) {
+bool IsDrawableSubMeshWithValidVertexSource(const ModelSubMesh &subMesh,
+                                            MeshManager *meshManager,
+                                            MaterialManager *materialManager) {
     return IsDrawableSubMesh(subMesh, meshManager, materialManager) &&
            HasRenderableVertexSource(subMesh);
 }
@@ -149,11 +148,10 @@ bool IsForwardDrawableSubMesh(const ModelSubMesh &subMesh,
                               MeshManager *meshManager,
                               MaterialManager *materialManager) {
     return IsDrawableSubMesh(subMesh, meshManager, materialManager) &&
-           HasPaletteDescriptor(subMesh) &&
-           HasRenderableVertexSource(subMesh);
+           HasPaletteDescriptor(subMesh) && HasRenderableVertexSource(subMesh);
 }
 
-}
+} // namespace
 
 static XMFLOAT4X4 StoreMatrix(const XMMATRIX &matrix) {
     XMFLOAT4X4 result{};
@@ -278,8 +276,8 @@ void ModelRenderer::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
         textureManager_->GetGpuHandle(textureManager_->GetWhiteTextureId());
     const std::vector<uint8_t> dissolveNoise =
         CreateDissolveNoisePixels(128u, 128u);
-    dissolveNoiseTextureId_ = textureManager_->CreateFromRgbaPixels(
-        128u, 128u, dissolveNoise.data());
+    dissolveNoiseTextureId_ =
+        textureManager_->CreateFromRgbaPixels(128u, 128u, dissolveNoise.data());
 
     CreateRootSignature();
     CreateShadowRootSignature();
@@ -323,8 +321,8 @@ void ModelRenderer::PreDraw() {
 
 void ModelRenderer::Draw(const Model &model, const Transform &transform,
                          const Camera &camera, uint32_t environmentTextureId) {
-    if (!dxCommon_ || !meshManager_ || !textureManager_ ||
-        !materialManager_ || !rootSignature_ || drawIndex_ >= kMaxDraws) {
+    if (!dxCommon_ || !meshManager_ || !textureManager_ || !materialManager_ ||
+        !rootSignature_ || drawIndex_ >= kMaxDraws) {
         return;
     }
 
@@ -335,8 +333,7 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
         XMMatrixScaling(safeTransform.scale.x, safeTransform.scale.y,
                         safeTransform.scale.z) *
         XMMatrixRotationQuaternion(q) *
-        XMMatrixTranslation(safeTransform.position.x,
-                            safeTransform.position.y,
+        XMMatrixTranslation(safeTransform.position.x, safeTransform.position.y,
                             safeTransform.position.z);
 
     if (model.hasRootAnimation) {
@@ -349,8 +346,7 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
     const D3D12_GPU_VIRTUAL_ADDRESS objectCbAddr =
         WriteObjectConstants(wvp, world, worldInverseTranspose);
     const D3D12_GPU_VIRTUAL_ADDRESS sceneCbAddr = WriteSceneConstants(camera);
-    const D3D12_GPU_VIRTUAL_ADDRESS effectCbAddr =
-        WriteDrawEffectConstants();
+    const D3D12_GPU_VIRTUAL_ADDRESS effectCbAddr = WriteDrawEffectConstants();
     if (objectCbAddr == 0 || sceneCbAddr == 0 || effectCbAddr == 0) {
         return;
     }
@@ -368,21 +364,17 @@ void ModelRenderer::Draw(const Model &model, const Transform &transform,
 
 void ModelRenderer::DrawInstanced(const Model &model,
                                   const Transform *transforms,
-                                  uint32_t instanceCount,
-                                  const Camera &camera,
+                                  uint32_t instanceCount, const Camera &camera,
                                   uint32_t environmentTextureId) {
-    if (!dxCommon_ || !meshManager_ || !textureManager_ ||
-        !materialManager_ || !rootSignature_ || !transforms ||
-        instanceCount == 0) {
+    if (!dxCommon_ || !meshManager_ || !textureManager_ || !materialManager_ ||
+        !rootSignature_ || !transforms || instanceCount == 0) {
         return;
     }
 
-    const D3D12_GPU_VIRTUAL_ADDRESS objectCbAddr =
-        WriteObjectConstants(XMMatrixIdentity(), XMMatrixIdentity(),
-                             XMMatrixIdentity());
+    const D3D12_GPU_VIRTUAL_ADDRESS objectCbAddr = WriteObjectConstants(
+        XMMatrixIdentity(), XMMatrixIdentity(), XMMatrixIdentity());
     const D3D12_GPU_VIRTUAL_ADDRESS sceneCbAddr = WriteSceneConstants(camera);
-    const D3D12_GPU_VIRTUAL_ADDRESS effectCbAddr =
-        WriteDrawEffectConstants();
+    const D3D12_GPU_VIRTUAL_ADDRESS effectCbAddr = WriteDrawEffectConstants();
     const D3D12_VERTEX_BUFFER_VIEW instanceView =
         WriteInstances(model, transforms, instanceCount);
     if (objectCbAddr == 0 || sceneCbAddr == 0 || effectCbAddr == 0 ||
@@ -398,21 +390,17 @@ void ModelRenderer::DrawInstanced(const Model &model,
 
 void ModelRenderer::DrawInstanced(const Model &model,
                                   const InstanceData *instances,
-                                  uint32_t instanceCount,
-                                  const Camera &camera,
+                                  uint32_t instanceCount, const Camera &camera,
                                   uint32_t environmentTextureId) {
-    if (!dxCommon_ || !meshManager_ || !textureManager_ ||
-        !materialManager_ || !rootSignature_ || !instances ||
-        instanceCount == 0) {
+    if (!dxCommon_ || !meshManager_ || !textureManager_ || !materialManager_ ||
+        !rootSignature_ || !instances || instanceCount == 0) {
         return;
     }
 
-    const D3D12_GPU_VIRTUAL_ADDRESS objectCbAddr =
-        WriteObjectConstants(XMMatrixIdentity(), XMMatrixIdentity(),
-                             XMMatrixIdentity());
+    const D3D12_GPU_VIRTUAL_ADDRESS objectCbAddr = WriteObjectConstants(
+        XMMatrixIdentity(), XMMatrixIdentity(), XMMatrixIdentity());
     const D3D12_GPU_VIRTUAL_ADDRESS sceneCbAddr = WriteSceneConstants(camera);
-    const D3D12_GPU_VIRTUAL_ADDRESS effectCbAddr =
-        WriteDrawEffectConstants();
+    const D3D12_GPU_VIRTUAL_ADDRESS effectCbAddr = WriteDrawEffectConstants();
     const D3D12_VERTEX_BUFFER_VIEW instanceView =
         WriteInstances(model, instances, instanceCount);
     if (objectCbAddr == 0 || sceneCbAddr == 0 || effectCbAddr == 0 ||
@@ -439,7 +427,8 @@ void ModelRenderer::DrawForwardSubMesh(
         return;
     }
 
-    const Material &material = materialManager_->GetMaterial(subMesh.materialId);
+    const Material &material =
+        materialManager_->GetMaterial(subMesh.materialId);
     SetPipelineForMaterial(material);
     const Mesh &mesh = meshManager_->GetMesh(subMesh.meshId);
     const D3D12_VERTEX_BUFFER_VIEW vertexBufferView =
@@ -447,11 +436,9 @@ void ModelRenderer::DrawForwardSubMesh(
             ? subMesh.skinCluster.skinnedVertexBufferView
             : mesh.vbView;
     const uint32_t requestedEnvironmentTextureId =
-        environmentTextureId != UINT32_MAX
-            ? environmentTextureId
-            : hasEnvironmentTexture_
-                  ? environmentTextureId_
-                  : textureManager_->GetBlackCubeTextureId();
+        environmentTextureId != UINT32_MAX ? environmentTextureId
+        : hasEnvironmentTexture_           ? environmentTextureId_
+                                 : textureManager_->GetBlackCubeTextureId();
     const uint32_t safeEnvironmentTextureId =
         textureManager_->IsValidTextureId(requestedEnvironmentTextureId)
             ? requestedEnvironmentTextureId
@@ -465,8 +452,8 @@ void ModelRenderer::DrawForwardSubMesh(
     cmd->SetGraphicsRootDescriptorTable(
         3, textureManager_->GetGpuHandle(ResolveBaseColorTextureId(
                textureManager_, material, subMesh.textureId)));
-    cmd->SetGraphicsRootDescriptorTable(4,
-                                        subMesh.skinCluster.paletteSrvGpuHandle);
+    cmd->SetGraphicsRootDescriptorTable(
+        4, subMesh.skinCluster.paletteSrvGpuHandle);
     cmd->SetGraphicsRootDescriptorTable(
         5, textureManager_->GetGpuHandle(safeEnvironmentTextureId));
     cmd->SetGraphicsRootDescriptorTable(6, shadowMapGpuHandle_);
@@ -508,11 +495,9 @@ void ModelRenderer::DrawInstancedSubMeshes(
                 : mesh.vbView;
         D3D12_VERTEX_BUFFER_VIEW views[] = {vertexBufferView, instanceView};
         const uint32_t requestedEnvironmentTextureId =
-            environmentTextureId != UINT32_MAX
-                ? environmentTextureId
-                : hasEnvironmentTexture_
-                      ? environmentTextureId_
-                      : textureManager_->GetBlackCubeTextureId();
+            environmentTextureId != UINT32_MAX ? environmentTextureId
+            : hasEnvironmentTexture_           ? environmentTextureId_
+                                     : textureManager_->GetBlackCubeTextureId();
         const uint32_t safeEnvironmentTextureId =
             textureManager_->IsValidTextureId(requestedEnvironmentTextureId)
                 ? requestedEnvironmentTextureId
@@ -545,10 +530,9 @@ void ModelRenderer::DrawInstancedSubMeshes(
     }
 }
 
-void ModelRenderer::SetShadowMap(
-    D3D12_GPU_DESCRIPTOR_HANDLE shadowMap,
-    const DirectX::XMFLOAT4X4 &lightViewProjection,
-    const SceneShadowSettings &settings) {
+void ModelRenderer::SetShadowMap(D3D12_GPU_DESCRIPTOR_HANDLE shadowMap,
+                                 const DirectX::XMFLOAT4X4 &lightViewProjection,
+                                 const SceneShadowSettings &settings) {
     if (!textureManager_) {
         shadowMapGpuHandle_ = {};
         shadowLightViewProjection_ = lightViewProjection;
@@ -557,16 +541,16 @@ void ModelRenderer::SetShadowMap(
         return;
     }
     const bool hasShadowMap = shadowMap.ptr != 0;
-    shadowMapGpuHandle_ =
-        hasShadowMap
-            ? shadowMap
-            : textureManager_->GetGpuHandle(textureManager_->GetWhiteTextureId());
+    shadowMapGpuHandle_ = hasShadowMap
+                              ? shadowMap
+                              : textureManager_->GetGpuHandle(
+                                    textureManager_->GetWhiteTextureId());
     shadowLightViewProjection_ = lightViewProjection;
-    shadowParams_ = {
-        hasShadowMap ? 1.0f : 0.0f,
-        std::isfinite(settings.bias) ? settings.bias : 0.0f,
-        ClampFinite(settings.strength, 0.0f, 1.0f, 0.0f),
-        std::isfinite(settings.normalBias) ? settings.normalBias : 0.0f};
+    shadowParams_ = {hasShadowMap ? 1.0f : 0.0f,
+                     std::isfinite(settings.bias) ? settings.bias : 0.0f,
+                     ClampFinite(settings.strength, 0.0f, 1.0f, 0.0f),
+                     std::isfinite(settings.normalBias) ? settings.normalBias
+                                                        : 0.0f};
     shadowFilterParams_ = {ClampFiniteMin(settings.filterRadius, 0.0f),
                            ClampFiniteMin(settings.depthSoftness, 0.0001f),
                            ClampFiniteMin(settings.edgeFade, 0.0f), 0.0f};
@@ -587,12 +571,10 @@ void ModelRenderer::PreDrawShadow() {
     currentGraphicsPipelineState_ = shadowPSO_.Get();
 }
 
-void ModelRenderer::DrawShadow(
-    const Model &model, const Transform &transform,
-    const DirectX::XMFLOAT4X4 &lightViewProjection) {
-    if (!dxCommon_ || !meshManager_ || !textureManager_ ||
-        !materialManager_ || !shadowRootSignature_ || !shadowPSO_ ||
-        drawIndex_ >= kMaxDraws) {
+void ModelRenderer::DrawShadow(const Model &model, const Transform &transform,
+                               const DirectX::XMFLOAT4X4 &lightViewProjection) {
+    if (!dxCommon_ || !meshManager_ || !textureManager_ || !materialManager_ ||
+        !shadowRootSignature_ || !shadowPSO_ || drawIndex_ >= kMaxDraws) {
         return;
     }
 
@@ -603,8 +585,7 @@ void ModelRenderer::DrawShadow(
         XMMatrixScaling(safeTransform.scale.x, safeTransform.scale.y,
                         safeTransform.scale.z) *
         XMMatrixRotationQuaternion(q) *
-        XMMatrixTranslation(safeTransform.position.x,
-                            safeTransform.position.y,
+        XMMatrixTranslation(safeTransform.position.x, safeTransform.position.y,
                             safeTransform.position.z);
 
     if (model.hasRootAnimation) {
@@ -625,8 +606,8 @@ void ModelRenderer::DrawShadow(
         if (drawIndex_ >= kMaxDraws) {
             return;
         }
-        if (!IsDrawableSubMeshWithValidVertexSource(
-                subMesh, meshManager_, materialManager_)) {
+        if (!IsDrawableSubMeshWithValidVertexSource(subMesh, meshManager_,
+                                                    materialManager_)) {
             return;
         }
 
@@ -645,9 +626,8 @@ void ModelRenderer::DrawShadow(
         cmd->SetGraphicsRootConstantBufferView(0, objectCbAddr);
         cmd->SetGraphicsRootConstantBufferView(1, materialCbAddr);
         cmd->SetGraphicsRootDescriptorTable(
-            2, textureManager_->GetGpuHandle(
-                   ResolveBaseColorTextureId(textureManager_, material,
-                                             subMesh.textureId)));
+            2, textureManager_->GetGpuHandle(ResolveBaseColorTextureId(
+                   textureManager_, material, subMesh.textureId)));
         cmd->IASetVertexBuffers(0, 1, &vertexBufferView);
         cmd->IASetIndexBuffer(&mesh.ibView);
         cmd->IASetPrimitiveTopology(mesh.primitiveTopology);
@@ -666,9 +646,9 @@ void ModelRenderer::DrawShadow(
 void ModelRenderer::DrawInstancedShadow(
     const Model &model, const Transform *transforms, uint32_t instanceCount,
     const DirectX::XMFLOAT4X4 &lightViewProjection) {
-    if (!dxCommon_ || !meshManager_ || !textureManager_ ||
-        !materialManager_ || !shadowRootSignature_ || !instancedShadowPSO_ ||
-        !transforms || instanceCount == 0 || drawIndex_ >= kMaxDraws) {
+    if (!dxCommon_ || !meshManager_ || !textureManager_ || !materialManager_ ||
+        !shadowRootSignature_ || !instancedShadowPSO_ || !transforms ||
+        instanceCount == 0 || drawIndex_ >= kMaxDraws) {
         return;
     }
 
@@ -689,9 +669,9 @@ void ModelRenderer::DrawInstancedShadow(
 void ModelRenderer::DrawInstancedShadow(
     const Model &model, const InstanceData *instances, uint32_t instanceCount,
     const DirectX::XMFLOAT4X4 &lightViewProjection) {
-    if (!dxCommon_ || !meshManager_ || !textureManager_ ||
-        !materialManager_ || !shadowRootSignature_ || !instancedShadowPSO_ ||
-        !instances || instanceCount == 0 || drawIndex_ >= kMaxDraws) {
+    if (!dxCommon_ || !meshManager_ || !textureManager_ || !materialManager_ ||
+        !shadowRootSignature_ || !instancedShadowPSO_ || !instances ||
+        instanceCount == 0 || drawIndex_ >= kMaxDraws) {
         return;
     }
 
@@ -717,8 +697,8 @@ void ModelRenderer::DrawInstancedShadowSubMeshes(
         if (drawIndex_ >= kMaxDraws) {
             break;
         }
-        if (!IsDrawableSubMeshWithValidVertexSource(
-                subMesh, meshManager_, materialManager_)) {
+        if (!IsDrawableSubMeshWithValidVertexSource(subMesh, meshManager_,
+                                                    materialManager_)) {
             continue;
         }
 
@@ -739,9 +719,8 @@ void ModelRenderer::DrawInstancedShadowSubMeshes(
                                                        objectConstantAddress);
         commandList->SetGraphicsRootConstantBufferView(1, materialCbAddr);
         commandList->SetGraphicsRootDescriptorTable(
-            2, textureManager_->GetGpuHandle(
-                   ResolveBaseColorTextureId(textureManager_, material,
-                                             subMesh.textureId)));
+            2, textureManager_->GetGpuHandle(ResolveBaseColorTextureId(
+                   textureManager_, material, subMesh.textureId)));
         commandList->IASetVertexBuffers(0, 2, views);
         commandList->IASetIndexBuffer(&mesh.ibView);
         commandList->IASetPrimitiveTopology(mesh.primitiveTopology);
@@ -750,8 +729,3 @@ void ModelRenderer::DrawInstancedShadowSubMeshes(
         ++drawIndex_;
     }
 }
-
-
-
-
-

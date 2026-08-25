@@ -18,8 +18,8 @@ Model AssimpLoader::Load(const std::string &path) {
 
     const aiScene *scene = importer.ReadFile(
         path, aiProcess_Triangulate | aiProcess_FlipUVs |
-                  aiProcess_JoinIdenticalVertices |
-                  aiProcess_LimitBoneWeights | aiProcess_CalcTangentSpace);
+                  aiProcess_JoinIdenticalVertices | aiProcess_LimitBoneWeights |
+                  aiProcess_CalcTangentSpace);
 
     if (!scene || !scene->HasMeshes()) {
         return {};

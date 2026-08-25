@@ -182,9 +182,7 @@ void ModelManager::SetActiveInstance(ModelManager *instance) {
     gActiveModelManager = instance;
 }
 
-ModelManager::~ModelManager() {
-    Finalize();
-}
+ModelManager::~ModelManager() { Finalize(); }
 
 void ModelManager::Initialize(DirectXCommon *dxCommon, SrvManager *srvManager,
                               TextureManager *textureManager) {
@@ -346,18 +344,18 @@ uint32_t ModelManager::CreateBox(uint32_t textureId, const Material &material,
         indices.push_back(base + 3u);
     };
 
-    addFace({0.0f, 0.0f, 1.0f}, {-hx, y0, hz}, {-hx, y1, hz},
-            {hx, y0, hz}, {hx, y1, hz});
-    addFace({0.0f, 0.0f, -1.0f}, {hx, y0, -hz}, {hx, y1, -hz},
-            {-hx, y0, -hz}, {-hx, y1, -hz});
-    addFace({1.0f, 0.0f, 0.0f}, {hx, y0, hz}, {hx, y1, hz},
-            {hx, y0, -hz}, {hx, y1, -hz});
-    addFace({-1.0f, 0.0f, 0.0f}, {-hx, y0, -hz}, {-hx, y1, -hz},
-            {-hx, y0, hz}, {-hx, y1, hz});
-    addFace({0.0f, 1.0f, 0.0f}, {-hx, y1, -hz}, {-hx, y1, hz},
-            {hx, y1, -hz}, {hx, y1, hz});
-    addFace({0.0f, -1.0f, 0.0f}, {-hx, y0, hz}, {-hx, y0, -hz},
-            {hx, y0, hz}, {hx, y0, -hz});
+    addFace({0.0f, 0.0f, 1.0f}, {-hx, y0, hz}, {-hx, y1, hz}, {hx, y0, hz},
+            {hx, y1, hz});
+    addFace({0.0f, 0.0f, -1.0f}, {hx, y0, -hz}, {hx, y1, -hz}, {-hx, y0, -hz},
+            {-hx, y1, -hz});
+    addFace({1.0f, 0.0f, 0.0f}, {hx, y0, hz}, {hx, y1, hz}, {hx, y0, -hz},
+            {hx, y1, -hz});
+    addFace({-1.0f, 0.0f, 0.0f}, {-hx, y0, -hz}, {-hx, y1, -hz}, {-hx, y0, hz},
+            {-hx, y1, hz});
+    addFace({0.0f, 1.0f, 0.0f}, {-hx, y1, -hz}, {-hx, y1, hz}, {hx, y1, -hz},
+            {hx, y1, hz});
+    addFace({0.0f, -1.0f, 0.0f}, {-hx, y0, hz}, {-hx, y0, -hz}, {hx, y0, hz},
+            {hx, y0, -hz});
 
     Model model{};
     ModelSubMesh subMesh{};
@@ -455,8 +453,7 @@ uint32_t ModelManager::CreateRing(uint32_t textureId, const Material &material,
     divide = ClampProceduralSegments(divide, 3u, kMaxProceduralSegments);
 
     outerRadius = ClampFiniteMin(outerRadius, 0.001f);
-    innerRadius =
-        ClampFinite(innerRadius, 0.0f, outerRadius - 0.0001f, 0.0f);
+    innerRadius = ClampFinite(innerRadius, 0.0f, outerRadius - 0.0001f, 0.0f);
 
     Material ringMaterial = material;
     if (ringMaterial.baseColorTextureId == UINT32_MAX) {
@@ -647,20 +644,16 @@ uint32_t ModelManager::CreateLowPolyTerrain(uint32_t textureId,
             const float worldX = -halfSize + static_cast<float>(x) * step;
             const float worldZ = -halfSize + static_cast<float>(z) * step;
             const float dist = std::sqrt(worldX * worldX + worldZ * worldZ);
-            const float outerT =
-                MathUtils::SmoothStep01((dist - flatRadius) /
-                                        (halfSize - flatRadius));
+            const float outerT = MathUtils::SmoothStep01(
+                (dist - flatRadius) / (halfSize - flatRadius));
 
             const float ridge =
-                0.45f *
-                    Hash01(static_cast<int32_t>(x), static_cast<int32_t>(z),
-                           seed) +
-                0.35f *
-                    Hash01(static_cast<int32_t>(x / 2u),
-                           static_cast<int32_t>(z / 2u), seed + 97u) +
-                0.20f *
-                    Hash01(static_cast<int32_t>(x / 4u),
-                           static_cast<int32_t>(z / 4u), seed + 193u);
+                0.45f * Hash01(static_cast<int32_t>(x), static_cast<int32_t>(z),
+                               seed) +
+                0.35f * Hash01(static_cast<int32_t>(x / 2u),
+                               static_cast<int32_t>(z / 2u), seed + 97u) +
+                0.20f * Hash01(static_cast<int32_t>(x / 4u),
+                               static_cast<int32_t>(z / 4u), seed + 193u);
             const float wave =
                 0.5f + 0.5f * std::sinf(worldX * 0.22f + worldZ * 0.17f);
             heightAt(x, z) =
@@ -730,10 +723,11 @@ uint32_t ModelManager::CreateLowPolyTerrain(uint32_t textureId,
     return AppendModel(models_, std::move(model));
 }
 
-uint32_t ModelManager::CreateMesh(
-    const void *vertexData, uint32_t vertexStride, uint32_t vertexCount,
-    const uint32_t *indexData, uint32_t indexCount,
-    D3D12_PRIMITIVE_TOPOLOGY primitiveTopology) {
+uint32_t ModelManager::CreateMesh(const void *vertexData, uint32_t vertexStride,
+                                  uint32_t vertexCount,
+                                  const uint32_t *indexData,
+                                  uint32_t indexCount,
+                                  D3D12_PRIMITIVE_TOPOLOGY primitiveTopology) {
     return meshManager_.CreateMesh(vertexData, vertexStride, vertexCount,
                                    indexData, indexCount, primitiveTopology);
 }
@@ -803,8 +797,7 @@ void ModelManager::Draw(uint32_t modelId, const Transform &transform,
 }
 
 void ModelManager::DrawInstanced(uint32_t modelId, const Transform *transforms,
-                                 uint32_t instanceCount,
-                                 const Camera &camera,
+                                 uint32_t instanceCount, const Camera &camera,
                                  uint32_t environmentTextureId) {
     const Model *model = GetModel(modelId);
     if (!model) {
@@ -817,8 +810,7 @@ void ModelManager::DrawInstanced(uint32_t modelId, const Transform *transforms,
 
 void ModelManager::DrawInstanced(uint32_t modelId,
                                  const InstanceData *instances,
-                                 uint32_t instanceCount,
-                                 const Camera &camera,
+                                 uint32_t instanceCount, const Camera &camera,
                                  uint32_t environmentTextureId) {
     const Model *model = GetModel(modelId);
     if (!model) {
@@ -829,9 +821,8 @@ void ModelManager::DrawInstanced(uint32_t modelId,
                                  environmentTextureId);
 }
 
-void ModelManager::DrawShadow(
-    uint32_t modelId, const Transform &transform,
-    const DirectX::XMFLOAT4X4 &lightViewProjection) {
+void ModelManager::DrawShadow(uint32_t modelId, const Transform &transform,
+                              const DirectX::XMFLOAT4X4 &lightViewProjection) {
     const Model *model = GetModel(modelId);
     if (!model) {
         return;

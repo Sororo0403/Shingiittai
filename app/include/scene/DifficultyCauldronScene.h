@@ -36,8 +36,7 @@ class DifficultyCauldronScene : public BaseScene {
     bool RequestHandTrackingStartOnce();
     void UpdateCameraPreview(float deltaTime);
     void UpdateSelection();
-    int UpdateHeldDifficulty(Input &input, bool gamepad,
-                             int currentValue);
+    int UpdateHeldDifficulty(Input &input, bool gamepad, int currentValue);
     int ApplyDigitSelection(Input &input, int currentValue);
     int ApplyHandSelection(int currentValue);
     void CommitDifficultySelection(int value);
@@ -53,8 +52,7 @@ class DifficultyCauldronScene : public BaseScene {
     void DrawDifficultyValue(float value, float centerX, float y, float scale,
                              float alpha = 1.0f);
     void DrawDifficultyDescription(float difficulty, float x, float y,
-                                   float maxWidth,
-                                   float alpha = 1.0f);
+                                   float maxWidth, float alpha = 1.0f);
     void DrawCameraPreview();
     void DrawRect(float x, float y, float w, float h,
                   const DirectX::XMFLOAT4 &color);
@@ -62,9 +60,8 @@ class DifficultyCauldronScene : public BaseScene {
                    const DirectX::XMFLOAT4 &color);
     void DrawImage(const Image &image, float x, float y, float scale = 1.0f,
                    float alpha = 1.0f);
-    void DrawTextureRect(uint32_t textureId, float x, float y, float w,
-                         float h, const DirectX::XMFLOAT4 &color,
-                         float uvWidth = 1.0f,
+    void DrawTextureRect(uint32_t textureId, float x, float y, float w, float h,
+                         const DirectX::XMFLOAT4 &color, float uvWidth = 1.0f,
                          SpriteBlendMode blendMode = SpriteBlendMode::Alpha,
                          float uvLeft = 0.0f);
 

@@ -24,12 +24,12 @@ class SwordSlashArcRenderer {
               const DirectX::XMFLOAT3 &playerPosition,
               const DirectX::XMFLOAT3 &targetPosition, const Camera &camera,
               size_t swordIndex);
-    void EmitHitLine(const DirectX::XMFLOAT3 &position,
-                     const DirectX::XMFLOAT3 &direction, const Camera &camera,
-                     float power,
-                     const DirectX::XMFLOAT2 &slashDirection = {0.0f, 0.0f},
-                     SwordSlashHitLineStyle style =
-                         SwordSlashHitLineStyle::Normal);
+    void
+    EmitHitLine(const DirectX::XMFLOAT3 &position,
+                const DirectX::XMFLOAT3 &direction, const Camera &camera,
+                float power,
+                const DirectX::XMFLOAT2 &slashDirection = {0.0f, 0.0f},
+                SwordSlashHitLineStyle style = SwordSlashHitLineStyle::Normal);
     void EmitParryLine(const DirectX::XMFLOAT3 &position,
                        const DirectX::XMFLOAT3 &direction, const Camera &camera,
                        float power,
@@ -38,8 +38,7 @@ class SwordSlashArcRenderer {
                               const DirectX::XMFLOAT3 &direction,
                               const Camera &camera, float power);
     void EmitEnemyWindSlash(const DirectX::XMFLOAT3 &position, float yaw,
-                            const Camera &camera, bool horizontal,
-                            float power);
+                            const Camera &camera, bool horizontal, float power);
     void EmitDirectionCueLine(const DirectX::XMFLOAT3 &position,
                               const DirectX::XMFLOAT2 &direction,
                               const Camera &camera,

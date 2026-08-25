@@ -15,8 +15,7 @@ void GameSceneHud::Update(const SceneContext &ctx, float playerHp,
 
     playerHpRate_ = std::clamp(playerHp / kPlayerHpMax, 0.0f, 1.0f);
     bossHpRate_ =
-        enemyMaxHp > 0.0f ? std::clamp(enemyHp / enemyMaxHp, 0.0f, 1.0f)
-                          : 0.0f;
+        enemyMaxHp > 0.0f ? std::clamp(enemyHp / enemyMaxHp, 0.0f, 1.0f) : 0.0f;
 }
 
 void GameSceneHud::Draw(const SceneContext &ctx, float alpha) {
@@ -26,9 +25,11 @@ void GameSceneHud::Draw(const SceneContext &ctx, float alpha) {
     }
 
     const float screenWidth =
-        ctx.systems.winApp ? static_cast<float>(ctx.systems.winApp->GetWidth()) : 1280.0f;
+        ctx.systems.winApp ? static_cast<float>(ctx.systems.winApp->GetWidth())
+                           : 1280.0f;
     const float screenHeight =
-        ctx.systems.winApp ? static_cast<float>(ctx.systems.winApp->GetHeight()) : 720.0f;
+        ctx.systems.winApp ? static_cast<float>(ctx.systems.winApp->GetHeight())
+                           : 720.0f;
 
     const float bossW = (std::min)(kBossHpBarMaxWidth, screenWidth * 0.62f);
     const float bossX = (screenWidth - bossW) * 0.5f;
@@ -63,8 +64,7 @@ void GameSceneHud::DrawRect(const SceneContext &ctx, float x, float y, float w,
 }
 
 void GameSceneHud::DrawBar(const SceneContext &ctx, float x, float y, float w,
-                           float h, float rate,
-                           const DirectX::XMFLOAT4 &fill,
+                           float h, float rate, const DirectX::XMFLOAT4 &fill,
                            const DirectX::XMFLOAT4 &accent, float alpha) {
     const float clampedRate = std::clamp(rate, 0.0f, 1.0f);
     const float frame = 3.0f;
@@ -82,8 +82,7 @@ void GameSceneHud::DrawBar(const SceneContext &ctx, float x, float y, float w,
         DrawRect(ctx, x + frame, y + frame, fillW, h - frame * 2.0f, fill,
                  alpha);
         DrawRect(ctx, x + frame, y + frame, fillW,
-                 (std::max)(2.0f, (h - frame * 2.0f) * 0.30f), accent,
-                 alpha);
+                 (std::max)(2.0f, (h - frame * 2.0f) * 0.30f), accent, alpha);
         DrawRect(ctx, x + frame + fillW - 2.0f, y + 1.0f, 2.0f, h - 2.0f,
                  {1.0f, 0.96f, 0.76f, 0.64f}, alpha);
     }

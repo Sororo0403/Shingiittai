@@ -103,16 +103,15 @@ bool UploadRingBuffer::CreateFrameResource(FrameResource &frame,
     CD3DX12_HEAP_PROPERTIES heap(D3D12_HEAP_TYPE_UPLOAD);
     auto desc = CD3DX12_RESOURCE_DESC::Buffer(bytesPerFrame);
     const HRESULT resourceResult = device->CreateCommittedResource(
-        &heap, D3D12_HEAP_FLAG_NONE, &desc,
-        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-        IID_PPV_ARGS(&frame.resource));
+        &heap, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr, IID_PPV_ARGS(&frame.resource));
     if (FAILED(resourceResult) || !frame.resource) {
         frame.Reset();
         return false;
     }
     frame.resource->SetName(L"UploadRingBuffer.FrameResource");
-    const HRESULT mapResult =
-        frame.resource->Map(0, nullptr, reinterpret_cast<void **>(&frame.mapped));
+    const HRESULT mapResult = frame.resource->Map(
+        0, nullptr, reinterpret_cast<void **>(&frame.mapped));
     if (FAILED(mapResult) || frame.mapped == nullptr) {
         frame.Reset();
         return false;

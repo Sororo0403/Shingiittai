@@ -61,9 +61,8 @@ AudioFileLoader::SoundData::Info MakeSoundInfo(const WAVEFORMATEX &format,
     info.bitsPerSample = format.wBitsPerSample;
     info.decodedBytes = decodedBytes;
     if (format.nAvgBytesPerSec > 0) {
-        info.durationSeconds =
-            static_cast<float>(decodedBytes) /
-            static_cast<float>(format.nAvgBytesPerSec);
+        info.durationSeconds = static_cast<float>(decodedBytes) /
+                               static_cast<float>(format.nAvgBytesPerSec);
     }
     return info;
 }
@@ -111,8 +110,8 @@ bool GetWaveFormat(IMFMediaType *mediaType, std::vector<BYTE> &result) {
 
     WAVEFORMATEX *waveFormat = nullptr;
     UINT32 waveFormatSize = 0;
-    if (FAILED(MFCreateWaveFormatExFromMFMediaType(
-            mediaType, &waveFormat, &waveFormatSize)) ||
+    if (FAILED(MFCreateWaveFormatExFromMFMediaType(mediaType, &waveFormat,
+                                                   &waveFormatSize)) ||
         waveFormat == nullptr || waveFormatSize == 0) {
         if (waveFormat != nullptr) {
             CoTaskMemFree(waveFormat);
@@ -165,8 +164,7 @@ bool ReadPcmData(IMFSourceReader *reader, std::vector<BYTE> &decodedPcm) {
             return false;
         }
         const size_t oldSize = decodedPcm.size();
-        if (locked.Size() >
-            (std::numeric_limits<size_t>::max)() - oldSize) {
+        if (locked.Size() > (std::numeric_limits<size_t>::max)() - oldSize) {
             decodedPcm.clear();
             return false;
         }

@@ -20,7 +20,8 @@ class WinApp {
     /// <param name="width">クライアント領域の幅</param>
     /// <param name="height">クライアント領域の高さ</param>
     /// <param name="title">ウィンドウタイトル</param>
-    /// <param name="fullscreen">起動時にボーダーレス全画面にする場合はtrue。</param>
+    /// <param
+    /// name="fullscreen">起動時にボーダーレス全画面にする場合はtrue。</param>
     void Initialize(HINSTANCE hInstance, int nCmdShow, int width, int height,
                     const std::wstring &title, bool fullscreen = false);
 

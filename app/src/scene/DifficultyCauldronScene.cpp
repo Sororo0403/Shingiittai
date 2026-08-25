@@ -31,9 +31,8 @@ constexpr int kDifficultyMinTenths = 0;
 constexpr int kDifficultyMaxTenths = 90;
 constexpr uint16_t kPreviewPort = 5006;
 constexpr float kPreviewStaleSeconds = 0.75f;
-constexpr std::array<int, 10> kDigitKeys = {
-    DIK_0, DIK_1, DIK_2, DIK_3, DIK_4,
-    DIK_5, DIK_6, DIK_7, DIK_8, DIK_9};
+constexpr std::array<int, 10> kDigitKeys = {DIK_0, DIK_1, DIK_2, DIK_3, DIK_4,
+                                            DIK_5, DIK_6, DIK_7, DIK_8, DIK_9};
 constexpr std::array<int, 10> kNumpadDigitKeys = {
     DIK_NUMPAD0, DIK_NUMPAD1, DIK_NUMPAD2, DIK_NUMPAD3, DIK_NUMPAD4,
     DIK_NUMPAD5, DIK_NUMPAD6, DIK_NUMPAD7, DIK_NUMPAD8, DIK_NUMPAD9};
@@ -57,8 +56,8 @@ float DifficultyRatio(float difficulty) {
 
 XMFLOAT4 LerpColor(const XMFLOAT4 &a, const XMFLOAT4 &b, float t) {
     t = std::clamp(t, 0.0f, 1.0f);
-    return {a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t,
-            a.z + (b.z - a.z) * t, a.w + (b.w - a.w) * t};
+    return {a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t,
+            a.w + (b.w - a.w) * t};
 }
 
 XMFLOAT4 GaugeHeatColor(float t, float alpha) {
@@ -100,12 +99,12 @@ uint32_t CreateTriangleTexture(TextureManager *texture, bool gradient) {
             const float y = (static_cast<float>(py) + 0.5f) /
                             static_cast<float>(kHeight - 1u);
             const float line = 1.0f - x;
-            const float distancePixels = (y - line) * static_cast<float>(kHeight);
+            const float distancePixels =
+                (y - line) * static_cast<float>(kHeight);
             const float alpha =
                 std::clamp(distancePixels / kAaPixels + 0.5f, 0.0f, 1.0f);
-            const XMFLOAT4 color =
-                gradient ? GaugeHeatColor(x, alpha)
-                         : Color(1.0f, 1.0f, 1.0f, alpha);
+            const XMFLOAT4 color = gradient ? GaugeHeatColor(x, alpha)
+                                            : Color(1.0f, 1.0f, 1.0f, alpha);
             const size_t index = (static_cast<size_t>(py) * kWidth + px) * 4u;
             pixels[index + 0] =
                 static_cast<uint8_t>(std::clamp(color.x, 0.0f, 1.0f) * 255.0f);
@@ -151,9 +150,11 @@ void DifficultyCauldronScene::Initialize(const SceneContext &ctx) {
         previewReceiver_.Initialize(ctx_->rendering.texture, kPreviewPort);
     }
 
-    backgroundScene_ = std::make_unique<GameScene>(GameScene::Mode::ReadyPreview);
+    backgroundScene_ =
+        std::make_unique<GameScene>(GameScene::Mode::ReadyPreview);
     backgroundScene_->Initialize(ctx);
-    backgroundScene_->SetReadyPreviewHeat(DifficultyRatio(SelectedDifficultyValue()));
+    backgroundScene_->SetReadyPreviewHeat(
+        DifficultyRatio(SelectedDifficultyValue()));
 
     for (int i = 0; i < 10; ++i) {
         digitImages_[static_cast<size_t>(i)] =
@@ -162,14 +163,14 @@ void DifficultyCauldronScene::Initialize(const SceneContext &ctx) {
     }
     dotImage_ =
         LoadTextureImage(L"app/resources/ui/result/glyphs/char_dot.png");
-    difficultyDescriptionImages_[0] = LoadTextureImage(
-        L"app/resources/ui/difficulty/description_easy.png");
-    difficultyDescriptionImages_[1] = LoadTextureImage(
-        L"app/resources/ui/difficulty/description_normal.png");
+    difficultyDescriptionImages_[0] =
+        LoadTextureImage(L"app/resources/ui/difficulty/description_easy.png");
+    difficultyDescriptionImages_[1] =
+        LoadTextureImage(L"app/resources/ui/difficulty/description_normal.png");
     difficultyDescriptionImages_[2] = LoadTextureImage(
         L"app/resources/ui/difficulty/description_experienced.png");
-    difficultyDescriptionImages_[3] = LoadTextureImage(
-        L"app/resources/ui/difficulty/description_hard.png");
+    difficultyDescriptionImages_[3] =
+        LoadTextureImage(L"app/resources/ui/difficulty/description_hard.png");
     difficultyDescriptionImages_[4] = LoadTextureImage(
         L"app/resources/ui/difficulty/description_extreme.png");
     controlsImage_ = LoadTextureImage(
@@ -241,7 +242,8 @@ void DifficultyCauldronScene::Draw() {
         backgroundScene_->Draw();
     }
 
-    const float backgroundIntro = SmoothStep(sceneTime_ / kIntroBackgroundDuration);
+    const float backgroundIntro =
+        SmoothStep(sceneTime_ / kIntroBackgroundDuration);
     const float overlayIntro = SmoothStep(sceneTime_ / 0.58f);
     ctx_->rendering.sprite->PreDraw();
     DrawRect(0.0f, 0.0f, w, h,
@@ -261,14 +263,14 @@ void DifficultyCauldronScene::DrawPostProcessOverlay() {
     DrawDifficultyGauge(w, h);
     const float controlsIntro = SmoothStep((sceneTime_ - 0.24f) / 0.28f);
     const float controlsScale =
-        (std::min)(0.80f,
-                   (w * 0.31f) / (std::max)(controlsImage_.width, 1.0f));
-    DrawImage(controlsImage_, kControlsPadding,
-              h - (controlsImage_.height -
-                   kControlsImageBottomTransparentPixels) *
-                      controlsScale -
-                  kControlsPadding,
-              controlsScale, 0.58f * controlsIntro);
+        (std::min)(0.80f, (w * 0.31f) / (std::max)(controlsImage_.width, 1.0f));
+    DrawImage(
+        controlsImage_, kControlsPadding,
+        h -
+            (controlsImage_.height - kControlsImageBottomTransparentPixels) *
+                controlsScale -
+            kControlsPadding,
+        controlsScale, 0.58f * controlsIntro);
 
     const float outroBlack =
         returnToSelectRequested_
@@ -291,8 +293,7 @@ void DifficultyCauldronScene::DrawPostProcessOverlay() {
     }
 }
 
-void DifficultyCauldronScene::DrawTransparent() {
-}
+void DifficultyCauldronScene::DrawTransparent() {}
 
 DifficultyCauldronScene::Image
 DifficultyCauldronScene::LoadTextureImage(const std::wstring &path) {
@@ -333,8 +334,7 @@ void DifficultyCauldronScene::UpdateSelection() {
     const bool gamepad = input->IsGamepadConnected();
     int nextDifficultyTenths =
         UpdateHeldDifficulty(*input, gamepad, selectedDifficultyTenths_);
-    nextDifficultyTenths =
-        ApplyDigitSelection(*input, nextDifficultyTenths);
+    nextDifficultyTenths = ApplyDigitSelection(*input, nextDifficultyTenths);
     nextDifficultyTenths = ApplyHandSelection(nextDifficultyTenths);
     CommitDifficultySelection(nextDifficultyTenths);
     HandleSelectionActions(*input, gamepad);
@@ -342,8 +342,7 @@ void DifficultyCauldronScene::UpdateSelection() {
 
 bool IsDirectionTriggered(Input &input, int primaryKey, int secondaryKey,
                           bool gamepad, WORD gamepadButton) {
-    return input.IsKeyTrigger(primaryKey) ||
-           input.IsKeyTrigger(secondaryKey) ||
+    return input.IsKeyTrigger(primaryKey) || input.IsKeyTrigger(secondaryKey) ||
            (gamepad && input.IsGamepadButtonTrigger(gamepadButton));
 }
 
@@ -367,19 +366,15 @@ float DifficultyRepeatInterval(float holdTime) {
 }
 
 int DifficultyCauldronScene::UpdateHeldDifficulty(Input &input, bool gamepad,
-                                                   int currentValue) {
-    const bool decreaseTrigger =
-        IsDirectionTriggered(input, DIK_A, DIK_LEFT, gamepad,
-                             XINPUT_GAMEPAD_DPAD_LEFT);
-    const bool increaseTrigger =
-        IsDirectionTriggered(input, DIK_D, DIK_RIGHT, gamepad,
-                             XINPUT_GAMEPAD_DPAD_RIGHT);
-    const bool decreaseHold =
-        IsDirectionHeld(input, DIK_A, DIK_LEFT, gamepad,
-                        XINPUT_GAMEPAD_DPAD_LEFT);
-    const bool increaseHold =
-        IsDirectionHeld(input, DIK_D, DIK_RIGHT, gamepad,
-                        XINPUT_GAMEPAD_DPAD_RIGHT);
+                                                  int currentValue) {
+    const bool decreaseTrigger = IsDirectionTriggered(
+        input, DIK_A, DIK_LEFT, gamepad, XINPUT_GAMEPAD_DPAD_LEFT);
+    const bool increaseTrigger = IsDirectionTriggered(
+        input, DIK_D, DIK_RIGHT, gamepad, XINPUT_GAMEPAD_DPAD_RIGHT);
+    const bool decreaseHold = IsDirectionHeld(input, DIK_A, DIK_LEFT, gamepad,
+                                              XINPUT_GAMEPAD_DPAD_LEFT);
+    const bool increaseHold = IsDirectionHeld(input, DIK_D, DIK_RIGHT, gamepad,
+                                              XINPUT_GAMEPAD_DPAD_RIGHT);
 
     int holdDirection = 0;
     if (decreaseHold && !increaseHold) {
@@ -406,8 +401,7 @@ int DifficultyCauldronScene::UpdateHeldDifficulty(Input &input, bool gamepad,
         const float repeatInterval =
             DifficultyRepeatInterval(selectionHoldTimer_);
         const float initialRepeatDelay = 0.30f;
-        const int step =
-            selectionHoldTimer_ >= 1.10f ? 2 : 1;
+        const int step = selectionHoldTimer_ >= 1.10f ? 2 : 1;
         if (freshTrigger) {
             currentValue += holdDirection;
             selectionRepeatTimer_ = initialRepeatDelay;
@@ -422,7 +416,7 @@ int DifficultyCauldronScene::UpdateHeldDifficulty(Input &input, bool gamepad,
 }
 
 int DifficultyCauldronScene::ApplyDigitSelection(Input &input,
-                                                  int currentValue) {
+                                                 int currentValue) {
     for (int i = 0; i < 10; ++i) {
         if (input.IsKeyTrigger(kDigitKeys[static_cast<size_t>(i)]) ||
             input.IsKeyTrigger(kNumpadDigitKeys[static_cast<size_t>(i)])) {
@@ -437,9 +431,8 @@ int DifficultyCauldronScene::ApplyDigitSelection(Input &input,
 
 int DifficultyCauldronScene::ApplyHandSelection(int currentValue) {
     if (IsHandControl(inputCalibration_.controlType)) {
-        const float speed =
-            (std::max)(handController_.GetMotionSpeed(0),
-                       handController_.GetMotionSpeed(1));
+        const float speed = (std::max)(handController_.GetMotionSpeed(0),
+                                       handController_.GetMotionSpeed(1));
         if (handSwingArmed_ && speed >= kHandSwingStartSpeed &&
             handSwingCooldown_ <= 0.0f) {
             currentValue = selectedDifficultyTenths_ + 1;
@@ -464,7 +457,7 @@ void DifficultyCauldronScene::CommitDifficultySelection(int value) {
 }
 
 void DifficultyCauldronScene::HandleSelectionActions(Input &input,
-                                                      bool gamepad) {
+                                                     bool gamepad) {
     if (input.IsKeyTrigger(DIK_ESCAPE) ||
         (gamepad && input.IsGamepadButtonTrigger(XINPUT_GAMEPAD_B))) {
         AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Cancel);
@@ -510,8 +503,7 @@ void DifficultyCauldronScene::ApplyHeatPostProcess() {
     profile.vignette.power = 1.02f + 0.08f * danger;
     profile.radialBlur.sampleCount = 1;
     profile.radialBlur.strength = 0.0f;
-    profile.sceneDim.strength =
-        (0.004f + 0.018f * t + 0.030f * danger) * intro;
+    profile.sceneDim.strength = (0.004f + 0.018f * t + 0.030f * danger) * intro;
     ctx_->rendering.postEffectManager->SetBaseProfile(profile);
 }
 
@@ -525,14 +517,13 @@ void DifficultyCauldronScene::DrawHeatEffects(float screenWidth,
     const float panic =
         danger * (0.72f + 0.28f * std::sinf(sceneTime_ * 17.0f));
     DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
-             Color(0.08f + 0.18f * t + 0.22f * danger,
-                   0.055f + 0.060f * t,
+             Color(0.08f + 0.18f * t + 0.22f * danger, 0.055f + 0.060f * t,
                    0.15f * (1.0f - t) + 0.04f * t,
                    (0.040f + 0.050f * t + 0.055f * danger) * intro));
 
     if (t > 0.18f) {
-        const float bandAlpha = (0.055f + 0.20f * danger) *
-                                (0.55f + 0.45f * pulse) * intro;
+        const float bandAlpha =
+            (0.055f + 0.20f * danger) * (0.55f + 0.45f * pulse) * intro;
         const float bandH = screenHeight * (0.050f + 0.085f * danger);
         DrawRect(0.0f, 0.0f, screenWidth, bandH,
                  Color(1.0f, 0.42f + 0.18f * t, 0.08f, bandAlpha));
@@ -552,10 +543,11 @@ void DifficultyCauldronScene::DrawHeatEffects(float screenWidth,
     if (t > 0.74f) {
         const float flashAlpha = (t - 0.74f) / 0.26f;
         const float streakY =
-            screenHeight * (0.22f + 0.52f * (0.5f + 0.5f * std::sinf(sceneTime_ * 9.3f)));
-        DrawRect(0.0f, streakY, screenWidth, 5.0f + 10.0f * danger,
-                 Color(1.0f, 0.52f, 0.10f,
-                       0.090f * flashAlpha * pulse * intro));
+            screenHeight *
+            (0.22f + 0.52f * (0.5f + 0.5f * std::sinf(sceneTime_ * 9.3f)));
+        DrawRect(
+            0.0f, streakY, screenWidth, 5.0f + 10.0f * danger,
+            Color(1.0f, 0.52f, 0.10f, 0.090f * flashAlpha * pulse * intro));
         DrawRect(0.0f, streakY + 16.0f, screenWidth, 2.0f + 5.0f * danger,
                  Color(1.0f, 0.10f, 0.04f, 0.060f * flashAlpha * intro));
     }
@@ -566,13 +558,12 @@ void DifficultyCauldronScene::DrawHeatEffects(float screenWidth,
             const float lane = static_cast<float>(i) / 4.0f;
             const float wave =
                 0.5f + 0.5f * std::sinf(sceneTime_ * (5.8f + lane * 2.7f) +
-                                         lane * 6.28318f);
+                                        lane * 6.28318f);
             const float y =
                 screenHeight * (0.15f + 0.70f * lane + 0.035f * (wave - 0.5f));
             const float h = 2.0f + 8.0f * danger + 7.0f * wave * heatAlpha;
-            const float alpha =
-                (0.018f + 0.065f * danger) * heatAlpha *
-                (0.45f + 0.55f * wave) * intro;
+            const float alpha = (0.018f + 0.065f * danger) * heatAlpha *
+                                (0.45f + 0.55f * wave) * intro;
             DrawRect(0.0f, y, screenWidth, h,
                      Color(1.0f, 0.36f + 0.28f * t, 0.06f, alpha));
         }
@@ -580,11 +571,9 @@ void DifficultyCauldronScene::DrawHeatEffects(float screenWidth,
 
     if (t > 0.82f) {
         const float maxAlpha = (t - 0.82f) / 0.18f;
-        const float flash =
-            0.5f + 0.5f * std::sinf(sceneTime_ * 23.0f);
+        const float flash = 0.5f + 0.5f * std::sinf(sceneTime_ * 23.0f);
         DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
-                 Color(1.0f, 0.30f, 0.08f,
-                       0.022f * maxAlpha * flash * intro));
+                 Color(1.0f, 0.30f, 0.08f, 0.022f * maxAlpha * flash * intro));
     }
 }
 
@@ -607,21 +596,21 @@ void DifficultyCauldronScene::DrawDifficultyGauge(float screenWidth,
     const float formedW = gaugeW * form;
     const float leftTrim = 3.0f;
     const XMFLOAT4 gold = Color(0.86f, 0.61f - 0.22f * t, 0.21f, 0.94f);
-    const XMFLOAT4 brightGold =
-        Color(1.0f, 0.86f - 0.32f * t, 0.38f, 0.92f);
+    const XMFLOAT4 brightGold = Color(1.0f, 0.86f - 0.32f * t, 0.38f, 0.92f);
 
     const float shadowW = formedW + 36.0f * form;
     const float shadowTrim = (std::min)(leftTrim, shadowW);
-    const float shadowUvLeft = shadowW > 0.0f ? (shadowTrim / shadowW) * form : 0.0f;
+    const float shadowUvLeft =
+        shadowW > 0.0f ? (shadowTrim / shadowW) * form : 0.0f;
     DrawTextureRect(triangleMaskImage_.textureId, x - 18.0f + shadowTrim,
                     y - 16.0f, shadowW - shadowTrim, gaugeH + 32.0f,
-                    Color(0.0f, 0.0f, 0.0f, 0.46f * form),
-                    form - shadowUvLeft, SpriteBlendMode::PremultipliedMask,
-                    shadowUvLeft);
+                    Color(0.0f, 0.0f, 0.0f, 0.46f * form), form - shadowUvLeft,
+                    SpriteBlendMode::PremultipliedMask, shadowUvLeft);
 
     const float outerW = formedW + 16.0f * form;
     const float outerTrim = (std::min)(leftTrim, outerW);
-    const float outerUvLeft = outerW > 0.0f ? (outerTrim / outerW) * form : 0.0f;
+    const float outerUvLeft =
+        outerW > 0.0f ? (outerTrim / outerW) * form : 0.0f;
     DrawTextureRect(triangleMaskImage_.textureId, x - 8.0f + outerTrim,
                     y - 8.0f, outerW - outerTrim, gaugeH + 16.0f,
                     Color(gold.x, gold.y, gold.z, gold.w * form),
@@ -651,8 +640,7 @@ void DifficultyCauldronScene::DrawDifficultyGauge(float screenWidth,
         DrawTextureRect(triangleGradientImage_.textureId, innerX + fillTrim,
                         innerY, fillW - fillTrim, innerH,
                         Color(1.18f, 1.12f, 1.06f, 1.0f * form),
-                        fillT - fillUvLeft, SpriteBlendMode::Alpha,
-                        fillUvLeft);
+                        fillT - fillUvLeft, SpriteBlendMode::Alpha, fillUvLeft);
     }
 
     for (int i = 0; i < 10; ++i) {

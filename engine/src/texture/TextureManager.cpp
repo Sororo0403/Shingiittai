@@ -32,7 +32,8 @@ class UploadPassScope {
   public:
     UploadPassScope(DirectXCommon *dxCommon, TextureManager *textureManager,
                     bool active)
-        : dxCommon_(dxCommon), textureManager_(textureManager), active_(active) {}
+        : dxCommon_(dxCommon), textureManager_(textureManager),
+          active_(active) {}
 
     ~UploadPassScope() {
         if (active_ && dxCommon_ != nullptr) {
@@ -70,8 +71,8 @@ class TextureManagerInitializationGuard {
         }
     }
 
-    TextureManagerInitializationGuard(const TextureManagerInitializationGuard &) =
-        delete;
+    TextureManagerInitializationGuard(
+        const TextureManagerInitializationGuard &) = delete;
     TextureManagerInitializationGuard &
     operator=(const TextureManagerInitializationGuard &) = delete;
 
@@ -82,8 +83,8 @@ class TextureManagerInitializationGuard {
     bool active_ = true;
 };
 
-static TextureManager::DecodedTexture DecodeTextureFileForAsync(
-    const std::wstring &filePath) {
+static TextureManager::DecodedTexture
+DecodeTextureFileForAsync(const std::wstring &filePath) {
     const std::filesystem::path resolvedPath = ResolveTexturePath(filePath);
     std::error_code ec;
     if (!std::filesystem::exists(resolvedPath, ec)) {
@@ -95,24 +96,22 @@ static TextureManager::DecodedTexture DecodeTextureFileForAsync(
     const std::wstring ext = resolvedPath.extension().wstring();
 
     if (_wcsicmp(ext.c_str(), L".dds") == 0) {
-        if (FAILED(DirectX::LoadFromDDSFile(resolvedPath.c_str(),
-                                            DirectX::DDS_FLAGS_NONE,
-                                            &decoded.metadata,
-                                            decoded.scratch))) {
+        if (FAILED(DirectX::LoadFromDDSFile(
+                resolvedPath.c_str(), DirectX::DDS_FLAGS_NONE,
+                &decoded.metadata, decoded.scratch))) {
             return {};
         }
     } else {
-        if (FAILED(DirectX::LoadFromWICFile(resolvedPath.c_str(),
-                                            DirectX::WIC_FLAGS_IGNORE_SRGB,
-                                            &decoded.metadata,
-                                            decoded.scratch))) {
+        if (FAILED(DirectX::LoadFromWICFile(
+                resolvedPath.c_str(), DirectX::WIC_FLAGS_IGNORE_SRGB,
+                &decoded.metadata, decoded.scratch))) {
             return {};
         }
     }
 
-    decoded.succeeded =
-        decoded.scratch.GetImages() != nullptr &&
-        decoded.scratch.GetImageCount() > 0 && !decoded.pathKey.empty();
+    decoded.succeeded = decoded.scratch.GetImages() != nullptr &&
+                        decoded.scratch.GetImageCount() > 0 &&
+                        !decoded.pathKey.empty();
     return decoded;
 }
 
@@ -151,13 +150,13 @@ class ScopedSrvAllocation {
 };
 
 bool IsTextureMetadataValid(const TexMetadata &metadata, size_t imageCount) {
-    if (metadata.mipLevels == 0 || metadata.arraySize >
-        (std::numeric_limits<size_t>::max)() / metadata.mipLevels) {
+    if (metadata.mipLevels == 0 ||
+        metadata.arraySize >
+            (std::numeric_limits<size_t>::max)() / metadata.mipLevels) {
         return false;
     }
-    const size_t expectedImageCount =
-        static_cast<size_t>(metadata.arraySize) *
-        static_cast<size_t>(metadata.mipLevels);
+    const size_t expectedImageCount = static_cast<size_t>(metadata.arraySize) *
+                                      static_cast<size_t>(metadata.mipLevels);
     const std::array<bool, 11> valid = {
         metadata.width != 0,
         metadata.height != 0,
@@ -176,10 +175,8 @@ bool IsTextureMetadataValid(const TexMetadata &metadata, size_t imageCount) {
             static_cast<size_t>((std::numeric_limits<int>::max)()) &&
         metadata.height <=
             static_cast<size_t>((std::numeric_limits<int>::max)());
-    return dimensionsFitInt &&
-           std::all_of(valid.begin(), valid.end(), [](bool value) {
-               return value;
-           });
+    return dimensionsFitInt && std::all_of(valid.begin(), valid.end(),
+                                           [](bool value) { return value; });
 }
 
 bool AreTextureImagesValid(const Image *images, size_t imageCount) {
@@ -193,9 +190,8 @@ bool AreTextureImagesValid(const Image *images, size_t imageCount) {
             images[index].rowPitch <= maxPitch,
             images[index].slicePitch <= maxPitch,
         };
-        if (!std::all_of(valid.begin(), valid.end(), [](bool value) {
-                return value;
-            })) {
+        if (!std::all_of(valid.begin(), valid.end(),
+                         [](bool value) { return value; })) {
             return false;
         }
     }
@@ -212,9 +208,8 @@ bool CanCreateTexture(DirectXCommon *dxCommon, SrvManager *srvManager,
         images != nullptr,
         imageCount != 0,
     };
-    if (!std::all_of(valid.begin(), valid.end(), [](bool value) {
-            return value;
-        })) {
+    if (!std::all_of(valid.begin(), valid.end(),
+                     [](bool value) { return value; })) {
         return false;
     }
     return IsTextureMetadataValid(metadata, imageCount) &&
@@ -253,7 +248,7 @@ MakeTextureSrvDescription(const TexMetadata &metadata) {
     }
     return description;
 }
-}
+} // namespace
 
 TextureManager &TextureManager::GetInstance() {
     static TextureManager instance;
@@ -264,9 +259,7 @@ void TextureManager::SetActiveInstance(TextureManager *instance) {
     gActiveTextureManager = instance;
 }
 
-TextureManager::~TextureManager() {
-    Finalize();
-}
+TextureManager::~TextureManager() { Finalize(); }
 
 void TextureManager::Initialize(DirectXCommon *dxCommon,
                                 SrvManager *srvManager) {
@@ -317,8 +310,8 @@ void TextureManager::Initialize(DirectXCommon *dxCommon,
     TexMetadata cubeMetadata = metadata;
     cubeMetadata.arraySize = 6;
     cubeMetadata.miscFlags = TEX_MISC_TEXTURECUBE;
-    whiteCubeTextureId_ = CreateTexture(cubeImages, _countof(cubeImages),
-                                        cubeMetadata);
+    whiteCubeTextureId_ =
+        CreateTexture(cubeImages, _countof(cubeImages), cubeMetadata);
 
     uint32_t blackPixel = 0xFF000000;
     image.pixels = reinterpret_cast<uint8_t *>(&blackPixel);
@@ -326,8 +319,8 @@ void TextureManager::Initialize(DirectXCommon *dxCommon,
     for (Image &cubeImage : blackCubeImages) {
         cubeImage = image;
     }
-    blackCubeTextureId_ = CreateTexture(blackCubeImages, _countof(blackCubeImages),
-                                        cubeMetadata);
+    blackCubeTextureId_ =
+        CreateTexture(blackCubeImages, _countof(blackCubeImages), cubeMetadata);
 
     uint32_t flatNormalPixel = 0xFFFF8080;
     image.pixels = reinterpret_cast<uint8_t *>(&flatNormalPixel);
@@ -390,9 +383,8 @@ uint32_t TextureManager::Load(const std::wstring &filePath) {
                                                      : UINT32_MAX;
         }
     } else {
-        if (FAILED(LoadFromWICFile(resolvedPath.c_str(),
-                                   WIC_FLAGS_IGNORE_SRGB, &metadata,
-                                   scratch))) {
+        if (FAILED(LoadFromWICFile(resolvedPath.c_str(), WIC_FLAGS_IGNORE_SRGB,
+                                   &metadata, scratch))) {
             return IsValidTextureId(whiteTextureId_) ? whiteTextureId_
                                                      : UINT32_MAX;
         }
@@ -596,7 +588,8 @@ TextureManager::GetGpuHandle(uint32_t textureId) const {
         !srvManager_->IsAllocated(textures_[textureId].srvIndex)) {
         if (srvManager_ != nullptr && IsValidTextureId(whiteTextureId_) &&
             srvManager_->IsAllocated(textures_[whiteTextureId_].srvIndex)) {
-            return srvManager_->GetGpuHandle(textures_[whiteTextureId_].srvIndex);
+            return srvManager_->GetGpuHandle(
+                textures_[whiteTextureId_].srvIndex);
         }
         return {};
     }

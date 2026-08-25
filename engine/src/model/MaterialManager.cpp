@@ -13,9 +13,7 @@ const Material &FallbackMaterial() {
 }
 } // namespace
 
-MaterialManager::~MaterialManager() {
-    Finalize();
-}
+MaterialManager::~MaterialManager() { Finalize(); }
 
 void MaterialManager::Initialize(DirectXCommon *dxCommon) {
     if (!dxCommon) {
@@ -62,9 +60,8 @@ uint32_t MaterialManager::CreateMaterial(const Material &material) {
         return UINT32_MAX;
     }
 
-    const HRESULT mapResult =
-        matRes.resource->Map(0, nullptr,
-                             reinterpret_cast<void **>(&matRes.mappedData));
+    const HRESULT mapResult = matRes.resource->Map(
+        0, nullptr, reinterpret_cast<void **>(&matRes.mappedData));
     if (FAILED(mapResult) || matRes.mappedData == nullptr) {
         return UINT32_MAX;
     }

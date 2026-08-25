@@ -27,11 +27,9 @@ enum class MaterialCullMode : int32_t {
 /// </summary>
 struct Material {
     DirectX::XMFLOAT4 color = {1.0f, 1.0f, 1.0f, 1.0f};
-    DirectX::XMFLOAT4X4 uvTransform{
-        1.0f, 0.0f, 0.0f, 0.0f,
-        0.0f, 1.0f, 0.0f, 0.0f,
-        0.0f, 0.0f, 1.0f, 0.0f,
-        0.0f, 0.0f, 0.0f, 1.0f};
+    DirectX::XMFLOAT4X4 uvTransform{1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,
+                                    0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+                                    0.0f, 0.0f, 0.0f, 1.0f};
     int32_t enableTexture = 1;
     float reflectionStrength = 0.18f;
     float reflectionFresnelStrength = 0.12f;
@@ -77,9 +75,8 @@ inline DirectX::XMFLOAT4 FiniteFloat4(const DirectX::XMFLOAT4 &value,
     };
 }
 
-inline DirectX::XMFLOAT4X4
-FiniteMatrix(const DirectX::XMFLOAT4X4 &value,
-             const DirectX::XMFLOAT4X4 &fallback) {
+inline DirectX::XMFLOAT4X4 FiniteMatrix(const DirectX::XMFLOAT4X4 &value,
+                                        const DirectX::XMFLOAT4X4 &fallback) {
     DirectX::XMFLOAT4X4 result = value;
     for (int row = 0; row < 4; ++row) {
         for (int column = 0; column < 4; ++column) {
@@ -109,30 +106,25 @@ inline Material NormalizeMaterialForDraw(Material material) {
         MaterialDetail::FiniteFloat4(material.color, defaults.color);
     material.color.w =
         MaterialDetail::ClampFinite(material.color.w, 0.0f, 1.0f, 1.0f);
-    material.uvTransform =
-        MaterialDetail::FiniteMatrix(material.uvTransform,
-                                     defaults.uvTransform);
+    material.uvTransform = MaterialDetail::FiniteMatrix(material.uvTransform,
+                                                        defaults.uvTransform);
     material.reflectionStrength = MaterialDetail::ClampFiniteMin(
         material.reflectionStrength, 0.0f, defaults.reflectionStrength);
-    material.reflectionFresnelStrength = MaterialDetail::ClampFiniteMin(
-        material.reflectionFresnelStrength, 0.0f,
-        defaults.reflectionFresnelStrength);
+    material.reflectionFresnelStrength =
+        MaterialDetail::ClampFiniteMin(material.reflectionFresnelStrength, 0.0f,
+                                       defaults.reflectionFresnelStrength);
     material.reflectionRoughness = MaterialDetail::ClampFinite(
-        material.reflectionRoughness, 0.0f, 1.0f,
-        defaults.reflectionRoughness);
-    material.roughness = MaterialDetail::ClampFinite(
-        material.roughness, 0.0f, 1.0f, defaults.roughness);
-    material.metallic = MaterialDetail::ClampFinite(
-        material.metallic, 0.0f, 1.0f, defaults.metallic);
-    material.customParams =
-        MaterialDetail::FiniteFloat4(material.customParams,
-                                     defaults.customParams);
-    material.customParams2 =
-        MaterialDetail::FiniteFloat4(material.customParams2,
-                                     defaults.customParams2);
-    material.customParams3 =
-        MaterialDetail::FiniteFloat4(material.customParams3,
-                                     defaults.customParams3);
+        material.reflectionRoughness, 0.0f, 1.0f, defaults.reflectionRoughness);
+    material.roughness = MaterialDetail::ClampFinite(material.roughness, 0.0f,
+                                                     1.0f, defaults.roughness);
+    material.metallic = MaterialDetail::ClampFinite(material.metallic, 0.0f,
+                                                    1.0f, defaults.metallic);
+    material.customParams = MaterialDetail::FiniteFloat4(material.customParams,
+                                                         defaults.customParams);
+    material.customParams2 = MaterialDetail::FiniteFloat4(
+        material.customParams2, defaults.customParams2);
+    material.customParams3 = MaterialDetail::FiniteFloat4(
+        material.customParams3, defaults.customParams3);
 
     if (blendMode == BlendMode::Transparent) {
         material.depthWrite = 0;
@@ -150,10 +142,10 @@ inline Material NormalizeMaterialForDraw(Material material) {
     material.normalStrength = MaterialDetail::ClampFiniteMin(
         material.normalStrength, 0.0f, defaults.normalStrength);
 
-    material.enableNormalMap =
-        (material.enableNormalMap != 0 || material.normalTextureId != UINT32_MAX)
-            ? 1
-            : 0;
+    material.enableNormalMap = (material.enableNormalMap != 0 ||
+                                material.normalTextureId != UINT32_MAX)
+                                   ? 1
+                                   : 0;
     material.enableTexture = material.enableTexture != 0 ? 1 : 0;
     material.depthWrite = material.depthWrite != 0 ? 1 : 0;
 

@@ -57,8 +57,9 @@ class EffectManager {
     static ParticleEmitterSettings
     BuildEmitterSettings(const ParticleLayerDesc &desc,
                          const DirectX::XMFLOAT3 &position);
-    static ParticleEmitterSettings BuildEmitterSettings(
-        const ParticleLayerDesc &desc, const PlayDesc &playDesc);
+    static ParticleEmitterSettings
+    BuildEmitterSettings(const ParticleLayerDesc &desc,
+                         const PlayDesc &playDesc);
 
     std::optional<size_t> FindAssetIndex(const std::string &name) const;
     size_t GetRuntimeLayerOffset(size_t assetIndex) const;

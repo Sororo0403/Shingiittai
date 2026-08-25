@@ -43,10 +43,9 @@ class ImguiManager {
 
   private:
     bool IsReady() const;
-    static void AllocateSrvDescriptor(
-        ImGui_ImplDX12_InitInfo *info,
-        D3D12_CPU_DESCRIPTOR_HANDLE *outCpu,
-        D3D12_GPU_DESCRIPTOR_HANDLE *outGpu);
+    static void AllocateSrvDescriptor(ImGui_ImplDX12_InitInfo *info,
+                                      D3D12_CPU_DESCRIPTOR_HANDLE *outCpu,
+                                      D3D12_GPU_DESCRIPTOR_HANDLE *outGpu);
     static void FreeSrvDescriptor(ImGui_ImplDX12_InitInfo *info,
                                   D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
                                   D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle);

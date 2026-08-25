@@ -30,6 +30,5 @@ uint32_t GetEnemyPhaseTextureId(const EnemyPhaseMaterialSet &materials);
 
 void ApplyEnemyPhaseMaterial(ModelManager *modelManager,
                              TextureManager *textureManager, uint32_t modelId,
-                             EnemyPhaseMaterialSet &materials,
-                             BossPhase phase, bool phaseTransitionActive,
-                             float transitionRatio);
+                             EnemyPhaseMaterialSet &materials, BossPhase phase,
+                             bool phaseTransitionActive, float transitionRatio);

@@ -66,14 +66,14 @@ void OptionScene::Initialize(const SceneContext &ctx) {
         LoadTextureImage(L"app/resources/ui/option/mplus/display.png");
     bgmLabelImage_ = LoadTextureImage(L"app/resources/ui/option/mplus/bgm.png");
     seLabelImage_ = LoadTextureImage(L"app/resources/ui/option/mplus/se.png");
-    cameraSensitivityLabelImage_ =
-        LoadTextureImage(L"app/resources/ui/option/mplus/camera_sensitivity.png");
+    cameraSensitivityLabelImage_ = LoadTextureImage(
+        L"app/resources/ui/option/mplus/camera_sensitivity.png");
     cameraSlashSensitivityLabelImage_ =
         LoadTextureImage(L"app/resources/ui/option/mplus/camera_slash.png");
     cameraVerticalSensitivityLabelImage_ =
         LoadTextureImage(L"app/resources/ui/option/mplus/camera_vertical.png");
-    cameraHorizontalSensitivityLabelImage_ =
-        LoadTextureImage(L"app/resources/ui/option/mplus/camera_horizontal.png");
+    cameraHorizontalSensitivityLabelImage_ = LoadTextureImage(
+        L"app/resources/ui/option/mplus/camera_horizontal.png");
     mouseSlashLabelImage_ =
         LoadTextureImage(L"app/resources/ui/option/mplus/mouse_slash.png");
     fullscreenValueImage_ =
@@ -88,8 +88,8 @@ void OptionScene::Initialize(const SceneContext &ctx) {
 }
 
 void OptionScene::Update() {
-    introTimer_ = (std::min)(introTimer_ + ctx_->frame.deltaTime,
-                             kIntroDuration + 0.2f);
+    introTimer_ =
+        (std::min)(introTimer_ + ctx_->frame.deltaTime, kIntroDuration + 0.2f);
     if (backgroundScene_) {
         backgroundScene_->Update();
     }
@@ -168,7 +168,8 @@ int OptionScene::GetAdjustmentTriggerDirection(Input &input) const {
         input.IsKeyTrigger(DIK_A) || input.IsKeyTrigger(DIK_LEFT);
     const bool rightTrigger =
         input.IsKeyTrigger(DIK_D) || input.IsKeyTrigger(DIK_RIGHT);
-    const bool leftPress = input.IsKeyPress(DIK_A) || input.IsKeyPress(DIK_LEFT);
+    const bool leftPress =
+        input.IsKeyPress(DIK_A) || input.IsKeyPress(DIK_LEFT);
     const bool rightPress =
         input.IsKeyPress(DIK_D) || input.IsKeyPress(DIK_RIGHT);
     if (leftTrigger && !rightPress) {
@@ -282,9 +283,9 @@ void OptionScene::AdjustSelectedOption(int direction) {
 void OptionScene::DrawOverlay(float screenWidth, float screenHeight) {
     const float backgroundReveal =
         Smooth01(introTimer_ / kBackgroundRevealDuration);
-    DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
-             Color(0.0f, 0.0f, 0.0f,
-                   0.62f + (1.0f - backgroundReveal) * 0.20f));
+    DrawRect(
+        0.0f, 0.0f, screenWidth, screenHeight,
+        Color(0.0f, 0.0f, 0.0f, 0.62f + (1.0f - backgroundReveal) * 0.20f));
     DrawRect(0.0f, 0.0f, screenWidth, screenHeight * 0.20f,
              Color(0.0f, 0.0f, 0.0f, 0.32f * backgroundReveal));
     DrawRect(0.0f, screenHeight * 0.80f, screenWidth, screenHeight * 0.20f,
@@ -300,8 +301,8 @@ void OptionScene::DrawPanel(float screenWidth, float screenHeight) {
     const float panelW = std::clamp(screenWidth * 0.66f, 820.0f, 1120.0f);
     const float panelH = std::clamp(screenHeight * 0.62f, 500.0f, 660.0f);
     const float panelX = (screenWidth - panelW) * 0.5f;
-    const float panelY = (screenHeight - panelH) * 0.5f +
-                         (1.0f - intro) * 30.0f;
+    const float panelY =
+        (screenHeight - panelH) * 0.5f + (1.0f - intro) * 30.0f;
 
     DrawRect(panelX + 10.0f, panelY + 12.0f, panelW, panelH,
              Color(0.0f, 0.0f, 0.0f, 0.34f * intro));
@@ -319,18 +320,21 @@ void OptionScene::DrawPanel(float screenWidth, float screenHeight) {
 
     const Image *labels[kOptionCount] = {
         &displayLabelImage_,
-        &bgmLabelImage_, &seLabelImage_, &cameraSensitivityLabelImage_,
+        &bgmLabelImage_,
+        &seLabelImage_,
+        &cameraSensitivityLabelImage_,
         &cameraSlashSensitivityLabelImage_,
         &cameraVerticalSensitivityLabelImage_,
         &cameraHorizontalSensitivityLabelImage_,
         &mouseSlashLabelImage_};
-    const float values[kOptionCount - 1] = {AppSceneServices::GetBgmVolume(),
-                                        AppSceneServices::GetSeVolume(),
-                                        AppSceneServices::GetCameraSensitivity(),
-                                        AppSceneServices::GetCameraSlashSensitivity(),
-                                        AppSceneServices::GetCameraVerticalSensitivity(),
-                                        AppSceneServices::GetCameraHorizontalSensitivity(),
-                                        AppSceneServices::GetMouseSlashSensitivity()};
+    const float values[kOptionCount - 1] = {
+        AppSceneServices::GetBgmVolume(),
+        AppSceneServices::GetSeVolume(),
+        AppSceneServices::GetCameraSensitivity(),
+        AppSceneServices::GetCameraSlashSensitivity(),
+        AppSceneServices::GetCameraVerticalSensitivity(),
+        AppSceneServices::GetCameraHorizontalSensitivity(),
+        AppSceneServices::GetMouseSlashSensitivity()};
     const float rowX = panelX + panelW * 0.16f;
     const float barX = panelX + panelW * 0.41f;
     const float barW = panelW * 0.40f;
@@ -349,16 +353,14 @@ void OptionScene::DrawPanel(float screenWidth, float screenHeight) {
         const Image &label = *labels[i];
         const float labelScale =
             (std::min)(0.82f, labelAreaW / (std::max)(label.width, 1.0f));
-        DrawImage(label, rowX,
-                  rowCenterY - label.height * labelScale * 0.5f,
+        DrawImage(label, rowX, rowCenterY - label.height * labelScale * 0.5f,
                   labelScale, textColor.w);
 
         if (i == 0) {
-            const Image &mode =
-                ctx_->systems.winApp != nullptr &&
-                        ctx_->systems.winApp->IsFullscreen()
-                    ? fullscreenValueImage_
-                    : windowValueImage_;
+            const Image &mode = ctx_->systems.winApp != nullptr &&
+                                        ctx_->systems.winApp->IsFullscreen()
+                                    ? fullscreenValueImage_
+                                    : windowValueImage_;
             DrawRect(barX, barY, barW, barH,
                      selected ? Color(0.95f, 0.64f, 0.16f, 0.92f * intro)
                               : Color(0.16f, 0.18f, 0.22f, 0.78f * intro));
@@ -366,26 +368,26 @@ void OptionScene::DrawPanel(float screenWidth, float screenHeight) {
                       selected ? Color(1.0f, 0.86f, 0.26f, 0.95f * intro)
                                : Color(0.54f, 0.58f, 0.64f, 0.42f * intro));
             const float modeScale =
-                (std::min)(0.66f, (barW - 28.0f) /
-                                      (std::max)(mode.width, 1.0f));
+                (std::min)(0.66f,
+                           (barW - 28.0f) / (std::max)(mode.width, 1.0f));
             DrawImage(mode, barX + 14.0f,
                       rowCenterY - mode.height * modeScale * 0.5f, modeScale,
                       selected ? 1.0f : 0.82f);
         } else {
-        DrawRect(barX, barY, barW, barH,
-                 Color(0.055f, 0.062f, 0.074f, 0.96f));
-        DrawFrame(barX, barY, barW, barH, 2.0f,
-                  selected ? Color(1.0f, 0.78f, 0.34f, 0.88f * intro)
-                           : Color(0.54f, 0.58f, 0.64f, 0.42f * intro));
-        DrawRect(barX, barY,
-                 barW * std::clamp(values[i - 1], 0.0f, 1.0f), barH,
-                 selected ? Color(1.0f, 0.68f, 0.20f, 0.90f * intro)
-                          : Color(0.72f, 0.76f, 0.82f, 0.64f * intro));
+            DrawRect(barX, barY, barW, barH,
+                     Color(0.055f, 0.062f, 0.074f, 0.96f));
+            DrawFrame(barX, barY, barW, barH, 2.0f,
+                      selected ? Color(1.0f, 0.78f, 0.34f, 0.88f * intro)
+                               : Color(0.54f, 0.58f, 0.64f, 0.42f * intro));
+            DrawRect(barX, barY, barW * std::clamp(values[i - 1], 0.0f, 1.0f),
+                     barH,
+                     selected ? Color(1.0f, 0.68f, 0.20f, 0.90f * intro)
+                              : Color(0.72f, 0.76f, 0.82f, 0.64f * intro));
         }
         if (selected) {
-            const float keyScale = std::clamp(
-                barH * 1.65f / (std::max)(keyAImage_.height, 1.0f), 0.38f,
-                0.58f);
+            const float keyScale =
+                std::clamp(barH * 1.65f / (std::max)(keyAImage_.height, 1.0f),
+                           0.38f, 0.58f);
             const float keyW = keyAImage_.width * keyScale;
             const float keyH = keyAImage_.height * keyScale;
             const float keyY = rowCenterY - keyH * 0.5f;
@@ -395,7 +397,6 @@ void OptionScene::DrawPanel(float screenWidth, float screenHeight) {
                       0.78f * intro);
         }
     }
-
 }
 
 void OptionScene::DrawControlsPrompt(float screenWidth, float screenHeight) {
@@ -440,8 +441,7 @@ void OptionScene::DrawRect(float x, float y, float w, float h,
     ctx_->rendering.sprite->DrawSprite(sprite);
 }
 
-void OptionScene::DrawFrame(float x, float y, float w, float h,
-                            float thickness,
+void OptionScene::DrawFrame(float x, float y, float w, float h, float thickness,
                             const DirectX::XMFLOAT4 &color) {
     DrawRect(x, y, w, thickness, color);
     DrawRect(x, y + h - thickness, w, thickness, color);

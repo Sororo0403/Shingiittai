@@ -15,5 +15,6 @@ class AssetManager {
     /// <summary>
     /// onicalizeかを取得する
     /// </summary>
-    static std::filesystem::path Canonicalize(const std::filesystem::path &path);
+    static std::filesystem::path
+    Canonicalize(const std::filesystem::path &path);
 };

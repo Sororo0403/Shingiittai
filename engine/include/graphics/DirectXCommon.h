@@ -1,6 +1,6 @@
 #pragma once
-#include <Windows.h>
 #include <DirectXMath.h>
+#include <Windows.h>
 #include <array>
 #include <cstdint>
 #include <d3d12.h>
@@ -15,8 +15,7 @@ class SrvManager;
 /// </summary>
 class DirectXCommon {
   public:
-    static constexpr DXGI_FORMAT kBackBufferFormat =
-        DXGI_FORMAT_R8G8B8A8_UNORM;
+    static constexpr DXGI_FORMAT kBackBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
     static constexpr DXGI_FORMAT kSceneColorFormat =
         DXGI_FORMAT_R16G16B16A16_FLOAT;
     static constexpr DXGI_FORMAT kDepthStencilFormat =

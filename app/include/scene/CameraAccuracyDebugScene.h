@@ -24,8 +24,8 @@ class CameraAccuracyDebugScene : public BaseScene {
         TutorialOption,
     };
 
-    explicit CameraAccuracyDebugScene(ReturnTarget returnTarget =
-                                          ReturnTarget::Title);
+    explicit CameraAccuracyDebugScene(
+        ReturnTarget returnTarget = ReturnTarget::Title);
     ~CameraAccuracyDebugScene() override;
 
     void Initialize(const SceneContext &ctx) override;
@@ -79,8 +79,8 @@ class CameraAccuracyDebugScene : public BaseScene {
     void DrawSensitivityValue(float value, float x, float y, float scale,
                               const DirectX::XMFLOAT4 &color);
     float RequiredTravelForSensitivity(float axisSensitivity) const;
-    void DrawHandPanel(const char *title, const char *subtitle, size_t handIndex,
-                       float x, float y, float w, float h);
+    void DrawHandPanel(const char *title, const char *subtitle,
+                       size_t handIndex, float x, float y, float w, float h);
     void DrawHandStats(size_t handIndex, float x, float y);
     void DrawRect(float x, float y, float w, float h,
                   const DirectX::XMFLOAT4 &color);

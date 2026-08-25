@@ -1,10 +1,10 @@
 #include "CalibrationScene.h"
+#include "DifficultyCauldronScene.h"
 #include "DirectXCommon.h"
 #include "PostEffectManager.h"
 #include "SceneManager.h"
 #include "SpriteManager.h"
 #include "TextureManager.h"
-#include "DifficultyCauldronScene.h"
 #include "WinApp.h"
 #include <algorithm>
 #include <cmath>
@@ -29,8 +29,8 @@ void CalibrationScene::Initialize(const SceneContext &ctx) {
     stableTimer_ = 0.0f;
     finished_ = false;
 
-    backgroundImage_ =
-        LoadTextureImage(L"app/resources/ui/weapon_select/weapon_select_bg.png");
+    backgroundImage_ = LoadTextureImage(
+        L"app/resources/ui/weapon_select/weapon_select_bg.png");
     for (int i = 0; i < 10; ++i) {
         digitImages_[static_cast<size_t>(i)] =
             LoadTextureImage(L"app/resources/ui/result/glyphs/char_" +
@@ -70,7 +70,8 @@ CalibrationScene::Image
 CalibrationScene::LoadTextureImage(const std::wstring &path) {
     Image image{};
     image.textureId = ctx_->rendering.texture->Load(path);
-    image.width = static_cast<float>(ctx_->rendering.texture->GetWidth(image.textureId));
+    image.width =
+        static_cast<float>(ctx_->rendering.texture->GetWidth(image.textureId));
     image.height =
         static_cast<float>(ctx_->rendering.texture->GetHeight(image.textureId));
     return image;
@@ -90,11 +91,11 @@ void CalibrationScene::FinishCalibration() {
 void CalibrationScene::DrawBackground(float screenWidth, float screenHeight) {
     DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
              Color(0.018f, 0.020f, 0.024f, 1.0f));
-    DrawImage(backgroundImage_, 0.0f, 0.0f,
-              (std::max)(screenWidth / (std::max)(backgroundImage_.width, 1.0f),
-                         screenHeight /
-                             (std::max)(backgroundImage_.height, 1.0f)),
-              0.32f);
+    DrawImage(
+        backgroundImage_, 0.0f, 0.0f,
+        (std::max)(screenWidth / (std::max)(backgroundImage_.width, 1.0f),
+                   screenHeight / (std::max)(backgroundImage_.height, 1.0f)),
+        0.32f);
 
     const float cx = screenWidth * 0.5f;
     const float cy = screenHeight * 0.48f;
@@ -122,11 +123,10 @@ void CalibrationScene::DrawProgress(float screenWidth, float screenHeight) {
     const float y = screenHeight * 0.76f;
     DrawRect(x, y, barW, barH, Color(0.05f, 0.06f, 0.07f, 0.92f));
     DrawRect(x, y, barW * progress, barH, Color(1.0f, 0.82f, 0.18f, 0.96f));
-    DrawRect(x, y + barH + 5.0f, barW, 4.0f,
-             Color(0.10f, 0.54f, 1.0f, 0.72f));
+    DrawRect(x, y + barH + 5.0f, barW, 4.0f, Color(0.10f, 0.54f, 1.0f, 0.72f));
 
-    const int countdown = static_cast<int>(std::ceil(
-        (std::max)(0.0f, kRequiredStillTime - stableTimer_)));
+    const int countdown = static_cast<int>(
+        std::ceil((std::max)(0.0f, kRequiredStillTime - stableTimer_)));
     const int digit = std::clamp(countdown, 0, 3);
     const Image &image = digitImages_[static_cast<size_t>(digit)];
     const float scale = 1.7f;

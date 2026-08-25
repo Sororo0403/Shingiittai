@@ -4,8 +4,8 @@
 #include "graphics/UploadRingBuffer.h"
 #include "model/InstanceData.h"
 #include "model/MaterialManager.h"
-#include "model/ModelDrawEffect.h"
 #include "model/Model.h"
+#include "model/ModelDrawEffect.h"
 #include "model/Transform.h"
 #include <DirectXMath.h>
 #include <array>
@@ -108,7 +108,9 @@ class ModelRenderer {
     /// <summary>
     /// 現在フレームの描画エフェクトを設定する
     /// </summary>
-    void SetDrawEffect(const ModelDrawEffect &effect) { currentEffect_ = effect; }
+    void SetDrawEffect(const ModelDrawEffect &effect) {
+        currentEffect_ = effect;
+    }
 
     /// <summary>
     /// 描画エフェクト設定を初期状態へ戻す
@@ -196,9 +198,10 @@ class ModelRenderer {
     void CreateSkinningPipelineState();
 
     void CreateUploadBuffer();
-    D3D12_GPU_VIRTUAL_ADDRESS WriteObjectConstants(
-        const DirectX::XMMATRIX &wvp, const DirectX::XMMATRIX &world,
-        const DirectX::XMMATRIX &worldInverseTranspose);
+    D3D12_GPU_VIRTUAL_ADDRESS
+    WriteObjectConstants(const DirectX::XMMATRIX &wvp,
+                         const DirectX::XMMATRIX &world,
+                         const DirectX::XMMATRIX &worldInverseTranspose);
     /// <summary>
     /// データを書き込む
     /// </summary>
@@ -215,18 +218,18 @@ class ModelRenderer {
     /// </summary>
     void SetPipelineForMaterial(const Material &material);
     void SetInstancedPipelineForMaterial(const Material &material);
-    void DrawForwardSubMesh(
-        const ModelSubMesh &subMesh,
-        D3D12_GPU_VIRTUAL_ADDRESS objectConstantAddress,
-        D3D12_GPU_VIRTUAL_ADDRESS sceneConstantAddress,
-        D3D12_GPU_VIRTUAL_ADDRESS effectConstantAddress,
-        uint32_t environmentTextureId);
-    void DrawInstancedSubMeshes(
-        const Model &model, const D3D12_VERTEX_BUFFER_VIEW &instanceView,
-        D3D12_GPU_VIRTUAL_ADDRESS objectConstantAddress,
-        D3D12_GPU_VIRTUAL_ADDRESS sceneConstantAddress,
-        D3D12_GPU_VIRTUAL_ADDRESS effectConstantAddress,
-        uint32_t environmentTextureId, uint32_t instanceCount);
+    void DrawForwardSubMesh(const ModelSubMesh &subMesh,
+                            D3D12_GPU_VIRTUAL_ADDRESS objectConstantAddress,
+                            D3D12_GPU_VIRTUAL_ADDRESS sceneConstantAddress,
+                            D3D12_GPU_VIRTUAL_ADDRESS effectConstantAddress,
+                            uint32_t environmentTextureId);
+    void DrawInstancedSubMeshes(const Model &model,
+                                const D3D12_VERTEX_BUFFER_VIEW &instanceView,
+                                D3D12_GPU_VIRTUAL_ADDRESS objectConstantAddress,
+                                D3D12_GPU_VIRTUAL_ADDRESS sceneConstantAddress,
+                                D3D12_GPU_VIRTUAL_ADDRESS effectConstantAddress,
+                                uint32_t environmentTextureId,
+                                uint32_t instanceCount);
 
     /// <summary>
     /// ComputeShaderで必要なスキニング済み頂点をまとめて書き込む
@@ -281,10 +284,8 @@ class ModelRenderer {
     bool hasEnvironmentTexture_ = false;
     D3D12_GPU_DESCRIPTOR_HANDLE shadowMapGpuHandle_{};
     DirectX::XMFLOAT4X4 shadowLightViewProjection_ = {
-        1.0f, 0.0f, 0.0f, 0.0f,
-        0.0f, 1.0f, 0.0f, 0.0f,
-        0.0f, 0.0f, 1.0f, 0.0f,
-        0.0f, 0.0f, 0.0f, 1.0f};
+        1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f};
     DirectX::XMFLOAT4 shadowParams_{0.0f, 0.0015f, 0.45f, 0.0f};
     DirectX::XMFLOAT4 shadowFilterParams_{1.45f, 2600.0f, 0.045f, 0.0f};
 };

@@ -1,11 +1,11 @@
 #pragma once
-#include "SwordInputCalibration.h"
 #include "SwordControllerState.h"
+#include "SwordInputCalibration.h"
 #include "SwordPose.h"
 #include <DirectXMath.h>
 #include <array>
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 
 class SwordUdpController {
@@ -90,9 +90,8 @@ class SwordUdpController {
         float bodyVisibility = 0.0f;
         bool hasTilt = false;
         float tiltRadians = 0.0f;
-        std::array<DirectX::XMFLOAT2, 2> palm = {
-            DirectX::XMFLOAT2{0.5f, 0.5f},
-            DirectX::XMFLOAT2{0.5f, 0.5f}};
+        std::array<DirectX::XMFLOAT2, 2> palm = {DirectX::XMFLOAT2{0.5f, 0.5f},
+                                                 DirectX::XMFLOAT2{0.5f, 0.5f}};
     };
 
     struct StableMotion {
@@ -114,70 +113,64 @@ class SwordUdpController {
         bool &synthesizeReacquireSlash, bool &synthesizeJumpSlash,
         DirectX::XMFLOAT2 &reacquireDelta, float &reacquireDistance,
         DirectX::XMFLOAT2 &jumpDelta, float &jumpDistance);
-    bool ShouldSynthesizeReacquireSlash(
-        size_t i, float effectiveSlashCooldown,
-        const DirectX::XMFLOAT2 &corrected,
-        const DirectX::XMFLOAT2 &reacquireDelta,
-        float reacquireDistance, float threshold,
-        bool reacquired) const;
-    bool ShouldSynthesizeJumpSlash(
-        size_t i, float effectiveSlashCooldown,
-        const DirectX::XMFLOAT2 &corrected,
-        const DirectX::XMFLOAT2 &jumpDelta, float jumpDistance,
-        float threshold, bool jumped, bool teleported) const;
-    StableMotion UpdateActiveHandMotion(
-        size_t i, float dt, const DirectX::XMFLOAT2 &corrected,
-        bool reacquired, bool jumped, float stableNetDistanceThreshold,
-        float preLossNetDistanceThreshold,
-        float preLossDirectionThreshold,
-        DirectX::XMFLOAT2 &frameDeltaPalm);
+    bool ShouldSynthesizeReacquireSlash(size_t i, float effectiveSlashCooldown,
+                                        const DirectX::XMFLOAT2 &corrected,
+                                        const DirectX::XMFLOAT2 &reacquireDelta,
+                                        float reacquireDistance,
+                                        float threshold, bool reacquired) const;
+    bool ShouldSynthesizeJumpSlash(size_t i, float effectiveSlashCooldown,
+                                   const DirectX::XMFLOAT2 &corrected,
+                                   const DirectX::XMFLOAT2 &jumpDelta,
+                                   float jumpDistance, float threshold,
+                                   bool jumped, bool teleported) const;
+    StableMotion UpdateActiveHandMotion(size_t i, float dt,
+                                        const DirectX::XMFLOAT2 &corrected,
+                                        bool reacquired, bool jumped,
+                                        float stableNetDistanceThreshold,
+                                        float preLossNetDistanceThreshold,
+                                        float preLossDirectionThreshold,
+                                        DirectX::XMFLOAT2 &frameDeltaPalm);
     DirectX::XMFLOAT2 ResolveHandSlashDirection(
-        const DirectX::XMFLOAT2 &corrected,
-        const StableMotion &stableMotion,
-        const DirectX::XMFLOAT2 &frameDeltaPalm,
-        bool synthesizeJumpSlash,
+        const DirectX::XMFLOAT2 &corrected, const StableMotion &stableMotion,
+        const DirectX::XMFLOAT2 &frameDeltaPalm, bool synthesizeJumpSlash,
         const DirectX::XMFLOAT2 &jumpDelta, float jumpDistance,
-        bool synthesizeReacquireSlash,
-        const DirectX::XMFLOAT2 &reacquireDelta,
+        bool synthesizeReacquireSlash, const DirectX::XMFLOAT2 &reacquireDelta,
         float reacquireDistance) const;
     void UpdateActiveHandSlash(
         size_t i, float dt, float effectiveSlashCooldown,
-        const DirectX::XMFLOAT2 &corrected,
-        const StableMotion &stableMotion,
+        const DirectX::XMFLOAT2 &corrected, const StableMotion &stableMotion,
         const DirectX::XMFLOAT2 &frameDeltaPalm,
-        const DirectX::XMFLOAT2 &slashDir,
-        bool synthesizeReacquireSlash, bool synthesizeJumpSlash,
-        float baseSlashThreshold, float baseSlashResetThreshold,
-        float baseSlashNetDistanceThreshold, float overallThresholdScale,
-        float stableNetDistanceThreshold, float verticalSensitivity,
-        float horizontalSensitivity);
-    float ComputeStableSlashSpeed(
-        size_t i, float slashThreshold,
-        float slashNetDistanceThreshold,
-        const StableMotion &stableMotion,
-        const DirectX::XMFLOAT2 &frameDeltaPalm) const;
+        const DirectX::XMFLOAT2 &slashDir, bool synthesizeReacquireSlash,
+        bool synthesizeJumpSlash, float baseSlashThreshold,
+        float baseSlashResetThreshold, float baseSlashNetDistanceThreshold,
+        float overallThresholdScale, float stableNetDistanceThreshold,
+        float verticalSensitivity, float horizontalSensitivity);
+    float
+    ComputeStableSlashSpeed(size_t i, float slashThreshold,
+                            float slashNetDistanceThreshold,
+                            const StableMotion &stableMotion,
+                            const DirectX::XMFLOAT2 &frameDeltaPalm) const;
     void UpdateHandSlashRearm(size_t i, float dt, float slashSpeed,
                               float slashResetThreshold,
                               float stableNetDistanceThreshold,
                               const StableMotion &stableMotion,
                               const DirectX::XMFLOAT2 &corrected);
-    float ComputeGatedHandSlashSpeed(
-        size_t i, float effectiveSlashCooldown, float slashSpeed,
-        float slashThreshold, float stableSlashSpeed,
-        bool synthesizeReacquireSlash,
-        bool synthesizeJumpSlash) const;
-    void UpdateHandOrientation(size_t i,
-                               const DirectX::XMFLOAT2 &corrected);
+    float ComputeGatedHandSlashSpeed(size_t i, float effectiveSlashCooldown,
+                                     float slashSpeed, float slashThreshold,
+                                     float stableSlashSpeed,
+                                     bool synthesizeReacquireSlash,
+                                     bool synthesizeJumpSlash) const;
+    void UpdateHandOrientation(size_t i, const DirectX::XMFLOAT2 &corrected);
     void ResetHandFrameState(size_t i, float dt);
-    bool HandleInactiveHand(size_t i, float dt,
-                            float effectiveSlashCooldown,
+    bool HandleInactiveHand(size_t i, float dt, float effectiveSlashCooldown,
                             float slashThreshold,
                             float preLossDirectionThreshold);
     void CloseSocket();
     void UpdateTiltEstimate(float dt);
     size_t ChooseSingleHandSlot(const DirectX::XMFLOAT2 &palm) const;
-    DirectX::XMFLOAT2 TransformCameraPalmForSword(
-        size_t handIndex, const DirectX::XMFLOAT2 &palm) const;
+    DirectX::XMFLOAT2
+    TransformCameraPalmForSword(size_t handIndex,
+                                const DirectX::XMFLOAT2 &palm) const;
     void ResetMotionHistory(size_t handIndex);
     void AddMotionSample(size_t handIndex, const DirectX::XMFLOAT2 &palm,
                          float dt);

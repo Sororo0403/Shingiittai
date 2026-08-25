@@ -1,10 +1,10 @@
-#include "texture/TextureManager.h"
 #include "graphics/DirectXCommon.h"
 #include "graphics/DxHelpers.h"
 #include "graphics/SrvManager.h"
 #include "texture/Texture.h"
-#include <array>
+#include "texture/TextureManager.h"
 #include <algorithm>
+#include <array>
 #include <limits>
 
 using namespace DirectX;
@@ -16,7 +16,8 @@ class UploadPassScope {
   public:
     UploadPassScope(DirectXCommon *dxCommon, TextureManager *textureManager,
                     bool active)
-        : dxCommon_(dxCommon), textureManager_(textureManager), active_(active) {}
+        : dxCommon_(dxCommon), textureManager_(textureManager),
+          active_(active) {}
 
     ~UploadPassScope() {
         if (active_ && dxCommon_ != nullptr) {
@@ -57,9 +58,8 @@ bool MatchesSingleTexture2D(const Texture &texture,
         static_cast<int>(description.Width) == texture.width,
         static_cast<int>(description.Height) == texture.height,
     };
-    return std::all_of(valid.begin(), valid.end(), [](bool value) {
-        return value;
-    });
+    return std::all_of(valid.begin(), valid.end(),
+                       [](bool value) { return value; });
 }
 
 bool TryBuildSubresource(const Texture &texture, const uint8_t *pixels,
@@ -83,7 +83,8 @@ bool TryBuildSubresource(const Texture &texture, const uint8_t *pixels,
     const size_t height = static_cast<size_t>(texture.height);
     const bool invalidPitch =
         rowPitch < expectedRowPitch ||
-        rowPitch > static_cast<size_t>((std::numeric_limits<LONG_PTR>::max)()) ||
+        rowPitch >
+            static_cast<size_t>((std::numeric_limits<LONG_PTR>::max)()) ||
         rowPitch > (std::numeric_limits<size_t>::max)() / height;
     if (invalidPitch) {
         return false;
@@ -108,9 +109,8 @@ bool CanUpdateTexture(DirectXCommon *dxCommon, const uint8_t *pixels,
         rowPitch != 0,
         validTextureId,
     };
-    return std::all_of(valid.begin(), valid.end(), [](bool value) {
-        return value;
-    });
+    return std::all_of(valid.begin(), valid.end(),
+                       [](bool value) { return value; });
 }
 
 bool IsUsableDynamicTexture(const Texture &texture) {
@@ -119,15 +119,14 @@ bool IsUsableDynamicTexture(const Texture &texture) {
         texture.width > 0,
         texture.height > 0,
     };
-    return std::all_of(valid.begin(), valid.end(), [](bool value) {
-        return value;
-    });
+    return std::all_of(valid.begin(), valid.end(),
+                       [](bool value) { return value; });
 }
 
 } // namespace
 
 uint32_t TextureManager::CreateFromRgbaPixels(uint32_t width, uint32_t height,
-                                               const uint8_t *pixels) {
+                                              const uint8_t *pixels) {
     return CreateTexture2D(width, height, DXGI_FORMAT_R8G8B8A8_UNORM, pixels,
                            static_cast<size_t>(width) * 4u);
 }

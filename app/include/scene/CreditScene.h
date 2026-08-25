@@ -36,7 +36,8 @@ class CreditScene : public BaseScene {
     void DrawCredits(float screenWidth, float screenHeight);
     void DrawControlsPrompt(float screenWidth, float screenHeight);
     void DrawTransition(float screenWidth, float screenHeight);
-    float CalculateLogoStopDistance(float screenWidth, float screenHeight) const;
+    float CalculateLogoStopDistance(float screenWidth,
+                                    float screenHeight) const;
     bool IsLogoStopped(float screenWidth, float screenHeight) const;
     void DrawRect(float x, float y, float w, float h,
                   const DirectX::XMFLOAT4 &color);

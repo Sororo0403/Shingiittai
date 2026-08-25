@@ -216,8 +216,7 @@ void MeshRenderer::CreatePipelineStates() {
     auto *device = dxCommon_->GetDevice();
     auto vs = ShaderCompiler::Compile(ShaderPaths::MeshVS, "main", "vs_6_6");
     auto instancedVs =
-        ShaderCompiler::Compile(ShaderPaths::MeshInstancedVS, "main",
-                                "vs_6_6");
+        ShaderCompiler::Compile(ShaderPaths::MeshInstancedVS, "main", "vs_6_6");
     auto ps = ShaderCompiler::Compile(ShaderPaths::MeshPS, "main", "ps_6_6");
 
     D3D12_INPUT_ELEMENT_DESC baseLayout[] = {
@@ -235,8 +234,7 @@ void MeshRenderer::CreatePipelineStates() {
         {"TANGENT", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
          D3D12_APPEND_ALIGNED_ELEMENT,
          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-        {"CUSTOM", 0, DXGI_FORMAT_R32_FLOAT, 0,
-         D3D12_APPEND_ALIGNED_ELEMENT,
+        {"CUSTOM", 0, DXGI_FORMAT_R32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
     };
 
@@ -307,9 +305,9 @@ void MeshRenderer::CreatePipelineStates() {
         depth.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
         pso.DepthStencilState = depth;
 
-        ThrowIfFailed(device->CreateGraphicsPipelineState(
-                          &pso, IID_PPV_ARGS(&psoOut)),
-                      "CreateGraphicsPipelineState(MeshRenderer) failed");
+        ThrowIfFailed(
+            device->CreateGraphicsPipelineState(&pso, IID_PPV_ARGS(&psoOut)),
+            "CreateGraphicsPipelineState(MeshRenderer) failed");
     };
 
     for (bool transparent : {false, true}) {
@@ -352,8 +350,7 @@ uint32_t MeshRenderer::CreatePipeline(const MeshPipelineDesc &desc) {
         {"TANGENT", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
          D3D12_APPEND_ALIGNED_ELEMENT,
          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-        {"CUSTOM", 0, DXGI_FORMAT_R32_FLOAT, 0,
-         D3D12_APPEND_ALIGNED_ELEMENT,
+        {"CUSTOM", 0, DXGI_FORMAT_R32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
     };
 
@@ -380,8 +377,7 @@ uint32_t MeshRenderer::CreatePipeline(const std::wstring &vertexShaderPath,
 }
 
 uint32_t MeshRenderer::CreateAdditiveNoDepthPipeline(
-    const std::wstring &vertexShaderPath,
-    const std::wstring &pixelShaderPath) {
+    const std::wstring &vertexShaderPath, const std::wstring &pixelShaderPath) {
     MeshPipelineDesc desc{};
     desc.vertexShader = vertexShaderPath;
     desc.pixelShader = pixelShaderPath;
@@ -421,8 +417,7 @@ uint32_t MeshRenderer::CreateInstancedPipeline(
         {"TANGENT", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
          D3D12_APPEND_ALIGNED_ELEMENT,
          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-        {"CUSTOM", 0, DXGI_FORMAT_R32_FLOAT, 0,
-         D3D12_APPEND_ALIGNED_ELEMENT,
+        {"CUSTOM", 0, DXGI_FORMAT_R32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
         {"WORLD", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 0,
          D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
@@ -447,8 +442,7 @@ uint32_t MeshRenderer::CreateInstancedPipeline(
     };
 
     auto makePso = [&](bool transparent, MaterialCullMode cullMode,
-                       bool depthWrite,
-                       ComPtr<ID3D12PipelineState> &psoOut) {
+                       bool depthWrite, ComPtr<ID3D12PipelineState> &psoOut) {
         D3D12_GRAPHICS_PIPELINE_STATE_DESC pso{};
         pso.pRootSignature = rootSignature_.Get();
         pso.VS = {instancedVs->GetBufferPointer(),
@@ -484,9 +478,9 @@ uint32_t MeshRenderer::CreateInstancedPipeline(
         depth.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
         pso.DepthStencilState = depth;
 
-        ThrowIfFailed(device->CreateGraphicsPipelineState(
-                          &pso, IID_PPV_ARGS(&psoOut)),
-                      "CreateGraphicsPipelineState(CustomInstancedMesh) failed");
+        ThrowIfFailed(
+            device->CreateGraphicsPipelineState(&pso, IID_PPV_ARGS(&psoOut)),
+            "CreateGraphicsPipelineState(CustomInstancedMesh) failed");
     };
 
     for (bool transparent : {false, true}) {
@@ -530,10 +524,10 @@ uint32_t MeshRenderer::CreateInstancedPipeline(
     shadowDepth.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
     shadowPso.DepthStencilState = shadowDepth;
 
-    ThrowIfFailed(device->CreateGraphicsPipelineState(
-                      &shadowPso,
-                      IID_PPV_ARGS(&pipelineSet.shadowPipelineState)),
-                  "CreateGraphicsPipelineState(CustomInstancedShadow) failed");
+    ThrowIfFailed(
+        device->CreateGraphicsPipelineState(
+            &shadowPso, IID_PPV_ARGS(&pipelineSet.shadowPipelineState)),
+        "CreateGraphicsPipelineState(CustomInstancedShadow) failed");
 
     if (customInstancedPipelines_.size() >=
         static_cast<size_t>((std::numeric_limits<uint32_t>::max)())) {
@@ -569,8 +563,7 @@ void MeshRenderer::CreateShadowPipelineStates() {
         {"TANGENT", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
          D3D12_APPEND_ALIGNED_ELEMENT,
          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-        {"CUSTOM", 0, DXGI_FORMAT_R32_FLOAT, 0,
-         D3D12_APPEND_ALIGNED_ELEMENT,
+        {"CUSTOM", 0, DXGI_FORMAT_R32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
     };
 
@@ -628,9 +621,9 @@ void MeshRenderer::CreateShadowPipelineStates() {
         depth.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
         pso.DepthStencilState = depth;
 
-        ThrowIfFailed(device->CreateGraphicsPipelineState(
-                          &pso, IID_PPV_ARGS(&psoOut)),
-                      "CreateGraphicsPipelineState(MeshShadow) failed");
+        ThrowIfFailed(
+            device->CreateGraphicsPipelineState(&pso, IID_PPV_ARGS(&psoOut)),
+            "CreateGraphicsPipelineState(MeshShadow) failed");
     };
 
     makePso({vs->GetBufferPointer(), vs->GetBufferSize()},

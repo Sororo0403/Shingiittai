@@ -123,8 +123,7 @@ class GPUParticleSystem {
         DirectX::XMFLOAT4 basisForward{0.0f, 0.0f, 1.0f, 0.0f};
         DirectX::XMFLOAT4 directionAndDirectionalVelocity{0.0f, 1.0f, 0.0f,
                                                           0.0f};
-        DirectX::XMFLOAT4 velocityBiasAndRadialVelocity{0.0f, 0.0f, 0.0f,
-                                                        1.0f};
+        DirectX::XMFLOAT4 velocityBiasAndRadialVelocity{0.0f, 0.0f, 0.0f, 1.0f};
         DirectX::XMFLOAT4 lifeAndFade{0.5f, 0.2f, 0.0f, 0.2f};
         DirectX::XMFLOAT4 scale{0.2f, 0.0f, 0.1f, 0.0f};
         DirectX::XMFLOAT4 accelerationAndTurbulence{};
@@ -175,9 +174,9 @@ class GPUParticleSystem {
     /// </summary>
     void DispatchUpdate();
     void RecordUpdateDispatch(const EmitterForGPU &emitter);
-    static void RecordDrawArgsDispatches(
-        DirectXCommon *dxCommon, SrvManager *srvManager,
-        const std::vector<GPUParticleSystem *> &jobs);
+    static void
+    RecordDrawArgsDispatches(DirectXCommon *dxCommon, SrvManager *srvManager,
+                             const std::vector<GPUParticleSystem *> &jobs);
 
     EmitterForGPU BuildEmitterForGPU(const ParticleEmitterSettings &settings,
                                      uint32_t emit) const;

@@ -1,11 +1,11 @@
-#include "sound/SoundManager.h"
 #include "core/AssetManager.h"
+#include "sound/SoundManager.h"
 
 #include <Objbase.h>
 #include <algorithm>
-#include <cwctype>
-#include <cstring>
 #include <cmath>
+#include <cstring>
+#include <cwctype>
 #include <filesystem>
 #include <limits>
 #include <mfapi.h>
@@ -141,8 +141,8 @@ bool GetWaveFormat(IMFMediaType *mediaType, std::vector<BYTE> &result) {
 
     WAVEFORMATEX *waveFormat = nullptr;
     UINT32 waveFormatSize = 0;
-    if (FAILED(MFCreateWaveFormatExFromMFMediaType(
-            mediaType, &waveFormat, &waveFormatSize)) ||
+    if (FAILED(MFCreateWaveFormatExFromMFMediaType(mediaType, &waveFormat,
+                                                   &waveFormatSize)) ||
         waveFormat == nullptr || waveFormatSize == 0) {
         if (waveFormat != nullptr) {
             CoTaskMemFree(waveFormat);
@@ -162,8 +162,7 @@ bool SeekStreamToStart(IMFSourceReader *reader) {
     PropVariantInit(&position);
     position.vt = VT_I8;
     position.hVal.QuadPart = 0;
-    const HRESULT hr =
-        reader->SetCurrentPosition(GUID_NULL, position);
+    const HRESULT hr = reader->SetCurrentPosition(GUID_NULL, position);
     PropVariantClear(&position);
     return SUCCEEDED(hr);
 }
@@ -209,8 +208,7 @@ bool ReadNextStreamChunk(IMFSourceReader *reader, bool &sourceEnded,
             return false;
         }
         const size_t oldSize = decodedPcm.size();
-        if (locked.Size() >
-            (std::numeric_limits<size_t>::max)() - oldSize) {
+        if (locked.Size() > (std::numeric_limits<size_t>::max)() - oldSize) {
             decodedPcm.clear();
             return false;
         }
@@ -222,8 +220,6 @@ bool ReadNextStreamChunk(IMFSourceReader *reader, bool &sourceEnded,
 }
 
 } // namespace
-
-
 
 uint32_t SoundManager::PlayStream(const std::wstring &path, float volume,
                                   bool loop) {
@@ -329,7 +325,8 @@ bool SoundManager::SubmitNextStreamBuffer(PlayingVoice &playingVoice) {
 
     bool reachedEnd = false;
     std::vector<BYTE> pcm;
-    if (!ReadNextStreamChunk(playingVoice.streamReader.Get(), reachedEnd, pcm)) {
+    if (!ReadNextStreamChunk(playingVoice.streamReader.Get(), reachedEnd,
+                             pcm)) {
         playingVoice.streamSourceEnded = true;
         return false;
     }
@@ -386,7 +383,8 @@ bool SoundManager::RestartLoopingStream(PlayingVoice &playingVoice,
         return false;
     }
     reachedEnd = false;
-    if (!ReadNextStreamChunk(playingVoice.streamReader.Get(), reachedEnd, pcm)) {
+    if (!ReadNextStreamChunk(playingVoice.streamReader.Get(), reachedEnd,
+                             pcm)) {
         playingVoice.streamSourceEnded = true;
         return false;
     }

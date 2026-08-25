@@ -254,9 +254,10 @@ ID3D12RootSignature *GetSharedParticleDrawRootSignature(ID3D12Device *device) {
     return gCachedParticleDrawRootSignature.Get();
 }
 
-ID3D12PipelineState *GetOrCreateParticleDrawPso(
-    ID3D12Device *device, ID3D12RootSignature *rootSignature,
-    const std::wstring &pixelShaderPath) {
+ID3D12PipelineState *
+GetOrCreateParticleDrawPso(ID3D12Device *device,
+                           ID3D12RootSignature *rootSignature,
+                           const std::wstring &pixelShaderPath) {
     ResetParticleDrawCacheIfDeviceChanged(device);
 
     auto found = gParticleDrawPsoCache.find(pixelShaderPath);
@@ -302,17 +303,17 @@ ID3D12PipelineState *GetOrCreateParticleDrawPso(
     drawPso.DepthStencilState = depth;
 
     ComPtr<ID3D12PipelineState> pso;
-    ThrowIfFailed(device->CreateGraphicsPipelineState(
-                      &drawPso, IID_PPV_ARGS(&pso)),
-                  "CreateGraphicsPipelineState(GPUParticleDraw) failed");
+    ThrowIfFailed(
+        device->CreateGraphicsPipelineState(&drawPso, IID_PPV_ARGS(&pso)),
+        "CreateGraphicsPipelineState(GPUParticleDraw) failed");
 
     ID3D12PipelineState *result = pso.Get();
     gParticleDrawPsoCache[pixelShaderPath] = std::move(pso);
     return result;
 }
 
-ID3D12CommandSignature *GetSharedParticleDrawCommandSignature(
-    ID3D12Device *device) {
+ID3D12CommandSignature *
+GetSharedParticleDrawCommandSignature(ID3D12Device *device) {
     ResetParticleDrawCacheIfDeviceChanged(device);
     if (gCachedParticleDrawCommandSignature) {
         return gCachedParticleDrawCommandSignature.Get();
@@ -360,11 +361,9 @@ class ParticleUploadPassScope {
     bool active_ = false;
 };
 
-}
+} // namespace
 
-GPUParticleSystem::~GPUParticleSystem() {
-    ReleaseResources();
-}
+GPUParticleSystem::~GPUParticleSystem() { ReleaseResources(); }
 
 class GPUParticleSystem::InitializationGuard {
   public:
@@ -450,9 +449,11 @@ void GPUParticleSystem::Initialize(DirectXCommon *dxCommon,
 
 void GPUParticleSystem::SetEmitterSettings(
     const ParticleEmitterSettings &settings) {
-    ParticleEmitterSettings normalized = NormalizeParticleEmitterSettings(settings);
+    ParticleEmitterSettings normalized =
+        NormalizeParticleEmitterSettings(settings);
     const bool keepFrequencyTime =
-        IsContinuousEmitter(emitterSettings_) && IsContinuousEmitter(normalized) &&
+        IsContinuousEmitter(emitterSettings_) &&
+        IsContinuousEmitter(normalized) &&
         std::abs(emitterSettings_.emitRate - normalized.emitRate) < 0.0001f;
     emitterSettings_ = normalized;
     if (!keepFrequencyTime) {
@@ -485,7 +486,8 @@ void GPUParticleSystem::SetMaterialSettings(
 }
 
 void GPUParticleSystem::EmitOnce(const ParticleEmitterSettings &settings) {
-    ParticleEmitterSettings normalized = NormalizeParticleEmitterSettings(settings);
+    ParticleEmitterSettings normalized =
+        NormalizeParticleEmitterSettings(settings);
     emitterSettings_ = normalized;
     emitterFrequencyTime_ = 0.0f;
     activeTimeRemaining_ =
@@ -611,8 +613,8 @@ void GPUParticleSystem::Draw(const Camera &camera) {
     cmd->SetGraphicsRootDescriptorTable(
         3, textureManager_->GetGpuHandle(noiseTextureId));
     cmd->SetGraphicsRootDescriptorTable(4, activeIndexSrvGpuHandle_);
-    cmd->ExecuteIndirect(drawCommandSignature_.Get(), 1, drawArgsResource_.Get(),
-                         0, nullptr, 0);
+    cmd->ExecuteIndirect(drawCommandSignature_.Get(), 1,
+                         drawArgsResource_.Get(), 0, nullptr, 0);
 }
 
 void GPUParticleSystem::UpdateDrawConstants(const Camera &camera) {
@@ -623,8 +625,7 @@ void GPUParticleSystem::UpdateDrawConstants(const Camera &camera) {
     XMMATRIX billboard = camera.GetView();
     billboard.r[3] = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
     const XMVECTOR billboardDeterminant = XMMatrixDeterminant(billboard);
-    const float billboardDeterminantValue =
-        XMVectorGetX(billboardDeterminant);
+    const float billboardDeterminantValue = XMVectorGetX(billboardDeterminant);
     billboard = std::isfinite(billboardDeterminantValue) &&
                         std::abs(billboardDeterminantValue) > 0.000001f
                     ? XMMatrixInverse(nullptr, billboard)
@@ -640,12 +641,10 @@ void GPUParticleSystem::UpdateDrawConstants(const Camera &camera) {
         ClampColor(emitterSettings_.tintColor, {1.0f, 1.0f, 1.0f, 1.0f});
     mappedDrawCB_->atlasInfo = {
         static_cast<float>((std::max)(1u, emitterSettings_.atlasColumns)),
-        static_cast<float>((std::max)(1u, emitterSettings_.atlasRows)),
-        0.0f,
+        static_cast<float>((std::max)(1u, emitterSettings_.atlasRows)), 0.0f,
         0.0f};
     mappedDrawCB_->materialParams0 = materialSettings_.params0;
     mappedDrawCB_->materialParams1 = materialSettings_.params1;
-
 }
 
 void GPUParticleSystem::DispatchPendingUpdate() {
@@ -685,11 +684,11 @@ void GPUParticleSystem::DispatchUpdate() {
     cmd->ResourceBarrier(static_cast<UINT>(barriers.size()), barriers.data());
 
     const UINT clearValues[4] = {};
-    cmd->ClearUnorderedAccessViewUint(activeCountUavGpuHandle_,
-                                      activeCountUavCpuHandle_,
-                                      activeCountResource_.Get(), clearValues,
-                                      0, nullptr);
-    auto clearBarrier = CD3DX12_RESOURCE_BARRIER::UAV(activeCountResource_.Get());
+    cmd->ClearUnorderedAccessViewUint(
+        activeCountUavGpuHandle_, activeCountUavCpuHandle_,
+        activeCountResource_.Get(), clearValues, 0, nullptr);
+    auto clearBarrier =
+        CD3DX12_RESOURCE_BARRIER::UAV(activeCountResource_.Get());
     cmd->ResourceBarrier(1, &clearBarrier);
 
     std::vector<ParticleEmitterSettings> emitSettings;
@@ -808,29 +807,28 @@ GPUParticleSystem::BuildEmitterForGPU(const ParticleEmitterSettings &settings,
                           settings.basisRight.z, 0.0f};
     emitter.basisUp = {settings.basisUp.x, settings.basisUp.y,
                        settings.basisUp.z, 0.0f};
-    emitter.basisForward = {settings.basisForward.x,
-                            settings.basisForward.y,
+    emitter.basisForward = {settings.basisForward.x, settings.basisForward.y,
                             settings.basisForward.z, 0.0f};
     emitter.directionAndDirectionalVelocity = {
         settings.direction.x, settings.direction.y, settings.direction.z,
         settings.directionalVelocity};
     emitter.velocityBiasAndRadialVelocity = {
-        settings.velocityBias.x, settings.velocityBias.y, settings.velocityBias.z,
-        settings.radialVelocity};
+        settings.velocityBias.x, settings.velocityBias.y,
+        settings.velocityBias.z, settings.radialVelocity};
     emitter.lifeAndFade = {settings.baseLifeTime, settings.lifeTimeRandom,
                            settings.fadeInTime, settings.fadeOutTime};
     emitter.scale = {settings.startScale, settings.endScale,
                      settings.scaleRandom, settings.stretch};
     emitter.accelerationAndTurbulence = {
-        settings.acceleration.x, settings.acceleration.y, settings.acceleration.z,
-        settings.turbulence};
+        settings.acceleration.x, settings.acceleration.y,
+        settings.acceleration.z, settings.turbulence};
     emitter.motion = {settings.damping, settings.fadeOutPower,
                       static_cast<float>(settings.atlasColumns),
                       static_cast<float>(settings.atlasRows)};
-    emitter.atlasAndRotation = {
-        static_cast<float>(settings.atlasFrameStart),
-        static_cast<float>(settings.atlasFrameCount), settings.rotationSpeed,
-        settings.randomStartRotation ? 1.0f : 0.0f};
+    emitter.atlasAndRotation = {static_cast<float>(settings.atlasFrameStart),
+                                static_cast<float>(settings.atlasFrameCount),
+                                settings.rotationSpeed,
+                                settings.randomStartRotation ? 1.0f : 0.0f};
     emitter.tintColor = settings.tintColor;
     emitter.config = {
         static_cast<uint32_t>(settings.emissionType),
@@ -929,9 +927,9 @@ void GPUParticleSystem::CreatePipelineStates() {
     D3D12_COMPUTE_PIPELINE_STATE_DESC argsPso{};
     argsPso.pRootSignature = argsRootSignature_.Get();
     argsPso.CS = {argsCs->GetBufferPointer(), argsCs->GetBufferSize()};
-    ThrowIfFailed(device->CreateComputePipelineState(&argsPso,
-                                                     IID_PPV_ARGS(&argsPSO_)),
-                  "CreateComputePipelineState(GPUParticleArgs) failed");
+    ThrowIfFailed(
+        device->CreateComputePipelineState(&argsPso, IID_PPV_ARGS(&argsPSO_)),
+        "CreateComputePipelineState(GPUParticleArgs) failed");
 
     drawCommandSignature_ = GetSharedParticleDrawCommandSignature(device);
 
@@ -1281,7 +1279,8 @@ void GPUParticleSystem::RestorePendingEmitters(
     totalTime_ = 0.0f;
     emitterFrequencyTime_ = 0.0f;
     activeTimeRemaining_ = 0.0f;
-    emitterSettings_ = NormalizeParticleEmitterSettings(ParticleEmitterSettings{});
+    emitterSettings_ =
+        NormalizeParticleEmitterSettings(ParticleEmitterSettings{});
     pendingEmitSettings_ = std::move(pendingSettings);
     for (const ParticleEmitterSettings &settings : pendingEmitSettings_) {
         emitterSettings_ = settings;
@@ -1315,7 +1314,7 @@ GPUParticleSystem::CreateInitialParticles() const {
 
 bool GPUParticleSystem::HasInitializedResources() const {
     const std::array<bool, 18> ready = {
-        particleResource_ != nullptr,       freeListResource_ != nullptr,
+        particleResource_ != nullptr,      freeListResource_ != nullptr,
         freeListIndexResource_ != nullptr, activeIndexResource_ != nullptr,
         activeCountResource_ != nullptr,   drawArgsResource_ != nullptr,
         updateConstantBuffer_ != nullptr,  drawConstantBuffer_ != nullptr,
@@ -1325,9 +1324,8 @@ bool GPUParticleSystem::HasInitializedResources() const {
         activeIndexSrvGpuHandle_.ptr != 0, activeIndexUavGpuHandle_.ptr != 0,
         activeCountUavGpuHandle_.ptr != 0, drawArgsUavGpuHandle_.ptr != 0,
     };
-    return std::all_of(ready.begin(), ready.end(), [](bool value) {
-        return value;
-    });
+    return std::all_of(ready.begin(), ready.end(),
+                       [](bool value) { return value; });
 }
 
 bool GPUParticleSystem::IsReadyToDraw() const {
@@ -1346,15 +1344,13 @@ bool GPUParticleSystem::IsReadyToDraw() const {
         particleSrvGpuHandle_.ptr != 0,
         activeIndexSrvGpuHandle_.ptr != 0,
     };
-    return std::all_of(ready.begin(), ready.end(), [](bool value) {
-        return value;
-    });
+    return std::all_of(ready.begin(), ready.end(),
+                       [](bool value) { return value; });
 }
 
 bool GPUParticleSystem::HasDrawWork() const {
     return updatePending_ || !pendingEmitSettings_.empty() ||
-           activeTimeRemaining_ > 0.0f ||
-           IsContinuousEmitter(emitterSettings_);
+           activeTimeRemaining_ > 0.0f || IsContinuousEmitter(emitterSettings_);
 }
 
 void GPUParticleSystem::ReleaseSrvDescriptors() {
@@ -1362,10 +1358,9 @@ void GPUParticleSystem::ReleaseSrvDescriptors() {
         return;
     }
     uint32_t *indices[] = {
-        &particleSrvIndex_,       &particleUavIndex_,
-        &freeListUavIndex_,       &freeListIndexUavIndex_,
-        &activeIndexSrvIndex_,    &activeIndexUavIndex_,
-        &activeCountUavIndex_,    &drawArgsUavIndex_,
+        &particleSrvIndex_,      &particleUavIndex_,    &freeListUavIndex_,
+        &freeListIndexUavIndex_, &activeIndexSrvIndex_, &activeIndexUavIndex_,
+        &activeCountUavIndex_,   &drawArgsUavIndex_,
     };
     for (uint32_t *index : indices) {
         if (*index != UINT32_MAX) {
@@ -1389,8 +1384,8 @@ void GPUParticleSystem::UnmapConstantBuffers() {
 void GPUParticleSystem::ReleaseResources() {
 
     const bool hasGpuResources =
-        updateConstantBuffer_ || drawConstantBuffer_ ||
-        particleResource_ || particleUploadResource_ || freeListResource_ ||
+        updateConstantBuffer_ || drawConstantBuffer_ || particleResource_ ||
+        particleUploadResource_ || freeListResource_ ||
         freeListUploadResource_ || freeListIndexResource_ ||
         freeListIndexUploadResource_ || activeIndexResource_ ||
         activeCountResource_ || drawArgsResource_;

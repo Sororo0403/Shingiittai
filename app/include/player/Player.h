@@ -16,8 +16,8 @@ class Input;
 class Player {
   public:
     static constexpr size_t kSwordCount = 2;
-  public:
 
+  public:
     void Initialize(uint32_t playerModelId, uint32_t swordModelId);
     void SetInputCalibration(const SwordInputCalibration &calibration);
     void SetCameraSwordSlashSuppressed(bool suppressed) {
@@ -32,17 +32,17 @@ class Player {
     bool IsHandActive(size_t handIndex) const {
         return swordUdpController_.GetDebugHandState(handIndex).active;
     }
-    bool HasFreshHandInput() const { return swordUdpController_.HasFreshInput(); }
+    bool HasFreshHandInput() const {
+        return swordUdpController_.HasFreshInput();
+    }
 
     void Update(Input *input, float deltaTime,
                 const DirectX::XMFLOAT3 &lookTarget, float cameraYaw,
-                float controlDeltaTime = -1.0f,
-                bool suppressLookAt = false,
+                float controlDeltaTime = -1.0f, bool suppressLookAt = false,
                 bool suppressMovement = false);
     void UpdateDebugSwordPoses(const SwordPose &leftPose,
                                const SwordPose &rightPose, float deltaTime,
-                               const DirectX::XMFLOAT3 &position,
-                               float yaw);
+                               const DirectX::XMFLOAT3 &position, float yaw);
     void UpdateDemo(float deltaTime, const DirectX::XMFLOAT3 &lookTarget);
 
     void Draw(ModelManager *modelManager, const Camera &camera,
@@ -97,6 +97,7 @@ class Player {
         bladeClashPoseForwardLean_ = false;
     }
     bool UsesGamepadCameraLook() const { return useGamepadCameraLook_; }
+
   private:
     Transform BuildPlayerVisual(float visualScale) const;
     ModelDrawEffect MakeDamageFlashEffect(bool forceOpaque,
@@ -118,8 +119,7 @@ class Player {
     void UpdateWeaponRules(Input *input, SwordPose &leftPose,
                            SwordPose &rightPose, bool useDualControls,
                            float deltaTime);
-    void UpdateBodyState(float deltaTime,
-                         const DirectX::XMFLOAT3 &lookTarget,
+    void UpdateBodyState(float deltaTime, const DirectX::XMFLOAT3 &lookTarget,
                          bool suppressLookAt, bool suppressMovement);
     void ResolveInputSwordPoses(Input *input, float inputDeltaTime,
                                 bool useUdpSword, bool useKeyboardMouse,
@@ -129,6 +129,7 @@ class Player {
                                     SwordPose &rightPose) const;
     void UpdateSwords(const SwordPose &leftPose, const SwordPose &rightPose,
                       float inputDeltaTime, bool allowMotionSlash);
+
   private:
     static constexpr float kHandHeight = 1.0f;
     static constexpr float kArmLength = 1.0f;

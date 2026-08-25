@@ -108,8 +108,7 @@ class GameScene : public BaseScene {
     int ResolveTutorialMessageIndex(ActionKind actionKind,
                                     ActionStep actionStep,
                                     float releaseRatio) const;
-    void DrawTutorialMessagePanel(float width, float height,
-                                  int messageIndex);
+    void DrawTutorialMessagePanel(float width, float height, int messageIndex);
     void DrawTutorialExcellent(float width, float height);
     void DrawTutorialEntryFade();
     void DrawTutorialSlashCounter(float x, float y, float scale, float alpha);
@@ -141,14 +140,12 @@ class GameScene : public BaseScene {
     void SyncEnemyAnimation();
     void UpdateBladeClashEnemyAnimation(float deltaTime);
     void SelectBladeClashStartupClip(bool hasTeleport, bool hasSweep,
-                                     std::string &clip,
-                                     float &clipRatio) const;
+                                     std::string &clip, float &clipRatio) const;
     void SelectBladeClashGuardBreakClip(bool hasTeleport, bool hasSweep,
                                         std::string &clip,
                                         float &clipRatio) const;
-    void SelectBladeClashWinClip(bool hasTeleport, bool hasSweep,
-                                 bool hasSmash, std::string &clip,
-                                 float &clipRatio) const;
+    void SelectBladeClashWinClip(bool hasTeleport, bool hasSweep, bool hasSmash,
+                                 std::string &clip, float &clipRatio) const;
     void SelectBladeClashLossClip(bool hasTeleport, bool hasSweep,
                                   bool hasSmash, std::string &clip,
                                   float &clipRatio) const;
@@ -194,8 +191,7 @@ class GameScene : public BaseScene {
     bool IsTutorialRedWaitStep() const;
     bool IsTutorialGreenCutStep() const;
     void BeginTutorialAttackIfReady(float deltaTime);
-    bool DidTutorialSlashStart(
-        const std::array<bool, 2> &slashStates) const;
+    bool DidTutorialSlashStart(const std::array<bool, 2> &slashStates) const;
     void HandleTutorialRedEarlySlash(
         const std::array<bool, 2> &swordSlashStatesBeforeCombat,
         bool tutorialSlashStarted);
@@ -206,9 +202,10 @@ class GameScene : public BaseScene {
     void UpdateTutorialRedWait(
         float deltaTime,
         const std::array<bool, 2> &swordSlashStatesBeforeCombat);
-    void HandleTutorialEnemyActionTransition(
-        ActionKind previousKind, ActionStep previousStep,
-        ActionKind currentKind, ActionStep currentStep);
+    void HandleTutorialEnemyActionTransition(ActionKind previousKind,
+                                             ActionStep previousStep,
+                                             ActionKind currentKind,
+                                             ActionStep currentStep);
     void UpdateTutorialEnemyAnimation(float deltaTime);
     void UpdateTutorialCombat(
         float deltaTime,
@@ -236,25 +233,21 @@ class GameScene : public BaseScene {
     bool UpdateVictoryBattleCamera(const BattleCameraContext &cameraContext);
     bool UpdateIntroBattleCamera(const BattleCameraContext &cameraContext);
     bool UpdateDefeatBattleCamera(const BattleCameraContext &cameraContext);
-    bool UpdateBladeClashFinishCamera(
-        const BattleCameraContext &cameraContext);
+    bool UpdateBladeClashFinishCamera(const BattleCameraContext &cameraContext);
     void ConfigureBattleCameraFov(const BattleCameraContext &cameraContext);
-    bool UpdateActiveBladeClashCamera(
-        const BattleCameraContext &cameraContext);
-    bool UpdatePlayerViewBattleCamera(
-        const BattleCameraContext &cameraContext);
-    void UpdateThirdPersonBattleCamera(
-        const BattleCameraContext &cameraContext);
-    void UpdateThirdPersonLockAssist(
-        const BattleCameraContext &cameraContext);
-    DirectX::XMFLOAT3 ComputeThirdPersonCameraPosition(
-        const BattleCameraContext &cameraContext,
-        const DirectX::XMFLOAT3 &forward,
-        const DirectX::XMFLOAT3 &right);
-    DirectX::XMFLOAT3 ComputeThirdPersonLookAt(
-        const BattleCameraContext &cameraContext,
-        const DirectX::XMFLOAT3 &cameraTargetBase,
-        const DirectX::XMFLOAT3 &forward);
+    bool UpdateActiveBladeClashCamera(const BattleCameraContext &cameraContext);
+    bool UpdatePlayerViewBattleCamera(const BattleCameraContext &cameraContext);
+    void
+    UpdateThirdPersonBattleCamera(const BattleCameraContext &cameraContext);
+    void UpdateThirdPersonLockAssist(const BattleCameraContext &cameraContext);
+    DirectX::XMFLOAT3
+    ComputeThirdPersonCameraPosition(const BattleCameraContext &cameraContext,
+                                     const DirectX::XMFLOAT3 &forward,
+                                     const DirectX::XMFLOAT3 &right);
+    DirectX::XMFLOAT3
+    ComputeThirdPersonLookAt(const BattleCameraContext &cameraContext,
+                             const DirectX::XMFLOAT3 &cameraTargetBase,
+                             const DirectX::XMFLOAT3 &forward);
     struct CombatFrameContext {
         std::array<CollisionManager::BodyId, 3> enemyHurtBodies{};
         ActionKind enemyActionKind = ActionKind::None;
@@ -285,13 +278,12 @@ class GameScene : public BaseScene {
     bool ConfigureCounterCombatWindows(CombatFrameContext &combat);
     void ConfigureEnemyAttackCollision(CombatFrameContext &combat,
                                        bool attackCommitted);
-    void TriggerSuccessfulCounter(CombatFrameContext &combat,
-                                  size_t swordIndex, float enemyDamage,
-                                  float hitCooldown);
+    void TriggerSuccessfulCounter(CombatFrameContext &combat, size_t swordIndex,
+                                  float enemyDamage, float hitCooldown);
     bool IsEnemyHurtBodyHit(const CombatFrameContext &combat,
                             CollisionManager::BodyId attackBody) const;
-    bool IsProjectileInDeflectRange(
-        const ArcaneProjectileState &projectile) const;
+    bool
+    IsProjectileInDeflectRange(const ArcaneProjectileState &projectile) const;
     bool IsProjectileSlashAligned(const ArcaneProjectileState &projectile,
                                   const Sword &sword) const;
     void HandleBadSlashPunish(CombatFrameContext &combat);
@@ -299,10 +291,10 @@ class GameScene : public BaseScene {
     bool ProcessSwordAttack(CombatFrameContext &combat, size_t swordIndex);
     bool TrySwordCounter(CombatFrameContext &combat, size_t swordIndex,
                          const Sword &sword);
-    bool TryReflectProjectiles(CombatFrameContext &combat,
-                               size_t swordIndex, const Sword &sword);
-    bool TryReflectProjectile(CombatFrameContext &combat,
-                              size_t swordIndex, const Sword &sword,
+    bool TryReflectProjectiles(CombatFrameContext &combat, size_t swordIndex,
+                               const Sword &sword);
+    bool TryReflectProjectile(CombatFrameContext &combat, size_t swordIndex,
+                              const Sword &sword,
                               ArcaneProjectileState &projectile,
                               bool slashStarted);
     bool TryNormalSwordHit(CombatFrameContext &combat, size_t swordIndex,
@@ -335,16 +327,15 @@ class GameScene : public BaseScene {
     void EmitEnemyActionParticles(ActionKind kind, ActionStep step);
     void EmitArcaneLaserParticles(float deltaTime);
     void EmitArcaneLaserChargeParticles(bool cataclysmLaser,
-                                         const DirectX::XMFLOAT3 &muzzle,
-                                         const DirectX::XMFLOAT3 &direction);
+                                        const DirectX::XMFLOAT3 &muzzle,
+                                        const DirectX::XMFLOAT3 &direction);
     void EmitArcaneProjectileTrail(const ArcaneProjectileState &projectile,
                                    const DirectX::XMFLOAT3 &fallbackDirection);
-    void EmitArcaneProjectileTrailBursts(
-        const ArcaneProjectileState &projectile,
-        const DirectX::XMFLOAT3 &projectileDir);
-    void EmitArcaneProjectileTrailSmoke(
-        const ArcaneProjectileState &projectile,
-        const DirectX::XMFLOAT3 &projectileDir);
+    void
+    EmitArcaneProjectileTrailBursts(const ArcaneProjectileState &projectile,
+                                    const DirectX::XMFLOAT3 &projectileDir);
+    void EmitArcaneProjectileTrailSmoke(const ArcaneProjectileState &projectile,
+                                        const DirectX::XMFLOAT3 &projectileDir);
     bool HasReflectedArcaneProjectiles() const;
     void EmitEnemyCueParticles(float deltaTime);
     bool EmitArcaneProjectileCue(const ArcaneProjectileState &projectile);
@@ -358,8 +349,7 @@ class GameScene : public BaseScene {
                                 bool farWarpSlashActive) const;
     bool ShouldSuppressEnemyAttackCue(bool releaseCounterCueVisible,
                                       bool farWarpSlashActive) const;
-    void EmitEnemyAttackCueLine(ActionKind kind,
-                                bool releaseCounterCueVisible);
+    void EmitEnemyAttackCueLine(ActionKind kind, bool releaseCounterCueVisible);
     void BeginArcaneProjectileVolley();
     void UpdateArcaneProjectileVolley(float deltaTime);
     bool FireCataclysmVolleyProjectile();
@@ -371,8 +361,7 @@ class GameScene : public BaseScene {
     void ConfigureArcaneArcProjectileAim(DirectX::XMFLOAT3 &muzzle,
                                          DirectX::XMFLOAT3 &direction) const;
     void InitializeArcaneProjectileState(ArcaneProjectileState &projectile,
-                                         bool cataclysmShot,
-                                         bool arcaneArcShot,
+                                         bool cataclysmShot, bool arcaneArcShot,
                                          const DirectX::XMFLOAT3 &muzzle,
                                          const DirectX::XMFLOAT3 &direction);
     void ResetArcaneProjectile();
@@ -402,8 +391,8 @@ class GameScene : public BaseScene {
     DirectX::XMFLOAT2 GetArcaneProjectileCueDirection() const;
     uint32_t GetCurrentEnemyTextureId() const;
     void ApplyBulletTextureToModel(uint32_t textureId);
-    DirectX::XMFLOAT2
-    ProjectWorldDirectionToCueDirection(const DirectX::XMFLOAT3 &worldDir) const;
+    DirectX::XMFLOAT2 ProjectWorldDirectionToCueDirection(
+        const DirectX::XMFLOAT3 &worldDir) const;
     void DrawArcaneProjectile();
     void DrawPlayerChargedProjectile();
     void UpdateBattlePostProcessState(float deltaTime);

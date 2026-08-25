@@ -1,13 +1,12 @@
+#include "AppSceneServices.h"
 #include "DirectXCommon.h"
 #include "GameScene.h"
 #include "Input.h"
-#include "AppSceneServices.h"
-#include "core/AssetManager.h"
 #include "Lighting.h"
 #include "ModelManager.h"
-#include "RenderPassController.h"
 #include "PostEffectManager.h"
 #include "PostProcessSystem.h"
+#include "RenderPassController.h"
 #include "SceneContext.h"
 #include "SceneManager.h"
 #include "SoundManager.h"
@@ -16,21 +15,22 @@
 #include "TextureManager.h"
 #include "TitleScene.h"
 #include "WinApp.h"
+#include "core/AssetManager.h"
 #include <Windows.h>
 #include <filesystem>
 #include <memory>
-#include <system_error>
 #include <string>
+#include <system_error>
 
 namespace {
 std::filesystem::path ResolveExecutableDirectory() {
     std::wstring path(MAX_PATH, L'\0');
-    DWORD length =
-        GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
+    DWORD length = GetModuleFileNameW(nullptr, path.data(),
+                                      static_cast<DWORD>(path.size()));
     while (length == path.size()) {
         path.resize(path.size() * 2, L'\0');
-        length =
-            GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
+        length = GetModuleFileNameW(nullptr, path.data(),
+                                    static_cast<DWORD>(path.size()));
     }
     path.resize(length);
     return std::filesystem::path(path).parent_path();
@@ -46,7 +46,8 @@ class HandUdpSenderProcess {
         }
 
         const std::filesystem::path runtimeRoot = ResolveRuntimeRoot();
-        const std::filesystem::path sourceDir = HandTrackingSourceDir(runtimeRoot);
+        const std::filesystem::path sourceDir =
+            HandTrackingSourceDir(runtimeRoot);
         const std::filesystem::path modelPath =
             sourceDir / L"models" / L"hand_landmarker.task";
         const std::filesystem::path packagedExe = PackagedExePath(runtimeRoot);
@@ -91,7 +92,8 @@ class HandUdpSenderProcess {
         }
 
         const std::filesystem::path runtimeRoot = ResolveRuntimeRoot();
-        const std::filesystem::path sourceDir = HandTrackingSourceDir(runtimeRoot);
+        const std::filesystem::path sourceDir =
+            HandTrackingSourceDir(runtimeRoot);
         const std::filesystem::path modelPath =
             sourceDir / L"models" / L"hand_landmarker.task";
         const std::filesystem::path modelArg =
@@ -101,8 +103,8 @@ class HandUdpSenderProcess {
             return false;
         }
 
-        const std::wstring command = BuildCommand(runtimeRoot, sourceDir,
-                                                   modelArg);
+        const std::wstring command =
+            BuildCommand(runtimeRoot, sourceDir, modelArg);
         if (command.empty()) {
             return false;
         }
@@ -167,8 +169,8 @@ class HandUdpSenderProcess {
     static void AppendCameraArgument(std::wstring &command) {
         wchar_t cameraSource[1024]{};
         constexpr DWORD capacity = static_cast<DWORD>(std::size(cameraSource));
-        const DWORD length = GetEnvironmentVariableW(
-            L"SHINGIITTAI_MAIN_CAMERA", cameraSource, capacity);
+        const DWORD length = GetEnvironmentVariableW(L"SHINGIITTAI_MAIN_CAMERA",
+                                                     cameraSource, capacity);
         if (!command.empty() && length > 0 && length < capacity) {
             command += L" --camera \"";
             command += std::wstring(cameraSource, length);
@@ -176,10 +178,10 @@ class HandUdpSenderProcess {
         }
     }
 
-    static std::wstring BuildCommand(
-        const std::filesystem::path &runtimeRoot,
-        const std::filesystem::path &sourceDir,
-        const std::filesystem::path &modelArgument) {
+    static std::wstring
+    BuildCommand(const std::filesystem::path &runtimeRoot,
+                 const std::filesystem::path &sourceDir,
+                 const std::filesystem::path &modelArgument) {
         const std::filesystem::path scriptPath =
             sourceDir / L"src" / L"hand_udp_sender.py";
         const std::filesystem::path venvPython = VenvPythonPath(runtimeRoot);
@@ -191,17 +193,15 @@ class HandUdpSenderProcess {
                             modelArgument.wstring() + L"\"";
         } else if (std::filesystem::exists(scriptPath)) {
             scriptCommand = L"py -3.11 \"" + scriptPath.wstring() +
-                            L"\" --model \"" + modelArgument.wstring() +
-                            L"\"";
+                            L"\" --model \"" + modelArgument.wstring() + L"\"";
         }
         AppendCameraArgument(scriptCommand);
 
         std::wstring packagedCommand;
         const std::filesystem::path packagedExe = PackagedExePath(runtimeRoot);
         if (std::filesystem::exists(packagedExe)) {
-            packagedCommand = L"\"" + packagedExe.wstring() +
-                              L"\" --model \"" + modelArgument.wstring() +
-                              L"\"";
+            packagedCommand = L"\"" + packagedExe.wstring() + L"\" --model \"" +
+                              modelArgument.wstring() + L"\"";
             AppendCameraArgument(packagedCommand);
         }
         return packagedCommand.empty() ? scriptCommand : packagedCommand;
@@ -242,9 +242,8 @@ class HandUdpSenderProcess {
         PROCESS_INFORMATION process{};
         const BOOL started = CreateProcessW(
             nullptr, mutableCommand.data(), nullptr, nullptr,
-            redirectLogs ? TRUE : FALSE,
-            CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr,
-            runtimeRoot.wstring().c_str(), &startup, &process);
+            redirectLogs ? TRUE : FALSE, CREATE_NO_WINDOW | CREATE_SUSPENDED,
+            nullptr, runtimeRoot.wstring().c_str(), &startup, &process);
         CloseChildLogs(logs);
         if (!started) {
             if (job != nullptr) {
@@ -252,7 +251,8 @@ class HandUdpSenderProcess {
             }
             return false;
         }
-        if (job != nullptr && !AssignProcessToJobObject(job, process.hProcess)) {
+        if (job != nullptr &&
+            !AssignProcessToJobObject(job, process.hProcess)) {
             CloseHandle(job);
             job = nullptr;
         }
@@ -290,28 +290,28 @@ class HandUdpSenderProcess {
 
     static bool IsDisabled() {
         wchar_t value[8]{};
-        const DWORD length = GetEnvironmentVariableW(
-            L"SHINGIITTAI_DISABLE_HAND_CAMERA", value,
-            static_cast<DWORD>(std::size(value)));
+        const DWORD length =
+            GetEnvironmentVariableW(L"SHINGIITTAI_DISABLE_HAND_CAMERA", value,
+                                    static_cast<DWORD>(std::size(value)));
         return length > 0 && value[0] == L'1';
     }
 
-    static std::filesystem::path HandTrackingSourceDir(
-        const std::filesystem::path &root) {
+    static std::filesystem::path
+    HandTrackingSourceDir(const std::filesystem::path &root) {
         return root / L"hand_tracking";
     }
 
-    static std::filesystem::path VenvPythonPath(
-        const std::filesystem::path &root) {
+    static std::filesystem::path
+    VenvPythonPath(const std::filesystem::path &root) {
         return root / L"generated" / L"intermediate" / L"HandUdpSender" /
                L".venv" / L"Scripts" / L"python.exe";
     }
 
-    static std::filesystem::path PackagedExePath(
-        const std::filesystem::path &root) {
-        std::filesystem::path runtimePackagedExe =
-            HandTrackingSourceDir(root) / L"hand_udp_sender" /
-            L"hand_udp_sender.exe";
+    static std::filesystem::path
+    PackagedExePath(const std::filesystem::path &root) {
+        std::filesystem::path runtimePackagedExe = HandTrackingSourceDir(root) /
+                                                   L"hand_udp_sender" /
+                                                   L"hand_udp_sender.exe";
         if (std::filesystem::exists(runtimePackagedExe)) {
             return runtimePackagedExe;
         }
@@ -398,10 +398,11 @@ class HandUdpSenderProcess {
     DWORD lastStartAttemptTick_ = 0;
 };
 
-}
+} // namespace
 
 int RunApp(HINSTANCE hInstance, int nCmdShow) {
-    const std::filesystem::path executableDirectory = ResolveExecutableDirectory();
+    const std::filesystem::path executableDirectory =
+        ResolveExecutableDirectory();
     SetCurrentDirectoryW(executableDirectory.wstring().c_str());
     AssetManager::SetAssetRoot(executableDirectory);
 
@@ -453,10 +454,8 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
     ModelManager modelManager;
     modelManager.Initialize(&dxCommon, &srvManager, &textureManager);
     DirectX::XMFLOAT4X4 identityLightViewProjection{
-        1.0f, 0.0f, 0.0f, 0.0f,
-        0.0f, 1.0f, 0.0f, 0.0f,
-        0.0f, 0.0f, 1.0f, 0.0f,
-        0.0f, 0.0f, 0.0f, 1.0f};
+        1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f};
     SceneShadowSettings noShadow{};
     noShadow.strength = 0.0f;
     modelManager.GetRenderer()->SetShadowMap(
@@ -495,10 +494,10 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
             return started;
         },
         [&handUdpSenderProcess]() { handUdpSenderProcess.DeactivateCamera(); },
-        [handTrackingRuntimeAvailable]() { return handTrackingRuntimeAvailable; },
-        [&handUdpSenderProcess]() {
-            return handUdpSenderProcess.IsRunning();
-        });
+        [handTrackingRuntimeAvailable]() {
+            return handTrackingRuntimeAvailable;
+        },
+        [&handUdpSenderProcess]() { return handUdpSenderProcess.IsRunning(); });
 
     // SceneManager
     SceneManager sceneManager;

@@ -1,4 +1,3 @@
-#include "model/ModelRenderer.h"
 #include "graphics/DirectXCommon.h"
 #include "graphics/DxHelpers.h"
 #include "graphics/DxUtils.h"
@@ -7,6 +6,7 @@
 #include "graphics/SrvManager.h"
 #include "model/MaterialManager.h"
 #include "model/MeshManager.h"
+#include "model/ModelRenderer.h"
 #include "model/Vertex.h"
 #include "texture/TextureManager.h"
 #include <algorithm>
@@ -85,7 +85,7 @@ uint32_t ResolveNormalTextureId(TextureManager *textureManager,
     return ResolveNormalTextureId(textureManager, textureId);
 }
 
-}
+} // namespace
 
 static XMFLOAT4X4 StoreMatrix(const XMMATRIX &matrix) {
     XMFLOAT4X4 result{};
@@ -179,9 +179,9 @@ void ModelRenderer::CreateUploadBuffer() {
     uploadBuffer_.Initialize(dxCommon_->GetDevice(), kUploadBytesPerFrame, 2);
 }
 
-D3D12_GPU_VIRTUAL_ADDRESS ModelRenderer::WriteObjectConstants(
-    const XMMATRIX &wvp, const XMMATRIX &world,
-    const XMMATRIX &worldInverseTranspose) {
+D3D12_GPU_VIRTUAL_ADDRESS
+ModelRenderer::WriteObjectConstants(const XMMATRIX &wvp, const XMMATRIX &world,
+                                    const XMMATRIX &worldInverseTranspose) {
     PerObjectConstBufferData data{};
     XMStoreFloat4x4(&data.matWVP, XMMatrixTranspose(wvp));
     XMStoreFloat4x4(&data.matWorld, XMMatrixTranspose(world));
@@ -259,8 +259,7 @@ ModelRenderer::WriteInstances(const Model &model, const Transform *transforms,
     std::vector<InstanceData> instances(instanceCount);
     for (uint32_t index = 0; index < instanceCount; ++index) {
         const Transform transform = SanitizeTransformForDraw(transforms[index]);
-        XMVECTOR q =
-            LoadNormalizedQuaternionOrIdentity(transform.rotation);
+        XMVECTOR q = LoadNormalizedQuaternionOrIdentity(transform.rotation);
         const XMMATRIX world =
             XMMatrixScaling(transform.scale.x, transform.scale.y,
                             transform.scale.z) *
@@ -287,8 +286,7 @@ ModelRenderer::WriteInstances(const Model &model,
                               : XMMatrixIdentity();
 
     for (uint32_t index = 0; index < instanceCount; ++index) {
-        instances[index] =
-            SanitizeInstanceDataForDraw(sourceInstances[index]);
+        instances[index] = SanitizeInstanceDataForDraw(sourceInstances[index]);
         XMMATRIX world = XMLoadFloat4x4(&instances[index].world);
         if (model.hasRootAnimation) {
             world = root * world;
@@ -296,9 +294,8 @@ ModelRenderer::WriteInstances(const Model &model,
         XMStoreFloat4x4(&instances[index].world, world);
     }
 
-    const UploadAllocation allocation =
-        uploadBuffer_.WriteArray(instances.data(), instances.size(),
-                                 alignof(InstanceData));
+    const UploadAllocation allocation = uploadBuffer_.WriteArray(
+        instances.data(), instances.size(), alignof(InstanceData));
 
     D3D12_VERTEX_BUFFER_VIEW view{};
     view.BufferLocation = allocation.gpu;

@@ -103,6 +103,5 @@ void Camera::SanitizeProjection() {
         (std::max)(FiniteOr(orthographicHeight_, kDefaultOrthoHeight),
                    kMinOrthoHeight);
     nearZ_ = (std::max)(FiniteOr(nearZ_, kDefaultNearZ), kMinNearZ);
-    farZ_ = (std::max)(FiniteOr(farZ_, kDefaultFarZ),
-                       nearZ_ + kMinDepthRange);
+    farZ_ = (std::max)(FiniteOr(farZ_, kDefaultFarZ), nearZ_ + kMinDepthRange);
 }

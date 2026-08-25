@@ -18,13 +18,11 @@ template <typename Tag> class ResourceHandle {
 
     explicit constexpr operator bool() const { return IsValid(); }
 
-    friend constexpr bool operator==(ResourceHandle lhs,
-                                     ResourceHandle rhs) {
+    friend constexpr bool operator==(ResourceHandle lhs, ResourceHandle rhs) {
         return lhs.index_ == rhs.index_;
     }
 
-    friend constexpr bool operator!=(ResourceHandle lhs,
-                                     ResourceHandle rhs) {
+    friend constexpr bool operator!=(ResourceHandle lhs, ResourceHandle rhs) {
         return !(lhs == rhs);
     }
 

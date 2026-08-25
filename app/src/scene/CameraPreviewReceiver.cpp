@@ -1,12 +1,12 @@
 #include "CameraPreviewReceiver.h"
 
-#include <WinSock2.h>
-#include <WS2tcpip.h>
 #include "Sprite.h"
 #include "SpriteManager.h"
 #include "TextureManager.h"
 #include <DirectXMath.h>
 #include <DirectXTex.h>
+#include <WS2tcpip.h>
+#include <WinSock2.h>
 #include <algorithm>
 #include <array>
 #include <cstring>
@@ -51,8 +51,8 @@ void CameraPreviewReceiver::Initialize(TextureManager *texture, uint16_t port,
     frame_.rgbaPixels.resize(static_cast<size_t>(width) *
                              static_cast<size_t>(height) * 4u);
     if (texture != nullptr) {
-        frame_.textureId =
-            texture->CreateFromRgbaPixels(width, height, frame_.rgbaPixels.data());
+        frame_.textureId = texture->CreateFromRgbaPixels(
+            width, height, frame_.rgbaPixels.data());
     }
 
     jpegBuffer_.clear();
@@ -155,11 +155,10 @@ void CameraPreviewReceiver::ReceivePackets() {
     for (;;) {
         sockaddr_in from{};
         int fromLength = sizeof(from);
-        const int bytes = recvfrom(ToSocket(socket_),
-                                   reinterpret_cast<char *>(buffer.data()),
-                                   static_cast<int>(buffer.size()), 0,
-                                   reinterpret_cast<sockaddr *>(&from),
-                                   &fromLength);
+        const int bytes =
+            recvfrom(ToSocket(socket_), reinterpret_cast<char *>(buffer.data()),
+                     static_cast<int>(buffer.size()), 0,
+                     reinterpret_cast<sockaddr *>(&from), &fromLength);
         if (bytes == SOCKET_ERROR) {
             return;
         }
@@ -182,7 +181,8 @@ void CameraPreviewReceiver::HandlePacket(const uint8_t *data, int bytes) {
     size_t chunkIndex = 0;
     size_t chunkCount = 0;
     size_t totalSize = 0;
-    if (!(stream >> magic >> frameId >> chunkIndex >> chunkCount >> totalSize) ||
+    if (!(stream >> magic >> frameId >> chunkIndex >> chunkCount >>
+          totalSize) ||
         magic != "SGCAM" || chunkCount == 0 || chunkIndex >= chunkCount ||
         totalSize == 0 || totalSize > kMaxJpegSize) {
         return;
@@ -214,17 +214,16 @@ void CameraPreviewReceiver::HandlePacket(const uint8_t *data, int bytes) {
     }
 }
 
-void CameraPreviewReceiver::DecodeJpeg(
-    const std::vector<uint8_t> &jpegData) {
+void CameraPreviewReceiver::DecodeJpeg(const std::vector<uint8_t> &jpegData) {
     if (jpegData.empty()) {
         return;
     }
 
     DirectX::ScratchImage scratch;
     DirectX::TexMetadata metadata{};
-    HRESULT hr = DirectX::LoadFromWICMemory(
-        jpegData.data(), jpegData.size(), DirectX::WIC_FLAGS_FORCE_RGB,
-        &metadata, scratch);
+    HRESULT hr = DirectX::LoadFromWICMemory(jpegData.data(), jpegData.size(),
+                                            DirectX::WIC_FLAGS_FORCE_RGB,
+                                            &metadata, scratch);
     if (FAILED(hr)) {
         return;
     }

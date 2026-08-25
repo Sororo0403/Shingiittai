@@ -13,11 +13,9 @@ constexpr float kMouseSwordMaxAngle = 1.18f;
 constexpr float kMouseSlashMinDeltaSq = 12.0f * 12.0f;
 constexpr float kMouseSlashHardThresholdScale = 1.75f;
 constexpr float kMouseSlashEasyThresholdScale = 0.82f;
-}
+} // namespace
 
-SwordPose SwordMouseController::GetPose() const {
-    return state_.ToPose();
-}
+SwordPose SwordMouseController::GetPose() const { return state_.ToPose(); }
 
 void SwordMouseController::Update(Input *input, float dt,
                                   const Transform &swordPos) {
@@ -42,8 +40,7 @@ void SwordMouseController::UpdateOrientation(Input *input, float dt) {
                         -kMouseSwordMaxAngle, kMouseSwordMaxAngle);
 
     XMVECTOR qYaw = XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), yaw_);
-    XMVECTOR qPitch =
-        XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), pitch_);
+    XMVECTOR qPitch = XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), pitch_);
     XMVECTOR q = XMQuaternionNormalize(XMQuaternionMultiply(qPitch, qYaw));
     XMStoreFloat4(&state_.orientation, q);
 }

@@ -32,9 +32,8 @@ float FarDistanceVisualScale(const DirectX::XMFLOAT3 &visualPosition,
     const float dy = playerPosition.y - visualPosition.y;
     const float dz = playerPosition.z - visualPosition.z;
     const float distance = std::sqrt(dx * dx + dy * dy + dz * dz);
-    const float t =
-        Saturate((distance - kScaleStartDistance) /
-                 (kScaleFullDistance - kScaleStartDistance));
+    const float t = Saturate((distance - kScaleStartDistance) /
+                             (kScaleFullDistance - kScaleStartDistance));
     const float eased = t * t * (3.0f - 2.0f * t);
     return 1.0f + kMaxScaleBonus * eased;
 }
@@ -50,15 +49,15 @@ void Enemy::UpdateParts() {
     pose.forwardZ = std::cos(pose.usedYaw);
     pose.rightX = std::cos(pose.usedYaw);
     pose.rightZ = -std::sin(pose.usedYaw);
-    pose.suppressAttackBodyMotion =
-        action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
-        action_.kind == ActionKind::BladeClash ||
-        action_.kind == ActionKind::ArcaneLaser ||
-        action_.kind == ActionKind::CataclysmLaser;
+    pose.suppressAttackBodyMotion = action_.kind == ActionKind::Smash ||
+                                    action_.kind == ActionKind::Sweep ||
+                                    action_.kind == ActionKind::BladeClash ||
+                                    action_.kind == ActionKind::ArcaneLaser ||
+                                    action_.kind == ActionKind::CataclysmLaser;
     pose.suppressActionPresentation = counterRecoilTimer_ > 0.0f;
-    pose.isTelegraphCharge =
-        action_.step == ActionStep::Charge &&
-        (action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep);
+    pose.isTelegraphCharge = action_.step == ActionStep::Charge &&
+                             (action_.kind == ActionKind::Smash ||
+                              action_.kind == ActionKind::Sweep);
     pose.isFarSlashFlashHold =
         farSlashActive_ && action_.step == ActionStep::Active &&
         runtime_.stateTimer <= GetFarWarpSlashStanceHoldDuration();
@@ -112,9 +111,10 @@ void Enemy::ApplyHitPartPresentation(PartPresentationContext &pose) {
     }
 
     if (counterRecoilTimer_ > 0.0f) {
-        float recoilProgress = counterRecoilDuration_ > 0.0001f
-                                   ? 1.0f - (counterRecoilTimer_ / counterRecoilDuration_)
-                                   : 1.0f;
+        float recoilProgress =
+            counterRecoilDuration_ > 0.0001f
+                ? 1.0f - (counterRecoilTimer_ / counterRecoilDuration_)
+                : 1.0f;
         recoilProgress = Saturate(recoilProgress);
         const float recoil = recoilProgress * recoilProgress;
         bodyTf_.position.y += 0.015f * recoil;
@@ -122,8 +122,7 @@ void Enemy::ApplyHitPartPresentation(PartPresentationContext &pose) {
     }
 }
 
-void Enemy::ApplyChargePartPresentation(
-    const PartPresentationContext &pose) {
+void Enemy::ApplyChargePartPresentation(const PartPresentationContext &pose) {
     if (tellActive_ || pose.isTelegraphCharge || pose.isFarSlashFlashHold) {
         const float chargePulse = tellActive_ ? (1.0f + 0.55f * pose.pulse)
                                               : (0.72f + 0.42f * pose.pulse);
@@ -144,11 +143,11 @@ void Enemy::ApplyChargePartPresentation(
 
     if (!pose.suppressActionPresentation && farSlashActive_ &&
         (pose.isTelegraphCharge || pose.isFarSlashFlashHold)) {
-        const float chargeTime =
-            action_.kind == ActionKind::Smash ? GetCurrentSmashChargeTime()
-                                              : GetCurrentSweepChargeTime();
-        const float chargeT =
-            chargeTime > 0.0001f ? Saturate(runtime_.stateTimer / chargeTime)
+        const float chargeTime = action_.kind == ActionKind::Smash
+                                     ? GetCurrentSmashChargeTime()
+                                     : GetCurrentSweepChargeTime();
+        const float chargeT = chargeTime > 0.0001f
+                                  ? Saturate(runtime_.stateTimer / chargeTime)
                                   : 1.0f;
         const float coil = 0.35f + 0.65f * chargeT;
         const float shiver =
@@ -199,7 +198,8 @@ void Enemy::ApplyPhasePartPresentation(PartPresentationContext &pose) {
         const float hold = chargeEase * (1.0f - releaseEase);
         const float snap = std::sin(release * 3.14159265f);
         const float tremble =
-            hold * (0.5f + 0.5f * std::sin(runtime_.phaseTransitionTimer * 34.0f));
+            hold *
+            (0.5f + 0.5f * std::sin(runtime_.phaseTransitionTimer * 34.0f));
 
         bodyTf_.position.y -= 0.26f * hold - 0.10f * releaseEase;
         bodyTf_.scale.x += -0.24f * hold + 0.46f * releaseEase + 0.10f * snap;
@@ -207,10 +207,10 @@ void Enemy::ApplyPhasePartPresentation(PartPresentationContext &pose) {
         bodyTf_.scale.z += -0.24f * hold + 0.46f * releaseEase + 0.10f * snap;
 
         rightHandTf_.position.y += 0.54f * hold + 0.74f * releaseEase;
-        rightHandTf_.position.x += (-pose.rightX) * 0.46f * hold +
-                                   pose.rightX * 0.96f * releaseEase;
-        rightHandTf_.position.z += (-pose.rightZ) * 0.46f * hold +
-                                   pose.rightZ * 0.96f * releaseEase;
+        rightHandTf_.position.x +=
+            (-pose.rightX) * 0.46f * hold + pose.rightX * 0.96f * releaseEase;
+        rightHandTf_.position.z +=
+            (-pose.rightZ) * 0.46f * hold + pose.rightZ * 0.96f * releaseEase;
         rightHandTf_.position.x += (-pose.forwardX) * 0.12f * hold;
         rightHandTf_.position.z += (-pose.forwardZ) * 0.12f * hold;
         rightHandTf_.scale.x += 0.08f * hold + 0.22f * releaseEase;
@@ -218,10 +218,10 @@ void Enemy::ApplyPhasePartPresentation(PartPresentationContext &pose) {
         rightHandTf_.scale.z += 0.08f * hold + 0.22f * releaseEase;
 
         leftHandTf_.position.y += 0.46f * hold + 0.60f * releaseEase;
-        leftHandTf_.position.x += pose.rightX * 0.38f * hold +
-                                  (-pose.rightX) * 0.78f * releaseEase;
-        leftHandTf_.position.z += pose.rightZ * 0.38f * hold +
-                                  (-pose.rightZ) * 0.78f * releaseEase;
+        leftHandTf_.position.x +=
+            pose.rightX * 0.38f * hold + (-pose.rightX) * 0.78f * releaseEase;
+        leftHandTf_.position.z +=
+            pose.rightZ * 0.38f * hold + (-pose.rightZ) * 0.78f * releaseEase;
         leftHandTf_.position.x += (-pose.forwardX) * 0.10f * hold;
         leftHandTf_.position.z += (-pose.forwardZ) * 0.10f * hold;
         leftHandTf_.scale.x += 0.06f * hold + 0.18f * releaseEase;
@@ -238,8 +238,7 @@ void Enemy::ApplyPhasePartPresentation(PartPresentationContext &pose) {
     }
 }
 
-void Enemy::ApplyEnemyActionPartPresentation(
-    PartPresentationContext &pose) {
+void Enemy::ApplyEnemyActionPartPresentation(PartPresentationContext &pose) {
     if (pose.suppressActionPresentation) {
         return;
     }
@@ -267,259 +266,262 @@ void Enemy::ApplyEnemyActionPartPresentation(
     }
 }
 
-void Enemy::ApplySmashPartPresentation(
-    PartPresentationContext &pose) {
-if (action_.step == ActionStep::Charge ||
-    action_.step == ActionStep::Hold || pose.isFarSlashFlashHold) {
-    const bool isDelayBait = action_.step == ActionStep::Hold;
-    bodyTf_.position.y -= 0.28f + 0.08f * pose.pulse;
-    bodyTf_.scale.y += 0.24f;
-    bodyTf_.scale.x += 0.16f + 0.06f * pose.pulse;
-    bodyTf_.scale.z += 0.16f + 0.06f * pose.pulse;
-    rightHandTf_.position.y += 2.75f + 0.28f * pose.pulse;
-    rightHandTf_.position.x += (-pose.forwardX) * 1.48f;
-    rightHandTf_.position.z += (-pose.forwardZ) * 1.48f;
-    rightHandTf_.scale.x += 0.34f + 0.18f * pose.pulse;
-    rightHandTf_.scale.y += 0.34f + 0.18f * pose.pulse;
-    rightHandTf_.scale.z += 0.34f + 0.18f * pose.pulse;
-    leftHandTf_.position.y += 0.36f;
-    leftHandTf_.position.x += pose.forwardX * 0.18f;
-    leftHandTf_.position.z += pose.forwardZ * 0.18f;
-    visualTf_.position.x += (-pose.forwardX) * 0.40f;
-    visualTf_.position.z += (-pose.forwardZ) * 0.40f;
-    visualTf_.position.y -= 0.12f;
-    pose.visualPitch -= 0.62f + 0.12f * pose.pulse;
-    if (isDelayBait) {
-        bodyTf_.position.y -= 0.16f;
-        bodyTf_.position.x += (-pose.forwardX) * (0.26f + 0.10f * pose.pulse);
-        bodyTf_.position.z += (-pose.forwardZ) * (0.26f + 0.10f * pose.pulse);
-        bodyTf_.scale.x += 0.12f;
-        bodyTf_.scale.z += 0.12f;
-        rightHandTf_.position.y += 0.62f + 0.16f * pose.pulse;
-        rightHandTf_.position.x += (-pose.forwardX) * 0.52f + pose.rightX * 0.18f;
-        rightHandTf_.position.z += (-pose.forwardZ) * 0.52f + pose.rightZ * 0.18f;
-        leftHandTf_.position.y += 0.22f;
-        leftHandTf_.position.x += pose.forwardX * 0.28f;
-        leftHandTf_.position.z += pose.forwardZ * 0.28f;
-        pose.visualPitch -= 0.22f;
+void Enemy::ApplySmashPartPresentation(PartPresentationContext &pose) {
+    if (action_.step == ActionStep::Charge ||
+        action_.step == ActionStep::Hold || pose.isFarSlashFlashHold) {
+        const bool isDelayBait = action_.step == ActionStep::Hold;
+        bodyTf_.position.y -= 0.28f + 0.08f * pose.pulse;
+        bodyTf_.scale.y += 0.24f;
+        bodyTf_.scale.x += 0.16f + 0.06f * pose.pulse;
+        bodyTf_.scale.z += 0.16f + 0.06f * pose.pulse;
+        rightHandTf_.position.y += 2.75f + 0.28f * pose.pulse;
+        rightHandTf_.position.x += (-pose.forwardX) * 1.48f;
+        rightHandTf_.position.z += (-pose.forwardZ) * 1.48f;
+        rightHandTf_.scale.x += 0.34f + 0.18f * pose.pulse;
+        rightHandTf_.scale.y += 0.34f + 0.18f * pose.pulse;
+        rightHandTf_.scale.z += 0.34f + 0.18f * pose.pulse;
+        leftHandTf_.position.y += 0.36f;
+        leftHandTf_.position.x += pose.forwardX * 0.18f;
+        leftHandTf_.position.z += pose.forwardZ * 0.18f;
+        visualTf_.position.x += (-pose.forwardX) * 0.40f;
+        visualTf_.position.z += (-pose.forwardZ) * 0.40f;
+        visualTf_.position.y -= 0.12f;
+        pose.visualPitch -= 0.62f + 0.12f * pose.pulse;
+        if (isDelayBait) {
+            bodyTf_.position.y -= 0.16f;
+            bodyTf_.position.x +=
+                (-pose.forwardX) * (0.26f + 0.10f * pose.pulse);
+            bodyTf_.position.z +=
+                (-pose.forwardZ) * (0.26f + 0.10f * pose.pulse);
+            bodyTf_.scale.x += 0.12f;
+            bodyTf_.scale.z += 0.12f;
+            rightHandTf_.position.y += 0.62f + 0.16f * pose.pulse;
+            rightHandTf_.position.x +=
+                (-pose.forwardX) * 0.52f + pose.rightX * 0.18f;
+            rightHandTf_.position.z +=
+                (-pose.forwardZ) * 0.52f + pose.rightZ * 0.18f;
+            leftHandTf_.position.y += 0.22f;
+            leftHandTf_.position.x += pose.forwardX * 0.28f;
+            leftHandTf_.position.z += pose.forwardZ * 0.28f;
+            pose.visualPitch -= 0.22f;
+        }
+    } else if (action_.step == ActionStep::Active ||
+               pose.isFarSlashPostPierceSlash) {
+        bodyTf_.position.x += pose.forwardX * 0.18f;
+        bodyTf_.position.z += pose.forwardZ * 0.18f;
+        bodyTf_.position.y -= 0.05f;
+        rightHandTf_.position.y -= 0.45f;
+        rightHandTf_.position.x += pose.forwardX * 2.10f;
+        rightHandTf_.position.z += pose.forwardZ * 2.10f;
+        visualTf_.position.x += pose.forwardX * 0.42f;
+        visualTf_.position.z += pose.forwardZ * 0.42f;
+        visualTf_.position.y += 0.06f;
+        pose.visualPitch += 0.34f;
+    } else if (action_.step == ActionStep::Recovery) {
+        rightHandTf_.position.y += 0.3f;
+        rightHandTf_.position.x += pose.forwardX * 0.8f;
+        rightHandTf_.position.z += pose.forwardZ * 0.8f;
+
+        visualTf_.position.x += pose.forwardX * 0.10f;
+        visualTf_.position.z += pose.forwardZ * 0.10f;
+        pose.visualPitch += 0.10f;
     }
-} else if (action_.step == ActionStep::Active ||
-           pose.isFarSlashPostPierceSlash) {
-    bodyTf_.position.x += pose.forwardX * 0.18f;
-    bodyTf_.position.z += pose.forwardZ * 0.18f;
-    bodyTf_.position.y -= 0.05f;
-    rightHandTf_.position.y -= 0.45f;
-    rightHandTf_.position.x += pose.forwardX * 2.10f;
-    rightHandTf_.position.z += pose.forwardZ * 2.10f;
-    visualTf_.position.x += pose.forwardX * 0.42f;
-    visualTf_.position.z += pose.forwardZ * 0.42f;
-    visualTf_.position.y += 0.06f;
-    pose.visualPitch += 0.34f;
-} else if (action_.step == ActionStep::Recovery) {
-    rightHandTf_.position.y += 0.3f;
-    rightHandTf_.position.x += pose.forwardX * 0.8f;
-    rightHandTf_.position.z += pose.forwardZ * 0.8f;
-
-
-    visualTf_.position.x += pose.forwardX * 0.10f;
-    visualTf_.position.z += pose.forwardZ * 0.10f;
-    pose.visualPitch += 0.10f;
-}
 }
 
-void Enemy::ApplySweepPartPresentation(
-    PartPresentationContext &pose) {
-if (action_.step == ActionStep::Charge ||
-    action_.step == ActionStep::Hold || pose.isFarSlashFlashHold) {
-    const bool isWideTell = action_.step == ActionStep::Hold;
-    bodyTf_.position.y -= 0.24f + 0.06f * pose.pulse;
-    bodyTf_.position.x += pose.rightX * (0.44f + 0.10f * pose.pulse);
-    bodyTf_.position.z += pose.rightZ * (0.44f + 0.10f * pose.pulse);
-    bodyTf_.scale.x += 0.20f + 0.04f * pose.pulse;
-    bodyTf_.scale.z += 0.26f + 0.06f * pose.pulse;
-    rightHandTf_.position.x += pose.rightX * (3.20f + 0.34f * pose.pulse);
-    rightHandTf_.position.y += 0.72f + 0.18f * pose.pulse;
-    rightHandTf_.position.z += pose.rightZ * (3.20f + 0.34f * pose.pulse);
-    rightHandTf_.scale.x += 0.42f + 0.22f * pose.pulse;
-    rightHandTf_.scale.y += 0.42f + 0.22f * pose.pulse;
-    rightHandTf_.scale.z += 0.42f + 0.22f * pose.pulse;
-    leftHandTf_.position.x += (-pose.rightX) * 0.82f + (-pose.forwardX) * 0.18f;
-    leftHandTf_.position.z += (-pose.rightZ) * 0.82f + (-pose.forwardZ) * 0.18f;
-    leftHandTf_.position.y += 0.16f;
-    visualTf_.position.x += pose.rightX * 0.18f;
-    visualTf_.position.z += pose.rightZ * 0.18f;
-    pose.visualYaw += 0.62f + 0.18f * pose.pulse;
-    pose.visualRoll -= 0.62f + 0.18f * pose.pulse;
-    if (isWideTell) {
-        bodyTf_.position.x += pose.rightX * 0.28f;
-        bodyTf_.position.z += pose.rightZ * 0.28f;
-        bodyTf_.scale.x += 0.10f;
+void Enemy::ApplySweepPartPresentation(PartPresentationContext &pose) {
+    if (action_.step == ActionStep::Charge ||
+        action_.step == ActionStep::Hold || pose.isFarSlashFlashHold) {
+        const bool isWideTell = action_.step == ActionStep::Hold;
+        bodyTf_.position.y -= 0.24f + 0.06f * pose.pulse;
+        bodyTf_.position.x += pose.rightX * (0.44f + 0.10f * pose.pulse);
+        bodyTf_.position.z += pose.rightZ * (0.44f + 0.10f * pose.pulse);
+        bodyTf_.scale.x += 0.20f + 0.04f * pose.pulse;
+        bodyTf_.scale.z += 0.26f + 0.06f * pose.pulse;
+        rightHandTf_.position.x += pose.rightX * (3.20f + 0.34f * pose.pulse);
+        rightHandTf_.position.y += 0.72f + 0.18f * pose.pulse;
+        rightHandTf_.position.z += pose.rightZ * (3.20f + 0.34f * pose.pulse);
+        rightHandTf_.scale.x += 0.42f + 0.22f * pose.pulse;
+        rightHandTf_.scale.y += 0.42f + 0.22f * pose.pulse;
+        rightHandTf_.scale.z += 0.42f + 0.22f * pose.pulse;
+        leftHandTf_.position.x +=
+            (-pose.rightX) * 0.82f + (-pose.forwardX) * 0.18f;
+        leftHandTf_.position.z +=
+            (-pose.rightZ) * 0.82f + (-pose.forwardZ) * 0.18f;
+        leftHandTf_.position.y += 0.16f;
+        visualTf_.position.x += pose.rightX * 0.18f;
+        visualTf_.position.z += pose.rightZ * 0.18f;
+        pose.visualYaw += 0.62f + 0.18f * pose.pulse;
+        pose.visualRoll -= 0.62f + 0.18f * pose.pulse;
+        if (isWideTell) {
+            bodyTf_.position.x += pose.rightX * 0.28f;
+            bodyTf_.position.z += pose.rightZ * 0.28f;
+            bodyTf_.scale.x += 0.10f;
+            bodyTf_.scale.z += 0.16f;
+            rightHandTf_.position.x += pose.rightX * 0.72f;
+            rightHandTf_.position.z += pose.rightZ * 0.72f;
+            leftHandTf_.position.x += (-pose.rightX) * 0.34f;
+            leftHandTf_.position.z += (-pose.rightZ) * 0.34f;
+            pose.visualYaw += 0.20f;
+            pose.visualRoll -= 0.18f;
+        }
+    } else if (action_.step == ActionStep::Active ||
+               pose.isFarSlashPostPierceSlash) {
+        bodyTf_.position.x += (-pose.rightX) * 0.18f;
+        bodyTf_.position.z += (-pose.rightZ) * 0.18f;
+        rightHandTf_.position.x += (-pose.rightX) * 2.00f;
+        rightHandTf_.position.y += 0.2f;
+        rightHandTf_.position.z += (-pose.rightZ) * 2.00f;
+        pose.visualYaw -= 0.26f;
+        pose.visualRoll += 0.26f;
+        visualTf_.position.x += (-pose.rightX) * 0.20f;
+        visualTf_.position.z += (-pose.rightZ) * 0.20f;
+    } else if (action_.step == ActionStep::Recovery) {
+        rightHandTf_.position.x += pose.rightX * 0.3f;
+        rightHandTf_.position.y += 0.1f;
+        rightHandTf_.position.z += pose.rightZ * 0.3f;
+        pose.visualRoll += 0.10f;
+    }
+}
+
+void Enemy::ApplyBladeClashPartPresentation(PartPresentationContext &pose) {
+    if (action_.step == ActionStep::Charge) {
+        bodyTf_.position.y -= 0.18f + 0.06f * pose.pulse;
+        bodyTf_.position.x += pose.forwardX * 0.18f;
+        bodyTf_.position.z += pose.forwardZ * 0.18f;
+        bodyTf_.scale.x += 0.18f + 0.08f * pose.pulse;
+        bodyTf_.scale.z += 0.18f + 0.08f * pose.pulse;
+        leftHandTf_.position.x +=
+            (-pose.rightX) * 0.34f + pose.forwardX * 0.52f;
+        leftHandTf_.position.z +=
+            (-pose.rightZ) * 0.34f + pose.forwardZ * 0.52f;
+        rightHandTf_.position.x += pose.rightX * 0.34f + pose.forwardX * 0.52f;
+        rightHandTf_.position.z += pose.rightZ * 0.34f + pose.forwardZ * 0.52f;
+        leftHandTf_.position.y += 0.28f;
+        rightHandTf_.position.y += 0.34f;
+        pose.visualPitch -= 0.22f + 0.04f * pose.pulse;
+    } else if (action_.step == ActionStep::Active) {
+        bodyTf_.position.x += pose.forwardX * 0.24f;
+        bodyTf_.position.z += pose.forwardZ * 0.24f;
+        bodyTf_.scale.x += 0.22f;
         bodyTf_.scale.z += 0.16f;
-        rightHandTf_.position.x += pose.rightX * 0.72f;
-        rightHandTf_.position.z += pose.rightZ * 0.72f;
-        leftHandTf_.position.x += (-pose.rightX) * 0.34f;
-        leftHandTf_.position.z += (-pose.rightZ) * 0.34f;
-        pose.visualYaw += 0.20f;
-        pose.visualRoll -= 0.18f;
+        leftHandTf_.position.x += pose.forwardX * 1.10f;
+        leftHandTf_.position.z += pose.forwardZ * 1.10f;
+        rightHandTf_.position.x += pose.forwardX * 1.26f;
+        rightHandTf_.position.z += pose.forwardZ * 1.26f;
+        leftHandTf_.scale.x += 0.26f;
+        rightHandTf_.scale.x += 0.30f;
+        pose.visualPitch += 0.14f;
+    } else if (action_.step == ActionStep::Recovery) {
+        bodyTf_.position.x += (-pose.forwardX) * 0.08f;
+        bodyTf_.position.z += (-pose.forwardZ) * 0.08f;
+        pose.visualPitch += 0.08f;
     }
-} else if (action_.step == ActionStep::Active ||
-           pose.isFarSlashPostPierceSlash) {
-    bodyTf_.position.x += (-pose.rightX) * 0.18f;
-    bodyTf_.position.z += (-pose.rightZ) * 0.18f;
-    rightHandTf_.position.x += (-pose.rightX) * 2.00f;
-    rightHandTf_.position.y += 0.2f;
-    rightHandTf_.position.z += (-pose.rightZ) * 2.00f;
-    pose.visualYaw -= 0.26f;
-    pose.visualRoll += 0.26f;
-    visualTf_.position.x += (-pose.rightX) * 0.20f;
-    visualTf_.position.z += (-pose.rightZ) * 0.20f;
-} else if (action_.step == ActionStep::Recovery) {
-    rightHandTf_.position.x += pose.rightX * 0.3f;
-    rightHandTf_.position.y += 0.1f;
-    rightHandTf_.position.z += pose.rightZ * 0.3f;
-    pose.visualRoll += 0.10f;
-}
 }
 
-void Enemy::ApplyBladeClashPartPresentation(
-    PartPresentationContext &pose) {
-if (action_.step == ActionStep::Charge) {
-    bodyTf_.position.y -= 0.18f + 0.06f * pose.pulse;
-    bodyTf_.position.x += pose.forwardX * 0.18f;
-    bodyTf_.position.z += pose.forwardZ * 0.18f;
-    bodyTf_.scale.x += 0.18f + 0.08f * pose.pulse;
-    bodyTf_.scale.z += 0.18f + 0.08f * pose.pulse;
-    leftHandTf_.position.x += (-pose.rightX) * 0.34f + pose.forwardX * 0.52f;
-    leftHandTf_.position.z += (-pose.rightZ) * 0.34f + pose.forwardZ * 0.52f;
-    rightHandTf_.position.x += pose.rightX * 0.34f + pose.forwardX * 0.52f;
-    rightHandTf_.position.z += pose.rightZ * 0.34f + pose.forwardZ * 0.52f;
-    leftHandTf_.position.y += 0.28f;
-    rightHandTf_.position.y += 0.34f;
-    pose.visualPitch -= 0.22f + 0.04f * pose.pulse;
-} else if (action_.step == ActionStep::Active) {
-    bodyTf_.position.x += pose.forwardX * 0.24f;
-    bodyTf_.position.z += pose.forwardZ * 0.24f;
-    bodyTf_.scale.x += 0.22f;
-    bodyTf_.scale.z += 0.16f;
-    leftHandTf_.position.x += pose.forwardX * 1.10f;
-    leftHandTf_.position.z += pose.forwardZ * 1.10f;
-    rightHandTf_.position.x += pose.forwardX * 1.26f;
-    rightHandTf_.position.z += pose.forwardZ * 1.26f;
-    leftHandTf_.scale.x += 0.26f;
-    rightHandTf_.scale.x += 0.30f;
-    pose.visualPitch += 0.14f;
-} else if (action_.step == ActionStep::Recovery) {
-    bodyTf_.position.x += (-pose.forwardX) * 0.08f;
-    bodyTf_.position.z += (-pose.forwardZ) * 0.08f;
-    pose.visualPitch += 0.08f;
-}
-}
-
-void Enemy::ApplyArcaneLaserPartPresentation(
-    PartPresentationContext &pose) {
-const float charge = GetArcaneLaserChargeRatio();
-if (action_.step == ActionStep::Charge) {
-    bodyTf_.position.y -= 0.10f + 0.08f * charge;
-    bodyTf_.position.x += (-pose.forwardX) * (0.18f + 0.20f * charge);
-    bodyTf_.position.z += (-pose.forwardZ) * (0.18f + 0.20f * charge);
-    bodyTf_.scale.x += 0.10f + 0.12f * charge;
-    bodyTf_.scale.z += 0.12f + 0.16f * charge;
-    rightHandTf_.position.x += pose.forwardX * (1.65f + 0.34f * charge);
-    rightHandTf_.position.z += pose.forwardZ * (1.65f + 0.34f * charge);
-    rightHandTf_.position.y += 0.62f + 0.24f * pose.pulse;
-    rightHandTf_.scale.x += 0.24f + 0.20f * charge;
-    rightHandTf_.scale.y += 0.24f + 0.20f * charge;
-    rightHandTf_.scale.z += 0.24f + 0.20f * charge;
-    leftHandTf_.position.x += (-pose.rightX) * 0.28f + pose.forwardX * 0.26f;
-    leftHandTf_.position.z += (-pose.rightZ) * 0.28f + pose.forwardZ * 0.26f;
-    leftHandTf_.position.y += 0.18f;
-    pose.visualPitch -= 0.12f + 0.08f * charge;
-} else if (action_.step == ActionStep::Active) {
-    bodyTf_.position.x += (-pose.forwardX) * 0.12f;
-    bodyTf_.position.z += (-pose.forwardZ) * 0.12f;
-    rightHandTf_.position.x += pose.forwardX * 2.20f;
-    rightHandTf_.position.z += pose.forwardZ * 2.20f;
-    rightHandTf_.position.y += 0.62f;
-    rightHandTf_.scale.x += 0.48f;
-    rightHandTf_.scale.y += 0.48f;
-    rightHandTf_.scale.z += 0.48f;
-    pose.visualPitch -= 0.06f;
-} else if (action_.step == ActionStep::Recovery) {
-    rightHandTf_.position.x += pose.forwardX * 0.58f;
-    rightHandTf_.position.z += pose.forwardZ * 0.58f;
-    rightHandTf_.position.y += 0.22f;
-    pose.visualPitch += 0.05f;
-}
+void Enemy::ApplyArcaneLaserPartPresentation(PartPresentationContext &pose) {
+    const float charge = GetArcaneLaserChargeRatio();
+    if (action_.step == ActionStep::Charge) {
+        bodyTf_.position.y -= 0.10f + 0.08f * charge;
+        bodyTf_.position.x += (-pose.forwardX) * (0.18f + 0.20f * charge);
+        bodyTf_.position.z += (-pose.forwardZ) * (0.18f + 0.20f * charge);
+        bodyTf_.scale.x += 0.10f + 0.12f * charge;
+        bodyTf_.scale.z += 0.12f + 0.16f * charge;
+        rightHandTf_.position.x += pose.forwardX * (1.65f + 0.34f * charge);
+        rightHandTf_.position.z += pose.forwardZ * (1.65f + 0.34f * charge);
+        rightHandTf_.position.y += 0.62f + 0.24f * pose.pulse;
+        rightHandTf_.scale.x += 0.24f + 0.20f * charge;
+        rightHandTf_.scale.y += 0.24f + 0.20f * charge;
+        rightHandTf_.scale.z += 0.24f + 0.20f * charge;
+        leftHandTf_.position.x +=
+            (-pose.rightX) * 0.28f + pose.forwardX * 0.26f;
+        leftHandTf_.position.z +=
+            (-pose.rightZ) * 0.28f + pose.forwardZ * 0.26f;
+        leftHandTf_.position.y += 0.18f;
+        pose.visualPitch -= 0.12f + 0.08f * charge;
+    } else if (action_.step == ActionStep::Active) {
+        bodyTf_.position.x += (-pose.forwardX) * 0.12f;
+        bodyTf_.position.z += (-pose.forwardZ) * 0.12f;
+        rightHandTf_.position.x += pose.forwardX * 2.20f;
+        rightHandTf_.position.z += pose.forwardZ * 2.20f;
+        rightHandTf_.position.y += 0.62f;
+        rightHandTf_.scale.x += 0.48f;
+        rightHandTf_.scale.y += 0.48f;
+        rightHandTf_.scale.z += 0.48f;
+        pose.visualPitch -= 0.06f;
+    } else if (action_.step == ActionStep::Recovery) {
+        rightHandTf_.position.x += pose.forwardX * 0.58f;
+        rightHandTf_.position.z += pose.forwardZ * 0.58f;
+        rightHandTf_.position.y += 0.22f;
+        pose.visualPitch += 0.05f;
+    }
 }
 
-void Enemy::ApplyCataclysmLaserPartPresentation(
-    PartPresentationContext &pose) {
-const float charge = GetCataclysmLaserChargeRatio();
-const float heavyPulse = pose.pulse * (0.65f + 0.35f * charge);
-if (action_.step == ActionStep::Charge) {
-    bodyTf_.position.y += 0.78f + 1.16f * charge + 0.10f * heavyPulse;
-    bodyTf_.position.x += (-pose.forwardX) * (0.34f + 0.42f * charge);
-    bodyTf_.position.z += (-pose.forwardZ) * (0.34f + 0.42f * charge);
-    bodyTf_.scale.x += 0.22f + 0.26f * charge;
-    bodyTf_.scale.y += 0.06f + 0.08f * charge;
-    bodyTf_.scale.z += 0.24f + 0.34f * charge;
-    rightHandTf_.position.x += pose.forwardX * (2.25f + 0.72f * charge);
-    rightHandTf_.position.z += pose.forwardZ * (2.25f + 0.72f * charge);
-    rightHandTf_.position.y += 1.38f + 0.82f * charge +
-                               0.42f * heavyPulse;
-    rightHandTf_.scale.x += 0.54f + 0.44f * charge;
-    rightHandTf_.scale.y += 0.54f + 0.44f * charge;
-    rightHandTf_.scale.z += 0.54f + 0.44f * charge;
-    leftHandTf_.position.x += (-pose.rightX) * 0.38f + pose.forwardX * 0.42f;
-    leftHandTf_.position.z += (-pose.rightZ) * 0.38f + pose.forwardZ * 0.42f;
-    leftHandTf_.position.y += 0.82f + 0.72f * charge;
-    visualTf_.position.y += 0.78f + 1.12f * charge +
-                            0.08f * heavyPulse;
-    visualTf_.scale.x += 0.06f * charge;
-    visualTf_.scale.z += 0.08f * charge;
-    pose.visualPitch -= 0.24f + 0.18f * charge;
-} else if (action_.step == ActionStep::Active) {
-    bodyTf_.position.y += 2.10f + 0.14f * heavyPulse;
-    bodyTf_.position.x += (-pose.forwardX) * 0.22f;
-    bodyTf_.position.z += (-pose.forwardZ) * 0.22f;
-    bodyTf_.scale.x += 0.18f;
-    bodyTf_.scale.z += 0.26f;
-    rightHandTf_.position.x += pose.forwardX * 2.85f;
-    rightHandTf_.position.z += pose.forwardZ * 2.85f;
-    rightHandTf_.position.y += 2.52f + 0.18f * heavyPulse;
-    rightHandTf_.scale.x += 0.78f;
-    rightHandTf_.scale.y += 0.78f;
-    rightHandTf_.scale.z += 0.78f;
-    leftHandTf_.position.y += 1.52f + 0.12f * heavyPulse;
-    visualTf_.position.y += 2.08f + 0.12f * heavyPulse;
-    pose.visualPitch -= 0.12f;
-} else if (action_.step == ActionStep::Recovery) {
-    rightHandTf_.position.x += pose.forwardX * 0.88f;
-    rightHandTf_.position.z += pose.forwardZ * 0.88f;
-    rightHandTf_.position.y += 0.80f;
-    bodyTf_.position.y += 0.58f;
-    visualTf_.position.y += 0.52f;
-    pose.visualPitch += 0.08f;
-}
+void Enemy::ApplyCataclysmLaserPartPresentation(PartPresentationContext &pose) {
+    const float charge = GetCataclysmLaserChargeRatio();
+    const float heavyPulse = pose.pulse * (0.65f + 0.35f * charge);
+    if (action_.step == ActionStep::Charge) {
+        bodyTf_.position.y += 0.78f + 1.16f * charge + 0.10f * heavyPulse;
+        bodyTf_.position.x += (-pose.forwardX) * (0.34f + 0.42f * charge);
+        bodyTf_.position.z += (-pose.forwardZ) * (0.34f + 0.42f * charge);
+        bodyTf_.scale.x += 0.22f + 0.26f * charge;
+        bodyTf_.scale.y += 0.06f + 0.08f * charge;
+        bodyTf_.scale.z += 0.24f + 0.34f * charge;
+        rightHandTf_.position.x += pose.forwardX * (2.25f + 0.72f * charge);
+        rightHandTf_.position.z += pose.forwardZ * (2.25f + 0.72f * charge);
+        rightHandTf_.position.y += 1.38f + 0.82f * charge + 0.42f * heavyPulse;
+        rightHandTf_.scale.x += 0.54f + 0.44f * charge;
+        rightHandTf_.scale.y += 0.54f + 0.44f * charge;
+        rightHandTf_.scale.z += 0.54f + 0.44f * charge;
+        leftHandTf_.position.x +=
+            (-pose.rightX) * 0.38f + pose.forwardX * 0.42f;
+        leftHandTf_.position.z +=
+            (-pose.rightZ) * 0.38f + pose.forwardZ * 0.42f;
+        leftHandTf_.position.y += 0.82f + 0.72f * charge;
+        visualTf_.position.y += 0.78f + 1.12f * charge + 0.08f * heavyPulse;
+        visualTf_.scale.x += 0.06f * charge;
+        visualTf_.scale.z += 0.08f * charge;
+        pose.visualPitch -= 0.24f + 0.18f * charge;
+    } else if (action_.step == ActionStep::Active) {
+        bodyTf_.position.y += 2.10f + 0.14f * heavyPulse;
+        bodyTf_.position.x += (-pose.forwardX) * 0.22f;
+        bodyTf_.position.z += (-pose.forwardZ) * 0.22f;
+        bodyTf_.scale.x += 0.18f;
+        bodyTf_.scale.z += 0.26f;
+        rightHandTf_.position.x += pose.forwardX * 2.85f;
+        rightHandTf_.position.z += pose.forwardZ * 2.85f;
+        rightHandTf_.position.y += 2.52f + 0.18f * heavyPulse;
+        rightHandTf_.scale.x += 0.78f;
+        rightHandTf_.scale.y += 0.78f;
+        rightHandTf_.scale.z += 0.78f;
+        leftHandTf_.position.y += 1.52f + 0.12f * heavyPulse;
+        visualTf_.position.y += 2.08f + 0.12f * heavyPulse;
+        pose.visualPitch -= 0.12f;
+    } else if (action_.step == ActionStep::Recovery) {
+        rightHandTf_.position.x += pose.forwardX * 0.88f;
+        rightHandTf_.position.z += pose.forwardZ * 0.88f;
+        rightHandTf_.position.y += 0.80f;
+        bodyTf_.position.y += 0.58f;
+        visualTf_.position.y += 0.52f;
+        pose.visualPitch += 0.08f;
+    }
 }
 
-void Enemy::ApplyStalkPartPresentation(
-    PartPresentationContext &pose) {
-rightHandTf_.position.y += 0.35f;
-leftHandTf_.position.y += 0.20f;
-rightHandTf_.position.x += pose.forwardX * 0.35f;
-rightHandTf_.position.z += pose.forwardZ * 0.35f;
-visualTf_.position.x += pose.forwardX * 0.06f;
-visualTf_.position.z += pose.forwardZ * 0.06f;
-pose.visualRoll += 0.04f * pose.pulse;
+void Enemy::ApplyStalkPartPresentation(PartPresentationContext &pose) {
+    rightHandTf_.position.y += 0.35f;
+    leftHandTf_.position.y += 0.20f;
+    rightHandTf_.position.x += pose.forwardX * 0.35f;
+    rightHandTf_.position.z += pose.forwardZ * 0.35f;
+    visualTf_.position.x += pose.forwardX * 0.06f;
+    visualTf_.position.z += pose.forwardZ * 0.06f;
+    pose.visualRoll += 0.04f * pose.pulse;
 }
 
 void Enemy::ApplyWarpPartPresentation(PartPresentationContext &pose) {
     if (action_.kind == ActionKind::Warp && action_.step == ActionStep::Start) {
         const float startTime = GetCurrentWarpStartTime();
-        const float t =
-            startTime > 0.0001f ? Saturate(runtime_.stateTimer / startTime)
-                                 : 1.0f;
+        const float t = startTime > 0.0001f
+                            ? Saturate(runtime_.stateTimer / startTime)
+                            : 1.0f;
         const float windup = std::sin(t * 3.14159265f);
         const float snapT = Saturate((t - 0.34f) / 0.66f);
         const float snap = std::pow(snapT, 2.65f);
@@ -551,8 +553,8 @@ void Enemy::ApplyWarpPartPresentation(PartPresentationContext &pose) {
         visualTf_.position.x += pose.rightX * shimmer * 0.040f;
         visualTf_.position.z += pose.rightZ * shimmer * 0.040f;
         pose.visualYaw += shimmer * 0.08f - distortion * 0.08f;
-        pose.visualRoll += shimmer * 0.14f + distortion * 0.16f -
-                      overshoot * 0.12f;
+        pose.visualRoll +=
+            shimmer * 0.14f + distortion * 0.16f - overshoot * 0.12f;
     }
 }
 
@@ -576,8 +578,8 @@ void Enemy::FinalizePartTransforms(PartPresentationContext &pose) {
     DirectX::XMStoreFloat4(&leftHandTf_.rotation, hitboxRot);
     DirectX::XMStoreFloat4(&rightHandTf_.rotation, hitboxRot);
 
-    DirectX::XMVECTOR visualRot =
-        DirectX::XMQuaternionRotationRollPitchYaw(pose.visualPitch, pose.visualYaw, pose.visualRoll);
+    DirectX::XMVECTOR visualRot = DirectX::XMQuaternionRotationRollPitchYaw(
+        pose.visualPitch, pose.visualYaw, pose.visualRoll);
     DirectX::XMStoreFloat4(&visualTf_.rotation, visualRot);
 }
 
@@ -597,9 +599,8 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
                                   actionNoise);
     bool isHitFlashing = false;
     const ModelDrawEffect hitEffect = BuildEnemyHitEffect(isHitFlashing);
-    const ModelDrawEffect baseEffect =
-        BuildEnemyBaseEffect(hitEffect, isHitFlashing, actionTint,
-                             actionIntensity, actionNoise);
+    const ModelDrawEffect baseEffect = BuildEnemyBaseEffect(
+        hitEffect, isHitFlashing, actionTint, actionIntensity, actionNoise);
 
     const float warpAlpha = GetWarpVisualAlpha();
     if (isVisible_ && warpAlpha > 0.001f) {
@@ -617,15 +618,16 @@ void Enemy::Draw(ModelManager *modelManager, const Camera &camera,
     modelManager->ClearDrawEffect();
 }
 
-void Enemy::ResolveActionDrawStyle(
-    float actionPulse, DirectX::XMFLOAT4 &actionTint,
-    float &actionIntensity, float &actionNoise) const {
+void Enemy::ResolveActionDrawStyle(float actionPulse,
+                                   DirectX::XMFLOAT4 &actionTint,
+                                   float &actionIntensity,
+                                   float &actionNoise) const {
     const DirectX::XMFLOAT4 phaseTint =
         phase_ == BossPhase::Phase3
             ? DirectX::XMFLOAT4{0.72f, 0.50f, 0.16f, 0.20f}
-            : phase_ == BossPhase::Phase2
-                  ? DirectX::XMFLOAT4{0.56f, 0.50f, 0.42f, 0.16f}
-                  : DirectX::XMFLOAT4{0.72f, 0.76f, 0.72f, 0.12f};
+        : phase_ == BossPhase::Phase2
+            ? DirectX::XMFLOAT4{0.56f, 0.50f, 0.42f, 0.16f}
+            : DirectX::XMFLOAT4{0.72f, 0.76f, 0.72f, 0.12f};
     actionTint = phaseTint;
     actionIntensity = 0.025f + 0.010f * actionPulse;
     actionNoise = 0.08f;
@@ -669,16 +671,15 @@ void Enemy::ResolveActionDrawStyle(
     default:
         break;
     }
-
-
 }
 
-void Enemy::ApplyActionDrawStyleModifiers(
-    float actionPulse, DirectX::XMFLOAT4 &actionTint,
-    float &actionIntensity, float &actionNoise) const {
-    const bool isTelegraphCharge =
-        action_.step == ActionStep::Charge &&
-        (action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep);
+void Enemy::ApplyActionDrawStyleModifiers(float actionPulse,
+                                          DirectX::XMFLOAT4 &actionTint,
+                                          float &actionIntensity,
+                                          float &actionNoise) const {
+    const bool isTelegraphCharge = action_.step == ActionStep::Charge &&
+                                   (action_.kind == ActionKind::Smash ||
+                                    action_.kind == ActionKind::Sweep);
     if (isTelegraphCharge) {
         actionTint = LerpColor(actionTint, {0.82f, 0.72f, 0.42f, 0.22f},
                                0.08f + 0.08f * actionPulse);
@@ -705,15 +706,13 @@ void Enemy::ApplyActionDrawStyleModifiers(
         actionIntensity += 0.12f * phaseRatio;
         actionNoise += 0.06f * phaseRatio;
     }
-
-
 }
 
 ModelDrawEffect Enemy::BuildEnemyHitEffect(bool &isHitFlashing) const {
     float hitReactionFlash = 0.0f;
     if (hitReactionDuration_ > 0.0001f) {
-        hitReactionFlash =
-            std::clamp(runtime_.hitReactionTimer / hitReactionDuration_, 0.0f, 1.0f);
+        hitReactionFlash = std::clamp(
+            runtime_.hitReactionTimer / hitReactionDuration_, 0.0f, 1.0f);
     }
     const float damageFlash =
         damageFlashDuration_ > 0.0001f
@@ -726,12 +725,11 @@ ModelDrawEffect Enemy::BuildEnemyHitEffect(bool &isHitFlashing) const {
     if (isHitFlashing) {
         const bool hasHitReactionFlash = hitReactionFlash > 0.0f;
         const float flashElapsed =
-            hasHitReactionFlash ? hitReactionDuration_ - runtime_.hitReactionTimer
-                                : damageFlashDuration_ - runtime_.damageFlashTimer;
+            hasHitReactionFlash
+                ? hitReactionDuration_ - runtime_.hitReactionTimer
+                : damageFlashDuration_ - runtime_.damageFlashTimer;
         const float hitStrobe =
-            std::sinf(flashElapsed * 45.0f) > 0.0f
-                ? 1.0f
-                : 0.0f;
+            std::sinf(flashElapsed * 45.0f) > 0.0f ? 1.0f : 0.0f;
         const float hitFlashAmount = hitFlash * hitStrobe;
         hitEffect.enabled = hitFlashAmount > 0.0f;
         hitEffect.additiveBlend = false;
@@ -741,34 +739,33 @@ ModelDrawEffect Enemy::BuildEnemyHitEffect(bool &isHitFlashing) const {
                             {1.0f, 1.0f, 1.0f, 0.98f}, hitFlash)
                 : LerpColor({1.0f, 0.82f, 0.50f, 0.42f},
                             {1.0f, 0.95f, 0.74f, 0.52f}, damageFlash);
-        hitEffect.intensity =
-            hasHitReactionFlash ? 0.46f + 0.62f * hitFlashAmount
-                                : 0.16f + 0.22f * hitFlashAmount;
+        hitEffect.intensity = hasHitReactionFlash
+                                  ? 0.46f + 0.62f * hitFlashAmount
+                                  : 0.16f + 0.22f * hitFlashAmount;
         hitEffect.fresnelPower = 1.8f;
         hitEffect.noiseAmount = 0.08f;
         hitEffect.time = flashElapsed;
-        hitEffect.surfaceTint =
-            hasHitReactionFlash ? 0.40f + 0.24f * hitFlashAmount
-                                : 0.09f + 0.14f * hitFlashAmount;
+        hitEffect.surfaceTint = hasHitReactionFlash
+                                    ? 0.40f + 0.24f * hitFlashAmount
+                                    : 0.09f + 0.14f * hitFlashAmount;
         hitEffect.alphaBoost = hasHitReactionFlash ? 0.62f : 0.34f;
     }
-
 
     return hitEffect;
 }
 
-ModelDrawEffect Enemy::BuildEnemyBaseEffect(
-    const ModelDrawEffect &hitEffect, bool isHitFlashing,
-    const DirectX::XMFLOAT4 &actionTint, float actionIntensity,
-    float actionNoise) const {
+ModelDrawEffect Enemy::BuildEnemyBaseEffect(const ModelDrawEffect &hitEffect,
+                                            bool isHitFlashing,
+                                            const DirectX::XMFLOAT4 &actionTint,
+                                            float actionIntensity,
+                                            float actionNoise) const {
     ModelDrawEffect baseEffect{};
     if (isHitFlashing) {
         baseEffect = hitEffect;
     } else {
-        const bool isTelegraphCharge =
-            action_.step == ActionStep::Charge &&
-            (action_.kind == ActionKind::Smash ||
-             action_.kind == ActionKind::Sweep);
+        const bool isTelegraphCharge = action_.step == ActionStep::Charge &&
+                                       (action_.kind == ActionKind::Smash ||
+                                        action_.kind == ActionKind::Sweep);
         baseEffect.enabled = false;
         baseEffect.additiveBlend = false;
         baseEffect.color = actionTint;
@@ -781,14 +778,14 @@ ModelDrawEffect Enemy::BuildEnemyBaseEffect(
         baseEffect.time = runtime_.stateTimer;
     }
 
-
     return baseEffect;
 }
 
-void Enemy::DrawEnemyVisual(
-    ModelManager *modelManager, const Camera &camera, const Transform &visual,
-    float alpha, float visualScale, float actionPulse, bool isHitFlashing,
-    const ModelDrawEffect &baseEffect) const {
+void Enemy::DrawEnemyVisual(ModelManager *modelManager, const Camera &camera,
+                            const Transform &visual, float alpha,
+                            float visualScale, float actionPulse,
+                            bool isHitFlashing,
+                            const ModelDrawEffect &baseEffect) const {
     auto applyBaseEffect = [&](float effectAlpha) {
         ModelDrawEffect effect = baseEffect;
         if (effectAlpha < 0.999f) {
@@ -837,17 +834,17 @@ void Enemy::DrawEnemyVisual(
     modelManager->Draw(modelId_, scaledVisual, camera);
 }
 
-void Enemy::DrawEnemyAfterimages(
-    ModelManager *modelManager, const Camera &camera,
-    float visualScale) const {
+void Enemy::DrawEnemyAfterimages(ModelManager *modelManager,
+                                 const Camera &camera,
+                                 float visualScale) const {
     for (const auto &trail : afterimageGhosts_) {
         if (!trail.isActive) {
             continue;
         }
-        const float alpha = trail.maxLife > 0.0001f
-                                ? std::clamp(trail.life / trail.maxLife, 0.0f,
-                                             1.0f)
-                                : 0.0f;
+        const float alpha =
+            trail.maxLife > 0.0001f
+                ? std::clamp(trail.life / trail.maxLife, 0.0f, 1.0f)
+                : 0.0f;
         Transform trailVisual = trail.visual;
         const float distanceVisualScale =
             visualScale *
@@ -868,16 +865,13 @@ void Enemy::DrawEnemyAfterimages(
         modelManager->SetDrawEffect(trailEffect);
         modelManager->Draw(modelId_, trailVisual, camera);
     }
-
-
 }
 
-void Enemy::ApplyVictoryDefeatPose(
-    float ratio, const DirectX::XMFLOAT3 &startPosition,
-    const DirectX::XMFLOAT3 &playerPosition) {
+void Enemy::ApplyVictoryDefeatPose(float ratio,
+                                   const DirectX::XMFLOAT3 &startPosition,
+                                   const DirectX::XMFLOAT3 &playerPosition) {
     ratio = (std::clamp)(ratio, 0.0f, 1.0f);
-    const int frame =
-        (std::min)(3, static_cast<int>(std::floor(ratio * 4.0f)));
+    const int frame = (std::min)(3, static_cast<int>(std::floor(ratio * 4.0f)));
 
     float awayX = startPosition.x - playerPosition.x;
     float awayZ = startPosition.z - playerPosition.z;
@@ -962,4 +956,3 @@ void Enemy::ApplyVictoryDefeatPose(
                                awayZ * (0.10f + 0.38f * fallPose);
     rightHandTf_.position.y += 0.84f - 0.80f * fallPose;
 }
-

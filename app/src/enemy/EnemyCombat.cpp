@@ -54,7 +54,8 @@ OBB Enemy::GetAttackOBB() const {
 }
 
 OBB Enemy::GetSmashAttackOBB() const {
-    const float usedYaw = ShouldUseLockedAttackYaw() ? lockedAttackYaw_ : facingYaw_;
+    const float usedYaw =
+        ShouldUseLockedAttackYaw() ? lockedAttackYaw_ : facingYaw_;
     const float forwardX = std::sin(usedYaw);
     const float forwardZ = std::cos(usedYaw);
 
@@ -70,7 +71,8 @@ OBB Enemy::GetSmashAttackOBB() const {
 }
 
 OBB Enemy::GetSweepAttackOBB() const {
-    const float usedYaw = ShouldUseLockedAttackYaw() ? lockedAttackYaw_ : facingYaw_;
+    const float usedYaw =
+        ShouldUseLockedAttackYaw() ? lockedAttackYaw_ : facingYaw_;
     const float forwardX = std::sin(usedYaw);
     const float forwardZ = std::cos(usedYaw);
 
@@ -143,7 +145,8 @@ bool Enemy::IsPunishableRecovery() const {
     case ActionKind::BladeClash:
     case ActionKind::ArcaneLaser:
     case ActionKind::CataclysmLaser:
-        return action_.step == ActionStep::Recovery && hitReactionTimer_ <= 0.0f;
+        return action_.step == ActionStep::Recovery &&
+               hitReactionTimer_ <= 0.0f;
     default:
         return false;
     }
@@ -314,8 +317,7 @@ float Enemy::TakeDamageNoReaction(float damage) {
     const float previousHitReactionTimer = hitReactionTimer_;
     const float appliedDamage = TakeDamageDeferTransitionsNoReaction(damage);
     ResolveDeferredDamageTransitions();
-    if (!deathFinished_ && !isDying_ && hp_ > 0.0f &&
-        !phaseTransitionActive_) {
+    if (!deathFinished_ && !isDying_ && hp_ > 0.0f && !phaseTransitionActive_) {
         hitReactionTimer_ = previousHitReactionTimer;
     }
     return appliedDamage;
@@ -459,7 +461,8 @@ void Enemy::FinishCounterRecoil() {
 
 bool Enemy::ApplyCounterBreakReaction(float vulnerabilityDuration) {
     const bool isCounterBreakableAction =
-        action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep ||
+        action_.kind == ActionKind::Smash ||
+        action_.kind == ActionKind::Sweep ||
         action_.kind == ActionKind::BladeClash ||
         action_.kind == ActionKind::ArcaneLaser ||
         action_.kind == ActionKind::CataclysmLaser;
@@ -467,10 +470,11 @@ bool Enemy::ApplyCounterBreakReaction(float vulnerabilityDuration) {
         return false;
     }
 
-    const bool continueTripleIai =
-        tripleIaiSlashActive_ && tripleIaiSlashesRemaining_ > 0 &&
-        farSlashActive_ &&
-        (action_.kind == ActionKind::Smash || action_.kind == ActionKind::Sweep);
+    const bool continueTripleIai = tripleIaiSlashActive_ &&
+                                   tripleIaiSlashesRemaining_ > 0 &&
+                                   farSlashActive_ &&
+                                   (action_.kind == ActionKind::Smash ||
+                                    action_.kind == ActionKind::Sweep);
 
     if (continueTripleIai) {
         EndAttack();

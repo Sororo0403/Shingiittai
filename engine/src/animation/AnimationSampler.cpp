@@ -77,8 +77,7 @@ XMFLOAT3 AnimationSampler::SampleVec3(const AnimationCurve<XMFLOAT3> &curve,
         return {0.0f, 0.0f, 0.0f};
     }
 
-    if (!std::isfinite(time) || keys.size() == 1 ||
-        time <= keys.front().time) {
+    if (!std::isfinite(time) || keys.size() == 1 || time <= keys.front().time) {
         return SanitizeVec3(keys.front().value);
     }
 
@@ -107,8 +106,7 @@ XMFLOAT4 AnimationSampler::SampleQuat(const AnimationCurve<XMFLOAT4> &curve,
         return {0.0f, 0.0f, 0.0f, 1.0f};
     }
 
-    if (!std::isfinite(time) || keys.size() == 1 ||
-        time <= keys.front().time) {
+    if (!std::isfinite(time) || keys.size() == 1 || time <= keys.front().time) {
         return StoreQuat(LoadNormalizedQuatOrIdentity(keys.front().value));
     }
 

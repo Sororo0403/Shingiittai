@@ -16,7 +16,8 @@ class HandLoadingScene : public BaseScene {
     HandLoadingScene(const SwordInputCalibration &inputCalibration,
                      GameScene::Mode destinationMode);
     explicit HandLoadingScene(const SwordInputCalibration &inputCalibration);
-    explicit HandLoadingScene(CameraAccuracyDebugScene::ReturnTarget returnTarget);
+    explicit HandLoadingScene(
+        CameraAccuracyDebugScene::ReturnTarget returnTarget);
 
     void Initialize(const SceneContext &ctx) override;
     void Update() override;

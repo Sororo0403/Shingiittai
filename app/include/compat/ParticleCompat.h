@@ -16,14 +16,15 @@ inline DirectX::XMFLOAT3 NormalizeParticleCompatVec3(
     return {value.x * invLength, value.y * invLength, value.z * invLength};
 }
 
-inline DirectX::XMFLOAT3 CrossParticleCompatVec3(
-    const DirectX::XMFLOAT3 &a, const DirectX::XMFLOAT3 &b) {
+inline DirectX::XMFLOAT3 CrossParticleCompatVec3(const DirectX::XMFLOAT3 &a,
+                                                 const DirectX::XMFLOAT3 &b) {
     return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z,
             a.x * b.y - a.y * b.x};
 }
 
-inline void ConfigureParticleCompatSlashLineBasis(
-    ParticleEmitterSettings &settings, const DirectX::XMFLOAT3 &direction) {
+inline void
+ConfigureParticleCompatSlashLineBasis(ParticleEmitterSettings &settings,
+                                      const DirectX::XMFLOAT3 &direction) {
     const DirectX::XMFLOAT3 line =
         NormalizeParticleCompatVec3(direction, {1.0f, 0.0f, 0.0f});
     const DirectX::XMFLOAT3 worldUp{0.0f, 1.0f, 0.0f};
@@ -31,13 +32,10 @@ inline void ConfigureParticleCompatSlashLineBasis(
         std::fabs(line.x * worldUp.x + line.y * worldUp.y + line.z * worldUp.z);
     const DirectX::XMFLOAT3 thicknessFallback =
         upDot > 0.88f ? DirectX::XMFLOAT3{1.0f, 0.0f, 0.0f} : worldUp;
-    const DirectX::XMFLOAT3 depth =
-        NormalizeParticleCompatVec3(CrossParticleCompatVec3(line,
-                                                            thicknessFallback),
-                                    {0.0f, 0.0f, 1.0f});
-    const DirectX::XMFLOAT3 thickness =
-        NormalizeParticleCompatVec3(CrossParticleCompatVec3(depth, line),
-                                    thicknessFallback);
+    const DirectX::XMFLOAT3 depth = NormalizeParticleCompatVec3(
+        CrossParticleCompatVec3(line, thicknessFallback), {0.0f, 0.0f, 1.0f});
+    const DirectX::XMFLOAT3 thickness = NormalizeParticleCompatVec3(
+        CrossParticleCompatVec3(depth, line), thicknessFallback);
 
     settings.basisRight = line;
     settings.basisUp = thickness;
@@ -45,12 +43,10 @@ inline void ConfigureParticleCompatSlashLineBasis(
 }
 
 inline void EmitParticleBurst(GPUParticleSystem &system,
-                              const DirectX::XMFLOAT3 &position,
-                              uint32_t count, float lifeTime,
-                              AppParticleBurstStyle style,
+                              const DirectX::XMFLOAT3 &position, uint32_t count,
+                              float lifeTime, AppParticleBurstStyle style,
                               const DirectX::XMFLOAT4 &color,
-                              const DirectX::XMFLOAT3 &direction,
-                              float speed) {
+                              const DirectX::XMFLOAT3 &direction, float speed) {
     ParticleEmitterSettings settings{};
     settings.position = position;
     settings.emissionType = ParticleEmissionType::Burst;

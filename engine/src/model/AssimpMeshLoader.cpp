@@ -29,8 +29,7 @@ float ClampFinite(float value, float minimum, float maximum, float fallback) {
     return std::clamp(FiniteOr(value, fallback), minimum, maximum);
 }
 
-XMFLOAT3 SanitizeFloat3(const aiVector3D &value,
-                        const XMFLOAT3 &fallback) {
+XMFLOAT3 SanitizeFloat3(const aiVector3D &value, const XMFLOAT3 &fallback) {
     return {FiniteOr(value.x, fallback.x), FiniteOr(value.y, fallback.y),
             FiniteOr(value.z, fallback.z)};
 }
@@ -79,7 +78,8 @@ int CheckedIntSize(size_t value, const char *message) {
     return static_cast<int>(value);
 }
 
-bool TryParseEmbeddedTextureIndex(const std::string &name, unsigned int &index) {
+bool TryParseEmbeddedTextureIndex(const std::string &name,
+                                  unsigned int &index) {
     if (name.size() <= 1 || name[0] != '*') {
         return false;
     }
@@ -115,12 +115,11 @@ std::vector<Vertex> BuildVertices(const aiMesh &mesh) {
         if (mesh.HasNormals()) {
             vertex.normal = SanitizeNormal(mesh.mNormals[index]);
         }
-        vertex.uv = mesh.HasTextureCoords(0)
-                        ? XMFLOAT2{FiniteOr(mesh.mTextureCoords[0][index].x,
-                                           0.0f),
-                                   FiniteOr(mesh.mTextureCoords[0][index].y,
-                                           0.0f)}
-                        : XMFLOAT2{};
+        vertex.uv =
+            mesh.HasTextureCoords(0)
+                ? XMFLOAT2{FiniteOr(mesh.mTextureCoords[0][index].x, 0.0f),
+                           FiniteOr(mesh.mTextureCoords[0][index].y, 0.0f)}
+                : XMFLOAT2{};
         if (mesh.HasTangentsAndBitangents()) {
             vertex.tangent = SanitizeTangent(mesh.mTangents[index]);
         }
@@ -144,8 +143,8 @@ std::vector<uint32_t> BuildTriangleIndices(const aiMesh &mesh,
         if (!valid) {
             continue;
         }
-        indices.insert(indices.end(), {face.mIndices[0], face.mIndices[1],
-                                       face.mIndices[2]});
+        indices.insert(indices.end(),
+                       {face.mIndices[0], face.mIndices[1], face.mIndices[2]});
     }
     return indices;
 }
@@ -154,12 +153,11 @@ bool MeshDataSizesFit(const std::vector<Vertex> &vertices,
                       const std::vector<uint32_t> &indices) {
     const size_t maximum =
         static_cast<size_t>((std::numeric_limits<uint32_t>::max)());
-    const std::array<bool, 4> valid = {
-        !vertices.empty(), !indices.empty(), vertices.size() <= maximum,
-        indices.size() <= maximum};
-    return std::all_of(valid.begin(), valid.end(), [](bool value) {
-        return value;
-    });
+    const std::array<bool, 4> valid = {!vertices.empty(), !indices.empty(),
+                                       vertices.size() <= maximum,
+                                       indices.size() <= maximum};
+    return std::all_of(valid.begin(), valid.end(),
+                       [](bool value) { return value; });
 }
 
 void FillSourceBounds(const std::vector<Vertex> &vertices,
@@ -242,7 +240,8 @@ bool LoadEmbeddedTexture(TextureManager *manager, const aiScene &scene,
         return false;
     }
     const aiTexture *texture = scene.mTextures[textureIndex];
-    if (texture == nullptr || texture->mWidth == 0 || texture->pcData == nullptr) {
+    if (texture == nullptr || texture->mWidth == 0 ||
+        texture->pcData == nullptr) {
         return false;
     }
     if (texture->mHeight == 0) {
@@ -271,7 +270,7 @@ bool LoadEmbeddedTexture(TextureManager *manager, const aiScene &scene,
         pixels[destination + 3u] = source.a;
     }
     textureId = manager->CreateFromRgbaPixels(texture->mWidth, texture->mHeight,
-                                               pixels.data());
+                                              pixels.data());
     return true;
 }
 
@@ -301,9 +300,8 @@ Material BuildMaterial(const aiMaterial *source, bool hasTexture,
     material.reflectionStrength = 0.18f;
     material.reflectionFresnelStrength = 0.12f;
     aiColor4D diffuse{};
-    if (source != nullptr &&
-        aiGetMaterialColor(source, AI_MATKEY_COLOR_DIFFUSE, &diffuse) ==
-            AI_SUCCESS) {
+    if (source != nullptr && aiGetMaterialColor(source, AI_MATKEY_COLOR_DIFFUSE,
+                                                &diffuse) == AI_SUCCESS) {
         material.color.x = ClampFinite(diffuse.r, 0.0f, 1.0f, 1.0f);
         material.color.y = ClampFinite(diffuse.g, 0.0f, 1.0f, 1.0f);
         material.color.z = ClampFinite(diffuse.b, 0.0f, 1.0f, 1.0f);
@@ -318,8 +316,7 @@ Material BuildMaterial(const aiMaterial *source, bool hasTexture,
     material.enableTexture = hasTexture ? 1 : 0;
     material.enableNormalMap = hasNormalTexture ? 1 : 0;
     material.baseColorTextureId = hasTexture ? textureId : UINT32_MAX;
-    material.normalTextureId =
-        hasNormalTexture ? normalTextureId : UINT32_MAX;
+    material.normalTextureId = hasNormalTexture ? normalTextureId : UINT32_MAX;
     return material;
 }
 
@@ -530,8 +527,7 @@ void AssimpMeshLoader::ReorderBonesParentFirst(Model &model) const {
     model.bones = std::move(orderedBones);
     model.boneMap.clear();
     for (size_t boneIndex = 0; boneIndex < model.bones.size(); ++boneIndex) {
-        model.boneMap[model.bones[boneIndex].name] =
-            CheckedUint32Size(boneIndex,
-                              "AssimpMeshLoader reordered bone count overflow");
+        model.boneMap[model.bones[boneIndex].name] = CheckedUint32Size(
+            boneIndex, "AssimpMeshLoader reordered bone count overflow");
     }
 }

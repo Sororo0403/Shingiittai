@@ -54,9 +54,7 @@ class ImguiDescriptorAllocationGuard {
 };
 } // namespace
 
-ImguiManager::~ImguiManager() {
-    Finalize();
-}
+ImguiManager::~ImguiManager() { Finalize(); }
 
 void ImguiManager::Initialize(WinApp *winApp, DirectXCommon *dxCommon,
                               SrvManager *srvManager) {
@@ -105,9 +103,9 @@ void ImguiManager::Initialize(WinApp *winApp, DirectXCommon *dxCommon,
     initializeGuard.Commit();
 }
 
-void ImguiManager::AllocateSrvDescriptor(
-    ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HANDLE *outCpu,
-    D3D12_GPU_DESCRIPTOR_HANDLE *outGpu) {
+void ImguiManager::AllocateSrvDescriptor(ImGui_ImplDX12_InitInfo *info,
+                                         D3D12_CPU_DESCRIPTOR_HANDLE *outCpu,
+                                         D3D12_GPU_DESCRIPTOR_HANDLE *outGpu) {
     if (outCpu == nullptr || outGpu == nullptr) {
         return;
     }
@@ -123,7 +121,8 @@ void ImguiManager::AllocateSrvDescriptor(
     }
 
     const uint32_t index = manager->srvManager_->Allocate();
-    ImguiDescriptorAllocationGuard allocationGuard(*manager->srvManager_, index);
+    ImguiDescriptorAllocationGuard allocationGuard(*manager->srvManager_,
+                                                   index);
     const D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle =
         manager->srvManager_->GetCpuHandle(index);
     const D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle =
@@ -134,9 +133,9 @@ void ImguiManager::AllocateSrvDescriptor(
     allocationGuard.Commit();
 }
 
-void ImguiManager::FreeSrvDescriptor(
-    ImGui_ImplDX12_InitInfo *info, D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
-    D3D12_GPU_DESCRIPTOR_HANDLE) {
+void ImguiManager::FreeSrvDescriptor(ImGui_ImplDX12_InitInfo *info,
+                                     D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
+                                     D3D12_GPU_DESCRIPTOR_HANDLE) {
     if (info == nullptr || info->UserData == nullptr) {
         return;
     }

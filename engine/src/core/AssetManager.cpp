@@ -24,9 +24,7 @@ void AssetManager::SetAssetRoot(const std::filesystem::path &assetRoot) {
     gAssetRoot = ResolveRoot(assetRoot);
 }
 
-const std::filesystem::path &AssetManager::GetAssetRoot() {
-    return gAssetRoot;
-}
+const std::filesystem::path &AssetManager::GetAssetRoot() { return gAssetRoot; }
 
 std::filesystem::path
 AssetManager::ResolvePath(const std::filesystem::path &relativePath) {

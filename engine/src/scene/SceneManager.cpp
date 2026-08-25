@@ -9,7 +9,8 @@ class UploadPassScope {
   public:
     UploadPassScope(DirectXCommon *dxCommon, TextureManager *textureManager,
                     bool active)
-        : dxCommon_(dxCommon), textureManager_(textureManager), active_(active) {}
+        : dxCommon_(dxCommon), textureManager_(textureManager),
+          active_(active) {}
 
     ~UploadPassScope() {
         if (active_ && dxCommon_ != nullptr) {
@@ -177,4 +178,3 @@ void SceneManager::DrawShadow() {
         currentScene_->DrawShadow();
     }
 }
-

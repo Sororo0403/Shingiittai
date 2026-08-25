@@ -172,9 +172,8 @@ void Enemy::UpdateChargeTracking(float deltaTime, float trackingEnd,
                                  float stanceTime) {
     if (stateTimer_ < trackingEnd) {
         UpdateFacingToPlayerWithSpeed(
-            deltaTime,
-            chargeTurnSpeed_ *
-                ChargeTurnScaleAfterStance(stateTimer_, stanceTime));
+            deltaTime, chargeTurnSpeed_ *
+                           ChargeTurnScaleAfterStance(stateTimer_, stanceTime));
     } else if (!hasTrackingLocked_) {
         LockCurrentFacing();
         hasTrackingLocked_ = true;
@@ -219,17 +218,17 @@ void Enemy::UpdateSmashAttack(float deltaTime) {
         UpdateFarSlashLunge(deltaTime);
     }
 
-    const float attackStartTime =
-        farSlashActive_ ? kFarSlashCounterFlashDuration
-                        : timing->activeStartTime;
+    const float attackStartTime = farSlashActive_
+                                      ? kFarSlashCounterFlashDuration
+                                      : timing->activeStartTime;
     const float attackEndTime =
         farSlashActive_ && farSlashLungeDuration_ > 0.0001f
             ? std::max(timing->activeEndTime,
                        kFarSlashCounterFlashDuration + farSlashLungeDuration_)
             : timing->activeEndTime;
 
-    isAttackActive_ = stateTimer_ >= attackStartTime &&
-                      stateTimer_ <= attackEndTime;
+    isAttackActive_ =
+        stateTimer_ >= attackStartTime && stateTimer_ <= attackEndTime;
     if (stateTimer_ >= attackEndTime) {
         ChangeActionStep(ActionStep::Recovery);
         if (tripleIaiSlashActive_ && farSlashActive_ &&
@@ -328,17 +327,17 @@ void Enemy::UpdateSweepAttack(float deltaTime) {
         UpdateFarSlashLunge(deltaTime);
     }
 
-    const float attackStartTime =
-        farSlashActive_ ? kFarSlashCounterFlashDuration
-                        : timing->activeStartTime;
+    const float attackStartTime = farSlashActive_
+                                      ? kFarSlashCounterFlashDuration
+                                      : timing->activeStartTime;
     const float attackEndTime =
         farSlashActive_ && farSlashLungeDuration_ > 0.0001f
             ? std::max(timing->activeEndTime,
                        kFarSlashCounterFlashDuration + farSlashLungeDuration_)
             : timing->activeEndTime;
 
-    isAttackActive_ = stateTimer_ >= attackStartTime &&
-                      stateTimer_ <= attackEndTime;
+    isAttackActive_ =
+        stateTimer_ >= attackStartTime && stateTimer_ <= attackEndTime;
     if (stateTimer_ >= attackEndTime) {
         ChangeActionStep(ActionStep::Recovery);
         if (tripleIaiSlashActive_ && farSlashActive_ &&
@@ -443,8 +442,9 @@ void Enemy::UpdateArcaneLaserRecovery(float deltaTime) {
     UpdateFacingToPlayerWithSpeed(deltaTime, recoveryTurnSpeed_ * 0.20f);
 
     if (stateTimer_ >= config_.attacks.arcaneLaser.recoveryDuration) {
-        sharedRangedAttackCooldown_ = (std::max)(
-            sharedRangedAttackCooldown_, sharedRangedAttackCooldownDuration_);
+        sharedRangedAttackCooldown_ =
+            (std::max)(sharedRangedAttackCooldown_,
+                       sharedRangedAttackCooldownDuration_);
         if (TryBeginLaserReengageWarp(1.0f)) {
             return;
         }
@@ -466,8 +466,8 @@ void Enemy::UpdateCataclysmLaserCharge(float deltaTime) {
         kBoostLiftTime, std::max(0.18f, profile.chargeTime - kLiftDelay));
     const float liftRatio =
         std::clamp((stateTimer_ - kLiftDelay) / liftDuration, 0.0f, 1.0f);
-    const float smoothLift = 1.0f - (1.0f - liftRatio) * (1.0f - liftRatio) *
-                                        (1.0f - liftRatio);
+    const float smoothLift =
+        1.0f - (1.0f - liftRatio) * (1.0f - liftRatio) * (1.0f - liftRatio);
     tf_.position.y = groundY + kHoverHeight * smoothLift;
 
     const float boostPush =
@@ -514,4 +514,3 @@ void Enemy::UpdateCataclysmLaserRecovery(float deltaTime) {
         EndAttack();
     }
 }
-

@@ -147,8 +147,7 @@ void TutorialScene::Draw() {
     for (size_t i = 0; i < bodyImages_.size(); ++i) {
         const Image &body = bodyImages_[i];
         const float bodyScale =
-            (std::min)(1.0f,
-                       (panelW - 160.0f) / (std::max)(body.width, 1.0f));
+            (std::min)(1.0f, (panelW - 160.0f) / (std::max)(body.width, 1.0f));
         const float lineY =
             panelY + panelH * (0.40f + static_cast<float>(i) * 0.16f);
         DrawImage(body, panelX + (panelW - body.width * bodyScale) * 0.5f,
@@ -214,8 +213,8 @@ void TutorialScene::DrawRect(float x, float y, float w, float h,
     ctx_->rendering.sprite->DrawSprite(sprite);
 }
 
-void TutorialScene::DrawImage(const Image &image, float x, float y,
-                              float scale, float alpha) {
+void TutorialScene::DrawImage(const Image &image, float x, float y, float scale,
+                              float alpha) {
     if (image.width <= 0.0f || image.height <= 0.0f) {
         return;
     }

@@ -14,12 +14,12 @@ void GameScene::UpdateSceneLighting() {
     const XMFLOAT3 &enemyPos = enemy_.GetTransform().position;
     const ActionKind actionKind = enemy_.GetActionKind();
     const ActionStep actionStep = enemy_.GetActionStep();
-    const bool isAttackKind =
-        actionKind == ActionKind::Smash || actionKind == ActionKind::Sweep ||
-        actionKind == ActionKind::BladeClash;
+    const bool isAttackKind = actionKind == ActionKind::Smash ||
+                              actionKind == ActionKind::Sweep ||
+                              actionKind == ActionKind::BladeClash;
     const bool effectFocus =
-        (isAttackKind &&
-         (actionStep == ActionStep::Charge || actionStep == ActionStep::Active)) ||
+        (isAttackKind && (actionStep == ActionStep::Charge ||
+                          actionStep == ActionStep::Active)) ||
         enemy_.IsPhaseTransitionActive();
     XMFLOAT3 accentAnchor = enemy_.GetTransform().position;
 
@@ -45,8 +45,7 @@ void GameScene::UpdateSceneLighting() {
     }
     if (enemy_.IsPhaseTransitionActive()) {
         const float ratio = enemy_.GetPhaseTransitionRatio();
-        const float release =
-            std::clamp((ratio - 0.88f) / 0.05f, 0.0f, 1.0f);
+        const float release = std::clamp((ratio - 0.88f) / 0.05f, 0.0f, 1.0f);
         actionColor = {1.0f, 0.24f + 0.30f * release, 0.05f, 1.0f};
     }
 

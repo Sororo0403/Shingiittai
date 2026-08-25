@@ -65,8 +65,8 @@ void Enemy::SetDifficulty(float difficulty) {
     const float damageScale = 0.62f + 0.075f * effectiveDifficulty;
     const float knockbackScale = 0.70f + 0.055f * effectiveDifficulty;
     const float hitBoxScale = 0.86f + 0.035f * effectiveDifficulty;
-    const float timingScale = 1.10f - 0.053f * effectiveDifficulty -
-                              0.11f * highPressure;
+    const float timingScale =
+        1.10f - 0.053f * effectiveDifficulty - 0.11f * highPressure;
     ScaleAttackProfile(config_.attacks.smash.melee.base, damageScale,
                        knockbackScale, hitBoxScale, timingScale);
     ScaleAttackProfile(config_.attacks.sweep.melee.base, damageScale,
@@ -76,8 +76,8 @@ void Enemy::SetDifficulty(float difficulty) {
     ScaleAttackProfile(config_.attacks.arcaneLaser.profile, damageScale * 1.08f,
                        knockbackScale * 1.06f, hitBoxScale, timingScale);
     ScaleAttackProfile(config_.attacks.cataclysmLaser.profile,
-                       damageScale * 1.24f, knockbackScale * 1.18f,
-                       hitBoxScale, timingScale);
+                       damageScale * 1.24f, knockbackScale * 1.18f, hitBoxScale,
+                       timingScale);
 
     constexpr float kEasyActiveWindowDuration = 2.0f;
     auto widenActiveWindow = [&](EnemyAttackProfile &profile) {
@@ -102,8 +102,7 @@ void Enemy::SetDifficulty(float difficulty) {
     config_.attacks.smash.melee.feintChance = 0.34f;
     config_.attacks.sweep.melee.feintChance = 0.30f;
     config_.attacks.bladeClash.advanceSpeed = 3.15f + 2.60f * t;
-    config_.attacks.arcaneLaser.recoveryDuration *=
-        1.0f - 0.49f * highPressure;
+    config_.attacks.arcaneLaser.recoveryDuration *= 1.0f - 0.49f * highPressure;
     config_.attacks.cataclysmLaser.recoveryDuration *=
         1.0f - 0.37f * highPressure;
 
@@ -277,8 +276,7 @@ float Enemy::GetReleaseAnticipationRatio() const {
     } else {
         return 0.0f;
     }
-    const float farSlashCounterWindowScale =
-        farSlashActive_ ? 0.58f : 1.0f;
+    const float farSlashCounterWindowScale = farSlashActive_ ? 0.58f : 1.0f;
     cueWindow *= (1.0f - 0.42f * highPressure) * farSlashCounterWindowScale;
 
     if (releaseTime <= 0.0f) {
@@ -332,4 +330,3 @@ void Enemy::ValidateAllTimings() {
     ValidateTiming(config_.attacks.cataclysmLaser.profile.timing,
                    config_.attacks.cataclysmLaser.profile.chargeTime);
 }
-

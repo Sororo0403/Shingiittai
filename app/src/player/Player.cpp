@@ -10,7 +10,7 @@ using namespace DirectX;
 namespace {
 constexpr float kPlayerVisualScaleMultiplier = 1.45f;
 constexpr float kBaseSwordAttackDamage = 8.0f;
-}
+} // namespace
 
 void Player::Initialize(uint32_t playerModelId, uint32_t swordModelId) {
     modelId_ = playerModelId;
@@ -68,8 +68,8 @@ void Player::Update(Input *input, float deltaTime, const XMFLOAT3 &lookTarget,
 
     SwordPose leftPose = MakeIdleSwordPose(true);
     SwordPose rightPose = MakeIdleSwordPose(false);
-    ResolveInputSwordPoses(input, inputDeltaTime, useUdpSword,
-                           useKeyboardMouse, leftPose, rightPose);
+    ResolveInputSwordPoses(input, inputDeltaTime, useUdpSword, useKeyboardMouse,
+                           leftPose, rightPose);
 
     UpdateWeaponRules(input, leftPose, rightPose,
                       useUdpSword || useKeyboardMouse, deltaTime);
@@ -103,8 +103,7 @@ void Player::UpdateBodyState(float deltaTime, const XMFLOAT3 &lookTarget,
 
 void Player::ResolveInputSwordPoses(Input *input, float inputDeltaTime,
                                     bool useUdpSword, bool useKeyboardMouse,
-                                    SwordPose &leftPose,
-                                    SwordPose &rightPose) {
+                                    SwordPose &leftPose, SwordPose &rightPose) {
     if (useUdpSword && swordUdpController_.IsActive(0)) {
         leftPose = swordUdpController_.GetPose(0);
     } else if (useKeyboardMouse) {
@@ -131,9 +130,8 @@ void Player::ApplySwordPoseRestrictions(InputControlType controlType,
     }
 }
 
-void Player::UpdateSwords(const SwordPose &leftPose,
-                          const SwordPose &rightPose, float inputDeltaTime,
-                          bool allowMotionSlash) {
+void Player::UpdateSwords(const SwordPose &leftPose, const SwordPose &rightPose,
+                          float inputDeltaTime, bool allowMotionSlash) {
     leftSword_.Update(BuildSwordTransform(leftPose, true), leftPose,
                       inputDeltaTime, allowMotionSlash);
     rightSword_.Update(BuildSwordTransform(rightPose, false), rightPose,
@@ -146,8 +144,8 @@ void Player::UpdateSwords(const SwordPose &leftPose,
 
 void Player::UpdateDebugSwordPoses(const SwordPose &leftPoseInput,
                                    const SwordPose &rightPoseInput,
-                                   float deltaTime,
-                                   const XMFLOAT3 &position, float yaw) {
+                                   float deltaTime, const XMFLOAT3 &position,
+                                   float yaw) {
     tf_.position = position;
     SetYaw(yaw);
     velocity_ = {0.0f, 0.0f, 0.0f};
@@ -157,8 +155,7 @@ void Player::UpdateDebugSwordPoses(const SwordPose &leftPoseInput,
     SwordPose rightPose = rightPoseInput;
     UpdateWeaponRules(nullptr, leftPose, rightPose, true, deltaTime);
 
-    leftSword_.Update(BuildSwordTransform(leftPose, true), leftPose,
-                      deltaTime);
+    leftSword_.Update(BuildSwordTransform(leftPose, true), leftPose, deltaTime);
     rightSword_.Update(BuildSwordTransform(rightPose, false), rightPose,
                        deltaTime);
 
@@ -178,8 +175,7 @@ void Player::UpdateDemo(float deltaTime, const XMFLOAT3 &lookTarget) {
     leftPose.isSlashMode = false;
     rightPose.isSlashMode = false;
 
-    leftSword_.Update(BuildSwordTransform(leftPose, true), leftPose,
-                      deltaTime);
+    leftSword_.Update(BuildSwordTransform(leftPose, true), leftPose, deltaTime);
     rightSword_.Update(BuildSwordTransform(rightPose, false), rightPose,
                        deltaTime);
 
@@ -237,10 +233,9 @@ Transform Player::BuildPlayerVisual(float visualScale) const {
         XMVECTOR baseRotation = XMLoadFloat4(&visual.rotation);
         XMVECTOR leanRotation =
             XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), lean);
-        XMStoreFloat4(
-            &visual.rotation,
-            XMQuaternionNormalize(
-                XMQuaternionMultiply(leanRotation, baseRotation)));
+        XMStoreFloat4(&visual.rotation,
+                      XMQuaternionNormalize(
+                          XMQuaternionMultiply(leanRotation, baseRotation)));
         visual.position.y -=
             (bladeClashPoseForwardLean_ ? 0.04f : 0.10f) * push;
         const float forwardShift = bladeClashPoseForwardLean_ ? 0.18f : 0.10f;
@@ -251,12 +246,11 @@ Transform Player::BuildPlayerVisual(float visualScale) const {
         const float fall = std::clamp(defeatPoseRatio_, 0.0f, 1.0f);
         const float eased = fall * fall * (3.0f - 2.0f * fall);
         XMVECTOR baseRotation = XMLoadFloat4(&visual.rotation);
-        XMVECTOR fallRotation = XMQuaternionRotationAxis(
-            XMVectorSet(1, 0, 0, 0), -1.34f * eased);
-        XMStoreFloat4(
-            &visual.rotation,
-            XMQuaternionNormalize(
-                XMQuaternionMultiply(fallRotation, baseRotation)));
+        XMVECTOR fallRotation =
+            XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), -1.34f * eased);
+        XMStoreFloat4(&visual.rotation,
+                      XMQuaternionNormalize(
+                          XMQuaternionMultiply(fallRotation, baseRotation)));
         visual.position.y -= 0.48f * eased;
         visual.scale.x *= 1.0f + 0.08f * eased;
         visual.scale.y *= 1.0f - 0.24f * eased;
@@ -266,7 +260,7 @@ Transform Player::BuildPlayerVisual(float visualScale) const {
 }
 
 ModelDrawEffect Player::MakeDamageFlashEffect(bool forceOpaque,
-                                               float flashRatio) const {
+                                              float flashRatio) const {
     ModelDrawEffect effect{};
     effect.enabled = true;
     effect.forceOpaqueMaterial = forceOpaque;
@@ -350,8 +344,8 @@ void Player::SetCinematicBladeClashPose(const XMFLOAT3 &position, float yaw,
                 XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), -0.24f);
             XMVECTOR qYaw = XMQuaternionRotationAxis(
                 XMVectorSet(0, 1, 0, 0), 3.14159265f - side * 0.72f);
-            XMVECTOR qRoll = XMQuaternionRotationAxis(
-                XMVectorSet(0, 0, 1, 0), side * 0.58f);
+            XMVECTOR qRoll =
+                XMQuaternionRotationAxis(XMVectorSet(0, 0, 1, 0), side * 0.58f);
             XMStoreFloat4(&pose.orientation,
                           XMQuaternionNormalize(XMQuaternionMultiply(
                               XMQuaternionMultiply(qPitch, qYaw), qRoll)));
@@ -363,9 +357,8 @@ void Player::SetCinematicBladeClashPose(const XMFLOAT3 &position, float yaw,
         const float yawOut =
             side * (1.92f + 0.38f * swingOut) * (1.0f - finish) +
             (3.14159265f - side * (0.26f + 0.16f * push)) * finish;
-        const float pitchDown =
-            (0.22f + 0.20f * swingOut) * (1.0f - finish) +
-            (-0.36f - 0.18f * push) * finish;
+        const float pitchDown = (0.22f + 0.20f * swingOut) * (1.0f - finish) +
+                                (-0.36f - 0.18f * push) * finish;
         const float rollThrough =
             side * ((0.78f + 0.38f * swingOut) * (1.0f - finish) +
                     (1.14f + 0.28f * push) * finish);
@@ -448,8 +441,7 @@ void Player::UpdateMovement(float deltaTime, const XMFLOAT3 &lookTarget) {
     const float distanceError = distance - kAutoMoveIdealDistance;
     const float distancePush = std::clamp(distanceError * 1.15f, -1.0f, 1.0f);
     const float orbitScale =
-        distance < kAutoMoveNearDistance ||
-                distance > kAutoMoveFarDistance
+        distance < kAutoMoveNearDistance || distance > kAutoMoveFarDistance
             ? 0.35f
             : 1.0f;
 
@@ -497,9 +489,7 @@ void Player::AddKnockback(const DirectX::XMFLOAT3 &velocity) {
     knockbackVelocity_.z += velocity.z;
 }
 
-float Player::GetCounterDamageMultiplier() const {
-    return 7.0f;
-}
+float Player::GetCounterDamageMultiplier() const { return 7.0f; }
 
 float Player::GetCounterVulnerabilityDuration() const { return 1.35f; }
 
@@ -517,11 +507,10 @@ float Player::TakeDamage(float damage) {
     return appliedDamage;
 }
 
-Player::ChargedShot Player::ConsumeChargedShot() {
-    return {};
-}
+Player::ChargedShot Player::ConsumeChargedShot() { return {}; }
 
-Transform Player::BuildSwordTransform(const SwordPose &pose, bool isLeft) const {
+Transform Player::BuildSwordTransform(const SwordPose &pose,
+                                      bool isLeft) const {
     Transform swordTransform{};
 
     XMVECTOR playerRot = XMQuaternionNormalize(XMLoadFloat4(&tf_.rotation));
@@ -533,8 +522,8 @@ Transform Player::BuildSwordTransform(const SwordPose &pose, bool isLeft) const 
     const float handOffsetX = isLeft ? -kHandOffsetX : kHandOffsetX;
 
     XMVECTOR playerPos = XMLoadFloat3(&tf_.position);
-    XMVECTOR shoulderOffset = XMVector3Rotate(
-        XMVectorSet(handOffsetX, kHandHeight, 0, 0), playerRot);
+    XMVECTOR shoulderOffset =
+        XMVector3Rotate(XMVectorSet(handOffsetX, kHandHeight, 0, 0), playerRot);
     XMVECTOR shoulderPos = XMVectorAdd(playerPos, shoulderOffset);
     XMVECTOR armVec =
         XMVector3Rotate(XMVectorSet(0, 0, kArmLength, 0), finalRot);

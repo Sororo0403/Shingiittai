@@ -1,7 +1,7 @@
 #pragma once
+#include "InputControlType.h"
 #include <DirectXMath.h>
 #include <array>
-#include "InputControlType.h"
 
 struct SwordInputCalibration {
     InputControlType controlType = InputControlType::KeyboardMouse;

@@ -48,26 +48,26 @@ struct SettingRange {
 };
 
 constexpr std::array<SettingRange, kDetailedSensitivityCount> kSettingRanges = {
-    SettingRange{0.0f, 1.0f, 0.05f},    // 全体 操作感度
-    SettingRange{0.0f, 1.0f, 0.05f},    // 全体 斬撃感度
-    SettingRange{0.0f, 1.0f, 0.05f},    // 全体 縦斬り感度
-    SettingRange{0.0f, 1.0f, 0.05f},    // 全体 横斬り感度
-    SettingRange{0.50f, 5.00f, 0.05f},  SettingRange{0.50f, 5.00f, 0.05f},
-    SettingRange{0.20f, 1.20f, 0.02f},  SettingRange{1.00f, 2.50f, 0.02f},
-    SettingRange{0.04f, 0.30f, 0.01f},  SettingRange{0.20f, 1.80f, 0.02f},
-    SettingRange{0.05f, 1.00f, 0.01f},  SettingRange{0.40f, 1.20f, 0.01f},
-    SettingRange{0.20f, 1.50f, 0.02f},  SettingRange{1.00f, 3.00f, 0.02f},
-    SettingRange{0.60f, 2.20f, 0.02f},  SettingRange{0.30f, 1.40f, 0.02f},
-    SettingRange{0.05f, 0.50f, 0.01f},  SettingRange{0.02f, 0.40f, 0.01f},
-    SettingRange{0.05f, 0.80f, 0.01f},  SettingRange{2.00f, 40.0f, 0.5f},
-    SettingRange{10.0f, 80.0f, 1.0f},   SettingRange{0.010f, 0.120f, 0.005f},
-    SettingRange{0.10f, 1.00f, 0.01f},  SettingRange{2.00f, 30.0f, 0.5f},
-    SettingRange{0.04f, 0.30f, 0.01f},  SettingRange{0.05f, 0.80f, 0.01f},
+    SettingRange{0.0f, 1.0f, 0.05f}, // 全体 操作感度
+    SettingRange{0.0f, 1.0f, 0.05f}, // 全体 斬撃感度
+    SettingRange{0.0f, 1.0f, 0.05f}, // 全体 縦斬り感度
+    SettingRange{0.0f, 1.0f, 0.05f}, // 全体 横斬り感度
+    SettingRange{0.50f, 5.00f, 0.05f},    SettingRange{0.50f, 5.00f, 0.05f},
+    SettingRange{0.20f, 1.20f, 0.02f},    SettingRange{1.00f, 2.50f, 0.02f},
+    SettingRange{0.04f, 0.30f, 0.01f},    SettingRange{0.20f, 1.80f, 0.02f},
+    SettingRange{0.05f, 1.00f, 0.01f},    SettingRange{0.40f, 1.20f, 0.01f},
+    SettingRange{0.20f, 1.50f, 0.02f},    SettingRange{1.00f, 3.00f, 0.02f},
+    SettingRange{0.60f, 2.20f, 0.02f},    SettingRange{0.30f, 1.40f, 0.02f},
+    SettingRange{0.05f, 0.50f, 0.01f},    SettingRange{0.02f, 0.40f, 0.01f},
+    SettingRange{0.05f, 0.80f, 0.01f},    SettingRange{2.00f, 40.0f, 0.5f},
+    SettingRange{10.0f, 80.0f, 1.0f},     SettingRange{0.010f, 0.120f, 0.005f},
+    SettingRange{0.10f, 1.00f, 0.01f},    SettingRange{2.00f, 30.0f, 0.5f},
+    SettingRange{0.04f, 0.30f, 0.01f},    SettingRange{0.05f, 0.80f, 0.01f},
     SettingRange{0.020f, 0.200f, 0.005f}, SettingRange{0.05f, 1.00f, 0.01f},
-    SettingRange{0.05f, 0.80f, 0.01f},  SettingRange{0.20f, 1.00f, 0.01f},
+    SettingRange{0.05f, 0.80f, 0.01f},    SettingRange{0.20f, 1.00f, 0.01f},
     SettingRange{0.020f, 0.200f, 0.005f}, SettingRange{0.05f, 0.80f, 0.01f},
     SettingRange{0.005f, 0.080f, 0.001f}, SettingRange{0.04f, 0.40f, 0.01f},
-    SettingRange{0.02f, 0.50f, 0.01f},  SettingRange{0.05f, 0.60f, 0.01f},
+    SettingRange{0.02f, 0.50f, 0.01f},    SettingRange{0.05f, 0.60f, 0.01f},
     SettingRange{0.005f, 0.080f, 0.001f}, SettingRange{0.005f, 0.120f, 0.001f},
     SettingRange{0.002f, 0.040f, 0.001f}, SettingRange{0.20f, 0.90f, 0.01f},
     SettingRange{0.040f, 0.200f, 0.005f}, SettingRange{0.020f, 0.120f, 0.005f},
@@ -120,7 +120,7 @@ constexpr std::array<float AdvancedSettings::*,
         &AdvancedSettings::handMaxVisualScale,
         &AdvancedSettings::handFarThresholdScale,
         &AdvancedSettings::handNearThresholdScale,
-    };
+};
 
 XMFLOAT4 Color(float r, float g, float b, float a = 1.0f) {
     return {r, g, b, a};
@@ -139,53 +139,100 @@ const std::array<const char *, 7> &GlyphRows(char c) {
         auto set = [&](char ch, const std::array<const char *, 7> &rows) {
             out[static_cast<unsigned char>(ch)] = rows;
         };
-        set('A', {"01110", "10001", "10001", "11111", "10001", "10001", "10001"});
-        set('B', {"11110", "10001", "10001", "11110", "10001", "10001", "11110"});
-        set('C', {"01111", "10000", "10000", "10000", "10000", "10000", "01111"});
-        set('D', {"11110", "10001", "10001", "10001", "10001", "10001", "11110"});
-        set('E', {"11111", "10000", "10000", "11110", "10000", "10000", "11111"});
-        set('F', {"11111", "10000", "10000", "11110", "10000", "10000", "10000"});
-        set('G', {"01111", "10000", "10000", "10011", "10001", "10001", "01110"});
-        set('H', {"10001", "10001", "10001", "11111", "10001", "10001", "10001"});
-        set('I', {"11111", "00100", "00100", "00100", "00100", "00100", "11111"});
-        set('J', {"00111", "00010", "00010", "00010", "00010", "10010", "01100"});
-        set('K', {"10001", "10010", "10100", "11000", "10100", "10010", "10001"});
-        set('L', {"10000", "10000", "10000", "10000", "10000", "10000", "11111"});
-        set('M', {"10001", "11011", "10101", "10101", "10001", "10001", "10001"});
-        set('N', {"10001", "11001", "10101", "10011", "10001", "10001", "10001"});
-        set('O', {"01110", "10001", "10001", "10001", "10001", "10001", "01110"});
-        set('P', {"11110", "10001", "10001", "11110", "10000", "10000", "10000"});
-        set('Q', {"01110", "10001", "10001", "10001", "10101", "10010", "01101"});
-        set('R', {"11110", "10001", "10001", "11110", "10100", "10010", "10001"});
-        set('S', {"01111", "10000", "10000", "01110", "00001", "00001", "11110"});
-        set('T', {"11111", "00100", "00100", "00100", "00100", "00100", "00100"});
-        set('U', {"10001", "10001", "10001", "10001", "10001", "10001", "01110"});
-        set('V', {"10001", "10001", "10001", "10001", "10001", "01010", "00100"});
-        set('W', {"10001", "10001", "10001", "10101", "10101", "11011", "10001"});
-        set('X', {"10001", "10001", "01010", "00100", "01010", "10001", "10001"});
-        set('Y', {"10001", "10001", "01010", "00100", "00100", "00100", "00100"});
-        set('Z', {"11111", "00001", "00010", "00100", "01000", "10000", "11111"});
-        set('0', {"01110", "10001", "10011", "10101", "11001", "10001", "01110"});
-        set('1', {"00100", "01100", "00100", "00100", "00100", "00100", "01110"});
-        set('2', {"01110", "10001", "00001", "00010", "00100", "01000", "11111"});
-        set('3', {"11110", "00001", "00001", "01110", "00001", "00001", "11110"});
-        set('4', {"00010", "00110", "01010", "10010", "11111", "00010", "00010"});
-        set('5', {"11111", "10000", "10000", "11110", "00001", "00001", "11110"});
-        set('6', {"00111", "01000", "10000", "11110", "10001", "10001", "01110"});
-        set('7', {"11111", "00001", "00010", "00100", "01000", "01000", "01000"});
-        set('8', {"01110", "10001", "10001", "01110", "10001", "10001", "01110"});
-        set('9', {"01110", "10001", "10001", "01111", "00001", "00010", "11100"});
-        set('.', {"00000", "00000", "00000", "00000", "00000", "01100", "01100"});
-        set(',', {"00000", "00000", "00000", "00000", "01100", "00100", "01000"});
-        set(':', {"00000", "01100", "01100", "00000", "01100", "01100", "00000"});
-        set('-', {"00000", "00000", "00000", "11111", "00000", "00000", "00000"});
-        set('+', {"00000", "00100", "00100", "11111", "00100", "00100", "00000"});
-        set('/', {"00001", "00010", "00010", "00100", "01000", "01000", "10000"});
-        set('(', {"00010", "00100", "01000", "01000", "01000", "00100", "00010"});
-        set(')', {"01000", "00100", "00010", "00010", "00010", "00100", "01000"});
-        set('[', {"01110", "01000", "01000", "01000", "01000", "01000", "01110"});
-        set(']', {"01110", "00010", "00010", "00010", "00010", "00010", "01110"});
-        set('=', {"00000", "11111", "00000", "11111", "00000", "00000", "00000"});
+        set('A',
+            {"01110", "10001", "10001", "11111", "10001", "10001", "10001"});
+        set('B',
+            {"11110", "10001", "10001", "11110", "10001", "10001", "11110"});
+        set('C',
+            {"01111", "10000", "10000", "10000", "10000", "10000", "01111"});
+        set('D',
+            {"11110", "10001", "10001", "10001", "10001", "10001", "11110"});
+        set('E',
+            {"11111", "10000", "10000", "11110", "10000", "10000", "11111"});
+        set('F',
+            {"11111", "10000", "10000", "11110", "10000", "10000", "10000"});
+        set('G',
+            {"01111", "10000", "10000", "10011", "10001", "10001", "01110"});
+        set('H',
+            {"10001", "10001", "10001", "11111", "10001", "10001", "10001"});
+        set('I',
+            {"11111", "00100", "00100", "00100", "00100", "00100", "11111"});
+        set('J',
+            {"00111", "00010", "00010", "00010", "00010", "10010", "01100"});
+        set('K',
+            {"10001", "10010", "10100", "11000", "10100", "10010", "10001"});
+        set('L',
+            {"10000", "10000", "10000", "10000", "10000", "10000", "11111"});
+        set('M',
+            {"10001", "11011", "10101", "10101", "10001", "10001", "10001"});
+        set('N',
+            {"10001", "11001", "10101", "10011", "10001", "10001", "10001"});
+        set('O',
+            {"01110", "10001", "10001", "10001", "10001", "10001", "01110"});
+        set('P',
+            {"11110", "10001", "10001", "11110", "10000", "10000", "10000"});
+        set('Q',
+            {"01110", "10001", "10001", "10001", "10101", "10010", "01101"});
+        set('R',
+            {"11110", "10001", "10001", "11110", "10100", "10010", "10001"});
+        set('S',
+            {"01111", "10000", "10000", "01110", "00001", "00001", "11110"});
+        set('T',
+            {"11111", "00100", "00100", "00100", "00100", "00100", "00100"});
+        set('U',
+            {"10001", "10001", "10001", "10001", "10001", "10001", "01110"});
+        set('V',
+            {"10001", "10001", "10001", "10001", "10001", "01010", "00100"});
+        set('W',
+            {"10001", "10001", "10001", "10101", "10101", "11011", "10001"});
+        set('X',
+            {"10001", "10001", "01010", "00100", "01010", "10001", "10001"});
+        set('Y',
+            {"10001", "10001", "01010", "00100", "00100", "00100", "00100"});
+        set('Z',
+            {"11111", "00001", "00010", "00100", "01000", "10000", "11111"});
+        set('0',
+            {"01110", "10001", "10011", "10101", "11001", "10001", "01110"});
+        set('1',
+            {"00100", "01100", "00100", "00100", "00100", "00100", "01110"});
+        set('2',
+            {"01110", "10001", "00001", "00010", "00100", "01000", "11111"});
+        set('3',
+            {"11110", "00001", "00001", "01110", "00001", "00001", "11110"});
+        set('4',
+            {"00010", "00110", "01010", "10010", "11111", "00010", "00010"});
+        set('5',
+            {"11111", "10000", "10000", "11110", "00001", "00001", "11110"});
+        set('6',
+            {"00111", "01000", "10000", "11110", "10001", "10001", "01110"});
+        set('7',
+            {"11111", "00001", "00010", "00100", "01000", "01000", "01000"});
+        set('8',
+            {"01110", "10001", "10001", "01110", "10001", "10001", "01110"});
+        set('9',
+            {"01110", "10001", "10001", "01111", "00001", "00010", "11100"});
+        set('.',
+            {"00000", "00000", "00000", "00000", "00000", "01100", "01100"});
+        set(',',
+            {"00000", "00000", "00000", "00000", "01100", "00100", "01000"});
+        set(':',
+            {"00000", "01100", "01100", "00000", "01100", "01100", "00000"});
+        set('-',
+            {"00000", "00000", "00000", "11111", "00000", "00000", "00000"});
+        set('+',
+            {"00000", "00100", "00100", "11111", "00100", "00100", "00000"});
+        set('/',
+            {"00001", "00010", "00010", "00100", "01000", "01000", "10000"});
+        set('(',
+            {"00010", "00100", "01000", "01000", "01000", "00100", "00010"});
+        set(')',
+            {"01000", "00100", "00010", "00010", "00010", "00100", "01000"});
+        set('[',
+            {"01110", "01000", "01000", "01000", "01000", "01000", "01110"});
+        set(']',
+            {"01110", "00010", "00010", "00010", "00010", "00010", "01110"});
+        set('=',
+            {"00000", "11111", "00000", "11111", "00000", "00000", "00000"});
         set(' ', blank);
         return out;
     }();
@@ -255,9 +302,9 @@ void CameraAccuracyDebugScene::Initialize(const SceneContext &ctx) {
         L"app/resources/ui/sensitivity_adjust/detail/row_select.png");
     for (int i = 0; i < kDetailedSensitivityCount; ++i) {
         wchar_t path[128]{};
-        std::swprintf(path, sizeof(path) / sizeof(path[0]),
-                      L"app/resources/ui/sensitivity_adjust/detail/label_%02d.png",
-                      i);
+        std::swprintf(
+            path, sizeof(path) / sizeof(path[0]),
+            L"app/resources/ui/sensitivity_adjust/detail/label_%02d.png", i);
         settingLabelImages_[static_cast<size_t>(i)] = LoadTextureImage(path);
     }
     for (int i = 0; i < 10; ++i) {
@@ -340,8 +387,8 @@ void CameraAccuracyDebugScene::ReturnToPreviousScene() {
 void CameraAccuracyDebugScene::UpdateSensitivityInput(Input &input) {
     if (input.IsKeyTrigger(DIK_TAB)) {
         detailedSensitivityMode_ = !detailedSensitivityMode_;
-        selectedSensitivityIndex_ =
-            std::clamp(selectedSensitivityIndex_, 0, SensitivityItemCount() - 1);
+        selectedSensitivityIndex_ = std::clamp(selectedSensitivityIndex_, 0,
+                                               SensitivityItemCount() - 1);
         AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
     }
     if (input.IsKeyTrigger(DIK_W) || input.IsKeyTrigger(DIK_UP)) {
@@ -461,7 +508,8 @@ float CameraAccuracyDebugScene::GetSensitivityStep(size_t index) const {
 }
 
 void CameraAccuracyDebugScene::SetSensitivityValue(size_t index, float value) {
-    value = std::clamp(value, GetSensitivityMin(index), GetSensitivityMax(index));
+    value =
+        std::clamp(value, GetSensitivityMin(index), GetSensitivityMax(index));
     auto &advanced = AppSceneServices::GetCameraAdvancedSettings();
     const size_t kind = index % kBasicSensitivityCount;
 
@@ -491,7 +539,8 @@ void CameraAccuracyDebugScene::SetSensitivityValue(size_t index, float value) {
     }
 }
 
-float CameraAccuracyDebugScene::GetSensitivityNormalizedValue(size_t index) const {
+float CameraAccuracyDebugScene::GetSensitivityNormalizedValue(
+    size_t index) const {
     const float minValue = GetSensitivityMin(index);
     const float maxValue = GetSensitivityMax(index);
     if (maxValue <= minValue) {
@@ -509,7 +558,8 @@ void CameraAccuracyDebugScene::UpdateCamera() {
     const int width = ctx_->systems.winApp->GetWidth();
     const int height = ctx_->systems.winApp->GetHeight();
     if (width > 0 && height > 0) {
-        camera_.SetAspect(static_cast<float>(width) / static_cast<float>(height));
+        camera_.SetAspect(static_cast<float>(width) /
+                          static_cast<float>(height));
     }
 
     const float orbit = std::sinf(sceneTime_ * 0.24f) * 0.12f;
@@ -577,11 +627,13 @@ CameraAccuracyDebugScene::MakePoseFromPalm(const XMFLOAT2 &palm) const {
     return pose;
 }
 
-Transform CameraAccuracyDebugScene::BuildSwordTransform(
-    const SwordPose &pose, const XMFLOAT3 &anchor, bool isLeft) const {
+Transform CameraAccuracyDebugScene::BuildSwordTransform(const SwordPose &pose,
+                                                        const XMFLOAT3 &anchor,
+                                                        bool isLeft) const {
     Transform transform{};
     const float handOffsetX = isLeft ? -0.34f : 0.34f;
-    const XMVECTOR swordRot = XMQuaternionNormalize(XMLoadFloat4(&pose.orientation));
+    const XMVECTOR swordRot =
+        XMQuaternionNormalize(XMLoadFloat4(&pose.orientation));
     XMStoreFloat4(&transform.rotation, swordRot);
 
     const XMVECTOR shoulder =
@@ -612,8 +664,8 @@ void CameraAccuracyDebugScene::DrawOverlay(float screenWidth,
     DrawRect(0.0f, 0.0f, screenWidth, 74.0f, Color(0.0f, 0.0f, 0.0f, 0.66f));
     DrawImage(detailedSensitivityMode_ ? detailTitleImage_ : basicTitleImage_,
               24.0f, 13.0f, 0.86f, 0.96f);
-    const Image &hint = detailedSensitivityMode_ ? detailHintImage_
-                                                 : basicHintImage_;
+    const Image &hint =
+        detailedSensitivityMode_ ? detailHintImage_ : basicHintImage_;
     DrawImage(hint, screenWidth - hint.width * 0.72f - 22.0f, 22.0f, 0.72f,
               0.90f);
     DrawSensitivityPanel(screenWidth);
@@ -641,12 +693,14 @@ void CameraAccuracyDebugScene::DrawSensitivityPanel(float screenWidth) {
             std::clamp(selectedSensitivityIndex_ - kVisibleDetailedRows / 2, 0,
                        kDetailedSensitivityCount - kVisibleDetailedRows);
 
-        DrawRect(panelX - 5.0f, panelY - 5.0f, panelW + 10.0f,
-                 panelH + 10.0f, Color(1.0f, 0.95f, 0.62f, 0.52f));
-        DrawRect(panelX, panelY, panelW, panelH, Color(0.0f, 0.0f, 0.0f, 0.92f));
+        DrawRect(panelX - 5.0f, panelY - 5.0f, panelW + 10.0f, panelH + 10.0f,
+                 Color(1.0f, 0.95f, 0.62f, 0.52f));
+        DrawRect(panelX, panelY, panelW, panelH,
+                 Color(0.0f, 0.0f, 0.0f, 0.92f));
         DrawFrame(panelX, panelY, panelW, panelH, 4.0f,
                   Color(1.0f, 0.86f, 0.20f, 1.0f));
-        DrawImage(pageLabelImage_, panelX + 24.0f, panelY + 16.0f, 0.72f, 0.92f);
+        DrawImage(pageLabelImage_, panelX + 24.0f, panelY + 16.0f, 0.72f,
+                  0.92f);
         char pageText[32]{};
         std::snprintf(pageText, sizeof(pageText), "%02d/%02d",
                       selectedSensitivityIndex_ + 1, kDetailedSensitivityCount);
@@ -654,20 +708,19 @@ void CameraAccuracyDebugScene::DrawSensitivityPanel(float screenWidth) {
                  Color(0.96f, 0.88f, 0.54f, 0.92f));
 
         for (int row = 0; row < kVisibleDetailedRows; ++row) {
-            const size_t i = static_cast<size_t>(firstRow) +
-                             static_cast<size_t>(row);
+            const size_t i =
+                static_cast<size_t>(firstRow) + static_cast<size_t>(row);
             const size_t kind = i < kHandSensitivityCount
                                     ? i % kBasicSensitivityCount
                                     : (i - kHandSensitivityCount + 2) % 4;
-            const XMFLOAT4 color =
-                kind == 0 ? Color(0.0f, 0.92f, 1.0f, 1.0f)
-                          : kind == 1 ? Color(1.0f, 0.28f, 0.20f, 1.0f)
-                                      : kind == 2 ? Color(0.58f, 1.0f, 0.30f, 1.0f)
-                                                  : Color(1.0f, 0.58f, 0.18f, 1.0f);
-            DrawSettingGaugeRow(i, settingLabelImages_[i], color, panelX,
-                                panelY + 62.0f +
-                                    rowGap * static_cast<float>(row),
-                                panelW);
+            const XMFLOAT4 color = kind == 0   ? Color(0.0f, 0.92f, 1.0f, 1.0f)
+                                   : kind == 1 ? Color(1.0f, 0.28f, 0.20f, 1.0f)
+                                   : kind == 2
+                                       ? Color(0.58f, 1.0f, 0.30f, 1.0f)
+                                       : Color(1.0f, 0.58f, 0.18f, 1.0f);
+            DrawSettingGaugeRow(
+                i, settingLabelImages_[i], color, panelX,
+                panelY + 62.0f + rowGap * static_cast<float>(row), panelW);
         }
         return;
     }
@@ -697,9 +750,11 @@ void CameraAccuracyDebugScene::DrawSensitivityPanel(float screenWidth) {
                  panelW);
 }
 
-void CameraAccuracyDebugScene::DrawSettingGaugeRow(
-    size_t index, const Image &label, const XMFLOAT4 &barColor, float panelX,
-    float rowY, float panelW) {
+void CameraAccuracyDebugScene::DrawSettingGaugeRow(size_t index,
+                                                   const Image &label,
+                                                   const XMFLOAT4 &barColor,
+                                                   float panelX, float rowY,
+                                                   float panelW) {
     const bool selected = static_cast<int>(index) == selectedSensitivityIndex_;
     const float labelX = panelX + 28.0f;
     const float barX = panelX + 360.0f;
@@ -708,10 +763,9 @@ void CameraAccuracyDebugScene::DrawSettingGaugeRow(
     const float barH = 18.0f;
     if (selected) {
         DrawImageSized(rowSelectImage_, panelX + 12.0f, rowY - 7.0f,
-                       panelW - 24.0f, 31.0f,
-                       Color(1.0f, 0.82f, 0.30f, 0.38f));
-        DrawFrame(panelX + 12.0f, rowY - 7.0f, panelW - 24.0f, 31.0f,
-                  2.0f, Color(1.0f, 0.78f, 0.24f, 0.70f));
+                       panelW - 24.0f, 31.0f, Color(1.0f, 0.82f, 0.30f, 0.38f));
+        DrawFrame(panelX + 12.0f, rowY - 7.0f, panelW - 24.0f, 31.0f, 2.0f,
+                  Color(1.0f, 0.78f, 0.24f, 0.70f));
     }
     DrawImageCentered(label, labelX + 150.0f, rowY + 9.0f, 300.0f, 30.0f,
                       selected ? 1.0f : 0.82f);
@@ -728,9 +782,11 @@ void CameraAccuracyDebugScene::DrawSettingGaugeRow(
                                   : Color(0.92f, 0.94f, 0.96f, 0.84f));
 }
 
-void CameraAccuracyDebugScene::DrawGaugeRow(
-    size_t index, const Image &label, float value, const XMFLOAT4 &barColor,
-    float panelX, float rowY, float panelW) {
+void CameraAccuracyDebugScene::DrawGaugeRow(size_t index, const Image &label,
+                                            float value,
+                                            const XMFLOAT4 &barColor,
+                                            float panelX, float rowY,
+                                            float panelW) {
     const bool selected = static_cast<int>(index) == selectedSensitivityIndex_;
     const float labelX = panelX + 26.0f;
     const float barX = panelX + 180.0f;
@@ -740,8 +796,8 @@ void CameraAccuracyDebugScene::DrawGaugeRow(
     if (selected) {
         DrawRect(panelX + 12.0f, rowY - 8.0f, panelW - 24.0f, 34.0f,
                  Color(1.0f, 0.74f, 0.20f, 0.20f));
-        DrawFrame(panelX + 12.0f, rowY - 8.0f, panelW - 24.0f, 34.0f,
-                  2.0f, Color(1.0f, 0.78f, 0.24f, 0.70f));
+        DrawFrame(panelX + 12.0f, rowY - 8.0f, panelW - 24.0f, 34.0f, 2.0f,
+                  Color(1.0f, 0.78f, 0.24f, 0.70f));
     }
     DrawImageCentered(label, labelX + 48.0f, rowY + 10.0f, 110.0f, 28.0f,
                       selected ? 1.0f : 0.82f);
@@ -792,9 +848,10 @@ void CameraAccuracyDebugScene::DrawHandPanel(const char *title,
 
     const float requiredH = RequiredTravelForSensitivity(
         AppSceneServices::GetCameraHorizontalSensitivity());
-    const float requiredV = RequiredTravelForSensitivity(
-                                AppSceneServices::GetCameraVerticalSensitivity()) *
-                            kVerticalSlashThresholdScale;
+    const float requiredV =
+        RequiredTravelForSensitivity(
+            AppSceneServices::GetCameraVerticalSensitivity()) *
+        kVerticalSlashThresholdScale;
     const float centerX = mapX + mapW * 0.5f;
     const float centerY = mapY + mapH * 0.5f;
     const float requiredPixelsH = requiredH * mapW;
@@ -820,8 +877,7 @@ void CameraAccuracyDebugScene::DrawHandPanel(const char *title,
     const XMFLOAT2 corrected = toPanel(sample.calibratedPalm);
     DrawPoint(neutral.x, neutral.y, 5.0f, Color(0.92f, 0.92f, 0.92f, 0.64f));
     DrawPoint(raw.x, raw.y, 6.0f, Color(0.22f, 0.62f, 1.0f, 0.88f));
-    DrawPoint(corrected.x, corrected.y, 6.0f,
-              Color(1.0f, 0.72f, 0.18f, 0.92f));
+    DrawPoint(corrected.x, corrected.y, 6.0f, Color(1.0f, 0.72f, 0.18f, 0.92f));
 
     DrawRect((std::min)(centerX, corrected.x), centerY - 2.0f,
              std::abs(corrected.x - centerX) + 2.0f, 4.0f,
@@ -833,8 +889,9 @@ void CameraAccuracyDebugScene::DrawHandPanel(const char *title,
     DrawText("BLUE RAW  WHITE NEUTRAL  GOLD CORRECTED", x + 12.0f,
              y + h - 42.0f, 1.05f, Color(0.72f, 0.78f, 0.84f, 0.82f));
     DrawText(sample.active ? "DETECTED" : "NO HAND", x + 12.0f, y + h - 22.0f,
-             1.35f, sample.active ? Color(0.46f, 1.0f, 0.64f, 0.92f)
-                                   : Color(1.0f, 0.46f, 0.30f, 0.84f));
+             1.35f,
+             sample.active ? Color(0.46f, 1.0f, 0.64f, 0.92f)
+                           : Color(1.0f, 0.46f, 0.30f, 0.84f));
 }
 
 void CameraAccuracyDebugScene::DrawHandStats(size_t handIndex, float x,
@@ -842,14 +899,12 @@ void CameraAccuracyDebugScene::DrawHandStats(size_t handIndex, float x,
     const auto sample = controller_.GetDebugHandState(handIndex);
     char line[256]{};
     std::snprintf(line, sizeof(line),
-                  "H%zu ACT=%d RAW %.2f %.2f  CAL %.2f %.2f",
-                  handIndex, sample.active ? 1 : 0, sample.rawPalm.x,
-                  sample.rawPalm.y, sample.calibratedPalm.x,
-                  sample.calibratedPalm.y);
+                  "H%zu ACT=%d RAW %.2f %.2f  CAL %.2f %.2f", handIndex,
+                  sample.active ? 1 : 0, sample.rawPalm.x, sample.rawPalm.y,
+                  sample.calibratedPalm.x, sample.calibratedPalm.y);
     DrawText(line, x, y, 1.25f, Color(0.82f, 0.88f, 0.94f, 0.86f));
-    std::snprintf(line, sizeof(line),
-                  "   DIR %.2f %.2f  SPEED %.2f  SLASH=%d", sample.slashDir.x,
-                  sample.slashDir.y, sample.motionSpeed,
+    std::snprintf(line, sizeof(line), "   DIR %.2f %.2f  SPEED %.2f  SLASH=%d",
+                  sample.slashDir.x, sample.slashDir.y, sample.motionSpeed,
                   sample.isSlashMode ? 1 : 0);
     DrawText(line, x, y + 22.0f, 1.25f, Color(0.72f, 0.78f, 0.86f, 0.82f));
 }
@@ -899,18 +954,19 @@ void CameraAccuracyDebugScene::DrawImageSized(const Image &image, float x,
 void CameraAccuracyDebugScene::DrawImageCentered(const Image &image,
                                                  float centerX, float centerY,
                                                  float maxWidth,
-                                                 float maxHeight,
-                                                 float alpha) {
+                                                 float maxHeight, float alpha) {
     if (image.textureId == 0 || image.width <= 0.0f || image.height <= 0.0f) {
         return;
     }
-    const float scale = std::min(maxWidth / image.width, maxHeight / image.height);
+    const float scale =
+        std::min(maxWidth / image.width, maxHeight / image.height);
     DrawImage(image, centerX - image.width * scale * 0.5f,
               centerY - image.height * scale * 0.5f, scale, alpha);
 }
 
-void CameraAccuracyDebugScene::DrawSensitivityValue(
-    float value, float x, float y, float scale, const XMFLOAT4 &color) {
+void CameraAccuracyDebugScene::DrawSensitivityValue(float value, float x,
+                                                    float y, float scale,
+                                                    const XMFLOAT4 &color) {
     char text[16]{};
     if (value >= 10.0f) {
         std::snprintf(text, sizeof(text), "%.1f", value);

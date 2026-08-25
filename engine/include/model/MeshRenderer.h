@@ -46,13 +46,12 @@ class MeshRenderer {
     uint32_t CreatePipeline(const MeshPipelineDesc &desc);
     uint32_t CreatePipeline(const std::wstring &vertexShaderPath,
                             const std::wstring &pixelShaderPath);
-    uint32_t CreateAdditiveNoDepthPipeline(
-        const std::wstring &vertexShaderPath,
-        const std::wstring &pixelShaderPath);
+    uint32_t CreateAdditiveNoDepthPipeline(const std::wstring &vertexShaderPath,
+                                           const std::wstring &pixelShaderPath);
     void DrawMeshWithPipeline(uint32_t pipelineId, const Mesh &mesh,
                               const Material &material,
-                              const Transform &transform,
-                              const Camera &camera, uint32_t textureId = 0,
+                              const Transform &transform, const Camera &camera,
+                              uint32_t textureId = 0,
                               uint32_t normalTextureId = UINT32_MAX);
     void DrawMeshWithPipelineHandles(
         uint32_t pipelineId, const Mesh &mesh, const Material &material,
@@ -65,16 +64,17 @@ class MeshRenderer {
                            uint32_t instanceCount, const Camera &camera,
                            uint32_t textureId = 0,
                            uint32_t normalTextureId = UINT32_MAX);
-    uint32_t CreateInstancedPipeline(
-        const std::wstring &vertexShaderPath,
-        const std::wstring &pixelShaderPath,
-        const std::wstring &shadowVertexShaderPath,
-        const std::wstring &shadowPixelShaderPath);
-    void DrawMeshInstancedWithPipeline(
-        uint32_t pipelineId, const Mesh &mesh, const Material &material,
-        const InstanceData *instances, uint32_t instanceCount,
-        const Camera &camera, uint32_t textureId = 0,
-        uint32_t normalTextureId = UINT32_MAX);
+    uint32_t CreateInstancedPipeline(const std::wstring &vertexShaderPath,
+                                     const std::wstring &pixelShaderPath,
+                                     const std::wstring &shadowVertexShaderPath,
+                                     const std::wstring &shadowPixelShaderPath);
+    void DrawMeshInstancedWithPipeline(uint32_t pipelineId, const Mesh &mesh,
+                                       const Material &material,
+                                       const InstanceData *instances,
+                                       uint32_t instanceCount,
+                                       const Camera &camera,
+                                       uint32_t textureId = 0,
+                                       uint32_t normalTextureId = UINT32_MAX);
 
     /// <summary>
     /// PreDrawShadowを実行する
@@ -88,13 +88,15 @@ class MeshRenderer {
                         const DirectX::XMFLOAT4X4 &lightViewProjection,
                         uint32_t textureId = 0);
 
-    void DrawMeshInstancedShadow(
-        const Mesh &mesh, const InstanceData *instances, uint32_t instanceCount,
-        const DirectX::XMFLOAT4X4 &lightViewProjection);
-    void DrawMeshInstancedShadow(
-        const Mesh &mesh, const Material &material,
-        const InstanceData *instances, uint32_t instanceCount,
-        const DirectX::XMFLOAT4X4 &lightViewProjection, uint32_t textureId = 0);
+    void
+    DrawMeshInstancedShadow(const Mesh &mesh, const InstanceData *instances,
+                            uint32_t instanceCount,
+                            const DirectX::XMFLOAT4X4 &lightViewProjection);
+    void DrawMeshInstancedShadow(const Mesh &mesh, const Material &material,
+                                 const InstanceData *instances,
+                                 uint32_t instanceCount,
+                                 const DirectX::XMFLOAT4X4 &lightViewProjection,
+                                 uint32_t textureId = 0);
     void DrawMeshInstancedShadowWithPipeline(
         uint32_t pipelineId, const Mesh &mesh, const Material &material,
         const InstanceData *instances, uint32_t instanceCount,
@@ -126,15 +128,16 @@ class MeshRenderer {
     /// </summary>
     void CreateShadowPipelineStates();
     void CreateUploadBuffer();
-    D3D12_GPU_VIRTUAL_ADDRESS WriteObjectConstants(
-        const DirectX::XMMATRIX &wvp, const DirectX::XMMATRIX &world,
-        const DirectX::XMMATRIX &worldInverseTranspose);
+    D3D12_GPU_VIRTUAL_ADDRESS
+    WriteObjectConstants(const DirectX::XMMATRIX &wvp,
+                         const DirectX::XMMATRIX &world,
+                         const DirectX::XMMATRIX &worldInverseTranspose);
     /// <summary>
     /// データを書き込む
     /// </summary>
     D3D12_GPU_VIRTUAL_ADDRESS WriteSceneConstants(const Camera &camera);
-    D3D12_GPU_VIRTUAL_ADDRESS WriteShadowSceneConstants(
-        const DirectX::XMFLOAT4X4 &lightViewProjection);
+    D3D12_GPU_VIRTUAL_ADDRESS
+    WriteShadowSceneConstants(const DirectX::XMFLOAT4X4 &lightViewProjection);
     /// <summary>
     /// データを書き込む
     /// </summary>
@@ -188,10 +191,8 @@ class MeshRenderer {
     SceneFog currentFog_{};
     D3D12_GPU_DESCRIPTOR_HANDLE shadowMapGpuHandle_{};
     DirectX::XMFLOAT4X4 shadowLightViewProjection_ = {
-        1.0f, 0.0f, 0.0f, 0.0f,
-        0.0f, 1.0f, 0.0f, 0.0f,
-        0.0f, 0.0f, 1.0f, 0.0f,
-        0.0f, 0.0f, 0.0f, 1.0f};
+        1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f};
     DirectX::XMFLOAT4 shadowParams_{0.0f, 0.0015f, 0.45f, 0.0f};
     DirectX::XMFLOAT4 shadowFilterParams_{1.45f, 2600.0f, 0.045f, 0.0f};
     DirectX::XMFLOAT4 customSceneParams0_{1.0f, 0.0f, 0.0f, 0.0f};

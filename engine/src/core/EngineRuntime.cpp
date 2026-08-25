@@ -13,9 +13,9 @@
 #include "graphics/SrvManager.h"
 #include "graphics/TransparentRenderQueue.h"
 #include "input/Input.h"
-#include "model/ModelManager.h"
 #include "model/MeshManager.h"
 #include "model/MeshRenderer.h"
+#include "model/ModelManager.h"
 #include "model/SkyboxRenderer.h"
 #include "particle/GPUParticleSystem.h"
 #include "scene/AbstractSceneFactory.h"
@@ -149,48 +149,57 @@ int EngineRuntime::Run(HINSTANCE instance, int showCommand,
 
 void EngineRuntime::Initialize(HINSTANCE instance, int showCommand,
                                const EngineRuntimeConfig &config) {
-    systems_->winApp.Initialize(instance, showCommand, config.width, config.height,
-                       config.title, config.fullscreen);
+    systems_->winApp.Initialize(instance, showCommand, config.width,
+                                config.height, config.title, config.fullscreen);
     systems_->winApp.SetCursorVisible(config.cursorVisible);
     currentWidth_ = systems_->winApp.GetWidth();
     currentHeight_ = systems_->winApp.GetHeight();
 
-    systems_->dxCommon.Initialize(systems_->winApp.GetHwnd(), currentWidth_, currentHeight_);
+    systems_->dxCommon.Initialize(systems_->winApp.GetHwnd(), currentWidth_,
+                                  currentHeight_);
     systems_->srvManager.Initialize(&systems_->dxCommon);
     systems_->dxCommon.CreateDepthStencilSrv(&systems_->srvManager);
     systems_->dxCommon.RegisterSceneColorSRV(&systems_->srvManager);
 
-    systems_->textureManager.Initialize(&systems_->dxCommon, &systems_->srvManager);
+    systems_->textureManager.Initialize(&systems_->dxCommon,
+                                        &systems_->srvManager);
     systems_->pipelineManager.Initialize(&systems_->dxCommon);
-    systems_->renderTexture.Initialize(&systems_->dxCommon, &systems_->srvManager,
-                                       currentWidth_, currentHeight_);
+    systems_->renderTexture.Initialize(&systems_->dxCommon,
+                                       &systems_->srvManager, currentWidth_,
+                                       currentHeight_);
 
     systems_->meshManager.Initialize(&systems_->dxCommon);
-    systems_->meshRenderer.Initialize(&systems_->dxCommon, &systems_->srvManager, &systems_->textureManager);
-    systems_->modelManager.Initialize(&systems_->dxCommon, &systems_->srvManager,
-                                      &systems_->textureManager);
+    systems_->meshRenderer.Initialize(
+        &systems_->dxCommon, &systems_->srvManager, &systems_->textureManager);
+    systems_->modelManager.Initialize(
+        &systems_->dxCommon, &systems_->srvManager, &systems_->textureManager);
     systems_->modelManager.GetRenderer()->SetEnvironmentTexture(
         systems_->textureManager.GetWhiteCubeTextureId());
     systems_->spriteManager = &SpriteManager::GetInstance();
-    systems_->spriteManager->Initialize(&systems_->dxCommon, &systems_->textureManager,
-                                        &systems_->srvManager, currentWidth_,
-                                        currentHeight_);
-    systems_->postProcessSystem.Initialize(&systems_->dxCommon, &systems_->srvManager, currentWidth_,
-                                   currentHeight_);
+    systems_->spriteManager->Initialize(
+        &systems_->dxCommon, &systems_->textureManager, &systems_->srvManager,
+        currentWidth_, currentHeight_);
+    systems_->postProcessSystem.Initialize(&systems_->dxCommon,
+                                           &systems_->srvManager, currentWidth_,
+                                           currentHeight_);
     systems_->postEffectManager.Initialize(&systems_->postProcessSystem);
-    systems_->skyboxRenderer.Initialize(&systems_->dxCommon, &systems_->srvManager,
-                                        &systems_->textureManager);
-    systems_->shadowMapRenderer.Initialize(&systems_->dxCommon, &systems_->srvManager);
-    systems_->renderPassController.Initialize(&systems_->dxCommon, &systems_->srvManager);
+    systems_->skyboxRenderer.Initialize(
+        &systems_->dxCommon, &systems_->srvManager, &systems_->textureManager);
+    systems_->shadowMapRenderer.Initialize(&systems_->dxCommon,
+                                           &systems_->srvManager);
+    systems_->renderPassController.Initialize(&systems_->dxCommon,
+                                              &systems_->srvManager);
     systems_->input.Initialize(instance, systems_->winApp.GetHwnd());
     CameraManager::SetActiveInstance(&systems_->cameraManager);
     SoundManager::GetInstance().Initialize();
     systems_->sceneContext.systems.sound =
-        SoundManager::GetInstance().IsInitialized() ? &SoundManager::GetInstance()
-                                                    : nullptr;
+        SoundManager::GetInstance().IsInitialized()
+            ? &SoundManager::GetInstance()
+            : nullptr;
 
 #ifdef _DEBUG
-    systems_->imguiManager.Initialize(&systems_->winApp, &systems_->dxCommon, &systems_->srvManager);
+    systems_->imguiManager.Initialize(&systems_->winApp, &systems_->dxCommon,
+                                      &systems_->srvManager);
 #endif
 
     systems_->sceneContext.systems.input = &systems_->input;
@@ -204,18 +213,23 @@ void EngineRuntime::Initialize(HINSTANCE instance, int showCommand,
         systems_->modelManager.GetRenderer();
     systems_->sceneContext.rendering.sprite = systems_->spriteManager;
     systems_->sceneContext.rendering.spriteRenderer =
-        systems_->spriteManager != nullptr ? systems_->spriteManager->GetRenderer()
-                                           : nullptr;
+        systems_->spriteManager != nullptr
+            ? systems_->spriteManager->GetRenderer()
+            : nullptr;
     systems_->sceneContext.rendering.texture = &systems_->textureManager;
     systems_->sceneContext.rendering.dxCommon = &systems_->dxCommon;
     systems_->sceneContext.rendering.srv = &systems_->srvManager;
     systems_->sceneContext.rendering.pipeline = &systems_->pipelineManager;
     systems_->sceneContext.rendering.renderTexture = &systems_->renderTexture;
-    systems_->sceneContext.rendering.postEffectManager = &systems_->postEffectManager;
+    systems_->sceneContext.rendering.postEffectManager =
+        &systems_->postEffectManager;
     systems_->sceneContext.rendering.skyboxRenderer = &systems_->skyboxRenderer;
-    systems_->sceneContext.rendering.shadowMapRenderer = &systems_->shadowMapRenderer;
-    systems_->sceneContext.rendering.transparentQueue = &systems_->transparentQueue;
-    systems_->sceneContext.render = systems_->renderPassController.GetContextPtr();
+    systems_->sceneContext.rendering.shadowMapRenderer =
+        &systems_->shadowMapRenderer;
+    systems_->sceneContext.rendering.transparentQueue =
+        &systems_->transparentQueue;
+    systems_->sceneContext.render =
+        systems_->renderPassController.GetContextPtr();
 #ifdef _DEBUG
     systems_->sceneContext.systems.imgui = &systems_->imguiManager;
 #endif
@@ -261,7 +275,8 @@ void EngineRuntime::RenderFrame() {
 
     systems_->dxCommon.BeginFrame();
     systems_->renderPassController.BeginFrame(
-        systems_->sceneContext.frame.frameTime, systems_->sceneContext.frame.deltaTime,
+        systems_->sceneContext.frame.frameTime,
+        systems_->sceneContext.frame.deltaTime,
         static_cast<uint32_t>(currentWidth_),
         static_cast<uint32_t>(currentHeight_));
 
@@ -270,7 +285,8 @@ void EngineRuntime::RenderFrame() {
 #endif
 
     {
-        auto pass = systems_->renderPassController.ScopedPass(RenderPass::Shadow);
+        auto pass =
+            systems_->renderPassController.ScopedPass(RenderPass::Shadow);
         (void)pass;
         systems_->shadowMapRenderer.Begin();
         systems_->meshRenderer.PreDrawShadow();

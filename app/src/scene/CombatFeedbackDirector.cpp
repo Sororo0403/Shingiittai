@@ -11,9 +11,7 @@ constexpr float kPlayerDamageTint[3]{0.92f, 0.02f, 0.015f};
 constexpr float kMistimedCounterTint[3]{1.0f, 0.03f, 0.015f};
 constexpr float kCounterTint[3]{0.08f, 0.62f, 1.0f};
 
-float Clamp01(float value) {
-    return std::clamp(value, 0.0f, 1.0f);
-}
+float Clamp01(float value) { return std::clamp(value, 0.0f, 1.0f); }
 
 float EaseOut(float value) {
     const float t = Clamp01(value);
@@ -93,10 +91,9 @@ void CombatFeedbackDirector::Update(float deltaTime, float sceneTime) {
               std::begin(profile.vignette.primaryTintColor));
     std::copy(std::begin(secondaryTintColor_), std::end(secondaryTintColor_),
               std::begin(profile.vignette.secondaryTintColor));
-    profile.vignette.enabled =
-        vignetteStrength > 0.001f ||
-        profile.vignette.primaryTintStrength > 0.001f ||
-        profile.vignette.secondaryTintStrength > 0.001f;
+    profile.vignette.enabled = vignetteStrength > 0.001f ||
+                               profile.vignette.primaryTintStrength > 0.001f ||
+                               profile.vignette.secondaryTintStrength > 0.001f;
     profile.vignette.strength = vignetteStrength;
     profile.vignette.scale = 11.0f;
     profile.vignette.power = 1.15f;
@@ -113,12 +110,11 @@ void CombatFeedbackDirector::Update(float deltaTime, float sceneTime) {
     }
     profile.sceneDim.strength = 0.0f;
 
-    const bool hasFeedback =
-        profile.radialBlur.strength > 0.001f ||
-        profile.randomNoise.strength > 0.001f ||
-        profile.vignette.strength > 0.001f ||
-        profile.vignette.primaryTintStrength > 0.001f ||
-        profile.vignette.secondaryTintStrength > 0.001f;
+    const bool hasFeedback = profile.radialBlur.strength > 0.001f ||
+                             profile.randomNoise.strength > 0.001f ||
+                             profile.vignette.strength > 0.001f ||
+                             profile.vignette.primaryTintStrength > 0.001f ||
+                             profile.vignette.secondaryTintStrength > 0.001f;
     if (hasFeedback) {
         postEffectManager_->SetLayerProfile(postEffectLayer_, profile);
     } else {
@@ -168,23 +164,20 @@ void CombatFeedbackDirector::PushEvent(const CombatFeedbackEvent &event) {
     switch (event.type) {
     case CombatFeedbackEventType::PlayerSlashHit:
         AddHitStop(0.045f + 0.012f * power, 0.16f);
-        AddCameraShake(0.16f, 0.010f + 0.003f * power,
-                       0.006f + 0.002f * power);
+        AddCameraShake(0.16f, 0.010f + 0.003f * power, 0.006f + 0.002f * power);
         AddPostFlash(0.13f, 0.016f + 0.007f * power, 0.025f, 0.04f);
         fovKickDeg_ = (std::max)(fovKickDeg_, 0.55f + 0.16f * power);
         break;
     case CombatFeedbackEventType::PlayerDamaged:
         AddHitStop(0.115f, 0.035f);
         AddCameraShake(0.24f, 0.046f, 0.030f);
-        AddPostFlash(0.34f, 0.034f, 0.072f, 0.12f, 0.88f,
-                     kPlayerDamageTint);
+        AddPostFlash(0.34f, 0.034f, 0.072f, 0.12f, 0.88f, kPlayerDamageTint);
         fovKickDeg_ = (std::max)(fovKickDeg_, 2.6f);
         break;
     case CombatFeedbackEventType::MistimedCounterSlash:
         AddHitStop(0.340f, 0.075f);
         AddCameraShake(0.30f, 0.042f, 0.025f);
-        AddPostFlash(0.48f, 0.095f, 0.068f, 0.48f, 0.94f,
-                     kMistimedCounterTint);
+        AddPostFlash(0.48f, 0.095f, 0.068f, 0.48f, 0.94f, kMistimedCounterTint);
         fovKickDeg_ = (std::max)(fovKickDeg_, 4.8f);
         break;
     case CombatFeedbackEventType::CounterSuccess:
@@ -264,8 +257,7 @@ void CombatFeedbackDirector::ApplyCameraImpulse(XMFLOAT3 &cameraPosition,
     const XMFLOAT3 posOffset =
         Add(Scale(rightF, horizontal), Scale(upF, vertical));
     const XMFLOAT3 lookOffset =
-        Add(Scale(rightF, -horizontal * 0.42f),
-            Scale(upF, -vertical * 0.55f));
+        Add(Scale(rightF, -horizontal * 0.42f), Scale(upF, -vertical * 0.55f));
 
     cameraPosition = Add(cameraPosition, posOffset);
     lookAt = Add(lookAt, lookOffset);

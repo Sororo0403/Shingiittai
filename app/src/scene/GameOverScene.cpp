@@ -58,9 +58,9 @@ constexpr float kGameOverTextCompleteTime =
     kGameOverLetterFadeDuration;
 constexpr float kGameOverBlackFadeStartTime =
     kGameOverTextCompleteTime + kGameOverTextHoldDuration;
-constexpr float kTitleFadeDuration =
-    kGameOverBlackFadeStartTime + kGameOverBlackFadeDuration +
-    kGameOverBlackHoldDuration;
+constexpr float kTitleFadeDuration = kGameOverBlackFadeStartTime +
+                                     kGameOverBlackFadeDuration +
+                                     kGameOverBlackHoldDuration;
 constexpr float kTitleFadeSkipDuration =
     kGameOverBlackFadeStartTime + kGameOverBlackFadeDuration;
 
@@ -111,7 +111,8 @@ uint32_t CreateDustTexture(TextureManager *texture) {
             const float r = std::sqrtf(u * u + v * v);
             const float core = 1.0f - SmoothStep01((r - 0.05f) / 0.24f);
             const float halo = 1.0f - SmoothStep01((r - 0.18f) / 0.58f);
-            const float alpha = std::clamp(core * 0.82f + halo * 0.32f, 0.0f, 1.0f);
+            const float alpha =
+                std::clamp(core * 0.82f + halo * 0.32f, 0.0f, 1.0f);
             const size_t index = (static_cast<size_t>(y) * kSize + x) * 4u;
             pixels[index + 0] = 255u;
             pixels[index + 1] = 244u;
@@ -187,7 +188,8 @@ void GameOverScene::Initialize(const SceneContext &ctx) {
     poolMaterial.cullMode = static_cast<int32_t>(MaterialCullMode::None);
     poolMaterial.depthWrite = 0;
     poolMaterial.roughness = 1.0f;
-    spotlightPoolModelId_ = model->CreatePlane(spotlightDustTextureId_, poolMaterial);
+    spotlightPoolModelId_ =
+        model->CreatePlane(spotlightDustTextureId_, poolMaterial);
 
     CreateTextImages();
 }
@@ -211,8 +213,8 @@ void GameOverScene::Update() {
                 (std::max)(0.0f, 1.0f - std::fabs(introTimer_ - 0.50f) / 0.14f);
             const float y = kPlayerDefeatPosition.y + (1.0f - fall) * 6.4f -
                             hit * 0.34f + bounce * 0.18f;
-            player_.LockPosition({kPlayerDefeatPosition.x, y,
-                                  kPlayerDefeatPosition.z});
+            player_.LockPosition(
+                {kPlayerDefeatPosition.x, y, kPlayerDefeatPosition.z});
         }
         player_.SetYaw(0.65f);
         player_.SetDefeatPoseRatio(SmoothStep01((introTimer_ - 0.34f) / 0.42f));
@@ -250,8 +252,8 @@ void GameOverScene::CreateTextImages() {
     auto load = [&](const wchar_t *path) {
         Image image{};
         image.textureId = ctx_->rendering.texture->Load(path);
-        image.width =
-            static_cast<float>(ctx_->rendering.texture->GetWidth(image.textureId));
+        image.width = static_cast<float>(
+            ctx_->rendering.texture->GetWidth(image.textureId));
         image.height = static_cast<float>(
             ctx_->rendering.texture->GetHeight(image.textureId));
         return image;
@@ -325,8 +327,8 @@ void GameOverScene::UpdateRetryRise(float deltaTime) {
         retrySkipFadeTimer_ =
             (std::min)(retrySkipFadeTimer_ + deltaTime, kRetrySkipFadeDuration);
         if (retrySkipFadeTimer_ >= kRetrySkipFadeDuration) {
-            sceneManager_->ChangeScene(
-                std::make_unique<GameScene>(inputCalibration_, combatDifficulty_));
+            sceneManager_->ChangeScene(std::make_unique<GameScene>(
+                inputCalibration_, combatDifficulty_));
         }
         return;
     }
@@ -336,7 +338,8 @@ void GameOverScene::UpdateRetryRise(float deltaTime) {
         return;
     }
 
-    retryRiseTimer_ = (std::min)(retryRiseTimer_ + deltaTime, kRetryRiseDuration);
+    retryRiseTimer_ =
+        (std::min)(retryRiseTimer_ + deltaTime, kRetryRiseDuration);
     const float rawT =
         std::clamp(retryRiseTimer_ / kRetryRiseAnimDuration, 0.0f, 1.0f);
     constexpr float kSqueezeEnd = 0.16f;
@@ -345,10 +348,10 @@ void GameOverScene::UpdateRetryRise(float deltaTime) {
     const float squeezeT = std::clamp(rawT / kSqueezeEnd, 0.0f, 1.0f);
     const float popT =
         std::clamp((rawT - kSqueezeEnd) / (kPopEnd - kSqueezeEnd), 0.0f, 1.0f);
-    const float riseT = rawT < kSqueezeEnd
-                            ? 0.0f
-                            : std::clamp(1.0f - std::powf(1.0f - popT, 4.2f),
-                                         0.0f, 1.0f);
+    const float riseT =
+        rawT < kSqueezeEnd
+            ? 0.0f
+            : std::clamp(1.0f - std::powf(1.0f - popT, 4.2f), 0.0f, 1.0f);
     const float defeatPose = 1.0f - riseT;
     const float defeatPoseEased = SmoothStep01(defeatPose);
     constexpr float kDefeatVisualGroundOffset = 0.48f;
@@ -357,15 +360,15 @@ void GameOverScene::UpdateRetryRise(float deltaTime) {
         rawT < kTrembleEnd ? (1.0f - rawT / kTrembleEnd) : 0.0f;
     const float shakeX = std::sinf(retryRiseTimer_ * 118.0f) * 0.038f * tremble;
     const float shakeZ = std::cosf(retryRiseTimer_ * 96.0f) * 0.024f * tremble;
-    const float shakeYaw = std::sinf(retryRiseTimer_ * 110.0f) * 0.092f * tremble;
+    const float shakeYaw =
+        std::sinf(retryRiseTimer_ * 110.0f) * 0.092f * tremble;
     const float turnT =
         SmoothStep01((retryRiseTimer_ - kRetryRiseAnimDuration * 0.58f) /
                      (kRetryRiseAnimDuration * 0.34f));
     const float runT = SmoothStep01((retryRiseTimer_ - kRetryRunStart) /
                                     kRetryBlackFadeDuration);
-    const float runZ =
-        kPlayerDefeatPosition.z +
-        (kRetryRunEndZ - kPlayerDefeatPosition.z) * runT;
+    const float runZ = kPlayerDefeatPosition.z +
+                       (kRetryRunEndZ - kPlayerDefeatPosition.z) * runT;
     player_.LockPosition({
         kPlayerDefeatPosition.x + shakeX,
         kPlayerDefeatPosition.y -
@@ -427,8 +430,8 @@ void GameOverScene::DrawWorld() {
                                         kDefeatSpotlightPosition.y,
                                         kDefeatSpotlightPosition.z, 8.20f};
     lighting.spotLight.direction = {0.083f, -0.979f, 0.183f, 0.0f};
-    lighting.spotLight.colorIntensity = {
-        1.0f, 0.86f, 0.58f, retrySpotlightOff ? 0.0f : 11.50f};
+    lighting.spotLight.colorIntensity = {1.0f, 0.86f, 0.58f,
+                                         retrySpotlightOff ? 0.0f : 11.50f};
     lighting.spotLight.angleParams = {0.976f, 0.620f, 1.85f, 1.0f};
     lighting.lightingParams = {64.0f, 0.26f, 2.60f, 0.03f};
     model->SetSceneLighting(lighting);
@@ -452,7 +455,8 @@ void GameOverScene::DrawWorld() {
     }
     if (!retrySpotlightOff && spotlightPoolModelId_ != 0) {
         Transform pool{};
-        pool.position = {kDefeatSpotlightTarget.x, kPlayerDefeatPosition.y - 0.45f,
+        pool.position = {kDefeatSpotlightTarget.x,
+                         kPlayerDefeatPosition.y - 0.45f,
                          kDefeatSpotlightTarget.z};
         pool.rotation = MakeQuat(-XM_PIDIV2, 0.0f, 0.0f);
         pool.scale = {2.65f, 2.65f, 1.0f};
@@ -480,9 +484,8 @@ void GameOverScene::DrawOverlay(float screenWidth, float screenHeight) {
         DrawMenu(screenWidth, screenHeight);
     }
     if (state_ == State::RetryRise) {
-        const float retryFade =
-            SmoothStep01((retryRiseTimer_ - kRetryRunStart) /
-                         kRetryBlackFadeDuration);
+        const float retryFade = SmoothStep01(
+            (retryRiseTimer_ - kRetryRunStart) / kRetryBlackFadeDuration);
         const float skipFade =
             retrySkipFadeActive_
                 ? SmoothStep01(retrySkipFadeTimer_ / kRetrySkipFadeDuration)
@@ -502,19 +505,17 @@ void GameOverScene::DrawDefeatTitle(float screenWidth, float screenHeight) {
     const Image &image = defeatCleanImage_;
     const float introAlpha =
         state_ == State::DefeatIntro ? SmoothStep01(introTimer_ / 0.28f) : 1.0f;
-    const float baseScale =
-        std::clamp(screenWidth * 0.54f / (std::max)(image.width, 1.0f), 0.42f,
-                   0.86f);
-    const float introSettle =
-        state_ == State::DefeatIntro ? SmoothStep01((introTimer_ - 0.22f) / 0.30f)
-                                     : 1.0f;
+    const float baseScale = std::clamp(
+        screenWidth * 0.54f / (std::max)(image.width, 1.0f), 0.42f, 0.86f);
+    const float introSettle = state_ == State::DefeatIntro
+                                  ? SmoothStep01((introTimer_ - 0.22f) / 0.30f)
+                                  : 1.0f;
     const float impact =
         state_ == State::DefeatIntro
-            ? (std::max)(0.0f,
-                         1.0f - std::fabs(introTimer_ - 0.34f) / 0.07f)
+            ? (std::max)(0.0f, 1.0f - std::fabs(introTimer_ - 0.34f) / 0.07f)
             : 0.0f;
-    const float defeatScale = baseScale * (1.22f - 0.22f * introSettle +
-                                           impact * 0.08f);
+    const float defeatScale =
+        baseScale * (1.22f - 0.22f * introSettle + impact * 0.08f);
     const float defeatW = image.width * defeatScale;
     const float x = (screenWidth - defeatW) * 0.5f;
     const float targetY = screenHeight * 0.085f;
@@ -522,13 +523,11 @@ void GameOverScene::DrawDefeatTitle(float screenWidth, float screenHeight) {
         state_ == State::DefeatIntro ? EaseInQuad(introTimer_ / 0.34f) : 1.0f;
     const float titleSettle =
         state_ == State::DefeatIntro
-            ? (std::max)(0.0f,
-                         1.0f - std::fabs(introTimer_ - 0.36f) / 0.08f)
+            ? (std::max)(0.0f, 1.0f - std::fabs(introTimer_ - 0.36f) / 0.08f)
             : 0.0f;
     const float titleBounce =
         state_ == State::DefeatIntro
-            ? (std::max)(0.0f,
-                         1.0f - std::fabs(introTimer_ - 0.48f) / 0.12f)
+            ? (std::max)(0.0f, 1.0f - std::fabs(introTimer_ - 0.48f) / 0.12f)
             : 0.0f;
     const float y = targetY - (1.0f - titleFall) * (screenHeight * 0.50f) +
                     titleSettle * 30.0f - titleBounce * 10.0f;
@@ -565,8 +564,7 @@ void GameOverScene::DrawMenu(float screenWidth, float screenHeight) {
 
 void GameOverScene::DrawTitleFade(float screenWidth, float screenHeight) {
     const float t = SmoothStep01(titleFadeTimer_ / 0.70f);
-    DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
-             Color(0.0f, 0.0f, 0.0f, t));
+    DrawRect(0.0f, 0.0f, screenWidth, screenHeight, Color(0.0f, 0.0f, 0.0f, t));
     if (titleFadeTimer_ < kGameOverLetterStart - 0.06f) {
         return;
     }
@@ -598,15 +596,14 @@ void GameOverScene::DrawTitleFade(float screenWidth, float screenHeight) {
         const float letterStart =
             kGameOverLetterStart +
             kGameOverLetterInterval * static_cast<float>(i);
-        const float appear =
-            SmoothStep01((titleFadeTimer_ - letterStart) /
-                         kGameOverLetterFadeDuration);
+        const float appear = SmoothStep01((titleFadeTimer_ - letterStart) /
+                                          kGameOverLetterFadeDuration);
         if (appear > 0.001f) {
             const float ooze =
                 1.0f - SmoothStep01((titleFadeTimer_ - letterStart) /
                                     kGameOverLetterOozeDuration);
-            const float wave =
-                std::sinf(titleFadeTimer_ * 7.4f + static_cast<float>(i) * 1.83f);
+            const float wave = std::sinf(titleFadeTimer_ * 7.4f +
+                                         static_cast<float>(i) * 1.83f);
             const float slide = ooze * (5.0f + 1.8f * wave);
             const float wobbleX = ooze * wave * 1.4f;
             const float letterAlpha = appear;
@@ -622,14 +619,14 @@ void GameOverScene::DrawTitleFade(float screenWidth, float screenHeight) {
 
             for (int layer = 4; layer >= 1; --layer) {
                 const float layerF = static_cast<float>(layer);
-                const float bloomAlpha =
-                    letterAlpha * ooze * (1.0f - textDissolve) *
-                    (0.12f + 0.035f * layerF);
+                const float bloomAlpha = letterAlpha * ooze *
+                                         (1.0f - textDissolve) *
+                                         (0.12f + 0.035f * layerF);
                 if (bloomAlpha <= 0.001f) {
                     continue;
                 }
-                const float bloomScale = scale * (1.0f + ooze * 0.16f +
-                                                  layerF * 0.015f);
+                const float bloomScale =
+                    scale * (1.0f + ooze * 0.16f + layerF * 0.015f);
                 const float bloomW = letter.width * bloomScale;
                 const float bloomH = letter.height * bloomScale;
                 const float offsetX =
@@ -666,24 +663,21 @@ void GameOverScene::DrawTitleFade(float screenWidth, float screenHeight) {
                 for (int col = 0; col < kGameOverParticleColumns; ++col) {
                     const float colF = static_cast<float>(col);
                     const float rowF = static_cast<float>(row);
-                    const float seed =
-                        static_cast<float>(i) * 13.0f + colF * 3.17f +
-                        rowF * 7.31f;
+                    const float seed = static_cast<float>(i) * 13.0f +
+                                       colF * 3.17f + rowF * 7.31f;
                     const float randomA = std::sinf(seed) * 0.5f + 0.5f;
                     const float randomB = std::cosf(seed * 1.63f) * 0.5f + 0.5f;
                     const float startOffset = randomA * 0.28f + randomB * 0.10f;
-                    const float local =
-                        SmoothStep01((titleFadeTimer_ - crumbleStart -
-                                      startOffset) /
-                                     kGameOverCrumbleDuration);
+                    const float local = SmoothStep01(
+                        (titleFadeTimer_ - crumbleStart - startOffset) /
+                        kGameOverCrumbleDuration);
                     if (local <= 0.002f) {
                         continue;
                     }
                     const float gust = local * local;
                     const float spray = SmoothStep01((local - 0.08f) / 0.62f);
                     const float windX =
-                        screenWidth * (0.16f + randomA * 0.18f) +
-                        colF * 3.2f;
+                        screenWidth * (0.16f + randomA * 0.18f) + colF * 3.2f;
                     const float windY =
                         -screenHeight * (0.05f + randomB * 0.14f) +
                         (rowF - 4.5f) * 4.2f;
@@ -695,9 +689,9 @@ void GameOverScene::DrawTitleFade(float screenWidth, float screenHeight) {
                         std::cosf(titleFadeTimer_ * (7.0f + randomB * 5.0f) +
                                   seed * 0.71f) *
                         spray * 14.0f;
-                    const float fade =
-                        letterAlpha * SmoothStep01(local / 0.18f) *
-                        (1.0f - local * 0.96f);
+                    const float fade = letterAlpha *
+                                       SmoothStep01(local / 0.18f) *
+                                       (1.0f - local * 0.96f);
                     if (fade <= 0.003f) {
                         continue;
                     }
@@ -708,12 +702,12 @@ void GameOverScene::DrawTitleFade(float screenWidth, float screenHeight) {
                         grainBase * (1.0f - local * (0.22f + randomB * 0.24f));
                     const float baseX = bodyX + cellW * colF;
                     const float baseY = bodyY + cellH * rowF;
-                    const float particleX =
-                        baseX + cellW * randomA + gust * windX + flutterX -
-                        particleSize * 0.5f;
-                    const float particleY =
-                        baseY + cellH * randomB + gust * windY + flutterY -
-                        particleSize * 0.5f;
+                    const float particleX = baseX + cellW * randomA +
+                                            gust * windX + flutterX -
+                                            particleSize * 0.5f;
+                    const float particleY = baseY + cellH * randomB +
+                                            gust * windY + flutterY -
+                                            particleSize * 0.5f;
                     const float uvLeft =
                         colF / static_cast<float>(kGameOverParticleColumns);
                     const float uvTop =

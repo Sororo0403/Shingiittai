@@ -60,9 +60,7 @@ XMFLOAT4 MakeColor(float r, float g, float b, float a = 1.0f) {
 
 float SmoothStep(float t) { return t * t * (3.0f - 2.0f * t); }
 
-float Smooth01(float t) {
-    return SmoothStep(std::clamp(t, 0.0f, 1.0f));
-}
+float Smooth01(float t) { return SmoothStep(std::clamp(t, 0.0f, 1.0f)); }
 
 } // namespace
 
@@ -103,8 +101,7 @@ void CreditScene::Initialize(const SceneContext &ctx) {
 void CreditScene::Update() {
     const float deltaTime = ctx_->frame.deltaTime;
     sceneTime_ += deltaTime;
-    introTimer_ =
-        (std::min)(introTimer_ + deltaTime, kIntroDuration + 0.2f);
+    introTimer_ = (std::min)(introTimer_ + deltaTime, kIntroDuration + 0.2f);
     if (backgroundScene_) {
         backgroundScene_->Update();
     }
@@ -117,14 +114,15 @@ void CreditScene::Update() {
     const float logoStopDistance =
         CalculateLogoStopDistance(screenWidth, screenHeight);
     if (!returnRequested_ && sceneTime_ >= kCreditRollDelay) {
-        const float rollSpeed =
-            input != nullptr && input->IsKeyPress(DIK_SPACE)
-                ? kCreditRollFastSpeed
-                : kCreditRollSpeed;
-        creditRollDistance_ = (std::min)(
-            creditRollDistance_ + deltaTime * rollSpeed, logoStopDistance);
-        if (logoStopDistance > 0.0f && IsLogoStopped(screenWidth, screenHeight) &&
-            input != nullptr && input->IsKeyTrigger(DIK_SPACE)) {
+        const float rollSpeed = input != nullptr && input->IsKeyPress(DIK_SPACE)
+                                    ? kCreditRollFastSpeed
+                                    : kCreditRollSpeed;
+        creditRollDistance_ =
+            (std::min)(creditRollDistance_ + deltaTime * rollSpeed,
+                       logoStopDistance);
+        if (logoStopDistance > 0.0f &&
+            IsLogoStopped(screenWidth, screenHeight) && input != nullptr &&
+            input->IsKeyTrigger(DIK_SPACE)) {
             BeginReturnToTitle();
         }
     }
@@ -172,22 +170,21 @@ CreditScene::Image CreditScene::LoadTextureImage(const std::wstring &path) {
 }
 
 float CreditScene::CalculateLogoStopDistance(float screenWidth,
-                                            float screenHeight) const {
+                                             float screenHeight) const {
     const float bodyScale =
         std::clamp(screenWidth * 0.42f / kCreditVirtualWidth, 0.54f, 0.86f);
     float lastTextBottom = 0.0f;
     for (const CreditLine &line : creditLines_) {
-        lastTextBottom = (std::max)(
-            lastTextBottom,
-            (line.centerY + line.image.height * line.scale * 0.5f) *
-                bodyScale);
+        lastTextBottom =
+            (std::max)(lastTextBottom,
+                       (line.centerY + line.image.height * line.scale * 0.5f) *
+                           bodyScale);
     }
     const float logoDelayDistance =
         (screenHeight + 42.0f) + lastTextBottom + kLogoStartAfterTextPadding;
     const float logoCenterStopDistance =
-        (std::max)(0.0f,
-                   screenHeight + kLogoStartBelowScreenPadding -
-                       (screenHeight * 0.5f));
+        (std::max)(0.0f, screenHeight + kLogoStartBelowScreenPadding -
+                             (screenHeight * 0.5f));
     return logoDelayDistance + logoCenterStopDistance;
 }
 
@@ -236,11 +233,9 @@ void CreditScene::DrawCredits(float screenWidth, float screenHeight) {
             (std::max)(lastTextBottom,
                        (line.centerY + line.image.height * line.scale * 0.5f) *
                            bodyScale);
-        const float lineX =
-            textCenterX - line.image.width * lineScale * 0.5f;
-        const float lineY =
-            rollY + line.centerY * bodyScale -
-            line.image.height * lineScale * 0.5f;
+        const float lineX = textCenterX - line.image.width * lineScale * 0.5f;
+        const float lineY = rollY + line.centerY * bodyScale -
+                            line.image.height * lineScale * 0.5f;
         DrawImage(line.image, lineX, lineY, lineScale, intro);
     }
 
@@ -256,10 +251,10 @@ void CreditScene::DrawCredits(float screenWidth, float screenHeight) {
                        minScale, maxScale);
         const float signatureW = image.width * signatureScale;
         const float signatureH = image.height * signatureScale;
-        const float signatureCenterX = std::clamp(
-            screenWidth * kSignatureColumnCenterRatio,
-            bodyRight + rightMarginW * 0.22f,
-            screenWidth - rightMarginW * 0.18f);
+        const float signatureCenterX =
+            std::clamp(screenWidth * kSignatureColumnCenterRatio,
+                       bodyRight + rightMarginW * 0.22f,
+                       screenWidth - rightMarginW * 0.18f);
         const float signatureX = signatureCenterX - signatureW * 0.5f;
         const float signatureY =
             rollY + centerY * bodyScale - signatureH * 0.5f;
@@ -284,9 +279,9 @@ void CreditScene::DrawCredits(float screenWidth, float screenHeight) {
         const float logoRollDistance =
             (std::max)(0.0f, creditRollDistance_ - logoDelayDistance);
         const float logoCenterY =
-            (std::max)(screenHeight * 0.5f,
-                       screenHeight + kLogoStartBelowScreenPadding -
-                           logoRollDistance);
+            (std::max)(screenHeight * 0.5f, screenHeight +
+                                                kLogoStartBelowScreenPadding -
+                                                logoRollDistance);
         DrawImage(logoImage_, (screenWidth - logoW) * 0.5f,
                   logoCenterY - logoH * 0.5f, logoScale, intro);
 
@@ -300,8 +295,8 @@ void CreditScene::DrawCredits(float screenWidth, float screenHeight) {
             const float messageW = thankYouImage_.width * messageScale;
             const float messageY =
                 logoCenterY + logoH * 0.5f + 18.0f * messageScale;
-            DrawImage(thankYouImage_, (screenWidth - messageW) * 0.5f,
-                      messageY, messageScale, intro);
+            DrawImage(thankYouImage_, (screenWidth - messageW) * 0.5f, messageY,
+                      messageScale, intro);
         }
     }
 }
@@ -311,11 +306,11 @@ void CreditScene::DrawControlsPrompt(float screenWidth, float screenHeight) {
         return;
     }
 
-    const float intro =
-        Smooth01((introTimer_ - kIntroDuration * 0.6f) / (kIntroDuration * 0.5f));
-    const float promptScale = (std::min)(
-        1.0f,
-        (screenWidth * 0.48f) / (std::max)(controlsImage_.width, 1.0f));
+    const float intro = Smooth01((introTimer_ - kIntroDuration * 0.6f) /
+                                 (kIntroDuration * 0.5f));
+    const float promptScale =
+        (std::min)(1.0f, (screenWidth * 0.48f) /
+                             (std::max)(controlsImage_.width, 1.0f));
     DrawImage(controlsImage_, kControlsPadding,
               screenHeight - (controlsImage_.height - 18.0f) * promptScale -
                   kControlsPadding,
@@ -349,8 +344,8 @@ void CreditScene::DrawRect(float x, float y, float w, float h,
     ctx_->rendering.sprite->DrawSprite(sprite);
 }
 
-void CreditScene::DrawFrame(float x, float y, float w, float h,
-                            float thickness, const XMFLOAT4 &color) {
+void CreditScene::DrawFrame(float x, float y, float w, float h, float thickness,
+                            const XMFLOAT4 &color) {
     DrawRect(x, y, w, thickness, color);
     DrawRect(x, y + h - thickness, w, thickness, color);
     DrawRect(x, y, thickness, h, color);
@@ -379,10 +374,8 @@ void CreditScene::StartCreditBgm() {
 
     creditBgmSoundId_ = ctx_->systems.sound->LoadOrCreateSilent(
         L"app/resources/audio/bgm/bgm_TitleTheme.wav");
-    creditBgmVoiceHandle_ =
-        ctx_->systems.sound->Play(creditBgmSoundId_,
-                                  0.24f * AppSceneServices::GetBgmVolume(),
-                                  true);
+    creditBgmVoiceHandle_ = ctx_->systems.sound->Play(
+        creditBgmSoundId_, 0.24f * AppSceneServices::GetBgmVolume(), true);
 }
 
 void CreditScene::StopCreditBgm() {

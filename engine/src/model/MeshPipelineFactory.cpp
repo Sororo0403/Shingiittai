@@ -44,9 +44,9 @@ D3D12_BLEND_DESC MakeMeshBlendState(MeshBlendMode mode) {
 
     blend.RenderTarget[0].BlendEnable = TRUE;
     blend.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
-    blend.RenderTarget[0].DestBlend =
-        mode == MeshBlendMode::Additive ? D3D12_BLEND_ONE
-                                        : D3D12_BLEND_INV_SRC_ALPHA;
+    blend.RenderTarget[0].DestBlend = mode == MeshBlendMode::Additive
+                                          ? D3D12_BLEND_ONE
+                                          : D3D12_BLEND_INV_SRC_ALPHA;
     blend.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
     blend.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
     blend.RenderTarget[0].DestBlendAlpha =
@@ -56,8 +56,7 @@ D3D12_BLEND_DESC MakeMeshBlendState(MeshBlendMode mode) {
 }
 
 D3D12_DEPTH_STENCIL_DESC MakeMeshDepthState(MeshDepthMode mode) {
-    D3D12_DEPTH_STENCIL_DESC depth =
-        CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+    D3D12_DEPTH_STENCIL_DESC depth = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
     depth.DepthEnable = mode == MeshDepthMode::None ? FALSE : TRUE;
     depth.DepthWriteMask = mode == MeshDepthMode::TestWrite
                                ? D3D12_DEPTH_WRITE_MASK_ALL
@@ -111,9 +110,9 @@ MeshPipelineSet MeshPipelineFactory::CreatePipelineSet(
         pso.BlendState = MakeMeshBlendState(blendMode);
         pso.DepthStencilState = MakeMeshDepthState(depthMode);
 
-        ThrowIfFailed(device->CreateGraphicsPipelineState(
-                          &pso, IID_PPV_ARGS(&psoOut)),
-                      "CreateGraphicsPipelineState(MeshPipelineFactory) failed");
+        ThrowIfFailed(
+            device->CreateGraphicsPipelineState(&pso, IID_PPV_ARGS(&psoOut)),
+            "CreateGraphicsPipelineState(MeshPipelineFactory) failed");
     };
 
     if (desc.variantMode == MeshPipelineVariantMode::Fixed) {

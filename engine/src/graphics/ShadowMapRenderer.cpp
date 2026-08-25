@@ -32,9 +32,7 @@ class ShadowMapInitializationGuard {
 };
 } // namespace
 
-ShadowMapRenderer::~ShadowMapRenderer() {
-    Release();
-}
+ShadowMapRenderer::~ShadowMapRenderer() { Release(); }
 
 void ShadowMapRenderer::Initialize(DirectXCommon *dxCommon,
                                    SrvManager *srvManager, uint32_t width,
@@ -158,8 +156,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE ShadowMapRenderer::GetDsvHandle() const {
 
 void ShadowMapRenderer::ReleaseDepthResources() {
     if (depthTexture_ && dxCommon_ != nullptr &&
-        !dxCommon_->IsDeviceRemoved() &&
-        !dxCommon_->IsCommandListRecording()) {
+        !dxCommon_->IsDeviceRemoved() && !dxCommon_->IsCommandListRecording()) {
         dxCommon_->WaitForGpuIfPossible();
     }
 
@@ -174,9 +171,9 @@ void ShadowMapRenderer::CreateResources() {
     D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc{};
     dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
     dsvHeapDesc.NumDescriptors = 1;
-    ThrowIfFailed(device->CreateDescriptorHeap(&dsvHeapDesc,
-                                               IID_PPV_ARGS(&dsvHeap_)),
-                  "Create shadow DSV heap failed");
+    ThrowIfFailed(
+        device->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&dsvHeap_)),
+        "Create shadow DSV heap failed");
 
     D3D12_RESOURCE_DESC desc{};
     desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;

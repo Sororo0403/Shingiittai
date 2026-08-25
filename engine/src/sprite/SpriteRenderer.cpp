@@ -24,8 +24,7 @@ float FiniteOr(float value, float fallback) {
     return std::isfinite(value) ? value : fallback;
 }
 
-XMFLOAT2 SanitizeFloat2(const XMFLOAT2 &value,
-                        const XMFLOAT2 &fallback) {
+XMFLOAT2 SanitizeFloat2(const XMFLOAT2 &value, const XMFLOAT2 &fallback) {
     return {FiniteOr(value.x, fallback.x), FiniteOr(value.y, fallback.y)};
 }
 
@@ -91,8 +90,7 @@ void SpriteRenderer::Draw(const Sprite &sprite) {
 
     const XMFLOAT2 position = SanitizeFloat2(sprite.position, {0.0f, 0.0f});
     const XMFLOAT2 size = SanitizeFloat2(sprite.size, {0.0f, 0.0f});
-    const XMFLOAT2 uvLeftTop =
-        SanitizeFloat2(sprite.uvLeftTop, {0.0f, 0.0f});
+    const XMFLOAT2 uvLeftTop = SanitizeFloat2(sprite.uvLeftTop, {0.0f, 0.0f});
     const XMFLOAT2 uvSize = SanitizeFloat2(sprite.uvSize, {1.0f, 1.0f});
     const XMFLOAT4 color = SanitizeColor(sprite.color);
 
@@ -112,8 +110,8 @@ void SpriteRenderer::Draw(const Sprite &sprite) {
 
         QueuedDraw draw{};
         draw.pipelineKind = pipelineKind;
-        draw.textureId = ResolveSpriteTextureId(textureManager_,
-                                                sprite.textureId);
+        draw.textureId =
+            ResolveSpriteTextureId(textureManager_, sprite.textureId);
         if (draw.textureId == UINT32_MAX) {
             return;
         }
@@ -135,11 +133,10 @@ void SpriteRenderer::Draw(const Sprite &sprite) {
         break;
     case SpriteBlendMode::PremultipliedMask: {
 
-        const XMFLOAT4 darkenColor = {
-            color.x * 0.60f, color.y * 0.60f,
-            color.z * 0.60f, std::clamp(color.w * 1.10f, 0.0f, 1.0f)};
-        const XMFLOAT4 tintColor = {color.x, color.y,
-                                    color.z, color.w * 0.64f};
+        const XMFLOAT4 darkenColor = {color.x * 0.60f, color.y * 0.60f,
+                                      color.z * 0.60f,
+                                      std::clamp(color.w * 1.10f, 0.0f, 1.0f)};
+        const XMFLOAT4 tintColor = {color.x, color.y, color.z, color.w * 0.64f};
         drawPass(PipelineKind::Modulate, darkenColor);
         drawPass(PipelineKind::Alpha, tintColor);
         break;
@@ -181,9 +178,8 @@ void SpriteRenderer::PreDraw(bool backBufferTarget) {
     ID3D12DescriptorHeap *heaps[] = {srvHeap};
     cmd->SetDescriptorHeaps(1, heaps);
 
-    activeRenderTargetKind_ = backBufferTarget
-                                  ? RenderTargetKind::BackBuffer
-                                  : RenderTargetKind::SceneColor;
+    activeRenderTargetKind_ = backBufferTarget ? RenderTargetKind::BackBuffer
+                                               : RenderTargetKind::SceneColor;
     activePipelineKind_ = PipelineKind::Alpha;
     ID3D12PipelineState *pipelineState =
         pipelineStates_[static_cast<uint32_t>(activeRenderTargetKind_)]
@@ -292,7 +288,8 @@ void SpriteRenderer::DrawQueuedRun(ID3D12GraphicsCommandList *commandList,
         return;
     }
     commandList->SetGraphicsRootDescriptorTable(1, textureHandle);
-    commandList->DrawInstanced(static_cast<UINT>(batchVertices_.size()), 1, 0, 0);
+    commandList->DrawInstanced(static_cast<UINT>(batchVertices_.size()), 1, 0,
+                               0);
 }
 
 void SpriteRenderer::CreateUploadBuffer() {
@@ -395,12 +392,12 @@ void SpriteRenderer::CreatePipelineState() {
         rt.DestBlendAlpha = D3D12_BLEND_ZERO;
         desc.BlendState = blend;
         desc.PS = {psAlpha->GetBufferPointer(), psAlpha->GetBufferSize()};
-        ThrowIfFailed(dxCommon_->GetDevice()->CreateGraphicsPipelineState(
-                          &desc,
-                          IID_PPV_ARGS(&pipelineStates_[target]
-                                                     [static_cast<uint32_t>(
-                                                         PipelineKind::Alpha)])),
-                      "Create alpha sprite pipeline failed");
+        ThrowIfFailed(
+            dxCommon_->GetDevice()->CreateGraphicsPipelineState(
+                &desc,
+                IID_PPV_ARGS(&pipelineStates_[target][static_cast<uint32_t>(
+                    PipelineKind::Alpha)])),
+            "Create alpha sprite pipeline failed");
 
         rt.SrcBlend = D3D12_BLEND_ZERO;
         rt.DestBlend = D3D12_BLEND_SRC_COLOR;
@@ -408,12 +405,12 @@ void SpriteRenderer::CreatePipelineState() {
         rt.DestBlendAlpha = D3D12_BLEND_ONE;
         desc.BlendState = blend;
         desc.PS = {psModulate->GetBufferPointer(), psModulate->GetBufferSize()};
-        ThrowIfFailed(dxCommon_->GetDevice()->CreateGraphicsPipelineState(
-                          &desc,
-                          IID_PPV_ARGS(&pipelineStates_[target]
-                                                     [static_cast<uint32_t>(
-                                                         PipelineKind::Modulate)])),
-                      "Create modulate sprite pipeline failed");
+        ThrowIfFailed(
+            dxCommon_->GetDevice()->CreateGraphicsPipelineState(
+                &desc,
+                IID_PPV_ARGS(&pipelineStates_[target][static_cast<uint32_t>(
+                    PipelineKind::Modulate)])),
+            "Create modulate sprite pipeline failed");
 
         rt.SrcBlend = D3D12_BLEND_ONE;
         rt.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
@@ -424,9 +421,9 @@ void SpriteRenderer::CreatePipelineState() {
                    psPremultipliedMask->GetBufferSize()};
         ThrowIfFailed(
             dxCommon_->GetDevice()->CreateGraphicsPipelineState(
-                &desc, IID_PPV_ARGS(
-                           &pipelineStates_[target][static_cast<uint32_t>(
-                               PipelineKind::PremultipliedMask)])),
+                &desc,
+                IID_PPV_ARGS(&pipelineStates_[target][static_cast<uint32_t>(
+                    PipelineKind::PremultipliedMask)])),
             "Create premultiplied mask sprite pipeline failed");
     }
 }

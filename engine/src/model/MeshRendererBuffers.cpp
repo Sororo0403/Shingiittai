@@ -158,9 +158,9 @@ void MeshRenderer::CreateUploadBuffer() {
     uploadBuffer_.Initialize(dxCommon_->GetDevice(), kUploadBytesPerFrame, 2);
 }
 
-D3D12_GPU_VIRTUAL_ADDRESS MeshRenderer::WriteObjectConstants(
-    const XMMATRIX &wvp, const XMMATRIX &world,
-    const XMMATRIX &worldInverseTranspose) {
+D3D12_GPU_VIRTUAL_ADDRESS
+MeshRenderer::WriteObjectConstants(const XMMATRIX &wvp, const XMMATRIX &world,
+                                   const XMMATRIX &worldInverseTranspose) {
     PerObjectConstBufferData data{};
     XMStoreFloat4x4(&data.matWVP, XMMatrixTranspose(wvp));
     XMStoreFloat4x4(&data.matWorld, XMMatrixTranspose(world));
@@ -185,8 +185,8 @@ MeshRenderer::WriteSceneConstants(const Camera &camera) {
                                     0.0f};
     sceneDst->fillLightColor = currentLighting_.fillLightColor;
     sceneDst->ambientColor = currentLighting_.ambientColor;
-    for (size_t lightIndex = 0; lightIndex < currentLighting_.pointLights.size();
-         ++lightIndex) {
+    for (size_t lightIndex = 0;
+         lightIndex < currentLighting_.pointLights.size(); ++lightIndex) {
         sceneDst->pointLights[lightIndex].positionRange =
             currentLighting_.pointLights[lightIndex].positionRange;
         sceneDst->pointLights[lightIndex].colorIntensity =
@@ -204,9 +204,11 @@ MeshRenderer::WriteSceneConstants(const Camera &camera) {
     sceneDst->shadowFilterParams = shadowFilterParams_;
     sceneDst->customSceneParams0 = customSceneParams0_;
     sceneDst->customSceneParams1 = customSceneParams1_;
-    sceneDst->spotLight.positionRange = currentLighting_.spotLight.positionRange;
+    sceneDst->spotLight.positionRange =
+        currentLighting_.spotLight.positionRange;
     sceneDst->spotLight.direction = currentLighting_.spotLight.direction;
-    sceneDst->spotLight.colorIntensity = currentLighting_.spotLight.colorIntensity;
+    sceneDst->spotLight.colorIntensity =
+        currentLighting_.spotLight.colorIntensity;
     sceneDst->spotLight.angleParams = currentLighting_.spotLight.angleParams;
     return uploadBuffer_.Write(data).gpu;
 }
@@ -235,9 +237,8 @@ MeshRenderer::WriteInstances(const InstanceData *instances,
         safeInstances[index] = SanitizeInstanceDataForDraw(instances[index]);
     }
 
-    const UploadAllocation allocation =
-        uploadBuffer_.WriteArray(safeInstances.data(), safeInstances.size(),
-                                 alignof(InstanceData));
+    const UploadAllocation allocation = uploadBuffer_.WriteArray(
+        safeInstances.data(), safeInstances.size(), alignof(InstanceData));
     D3D12_VERTEX_BUFFER_VIEW view{};
     view.BufferLocation = allocation.gpu;
     view.SizeInBytes = static_cast<UINT>(allocation.size);

@@ -51,14 +51,12 @@ void SpriteManager::Draw(uint32_t id) {
 void SpriteManager::DrawAllSorted(bool backToFront) {
     std::vector<size_t> indices(sprites_.size());
     std::iota(indices.begin(), indices.end(), size_t{0});
-    std::stable_sort(indices.begin(), indices.end(),
-                     [&](size_t lhs, size_t rhs) {
-                         const float lhsZ = FiniteOr(sprites_[lhs].zOrder, 0.0f);
-                         const float rhsZ = FiniteOr(sprites_[rhs].zOrder, 0.0f);
-                         return backToFront
-                                    ? lhsZ > rhsZ
-                                    : lhsZ < rhsZ;
-                     });
+    std::stable_sort(
+        indices.begin(), indices.end(), [&](size_t lhs, size_t rhs) {
+            const float lhsZ = FiniteOr(sprites_[lhs].zOrder, 0.0f);
+            const float rhsZ = FiniteOr(sprites_[rhs].zOrder, 0.0f);
+            return backToFront ? lhsZ > rhsZ : lhsZ < rhsZ;
+        });
 
     for (size_t index : indices) {
         spriteRenderer_.Draw(sprites_[index]);

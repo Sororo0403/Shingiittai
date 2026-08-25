@@ -1,18 +1,18 @@
 #include "WeaponSelectScene.h"
 #include "AppSceneServices.h"
 #include "CreditScene.h"
-#include "SoundTestScene.h"
+#include "DifficultyCauldronScene.h"
+#include "HandLoadingScene.h"
 #include "Input.h"
 #include "OptionScene.h"
 #include "RankingScene.h"
 #include "SceneManager.h"
 #include "SoundManager.h"
+#include "SoundTestScene.h"
 #include "Sprite.h"
 #include "SpriteManager.h"
 #include "TextureManager.h"
 #include "TitleScene.h"
-#include "DifficultyCauldronScene.h"
-#include "HandLoadingScene.h"
 #include "TutorialSelectScene.h"
 #include "WinApp.h"
 #include <algorithm>
@@ -62,11 +62,10 @@ constexpr std::array<ImageContentBounds, 3> kButtonIllustrationBounds = {{
     {-82.0f, 46.0f, 82.0f, 162.0f},
 }};
 
-constexpr ImageContentBounds kTitleContentBounds{
-    0.0f, 0.0f, 187.0f, 43.0f};
+constexpr ImageContentBounds kTitleContentBounds{0.0f, 0.0f, 187.0f, 43.0f};
 
-constexpr ImageContentBounds kUtilityMenuTitleContentBounds{
-    1.0f, 25.0f, 118.0f, 52.0f};
+constexpr ImageContentBounds kUtilityMenuTitleContentBounds{1.0f, 25.0f, 118.0f,
+                                                            52.0f};
 
 constexpr std::array<ImageContentBounds, kUtilityMenuItemCount>
     kUtilityMenuLabelContentBounds = {{
@@ -188,93 +187,92 @@ bool WeaponSelectScene::UpdateReturnTransition() {
     if (!titleReturnRequested_) {
         return false;
     }
-        transitionTimer_ += ctx_->frame.deltaTime;
-        if (transitionTimer_ >= kTransitionDuration) {
-            sceneManager_->ChangeScene(std::make_unique<TitleScene>());
-        }
-        return true;
+    transitionTimer_ += ctx_->frame.deltaTime;
+    if (transitionTimer_ >= kTransitionDuration) {
+        sceneManager_->ChangeScene(std::make_unique<TitleScene>());
+    }
+    return true;
 }
 
 bool WeaponSelectScene::UpdateUtilityTransition() {
     if (!menuActionRequested_) {
         return false;
     }
-        transitionTimer_ += ctx_->frame.deltaTime;
-        if (transitionTimer_ >= kTransitionDuration) {
-            switch (utilityMenuIndex_) {
-            case 0:
-                preserveMenuBgmOnExit_ = true;
-                sceneManager_->ChangeScene(std::make_unique<RankingScene>(
-                    RankingScene::ReturnTarget::WeaponSelect));
-                break;
-            case 1:
-                sceneManager_->ChangeScene(std::make_unique<SoundTestScene>(
-                    SoundTestScene::ReturnTarget::WeaponSelect));
-                break;
-            case 2:
-                sceneManager_->ChangeScene(std::make_unique<CreditScene>(
-                    CreditScene::ReturnTarget::WeaponSelect));
-                break;
-            case 3:
-                sceneManager_->ChangeScene(std::make_unique<HandLoadingScene>(
-                    CameraAccuracyDebugScene::ReturnTarget::WeaponSelect));
-                break;
-            case 4:
-                preserveMenuBgmOnExit_ = true;
-                sceneManager_->ChangeScene(std::make_unique<OptionScene>(
-                    OptionScene::ReturnTarget::WeaponSelect));
-                break;
-            default:
-                break;
-            }
+    transitionTimer_ += ctx_->frame.deltaTime;
+    if (transitionTimer_ >= kTransitionDuration) {
+        switch (utilityMenuIndex_) {
+        case 0:
+            preserveMenuBgmOnExit_ = true;
+            sceneManager_->ChangeScene(std::make_unique<RankingScene>(
+                RankingScene::ReturnTarget::WeaponSelect));
+            break;
+        case 1:
+            sceneManager_->ChangeScene(std::make_unique<SoundTestScene>(
+                SoundTestScene::ReturnTarget::WeaponSelect));
+            break;
+        case 2:
+            sceneManager_->ChangeScene(std::make_unique<CreditScene>(
+                CreditScene::ReturnTarget::WeaponSelect));
+            break;
+        case 3:
+            sceneManager_->ChangeScene(std::make_unique<HandLoadingScene>(
+                CameraAccuracyDebugScene::ReturnTarget::WeaponSelect));
+            break;
+        case 4:
+            preserveMenuBgmOnExit_ = true;
+            sceneManager_->ChangeScene(std::make_unique<OptionScene>(
+                OptionScene::ReturnTarget::WeaponSelect));
+            break;
+        default:
+            break;
         }
-        return true;
+    }
+    return true;
 }
 
 bool WeaponSelectScene::UpdateStartTransition() {
     if (!startRequested_) {
         return false;
     }
-        if (selectedIndex_ == kTutorialButtonIndex) {
-            transitionTimer_ += ctx_->frame.deltaTime;
-            if (transitionTimer_ >= kTransitionDuration) {
-                preserveMenuBgmOnExit_ = true;
-                sceneManager_->ChangeScene(
-                    std::make_unique<TutorialSelectScene>());
-            }
+    if (selectedIndex_ == kTutorialButtonIndex) {
+        transitionTimer_ += ctx_->frame.deltaTime;
+        if (transitionTimer_ >= kTransitionDuration) {
+            preserveMenuBgmOnExit_ = true;
+            sceneManager_->ChangeScene(std::make_unique<TutorialSelectScene>());
+        }
+        return true;
+    }
+
+    const InputControlType selectedType = SelectedControlType();
+    if (selectedType == InputControlType::Hand &&
+        waitingForHandTrackingReady_) {
+        if (!IsHandTrackingReady()) {
+            transitionTimer_ =
+                (std::min)(transitionTimer_ + ctx_->frame.deltaTime,
+                           kTransitionDuration * 0.72f);
             return true;
         }
 
-        const InputControlType selectedType = SelectedControlType();
-        if (selectedType == InputControlType::Hand &&
-            waitingForHandTrackingReady_) {
-            if (!IsHandTrackingReady()) {
-                transitionTimer_ =
-                    (std::min)(transitionTimer_ + ctx_->frame.deltaTime,
-                               kTransitionDuration * 0.72f);
-                return true;
-            }
+        RequestHandTrackingStartOnce();
+        waitingForHandTrackingReady_ = false;
+        transitionTimer_ = 0.0f;
+    } else {
+        transitionTimer_ += ctx_->frame.deltaTime;
+    }
 
-            RequestHandTrackingStartOnce();
-            waitingForHandTrackingReady_ = false;
-            transitionTimer_ = 0.0f;
+    if (transitionTimer_ >= kTransitionDuration) {
+        SwordInputCalibration calibration{};
+        calibration.controlType = selectedType;
+        preserveMenuBgmOnExit_ = true;
+        if (selectedType == InputControlType::Hand) {
+            sceneManager_->ChangeScene(
+                std::make_unique<HandLoadingScene>(calibration));
         } else {
-            transitionTimer_ += ctx_->frame.deltaTime;
+            sceneManager_->ChangeScene(
+                std::make_unique<DifficultyCauldronScene>(calibration));
         }
-
-        if (transitionTimer_ >= kTransitionDuration) {
-            SwordInputCalibration calibration{};
-            calibration.controlType = selectedType;
-            preserveMenuBgmOnExit_ = true;
-            if (selectedType == InputControlType::Hand) {
-                sceneManager_->ChangeScene(
-                    std::make_unique<HandLoadingScene>(calibration));
-            } else {
-                sceneManager_->ChangeScene(
-                    std::make_unique<DifficultyCauldronScene>(calibration));
-            }
-        }
-        return true;
+    }
+    return true;
 }
 
 void WeaponSelectScene::Draw() {
@@ -339,8 +337,7 @@ void WeaponSelectScene::UpdateSelection(Input *input) {
     if (input->IsKeyTrigger(DIK_A) && selectedIndex_ > 0) {
         nextIndex = selectedIndex_ - 1;
     }
-    if (input->IsKeyTrigger(DIK_D) &&
-        selectedIndex_ < kSelectableCount - 1) {
+    if (input->IsKeyTrigger(DIK_D) && selectedIndex_ < kSelectableCount - 1) {
         nextIndex = selectedIndex_ + 1;
     }
 
@@ -454,9 +451,8 @@ void WeaponSelectScene::UpdateUtilityMenu(Input *input) {
         return;
     }
     if (input->IsKeyTrigger(DIK_A) || input->IsKeyTrigger(DIK_LEFT)) {
-        utilityMenuIndex_ =
-            (utilityMenuIndex_ + kUtilityMenuItemCount - 1) %
-            kUtilityMenuItemCount;
+        utilityMenuIndex_ = (utilityMenuIndex_ + kUtilityMenuItemCount - 1) %
+                            kUtilityMenuItemCount;
         AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
     }
     if (input->IsKeyTrigger(DIK_D) || input->IsKeyTrigger(DIK_RIGHT)) {
@@ -600,9 +596,7 @@ void WeaponSelectScene::StartMenuBgm() {
     AppSceneServices::StartMenuBgm(*ctx_);
 }
 
-void WeaponSelectScene::StopMenuBgm() {
-    AppSceneServices::StopMenuBgm(ctx_);
-}
+void WeaponSelectScene::StopMenuBgm() { AppSceneServices::StopMenuBgm(ctx_); }
 
 void WeaponSelectScene::DrawOverlay(float screenWidth, float screenHeight) {
     const float intro = Smooth01(introTimer_ / kIntroDuration);
@@ -643,9 +637,9 @@ void WeaponSelectScene::DrawButtons() {
                             : MakeColor(0.95f, 0.70f, 0.32f, 0.88f * intro))
                      : MakeColor(0.60f, 0.64f, 0.70f, 0.22f * alpha);
 
-        DrawRect(panelX + 8.0f, panelY + 10.0f, panelW, panelH,
-                 MakeColor(0.0f, 0.0f, 0.0f,
-                           (selected ? 0.38f : 0.24f) * intro));
+        DrawRect(
+            panelX + 8.0f, panelY + 10.0f, panelW, panelH,
+            MakeColor(0.0f, 0.0f, 0.0f, (selected ? 0.38f : 0.24f) * intro));
         DrawRect(panelX, panelY, panelW, panelH, body);
         DrawRect(panelX, panelY, panelW, 2.0f, edge);
         DrawRect(panelX, panelY + panelH - 2.0f, panelW, 2.0f, edge);
@@ -653,7 +647,6 @@ void WeaponSelectScene::DrawButtons() {
         DrawRect(panelX + panelW - 2.0f, panelY, 2.0f, panelH, edge);
 
         DrawButtonIllustration(i, rect, lift, alpha, selected);
-
     }
 }
 
@@ -677,8 +670,7 @@ void WeaponSelectScene::DrawButtonIllustration(int index,
         tutorialButton, MakeColor(0.06f, 0.95f, 0.86f, 1.0f * alpha),
         MakeColor(1.0f, 0.80f, 0.36f, 1.0f * alpha));
     const XMFLOAT4 line = PickButtonValue(
-        selected, selectedLine,
-        MakeColor(0.82f, 0.86f, 0.92f, 0.66f * alpha));
+        selected, selectedLine, MakeColor(0.82f, 0.86f, 0.92f, 0.66f * alpha));
     const XMFLOAT4 fill = PickButtonValue(
         selected, MakeColor(0.16f, 0.12f, 0.070f, 0.54f * alpha),
         MakeColor(0.10f, 0.11f, 0.13f, 0.44f * alpha));
@@ -697,7 +689,9 @@ void WeaponSelectScene::DrawButtonIllustration(int index,
                        const XMFLOAT4 &color) {
         DrawFrame(sx(x), sy(y), sw(w), sw(h), sw(thickness), color);
     };
-    auto part = [&](float offset) { return ButtonIntroProgress(index, offset); };
+    auto part = [&](float offset) {
+        return ButtonIntroProgress(index, offset);
+    };
 
     if (tutorialButton) {
         const float bookBuild = part(0.17f);
@@ -783,8 +777,7 @@ void WeaponSelectScene::DrawButtonIllustration(int index,
                 continue;
             }
             const float fingerX = PickButtonValue(
-                thumbRight,
-                handX + 22.0f + static_cast<float>(i) * 20.0f,
+                thumbRight, handX + 22.0f + static_cast<float>(i) * 20.0f,
                 handX + 44.0f + static_cast<float>(i) * 20.0f);
             rectAt(fingerX, handY + static_cast<float>(i % 2) * 7.0f, 14.0f,
                    52.0f * fingerBuild, ScaleAlpha(line, fingerBuild));
@@ -813,23 +806,22 @@ void WeaponSelectScene::DrawLabels(float screenWidth, float screenHeight) {
         const Image &name = modeNameImages_[i];
         const ImageContentBounds &bounds = kModeNameContentBounds[i];
         const bool tutorialButton = i == kTutorialButtonIndex;
-        const float maxLabelAspect =
-            tutorialButton ? kSmallButtonNameMaxAspect
-                           : kNormalButtonNameMaxAspect;
-        const float targetLabelHeight = (std::min)(
-            rect.h * (tutorialButton ? 0.11f : 0.10f),
-            (rect.w * 0.82f) / maxLabelAspect);
-        const float nameScale = (std::min)(
-            {tutorialButton ? 0.62f : 1.10f,
-             targetLabelHeight / (std::max)(bounds.Height(), 1.0f),
-             (rect.w * 0.82f) / (std::max)(bounds.Width(), 1.0f)});
+        const float maxLabelAspect = tutorialButton
+                                         ? kSmallButtonNameMaxAspect
+                                         : kNormalButtonNameMaxAspect;
+        const float targetLabelHeight =
+            (std::min)(rect.h * (tutorialButton ? 0.11f : 0.10f),
+                       (rect.w * 0.82f) / maxLabelAspect);
+        const float nameScale =
+            (std::min)({tutorialButton ? 0.62f : 1.10f,
+                        targetLabelHeight / (std::max)(bounds.Height(), 1.0f),
+                        (rect.w * 0.82f) / (std::max)(bounds.Width(), 1.0f)});
         const float centerX = rect.x + rect.w * 0.5f;
-        const float centerY =
-            rect.y + rect.h * (tutorialButton ? 0.80f : 0.78f) - lift +
-            (1.0f - intro) * 8.0f;
+        const float centerY = rect.y +
+                              rect.h * (tutorialButton ? 0.80f : 0.78f) - lift +
+                              (1.0f - intro) * 8.0f;
         DrawImage(name, centerX - bounds.CenterX() * nameScale,
-                  centerY - bounds.CenterY() * nameScale,
-                  nameScale, alpha);
+                  centerY - bounds.CenterY() * nameScale, nameScale, alpha);
     }
 
     const float titleIntro = Smooth01((introTimer_ - 0.10f) / 0.24f);
@@ -842,8 +834,7 @@ void WeaponSelectScene::DrawLabels(float screenWidth, float screenHeight) {
              MakeColor(0.0f, 0.0f, 0.0f, 0.42f * titleIntro));
     DrawRect(0.0f, titleBandY + titleBandH - 2.0f, screenWidth, 2.0f,
              MakeColor(1.0f, 0.80f, 0.36f, 0.30f * titleIntro));
-    DrawImage(sceneTitleImage_,
-              titleCenterX - kTitleContentBounds.CenterX(),
+    DrawImage(sceneTitleImage_, titleCenterX - kTitleContentBounds.CenterX(),
               titleCenterY - kTitleContentBounds.CenterY(), 1.0f,
               0.92f * titleIntro);
 
@@ -858,8 +849,8 @@ void WeaponSelectScene::DrawLabels(float screenWidth, float screenHeight) {
         kControlsPadding;
     DrawImage(controlsImage_, kControlsPadding, controlsY, controlsScale,
               0.58f * controlsIntro);
-    DrawImage(menuPromptImage_, kControlsPadding,
-              controlsY - 36.0f, controlsScale, 0.58f * controlsIntro);
+    DrawImage(menuPromptImage_, kControlsPadding, controlsY - 36.0f,
+              controlsScale, 0.58f * controlsIntro);
 }
 
 void WeaponSelectScene::DrawUtilityMenuWindow(float screenWidth,
@@ -881,8 +872,7 @@ void WeaponSelectScene::DrawUtilityMenuWindow(float screenWidth,
     const float panelMinW = (std::min)(860.0f, panelMaxW);
     const float panelMinH = (std::min)(380.0f, panelMaxH);
     const float panelW = std::clamp(screenWidth * 0.72f, panelMinW, panelMaxW);
-    const float panelH =
-        std::clamp(screenHeight * 0.44f, panelMinH, panelMaxH);
+    const float panelH = std::clamp(screenHeight * 0.44f, panelMinH, panelMaxH);
     const float panelX = (screenWidth - panelW) * 0.5f;
     const float panelY = (screenHeight - panelH) * 0.5f;
     const float edge = 3.0f;
@@ -894,19 +884,21 @@ void WeaponSelectScene::DrawUtilityMenuWindow(float screenWidth,
     DrawFrame(panelX, panelY, panelW, panelH, edge,
               MakeColor(0.92f, 0.68f, 0.28f, 0.72f));
 
-    const float titleScale = (std::min)(
-        {1.18f, (panelW * 0.30f) /
-                    (std::max)(kUtilityMenuTitleContentBounds.Width(), 1.0f),
-         (panelH * 0.13f) /
-             (std::max)(kUtilityMenuTitleContentBounds.Height(), 1.0f)});
+    const float titleScale =
+        (std::min)({1.18f,
+                    (panelW * 0.30f) /
+                        (std::max)(kUtilityMenuTitleContentBounds.Width(),
+                                   1.0f),
+                    (panelH * 0.13f) /
+                        (std::max)(kUtilityMenuTitleContentBounds.Height(),
+                                   1.0f)});
     const float titleCenterX = panelX + panelW * 0.5f;
     const float titleCenterY = panelY + panelH * 0.23f;
-    DrawImage(utilityMenuTitleImage_,
-              titleCenterX -
-                  kUtilityMenuTitleContentBounds.CenterX() * titleScale,
-              titleCenterY -
-                  kUtilityMenuTitleContentBounds.CenterY() * titleScale,
-              titleScale, 0.94f);
+    DrawImage(
+        utilityMenuTitleImage_,
+        titleCenterX - kUtilityMenuTitleContentBounds.CenterX() * titleScale,
+        titleCenterY - kUtilityMenuTitleContentBounds.CenterY() * titleScale,
+        titleScale, 0.94f);
 
     const float buttonGap = panelW * 0.028f;
     const float buttonAreaPadding = panelW * 0.075f;
@@ -916,9 +908,8 @@ void WeaponSelectScene::DrawUtilityMenuWindow(float screenWidth,
         (buttonAreaW -
          buttonGap * static_cast<float>(kUtilityMenuItemCount - 1)) /
         static_cast<float>(kUtilityMenuItemCount);
-    const float buttonSize = std::clamp((std::min)(panelH * 0.46f,
-                                                   buttonSizeByWidth),
-                                        32.0f, 180.0f);
+    const float buttonSize = std::clamp(
+        (std::min)(panelH * 0.46f, buttonSizeByWidth), 32.0f, 180.0f);
     const float buttonW = buttonSize;
     const float buttonH = buttonSize;
     const float totalButtonW =
@@ -931,12 +922,11 @@ void WeaponSelectScene::DrawUtilityMenuWindow(float screenWidth,
         const float x =
             firstButtonX + static_cast<float>(i) * (buttonW + buttonGap);
         const bool selected = i == utilityMenuIndex_;
-        const XMFLOAT4 body =
-            selected ? MakeColor(0.18f, 0.13f, 0.055f, 0.98f)
-                     : MakeColor(0.040f, 0.046f, 0.058f, 0.92f);
-        const XMFLOAT4 line =
-            selected ? MakeColor(1.0f, 0.78f, 0.34f, 0.96f)
-                     : MakeColor(0.62f, 0.66f, 0.72f, 0.38f);
+        const XMFLOAT4 body = selected
+                                  ? MakeColor(0.18f, 0.13f, 0.055f, 0.98f)
+                                  : MakeColor(0.040f, 0.046f, 0.058f, 0.92f);
+        const XMFLOAT4 line = selected ? MakeColor(1.0f, 0.78f, 0.34f, 0.96f)
+                                       : MakeColor(0.62f, 0.66f, 0.72f, 0.38f);
 
         DrawRect(x, buttonY, buttonW, buttonH, body);
         DrawFrame(x, buttonY, buttonW, buttonH, 2.0f, line);
@@ -949,9 +939,8 @@ void WeaponSelectScene::DrawUtilityMenuWindow(float screenWidth,
                           : MakeColor(0.020f, 0.024f, 0.030f, 0.58f));
         DrawFrame(iconBoxX, iconBoxY, iconBoxSize, iconBoxSize, 2.0f, line);
         DrawUtilityMenuIcon(i, iconBoxX + iconBoxSize * 0.5f,
-                            iconBoxY + iconBoxSize * 0.5f,
-                            iconBoxSize * 0.78f, selected ? 1.0f : 0.78f,
-                            selected);
+                            iconBoxY + iconBoxSize * 0.5f, iconBoxSize * 0.78f,
+                            selected ? 1.0f : 0.78f, selected);
 
         const Image &label =
             i < 4 ? utilityMenuOptionImages_[i] : optionMenuLabelImage_;
@@ -966,25 +955,24 @@ void WeaponSelectScene::DrawUtilityMenuWindow(float screenWidth,
         const float labelCenterX = x + buttonW * 0.5f;
         const float labelCenterY = buttonY + buttonH * 0.78f;
         DrawImage(label, labelCenterX - labelBounds.CenterX() * labelScale,
-                  labelCenterY - labelBounds.CenterY() * labelScale,
-                  labelScale, selected ? 1.0f : 0.82f);
+                  labelCenterY - labelBounds.CenterY() * labelScale, labelScale,
+                  selected ? 1.0f : 0.82f);
     }
 }
 
 void WeaponSelectScene::DrawUtilityMenuIcon(int index, float centerX,
                                             float centerY, float size,
                                             float alpha, bool selected) {
-    const XMFLOAT4 line =
-        selected ? MakeColor(1.0f, 0.78f, 0.34f, 0.92f * alpha)
-                 : MakeColor(0.82f, 0.86f, 0.92f, 0.66f * alpha);
-    const XMFLOAT4 fill =
-        selected ? MakeColor(0.16f, 0.12f, 0.070f, 0.48f * alpha)
-                 : MakeColor(0.10f, 0.11f, 0.13f, 0.38f * alpha);
+    const XMFLOAT4 line = selected
+                              ? MakeColor(1.0f, 0.78f, 0.34f, 0.92f * alpha)
+                              : MakeColor(0.82f, 0.86f, 0.92f, 0.66f * alpha);
+    const XMFLOAT4 fill = selected
+                              ? MakeColor(0.16f, 0.12f, 0.070f, 0.48f * alpha)
+                              : MakeColor(0.10f, 0.11f, 0.13f, 0.38f * alpha);
     const float s = size / 100.0f;
     auto x = [&](float v) { return centerX + v * s; };
     auto y = [&](float v) { return centerY + v * s; };
-    auto r = [&](float px, float py, float w, float h,
-                 const XMFLOAT4 &color) {
+    auto r = [&](float px, float py, float w, float h, const XMFLOAT4 &color) {
         DrawRect(x(px), y(py), w * s, h * s, color);
     };
     auto f = [&](float px, float py, float w, float h) {
@@ -1067,8 +1055,7 @@ void WeaponSelectScene::DrawHandCameraConfirmWindow(float screenWidth,
 
     const Image &message = handCameraConfirmMessageImage_;
     const float messageScale =
-        (std::min)(1.0f, (panelW * 0.86f) /
-                             ((std::max)(message.width, 1.0f)));
+        (std::min)(1.0f, (panelW * 0.86f) / ((std::max)(message.width, 1.0f)));
     const float messageW = message.width * messageScale;
     const float messageH = message.height * messageScale;
     DrawImage(message, panelX + (panelW - messageW) * 0.5f,
@@ -1087,12 +1074,11 @@ void WeaponSelectScene::DrawHandCameraConfirmWindow(float screenWidth,
         const float x =
             firstButtonX + static_cast<float>(i) * (buttonW + buttonGap);
         const bool selected = i == handCameraConfirmIndex_;
-        const XMFLOAT4 body =
-            selected ? MakeColor(0.18f, 0.13f, 0.055f, 0.98f)
-                     : MakeColor(0.040f, 0.046f, 0.058f, 0.92f);
-        const XMFLOAT4 line =
-            selected ? MakeColor(1.0f, 0.78f, 0.34f, 0.96f)
-                     : MakeColor(0.62f, 0.66f, 0.72f, 0.38f);
+        const XMFLOAT4 body = selected
+                                  ? MakeColor(0.18f, 0.13f, 0.055f, 0.98f)
+                                  : MakeColor(0.040f, 0.046f, 0.058f, 0.92f);
+        const XMFLOAT4 line = selected ? MakeColor(1.0f, 0.78f, 0.34f, 0.96f)
+                                       : MakeColor(0.62f, 0.66f, 0.72f, 0.38f);
 
         DrawRect(x, buttonY, buttonW, buttonH, body);
         DrawFrame(x, buttonY, buttonW, buttonH, 2.0f, line);
@@ -1100,10 +1086,8 @@ void WeaponSelectScene::DrawHandCameraConfirmWindow(float screenWidth,
         const Image &label = *labels[i];
         const float labelScale =
             (std::min)({1.0f,
-                        (buttonH * 0.68f) /
-                            ((std::max)(label.height, 1.0f)),
-                        (buttonW * 0.86f) /
-                            ((std::max)(label.width, 1.0f))});
+                        (buttonH * 0.68f) / ((std::max)(label.height, 1.0f)),
+                        (buttonW * 0.86f) / ((std::max)(label.width, 1.0f))});
         const float labelW = label.width * labelScale;
         const float labelH = label.height * labelScale;
         DrawImage(label, x + (buttonW - labelW) * 0.5f,

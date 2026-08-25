@@ -4,8 +4,8 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <d3d12.h>
 #include <cstring>
+#include <d3d12.h>
 #include <limits>
 #include <wrl.h>
 

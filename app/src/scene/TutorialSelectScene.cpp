@@ -59,11 +59,10 @@ constexpr std::array<ImageContentBounds, 3> kButtonIllustrationBounds = {{
     {-116.0f, 73.0f, 66.0f, 131.0f},
 }};
 
-constexpr ImageContentBounds kTitleContentBounds{
-    0.0f, 0.0f, 244.0f, 39.0f};
+constexpr ImageContentBounds kTitleContentBounds{0.0f, 0.0f, 244.0f, 39.0f};
 
-constexpr ImageContentBounds kUtilityMenuTitleContentBounds{
-    1.0f, 25.0f, 118.0f, 52.0f};
+constexpr ImageContentBounds kUtilityMenuTitleContentBounds{1.0f, 25.0f, 118.0f,
+                                                            52.0f};
 
 constexpr std::array<ImageContentBounds, kUtilityMenuItemCount>
     kUtilityMenuLabelContentBounds = {{
@@ -135,12 +134,12 @@ void TutorialSelectScene::Initialize(const SceneContext &ctx) {
         LoadTextureImage(L"app/resources/ui/menu/option_credits.png");
     utilityMenuOptionImages_[3] =
         LoadTextureImage(L"app/resources/ui/menu/option_camera_test.png");
-    buttonNameImages_[0] =
-        LoadTextureImage(L"app/resources/ui/tutorial_select/text/input_kbm.png");
-    buttonNameImages_[1] =
-        LoadTextureImage(L"app/resources/ui/tutorial_select/text/input_hand.png");
-    buttonNameImages_[kBackButtonIndex] =
-        LoadTextureImage(L"app/resources/ui/tutorial_select/text/back_game.png");
+    buttonNameImages_[0] = LoadTextureImage(
+        L"app/resources/ui/tutorial_select/text/input_kbm.png");
+    buttonNameImages_[1] = LoadTextureImage(
+        L"app/resources/ui/tutorial_select/text/input_hand.png");
+    buttonNameImages_[kBackButtonIndex] = LoadTextureImage(
+        L"app/resources/ui/tutorial_select/text/back_game.png");
     handCameraConfirmMessageImage_ = LoadTextureImage(
         L"app/resources/ui/hand_camera_confirm/use_camera_message.png");
     handCameraConfirmYesImage_ =
@@ -181,81 +180,80 @@ bool TutorialSelectScene::UpdateStartTransition() {
     if (!startRequested_) {
         return false;
     }
-        if (selectedIndex_ == kBackButtonIndex) {
-            transitionTimer_ += ctx_->frame.deltaTime;
-            if (transitionTimer_ >= kTransitionDuration) {
-                preserveMenuBgmOnExit_ = true;
-                sceneManager_->ChangeScene(std::make_unique<WeaponSelectScene>());
-            }
+    if (selectedIndex_ == kBackButtonIndex) {
+        transitionTimer_ += ctx_->frame.deltaTime;
+        if (transitionTimer_ >= kTransitionDuration) {
+            preserveMenuBgmOnExit_ = true;
+            sceneManager_->ChangeScene(std::make_unique<WeaponSelectScene>());
+        }
+        return true;
+    }
+
+    const InputControlType selectedType = SelectedControlType();
+    if (selectedType == InputControlType::Hand &&
+        waitingForHandTrackingReady_) {
+        if (!IsHandTrackingReady()) {
+            transitionTimer_ =
+                (std::min)(transitionTimer_ + ctx_->frame.deltaTime,
+                           kTransitionDuration * 0.72f);
             return true;
         }
 
-        const InputControlType selectedType = SelectedControlType();
-        if (selectedType == InputControlType::Hand &&
-            waitingForHandTrackingReady_) {
-            if (!IsHandTrackingReady()) {
-                transitionTimer_ =
-                    (std::min)(transitionTimer_ + ctx_->frame.deltaTime,
-                               kTransitionDuration * 0.72f);
-                return true;
-            }
+        RequestHandTrackingStartOnce();
+        waitingForHandTrackingReady_ = false;
+        transitionTimer_ = 0.0f;
+    } else {
+        transitionTimer_ += ctx_->frame.deltaTime;
+    }
 
-            RequestHandTrackingStartOnce();
-            waitingForHandTrackingReady_ = false;
-            transitionTimer_ = 0.0f;
+    if (transitionTimer_ >= kTransitionDuration) {
+        SwordInputCalibration calibration{};
+        calibration.controlType = selectedType;
+        if (selectedType == InputControlType::Hand) {
+            sceneManager_->ChangeScene(std::make_unique<HandLoadingScene>(
+                calibration, GameScene::Mode::Tutorial));
         } else {
-            transitionTimer_ += ctx_->frame.deltaTime;
+            sceneManager_->ChangeScene(std::make_unique<GameScene>(
+                calibration, GameScene::Mode::Tutorial));
         }
-
-        if (transitionTimer_ >= kTransitionDuration) {
-            SwordInputCalibration calibration{};
-            calibration.controlType = selectedType;
-            if (selectedType == InputControlType::Hand) {
-                sceneManager_->ChangeScene(std::make_unique<HandLoadingScene>(
-                    calibration, GameScene::Mode::Tutorial));
-            } else {
-                sceneManager_->ChangeScene(
-                    std::make_unique<GameScene>(calibration,
-                                                GameScene::Mode::Tutorial));
-            }
-        }
-        return true;
+    }
+    return true;
 }
 
 bool TutorialSelectScene::UpdateUtilityTransition() {
     if (!menuActionRequested_) {
         return false;
     }
-        transitionTimer_ += ctx_->frame.deltaTime;
-        if (transitionTimer_ >= kTransitionDuration) {
-            switch (utilityMenuIndex_) {
-            case 0:
-                preserveMenuBgmOnExit_ = true;
-                sceneManager_->ChangeScene(std::make_unique<RankingScene>(
-                    RankingScene::ReturnTarget::TutorialSelect));
-                break;
-            case 1:
-                sceneManager_->ChangeScene(std::make_unique<SoundTestScene>(
-                    SoundTestScene::ReturnTarget::TutorialSelect));
-                break;
-            case 2:
-                sceneManager_->ChangeScene(std::make_unique<CreditScene>(
-                    CreditScene::ReturnTarget::TutorialSelect));
-                break;
-            case 3:
-                sceneManager_->ChangeScene(std::make_unique<HandLoadingScene>(
-                    CameraAccuracyDebugScene::ReturnTarget::TutorialSelect));
-                break;
-            case 4:
-                preserveMenuBgmOnExit_ = true;
-                sceneManager_->ChangeScene(std::make_unique<OptionScene>(
-                    OptionScene::ReturnTarget::TutorialSelect));
-                break;
-            default:
-                break;
-            }
+    transitionTimer_ += ctx_->frame.deltaTime;
+    if (transitionTimer_ >= kTransitionDuration) {
+        switch (utilityMenuIndex_) {
+        case 0:
+            preserveMenuBgmOnExit_ = true;
+            sceneManager_->ChangeScene(std::make_unique<RankingScene>(
+                RankingScene::ReturnTarget::TutorialSelect));
+            break;
+        case 1:
+            sceneManager_->ChangeScene(std::make_unique<SoundTestScene>(
+                SoundTestScene::ReturnTarget::TutorialSelect));
+            break;
+        case 2:
+            sceneManager_->ChangeScene(std::make_unique<CreditScene>(
+                CreditScene::ReturnTarget::TutorialSelect));
+            break;
+        case 3:
+            sceneManager_->ChangeScene(std::make_unique<HandLoadingScene>(
+                CameraAccuracyDebugScene::ReturnTarget::TutorialSelect));
+            break;
+        case 4:
+            preserveMenuBgmOnExit_ = true;
+            sceneManager_->ChangeScene(std::make_unique<OptionScene>(
+                OptionScene::ReturnTarget::TutorialSelect));
+            break;
+        default:
+            break;
         }
-        return true;
+    }
+    return true;
 }
 
 void TutorialSelectScene::Draw() {
@@ -418,9 +416,8 @@ void TutorialSelectScene::UpdateUtilityMenu(Input *input) {
         return;
     }
     if (input->IsKeyTrigger(DIK_A) || input->IsKeyTrigger(DIK_LEFT)) {
-        utilityMenuIndex_ =
-            (utilityMenuIndex_ + kUtilityMenuItemCount - 1) %
-            kUtilityMenuItemCount;
+        utilityMenuIndex_ = (utilityMenuIndex_ + kUtilityMenuItemCount - 1) %
+                            kUtilityMenuItemCount;
         AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Select);
     }
     if (input->IsKeyTrigger(DIK_D) || input->IsKeyTrigger(DIK_RIGHT)) {
@@ -588,14 +585,14 @@ void TutorialSelectScene::DrawButtons() {
             selected ? MakeColor(0.030f, 0.040f, 0.040f, 0.92f * alpha)
                      : MakeColor(0.014f, 0.023f, 0.024f, 0.76f * alpha);
         const XMFLOAT4 edge =
-            selected ? (backButton
-                            ? MakeColor(0.95f, 0.70f, 0.32f, 0.88f * intro)
-                            : MakeColor(0.00f, 0.86f, 0.78f, 0.90f * intro))
-                     : MakeColor(0.60f, 0.70f, 0.70f, 0.22f * alpha);
+            selected
+                ? (backButton ? MakeColor(0.95f, 0.70f, 0.32f, 0.88f * intro)
+                              : MakeColor(0.00f, 0.86f, 0.78f, 0.90f * intro))
+                : MakeColor(0.60f, 0.70f, 0.70f, 0.22f * alpha);
 
-        DrawRect(panelX + 8.0f, panelY + 10.0f, panelW, panelH,
-                 MakeColor(0.0f, 0.0f, 0.0f,
-                           (selected ? 0.38f : 0.24f) * intro));
+        DrawRect(
+            panelX + 8.0f, panelY + 10.0f, panelW, panelH,
+            MakeColor(0.0f, 0.0f, 0.0f, (selected ? 0.38f : 0.24f) * intro));
         DrawRect(panelX, panelY, panelW, panelH, body);
         DrawRect(panelX, panelY, panelW, 2.0f, edge);
         DrawRect(panelX, panelY + panelH - 2.0f, panelW, 2.0f, edge);
@@ -612,24 +609,21 @@ void TutorialSelectScene::DrawButtonIllustration(int index,
     const bool backButton = index == kBackButtonIndex;
     const float centerX = rect.x + rect.w * 0.5f;
     const ImageContentBounds &bounds = kButtonIllustrationBounds[index];
-    const float iconAreaW =
-        rect.w * PickButtonValue(backButton, 0.70f, 0.76f);
-    const float iconAreaH =
-        rect.h * PickButtonValue(backButton, 0.42f, 0.48f);
+    const float iconAreaW = rect.w * PickButtonValue(backButton, 0.70f, 0.76f);
+    const float iconAreaH = rect.h * PickButtonValue(backButton, 0.42f, 0.48f);
     const float iconCenterY =
         rect.y + rect.h * PickButtonValue(backButton, 0.40f, 0.42f) - lift;
     const float scale =
         (std::min)(iconAreaW / (std::max)(bounds.Width(), 1.0f),
                    iconAreaH / (std::max)(bounds.Height(), 1.0f));
-    const XMFLOAT4 selectedLine = PickButtonValue(
-        backButton, MakeColor(1.0f, 0.80f, 0.36f, 1.0f * alpha),
-        MakeColor(0.06f, 0.95f, 0.86f, 1.0f * alpha));
+    const XMFLOAT4 selectedLine =
+        PickButtonValue(backButton, MakeColor(1.0f, 0.80f, 0.36f, 1.0f * alpha),
+                        MakeColor(0.06f, 0.95f, 0.86f, 1.0f * alpha));
     const XMFLOAT4 line = PickButtonValue(
-        selected, selectedLine,
-        MakeColor(0.82f, 0.90f, 0.92f, 0.66f * alpha));
-    const XMFLOAT4 fill = PickButtonValue(
-        selected, MakeColor(0.06f, 0.16f, 0.15f, 0.54f * alpha),
-        MakeColor(0.10f, 0.12f, 0.13f, 0.44f * alpha));
+        selected, selectedLine, MakeColor(0.82f, 0.90f, 0.92f, 0.66f * alpha));
+    const XMFLOAT4 fill =
+        PickButtonValue(selected, MakeColor(0.06f, 0.16f, 0.15f, 0.54f * alpha),
+                        MakeColor(0.10f, 0.12f, 0.13f, 0.44f * alpha));
     auto sx = [&](float value) {
         return centerX + (value - bounds.CenterX()) * scale;
     };
@@ -645,7 +639,9 @@ void TutorialSelectScene::DrawButtonIllustration(int index,
                        const XMFLOAT4 &color) {
         DrawFrame(sx(x), sy(y), sw(w), sw(h), sw(thickness), color);
     };
-    auto part = [&](float offset) { return ButtonIntroProgress(index, offset); };
+    auto part = [&](float offset) {
+        return ButtonIntroProgress(index, offset);
+    };
 
     if (backButton) {
         const float arrowBuild = part(0.18f);
@@ -723,8 +719,7 @@ void TutorialSelectScene::DrawButtonIllustration(int index,
                 continue;
             }
             const float fingerX = PickButtonValue(
-                thumbRight,
-                handX + 22.0f + static_cast<float>(i) * 20.0f,
+                thumbRight, handX + 22.0f + static_cast<float>(i) * 20.0f,
                 handX + 44.0f + static_cast<float>(i) * 20.0f);
             rectAt(fingerX, handY + static_cast<float>(i % 2) * 7.0f, 14.0f,
                    52.0f * fingerBuild, ScaleAlpha(line, fingerBuild));
@@ -755,20 +750,18 @@ void TutorialSelectScene::DrawLabels(float screenWidth, float screenHeight) {
         const bool backButton = i == kBackButtonIndex;
         const float maxLabelAspect =
             backButton ? kSmallButtonNameMaxAspect : kNormalButtonNameMaxAspect;
-        const float targetLabelHeight = (std::min)(
-            rect.h * (backButton ? 0.11f : 0.10f),
-            (rect.w * 0.82f) / maxLabelAspect);
-        const float nameScale = (std::min)(
-            {backButton ? 0.62f : 1.10f,
-             targetLabelHeight / (std::max)(bounds.Height(), 1.0f),
-             (rect.w * 0.82f) / (std::max)(bounds.Width(), 1.0f)});
+        const float targetLabelHeight =
+            (std::min)(rect.h * (backButton ? 0.11f : 0.10f),
+                       (rect.w * 0.82f) / maxLabelAspect);
+        const float nameScale =
+            (std::min)({backButton ? 0.62f : 1.10f,
+                        targetLabelHeight / (std::max)(bounds.Height(), 1.0f),
+                        (rect.w * 0.82f) / (std::max)(bounds.Width(), 1.0f)});
         const float centerX = rect.x + rect.w * 0.5f;
-        const float centerY =
-            rect.y + rect.h * (backButton ? 0.80f : 0.78f) - lift +
-            (1.0f - intro) * 8.0f;
+        const float centerY = rect.y + rect.h * (backButton ? 0.80f : 0.78f) -
+                              lift + (1.0f - intro) * 8.0f;
         DrawImage(name, centerX - bounds.CenterX() * nameScale,
-                  centerY - bounds.CenterY() * nameScale,
-                  nameScale, alpha);
+                  centerY - bounds.CenterY() * nameScale, nameScale, alpha);
     }
 
     const float titleIntro = Smooth01((introTimer_ - 0.10f) / 0.24f);
@@ -781,8 +774,7 @@ void TutorialSelectScene::DrawLabels(float screenWidth, float screenHeight) {
              MakeColor(0.0f, 0.0f, 0.0f, 0.42f * titleIntro));
     DrawRect(0.0f, titleBandY + titleBandH - 2.0f, screenWidth, 2.0f,
              MakeColor(0.00f, 0.86f, 0.78f, 0.30f * titleIntro));
-    DrawImage(sceneTitleImage_,
-              titleCenterX - kTitleContentBounds.CenterX(),
+    DrawImage(sceneTitleImage_, titleCenterX - kTitleContentBounds.CenterX(),
               titleCenterY - kTitleContentBounds.CenterY(), 1.0f,
               0.92f * titleIntro);
 
@@ -797,8 +789,8 @@ void TutorialSelectScene::DrawLabels(float screenWidth, float screenHeight) {
         kControlsPadding;
     DrawImage(controlsImage_, kControlsPadding, controlsY, controlsScale,
               0.58f * controlsIntro);
-    DrawImage(menuPromptImage_, kControlsPadding,
-              controlsY - 36.0f, controlsScale, 0.58f * controlsIntro);
+    DrawImage(menuPromptImage_, kControlsPadding, controlsY - 36.0f,
+              controlsScale, 0.58f * controlsIntro);
 }
 
 void TutorialSelectScene::DrawUtilityMenuWindow(float screenWidth,
@@ -820,8 +812,7 @@ void TutorialSelectScene::DrawUtilityMenuWindow(float screenWidth,
     const float panelMinW = (std::min)(860.0f, panelMaxW);
     const float panelMinH = (std::min)(380.0f, panelMaxH);
     const float panelW = std::clamp(screenWidth * 0.72f, panelMinW, panelMaxW);
-    const float panelH =
-        std::clamp(screenHeight * 0.44f, panelMinH, panelMaxH);
+    const float panelH = std::clamp(screenHeight * 0.44f, panelMinH, panelMaxH);
     const float panelX = (screenWidth - panelW) * 0.5f;
     const float panelY = (screenHeight - panelH) * 0.5f;
     const float edge = 3.0f;
@@ -833,19 +824,21 @@ void TutorialSelectScene::DrawUtilityMenuWindow(float screenWidth,
     DrawFrame(panelX, panelY, panelW, panelH, edge,
               MakeColor(0.92f, 0.68f, 0.28f, 0.72f));
 
-    const float titleScale = (std::min)(
-        {1.18f, (panelW * 0.30f) /
-                    (std::max)(kUtilityMenuTitleContentBounds.Width(), 1.0f),
-         (panelH * 0.13f) /
-             (std::max)(kUtilityMenuTitleContentBounds.Height(), 1.0f)});
+    const float titleScale =
+        (std::min)({1.18f,
+                    (panelW * 0.30f) /
+                        (std::max)(kUtilityMenuTitleContentBounds.Width(),
+                                   1.0f),
+                    (panelH * 0.13f) /
+                        (std::max)(kUtilityMenuTitleContentBounds.Height(),
+                                   1.0f)});
     const float titleCenterX = panelX + panelW * 0.5f;
     const float titleCenterY = panelY + panelH * 0.23f;
-    DrawImage(utilityMenuTitleImage_,
-              titleCenterX -
-                  kUtilityMenuTitleContentBounds.CenterX() * titleScale,
-              titleCenterY -
-                  kUtilityMenuTitleContentBounds.CenterY() * titleScale,
-              titleScale, 0.94f);
+    DrawImage(
+        utilityMenuTitleImage_,
+        titleCenterX - kUtilityMenuTitleContentBounds.CenterX() * titleScale,
+        titleCenterY - kUtilityMenuTitleContentBounds.CenterY() * titleScale,
+        titleScale, 0.94f);
 
     const float buttonGap = panelW * 0.028f;
     const float buttonAreaPadding = panelW * 0.075f;
@@ -855,9 +848,8 @@ void TutorialSelectScene::DrawUtilityMenuWindow(float screenWidth,
         (buttonAreaW -
          buttonGap * static_cast<float>(kUtilityMenuItemCount - 1)) /
         static_cast<float>(kUtilityMenuItemCount);
-    const float buttonSize = std::clamp((std::min)(panelH * 0.46f,
-                                                   buttonSizeByWidth),
-                                        32.0f, 180.0f);
+    const float buttonSize = std::clamp(
+        (std::min)(panelH * 0.46f, buttonSizeByWidth), 32.0f, 180.0f);
     const float buttonW = buttonSize;
     const float buttonH = buttonSize;
     const float totalButtonW =
@@ -870,12 +862,11 @@ void TutorialSelectScene::DrawUtilityMenuWindow(float screenWidth,
         const float x =
             firstButtonX + static_cast<float>(i) * (buttonW + buttonGap);
         const bool selected = i == utilityMenuIndex_;
-        const XMFLOAT4 body =
-            selected ? MakeColor(0.18f, 0.13f, 0.055f, 0.98f)
-                     : MakeColor(0.040f, 0.046f, 0.058f, 0.92f);
-        const XMFLOAT4 line =
-            selected ? MakeColor(1.0f, 0.78f, 0.34f, 0.96f)
-                     : MakeColor(0.62f, 0.66f, 0.72f, 0.38f);
+        const XMFLOAT4 body = selected
+                                  ? MakeColor(0.18f, 0.13f, 0.055f, 0.98f)
+                                  : MakeColor(0.040f, 0.046f, 0.058f, 0.92f);
+        const XMFLOAT4 line = selected ? MakeColor(1.0f, 0.78f, 0.34f, 0.96f)
+                                       : MakeColor(0.62f, 0.66f, 0.72f, 0.38f);
 
         DrawRect(x, buttonY, buttonW, buttonH, body);
         DrawFrame(x, buttonY, buttonW, buttonH, 2.0f, line);
@@ -888,9 +879,8 @@ void TutorialSelectScene::DrawUtilityMenuWindow(float screenWidth,
                           : MakeColor(0.020f, 0.024f, 0.030f, 0.58f));
         DrawFrame(iconBoxX, iconBoxY, iconBoxSize, iconBoxSize, 2.0f, line);
         DrawUtilityMenuIcon(i, iconBoxX + iconBoxSize * 0.5f,
-                            iconBoxY + iconBoxSize * 0.5f,
-                            iconBoxSize * 0.78f, selected ? 1.0f : 0.78f,
-                            selected);
+                            iconBoxY + iconBoxSize * 0.5f, iconBoxSize * 0.78f,
+                            selected ? 1.0f : 0.78f, selected);
 
         const Image &label =
             i < 4 ? utilityMenuOptionImages_[i] : optionMenuLabelImage_;
@@ -905,25 +895,24 @@ void TutorialSelectScene::DrawUtilityMenuWindow(float screenWidth,
         const float labelCenterX = x + buttonW * 0.5f;
         const float labelCenterY = buttonY + buttonH * 0.78f;
         DrawImage(label, labelCenterX - labelBounds.CenterX() * labelScale,
-                  labelCenterY - labelBounds.CenterY() * labelScale,
-                  labelScale, selected ? 1.0f : 0.82f);
+                  labelCenterY - labelBounds.CenterY() * labelScale, labelScale,
+                  selected ? 1.0f : 0.82f);
     }
 }
 
 void TutorialSelectScene::DrawUtilityMenuIcon(int index, float centerX,
                                               float centerY, float size,
                                               float alpha, bool selected) {
-    const XMFLOAT4 line =
-        selected ? MakeColor(1.0f, 0.78f, 0.34f, 0.92f * alpha)
-                 : MakeColor(0.82f, 0.86f, 0.92f, 0.66f * alpha);
-    const XMFLOAT4 fill =
-        selected ? MakeColor(0.16f, 0.12f, 0.070f, 0.48f * alpha)
-                 : MakeColor(0.10f, 0.11f, 0.13f, 0.38f * alpha);
+    const XMFLOAT4 line = selected
+                              ? MakeColor(1.0f, 0.78f, 0.34f, 0.92f * alpha)
+                              : MakeColor(0.82f, 0.86f, 0.92f, 0.66f * alpha);
+    const XMFLOAT4 fill = selected
+                              ? MakeColor(0.16f, 0.12f, 0.070f, 0.48f * alpha)
+                              : MakeColor(0.10f, 0.11f, 0.13f, 0.38f * alpha);
     const float s = size / 100.0f;
     auto x = [&](float v) { return centerX + v * s; };
     auto y = [&](float v) { return centerY + v * s; };
-    auto r = [&](float px, float py, float w, float h,
-                 const XMFLOAT4 &color) {
+    auto r = [&](float px, float py, float w, float h, const XMFLOAT4 &color) {
         DrawRect(x(px), y(py), w * s, h * s, color);
     };
     auto f = [&](float px, float py, float w, float h) {
@@ -1006,8 +995,7 @@ void TutorialSelectScene::DrawHandCameraConfirmWindow(float screenWidth,
 
     const Image &message = handCameraConfirmMessageImage_;
     const float messageScale =
-        (std::min)(1.0f, (panelW * 0.86f) /
-                             ((std::max)(message.width, 1.0f)));
+        (std::min)(1.0f, (panelW * 0.86f) / ((std::max)(message.width, 1.0f)));
     const float messageW = message.width * messageScale;
     const float messageH = message.height * messageScale;
     DrawImage(message, panelX + (panelW - messageW) * 0.5f,
@@ -1026,12 +1014,11 @@ void TutorialSelectScene::DrawHandCameraConfirmWindow(float screenWidth,
         const float x =
             firstButtonX + static_cast<float>(i) * (buttonW + buttonGap);
         const bool selected = i == handCameraConfirmIndex_;
-        const XMFLOAT4 body =
-            selected ? MakeColor(0.18f, 0.13f, 0.055f, 0.98f)
-                     : MakeColor(0.040f, 0.046f, 0.058f, 0.92f);
-        const XMFLOAT4 line =
-            selected ? MakeColor(1.0f, 0.78f, 0.34f, 0.96f)
-                     : MakeColor(0.62f, 0.66f, 0.72f, 0.38f);
+        const XMFLOAT4 body = selected
+                                  ? MakeColor(0.18f, 0.13f, 0.055f, 0.98f)
+                                  : MakeColor(0.040f, 0.046f, 0.058f, 0.92f);
+        const XMFLOAT4 line = selected ? MakeColor(1.0f, 0.78f, 0.34f, 0.96f)
+                                       : MakeColor(0.62f, 0.66f, 0.72f, 0.38f);
 
         DrawRect(x, buttonY, buttonW, buttonH, body);
         DrawFrame(x, buttonY, buttonW, buttonH, 2.0f, line);
@@ -1039,10 +1026,8 @@ void TutorialSelectScene::DrawHandCameraConfirmWindow(float screenWidth,
         const Image &label = *labels[i];
         const float labelScale =
             (std::min)({1.0f,
-                        (buttonH * 0.68f) /
-                            ((std::max)(label.height, 1.0f)),
-                        (buttonW * 0.86f) /
-                            ((std::max)(label.width, 1.0f))});
+                        (buttonH * 0.68f) / ((std::max)(label.height, 1.0f)),
+                        (buttonW * 0.86f) / ((std::max)(label.width, 1.0f))});
         const float labelW = label.width * labelScale;
         const float labelH = label.height * labelScale;
         DrawImage(label, x + (buttonW - labelW) * 0.5f,
@@ -1073,8 +1058,7 @@ void TutorialSelectScene::DrawRect(float x, float y, float w, float h,
 }
 
 void TutorialSelectScene::DrawFrame(float x, float y, float w, float h,
-                                    float thickness,
-                                    const XMFLOAT4 &color) {
+                                    float thickness, const XMFLOAT4 &color) {
     DrawRect(x, y, w, thickness, color);
     DrawRect(x, y + h - thickness, w, thickness, color);
     DrawRect(x, y, thickness, h, color);

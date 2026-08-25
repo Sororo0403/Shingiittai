@@ -33,23 +33,17 @@ void Frustum::Build(const XMMATRIX &viewProjection) {
     XMFLOAT4X4 m{};
     XMStoreFloat4x4(&m, viewProjection);
 
-    planes_[0] = NormalizePlane(
-        XMVectorSet(m._14 + m._11, m._24 + m._21, m._34 + m._31,
-                    m._44 + m._41));
-    planes_[1] = NormalizePlane(
-        XMVectorSet(m._14 - m._11, m._24 - m._21, m._34 - m._31,
-                    m._44 - m._41));
-    planes_[2] = NormalizePlane(
-        XMVectorSet(m._14 - m._12, m._24 - m._22, m._34 - m._32,
-                    m._44 - m._42));
-    planes_[3] = NormalizePlane(
-        XMVectorSet(m._14 + m._12, m._24 + m._22, m._34 + m._32,
-                    m._44 + m._42));
-    planes_[4] = NormalizePlane(
-        XMVectorSet(m._13, m._23, m._33, m._43));
-    planes_[5] = NormalizePlane(
-        XMVectorSet(m._14 - m._13, m._24 - m._23, m._34 - m._33,
-                    m._44 - m._43));
+    planes_[0] = NormalizePlane(XMVectorSet(m._14 + m._11, m._24 + m._21,
+                                            m._34 + m._31, m._44 + m._41));
+    planes_[1] = NormalizePlane(XMVectorSet(m._14 - m._11, m._24 - m._21,
+                                            m._34 - m._31, m._44 - m._41));
+    planes_[2] = NormalizePlane(XMVectorSet(m._14 - m._12, m._24 - m._22,
+                                            m._34 - m._32, m._44 - m._42));
+    planes_[3] = NormalizePlane(XMVectorSet(m._14 + m._12, m._24 + m._22,
+                                            m._34 + m._32, m._44 + m._42));
+    planes_[4] = NormalizePlane(XMVectorSet(m._13, m._23, m._33, m._43));
+    planes_[5] = NormalizePlane(XMVectorSet(m._14 - m._13, m._24 - m._23,
+                                            m._34 - m._33, m._44 - m._43));
 }
 
 void Frustum::Build(const Camera &camera) { Build(camera.GetViewProjection()); }
