@@ -167,6 +167,86 @@ float ClampFinite(float value, float minimum, float maximum, float fallback) {
     return std::clamp(value, minimum, maximum);
 }
 
+struct TerrainGeometry {
+    std::vector<Vertex> vertices;
+    std::vector<uint32_t> indices;
+};
+
+TerrainGeometry GenerateTerrainGeometry(uint32_t grid, float size,
+                                        float maxHeight, float flatRadius,
+                                        uint32_t seed) {
+    const float halfSize = size * 0.5f;
+    const float step = size / static_cast<float>(grid);
+    const uint32_t pointCount = grid + 1u;
+    std::vector<float> heights(static_cast<size_t>(pointCount) * pointCount);
+    const auto heightAt = [&](uint32_t x, uint32_t z) -> float & {
+        return heights[static_cast<size_t>(z) * pointCount + x];
+    };
+
+    for (uint32_t z = 0; z < pointCount; ++z) {
+        for (uint32_t x = 0; x < pointCount; ++x) {
+            const float worldX = -halfSize + static_cast<float>(x) * step;
+            const float worldZ = -halfSize + static_cast<float>(z) * step;
+            const float distance =
+                std::sqrt(worldX * worldX + worldZ * worldZ);
+            const float outerT = MathUtils::SmoothStep01(
+                (distance - flatRadius) / (halfSize - flatRadius));
+            const float ridge =
+                0.45f * Hash01(static_cast<int32_t>(x),
+                               static_cast<int32_t>(z), seed) +
+                0.35f * Hash01(static_cast<int32_t>(x / 2u),
+                               static_cast<int32_t>(z / 2u), seed + 97u) +
+                0.20f * Hash01(static_cast<int32_t>(x / 4u),
+                               static_cast<int32_t>(z / 4u), seed + 193u);
+            const float wave =
+                0.5f + 0.5f * std::sinf(worldX * 0.22f + worldZ * 0.17f);
+            heightAt(x, z) =
+                (-0.28f + maxHeight * (0.35f + ridge * 0.78f + wave * 0.24f)) *
+                outerT;
+        }
+    }
+
+    TerrainGeometry geometry;
+    geometry.vertices.reserve(static_cast<size_t>(grid) * grid * 6u);
+    geometry.indices.reserve(static_cast<size_t>(grid) * grid * 6u);
+    const auto makePoint = [&](uint32_t x, uint32_t z) {
+        return XMFLOAT3{-halfSize + static_cast<float>(x) * step,
+                        heightAt(x, z),
+                        -halfSize + static_cast<float>(z) * step};
+    };
+    const auto pushTriangle = [&](const XMFLOAT3 &a, const XMFLOAT3 &b,
+                                  const XMFLOAT3 &c) {
+        const XMFLOAT3 normal = CalculateFaceNormal(a, b, c);
+        const uint32_t base =
+            static_cast<uint32_t>(geometry.vertices.size());
+        geometry.vertices.push_back({a, normal, {0.0f, 0.0f}});
+        geometry.vertices.push_back({b, normal, {1.0f, 0.0f}});
+        geometry.vertices.push_back({c, normal, {0.5f, 1.0f}});
+        geometry.indices.insert(geometry.indices.end(),
+                                {base, base + 1u, base + 2u});
+    };
+
+    for (uint32_t z = 0; z < grid; ++z) {
+        for (uint32_t x = 0; x < grid; ++x) {
+            const XMFLOAT3 p00 = makePoint(x, z);
+            const XMFLOAT3 p10 = makePoint(x + 1u, z);
+            const XMFLOAT3 p01 = makePoint(x, z + 1u);
+            const XMFLOAT3 p11 = makePoint(x + 1u, z + 1u);
+            const bool flip = Hash01(static_cast<int32_t>(x),
+                                     static_cast<int32_t>(z), seed + 389u) >
+                              0.5f;
+            if (flip) {
+                pushTriangle(p00, p10, p11);
+                pushTriangle(p00, p11, p01);
+            } else {
+                pushTriangle(p00, p10, p01);
+                pushTriangle(p10, p11, p01);
+            }
+        }
+    }
+    return geometry;
+}
+
 } // namespace
 
 namespace {
@@ -630,87 +710,16 @@ uint32_t ModelManager::CreateLowPolyTerrain(uint32_t textureId,
     XMStoreFloat4x4(&terrainMaterial.uvTransform,
                     XMMatrixTranspose(XMMatrixIdentity()));
 
-    const float halfSize = size * 0.5f;
-    const float step = size / static_cast<float>(grid);
-    const uint32_t pointCount = grid + 1u;
-    std::vector<float> heights(static_cast<size_t>(pointCount) * pointCount);
-
-    auto heightAt = [&](uint32_t xIndex, uint32_t zIndex) -> float & {
-        return heights[static_cast<size_t>(zIndex) * pointCount + xIndex];
-    };
-
-    for (uint32_t z = 0; z < pointCount; ++z) {
-        for (uint32_t x = 0; x < pointCount; ++x) {
-            const float worldX = -halfSize + static_cast<float>(x) * step;
-            const float worldZ = -halfSize + static_cast<float>(z) * step;
-            const float dist = std::sqrt(worldX * worldX + worldZ * worldZ);
-            const float outerT = MathUtils::SmoothStep01(
-                (dist - flatRadius) / (halfSize - flatRadius));
-
-            const float ridge =
-                0.45f * Hash01(static_cast<int32_t>(x), static_cast<int32_t>(z),
-                               seed) +
-                0.35f * Hash01(static_cast<int32_t>(x / 2u),
-                               static_cast<int32_t>(z / 2u), seed + 97u) +
-                0.20f * Hash01(static_cast<int32_t>(x / 4u),
-                               static_cast<int32_t>(z / 4u), seed + 193u);
-            const float wave =
-                0.5f + 0.5f * std::sinf(worldX * 0.22f + worldZ * 0.17f);
-            heightAt(x, z) =
-                (-0.28f + maxHeight * (0.35f + ridge * 0.78f + wave * 0.24f)) *
-                outerT;
-        }
-    }
-
-    std::vector<Vertex> vertices;
-    std::vector<uint32_t> indices;
-    vertices.reserve(static_cast<size_t>(grid) * grid * 6u);
-    indices.reserve(static_cast<size_t>(grid) * grid * 6u);
-
-    auto makePoint = [&](uint32_t xIndex, uint32_t zIndex) {
-        const float worldX = -halfSize + static_cast<float>(xIndex) * step;
-        const float worldZ = -halfSize + static_cast<float>(zIndex) * step;
-        return XMFLOAT3{worldX, heightAt(xIndex, zIndex), worldZ};
-    };
-
-    auto pushTriangle = [&](const XMFLOAT3 &a, const XMFLOAT3 &b,
-                            const XMFLOAT3 &c) {
-        const XMFLOAT3 normal = CalculateFaceNormal(a, b, c);
-        const uint32_t base = static_cast<uint32_t>(vertices.size());
-        vertices.push_back({a, normal, {0.0f, 0.0f}});
-        vertices.push_back({b, normal, {1.0f, 0.0f}});
-        vertices.push_back({c, normal, {0.5f, 1.0f}});
-        indices.push_back(base + 0u);
-        indices.push_back(base + 1u);
-        indices.push_back(base + 2u);
-    };
-
-    for (uint32_t z = 0; z < grid; ++z) {
-        for (uint32_t x = 0; x < grid; ++x) {
-            XMFLOAT3 p00 = makePoint(x, z);
-            XMFLOAT3 p10 = makePoint(x + 1u, z);
-            XMFLOAT3 p01 = makePoint(x, z + 1u);
-            XMFLOAT3 p11 = makePoint(x + 1u, z + 1u);
-
-            const bool flip =
-                Hash01(static_cast<int32_t>(x), static_cast<int32_t>(z),
-                       seed + 389u) > 0.5f;
-            if (flip) {
-                pushTriangle(p00, p10, p11);
-                pushTriangle(p00, p11, p01);
-            } else {
-                pushTriangle(p00, p10, p01);
-                pushTriangle(p10, p11, p01);
-            }
-        }
-    }
+    TerrainGeometry geometry =
+        GenerateTerrainGeometry(grid, size, maxHeight, flatRadius, seed);
 
     Model model{};
     ModelSubMesh subMesh{};
-    subMesh.vertexCount = static_cast<uint32_t>(vertices.size());
+    subMesh.vertexCount = static_cast<uint32_t>(geometry.vertices.size());
     subMesh.meshId = meshManager_.CreateMesh(
-        vertices.data(), sizeof(Vertex), static_cast<uint32_t>(vertices.size()),
-        indices.data(), static_cast<uint32_t>(indices.size()));
+        geometry.vertices.data(), sizeof(Vertex),
+        static_cast<uint32_t>(geometry.vertices.size()), geometry.indices.data(),
+        static_cast<uint32_t>(geometry.indices.size()));
     subMesh.textureId = textureId;
     subMesh.materialId = materialManager_.CreateMaterial(terrainMaterial);
 

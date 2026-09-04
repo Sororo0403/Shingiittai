@@ -10,6 +10,9 @@
 class ModelManager;
 struct ModelDrawEffect;
 
+/// <summary>
+/// 敵行動内の局所的な進行段階
+/// </summary>
 enum class ActionStep {
     None,
     Start,
@@ -21,16 +24,25 @@ enum class ActionStep {
     End,
 };
 
+/// <summary>
+/// ワープ後にプレイヤーへ接近する方向
+/// </summary>
 enum class WarpApproachSlot { None, Front, Back };
 
 // Enemy combat is driven by a two-part FSM:
 // - ActionKind decides which behavior is currently running.
 // - ActionStep tracks the local phase within that behavior.
+/// <summary>
+/// 現在の敵行動と、その行動内の段階を保持する
+/// </summary>
 struct ActionState {
     ActionKind kind = ActionKind::None;
     ActionStep step = ActionStep::None;
 };
 
+/// <summary>
+/// プレイヤーへ提示する敵攻撃キューの種類
+/// </summary>
 enum class EnemyAttackCueType {
     None,
     Cancel,
@@ -39,6 +51,9 @@ enum class EnemyAttackCueType {
     Release,
 };
 
+/// <summary>
+/// 攻撃予兆の方向、表示時間、発行順を通知するイベント
+/// </summary>
 struct EnemyAttackCueEvent {
     EnemyAttackCueType type = EnemyAttackCueType::None;
     ActionKind kind = ActionKind::None;
@@ -47,6 +62,9 @@ struct EnemyAttackCueEvent {
     uint32_t sequence = 0;
 };
 
+/// <summary>
+/// ワープ開始から追撃へ引き継ぐ一時状態を保持する
+/// </summary>
 struct WarpContext {
     WarpApproachSlot approachSlot = WarpApproachSlot::None;
     DirectX::XMFLOAT3 targetPos = {0.0f, 0.0f, 0.0f};
@@ -69,6 +87,9 @@ struct WarpContext {
     bool hasTargetYaw = false;
 };
 
+/// <summary>
+/// ワープ残像一体分の姿勢と寿命を保持する
+/// </summary>
 struct EnemyAfterimageGhost {
     Transform visual{};
     float life = 0.0f;
@@ -76,6 +97,9 @@ struct EnemyAfterimageGhost {
     bool isActive = false;
 };
 
+/// <summary>
+/// 三連居合演出に使用する分身一体分の状態を保持する
+/// </summary>
 struct EnemyTripleIaiClone {
     Transform visual{};
     DirectX::XMFLOAT3 targetPosition = {0.0f, 0.0f, 0.0f};
@@ -86,15 +110,27 @@ struct EnemyTripleIaiClone {
 // 仕様書に合わせて BodyCenter -> BodyRight に整理
 
 // 上位戦術
+/// <summary>
+/// 敵AIが選択する上位戦術
+/// </summary>
 enum class TacticState { Melee, Chase };
 
+/// <summary>
+/// 体力と演出に応じて切り替わるボスフェーズ
+/// </summary>
 enum class BossPhase { Phase1, Phase2, Phase3 };
 
+/// <summary>
+/// 敵AIが意思決定に利用するプレイヤー観測値
+/// </summary>
 struct PlayerCombatObservation {
     DirectX::XMFLOAT3 position = {0.0f, 0.0f, 0.0f};
     bool isAttacking = false;
 };
 
+/// <summary>
+/// 敵攻撃の予備動作、攻撃判定、硬直時間を保持する
+/// </summary>
 struct AttackTimingParam {
     float totalTime = 1.0f;
     float trackingEndTime = 0.0f;
@@ -103,11 +139,17 @@ struct AttackTimingParam {
     float recoveryStartTime = 0.0f;
 };
 
+/// <summary>
+/// 乱数抽選に使用する浮動小数点の最小値と最大値
+/// </summary>
 struct RangeF {
     float min = 0.0f;
     float max = 0.0f;
 };
 
+/// <summary>
+/// 敵の体力、移動速度、基本間合いを保持する
+/// </summary>
 struct EnemyCoreConfig {
     float maxHp = 1080.0f;
     float phase2HealthRatioThreshold = 0.74f;
@@ -115,30 +157,45 @@ struct EnemyCoreConfig {
     float nearAttackDistance = 4.0f;
 };
 
+/// <summary>
+/// 単一攻撃の時間、威力、ノックバックを保持する
+/// </summary>
 struct EnemyAttackProfile {
     AttackParam attack{};
     AttackTimingParam timing{};
     float chargeTime = 0.0f;
 };
 
+/// <summary>
+/// 近接攻撃の基本値とリーチを保持する
+/// </summary>
 struct EnemyMeleeAttackProfile {
     EnemyAttackProfile base{};
     RangeF holdTime{};
     float feintChance = 0.0f;
 };
 
+/// <summary>
+/// 振り下ろし攻撃固有の調整値を保持する
+/// </summary>
 struct EnemySmashConfig {
     EnemyMeleeAttackProfile melee{};
     float attackForwardOffset = 0.0f;
     float attackHeightOffset = 0.0f;
 };
 
+/// <summary>
+/// 横薙ぎ攻撃固有の調整値を保持する
+/// </summary>
 struct EnemySweepConfig {
     EnemyMeleeAttackProfile melee{};
     float attackSideOffset = 0.0f;
     float attackHeightOffset = 0.0f;
 };
 
+/// <summary>
+/// 鍔迫り合いの開始条件と進行時間を保持する
+/// </summary>
 struct EnemyBladeClashConfig {
     EnemyAttackProfile profile = {{12.0f, 4.0f, {1.75f, 1.60f, 1.95f}},
                                   {1.46f, 0.72f, 0.0f, 0.88f, 0.88f},
@@ -146,6 +203,9 @@ struct EnemyBladeClashConfig {
     float advanceSpeed = 3.8f;
 };
 
+/// <summary>
+/// 通常レーザー攻撃の射程、判定、演出時間を保持する
+/// </summary>
 struct EnemyArcaneLaserConfig {
     EnemyAttackProfile profile = {{18.0f, 5.2f, {2.35f, 2.25f, 15.5f}},
                                   {2.70f, 1.28f, 0.0f, 0.72f, 0.72f},
@@ -157,6 +217,9 @@ struct EnemyArcaneLaserConfig {
     float recoveryDuration = 0.64f;
 };
 
+/// <summary>
+/// 最終フェーズ用レーザー攻撃の調整値を保持する
+/// </summary>
 struct EnemyCataclysmLaserConfig {
     EnemyAttackProfile profile = {{26.0f, 7.2f, {5.6f, 4.2f, 25.0f}},
                                   {6.85f, 1.72f, 0.0f, 3.95f, 3.95f},
@@ -168,6 +231,9 @@ struct EnemyCataclysmLaserConfig {
     float recoveryDuration = 1.08f;
 };
 
+/// <summary>
+/// 敵が利用する全攻撃パラメーターをまとめて保持する
+/// </summary>
 struct EnemyAttackSet {
     EnemySmashConfig smash = {{{{15.0f, 4.0f, {2.8f, 2.1f, 3.2f}},
                                 {1.20f, 0.86f, 0.05f, 0.22f, 0.38f},
@@ -188,18 +254,27 @@ struct EnemyAttackSet {
     EnemyCataclysmLaserConfig cataclysmLaser{};
 };
 
+/// <summary>
+/// ワープ距離、時間、再使用間隔を保持する
+/// </summary>
 struct EnemyWarpConfig {
     float startTime = 0.55f;
     float moveTime = 0.24f;
     float endTime = 0.48f;
 };
 
+/// <summary>
+/// 敵の基本能力、攻撃、ワープ設定を集約する
+/// </summary>
 struct EnemyConfig {
     EnemyCoreConfig core{};
     EnemyAttackSet attacks{};
     EnemyWarpConfig warp{};
 };
 
+/// <summary>
+/// 敵AIと戦闘演出が共有する実行時状態を保持する
+/// </summary>
 struct EnemyRuntimeState {
     float hp = 1000.0f;
     bool isDying = false;
@@ -277,30 +352,87 @@ struct EnemyRuntimeState {
     bool hasFarSlashLungeTarget = false;
 };
 
+/// <summary>
+/// ボス敵の意思決定、攻撃進行、ダメージ、描画状態を管理する
+/// </summary>
 class Enemy {
   public:
+    /// <summary>
+    /// 使用するリソースと初期状態を準備する
+    /// </summary>
     void Initialize(uint32_t modelId);
+    /// <summary>
+    /// SetDifficultyに対応する状態を設定する
+    /// </summary>
     void SetDifficulty(float difficulty);
+    /// <summary>
+    /// GetDifficultyに対応する現在値を取得する
+    /// </summary>
     float GetDifficulty() const { return difficulty_; }
 
+    /// <summary>
+    /// 入力と状態を1フレーム進める
+    /// </summary>
     void Update(const PlayerCombatObservation &playerObs, float deltaTime);
+    /// <summary>
+    /// UpdateTutorialに対応する公開処理を実行する
+    /// </summary>
     void UpdateTutorial(const PlayerCombatObservation &playerObs,
                         float deltaTime);
+    /// <summary>
+    /// BeginTutorialAttackに対応する処理を開始する
+    /// </summary>
     void BeginTutorialAttack(ActionKind kind);
+    /// <summary>
+    /// BeginDifficultyNineOpeningCutInに対応する処理を開始する
+    /// </summary>
     void
     BeginDifficultyNineOpeningCutIn(const DirectX::XMFLOAT3 &targetPosition);
+    /// <summary>
+    /// ResetTutorialStateが管理する状態を初期値へ戻す
+    /// </summary>
     void ResetTutorialState();
+    /// <summary>
+    /// SetTutorialPositionに対応する状態を設定する
+    /// </summary>
     void SetTutorialPosition(const DirectX::XMFLOAT3 &position);
 
+    /// <summary>
+    /// 現在の状態を描画する
+    /// </summary>
     void Draw(ModelManager *modelManager, const Camera &camera,
               float visualScale = 1.0f);
+    /// <summary>
+    /// 指定したダメージを適用し、実際の減少量を返す
+    /// </summary>
     float TakeDamage(float damage);
+    /// <summary>
+    /// 指定したダメージを適用し、実際の減少量を返す
+    /// </summary>
     float TakeDamageNoReaction(float damage);
+    /// <summary>
+    /// 指定したダメージを適用し、実際の減少量を返す
+    /// </summary>
     float TakeDamageDeferTransitions(float damage);
+    /// <summary>
+    /// 指定したダメージを適用し、実際の減少量を返す
+    /// </summary>
     float TakeDamageDeferTransitionsNoReaction(float damage);
+    /// <summary>
+    /// ResolveDeferredDamageTransitionsに対応する保留状態を確定する
+    /// </summary>
     void ResolveDeferredDamageTransitions();
+    /// <summary>
+    /// ForcePunishReleaseに対応する状態へ強制的に遷移する
+    /// </summary>
     void ForcePunishRelease();
+    /// <summary>
+    /// NotifyCounteredに対応するイベントを通知する
+    /// </summary>
     bool NotifyCountered(float vulnerabilityDuration);
+    /// <summary>
+    /// NotifyTripleIaiAttackResolvedForCameraに対応するイベントを通知する
+    /// </summary>
     void NotifyTripleIaiAttackResolvedForCamera() {
         if (runtime_.tripleIaiSlashActive &&
             runtime_.tripleIaiSlashesRemaining > 0 && runtime_.farSlashActive &&
@@ -309,42 +441,126 @@ class Enemy {
             runtime_.tripleIaiReturnCameraToCenter = true;
         }
     }
+    /// <summary>
+    /// IsBladeClashActionの条件を満たすか判定する
+    /// </summary>
     bool IsBladeClashAction() const;
+    /// <summary>
+    /// IsBladeClashWindowの条件を満たすか判定する
+    /// </summary>
     bool IsBladeClashWindow() const;
+    /// <summary>
+    /// ResolveBladeClashに対応する保留状態を確定する
+    /// </summary>
     void ResolveBladeClash(bool playerWon);
+    /// <summary>
+    /// NotifyBladeClashLandedに対応するイベントを通知する
+    /// </summary>
     void NotifyBladeClashLanded();
+    /// <summary>
+    /// FinishCounterRecoilに対応する進行状態を完了させる
+    /// </summary>
     void FinishCounterRecoil();
+    /// <summary>
+    /// ApplyVictoryDefeatPoseに対応する結果を適用する
+    /// </summary>
     void ApplyVictoryDefeatPose(float ratio,
                                 const DirectX::XMFLOAT3 &startPosition,
                                 const DirectX::XMFLOAT3 &playerPosition);
+    /// <summary>
+    /// SetBossPhaseForPresentationに対応する状態を設定する
+    /// </summary>
     void SetBossPhaseForPresentation(BossPhase phase) {
         runtime_.phase = phase;
     }
+    /// <summary>
+    /// DebugForceBossPhaseに対応する公開処理を実行する
+    /// </summary>
     void DebugForceBossPhase(BossPhase phase, bool playTransition);
+    /// <summary>
+    /// SetCinematicTransformに対応する状態を設定する
+    /// </summary>
     void SetCinematicTransform(const DirectX::XMFLOAT3 &position, float yaw);
+    /// <summary>
+    /// SetCinematicTransformに対応する状態を設定する
+    /// </summary>
     void SetCinematicTransform(const DirectX::XMFLOAT3 &position, float yaw,
                                float pitch, float roll);
+    /// <summary>
+    /// FaceTargetImmediatelyに対応する公開処理を実行する
+    /// </summary>
     void FaceTargetImmediately(const DirectX::XMFLOAT3 &targetPosition);
+    /// <summary>
+    /// GetTransformに対応する現在値を取得する
+    /// </summary>
     const Transform &GetTransform() const { return tf_; }
+    /// <summary>
+    /// GetHPに対応する現在値を取得する
+    /// </summary>
     float GetHP() const { return runtime_.hp; }
+    /// <summary>
+    /// GetMaxHPに対応する現在値を取得する
+    /// </summary>
     float GetMaxHP() const { return config_.core.maxHp; }
 
+    /// <summary>
+    /// GetBodyOBBに対応する現在値を取得する
+    /// </summary>
     OBB GetBodyOBB() const;
+    /// <summary>
+    /// GetLeftHandOBBに対応する現在値を取得する
+    /// </summary>
     OBB GetLeftHandOBB() const;
+    /// <summary>
+    /// GetRightHandOBBに対応する現在値を取得する
+    /// </summary>
     OBB GetRightHandOBB() const;
 
+    /// <summary>
+    /// GetActionKindに対応する現在値を取得する
+    /// </summary>
     ActionKind GetActionKind() const { return runtime_.action.kind; }
+    /// <summary>
+    /// GetActionStepに対応する現在値を取得する
+    /// </summary>
     ActionStep GetActionStep() const { return runtime_.action.step; }
+    /// <summary>
+    /// ConsumeAttackCueEventに対応する保留イベントを取得して消費する
+    /// </summary>
     bool ConsumeAttackCueEvent(EnemyAttackCueEvent &event);
+    /// <summary>
+    /// GetActionTimerForPresentationに対応する現在値を取得する
+    /// </summary>
     float GetActionTimerForPresentation() const { return runtime_.stateTimer; }
+    /// <summary>
+    /// GetReleaseAnticipationRatioに対応する現在値を取得する
+    /// </summary>
     float GetReleaseAnticipationRatio() const;
+    /// <summary>
+    /// GetTelegraphYawに対応する現在値を取得する
+    /// </summary>
     float GetTelegraphYaw() const;
+    /// <summary>
+    /// GetBossPhaseに対応する現在値を取得する
+    /// </summary>
     BossPhase GetBossPhase() const { return runtime_.phase; }
+    /// <summary>
+    /// IsPhaseTransitionActiveの条件を満たすか判定する
+    /// </summary>
     bool IsPhaseTransitionActive() const {
         return runtime_.phaseTransitionActive;
     }
+    /// <summary>
+    /// GetIsPhaseChangingに対応する現在値を取得する
+    /// </summary>
     bool GetIsPhaseChanging() const { return isPhaseChanging_; }
+    /// <summary>
+    /// SetIsPhaseChangingに対応する状態を設定する
+    /// </summary>
     void SetIsPhaseChanging(bool changing) { isPhaseChanging_ = changing; }
+    /// <summary>
+    /// GetPhaseTransitionRatioに対応する現在値を取得する
+    /// </summary>
     float GetPhaseTransitionRatio() const {
         if (phaseTransitionDuration_ <= 0.0001f) {
             return 1.0f;
@@ -359,12 +575,27 @@ class Enemy {
         return t;
     }
 
+    /// <summary>
+    /// IsAttackActiveの条件を満たすか判定する
+    /// </summary>
     bool IsAttackActive() const { return runtime_.isAttackActive; }
+    /// <summary>
+    /// GetAttackOBBに対応する現在値を取得する
+    /// </summary>
     OBB GetAttackOBB() const;
+    /// <summary>
+    /// IsFarWarpSlashActiveの条件を満たすか判定する
+    /// </summary>
     bool IsFarWarpSlashActive() const { return runtime_.farSlashActive; }
+    /// <summary>
+    /// IsTripleIaiSlashActiveの条件を満たすか判定する
+    /// </summary>
     bool IsTripleIaiSlashActive() const {
         return runtime_.tripleIaiSlashActive;
     }
+    /// <summary>
+    /// IsTripleIaiCenterCameraHoldの条件を満たすか判定する
+    /// </summary>
     bool IsTripleIaiCenterCameraHold() const {
         if (!runtime_.tripleIaiSlashActive) {
             return false;
@@ -382,6 +613,9 @@ class Enemy {
                                     runtime_.action.kind == ActionKind::Sweep);
         return nonFinalSlash && runtime_.tripleIaiReturnCameraToCenter;
     }
+    /// <summary>
+    /// GetTripleIaiCueSlotに対応する現在値を取得する
+    /// </summary>
     bool GetTripleIaiCueSlot(int index, DirectX::XMFLOAT3 &outPosition,
                              ActionKind &outKind) const {
         if (index < 0 || index >= EnemyRuntimeState::kTripleIaiCloneCount) {
@@ -409,9 +643,15 @@ class Enemy {
         }
         return false;
     }
+    /// <summary>
+    /// GetTripleIaiCenterFocusPositionに対応する現在値を取得する
+    /// </summary>
     DirectX::XMFLOAT3 GetTripleIaiCenterFocusPosition() const {
         return runtime_.tripleIaiCenterFocusPosition;
     }
+    /// <summary>
+    /// ShouldSuppressCounterStaggerの条件を満たすか判定する
+    /// </summary>
     bool ShouldSuppressCounterStagger() const {
         return runtime_.tripleIaiSlashActive &&
                runtime_.tripleIaiSlashesRemaining > 0 &&
@@ -419,17 +659,29 @@ class Enemy {
                (runtime_.action.kind == ActionKind::Smash ||
                 runtime_.action.kind == ActionKind::Sweep);
     }
+    /// <summary>
+    /// GetFarWarpSlashStanceHoldDurationに対応する現在値を取得する
+    /// </summary>
     float GetFarWarpSlashStanceHoldDuration() const {
         return runtime_.farSlashActive ? 0.50f + runtime_.farSlashLungeDuration
                                        : 0.0f;
     }
+    /// <summary>
+    /// ShouldSuppressRedAttackCueの条件を満たすか判定する
+    /// </summary>
     bool ShouldSuppressRedAttackCue() const {
         return runtime_.quickSlashActive || runtime_.farSlashActive ||
                runtime_.warpFeintImmediate;
     }
+    /// <summary>
+    /// IsWarpCollisionDisabledの条件を満たすか判定する
+    /// </summary>
     bool IsWarpCollisionDisabled() const {
         return runtime_.warp.collisionDisabled;
     }
+    /// <summary>
+    /// ShouldLockPlayerForArcaneLaserの条件を満たすか判定する
+    /// </summary>
     bool ShouldLockPlayerForArcaneLaser() const {
         return runtime_.action.kind == ActionKind::ArcaneLaser ||
                runtime_.action.kind == ActionKind::CataclysmLaser ||
@@ -437,6 +689,9 @@ class Enemy {
                 (runtime_.warp.followupKind == ActionKind::ArcaneLaser ||
                  runtime_.warp.followupKind == ActionKind::CataclysmLaser));
     }
+    /// <summary>
+    /// ShouldLockPlayerForFarWarpSlashの条件を満たすか判定する
+    /// </summary>
     bool ShouldLockPlayerForFarWarpSlash() const {
         const bool isFarWarpStartup =
             runtime_.action.kind == ActionKind::Warp &&
@@ -451,32 +706,66 @@ class Enemy {
         return isFarWarpStartup || isFarSlashCommit;
     }
 
+    /// <summary>
+    /// GetCurrentAttackDamageに対応する現在値を取得する
+    /// </summary>
     float GetCurrentAttackDamage() const;
+    /// <summary>
+    /// GetCurrentAttackKnockbackに対応する現在値を取得する
+    /// </summary>
     float GetCurrentAttackKnockback() const;
+    /// <summary>
+    /// GetArcaneLaserMuzzlePositionに対応する現在値を取得する
+    /// </summary>
     DirectX::XMFLOAT3 GetArcaneLaserMuzzlePosition() const;
+    /// <summary>
+    /// GetArcaneLaserDirectionに対応する現在値を取得する
+    /// </summary>
     DirectX::XMFLOAT3 GetArcaneLaserDirection() const {
         return runtime_.arcaneLaserDirection;
     }
+    /// <summary>
+    /// GetArcaneLaserRangeに対応する現在値を取得する
+    /// </summary>
     float GetArcaneLaserRange() const {
         return config_.attacks.arcaneLaser.range;
     }
+    /// <summary>
+    /// GetArcaneLaserRadiusに対応する現在値を取得する
+    /// </summary>
     float GetArcaneLaserRadius() const {
         return config_.attacks.arcaneLaser.radius;
     }
+    /// <summary>
+    /// GetArcaneLaserChargeRatioに対応する現在値を取得する
+    /// </summary>
     float GetArcaneLaserChargeRatio() const;
-    bool IsArcaneLaserCounterWindow() const;
+    /// <summary>
+    /// GetCataclysmLaserMuzzlePositionに対応する現在値を取得する
+    /// </summary>
     DirectX::XMFLOAT3 GetCataclysmLaserMuzzlePosition() const;
+    /// <summary>
+    /// GetCataclysmLaserDirectionに対応する現在値を取得する
+    /// </summary>
     DirectX::XMFLOAT3 GetCataclysmLaserDirection() const {
         return runtime_.cataclysmLaserDirection;
     }
+    /// <summary>
+    /// GetCataclysmLaserRangeに対応する現在値を取得する
+    /// </summary>
     float GetCataclysmLaserRange() const {
         return config_.attacks.cataclysmLaser.range;
     }
+    /// <summary>
+    /// GetCataclysmLaserRadiusに対応する現在値を取得する
+    /// </summary>
     float GetCataclysmLaserRadius() const {
         return config_.attacks.cataclysmLaser.radius;
     }
+    /// <summary>
+    /// GetCataclysmLaserChargeRatioに対応する現在値を取得する
+    /// </summary>
     float GetCataclysmLaserChargeRatio() const;
-    bool IsCataclysmLaserCounterWindow() const;
 
   private:
     Transform tf_{};
@@ -726,15 +1015,10 @@ class Enemy {
     TacticState DecideTactic() const;
     void BeginActionFromTactic(TacticState tactic);
     ActionKind SelectNearPressureAction() const;
-    bool TryBeginWarpAction(float chance);
-    bool TryBeginQuickSlash(float chance);
     bool TryBeginFarWarpSlash(float chance);
-    bool TryBeginPhantomWarpSkill(float chance);
     bool TryBeginTripleIaiSlash(float chance);
-    bool TryBeginBladeClash(float chance);
     bool TryBeginArcaneLaser(float chance);
     bool TryBeginLaserReengageWarp(float chance);
-    bool TryBeginArcaneLaserSlashFollowup(float chance);
     bool TryBeginCataclysmLaser(float chance);
     bool IsRangedAttackAvailable() const;
     void RegisterRangedAttackCommit();
@@ -823,6 +1107,11 @@ class Enemy {
 
     float GetCurrentSmashChargeTime() const;
     float GetCurrentSweepChargeTime() const;
+    void ConfigureAttackProfiles(float effectiveDifficulty,
+                                 float difficultyRatio);
+    void ConfigureMeleeTuning(float difficultyRatio);
+    void ConfigureRangedTuning(float difficultyRatio);
+    void ConfigureMovementTuning(float difficultyRatio);
 
     OBB GetSmashAttackOBB() const;
     OBB GetSweepAttackOBB() const;

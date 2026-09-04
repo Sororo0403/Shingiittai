@@ -115,7 +115,7 @@ int EngineRuntime::Run(HINSTANCE instance, int showCommand,
         systems_->frameTimer.Tick();
         ResizeIfNeeded();
         UpdateFrameContext();
-        systems_->input.Update(systems_->sceneContext.frame.deltaTime);
+        systems_->input.Update();
         systems_->sceneManager.Update();
         SoundManager::GetInstance().Update();
         RenderFrame();
@@ -137,7 +137,7 @@ int EngineRuntime::Run(HINSTANCE instance, int showCommand,
         systems_->frameTimer.Tick();
         ResizeIfNeeded();
         UpdateFrameContext();
-        systems_->input.Update(systems_->sceneContext.frame.deltaTime);
+        systems_->input.Update();
         systems_->sceneManager.Update();
         SoundManager::GetInstance().Update();
         RenderFrame();

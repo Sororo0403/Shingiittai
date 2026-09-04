@@ -80,7 +80,7 @@ void RenderTexture::Resize(int width, int height) {
         return;
     }
 
-    if (resource_ && dxCommon_ && !dxCommon_->IsDeviceRemoved() &&
+    if (resource_ && !dxCommon_->IsDeviceRemoved() &&
         !dxCommon_->IsCommandListRecording()) {
         dxCommon_->WaitForGpuIfPossible();
     }

@@ -144,12 +144,6 @@ bool SrvManager::IsAllocated(UINT index) const {
            allocated_[index];
 }
 
-void SrvManager::ValidateAllocatedIndex(UINT index,
-                                        const char *operation) const {
-    (void)index;
-    (void)operation;
-}
-
 D3D12_CPU_DESCRIPTOR_HANDLE
 SrvManager::GetCpuHandle(UINT index) const {
     if (!IsAllocated(index) || !heap_ || descriptorSize_ == 0 ||

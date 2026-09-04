@@ -3,6 +3,9 @@
 #include "particle/GPUParticleSystem.h"
 #include <cmath>
 
+/// <summary>
+/// ゼロ長を考慮してパーティクル方向ベクトルを正規化する
+/// </summary>
 inline DirectX::XMFLOAT3 NormalizeParticleCompatVec3(
     const DirectX::XMFLOAT3 &value,
     const DirectX::XMFLOAT3 &fallback = {1.0f, 0.0f, 0.0f}) {
@@ -16,12 +19,18 @@ inline DirectX::XMFLOAT3 NormalizeParticleCompatVec3(
     return {value.x * invLength, value.y * invLength, value.z * invLength};
 }
 
+/// <summary>
+/// パーティクル放射軸の構築に使う外積を計算する
+/// </summary>
 inline DirectX::XMFLOAT3 CrossParticleCompatVec3(const DirectX::XMFLOAT3 &a,
                                                  const DirectX::XMFLOAT3 &b) {
     return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z,
             a.x * b.y - a.y * b.x};
 }
 
+/// <summary>
+/// 放射方向に直交する安定した基底ベクトルを構築する
+/// </summary>
 inline void
 ConfigureParticleCompatSlashLineBasis(ParticleEmitterSettings &settings,
                                       const DirectX::XMFLOAT3 &direction) {
@@ -42,6 +51,9 @@ ConfigureParticleCompatSlashLineBasis(ParticleEmitterSettings &settings,
     settings.basisForward = depth;
 }
 
+/// <summary>
+/// 演出分類と方向から一回限りのGPUパーティクル放射を設定する
+/// </summary>
 inline void EmitParticleBurst(GPUParticleSystem &system,
                               const DirectX::XMFLOAT3 &position, uint32_t count,
                               float lifeTime, AppParticleBurstStyle style,

@@ -17,6 +17,35 @@ float CueValue(bool releaseCounterCueVisible, float releaseValue,
 }
 constexpr float kPi = 3.14159265f;
 
+struct HitLinePalette {
+    XMFLOAT4 wideGlow{};
+    XMFLOAT4 hotCore{};
+    XMFLOAT4 offsetGlow{};
+    XMFLOAT4 shardA{};
+    XMFLOAT4 shardB{};
+    XMFLOAT4 shardC{};
+    float lifeScale = 1.0f;
+};
+
+HitLinePalette MakeHitLinePalette(SwordSlashHitLineStyle style) {
+    if (style == SwordSlashHitLineStyle::RedPunish) {
+        return {{1.00f, 0.04f, 0.02f, 0.78f},
+                {1.00f, 0.82f, 0.76f, 1.00f},
+                {0.52f, 0.00f, 0.00f, 0.72f},
+                {1.00f, 0.18f, 0.08f, 0.92f},
+                {0.80f, 0.02f, 0.02f, 0.78f},
+                {1.00f, 0.05f, 0.02f, 0.74f},
+                1.65f};
+    }
+    return {{0.82f, 0.82f, 1.00f, 0.42f},
+            {1.00f, 0.98f, 1.00f, 1.00f},
+            {0.96f, 0.84f, 1.00f, 0.50f},
+            {0.94f, 0.97f, 1.00f, 0.78f},
+            {0.86f, 0.92f, 1.00f, 0.62f},
+            {1.00f, 1.00f, 1.00f, 0.66f},
+            1.0f};
+}
+
 XMFLOAT3 Add(const XMFLOAT3 &a, const XMFLOAT3 &b) {
     return {a.x + b.x, a.y + b.y, a.z + b.z};
 }
@@ -178,26 +207,7 @@ void SwordSlashArcRenderer::EmitHitLine(const XMFLOAT3 &position,
         visualPosition = Add(visualPosition, Scale(cameraForward, -1.05f));
         visualPosition.y += 0.18f;
     }
-    const XMFLOAT4 wideGlow = style == SwordSlashHitLineStyle::RedPunish
-                                  ? XMFLOAT4{1.00f, 0.04f, 0.02f, 0.78f}
-                                  : XMFLOAT4{0.82f, 0.82f, 1.00f, 0.42f};
-    const XMFLOAT4 hotCore = style == SwordSlashHitLineStyle::RedPunish
-                                 ? XMFLOAT4{1.00f, 0.82f, 0.76f, 1.00f}
-                                 : XMFLOAT4{1.00f, 0.98f, 1.00f, 1.00f};
-    const XMFLOAT4 offsetGlow = style == SwordSlashHitLineStyle::RedPunish
-                                    ? XMFLOAT4{0.52f, 0.00f, 0.00f, 0.72f}
-                                    : XMFLOAT4{0.96f, 0.84f, 1.00f, 0.50f};
-    const XMFLOAT4 shardA = style == SwordSlashHitLineStyle::RedPunish
-                                ? XMFLOAT4{1.00f, 0.18f, 0.08f, 0.92f}
-                                : XMFLOAT4{0.94f, 0.97f, 1.0f, 0.78f};
-    const XMFLOAT4 shardB = style == SwordSlashHitLineStyle::RedPunish
-                                ? XMFLOAT4{0.80f, 0.02f, 0.02f, 0.78f}
-                                : XMFLOAT4{0.86f, 0.92f, 1.0f, 0.62f};
-    const XMFLOAT4 shardC = style == SwordSlashHitLineStyle::RedPunish
-                                ? XMFLOAT4{1.00f, 0.05f, 0.02f, 0.74f}
-                                : XMFLOAT4{1.0f, 1.0f, 1.0f, 0.66f};
-    const float lifeScale =
-        style == SwordSlashHitLineStyle::RedPunish ? 1.65f : 1.0f;
+    const HitLinePalette palette = MakeHitLinePalette(style);
 
     auto emitStroke = [&](const XMFLOAT3 &axis, float alongOffset,
                           float normalOffset, float heightOffset,
@@ -214,7 +224,7 @@ void SwordSlashArcRenderer::EmitHitLine(const XMFLOAT3 &position,
         arc.axisB = strokeNormal;
         arc.radius = halfLength;
         arc.thickness = thickness;
-        arc.life = life * lifeScale;
+        arc.life = life * palette.lifeScale;
         arc.age = -delay;
         arc.color = color;
         arc.startAngle = 0.0f;
@@ -226,11 +236,14 @@ void SwordSlashArcRenderer::EmitHitLine(const XMFLOAT3 &position,
     };
 
     emitStroke(lineDir, -0.12f, 0.00f, 0.50f, 3.88f + clampedPower * 0.70f,
-               0.155f + clampedPower * 0.025f, 0.195f, 0.0f, wideGlow);
+               0.155f + clampedPower * 0.025f, 0.195f, 0.0f,
+               palette.wideGlow);
     emitStroke(lineDir, -0.10f, 0.00f, 0.52f, 4.15f + clampedPower * 0.74f,
-               0.060f + clampedPower * 0.010f, 0.138f, 0.0f, hotCore);
+               0.060f + clampedPower * 0.010f, 0.138f, 0.0f,
+               palette.hotCore);
     emitStroke(lineDir, -0.34f, -0.055f, 0.47f, 3.38f + clampedPower * 0.60f,
-               0.090f + clampedPower * 0.012f, 0.172f, 0.018f, offsetGlow);
+               0.090f + clampedPower * 0.012f, 0.172f, 0.018f,
+               palette.offsetGlow);
 
     const XMFLOAT3 shardUp = NormalizeSafe(
         Add(Scale(lineNormal, 0.78f), Scale(lineDir, 0.22f)), lineNormal);
@@ -241,11 +254,11 @@ void SwordSlashArcRenderer::EmitHitLine(const XMFLOAT3 &position,
         Add(Scale(cameraUp, 0.64f), Scale(lineDir, -0.28f)), cameraUp);
 
     emitStroke(shardUp, 0.22f, 0.02f, 0.52f, 1.05f + clampedPower * 0.12f,
-               0.018f, 0.108f, 0.0f, shardA);
+               0.018f, 0.108f, 0.0f, palette.shardA);
     emitStroke(shardDown, 0.16f, -0.02f, 0.48f, 0.72f + clampedPower * 0.08f,
-               0.014f, 0.095f, 0.010f, shardB);
+               0.014f, 0.095f, 0.010f, palette.shardB);
     emitStroke(shardBack, 0.10f, 0.00f, 0.58f, 0.78f + clampedPower * 0.08f,
-               0.012f, 0.088f, 0.016f, shardC);
+               0.012f, 0.088f, 0.016f, palette.shardC);
 }
 
 void SwordSlashArcRenderer::EmitDirectionCueLine(
@@ -666,102 +679,101 @@ void SwordSlashArcRenderer::BuildVertices() {
         if (arc.age < 0.0f) {
             continue;
         }
-        const float grow = SmoothStep(0.0f, 0.20f, ageRate);
-        const float fade = 1.0f - SmoothStep(0.46f, 1.0f, ageRate);
-        if (arc.isLine) {
-            const float growLine = (arc.isDirectionCue || arc.instantLineReveal)
-                                       ? 1.0f
-                                       : SmoothStep(0.0f, 0.18f, ageRate);
-            const float fadeLine =
-                arc.isDirectionCue ? 1.0f
-                                   : 1.0f - SmoothStep(0.35f, 1.0f, ageRate);
-            const float halfLength = arc.radius * growLine;
-            const float halfThickness =
-                arc.thickness * (1.0f + 0.45f * (1.0f - ageRate));
-            const XMFLOAT3 start =
-                Add(arc.center, Scale(arc.axisA, -halfLength));
-            const XMFLOAT3 end = Add(arc.center, Scale(arc.axisA, halfLength));
-            XMFLOAT4 color = arc.color;
-            color.w *= fadeLine;
-            const ArcVertex v0{Add(start, Scale(arc.axisB, -halfThickness)),
-                               {0.0f, 0.0f},
-                               color};
-            const ArcVertex v1{Add(start, Scale(arc.axisB, halfThickness)),
-                               {1.0f, 0.0f},
-                               color};
-            const ArcVertex v2{Add(end, Scale(arc.axisB, -halfThickness)),
-                               {0.0f, 1.0f},
-                               color};
-            const ArcVertex v3{
-                Add(end, Scale(arc.axisB, halfThickness)), {1.0f, 1.0f}, color};
-            if (vertexCount_ + 6 > vertexCapacity_) {
-                return;
-            }
-            mappedVertices_[vertexCount_++] = v0;
-            mappedVertices_[vertexCount_++] = v1;
-            mappedVertices_[vertexCount_++] = v2;
-            mappedVertices_[vertexCount_++] = v2;
-            mappedVertices_[vertexCount_++] = v1;
-            mappedVertices_[vertexCount_++] = v3;
-            continue;
-        }
-
-        const float radiusBoost = 1.0f + 0.12f * ageRate;
-        const float innerRadius =
-            (arc.radius - arc.thickness * 0.5f) * radiusBoost;
-        const float outerRadius =
-            (arc.radius + arc.thickness * 0.5f) * radiusBoost;
-        const float visibleEnd =
-            arc.startAngle + (arc.endAngle - arc.startAngle) * grow;
-
-        for (uint32_t i = 1; i <= kSegments; ++i) {
-            const float t0 =
-                static_cast<float>(i - 1) / static_cast<float>(kSegments);
-            const float t1 =
-                static_cast<float>(i) / static_cast<float>(kSegments);
-            const float a0 =
-                arc.startAngle + (visibleEnd - arc.startAngle) * t0;
-            const float a1 =
-                arc.startAngle + (visibleEnd - arc.startAngle) * t1;
-
-            XMFLOAT4 color0 = arc.color;
-            XMFLOAT4 color1 = arc.color;
-            const float tipFade0 = SmoothStep(0.0f, 0.10f, t0) *
-                                   (1.0f - SmoothStep(0.90f, 1.0f, t0));
-            const float tipFade1 = SmoothStep(0.0f, 0.10f, t1) *
-                                   (1.0f - SmoothStep(0.90f, 1.0f, t1));
-            color0.w *= fade * tipFade0;
-            color1.w *= fade * tipFade1;
-
-            const ArcVertex v0{
-                PointOnArc(arc.center, arc.axisA, arc.axisB, a0, innerRadius),
-                {0.0f, t0},
-                color0};
-            const ArcVertex v1{
-                PointOnArc(arc.center, arc.axisA, arc.axisB, a0, outerRadius),
-                {1.0f, t0},
-                color0};
-            const ArcVertex v2{
-                PointOnArc(arc.center, arc.axisA, arc.axisB, a1, innerRadius),
-                {0.0f, t1},
-                color1};
-            const ArcVertex v3{
-                PointOnArc(arc.center, arc.axisA, arc.axisB, a1, outerRadius),
-                {1.0f, t1},
-                color1};
-
-            if (vertexCount_ + 6 > vertexCapacity_) {
-                return;
-            }
-
-            mappedVertices_[vertexCount_++] = v0;
-            mappedVertices_[vertexCount_++] = v1;
-            mappedVertices_[vertexCount_++] = v2;
-            mappedVertices_[vertexCount_++] = v2;
-            mappedVertices_[vertexCount_++] = v1;
-            mappedVertices_[vertexCount_++] = v3;
+        const bool appended = arc.isLine ? AppendLineVertices(arc, ageRate)
+                                         : AppendArcVertices(arc, ageRate);
+        if (!appended) {
+            return;
         }
     }
+}
+
+bool SwordSlashArcRenderer::AppendLineVertices(const ArcInstance &arc,
+                                               float ageRate) {
+    if (vertexCount_ + 6 > vertexCapacity_) {
+        return false;
+    }
+    const float grow = (arc.isDirectionCue || arc.instantLineReveal)
+                           ? 1.0f
+                           : SmoothStep(0.0f, 0.18f, ageRate);
+    const float fade = arc.isDirectionCue
+                           ? 1.0f
+                           : 1.0f - SmoothStep(0.35f, 1.0f, ageRate);
+    const float halfLength = arc.radius * grow;
+    const float halfThickness =
+        arc.thickness * (1.0f + 0.45f * (1.0f - ageRate));
+    const XMFLOAT3 start = Add(arc.center, Scale(arc.axisA, -halfLength));
+    const XMFLOAT3 end = Add(arc.center, Scale(arc.axisA, halfLength));
+    XMFLOAT4 color = arc.color;
+    color.w *= fade;
+    const ArcVertex v0{Add(start, Scale(arc.axisB, -halfThickness)),
+                       {0.0f, 0.0f}, color};
+    const ArcVertex v1{Add(start, Scale(arc.axisB, halfThickness)),
+                       {1.0f, 0.0f}, color};
+    const ArcVertex v2{Add(end, Scale(arc.axisB, -halfThickness)),
+                       {0.0f, 1.0f}, color};
+    const ArcVertex v3{Add(end, Scale(arc.axisB, halfThickness)),
+                       {1.0f, 1.0f}, color};
+    mappedVertices_[vertexCount_++] = v0;
+    mappedVertices_[vertexCount_++] = v1;
+    mappedVertices_[vertexCount_++] = v2;
+    mappedVertices_[vertexCount_++] = v2;
+    mappedVertices_[vertexCount_++] = v1;
+    mappedVertices_[vertexCount_++] = v3;
+    return true;
+}
+
+bool SwordSlashArcRenderer::AppendArcVertices(const ArcInstance &arc,
+                                              float ageRate) {
+    const float grow = SmoothStep(0.0f, 0.20f, ageRate);
+    const float fade = 1.0f - SmoothStep(0.46f, 1.0f, ageRate);
+    const float radiusBoost = 1.0f + 0.12f * ageRate;
+    const float innerRadius =
+        (arc.radius - arc.thickness * 0.5f) * radiusBoost;
+    const float outerRadius =
+        (arc.radius + arc.thickness * 0.5f) * radiusBoost;
+    const float visibleEnd =
+        arc.startAngle + (arc.endAngle - arc.startAngle) * grow;
+
+    for (uint32_t i = 1; i <= kSegments; ++i) {
+        if (vertexCount_ + 6 > vertexCapacity_) {
+            return false;
+        }
+        const float t0 =
+            static_cast<float>(i - 1) / static_cast<float>(kSegments);
+        const float t1 = static_cast<float>(i) / static_cast<float>(kSegments);
+        const float a0 = arc.startAngle + (visibleEnd - arc.startAngle) * t0;
+        const float a1 = arc.startAngle + (visibleEnd - arc.startAngle) * t1;
+
+        XMFLOAT4 color0 = arc.color;
+        XMFLOAT4 color1 = arc.color;
+        const float tipFade0 = SmoothStep(0.0f, 0.10f, t0) *
+                               (1.0f - SmoothStep(0.90f, 1.0f, t0));
+        const float tipFade1 = SmoothStep(0.0f, 0.10f, t1) *
+                               (1.0f - SmoothStep(0.90f, 1.0f, t1));
+        color0.w *= fade * tipFade0;
+        color1.w *= fade * tipFade1;
+
+        const ArcVertex v0{
+            PointOnArc(arc.center, arc.axisA, arc.axisB, a0, innerRadius),
+            {0.0f, t0}, color0};
+        const ArcVertex v1{
+            PointOnArc(arc.center, arc.axisA, arc.axisB, a0, outerRadius),
+            {1.0f, t0}, color0};
+        const ArcVertex v2{
+            PointOnArc(arc.center, arc.axisA, arc.axisB, a1, innerRadius),
+            {0.0f, t1}, color1};
+        const ArcVertex v3{
+            PointOnArc(arc.center, arc.axisA, arc.axisB, a1, outerRadius),
+            {1.0f, t1}, color1};
+
+        mappedVertices_[vertexCount_++] = v0;
+        mappedVertices_[vertexCount_++] = v1;
+        mappedVertices_[vertexCount_++] = v2;
+        mappedVertices_[vertexCount_++] = v2;
+        mappedVertices_[vertexCount_++] = v1;
+        mappedVertices_[vertexCount_++] = v3;
+    }
+    return true;
 }
 
 void SwordSlashArcRenderer::CreateRootSignature() {

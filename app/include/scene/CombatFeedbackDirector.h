@@ -4,6 +4,9 @@
 #include <DirectXMath.h>
 #include <cstddef>
 
+/// <summary>
+/// 戦闘フィードバックへ渡す演出イベントの種類
+/// </summary>
 enum class CombatFeedbackEventType {
     PlayerSlashHit,
     PlayerDamaged,
@@ -14,6 +17,9 @@ enum class CombatFeedbackEventType {
     BladeClashPierce,
 };
 
+/// <summary>
+/// ヒットストップやカメラ揺れを生成するためのイベント情報
+/// </summary>
 struct CombatFeedbackEvent {
     CombatFeedbackEventType type = CombatFeedbackEventType::PlayerSlashHit;
     DirectX::XMFLOAT3 position = {0.0f, 0.0f, 0.0f};
@@ -22,20 +28,50 @@ struct CombatFeedbackEvent {
     size_t swordIndex = 0;
 };
 
+/// <summary>
+/// 戦闘イベントを時間倍率、画角変化、カメラ揺れへ変換する
+/// </summary>
 class CombatFeedbackDirector {
   public:
+    /// <summary>
+    /// ~CombatFeedbackDirectorに対応する公開処理を実行する
+    /// </summary>
     ~CombatFeedbackDirector();
 
+    /// <summary>
+    /// 使用するリソースと初期状態を準備する
+    /// </summary>
     void Initialize(PostEffectManager *postEffectManager);
+    /// <summary>
+    /// Resetが管理する状態を初期値へ戻す
+    /// </summary>
     void Reset();
+    /// <summary>
+    /// 入力と状態を1フレーム進める
+    /// </summary>
     void Update(float deltaTime, float sceneTime);
 
+    /// <summary>
+    /// PushEventに対応するイベントを処理待ちキューへ追加する
+    /// </summary>
     void PushEvent(const CombatFeedbackEvent &event);
 
+    /// <summary>
+    /// GetGameplayTimeScaleに対応する現在値を取得する
+    /// </summary>
     float GetGameplayTimeScale() const;
+    /// <summary>
+    /// GetFovKickDegに対応する現在値を取得する
+    /// </summary>
     float GetFovKickDeg() const;
+    /// <summary>
+    /// ApplyCameraImpulseに対応する結果を適用する
+    /// </summary>
     void ApplyCameraImpulse(DirectX::XMFLOAT3 &cameraPosition,
                             DirectX::XMFLOAT3 &lookAt, float sceneTime) const;
+    /// <summary>
+    /// AddCameraShakeに対応する要素を追加する
+    /// </summary>
     void AddCameraShake(float duration, float horizontal, float vertical);
 
   private:

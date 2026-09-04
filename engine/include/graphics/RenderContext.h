@@ -8,6 +8,9 @@ class Camera;
 class DirectXCommon;
 class SrvManager;
 
+/// <summary>
+/// 現在の描画パスで共有するデバイス、カメラ、フレーム情報を保持する
+/// </summary>
 struct RenderContext {
     DirectXCommon *dxCommon = nullptr;
     SrvManager *srv = nullptr;

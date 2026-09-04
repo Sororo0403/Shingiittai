@@ -14,22 +14,57 @@
 #include <string>
 #include <vector>
 
+/// <summary>
+/// 勝利演出、クリア結果、ランキング登録を管理する
+/// </summary>
 class GameVictoryScene : public BaseScene {
   public:
+    /// <summary>
+    /// GameVictorySceneに対応する公開処理を実行する
+    /// </summary>
     GameVictoryScene(float clearTime,
                      const SwordInputCalibration &inputCalibration = {},
                      float combatDifficulty = 5.0f);
+    /// <summary>
+    /// ~GameVictorySceneに対応する公開処理を実行する
+    /// </summary>
     ~GameVictoryScene() override;
 
+    /// <summary>
+    /// 使用するリソースと初期状態を準備する
+    /// </summary>
     void Initialize(const SceneContext &ctx) override;
+    /// <summary>
+    /// 入力と状態を1フレーム進める
+    /// </summary>
     void Update() override;
+    /// <summary>
+    /// 現在の状態を描画する
+    /// </summary>
     void Draw() override;
+    /// <summary>
+    /// 前景3D描画パスを使用するか判定する
+    /// </summary>
     bool UsesForeground3DPass() const override;
+    /// <summary>
+    /// 前景3D描画パスへ必要な要素を描画する
+    /// </summary>
     void DrawForeground3D() override;
+    /// <summary>
+    /// 透明描画パスへ必要な要素を描画する
+    /// </summary>
     void DrawTransparent() override;
+    /// <summary>
+    /// ポストプロセス後のオーバーレイを描画する
+    /// </summary>
     void DrawPostProcessOverlay() override;
 
   private:
+    void ResetSceneState();
+    void InitializePresentation();
+    void LoadVictoryAssets();
+    void LoadResultUi();
+    void PlayOpeningSlashSounds();
     struct Image {
         uint32_t textureId = 0;
         float width = 0.0f;
@@ -60,6 +95,25 @@ class GameVictoryScene : public BaseScene {
         InputControlType controlType = InputControlType::KeyboardMouse;
         bool isCurrent = false;
     };
+    struct SmokePatch {
+        DirectX::XMFLOAT3 offset{};
+        DirectX::XMFLOAT2 scale{};
+        float roll = 0.0f;
+        float delay = 0.0f;
+    };
+    struct RankingTableLayout {
+        float contentLeft = 0.0f;
+        float panelWidth = 0.0f;
+        float contentWidth = 0.0f;
+        float rowStartY = 0.0f;
+        float rowGap = 0.0f;
+        float rowFramePaddingY = 0.0f;
+        float rowFrameHeight = 0.0f;
+        float rowScale = 0.0f;
+        float scoreRight = 0.0f;
+        float timeRight = 0.0f;
+        float difficultyRight = 0.0f;
+    };
 
     void UpdateCamera(float screenWidth, float screenHeight);
     void UpdateCinematic(float deltaTime);
@@ -78,9 +132,15 @@ class GameVictoryScene : public BaseScene {
     void DrawStage();
     void DrawSlash();
     void DrawPreExplosionCharge();
+    void DrawPreExplosionBillboards(const DirectX::XMFLOAT3 &center,
+                                    float yaw, float alpha, float pulse,
+                                    float finalSurge, float burst);
     void DrawExplosionFlash();
     void DrawExplosionCore();
     void DrawExplosionBillboards();
+    void DrawExplosionSmokePatch(const SmokePatch &patch, uint32_t modelId,
+                                 const DirectX::XMFLOAT3 &center, float yaw,
+                                 float age, float alpha);
     void DrawForegroundEnemy();
     void DrawOverlay(float screenWidth, float screenHeight);
     void BeginResult();
@@ -92,6 +152,7 @@ class GameVictoryScene : public BaseScene {
     void LoadRanking();
     void SaveRanking() const;
     void DrawRankingPanel(float screenWidth, float screenHeight, float alpha);
+    void DrawRankingRows(const RankingTableLayout &layout, float alpha);
     void DrawActionButtons(float screenWidth, float screenHeight, float alpha);
     int ComputeScore(float clearTime, float difficulty) const;
     std::string FormatTime(float seconds) const;

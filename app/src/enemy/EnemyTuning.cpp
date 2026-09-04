@@ -49,24 +49,21 @@ void SetActiveWindowDuration(EnemyAttackProfile &profile, float duration) {
 }
 } // namespace
 
-void Enemy::SetDifficulty(float difficulty) {
-    difficulty_ = std::clamp(difficulty, 0.0f, 9.0f);
-    const float effectiveDifficulty = EffectiveCombatDifficulty(difficulty_);
-    const float t = DifficultyRatio(difficulty_);
-    const float highPressure = t;
-
-    config_ = EnemyConfig{};
+void Enemy::ConfigureAttackProfiles(float effectiveDifficulty,
+                                    float difficultyRatio) {
     config_.core.maxHp *= 0.58f + 0.095f * effectiveDifficulty;
     config_.core.maxHp *= 1.45f;
-    config_.core.phase2HealthRatioThreshold = 0.80f + 0.15f * t;
-    config_.core.phase3HealthRatioThreshold = 0.35f + 0.20f * t;
-    config_.core.nearAttackDistance = 3.35f + 1.20f * t;
+    config_.core.phase2HealthRatioThreshold =
+        0.80f + 0.15f * difficultyRatio;
+    config_.core.phase3HealthRatioThreshold =
+        0.35f + 0.20f * difficultyRatio;
+    config_.core.nearAttackDistance = 3.35f + 1.20f * difficultyRatio;
 
     const float damageScale = 0.62f + 0.075f * effectiveDifficulty;
     const float knockbackScale = 0.70f + 0.055f * effectiveDifficulty;
     const float hitBoxScale = 0.86f + 0.035f * effectiveDifficulty;
     const float timingScale =
-        1.10f - 0.053f * effectiveDifficulty - 0.11f * highPressure;
+        1.10f - 0.053f * effectiveDifficulty - 0.11f * difficultyRatio;
     ScaleAttackProfile(config_.attacks.smash.melee.base, damageScale,
                        knockbackScale, hitBoxScale, timingScale);
     ScaleAttackProfile(config_.attacks.sweep.melee.base, damageScale,
@@ -85,121 +82,154 @@ void Enemy::SetDifficulty(float difficulty) {
             profile.timing.activeEndTime - profile.timing.activeStartTime;
         const float targetDuration =
             currentDuration +
-            (kEasyActiveWindowDuration - currentDuration) * (1.0f - t);
+            (kEasyActiveWindowDuration - currentDuration) *
+                (1.0f - difficultyRatio);
         SetActiveWindowDuration(profile, targetDuration);
     };
     widenActiveWindow(config_.attacks.smash.melee.base);
     widenActiveWindow(config_.attacks.sweep.melee.base);
 
-    config_.attacks.smash.melee.holdTime.min = 0.12f + 0.20f * (1.0f - t);
-    config_.attacks.smash.melee.holdTime.max = 0.24f + 0.38f * (1.0f - t);
-    config_.attacks.sweep.melee.holdTime.min = 0.11f + 0.17f * (1.0f - t);
-    config_.attacks.sweep.melee.holdTime.max = 0.21f + 0.33f * (1.0f - t);
-    config_.attacks.smash.melee.holdTime.min *= 1.0f - 0.34f * highPressure;
-    config_.attacks.smash.melee.holdTime.max *= 1.0f - 0.46f * highPressure;
-    config_.attacks.sweep.melee.holdTime.min *= 1.0f - 0.34f * highPressure;
-    config_.attacks.sweep.melee.holdTime.max *= 1.0f - 0.46f * highPressure;
+    config_.attacks.smash.melee.holdTime.min =
+        0.12f + 0.20f * (1.0f - difficultyRatio);
+    config_.attacks.smash.melee.holdTime.max =
+        0.24f + 0.38f * (1.0f - difficultyRatio);
+    config_.attacks.sweep.melee.holdTime.min =
+        0.11f + 0.17f * (1.0f - difficultyRatio);
+    config_.attacks.sweep.melee.holdTime.max =
+        0.21f + 0.33f * (1.0f - difficultyRatio);
+    config_.attacks.smash.melee.holdTime.min *=
+        1.0f - 0.34f * difficultyRatio;
+    config_.attacks.smash.melee.holdTime.max *=
+        1.0f - 0.46f * difficultyRatio;
+    config_.attacks.sweep.melee.holdTime.min *=
+        1.0f - 0.34f * difficultyRatio;
+    config_.attacks.sweep.melee.holdTime.max *=
+        1.0f - 0.46f * difficultyRatio;
     config_.attacks.smash.melee.feintChance = 0.34f;
     config_.attacks.sweep.melee.feintChance = 0.30f;
-    config_.attacks.bladeClash.advanceSpeed = 3.15f + 2.60f * t;
-    config_.attacks.arcaneLaser.recoveryDuration *= 1.0f - 0.49f * highPressure;
+    config_.attacks.bladeClash.advanceSpeed =
+        3.15f + 2.60f * difficultyRatio;
+    config_.attacks.arcaneLaser.recoveryDuration *=
+        1.0f - 0.49f * difficultyRatio;
     config_.attacks.cataclysmLaser.recoveryDuration *=
-        1.0f - 0.37f * highPressure;
+        1.0f - 0.37f * difficultyRatio;
 
-    const float warpTimeScale = 1.15f - 0.60f * t;
+    const float warpTimeScale = 1.15f - 0.60f * difficultyRatio;
     config_.warp.startTime *= warpTimeScale;
     config_.warp.moveTime *= warpTimeScale;
     config_.warp.endTime *= warpTimeScale;
+}
 
-    smashTellTime_ = 0.17f - 0.090f * t;
-    sweepTellTime_ = 0.16f - 0.080f * t;
+void Enemy::ConfigureMeleeTuning(float difficultyRatio) {
+    smashTellTime_ = 0.17f - 0.090f * difficultyRatio;
+    sweepTellTime_ = 0.16f - 0.080f * difficultyRatio;
     nearSmashWeight_ = 32;
     nearSweepWeight_ = 34;
     phase2NearSmashBonus_ = 7;
     phase2NearSweepBonus_ = 14;
     phase3NearSmashBonus_ = 7;
     phase3NearSweepBonus_ = 9;
-    chargeTurnSpeed_ = 4.8f + 5.4f * t;
-    recoveryTurnSpeed_ = 1.7f + 3.5f * t;
-    idleTurnSpeed_ = 6.2f + 6.2f * t;
+    chargeTurnSpeed_ = 4.8f + 5.4f * difficultyRatio;
+    recoveryTurnSpeed_ = 1.7f + 3.5f * difficultyRatio;
+    idleTurnSpeed_ = 6.2f + 6.2f * difficultyRatio;
 
     quickSlashChance_ = 0.28f;
-    quickSmashChargeTime_ = 1.00f - 0.36f * t;
-    quickSweepChargeTime_ = 0.92f - 0.32f * t;
+    quickSmashChargeTime_ = 1.00f - 0.36f * difficultyRatio;
+    quickSweepChargeTime_ = 0.92f - 0.32f * difficultyRatio;
     directionFeintChance_ = 0.44f;
     chargeWarpFeintChance_ = 0.46f;
     farWarpSlashChance_ = 0.88f;
-    farWarpSlashDistance_ = 9.7f - 1.45f * t;
-    farSlashLungeSpeed_ = 70.0f + 26.0f * t;
-    farSlashSmashChargeTime_ = 0.94f - 0.25f * t;
-    farSlashSweepChargeTime_ = 0.86f - 0.23f * t;
+    farWarpSlashDistance_ = 9.7f - 1.45f * difficultyRatio;
+    farSlashLungeSpeed_ = 70.0f + 26.0f * difficultyRatio;
+    farSlashSmashChargeTime_ = 0.94f - 0.25f * difficultyRatio;
+    farSlashSweepChargeTime_ = 0.86f - 0.23f * difficultyRatio;
     phantomWarpChance_ = 0.46f;
-    phantomWarpCooldownDuration_ = 5.7f - 3.6f * t;
-    tripleIaiSlashChance_ = 0.36f + 0.30f * t;
-    tripleIaiSlashCooldownDuration_ = 8.0f - 3.4f * t;
-    tripleIaiSlashSpeedScale_ = 1.0f + 0.62f * t;
-    tripleIaiCloneLife_ = 1.20f + 0.30f * t;
-    tripleIaiIntroDuration_ = 1.14f - 0.44f * t;
-    phantomFinalLockDuration_ = 0.30f - 0.16f * t;
+    phantomWarpCooldownDuration_ = 5.7f - 3.6f * difficultyRatio;
+    tripleIaiSlashChance_ = 0.36f + 0.30f * difficultyRatio;
+    tripleIaiSlashCooldownDuration_ = 8.0f - 3.4f * difficultyRatio;
+    tripleIaiSlashSpeedScale_ = 1.0f + 0.62f * difficultyRatio;
+    tripleIaiCloneLife_ = 1.20f + 0.30f * difficultyRatio;
+    tripleIaiIntroDuration_ = 1.14f - 0.44f * difficultyRatio;
+    phantomFinalLockDuration_ = 0.30f - 0.16f * difficultyRatio;
     bladeClashChance_ = 0.30f;
-    arcaneLaserChance_ = 0.46f + 0.26f * t;
-    arcaneLaserSlashFollowupChance_ = 0.60f + 0.28f * t;
-    arcaneLaserCooldownDuration_ = 5.4f - 2.5f * t;
-    arcaneLaserMinDistance_ = 5.0f - 1.35f * t;
-    arcaneLaserWarpDistance_ = 28.0f + 5.5f * t;
-    arcaneLaserSlashMinDistance_ = 8.8f - 2.4f * t;
-    cataclysmLaserChance_ = 0.24f + 0.22f * t;
-    cataclysmLaserCooldownDuration_ = 15.0f - 5.0f * t;
-    cataclysmLaserMinDistance_ = 9.0f - 2.0f * t;
-    cataclysmLaserWarpDistance_ = 34.0f + 6.0f * t;
-    sharedRangedAttackCooldownDuration_ = 5.1f - 2.5f * t;
-    rangedAttackChainLockoutDuration_ = 9.0f - 2.3f * t;
+}
+
+void Enemy::ConfigureRangedTuning(float difficultyRatio) {
+    arcaneLaserChance_ = 0.46f + 0.26f * difficultyRatio;
+    arcaneLaserSlashFollowupChance_ = 0.60f + 0.28f * difficultyRatio;
+    arcaneLaserCooldownDuration_ = 5.4f - 2.5f * difficultyRatio;
+    arcaneLaserMinDistance_ = 5.0f - 1.35f * difficultyRatio;
+    arcaneLaserWarpDistance_ = 28.0f + 5.5f * difficultyRatio;
+    arcaneLaserSlashMinDistance_ = 8.8f - 2.4f * difficultyRatio;
+    cataclysmLaserChance_ = 0.24f + 0.22f * difficultyRatio;
+    cataclysmLaserCooldownDuration_ = 15.0f - 5.0f * difficultyRatio;
+    cataclysmLaserMinDistance_ = 9.0f - 2.0f * difficultyRatio;
+    cataclysmLaserWarpDistance_ = 34.0f + 6.0f * difficultyRatio;
+    sharedRangedAttackCooldownDuration_ = 5.1f - 2.5f * difficultyRatio;
+    rangedAttackChainLockoutDuration_ = 9.0f - 2.3f * difficultyRatio;
     rangedAttackChainLockoutThreshold_ = 5;
-    config_.attacks.arcaneLaser.range = 28.0f + 5.0f * t;
-    config_.attacks.arcaneLaser.radius = 0.44f + 0.10f * t;
-    config_.attacks.arcaneLaser.profile.chargeTime = 0.98f - 0.25f * t;
+    config_.attacks.arcaneLaser.range = 28.0f + 5.0f * difficultyRatio;
+    config_.attacks.arcaneLaser.radius = 0.44f + 0.10f * difficultyRatio;
+    config_.attacks.arcaneLaser.profile.chargeTime =
+        0.98f - 0.25f * difficultyRatio;
     config_.attacks.arcaneLaser.profile.timing.trackingEndTime =
-        0.60f - 0.17f * t;
+        0.60f - 0.17f * difficultyRatio;
     config_.attacks.arcaneLaser.profile.timing.activeStartTime = 0.0f;
     config_.attacks.arcaneLaser.profile.timing.activeEndTime =
-        2.85f - 0.32f * t;
+        2.85f - 0.32f * difficultyRatio;
     config_.attacks.arcaneLaser.profile.timing.recoveryStartTime =
         config_.attacks.arcaneLaser.profile.timing.activeEndTime;
     config_.attacks.arcaneLaser.profile.timing.totalTime =
         config_.attacks.arcaneLaser.profile.timing.activeEndTime +
         config_.attacks.arcaneLaser.recoveryDuration;
-    config_.attacks.cataclysmLaser.range = 39.0f + 9.0f * t;
-    config_.attacks.cataclysmLaser.radius = 1.85f + 0.70f * t;
-    config_.attacks.cataclysmLaser.profile.chargeTime = 0.50f - 0.09f * t;
+    config_.attacks.cataclysmLaser.range = 39.0f + 9.0f * difficultyRatio;
+    config_.attacks.cataclysmLaser.radius =
+        1.85f + 0.70f * difficultyRatio;
+    config_.attacks.cataclysmLaser.profile.chargeTime =
+        0.50f - 0.09f * difficultyRatio;
     config_.attacks.cataclysmLaser.profile.timing.trackingEndTime =
-        0.78f - 0.20f * t;
+        0.78f - 0.20f * difficultyRatio;
     config_.attacks.cataclysmLaser.profile.timing.activeStartTime = 0.0f;
     config_.attacks.cataclysmLaser.profile.timing.activeEndTime =
-        4.70f - 0.28f * t;
+        4.70f - 0.28f * difficultyRatio;
     config_.attacks.cataclysmLaser.profile.timing.recoveryStartTime =
         config_.attacks.cataclysmLaser.profile.timing.activeEndTime;
     config_.attacks.cataclysmLaser.profile.timing.totalTime =
         config_.attacks.cataclysmLaser.profile.timing.activeEndTime +
         config_.attacks.cataclysmLaser.recoveryDuration;
+}
 
-    stalkDurationMin_ = 0.54f - 0.36f * t;
-    stalkDurationMax_ = 1.14f - 0.70f * t;
-    stalkMoveSpeed_ = 1.24f + 2.05f * t;
-    stalkPounceDistanceBonus_ = 0.55f + 0.78f * t;
-    stalkPounceMinTime_ = 0.23f - 0.13f * t;
+void Enemy::ConfigureMovementTuning(float difficultyRatio) {
+    stalkDurationMin_ = 0.54f - 0.36f * difficultyRatio;
+    stalkDurationMax_ = 1.14f - 0.70f * difficultyRatio;
+    stalkMoveSpeed_ = 1.24f + 2.05f * difficultyRatio;
+    stalkPounceDistanceBonus_ = 0.55f + 0.78f * difficultyRatio;
+    stalkPounceMinTime_ = 0.23f - 0.13f * difficultyRatio;
     stalkPounceChance_ = 0.64f;
-    warpApproachFrontDistance_ = 2.64f - 0.62f * t;
-    warpApproachBackDistance_ = 2.44f - 0.56f * t;
+    warpApproachFrontDistance_ = 2.64f - 0.62f * difficultyRatio;
+    warpApproachBackDistance_ = 2.44f - 0.56f * difficultyRatio;
     warpNearChance_ = 0.18f;
     warpFarChance_ = 0.70f;
-    warpCutInDistance_ = 5.3f - 2.20f * t;
+    warpCutInDistance_ = 5.3f - 2.20f * difficultyRatio;
     warpCutInChance_ = 0.95f;
     warpFeintChance_ = 0.42f;
-    warpFeintEndTimeScale_ = 0.66f - 0.32f * t;
-    warpTrailLife_ = 0.28f + 0.10f * t;
-    warpTrailScaleMax_ = 0.84f + 0.48f * t;
-    hitReactionDuration_ = 0.16f - 0.06f * highPressure;
-    counterRecoilDuration_ = 0.62f - 0.22f * highPressure;
+    warpFeintEndTimeScale_ = 0.66f - 0.32f * difficultyRatio;
+    warpTrailLife_ = 0.28f + 0.10f * difficultyRatio;
+    warpTrailScaleMax_ = 0.84f + 0.48f * difficultyRatio;
+    hitReactionDuration_ = 0.16f - 0.06f * difficultyRatio;
+    counterRecoilDuration_ = 0.62f - 0.22f * difficultyRatio;
+}
+
+void Enemy::SetDifficulty(float difficulty) {
+    difficulty_ = std::clamp(difficulty, 0.0f, 9.0f);
+    const float effectiveDifficulty = EffectiveCombatDifficulty(difficulty_);
+    const float difficultyRatio = DifficultyRatio(difficulty_);
+
+    config_ = EnemyConfig{};
+    ConfigureAttackProfiles(effectiveDifficulty, difficultyRatio);
+    ConfigureMeleeTuning(difficultyRatio);
+    ConfigureRangedTuning(difficultyRatio);
+    ConfigureMovementTuning(difficultyRatio);
 
     ValidateAllTimings();
     if (!deathFinished_) {

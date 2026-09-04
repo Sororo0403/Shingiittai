@@ -162,7 +162,11 @@ class GPUParticleSystem {
     /// 空きリスト用バッファを生成する
     /// </summary>
     void CreateFreeListBuffers();
+    bool CreateFreeListStorage(UINT bufferSize);
+    void CreateFreeListIndexStorage();
     void CreateActiveDrawBuffers();
+    bool CreateActiveIndexStorage(UINT bufferSize);
+    void CreateActiveCounterAndDrawArgsStorage();
 
     /// <summary>
     /// 更新・描画用の定数バッファを生成する

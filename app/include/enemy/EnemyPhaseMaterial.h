@@ -8,6 +8,9 @@
 class ModelManager;
 class TextureManager;
 
+/// <summary>
+/// ボスフェーズごとに切り替えるモデル素材を保持する
+/// </summary>
 struct EnemyPhaseMaterialSet {
     static constexpr uint32_t kTextureSize = 512;
 

@@ -4,6 +4,9 @@
 #include <algorithm>
 #include <cmath>
 
+/// <summary>
+/// 鍔迫り合い決着時の時間変換と敗北姿勢を計算する
+/// </summary>
 namespace BladeClashCinematic {
 
 constexpr float kPi = 3.14159265f;
@@ -24,6 +27,9 @@ constexpr float kLossSlideStartTime = 1.12f;
 constexpr float kLossWallImpactTime = 1.58f;
 constexpr float kLossTotalRetreat = 15.80f;
 
+/// <summary>
+/// 鍔迫り合い敗北演出中の位置と各アニメーション進捗を保持する
+/// </summary>
 struct LossPose {
     DirectX::XMFLOAT3 position = {0.0f, 0.0f, 0.0f};
     float leanT = 0.0f;

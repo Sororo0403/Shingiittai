@@ -7,6 +7,9 @@
 #include <cstdint>
 #include <functional>
 
+/// <summary>
+/// 複数シーンで共有する設定、音声、ハンドトラッキング連携を提供する
+/// </summary>
 namespace AppSceneServices {
 using StartCallback = std::function<bool()>;
 using BoolCallback = std::function<bool()>;
@@ -43,6 +46,9 @@ inline std::array<float, 2> cameraHandVerticalSensitivity = {0.5f, 0.5f};
 inline std::array<float, 2> cameraHandHorizontalSensitivity = {0.5f, 0.5f};
 inline float mouseSlashSensitivity = 0.5f;
 
+/// <summary>
+/// ハンド入力の追従性、斬撃判定、異常値抑制に使う詳細設定
+/// </summary>
 struct CameraAdvancedSettings {
     float singleHandLeftThreshold = 0.45f;
     float singleHandRightThreshold = 0.55f;
@@ -91,6 +97,9 @@ struct CameraAdvancedSettings {
 
 inline CameraAdvancedSettings cameraAdvancedSettings{};
 
+/// <summary>
+/// 共通メニューで再生する操作効果音
+/// </summary>
 enum class MenuSe {
     Select,
     Selected,

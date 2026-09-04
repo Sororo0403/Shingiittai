@@ -380,6 +380,11 @@ void SoundTestScene::DrawPanel(float screenWidth, float screenHeight) {
               titleAreaY + (titleAreaH - titleH) * 0.5f, titleScale,
               0.94f * intro);
 
+    DrawTrackCard(x, y, panelW, panelH, intro);
+}
+
+void SoundTestScene::DrawTrackCard(float x, float y, float panelW,
+                                   float panelH, float intro) {
     const bool playingCurrent =
         playingIndex_ == selectedIndex_ && !playbackPaused_;
     const XMFLOAT4 cardAccent = playingCurrent

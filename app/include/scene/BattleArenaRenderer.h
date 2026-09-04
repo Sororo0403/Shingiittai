@@ -6,6 +6,9 @@
 class ModelManager;
 class TextureManager;
 
+/// <summary>
+/// バトルアリーナを構成するモデルとテクスチャの識別子を保持する
+/// </summary>
 struct BattleArenaModelIds {
     uint32_t arenaNoiseTextureId = 0;
     uint32_t arenaFloorModelId = 0;
@@ -29,9 +32,15 @@ struct BattleArenaModelIds {
     uint32_t chargeWeakPointModelId = 0;
 };
 
+/// <summary>
+/// アリーナ描画に必要なモデルを遅延生成し、共有識別子を返す
+/// </summary>
 const BattleArenaModelIds &EnsureBattleArenaModels(ModelManager *model,
                                                    TextureManager *texture);
 
+/// <summary>
+/// 指定した構築進捗と表示モードでバトルアリーナを描画する
+/// </summary>
 void DrawBattleArena(ModelManager *model, const Camera &camera,
                      const BattleArenaModelIds &ids, float time,
                      float floorBuild = 1.0f, float tileBuild = 1.0f,

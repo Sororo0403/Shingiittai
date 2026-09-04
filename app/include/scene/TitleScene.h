@@ -8,13 +8,31 @@
 
 class Input;
 
+/// <summary>
+/// タイトル表示、メニュー遷移、終了確認を管理する
+/// </summary>
 class TitleScene : public BaseScene {
   public:
+    /// <summary>
+    /// ~TitleSceneに対応する公開処理を実行する
+    /// </summary>
     ~TitleScene() override;
 
+    /// <summary>
+    /// 使用するリソースと初期状態を準備する
+    /// </summary>
     void Initialize(const SceneContext &ctx) override;
+    /// <summary>
+    /// 入力と状態を1フレーム進める
+    /// </summary>
     void Update() override;
+    /// <summary>
+    /// 現在の状態を描画する
+    /// </summary>
     void Draw() override;
+    /// <summary>
+    /// 透明描画パスへ必要な要素を描画する
+    /// </summary>
     void DrawTransparent() override;
 
   private:

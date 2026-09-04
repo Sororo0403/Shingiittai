@@ -435,26 +435,6 @@ void HandTrackingTestScene::UpdateRangedGestureState(bool pressed,
     }
 }
 
-void HandTrackingTestScene::CalibrateNeutralFromCurrentHands() {
-    bool hasNeutral = false;
-    for (size_t i = 0; i < hands_.size(); ++i) {
-        const auto sample = handController_.GetDebugHandState(i);
-        if (sample.fresh && sample.active) {
-            calibration_.handNeutral[i] = sample.rawPalm;
-            hasNeutral = true;
-        }
-    }
-
-    calibration_.hasHandNeutral = hasNeutral;
-    handController_.SetCalibration(calibration_);
-}
-
-void HandTrackingTestScene::ResetCalibration() {
-    calibration_ = {};
-    calibration_.controlType = InputControlType::Hand;
-    handController_.SetCalibration(calibration_);
-}
-
 bool HandTrackingTestScene::IsHandTrackingReady() const {
     return AppSceneServices::IsHandTrackingReady();
 }

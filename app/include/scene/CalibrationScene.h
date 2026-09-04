@@ -8,13 +8,31 @@
 #include <cstdint>
 #include <string>
 
+/// <summary>
+/// 選択した入力方式に必要な初期キャリブレーションを進行する
+/// </summary>
 class CalibrationScene : public BaseScene {
   public:
+    /// <summary>
+    /// CalibrationSceneに対応する公開処理を実行する
+    /// </summary>
     explicit CalibrationScene(InputControlType controlType);
 
+    /// <summary>
+    /// 使用するリソースと初期状態を準備する
+    /// </summary>
     void Initialize(const SceneContext &ctx) override;
+    /// <summary>
+    /// 入力と状態を1フレーム進める
+    /// </summary>
     void Update() override;
+    /// <summary>
+    /// 現在の状態を描画する
+    /// </summary>
     void Draw() override;
+    /// <summary>
+    /// 透明描画パスへ必要な要素を描画する
+    /// </summary>
     void DrawTransparent() override;
 
   private:

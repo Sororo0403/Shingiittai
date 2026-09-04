@@ -1,5 +1,6 @@
 #pragma once
 
+/// <summary>エンジン標準シェーダーのリポジトリ相対パスを提供する</summary>
 namespace ShaderPaths {
 
 inline constexpr const wchar_t *SpriteVS =

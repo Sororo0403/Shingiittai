@@ -10,13 +10,31 @@
 
 class DirectXCommon;
 
+/// <summary>
+/// 剣先の履歴から半透明の斬撃軌跡を構築して描画する
+/// </summary>
 class SwordTrailRenderer {
   public:
+    /// <summary>
+    /// 使用するリソースと初期状態を準備する
+    /// </summary>
     void Initialize(DirectXCommon *dxCommon);
+    /// <summary>
+    /// Resetが管理する状態を初期値へ戻す
+    /// </summary>
     void Reset();
 
+    /// <summary>
+    /// 入力と状態を1フレーム進める
+    /// </summary>
     void Update(const Player &player, float deltaTime);
+    /// <summary>
+    /// SuppressSlashUntilInactiveに対応する処理を一時的に抑制する
+    /// </summary>
     void SuppressSlashUntilInactive(size_t swordIndex);
+    /// <summary>
+    /// 現在の状態を描画する
+    /// </summary>
     void Draw(const Camera &camera);
 
   private:

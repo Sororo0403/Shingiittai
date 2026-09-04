@@ -130,12 +130,6 @@
     <Filter Include="Source Files\scene">
       <UniqueIdentifier>{4b6c6162-2d8e-9803-3ac2-e0f5c0fb33de}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\effect">
-      <UniqueIdentifier>{db0d5230-49b9-4100-829e-6f51f5441f8f}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Header Files\effect">
-      <UniqueIdentifier>{f3a6d2b6-7a67-4667-9218-1dbf493b2174}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\scene\CameraPreviewReceiver.cpp">
@@ -155,9 +149,6 @@
     </ClCompile>
     <ClCompile Include="src\scene\SoundTestScene.cpp">
       <Filter>Source Files\scene</Filter>
-    </ClCompile>
-    <ClCompile Include="src\effect\EffectManager.cpp">
-      <Filter>Source Files\effect</Filter>
     </ClCompile>
     <ClCompile Include="src\scene\BattleResultScene.cpp">
       <Filter>Source Files\scene</Filter>
@@ -281,12 +272,6 @@
     </ClInclude>
     <ClInclude Include="include\scene\SoundTestScene.h">
       <Filter>Header Files\scene</Filter>
-    </ClInclude>
-    <ClInclude Include="include\effect\EffectAsset.h">
-      <Filter>Header Files\effect</Filter>
-    </ClInclude>
-    <ClInclude Include="include\effect\EffectManager.h">
-      <Filter>Header Files\effect</Filter>
     </ClInclude>
     <ClInclude Include="include\scene\BattleResultScene.h">
       <Filter>Header Files\scene</Filter>

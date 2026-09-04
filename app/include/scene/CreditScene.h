@@ -7,6 +7,9 @@
 #include <string>
 #include <vector>
 
+/// <summary>
+/// クレジット項目の表示とスクロール、復帰先への遷移を管理する
+/// </summary>
 class CreditScene : public BaseScene {
   public:
     enum class ReturnTarget {
@@ -15,11 +18,26 @@ class CreditScene : public BaseScene {
         TutorialSelect,
     };
 
+    /// <summary>
+    /// CreditSceneに対応する公開処理を実行する
+    /// </summary>
     explicit CreditScene(ReturnTarget returnTarget = ReturnTarget::Title);
+    /// <summary>
+    /// ~CreditSceneに対応する公開処理を実行する
+    /// </summary>
     ~CreditScene() override;
 
+    /// <summary>
+    /// 使用するリソースと初期状態を準備する
+    /// </summary>
     void Initialize(const SceneContext &ctx) override;
+    /// <summary>
+    /// 入力と状態を1フレーム進める
+    /// </summary>
     void Update() override;
+    /// <summary>
+    /// 現在の状態を描画する
+    /// </summary>
     void Draw() override;
 
   private:

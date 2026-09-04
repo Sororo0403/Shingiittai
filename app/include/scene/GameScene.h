@@ -20,6 +20,9 @@
 #include <string>
 #include <vector>
 
+/// <summary>
+/// プレイヤーと敵の戦闘、カメラ、演出、勝敗遷移を統括する
+/// </summary>
 class GameScene : public BaseScene {
   public:
     enum class Mode {
@@ -31,11 +34,20 @@ class GameScene : public BaseScene {
         Tutorial,
     };
 
+    /// <summary>
+    /// GameSceneに対応する公開処理を実行する
+    /// </summary>
     explicit GameScene(const SwordInputCalibration &inputCalibration = {},
                        float combatDifficulty = 5.0f)
         : inputCalibration_(inputCalibration),
           combatDifficulty_(combatDifficulty) {}
+    /// <summary>
+    /// GameSceneに対応する公開処理を実行する
+    /// </summary>
     explicit GameScene(bool titleDemoMode) : titleDemoMode_(titleDemoMode) {}
+    /// <summary>
+    /// GameSceneに対応する公開処理を実行する
+    /// </summary>
     explicit GameScene(Mode mode)
         : titleDemoMode_(mode == Mode::TitleDemo),
           backgroundOnlyMode_(mode == Mode::BackgroundOnly ||
@@ -43,6 +55,9 @@ class GameScene : public BaseScene {
           readyPreviewMode_(mode == Mode::ReadyPreview),
           tutorialBackgroundMode_(mode == Mode::TutorialBackgroundOnly ||
                                   mode == Mode::Tutorial) {}
+    /// <summary>
+    /// GameSceneに対応する公開処理を実行する
+    /// </summary>
     GameScene(const SwordInputCalibration &inputCalibration, Mode mode)
         : inputCalibration_(inputCalibration),
           titleDemoMode_(mode == Mode::TitleDemo),
@@ -52,6 +67,9 @@ class GameScene : public BaseScene {
           tutorialBackgroundMode_(mode == Mode::TutorialBackgroundOnly ||
                                   mode == Mode::Tutorial),
           tutorialMode_(mode == Mode::Tutorial) {}
+    /// <summary>
+    /// GameSceneに対応する公開処理を実行する
+    /// </summary>
     GameScene(const SwordInputCalibration &inputCalibration,
               float combatDifficulty, Mode mode)
         : inputCalibration_(inputCalibration),
@@ -63,12 +81,30 @@ class GameScene : public BaseScene {
           tutorialBackgroundMode_(mode == Mode::TutorialBackgroundOnly ||
                                   mode == Mode::Tutorial),
           tutorialMode_(mode == Mode::Tutorial) {}
+    /// <summary>
+    /// ~GameSceneに対応する公開処理を実行する
+    /// </summary>
     ~GameScene() override;
 
+    /// <summary>
+    /// 使用するリソースと初期状態を準備する
+    /// </summary>
     void Initialize(const SceneContext &ctx) override;
+    /// <summary>
+    /// 入力と状態を1フレーム進める
+    /// </summary>
     void Update() override;
+    /// <summary>
+    /// 現在の状態を描画する
+    /// </summary>
     void Draw() override;
+    /// <summary>
+    /// 透明描画パスへ必要な要素を描画する
+    /// </summary>
     void DrawTransparent() override;
+    /// <summary>
+    /// SetReadyPreviewHeatに対応する状態を設定する
+    /// </summary>
     void SetReadyPreviewHeat(float heat);
 
   private:
@@ -90,9 +126,13 @@ class GameScene : public BaseScene {
     void UpdateReadyPreviewCamera(float deltaTime);
     void UpdateSceneLighting();
     void EmitReadyPreviewHeatParticles(float deltaTime);
+    void EmitIntenseReadyPreviewParticles(
+        float heat, float danger, float side, float depth, float wave,
+        const DirectX::XMFLOAT3 &enemyPosition,
+        const DirectX::XMFLOAT3 &corePosition,
+        const DirectX::XMFLOAT3 &upwardDirection);
     void DrawArena();
     void DrawDistantHazardBackdrop(float buildProgress);
-    void DrawBladeClashFinishBackdrop();
     float BackgroundBuildProgress(float delay, float duration) const;
     float BattleIntroWorldRevealProgress() const;
     void DrawVictoryFlash();
@@ -135,6 +175,17 @@ class GameScene : public BaseScene {
     void UpdateVictorySequence(float deltaTime);
     void EmitVictoryEnemyVanishExplosion();
     void DrawVictoryEnemyVanishExplosionBillboards();
+    struct VictoryBillboardPatch {
+        uint32_t modelId = 0;
+        DirectX::XMFLOAT3 offset{};
+        DirectX::XMFLOAT2 scale{};
+        float roll = 0.0f;
+        float delay = 0.0f;
+        bool fire = false;
+    };
+    void DrawVictoryBillboardPatch(const VictoryBillboardPatch &patch,
+                                   const DirectX::XMFLOAT3 &center, float yaw,
+                                   float age, float alpha);
     void BeginDefeatSequence();
     void UpdateDefeatSequence(float deltaTime);
     void SyncEnemyAnimation();
@@ -155,7 +206,13 @@ class GameScene : public BaseScene {
     void ApplyEnemyProceduralAnimation();
     void SetEnemyAnimationFrozen(bool frozen);
     void UpdateCombat(float gameplayDeltaTime);
+    bool UpdateBladeClashPlayerSlashes();
     void InitializePostEffects(const SceneContext &ctx);
+    void InitializeBattleActors(DirectXCommon *dx, TextureManager *texture);
+    void InitializeBattleArenaModels(ModelManager *model,
+                                     uint32_t arenaStoneTextureId);
+    void BindSharedBattleArenaModels();
+    void ResetBattleSessionState(ModelManager *model);
     void LoadBattleSounds(const SceneContext &ctx);
     void InitializeBattleCameraState(ModelManager *model);
     void InitializeHandTracking(const SceneContext &ctx);
@@ -234,6 +291,21 @@ class GameScene : public BaseScene {
     bool UpdateIntroBattleCamera(const BattleCameraContext &cameraContext);
     bool UpdateDefeatBattleCamera(const BattleCameraContext &cameraContext);
     bool UpdateBladeClashFinishCamera(const BattleCameraContext &cameraContext);
+    bool UpdateBladeClashWinFinishCamera(
+        const BattleCameraContext &cameraContext,
+        const DirectX::XMFLOAT2 &line, const DirectX::XMFLOAT3 &right,
+        float strike, float hold);
+    void ApplyBladeClashWinPrepCamera(
+        const DirectX::XMFLOAT2 &line, const DirectX::XMFLOAT3 &right,
+        float cameraSnap, const DirectX::XMFLOAT3 &guardBreakCamera,
+        const DirectX::XMFLOAT3 &guardBreakLookAt,
+        DirectX::XMFLOAT3 &cameraPosition, DirectX::XMFLOAT3 &lookAt) const;
+    void ApplyBladeClashFinishCameraPose(
+        const DirectX::XMFLOAT2 &line, DirectX::XMFLOAT3 cameraPosition,
+        DirectX::XMFLOAT3 lookAt, float targetFov);
+    bool UpdateBladeClashLossFinishCamera(
+        const DirectX::XMFLOAT2 &line, const DirectX::XMFLOAT3 &right,
+        const DirectX::XMFLOAT3 &center, float strike, float hold);
     void ConfigureBattleCameraFov(const BattleCameraContext &cameraContext);
     bool UpdateActiveBladeClashCamera(const BattleCameraContext &cameraContext);
     bool UpdatePlayerViewBattleCamera(const BattleCameraContext &cameraContext);
@@ -244,6 +316,12 @@ class GameScene : public BaseScene {
     ComputeThirdPersonCameraPosition(const BattleCameraContext &cameraContext,
                                      const DirectX::XMFLOAT3 &forward,
                                      const DirectX::XMFLOAT3 &right);
+    DirectX::XMFLOAT3
+    ComputeLockOnCameraPosition(const BattleCameraContext &cameraContext);
+    DirectX::XMFLOAT3 ComputeFreeCameraPosition(
+        const BattleCameraContext &cameraContext,
+        const DirectX::XMFLOAT3 &cameraTargetBase,
+        const DirectX::XMFLOAT3 &forward, const DirectX::XMFLOAT3 &right);
     DirectX::XMFLOAT3
     ComputeThirdPersonLookAt(const BattleCameraContext &cameraContext,
                              const DirectX::XMFLOAT3 &cameraTargetBase,
@@ -312,6 +390,9 @@ class GameScene : public BaseScene {
     void UpdateBladeClashFinish(float deltaTime);
     void EmitBladeClashWinGuardBreak();
     void UpdateBladeClashWinFinish(float bladeClashWinActionTimer);
+    void UpdateBladeClashWinPose(float bladeClashWinActionTimer);
+    void UpdateBladeClashWinActionPose(float bladeClashWinActionTimer,
+                                       float finishYaw);
     void UpdateBladeClashLossFinish();
     float AdvanceBladeClashFinishTimer(float deltaTime);
     void ApplyBladeClashFinishPostProcess();
@@ -386,8 +467,6 @@ class GameScene : public BaseScene {
                                        const DirectX::XMFLOAT3 &position,
                                        const DirectX::XMFLOAT3 &direction,
                                        bool hitEnemy);
-    bool IsArcaneProjectileInDeflectRange() const;
-    bool IsArcaneProjectileSlashAligned(const Sword &sword) const;
     DirectX::XMFLOAT2 GetArcaneProjectileCueDirection() const;
     uint32_t GetCurrentEnemyTextureId() const;
     void ApplyBulletTextureToModel(uint32_t textureId);

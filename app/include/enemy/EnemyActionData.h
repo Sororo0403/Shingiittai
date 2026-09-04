@@ -1,6 +1,9 @@
 #pragma once
 #include <DirectXMath.h>
 
+/// <summary>
+/// 敵が実行できる行動の種類
+/// </summary>
 enum class ActionKind {
     None,
     Smash,
@@ -12,6 +15,9 @@ enum class ActionKind {
     CataclysmLaser,
 };
 
+/// <summary>
+/// 攻撃の予備動作、持続、硬直、威力をまとめた調整値
+/// </summary>
 struct AttackParam {
     float damage = 0.0f;
     float knockback = 0.0f;

@@ -217,6 +217,25 @@ BattleResultScene::BattleResultScene(
 
 void BattleResultScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
+    ResetResultState();
+
+    if (IsHandControl(inputCalibration_.controlType)) {
+        handController_.SetCalibration(inputCalibration_);
+    }
+    if (resultKind_ == ResultKind::Clear) {
+        InitializeWorld();
+    }
+    if (ctx_->rendering.postEffectManager != nullptr) {
+        ctx_->rendering.postEffectManager->SetBaseProfile(PostProcessProfile{});
+    }
+    LoadResultImages();
+    ConfigureResultGlyphMetrics();
+    if (resultKind_ == ResultKind::Clear) {
+        RegisterClearRanking();
+    }
+}
+
+void BattleResultScene::ResetResultState() {
     sceneTime_ = 0.0f;
     clearRevealTimer_ = 0.0f;
     clearRevealPhase_ = ClearRevealPhase::Time;
@@ -230,18 +249,9 @@ void BattleResultScene::Initialize(const SceneContext &ctx) {
     clearActionButtonIndex_ = 1;
     returnTitleConfirmIndex_ = 1;
     celebrationParticlesReady_ = false;
+}
 
-    if (IsHandControl(inputCalibration_.controlType)) {
-        handController_.SetCalibration(inputCalibration_);
-    }
-
-    if (resultKind_ == ResultKind::Clear) {
-        InitializeWorld();
-    }
-    if (ctx_->rendering.postEffectManager != nullptr) {
-        ctx_->rendering.postEffectManager->SetBaseProfile(PostProcessProfile{});
-    }
-
+void BattleResultScene::LoadResultImages() {
     missionCompleteLabel_ =
         LoadTextureImage(L"app/resources/ui/result/mplus/mission_complete.png");
     clearTimeLabel_ =
@@ -293,6 +303,9 @@ void BattleResultScene::Initialize(const SceneContext &ctx) {
         LoadTextureImage(L"app/resources/ui/result/mplus/glyphs/char_dash.png");
     secondImage_ =
         LoadTextureImage(L"app/resources/ui/result/mplus/glyphs/char_s.png");
+}
+
+void BattleResultScene::ConfigureResultGlyphMetrics() {
     const float digitInkLeft[10] = {14.0f, 16.0f, 15.0f, 16.0f, 12.0f,
                                     16.0f, 14.0f, 16.0f, 14.0f, 14.0f};
     const float digitInkRight[10] = {50.0f, 41.0f, 48.0f, 48.0f, 50.0f,
@@ -321,10 +334,6 @@ void BattleResultScene::Initialize(const SceneContext &ctx) {
     secondImage_.inkRight = 43.0f;
     secondImage_.inkTop = 33.0f;
     secondImage_.inkBottom = 67.0f;
-
-    if (resultKind_ == ResultKind::Clear) {
-        RegisterClearRanking();
-    }
 }
 
 void BattleResultScene::Update() {
@@ -431,33 +440,6 @@ void BattleResultScene::UpdateClearActionButtons(Input &input) {
         AppSceneServices::PlayMenuSe(*ctx_, AppSceneServices::MenuSe::Selected);
         returnTitleFadeActive_ = true;
         returnTitleFadeTimer_ = 0.0f;
-    }
-}
-
-void BattleResultScene::UpdateHandResultInput(float deltaTime) {
-    handController_.Update(deltaTime);
-
-    const float speed = (std::max)(handController_.GetMotionSpeed(0),
-                                   handController_.GetMotionSpeed(1));
-    if (handSwingArmed_ && speed >= kHandSwingStartSpeed) {
-        ++handSwingCount_;
-        handSwingArmed_ = false;
-    }
-    if (speed <= kHandSwingResetSpeed) {
-        handSwingArmed_ = true;
-        handIdleTimer_ += deltaTime;
-    } else {
-        handIdleTimer_ = 0.0f;
-    }
-
-    if (handSwingCount_ >= kRequiredHandSwings) {
-        sceneManager_->ChangeScene(
-            std::make_unique<GameScene>(inputCalibration_, combatDifficulty_));
-        return;
-    }
-
-    if (handIdleTimer_ >= kHandIdleMenuSeconds) {
-        BeginReturnTitleConfirm();
     }
 }
 
@@ -829,15 +811,20 @@ void BattleResultScene::DrawResultStage() {
     }
 
     const float pulse = 0.5f + 0.5f * std::sinf(sceneTime_ * 2.2f);
-    constexpr float kPatternSpacing = 3.55f;
-    constexpr float kLaneSpacing = 4.25f;
-
     Transform floor{};
     floor.position = {0.0f, -0.04f, 0.0f};
     floor.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
     floor.scale = {180.0f, 180.0f, 1.0f};
     model->Draw(resultArenaFloorModelId_, floor, camera_);
 
+    DrawResultFloorPattern(model);
+    DrawResultArchitecture(model);
+    DrawResultGlowGrid(model, pulse);
+}
+
+void BattleResultScene::DrawResultFloorPattern(ModelManager *model) {
+    constexpr float kPatternSpacing = 3.55f;
+    constexpr float kLaneSpacing = 4.25f;
     ModelDrawEffect fieldEffect{};
     fieldEffect.enabled = true;
     fieldEffect.additiveBlend = false;
@@ -888,7 +875,9 @@ void BattleResultScene::DrawResultStage() {
     model->DrawInstanced(resultArenaSpokeModelId_, fieldTiles.data(),
                          static_cast<uint32_t>(fieldTiles.size()), camera_);
     model->ClearDrawEffect();
+}
 
+void BattleResultScene::DrawResultArchitecture(ModelManager *model) {
     Transform center{};
     center.position = {0.0f, 0.006f, 0.0f};
     center.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
@@ -938,7 +927,10 @@ void BattleResultScene::DrawResultStage() {
     }
     model->DrawInstanced(resultArenaTowerModelId_, towers.data(),
                          static_cast<uint32_t>(towers.size()), camera_);
+}
 
+void BattleResultScene::DrawResultGlowGrid(ModelManager *model, float pulse) {
+    constexpr float kPatternSpacing = 3.55f;
     ModelDrawEffect lineEffect{};
     lineEffect.enabled = true;
     lineEffect.additiveBlend = true;

@@ -370,57 +370,6 @@ ActionKind Enemy::SelectNearPressureAction() const {
     }
 }
 
-bool Enemy::TryBeginWarpAction(float chance) {
-    chance *= TechniqueUnlock(BossPhase::Phase2);
-    if (lastActionKind_ == ActionKind::Warp) {
-        chance *= 0.35f;
-    }
-    chance = std::clamp(chance, 0.0f, 1.0f);
-    const float roll =
-        static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-    if (roll >= chance || !PrepareWarpContext()) {
-        return false;
-    }
-
-    BeginAction(ActionKind::Warp, ActionStep::Start);
-    return true;
-}
-
-bool Enemy::TryBeginQuickSlash(float chance) {
-    const float unlock = TechniqueUnlock(BossPhase::Phase2);
-    if (unlock <= 0.0f) {
-        return false;
-    }
-    if (!IsPlayerInMeleeFront()) {
-        return false;
-    }
-
-    if (lastActionKind_ == ActionKind::Smash ||
-        lastActionKind_ == ActionKind::Sweep) {
-        chance *= 0.45f;
-    }
-    if (phase_ != BossPhase::Phase1) {
-        chance *= 0.72f;
-    }
-    if (phase_ == BossPhase::Phase3) {
-        chance *= 0.68f;
-    }
-    chance *= unlock;
-    chance = std::clamp(chance, 0.0f, 0.42f);
-
-    const float roll =
-        static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-    if (roll >= chance) {
-        return false;
-    }
-
-    BeginAction(SelectNearPressureAction(), ActionStep::Charge);
-    quickSlashActive_ = true;
-    warpFeintDecisionMade_ = true;
-    directionFeintDecisionMade_ = true;
-    return true;
-}
-
 bool Enemy::TryBeginFarWarpSlash(float chance) {
     if (phase_ == BossPhase::Phase3) {
         return TryBeginTripleIaiSlash(chance);
@@ -490,43 +439,6 @@ void Enemy::BeginDifficultyNineOpeningCutIn(
     BeginAction(ActionKind::Warp, ActionStep::Start);
 }
 
-bool Enemy::TryBeginPhantomWarpSkill(float chance) {
-    const float unlock = TechniqueUnlock(BossPhase::Phase3);
-    if (unlock <= 0.0f) {
-        return false;
-    }
-    if (phantomWarpCooldown_ > 0.0f || deathFinished_ || isDying_ ||
-        phaseTransitionActive_) {
-        return false;
-    }
-
-    const float distance = GetDistanceToPlayer();
-    if (distance < 1.65f || distance > 9.8f) {
-        return false;
-    }
-
-    if (lastActionKind_ == ActionKind::Warp) {
-        chance *= 0.42f;
-    }
-    if (phase_ == BossPhase::Phase3) {
-        chance += 0.12f;
-    } else if (phase_ == BossPhase::Phase2) {
-        chance += 0.06f;
-    }
-    chance *= unlock;
-    chance = std::clamp(chance, 0.0f, 0.72f);
-
-    const float roll =
-        static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-    if (roll >= chance) {
-        return false;
-    }
-
-    BeginPhantomWarpStep(2, false, ActionKind::None);
-    phantomWarpCooldown_ = phantomWarpCooldownDuration_;
-    return true;
-}
-
 bool Enemy::TryBeginTripleIaiSlash(float chance) {
     const float unlock = TechniqueUnlock(BossPhase::Phase3);
     if (unlock <= 0.0f || tripleIaiSlashCooldown_ > 0.0f ||
@@ -561,12 +473,6 @@ bool Enemy::TryBeginTripleIaiSlash(float chance) {
     RegisterRangedAttackCommit();
     BeginTripleIaiSlashIntro();
     return true;
-}
-
-bool Enemy::TryBeginBladeClash(float chance) {
-    // Blade clash is reserved for the phase 2 transition event.
-    (void)chance;
-    return false;
 }
 
 bool Enemy::TryBeginArcaneLaser(float chance) {
@@ -607,52 +513,6 @@ bool Enemy::TryBeginArcaneLaser(float chance) {
         return false;
     }
     warp_.hasValidTarget = true;
-    RegisterRangedAttackCommit();
-    BeginAction(ActionKind::Warp, ActionStep::Start);
-    return true;
-}
-
-bool Enemy::TryBeginArcaneLaserSlashFollowup(float chance) {
-    if (phase_ == BossPhase::Phase3) {
-        return TryBeginTripleIaiSlash(chance);
-    }
-
-    const float unlock = TechniqueUnlock(BossPhase::Phase2);
-    if (unlock <= 0.0f || deathFinished_ || isDying_ ||
-        !IsRangedAttackAvailable() || phaseTransitionActive_) {
-        return false;
-    }
-
-    const float distance = GetDistanceToPlayer();
-    if (distance < arcaneLaserSlashMinDistance_) {
-        return false;
-    }
-
-    if (phase_ == BossPhase::Phase3) {
-        chance += 0.14f;
-    }
-    chance *= unlock;
-    chance = std::clamp(chance, 0.0f, 0.82f);
-
-    const float roll =
-        static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-    if (roll >= chance) {
-        return false;
-    }
-
-    ResetWarpContext();
-    warp_.isCutIn = true;
-    warp_.farSlashFollowup = true;
-    warp_.approachSlot = WarpApproachSlot::Front;
-    if (!DecideWarpTargetFarSlash(warp_.targetPos)) {
-        ResetWarpContext();
-        return false;
-    }
-
-    warp_.hasValidTarget = true;
-    warp_.followupKind = SelectNearPressureAction();
-    warp_.followupStep = ActionStep::Charge;
-    warp_.faceLivePlayerOnEnd = true;
     RegisterRangedAttackCommit();
     BeginAction(ActionKind::Warp, ActionStep::Start);
     return true;

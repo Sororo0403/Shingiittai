@@ -112,7 +112,6 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)src\particle\GPUParticleSystem.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)src\scene\SceneManager.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)src\input\Input.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)src\input\InputReplay.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)src\sound\AudioFileLoader.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)src\sound\SoundManager.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)src\sound\SoundManagerSpatial.cpp" />
@@ -218,7 +217,6 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)include\sound\SoundManager.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)include\sound\SoundVoiceCallback.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)include\input\Input.h" />
-    <ClInclude Include="$(MSBuildThisFileDirectory)include\input\InputReplayTypes.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)include\scene\AbstractSceneFactory.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)include\scene\SceneManager.h" />
     <ClInclude Include="$(MSBuildThisFileDirectory)include\model\Material.h" />

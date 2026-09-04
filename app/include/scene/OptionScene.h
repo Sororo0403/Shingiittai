@@ -9,6 +9,9 @@
 
 class Input;
 
+/// <summary>
+/// 音量やカメラなどのゲーム設定を編集する画面を管理する
+/// </summary>
 class OptionScene : public BaseScene {
   public:
     enum class ReturnTarget {
@@ -16,12 +19,30 @@ class OptionScene : public BaseScene {
         TutorialSelect,
     };
 
+    /// <summary>
+    /// OptionSceneに対応する公開処理を実行する
+    /// </summary>
     explicit OptionScene(ReturnTarget returnTarget);
+    /// <summary>
+    /// ~OptionSceneに対応する公開処理を実行する
+    /// </summary>
     ~OptionScene() override;
 
+    /// <summary>
+    /// 使用するリソースと初期状態を準備する
+    /// </summary>
     void Initialize(const SceneContext &ctx) override;
+    /// <summary>
+    /// 入力と状態を1フレーム進める
+    /// </summary>
     void Update() override;
+    /// <summary>
+    /// 現在の状態を描画する
+    /// </summary>
     void Draw() override;
+    /// <summary>
+    /// 透明描画パスへ必要な要素を描画する
+    /// </summary>
     void DrawTransparent() override {}
 
   private:
@@ -29,6 +50,14 @@ class OptionScene : public BaseScene {
         uint32_t textureId = 0;
         float width = 0.0f;
         float height = 0.0f;
+    };
+    struct PanelRowLayout {
+        float intro = 0.0f;
+        float rowX = 0.0f;
+        float barX = 0.0f;
+        float barWidth = 0.0f;
+        float barHeight = 0.0f;
+        float labelAreaWidth = 0.0f;
     };
 
     Image LoadTextureImage(const std::wstring &path);
@@ -42,6 +71,8 @@ class OptionScene : public BaseScene {
     void BeginAdjustment(int direction);
     void DrawOverlay(float screenWidth, float screenHeight);
     void DrawPanel(float screenWidth, float screenHeight);
+    void DrawPanelRow(int index, const Image &label, float value,
+                      float rowCenterY, const PanelRowLayout &layout);
     void DrawControlsPrompt(float screenWidth, float screenHeight);
     void DrawTransition(float screenWidth, float screenHeight);
     void DrawRect(float x, float y, float w, float h,

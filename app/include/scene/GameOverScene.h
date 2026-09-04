@@ -8,16 +8,37 @@
 #include <cstdint>
 #include <string>
 
+/// <summary>
+/// 敗北演出と再挑戦またはタイトル復帰の選択を管理する
+/// </summary>
 class GameOverScene : public BaseScene {
   public:
+    /// <summary>
+    /// GameOverSceneに対応する公開処理を実行する
+    /// </summary>
     GameOverScene(float elapsedTime,
                   const SwordInputCalibration &inputCalibration = {},
                   float combatDifficulty = 5.0f);
 
+    /// <summary>
+    /// 使用するリソースと初期状態を準備する
+    /// </summary>
     void Initialize(const SceneContext &ctx) override;
+    /// <summary>
+    /// 入力と状態を1フレーム進める
+    /// </summary>
     void Update() override;
+    /// <summary>
+    /// 現在の状態を描画する
+    /// </summary>
     void Draw() override;
+    /// <summary>
+    /// 透明描画パスへ必要な要素を描画する
+    /// </summary>
     void DrawTransparent() override;
+    /// <summary>
+    /// ResetDefeatCountsが管理する状態を初期値へ戻す
+    /// </summary>
     static void ResetDefeatCounts();
 
   private:
@@ -25,6 +46,17 @@ class GameOverScene : public BaseScene {
         uint32_t textureId = 0;
         float width = 0.0f;
         float height = 0.0f;
+    };
+    struct TitleFadeParticleLayout {
+        float bodyX = 0.0f;
+        float bodyY = 0.0f;
+        float bodyWidth = 0.0f;
+        float bodyHeight = 0.0f;
+        float scale = 0.0f;
+        float screenWidth = 0.0f;
+        float screenHeight = 0.0f;
+        float letterAlpha = 0.0f;
+        float crumbleStart = 0.0f;
     };
     enum class State {
         DefeatIntro,
@@ -44,6 +76,9 @@ class GameOverScene : public BaseScene {
     void DrawDefeatTitle(float screenWidth, float screenHeight);
     void DrawMenu(float screenWidth, float screenHeight);
     void DrawTitleFade(float screenWidth, float screenHeight);
+    void DrawTitleFadeBlackOverlay(float screenWidth, float screenHeight);
+    void DrawTitleFadeParticles(const Image &letter, int letterIndex,
+                                const TitleFadeParticleLayout &layout);
     void DrawImage(const Image &image, float x, float y, float scale = 1.0f,
                    float alpha = 1.0f);
     void DrawImageTint(const Image &image, float x, float y, float scale,

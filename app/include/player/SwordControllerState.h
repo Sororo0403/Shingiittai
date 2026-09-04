@@ -2,6 +2,9 @@
 #include "SwordPose.h"
 #include <DirectXMath.h>
 
+/// <summary>
+/// 剣入力コントローラーのフレーム状態を保持する
+/// </summary>
 struct SwordControllerState {
     void UpdateSlash(float motionSpeed, float dt,
                      float slashThreshold = kSlashThreshold) {

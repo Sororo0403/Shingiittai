@@ -8,6 +8,9 @@
 #include <memory>
 #include <string>
 
+/// <summary>
+/// 登録済みBGMと効果音を試聴する画面を管理する
+/// </summary>
 class SoundTestScene : public BaseScene {
   public:
     enum class ReturnTarget {
@@ -15,12 +18,30 @@ class SoundTestScene : public BaseScene {
         TutorialSelect,
     };
 
+    /// <summary>
+    /// SoundTestSceneに対応する公開処理を実行する
+    /// </summary>
     explicit SoundTestScene(ReturnTarget returnTarget);
+    /// <summary>
+    /// ~SoundTestSceneに対応する公開処理を実行する
+    /// </summary>
     ~SoundTestScene() override;
 
+    /// <summary>
+    /// 使用するリソースと初期状態を準備する
+    /// </summary>
     void Initialize(const SceneContext &ctx) override;
+    /// <summary>
+    /// 入力と状態を1フレーム進める
+    /// </summary>
     void Update() override;
+    /// <summary>
+    /// 現在の状態を描画する
+    /// </summary>
     void Draw() override;
+    /// <summary>
+    /// 透明描画パスへ必要な要素を描画する
+    /// </summary>
     void DrawTransparent() override {}
 
   private:
@@ -49,6 +70,8 @@ class SoundTestScene : public BaseScene {
     void DrawOverlay(float screenWidth, float screenHeight);
     void DrawAudioVisualizer(float screenWidth, float screenHeight);
     void DrawPanel(float screenWidth, float screenHeight);
+    void DrawTrackCard(float panelX, float panelY, float panelWidth,
+                       float panelHeight, float intro);
     void DrawMusicIcon(float centerX, float centerY, float size, float alpha,
                        bool playing);
     void DrawSpeakerIcon(float centerX, float centerY, float size, float alpha,

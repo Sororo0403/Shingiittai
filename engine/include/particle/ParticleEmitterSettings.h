@@ -2,11 +2,13 @@
 #include <DirectXMath.h>
 #include <cstdint>
 
+/// <summary>パーティクルの放射タイミング</summary>
 enum class ParticleEmissionType : uint32_t {
     Burst = 0,
     Continuous = 1,
 };
 
+/// <summary>パーティクルの初期位置を生成する形状</summary>
 enum class ParticleSpawnShape : uint32_t {
     Point = 0,
     Sphere = 1,
@@ -16,6 +18,7 @@ enum class ParticleSpawnShape : uint32_t {
     Arc = 5,
 };
 
+/// <summary>GPUパーティクルの発生、運動、色、寿命を指定する</summary>
 struct ParticleEmitterSettings {
     DirectX::XMFLOAT3 position{0.0f, 0.0f, 0.0f};
     uint32_t maxParticles = 256;

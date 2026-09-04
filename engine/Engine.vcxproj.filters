@@ -222,9 +222,6 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)src\input\Input.cpp">
       <Filter>src\input</Filter>
     </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)src\input\InputReplay.cpp">
-      <Filter>src\input</Filter>
-    </ClCompile>
     <ClCompile Include="$(MSBuildThisFileDirectory)src\scene\SceneManager.cpp">
       <Filter>src\scene</Filter>
     </ClCompile>
@@ -420,9 +417,6 @@
       <Filter>include\sound</Filter>
     </ClInclude>
     <ClInclude Include="$(MSBuildThisFileDirectory)include\input\Input.h">
-      <Filter>include\input</Filter>
-    </ClInclude>
-    <ClInclude Include="$(MSBuildThisFileDirectory)include\input\InputReplayTypes.h">
       <Filter>include\input</Filter>
     </ClInclude>
     <ClInclude Include="$(MSBuildThisFileDirectory)include\scene\BaseScene.h">

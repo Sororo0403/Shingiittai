@@ -2,12 +2,14 @@
 #include <DirectXMath.h>
 #include <cstdint>
 
+/// <summary>スプライト描画時のブレンド方式</summary>
 enum class SpriteBlendMode : uint32_t {
     Alpha = 0,
     Modulate = 1,
     PremultipliedMask = 2,
 };
 
+/// <summary>一枚の2Dスプライトを描画するための状態を保持する</summary>
 struct Sprite {
     DirectX::XMFLOAT2 position{0.0f, 0.0f};
     DirectX::XMFLOAT2 size{100.0f, 100.0f};

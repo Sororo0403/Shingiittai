@@ -87,8 +87,6 @@ class SrvManager {
     UINT GetDescriptorSize() const { return descriptorSize_; }
 
   private:
-    void ValidateAllocatedIndex(UINT index, const char *operation) const;
-
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> heap_;
     UINT descriptorSize_ = 0;
     UINT maxSrvCount_ = 0;

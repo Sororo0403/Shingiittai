@@ -694,23 +694,7 @@ void WeaponSelectScene::DrawButtonIllustration(int index,
     };
 
     if (tutorialButton) {
-        const float bookBuild = part(0.17f);
-        rectAt(-82.0f, 46.0f, 164.0f, 116.0f * bookBuild,
-               ScaleAlpha(fill, bookBuild));
-        frameAt(-82.0f, 46.0f, 164.0f, 116.0f * bookBuild, 5.0f,
-                ScaleAlpha(line, bookBuild));
-        rectAt(-2.5f, 46.0f, 5.0f, 116.0f * bookBuild,
-               ScaleAlpha(line, bookBuild));
-
-        const float lineBuild = part(0.26f);
-        rectAt(-60.0f, 76.0f, 42.0f * lineBuild, 6.0f,
-               ScaleAlpha(line, lineBuild));
-        rectAt(-60.0f, 102.0f, 42.0f * lineBuild, 6.0f,
-               ScaleAlpha(line, lineBuild));
-        rectAt(22.0f, 76.0f, 42.0f * lineBuild, 6.0f,
-               ScaleAlpha(line, lineBuild));
-        rectAt(22.0f, 102.0f, 42.0f * lineBuild, 6.0f,
-               ScaleAlpha(line, lineBuild));
+        DrawTutorialButtonIllustration(index, rect, lift, alpha, selected);
         return;
     }
 
@@ -758,6 +742,83 @@ void WeaponSelectScene::DrawButtonIllustration(int index,
         return;
     }
 
+    DrawHandButtonIllustration(index, rect, lift, alpha, selected);
+}
+
+void WeaponSelectScene::DrawTutorialButtonIllustration(
+    int index, const ButtonRect &rect, float lift, float alpha, bool selected) {
+    const ImageContentBounds &bounds = kButtonIllustrationBounds[index];
+    const float scale =
+        (std::min)((rect.w * 0.70f) / (std::max)(bounds.Width(), 1.0f),
+                   (rect.h * 0.42f) / (std::max)(bounds.Height(), 1.0f));
+    const float centerX = rect.x + rect.w * 0.5f;
+    const float centerY = rect.y + rect.h * 0.40f - lift;
+    const XMFLOAT4 line =
+        selected ? MakeColor(0.06f, 0.95f, 0.86f, alpha)
+                 : MakeColor(0.82f, 0.86f, 0.92f, 0.66f * alpha);
+    const XMFLOAT4 fill =
+        selected ? MakeColor(0.16f, 0.12f, 0.070f, 0.54f * alpha)
+                 : MakeColor(0.10f, 0.11f, 0.13f, 0.44f * alpha);
+    auto sx = [&](float value) {
+        return centerX + (value - bounds.CenterX()) * scale;
+    };
+    auto sy = [&](float value) {
+        return centerY + (value - bounds.CenterY()) * scale;
+    };
+    auto rectAt = [&](float x, float y, float w, float h,
+                      const XMFLOAT4 &color) {
+        DrawRect(sx(x), sy(y), w * scale, h * scale, color);
+    };
+    auto frameAt = [&](float x, float y, float w, float h, float thickness,
+                       const XMFLOAT4 &color) {
+        DrawFrame(sx(x), sy(y), w * scale, h * scale, thickness * scale, color);
+    };
+    const float bookBuild = ButtonIntroProgress(index, 0.17f);
+    rectAt(-82.0f, 46.0f, 164.0f, 116.0f * bookBuild,
+           ScaleAlpha(fill, bookBuild));
+    frameAt(-82.0f, 46.0f, 164.0f, 116.0f * bookBuild, 5.0f,
+            ScaleAlpha(line, bookBuild));
+    rectAt(-2.5f, 46.0f, 5.0f, 116.0f * bookBuild,
+           ScaleAlpha(line, bookBuild));
+    const float lineBuild = ButtonIntroProgress(index, 0.26f);
+    for (const XMFLOAT2 origin : {XMFLOAT2{-60.0f, 76.0f},
+                                  XMFLOAT2{-60.0f, 102.0f},
+                                  XMFLOAT2{22.0f, 76.0f},
+                                  XMFLOAT2{22.0f, 102.0f}}) {
+        rectAt(origin.x, origin.y, 42.0f * lineBuild, 6.0f,
+               ScaleAlpha(line, lineBuild));
+    }
+}
+
+void WeaponSelectScene::DrawHandButtonIllustration(
+    int index, const ButtonRect &rect, float lift, float alpha, bool selected) {
+    const float centerX = rect.x + rect.w * 0.5f;
+    const ImageContentBounds &bounds = kButtonIllustrationBounds[index];
+    const float scale =
+        (std::min)((rect.w * 0.76f) / (std::max)(bounds.Width(), 1.0f),
+                   (rect.h * 0.48f) / (std::max)(bounds.Height(), 1.0f));
+    const float iconCenterY = rect.y + rect.h * 0.42f - lift;
+    const XMFLOAT4 line =
+        selected ? MakeColor(1.0f, 0.80f, 0.36f, alpha)
+                 : MakeColor(0.82f, 0.86f, 0.92f, 0.66f * alpha);
+    const XMFLOAT4 fill =
+        selected ? MakeColor(0.16f, 0.12f, 0.070f, 0.54f * alpha)
+                 : MakeColor(0.10f, 0.11f, 0.13f, 0.44f * alpha);
+    auto sx = [&](float value) {
+        return centerX + (value - bounds.CenterX()) * scale;
+    };
+    auto sy = [&](float value) {
+        return iconCenterY + (value - bounds.CenterY()) * scale;
+    };
+    auto rectAt = [&](float x, float y, float w, float h,
+                      const XMFLOAT4 &color) {
+        DrawRect(sx(x), sy(y), w * scale, h * scale, color);
+    };
+    auto frameAt = [&](float x, float y, float w, float h, float thickness,
+                       const XMFLOAT4 &color) {
+        DrawFrame(sx(x), sy(y), w * scale, h * scale, thickness * scale, color);
+    };
+    auto part = [&](float offset) { return ButtonIntroProgress(index, offset); };
     auto drawHand = [&](float handX, float delay, bool thumbRight) {
         const float handY = 38.0f;
         const float palmBuild = part(delay);
@@ -910,8 +971,6 @@ void WeaponSelectScene::DrawUtilityMenuWindow(float screenWidth,
         static_cast<float>(kUtilityMenuItemCount);
     const float buttonSize = std::clamp(
         (std::min)(panelH * 0.46f, buttonSizeByWidth), 32.0f, 180.0f);
-    const float buttonW = buttonSize;
-    const float buttonH = buttonSize;
     const float totalButtonW =
         buttonSize * static_cast<float>(kUtilityMenuItemCount) +
         buttonGap * static_cast<float>(kUtilityMenuItemCount - 1);
@@ -920,44 +979,44 @@ void WeaponSelectScene::DrawUtilityMenuWindow(float screenWidth,
 
     for (int i = 0; i < kUtilityMenuItemCount; ++i) {
         const float x =
-            firstButtonX + static_cast<float>(i) * (buttonW + buttonGap);
-        const bool selected = i == utilityMenuIndex_;
-        const XMFLOAT4 body = selected
-                                  ? MakeColor(0.18f, 0.13f, 0.055f, 0.98f)
-                                  : MakeColor(0.040f, 0.046f, 0.058f, 0.92f);
-        const XMFLOAT4 line = selected ? MakeColor(1.0f, 0.78f, 0.34f, 0.96f)
-                                       : MakeColor(0.62f, 0.66f, 0.72f, 0.38f);
-
-        DrawRect(x, buttonY, buttonW, buttonH, body);
-        DrawFrame(x, buttonY, buttonW, buttonH, 2.0f, line);
-
-        const float iconBoxSize = buttonSize * 0.58f;
-        const float iconBoxX = x + (buttonSize - iconBoxSize) * 0.5f;
-        const float iconBoxY = buttonY + buttonSize * 0.15f;
-        DrawRect(iconBoxX, iconBoxY, iconBoxSize, iconBoxSize,
-                 selected ? MakeColor(0.10f, 0.075f, 0.036f, 0.72f)
-                          : MakeColor(0.020f, 0.024f, 0.030f, 0.58f));
-        DrawFrame(iconBoxX, iconBoxY, iconBoxSize, iconBoxSize, 2.0f, line);
-        DrawUtilityMenuIcon(i, iconBoxX + iconBoxSize * 0.5f,
-                            iconBoxY + iconBoxSize * 0.5f, iconBoxSize * 0.78f,
-                            selected ? 1.0f : 0.78f, selected);
-
-        const Image &label =
-            i < 4 ? utilityMenuOptionImages_[i] : optionMenuLabelImage_;
-        const ImageContentBounds &labelBounds =
-            kUtilityMenuLabelContentBounds[i];
-        const float labelScale =
-            (std::min)({0.82f,
-                        (buttonH * 0.15f) /
-                            (std::max)(labelBounds.Height(), 1.0f),
-                        (buttonW * 0.86f) /
-                            (std::max)(labelBounds.Width(), 1.0f)});
-        const float labelCenterX = x + buttonW * 0.5f;
-        const float labelCenterY = buttonY + buttonH * 0.78f;
-        DrawImage(label, labelCenterX - labelBounds.CenterX() * labelScale,
-                  labelCenterY - labelBounds.CenterY() * labelScale, labelScale,
-                  selected ? 1.0f : 0.82f);
+            firstButtonX + static_cast<float>(i) * (buttonSize + buttonGap);
+        DrawUtilityMenuButton(i, x, buttonY, buttonSize);
     }
+}
+
+void WeaponSelectScene::DrawUtilityMenuButton(int index, float x, float y,
+                                              float size) {
+    const bool selected = index == utilityMenuIndex_;
+    const XMFLOAT4 body = selected
+                              ? MakeColor(0.18f, 0.13f, 0.055f, 0.98f)
+                              : MakeColor(0.040f, 0.046f, 0.058f, 0.92f);
+    const XMFLOAT4 line = selected ? MakeColor(1.0f, 0.78f, 0.34f, 0.96f)
+                                   : MakeColor(0.62f, 0.66f, 0.72f, 0.38f);
+    DrawRect(x, y, size, size, body);
+    DrawFrame(x, y, size, size, 2.0f, line);
+
+    const float iconSize = size * 0.58f;
+    const float iconX = x + (size - iconSize) * 0.5f;
+    const float iconY = y + size * 0.15f;
+    DrawRect(iconX, iconY, iconSize, iconSize,
+             selected ? MakeColor(0.10f, 0.075f, 0.036f, 0.72f)
+                      : MakeColor(0.020f, 0.024f, 0.030f, 0.58f));
+    DrawFrame(iconX, iconY, iconSize, iconSize, 2.0f, line);
+    DrawUtilityMenuIcon(index, iconX + iconSize * 0.5f,
+                        iconY + iconSize * 0.5f, iconSize * 0.78f,
+                        selected ? 1.0f : 0.78f, selected);
+
+    const Image &label = index < 4 ? utilityMenuOptionImages_[index]
+                                   : optionMenuLabelImage_;
+    const ImageContentBounds &bounds = kUtilityMenuLabelContentBounds[index];
+    const float scale =
+        (std::min)({0.82f, (size * 0.15f) / (std::max)(bounds.Height(), 1.0f),
+                    (size * 0.86f) / (std::max)(bounds.Width(), 1.0f)});
+    const float centerX = x + size * 0.5f;
+    const float centerY = y + size * 0.78f;
+    DrawImage(label, centerX - bounds.CenterX() * scale,
+              centerY - bounds.CenterY() * scale, scale,
+              selected ? 1.0f : 0.82f);
 }
 
 void WeaponSelectScene::DrawUtilityMenuIcon(int index, float centerX,

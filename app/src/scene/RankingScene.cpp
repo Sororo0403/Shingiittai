@@ -279,50 +279,7 @@ void RankingScene::DrawRanking(float screenWidth, float screenHeight) {
     const float x = (screenWidth - panelW) * 0.5f;
     const float y = (screenHeight - panelH) * 0.5f + (1.0f - intro) * 30.0f;
 
-    DrawRect(x + 12.0f, y + 14.0f, panelW, panelH,
-             Color(0.0f, 0.0f, 0.0f, 0.44f * intro));
-    DrawRect(x, y, panelW, panelH,
-             Color(0.010f, 0.013f, 0.018f, 0.92f * intro));
-    DrawRect(x + panelW * 0.05f, y + panelH * 0.245f, panelW * 0.90f,
-             panelH * 0.60f, Color(0.0f, 0.0f, 0.0f, 0.24f * intro));
-    DrawFrame(x, y, panelW, panelH, 2.0f,
-              Color(0.95f, 0.72f, 0.28f, 0.82f * intro));
-
-    const float titleScale = std::clamp(
-        (panelW * 0.42f) / (std::max)(rankingTitleLabel_.width, 1.0f), 0.48f,
-        0.78f);
-    const float titleW = rankingTitleLabel_.width * titleScale;
-    DrawImage(rankingTitleLabel_, x + (panelW - titleW) * 0.5f,
-              y + panelH * 0.085f, titleScale, 0.94f * intro);
-
-    const float tabY = y + panelH * 0.168f;
-    const float tabW = std::clamp(panelW * 0.30f, 210.0f, 292.0f);
-    const float tabH = std::clamp(panelH * 0.074f, 42.0f, 54.0f);
-    const float tabGap = std::clamp(panelW * 0.034f, 24.0f, 38.0f);
-    const float tabStartX = x + (panelW - tabW * 2.0f - tabGap) * 0.5f;
-    const Image *modeLabels[2] = {&modeKbmLabel_, &modeHandLabel_};
-    const InputControlType modes[2] = {InputControlType::KeyboardMouse,
-                                       InputControlType::Hand};
-    for (int i = 0; i < 2; ++i) {
-        const bool selected = selectedControlType_ == modes[i];
-        const float tabX = tabStartX + static_cast<float>(i) * (tabW + tabGap);
-        DrawRect(tabX, tabY, tabW, tabH,
-                 selected ? Color(0.18f, 0.13f, 0.055f, 0.88f * intro)
-                          : Color(0.040f, 0.046f, 0.058f, 0.72f * intro));
-        DrawFrame(tabX, tabY, tabW, tabH, selected ? 2.0f : 1.0f,
-                  selected ? Color(1.0f, 0.78f, 0.34f, 0.88f * intro)
-                           : Color(0.62f, 0.66f, 0.72f, 0.32f * intro));
-        const Image &label = *modeLabels[i];
-        const float labelScale =
-            (std::min)({(tabW * 0.84f) / (std::max)(label.width, 1.0f),
-                        (tabH * 0.66f) / (std::max)(label.height, 1.0f),
-                        0.90f});
-        const float labelW = label.width * labelScale;
-        const float labelH = label.height * labelScale;
-        DrawImage(label, tabX + (tabW - labelW) * 0.5f,
-                  tabY + (tabH - labelH) * 0.5f, labelScale,
-                  (selected ? 0.92f : 0.62f) * intro);
-    }
+    DrawRankingHeader(x, y, panelW, panelH, intro);
 
     const float contentLeft = x + panelW * 0.08f;
     const float contentRight = x + panelW * 0.92f;
@@ -403,6 +360,51 @@ void RankingScene::DrawRanking(float screenWidth, float screenHeight) {
         DrawTextLineRightBaseline(FormatDifficulty(entry.difficulty),
                                   difficultyRight, baselineY, rowScale,
                                   0.94f * intro);
+    }
+}
+
+void RankingScene::DrawRankingHeader(float x, float y, float panelW,
+                                     float panelH, float intro) {
+    DrawRect(x + 12.0f, y + 14.0f, panelW, panelH,
+             Color(0.0f, 0.0f, 0.0f, 0.44f * intro));
+    DrawRect(x, y, panelW, panelH,
+             Color(0.010f, 0.013f, 0.018f, 0.92f * intro));
+    DrawRect(x + panelW * 0.05f, y + panelH * 0.245f, panelW * 0.90f,
+             panelH * 0.60f, Color(0.0f, 0.0f, 0.0f, 0.24f * intro));
+    DrawFrame(x, y, panelW, panelH, 2.0f,
+              Color(0.95f, 0.72f, 0.28f, 0.82f * intro));
+
+    const float titleScale = std::clamp(
+        (panelW * 0.42f) / (std::max)(rankingTitleLabel_.width, 1.0f), 0.48f,
+        0.78f);
+    DrawImage(rankingTitleLabel_,
+              x + (panelW - rankingTitleLabel_.width * titleScale) * 0.5f,
+              y + panelH * 0.085f, titleScale, 0.94f * intro);
+
+    const float tabY = y + panelH * 0.168f;
+    const float tabW = std::clamp(panelW * 0.30f, 210.0f, 292.0f);
+    const float tabH = std::clamp(panelH * 0.074f, 42.0f, 54.0f);
+    const float tabGap = std::clamp(panelW * 0.034f, 24.0f, 38.0f);
+    const float tabStartX = x + (panelW - tabW * 2.0f - tabGap) * 0.5f;
+    const Image *modeLabels[2] = {&modeKbmLabel_, &modeHandLabel_};
+    const InputControlType modes[2] = {InputControlType::KeyboardMouse,
+                                       InputControlType::Hand};
+    for (int i = 0; i < 2; ++i) {
+        const bool selected = selectedControlType_ == modes[i];
+        const float tabX = tabStartX + static_cast<float>(i) * (tabW + tabGap);
+        DrawRect(tabX, tabY, tabW, tabH,
+                 selected ? Color(0.18f, 0.13f, 0.055f, 0.88f * intro)
+                          : Color(0.040f, 0.046f, 0.058f, 0.72f * intro));
+        DrawFrame(tabX, tabY, tabW, tabH, selected ? 2.0f : 1.0f,
+                  selected ? Color(1.0f, 0.78f, 0.34f, 0.88f * intro)
+                           : Color(0.62f, 0.66f, 0.72f, 0.32f * intro));
+        const Image &label = *modeLabels[i];
+        const float scale =
+            (std::min)({(tabW * 0.84f) / (std::max)(label.width, 1.0f),
+                        (tabH * 0.66f) / (std::max)(label.height, 1.0f), 0.90f});
+        DrawImage(label, tabX + (tabW - label.width * scale) * 0.5f,
+                  tabY + (tabH - label.height * scale) * 0.5f, scale,
+                  (selected ? 0.92f : 0.62f) * intro);
     }
 }
 

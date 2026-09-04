@@ -126,116 +126,130 @@ XMFLOAT4 Color(float r, float g, float b, float a = 1.0f) {
     return {r, g, b, a};
 }
 
-const std::array<const char *, 7> &GlyphRows(char c) {
-    static const std::array<const char *, 7> blank = {
-        "00000", "00000", "00000", "00000", "00000", "00000", "00000"};
-    static const std::array<const char *, 7> unknown = {
-        "11110", "00010", "00100", "01000", "01000", "00000", "01000"};
-    static const auto glyphs = [] {
-        std::array<std::array<const char *, 7>, 128> out{};
-        for (auto &rows : out) {
-            rows = blank;
-        }
-        auto set = [&](char ch, const std::array<const char *, 7> &rows) {
-            out[static_cast<unsigned char>(ch)] = rows;
-        };
-        set('A',
+using Glyph = std::array<const char *, 7>;
+using GlyphTable = std::array<Glyph, 128>;
+
+void SetLetterGlyphs(GlyphTable &glyphs) {
+    const auto set = [&](char ch, const Glyph &rows) {
+        glyphs[static_cast<unsigned char>(ch)] = rows;
+    };
+    set('A',
             {"01110", "10001", "10001", "11111", "10001", "10001", "10001"});
-        set('B',
+    set('B',
             {"11110", "10001", "10001", "11110", "10001", "10001", "11110"});
-        set('C',
+    set('C',
             {"01111", "10000", "10000", "10000", "10000", "10000", "01111"});
-        set('D',
+    set('D',
             {"11110", "10001", "10001", "10001", "10001", "10001", "11110"});
-        set('E',
+    set('E',
             {"11111", "10000", "10000", "11110", "10000", "10000", "11111"});
-        set('F',
+    set('F',
             {"11111", "10000", "10000", "11110", "10000", "10000", "10000"});
-        set('G',
+    set('G',
             {"01111", "10000", "10000", "10011", "10001", "10001", "01110"});
-        set('H',
+    set('H',
             {"10001", "10001", "10001", "11111", "10001", "10001", "10001"});
-        set('I',
+    set('I',
             {"11111", "00100", "00100", "00100", "00100", "00100", "11111"});
-        set('J',
+    set('J',
             {"00111", "00010", "00010", "00010", "00010", "10010", "01100"});
-        set('K',
+    set('K',
             {"10001", "10010", "10100", "11000", "10100", "10010", "10001"});
-        set('L',
+    set('L',
             {"10000", "10000", "10000", "10000", "10000", "10000", "11111"});
-        set('M',
+    set('M',
             {"10001", "11011", "10101", "10101", "10001", "10001", "10001"});
-        set('N',
+    set('N',
             {"10001", "11001", "10101", "10011", "10001", "10001", "10001"});
-        set('O',
+    set('O',
             {"01110", "10001", "10001", "10001", "10001", "10001", "01110"});
-        set('P',
+    set('P',
             {"11110", "10001", "10001", "11110", "10000", "10000", "10000"});
-        set('Q',
+    set('Q',
             {"01110", "10001", "10001", "10001", "10101", "10010", "01101"});
-        set('R',
+    set('R',
             {"11110", "10001", "10001", "11110", "10100", "10010", "10001"});
-        set('S',
+    set('S',
             {"01111", "10000", "10000", "01110", "00001", "00001", "11110"});
-        set('T',
+    set('T',
             {"11111", "00100", "00100", "00100", "00100", "00100", "00100"});
-        set('U',
+    set('U',
             {"10001", "10001", "10001", "10001", "10001", "10001", "01110"});
-        set('V',
+    set('V',
             {"10001", "10001", "10001", "10001", "10001", "01010", "00100"});
-        set('W',
+    set('W',
             {"10001", "10001", "10001", "10101", "10101", "11011", "10001"});
-        set('X',
+    set('X',
             {"10001", "10001", "01010", "00100", "01010", "10001", "10001"});
-        set('Y',
+    set('Y',
             {"10001", "10001", "01010", "00100", "00100", "00100", "00100"});
-        set('Z',
+    set('Z',
             {"11111", "00001", "00010", "00100", "01000", "10000", "11111"});
-        set('0',
+}
+
+void SetNumberAndSymbolGlyphs(GlyphTable &glyphs, const Glyph &blank) {
+    const auto set = [&](char ch, const Glyph &rows) {
+        glyphs[static_cast<unsigned char>(ch)] = rows;
+    };
+    set('0',
             {"01110", "10001", "10011", "10101", "11001", "10001", "01110"});
-        set('1',
+    set('1',
             {"00100", "01100", "00100", "00100", "00100", "00100", "01110"});
-        set('2',
+    set('2',
             {"01110", "10001", "00001", "00010", "00100", "01000", "11111"});
-        set('3',
+    set('3',
             {"11110", "00001", "00001", "01110", "00001", "00001", "11110"});
-        set('4',
+    set('4',
             {"00010", "00110", "01010", "10010", "11111", "00010", "00010"});
-        set('5',
+    set('5',
             {"11111", "10000", "10000", "11110", "00001", "00001", "11110"});
-        set('6',
+    set('6',
             {"00111", "01000", "10000", "11110", "10001", "10001", "01110"});
-        set('7',
+    set('7',
             {"11111", "00001", "00010", "00100", "01000", "01000", "01000"});
-        set('8',
+    set('8',
             {"01110", "10001", "10001", "01110", "10001", "10001", "01110"});
-        set('9',
+    set('9',
             {"01110", "10001", "10001", "01111", "00001", "00010", "11100"});
-        set('.',
+    set('.',
             {"00000", "00000", "00000", "00000", "00000", "01100", "01100"});
-        set(',',
+    set(',',
             {"00000", "00000", "00000", "00000", "01100", "00100", "01000"});
-        set(':',
+    set(':',
             {"00000", "01100", "01100", "00000", "01100", "01100", "00000"});
-        set('-',
+    set('-',
             {"00000", "00000", "00000", "11111", "00000", "00000", "00000"});
-        set('+',
+    set('+',
             {"00000", "00100", "00100", "11111", "00100", "00100", "00000"});
-        set('/',
+    set('/',
             {"00001", "00010", "00010", "00100", "01000", "01000", "10000"});
-        set('(',
+    set('(',
             {"00010", "00100", "01000", "01000", "01000", "00100", "00010"});
-        set(')',
+    set(')',
             {"01000", "00100", "00010", "00010", "00010", "00100", "01000"});
-        set('[',
+    set('[',
             {"01110", "01000", "01000", "01000", "01000", "01000", "01110"});
-        set(']',
+    set(']',
             {"01110", "00010", "00010", "00010", "00010", "00010", "01110"});
-        set('=',
+    set('=',
             {"00000", "11111", "00000", "11111", "00000", "00000", "00000"});
-        set(' ', blank);
-        return out;
-    }();
+    set(' ', blank);
+}
+
+GlyphTable BuildGlyphTable(const Glyph &blank) {
+    GlyphTable glyphs{};
+    glyphs.fill(blank);
+    SetLetterGlyphs(glyphs);
+    SetNumberAndSymbolGlyphs(glyphs, blank);
+    return glyphs;
+}
+
+const Glyph &GlyphRows(char c) {
+    static const Glyph blank = {"00000", "00000", "00000", "00000",
+                                "00000", "00000", "00000"};
+    static const Glyph unknown = {"11110", "00010", "00100", "01000",
+                                  "01000", "00000", "01000"};
+    static const GlyphTable glyphs = BuildGlyphTable(blank);
 
     const unsigned char index = static_cast<unsigned char>(c);
     if (index >= glyphs.size()) {
@@ -608,25 +622,6 @@ void CameraAccuracyDebugScene::UpdateGamePreview(float deltaTime) {
                                              {0.0f, 0.0f, 0.0f}, 0.0f);
 }
 
-SwordPose
-CameraAccuracyDebugScene::MakePoseFromPalm(const XMFLOAT2 &palm) const {
-    SwordPose pose{};
-    const float dirX = std::clamp((palm.x - 0.5f) * 2.0f, -1.0f, 1.0f);
-    const float dirY = std::clamp((0.5f - palm.y) * 2.0f, -1.0f, 1.0f);
-    pose.slashDir = {dirX, dirY};
-    pose.isSlashMode = true;
-
-    const float yaw = dirX * 0.82f;
-    const float pitch = -dirY * 0.72f;
-    const XMVECTOR qYaw =
-        XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), yaw);
-    const XMVECTOR qPitch =
-        XMQuaternionRotationAxis(XMVectorSet(1, 0, 0, 0), pitch);
-    XMStoreFloat4(&pose.orientation,
-                  XMQuaternionNormalize(XMQuaternionMultiply(qPitch, qYaw)));
-    return pose;
-}
-
 Transform CameraAccuracyDebugScene::BuildSwordTransform(const SwordPose &pose,
                                                         const XMFLOAT3 &anchor,
                                                         bool isLeft) const {
@@ -892,21 +887,6 @@ void CameraAccuracyDebugScene::DrawHandPanel(const char *title,
              1.35f,
              sample.active ? Color(0.46f, 1.0f, 0.64f, 0.92f)
                            : Color(1.0f, 0.46f, 0.30f, 0.84f));
-}
-
-void CameraAccuracyDebugScene::DrawHandStats(size_t handIndex, float x,
-                                             float y) {
-    const auto sample = controller_.GetDebugHandState(handIndex);
-    char line[256]{};
-    std::snprintf(line, sizeof(line),
-                  "H%zu ACT=%d RAW %.2f %.2f  CAL %.2f %.2f", handIndex,
-                  sample.active ? 1 : 0, sample.rawPalm.x, sample.rawPalm.y,
-                  sample.calibratedPalm.x, sample.calibratedPalm.y);
-    DrawText(line, x, y, 1.25f, Color(0.82f, 0.88f, 0.94f, 0.86f));
-    std::snprintf(line, sizeof(line), "   DIR %.2f %.2f  SPEED %.2f  SLASH=%d",
-                  sample.slashDir.x, sample.slashDir.y, sample.motionSpeed,
-                  sample.isSlashMode ? 1 : 0);
-    DrawText(line, x, y + 22.0f, 1.25f, Color(0.72f, 0.78f, 0.86f, 0.82f));
 }
 
 void CameraAccuracyDebugScene::DrawRect(float x, float y, float w, float h,

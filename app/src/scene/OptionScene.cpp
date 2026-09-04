@@ -342,61 +342,76 @@ void OptionScene::DrawPanel(float screenWidth, float screenHeight) {
     const float firstRowY = panelY + panelH * 0.33f;
     const float rowGap = panelH * 0.068f;
     const float labelAreaW = barX - rowX - 28.0f;
+    const PanelRowLayout rowLayout{intro, rowX, barX, barW, barH, labelAreaW};
 
     for (int i = 0; i < kOptionCount; ++i) {
-        const bool selected = i == selectedIndex_;
         const float rowCenterY = firstRowY + static_cast<float>(i) * rowGap;
-        const float barY = rowCenterY - barH * 0.5f;
-        const XMFLOAT4 textColor =
-            selected ? Color(1.0f, 0.78f, 0.34f, 0.98f * intro)
-                     : Color(0.78f, 0.82f, 0.88f, 0.74f * intro);
-        const Image &label = *labels[i];
-        const float labelScale =
-            (std::min)(0.82f, labelAreaW / (std::max)(label.width, 1.0f));
-        DrawImage(label, rowX, rowCenterY - label.height * labelScale * 0.5f,
-                  labelScale, textColor.w);
-
-        if (i == 0) {
-            const Image &mode = ctx_->systems.winApp != nullptr &&
-                                        ctx_->systems.winApp->IsFullscreen()
-                                    ? fullscreenValueImage_
-                                    : windowValueImage_;
-            DrawRect(barX, barY, barW, barH,
-                     selected ? Color(0.95f, 0.64f, 0.16f, 0.92f * intro)
-                              : Color(0.16f, 0.18f, 0.22f, 0.78f * intro));
-            DrawFrame(barX, barY, barW, barH, 2.0f,
-                      selected ? Color(1.0f, 0.86f, 0.26f, 0.95f * intro)
-                               : Color(0.54f, 0.58f, 0.64f, 0.42f * intro));
-            const float modeScale =
-                (std::min)(0.66f,
-                           (barW - 28.0f) / (std::max)(mode.width, 1.0f));
-            DrawImage(mode, barX + 14.0f,
-                      rowCenterY - mode.height * modeScale * 0.5f, modeScale,
-                      selected ? 1.0f : 0.82f);
-        } else {
-            DrawRect(barX, barY, barW, barH,
-                     Color(0.055f, 0.062f, 0.074f, 0.96f));
-            DrawFrame(barX, barY, barW, barH, 2.0f,
-                      selected ? Color(1.0f, 0.78f, 0.34f, 0.88f * intro)
-                               : Color(0.54f, 0.58f, 0.64f, 0.42f * intro));
-            DrawRect(barX, barY, barW * std::clamp(values[i - 1], 0.0f, 1.0f),
-                     barH,
-                     selected ? Color(1.0f, 0.68f, 0.20f, 0.90f * intro)
-                              : Color(0.72f, 0.76f, 0.82f, 0.64f * intro));
-        }
-        if (selected) {
-            const float keyScale =
-                std::clamp(barH * 1.65f / (std::max)(keyAImage_.height, 1.0f),
-                           0.38f, 0.58f);
-            const float keyW = keyAImage_.width * keyScale;
-            const float keyH = keyAImage_.height * keyScale;
-            const float keyY = rowCenterY - keyH * 0.5f;
-            DrawImage(keyAImage_, barX - keyW - 18.0f, keyY, keyScale,
-                      0.78f * intro);
-            DrawImage(keyDImage_, barX + barW + 18.0f, keyY, keyScale,
-                      0.78f * intro);
-        }
+        const float value = i == 0 ? 0.0f : values[i - 1];
+        DrawPanelRow(i, *labels[i], value, rowCenterY, rowLayout);
     }
+}
+
+void OptionScene::DrawPanelRow(int index, const Image &label, float value,
+                               float rowCenterY,
+                               const PanelRowLayout &layout) {
+    const bool selected = index == selectedIndex_;
+    const float barY = rowCenterY - layout.barHeight * 0.5f;
+    const XMFLOAT4 textColor =
+        selected ? Color(1.0f, 0.78f, 0.34f, 0.98f * layout.intro)
+                 : Color(0.78f, 0.82f, 0.88f, 0.74f * layout.intro);
+    const float labelScale =
+        (std::min)(0.82f, layout.labelAreaWidth /
+                              (std::max)(label.width, 1.0f));
+    DrawImage(label, layout.rowX,
+              rowCenterY - label.height * labelScale * 0.5f, labelScale,
+              textColor.w);
+
+    if (index == 0) {
+        const Image &mode = ctx_->systems.winApp != nullptr &&
+                                    ctx_->systems.winApp->IsFullscreen()
+                                ? fullscreenValueImage_
+                                : windowValueImage_;
+        DrawRect(layout.barX, barY, layout.barWidth, layout.barHeight,
+                 selected
+                     ? Color(0.95f, 0.64f, 0.16f, 0.92f * layout.intro)
+                     : Color(0.16f, 0.18f, 0.22f, 0.78f * layout.intro));
+        DrawFrame(layout.barX, barY, layout.barWidth, layout.barHeight, 2.0f,
+                  selected
+                      ? Color(1.0f, 0.86f, 0.26f, 0.95f * layout.intro)
+                      : Color(0.54f, 0.58f, 0.64f, 0.42f * layout.intro));
+        const float modeScale =
+            (std::min)(0.66f, (layout.barWidth - 28.0f) /
+                                 (std::max)(mode.width, 1.0f));
+        DrawImage(mode, layout.barX + 14.0f,
+                  rowCenterY - mode.height * modeScale * 0.5f, modeScale,
+                  selected ? 1.0f : 0.82f);
+    } else {
+        DrawRect(layout.barX, barY, layout.barWidth, layout.barHeight,
+                 Color(0.055f, 0.062f, 0.074f, 0.96f));
+        DrawFrame(layout.barX, barY, layout.barWidth, layout.barHeight, 2.0f,
+                  selected
+                      ? Color(1.0f, 0.78f, 0.34f, 0.88f * layout.intro)
+                      : Color(0.54f, 0.58f, 0.64f, 0.42f * layout.intro));
+        DrawRect(layout.barX, barY,
+                 layout.barWidth * std::clamp(value, 0.0f, 1.0f),
+                 layout.barHeight,
+                 selected
+                     ? Color(1.0f, 0.68f, 0.20f, 0.90f * layout.intro)
+                     : Color(0.72f, 0.76f, 0.82f, 0.64f * layout.intro));
+    }
+    if (!selected) {
+        return;
+    }
+
+    const float keyScale = std::clamp(
+        layout.barHeight * 1.65f / (std::max)(keyAImage_.height, 1.0f), 0.38f,
+        0.58f);
+    const float keyWidth = keyAImage_.width * keyScale;
+    const float keyY = rowCenterY - keyAImage_.height * keyScale * 0.5f;
+    DrawImage(keyAImage_, layout.barX - keyWidth - 18.0f, keyY, keyScale,
+              0.78f * layout.intro);
+    DrawImage(keyDImage_, layout.barX + layout.barWidth + 18.0f, keyY, keyScale,
+              0.78f * layout.intro);
 }
 
 void OptionScene::DrawControlsPrompt(float screenWidth, float screenHeight) {

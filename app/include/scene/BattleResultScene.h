@@ -12,6 +12,9 @@
 
 class Input;
 
+/// <summary>
+/// 戦闘結果、スコア、ランキング、次の遷移先を管理する
+/// </summary>
 class BattleResultScene : public BaseScene {
   public:
     enum class ResultKind {
@@ -19,13 +22,28 @@ class BattleResultScene : public BaseScene {
         GameOver,
     };
 
+    /// <summary>
+    /// BattleResultSceneに対応する公開処理を実行する
+    /// </summary>
     BattleResultScene(ResultKind resultKind, float clearTime,
                       const SwordInputCalibration &inputCalibration = {},
                       float combatDifficulty = 5.0f);
 
+    /// <summary>
+    /// 使用するリソースと初期状態を準備する
+    /// </summary>
     void Initialize(const SceneContext &ctx) override;
+    /// <summary>
+    /// 入力と状態を1フレーム進める
+    /// </summary>
     void Update() override;
+    /// <summary>
+    /// 現在の状態を描画する
+    /// </summary>
     void Draw() override;
+    /// <summary>
+    /// 透明描画パスへ必要な要素を描画する
+    /// </summary>
     void DrawTransparent() override;
 
   private:
@@ -57,14 +75,19 @@ class BattleResultScene : public BaseScene {
     void SaveRanking() const;
     void UpdateClearReveal(float deltaTime);
     void UpdateClearActionButtons(Input &input);
-    void UpdateHandResultInput(float deltaTime);
     void BeginReturnTitleConfirm();
     void UpdateReturnTitleConfirm(Input &input);
     void InitializeWorld();
     void UpdateCelebrationParticles(float deltaTime);
     void UpdateResultCamera(float screenWidth, float screenHeight);
+    void ResetResultState();
+    void LoadResultImages();
+    void ConfigureResultGlyphMetrics();
     void DrawWorld(float screenWidth, float screenHeight);
     void DrawResultStage();
+    void DrawResultFloorPattern(ModelManager *model);
+    void DrawResultArchitecture(ModelManager *model);
+    void DrawResultGlowGrid(ModelManager *model, float pulse);
     void DrawResultModels();
     void DrawResultOverlay(float screenWidth, float screenHeight);
     void DrawClear(float screenWidth, float screenHeight);

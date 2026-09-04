@@ -9,6 +9,9 @@
 #include <string>
 #include <vector>
 
+/// <summary>
+/// 保存された戦績を読み込み、ランキングとして表示する
+/// </summary>
 class RankingScene : public BaseScene {
   public:
     enum class ReturnTarget {
@@ -16,11 +19,26 @@ class RankingScene : public BaseScene {
         TutorialSelect,
     };
 
+    /// <summary>
+    /// RankingSceneに対応する公開処理を実行する
+    /// </summary>
     explicit RankingScene(ReturnTarget returnTarget);
 
+    /// <summary>
+    /// 使用するリソースと初期状態を準備する
+    /// </summary>
     void Initialize(const SceneContext &ctx) override;
+    /// <summary>
+    /// 入力と状態を1フレーム進める
+    /// </summary>
     void Update() override;
+    /// <summary>
+    /// 現在の状態を描画する
+    /// </summary>
     void Draw() override;
+    /// <summary>
+    /// 透明描画パスへ必要な要素を描画する
+    /// </summary>
     void DrawTransparent() override {}
 
   private:
@@ -47,6 +65,8 @@ class RankingScene : public BaseScene {
     void ChangeControlType(InputControlType controlType);
     void DrawOverlay(float screenWidth, float screenHeight);
     void DrawRanking(float screenWidth, float screenHeight);
+    void DrawRankingHeader(float x, float y, float panelWidth,
+                           float panelHeight, float intro);
     void DrawTransition(float screenWidth, float screenHeight);
     void DrawRect(float x, float y, float w, float h,
                   const DirectX::XMFLOAT4 &color);

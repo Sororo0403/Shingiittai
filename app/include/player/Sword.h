@@ -9,28 +9,70 @@
 class ModelManager;
 class Camera;
 
+/// <summary>
+/// カウンター判定に用いる斬撃方向
+/// </summary>
 enum class SwordCounterAxis { None, Vertical, Horizontal };
 
+/// <summary>
+/// 剣モデルの姿勢、斬撃状態、当たり判定を管理する
+/// </summary>
 class Sword {
   public:
+    /// <summary>
+    /// 使用するリソースと初期状態を準備する
+    /// </summary>
     void Initialize(uint32_t modelId);
+    /// <summary>
+    /// 入力と状態を1フレーム進める
+    /// </summary>
     void Update(const Transform &transform, const SwordPose &pose,
                 float deltaTime, bool allowMotionSlash = true);
 
+    /// <summary>
+    /// 現在の状態を描画する
+    /// </summary>
     void Draw(ModelManager *modelManager, const Camera &camera,
               float visualScale = 1.0f);
 
+    /// <summary>
+    /// GetTransformに対応する現在値を取得する
+    /// </summary>
     const Transform &GetTransform() const { return tf_; }
+    /// <summary>
+    /// GetOBBに対応する現在値を取得する
+    /// </summary>
     OBB GetOBB() const;
+    /// <summary>
+    /// GetOBBSamplesに対応する現在値を取得する
+    /// </summary>
     std::array<OBB, 3> GetOBBSamples() const;
 
+    /// <summary>
+    /// GetVisualBladeRootWorldに対応する現在値を取得する
+    /// </summary>
     DirectX::XMFLOAT3 GetVisualBladeRootWorld() const;
+    /// <summary>
+    /// GetVisualBladeTipWorldに対応する現在値を取得する
+    /// </summary>
     DirectX::XMFLOAT3 GetVisualBladeTipWorld() const;
 
+    /// <summary>
+    /// IsSlashModeの条件を満たすか判定する
+    /// </summary>
     bool IsSlashMode() const { return isSlashMode_; }
+    /// <summary>
+    /// CanSlashCounterの条件を満たすか判定する
+    /// </summary>
     bool CanSlashCounter() const { return isSlashMode_; }
 
+    /// <summary>
+    /// GetSlashDirectionに対応する現在値を取得する
+    /// </summary>
     const DirectX::XMFLOAT2 &GetSlashDirection() const { return slashDir_; }
+    /// <summary>
+    /// GetSlashAxisに対応する現在値を取得する
+    /// </summary>
     SwordCounterAxis GetSlashAxis() const;
 
   private:

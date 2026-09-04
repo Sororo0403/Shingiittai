@@ -204,13 +204,6 @@ float FindLoudestPlaybackSecond(SoundManager *sound, uint32_t soundId) {
     return bestSecond;
 }
 
-PostProcessProfile GetPostProcessProfile(const SceneContext *ctx) {
-    if (ctx == nullptr || ctx->rendering.postEffectManager == nullptr) {
-        return {};
-    }
-    return ctx->rendering.postEffectManager->GetBaseProfile();
-}
-
 void SetPostProcessProfile(const SceneContext *ctx,
                            const PostProcessProfile &profile) {
     if (ctx == nullptr || ctx->rendering.postEffectManager == nullptr) {
@@ -557,13 +550,6 @@ XMFLOAT4 Lerp(const XMFLOAT4 &a, const XMFLOAT4 &b, float t) {
             a.w + (b.w - a.w) * t};
 }
 
-XMFLOAT3 RotateXZ(const XMFLOAT3 &direction, float radians) {
-    const float c = std::cosf(radians);
-    const float s = std::sinf(radians);
-    return {direction.x * c + direction.z * s, direction.y,
-            -direction.x * s + direction.z * c};
-}
-
 float SmoothStep01(float value) {
     const float t = std::clamp(value, 0.0f, 1.0f);
     return t * t * (3.0f - 2.0f * t);
@@ -862,6 +848,10 @@ void GameScene::Initialize(const SceneContext &ctx) {
     uint32_t enemyModel = model->Load(L"app/resources/models/boss/boss.gltf");
     uint32_t bulletModel =
         model->Load(L"app/resources/models/boss/bullet.gltf");
+    playerModelId_ = playerModel;
+    swordModelId_ = swordModel;
+    enemyModelId_ = enemyModel;
+    bulletModelId_ = bulletModel;
     particleTextureId_ =
         texture->Load(L"app/resources/effects/particles/smoke.png");
     const XMFLOAT4 victoryHeat =
@@ -898,6 +888,13 @@ void GameScene::Initialize(const SceneContext &ctx) {
                                  0.24f, 0.12f, 0.64f);
     ApplyEnemyPhaseMaterial(model, texture, enemyModel, enemyPhaseMaterials_,
                             BossPhase::Phase1, false, 1.0f);
+    InitializeBattleArenaModels(model, arenaStoneTextureId);
+    InitializeBattleActors(dx, texture);
+    ResetBattleSessionState(model);
+}
+
+void GameScene::InitializeBattleArenaModels(ModelManager *model,
+                                            uint32_t arenaStoneTextureId) {
     if (!gSharedBattleModels.initialized) {
         gSharedBattleModels.arenaNoiseTextureId = arenaStoneTextureId;
         gSharedBattleModels.arenaFloorModelId =
@@ -980,6 +977,10 @@ void GameScene::Initialize(const SceneContext &ctx) {
         gSharedBattleModels.initialized = true;
     }
 
+    BindSharedBattleArenaModels();
+}
+
+void GameScene::BindSharedBattleArenaModels() {
     arenaNoiseTextureId_ = gSharedBattleModels.arenaNoiseTextureId;
     arenaFloorModelId_ = gSharedBattleModels.arenaFloorModelId;
     arenaLowPolyTerrainModelId_ =
@@ -1003,6 +1004,10 @@ void GameScene::Initialize(const SceneContext &ctx) {
     arenaDomeModelId_ = gSharedBattleModels.arenaDomeModelId;
     arenaBarrierRingModelId_ = gSharedBattleModels.arenaBarrierRingModelId;
     chargeWeakPointModelId_ = gSharedBattleModels.chargeWeakPointModelId;
+}
+
+void GameScene::InitializeBattleActors(DirectXCommon *dx,
+                                       TextureManager *texture) {
     sparkParticles_.Initialize(dx, ctx_->rendering.srv, texture,
                                particleTextureId_, 9000);
     sparkParticles_.SetEmission(1, 1000.0f);
@@ -1025,17 +1030,16 @@ void GameScene::Initialize(const SceneContext &ctx) {
     swordSlashArcRenderer_.Initialize(dx);
     swordSlashArcRenderer_.Reset();
 
-    player_.Initialize(playerModel, swordModel);
+    player_.Initialize(playerModelId_, swordModelId_);
     player_.SetInputCalibration(inputCalibration_);
-    playerModelId_ = playerModel;
-    swordModelId_ = swordModel;
-    bulletModelId_ = bulletModel;
     enemy_.SetDifficulty(combatDifficulty_);
-    enemy_.Initialize(enemyModel);
-    enemyModelId_ = enemyModel;
+    enemy_.Initialize(enemyModelId_);
     ApplyBulletTextureToModel(GetCurrentEnemyTextureId());
-    LoadBattleSounds(ctx);
+    LoadBattleSounds(*ctx_);
     StartBattleBgm();
+}
+
+void GameScene::ResetBattleSessionState(ModelManager *model) {
     cameraYaw_ = 0.0f;
     cameraPitch_ = 0.0f;
     isLockOn_ = true;
@@ -1120,7 +1124,7 @@ void GameScene::Initialize(const SceneContext &ctx) {
     pauseExitFadeTimer_ = 0.0f;
     pauseExitTarget_ = 0;
     player_.SetCameraSwordSlashSuppressed(false);
-    InitializeHandTracking(ctx);
+    InitializeHandTracking(*ctx_);
     hud_.Initialize(*ctx_);
     InitializeSceneMode();
 }
@@ -3607,16 +3611,6 @@ void GameScene::EmitArcaneProjectileExplosion(
     }
 }
 
-bool GameScene::IsArcaneProjectileInDeflectRange() const {
-    if (!arcaneProjectile_.active || arcaneProjectile_.reflected) {
-        return false;
-    }
-
-    const XMFLOAT3 playerPos = player_.GetTransform().position;
-    return DistanceSq(arcaneProjectile_.position, playerPos) <=
-           kArcaneProjectileDeflectRange * kArcaneProjectileDeflectRange;
-}
-
 XMFLOAT2 GameScene::GetArcaneProjectileCueDirection() const {
     if (!arcaneProjectile_.active) {
         return {1.0f, 0.0f};
@@ -3686,26 +3680,6 @@ XMFLOAT2 GameScene::ProjectWorldDirectionToCueDirection(
 
     const float invLen = 1.0f / std::sqrt(lenSq);
     return {x * invLen, y * invLen};
-}
-
-bool GameScene::IsArcaneProjectileSlashAligned(const Sword &sword) const {
-    if (!sword.CanSlashCounter()) {
-        return false;
-    }
-
-    const XMFLOAT2 slashDir = sword.GetSlashDirection();
-    const XMFLOAT2 cueDir = GetArcaneProjectileCueDirection();
-    const float slashLenSq = slashDir.x * slashDir.x + slashDir.y * slashDir.y;
-    if (slashLenSq < 0.010f) {
-        return false;
-    }
-
-    const float invSlashLen = 1.0f / std::sqrt(slashLenSq);
-    const float dot = (slashDir.x * invSlashLen) * cueDir.x +
-                      (slashDir.y * invSlashLen) * cueDir.y;
-    return arcaneProjectile_.cataclysm
-               ? dot >= kArcaneProjectileSlashDot
-               : std::fabs(dot) >= kArcaneProjectileSlashDot;
 }
 
 void GameScene::DrawArcaneProjectile() {
@@ -3900,6 +3874,22 @@ void GameScene::EmitReadyPreviewHeatParticles(float deltaTime) {
                       (2.10f + 3.50f * heat + 6.20f * danger) *
                           kReadyPreviewParticleVelocityScale);
 
+    EmitIntenseReadyPreviewParticles(heat, danger, side, depth, wave, enemyPos,
+                                     core, upward);
+}
+
+void GameScene::EmitIntenseReadyPreviewParticles(
+    float heat, float danger, float side, float depth, float wave,
+    const XMFLOAT3 &enemyPos, const XMFLOAT3 &core, const XMFLOAT3 &upward) {
+    const float highHeat = std::clamp((readyPreviewHeat_ - 7.0f / 9.0f) /
+                                          (1.0f - 7.0f / 9.0f),
+                                      0.0f, 1.0f);
+    const float density = 1.0f - 0.32f * SmoothStep01(highHeat);
+    auto previewCount = [density](float count) {
+        return ReadyPreviewParticleCount(count * density);
+    };
+    const XMFLOAT4 flameColor = ReadyPreviewParticleColor(
+        1.0f, 0.30f + 0.48f * heat, 0.04f, 0.88f + 0.12f * danger);
     if (heat > 0.24f) {
         EmitParticleBurst(explosionParticles_, {core.x, core.y + 0.22f, core.z},
                           previewCount(54.0f + 152.0f * heat + 350.0f * danger),
@@ -4951,6 +4941,10 @@ void GameScene::UpdateBladeClashWinFinish(float bladeClashWinActionTimer) {
                           0.76f);
     }
 
+    UpdateBladeClashWinPose(bladeClashWinActionTimer);
+}
+
+void GameScene::UpdateBladeClashWinPose(float bladeClashWinActionTimer) {
     const float finishYaw =
         std::atan2f(bladeClashDirection_.x, bladeClashDirection_.z);
     player_.SetDefeatPoseRatio(0.0f);
@@ -4998,7 +4992,13 @@ void GameScene::UpdateBladeClashWinFinish(float bladeClashWinActionTimer) {
         enemy_.SetCinematicTransform(
             enemyPos, enemyYaw, -Clash::kGuardBreakPose * collapseEase,
             side * (0.16f * snap + 0.18f * collapseEase));
-    } else {
+        return;
+    }
+    UpdateBladeClashWinActionPose(bladeClashWinActionTimer, finishYaw);
+}
+
+void GameScene::UpdateBladeClashWinActionPose(
+    float bladeClashWinActionTimer, float finishYaw) {
         const float windupT =
             std::clamp(bladeClashWinActionTimer / 0.05f, 0.0f, 1.0f);
         const float cutT =
@@ -5067,7 +5067,6 @@ void GameScene::UpdateBladeClashWinFinish(float bladeClashWinActionTimer) {
                 1.30f * enemySlamEase + 0.06f * enemySettleEase,
             side * (0.18f * hitPop + 0.48f * enemySlamEase -
                     0.08f * enemySettleEase));
-    }
 }
 
 void GameScene::UpdateBladeClashLossFinish() {
@@ -5395,26 +5394,10 @@ void GameScene::DrawVictoryEnemyVanishExplosionBillboards() {
     const XMFLOAT3 center = victoryFinalExplosionCenter_;
     const XMFLOAT3 cameraPos = camera_.GetPosition();
     const float yaw = BillboardYawToCamera(center, cameraPos);
-    const XMFLOAT4 heat = DifficultyGaugeHeatColor(combatDifficulty_, 1.0f);
-    const XMFLOAT4 fireColor{std::clamp(heat.x + 0.30f, 0.0f, 1.0f),
-                             std::clamp(heat.y + 0.24f, 0.0f, 1.0f),
-                             std::clamp(heat.z + 0.12f, 0.0f, 1.0f), 1.0f};
-    const XMFLOAT4 smokeColor =
-        Lerp({0.20f, 0.18f, 0.16f, 1.0f}, heat, 0.22f + 0.18f * difficultyT);
-
-    struct BillboardPatch {
-        uint32_t modelId = 0;
-        XMFLOAT3 offset{};
-        XMFLOAT2 scale{};
-        float roll = 0.0f;
-        float delay = 0.0f;
-        bool fire = false;
-    };
-
     const uint32_t smokeModelId = PickValue(
         victoryDarkSmokeBillboardModelId_ != 0,
         victoryDarkSmokeBillboardModelId_, victorySmokeBillboardModelId_);
-    const BillboardPatch patches[] = {
+    const VictoryBillboardPatch patches[] = {
         {victoryFireBillboardModelId_,
          {0.00f, 0.00f, -0.03f},
          {2.25f, 1.18f},
@@ -5471,59 +5454,66 @@ void GameScene::DrawVictoryEnemyVanishExplosionBillboards() {
          false},
     };
 
-    for (const BillboardPatch &patch : patches) {
-        if (patch.modelId == 0) {
-            continue;
-        }
-        const float local = SmoothStep01((age - patch.delay) /
-                                         kVictoryEnemyExplosionBillboardRise);
-        if (local <= 0.001f) {
-            continue;
-        }
-
-        const float drift = SmoothStep01(age / 1.45f);
-        const float fireFade =
-            PickValue(patch.fire, 1.0f - SmoothStep01(age / 0.48f), 1.0f);
-        if (patch.fire && fireFade <= 0.001f) {
-            continue;
-        }
-
-        ModelDrawEffect effect{};
-        effect.enabled = true;
-        effect.additiveBlend = patch.fire;
-        effect.disableCulling = true;
-        effect.blendOverride = ModelDrawEffectBlendOverride::Alpha;
-        effect.color = PickValue(patch.fire, fireColor, smokeColor);
-        effect.color.w = alpha * local * PickValue(patch.fire, fireFade, 0.92f);
-        effect.intensity = PickValue(patch.fire, 1.18f + 0.40f * difficultyT,
-                                     0.18f + 0.16f * difficultyT);
-        effect.fresnelPower = PickValue(patch.fire, 1.35f, 0.78f);
-        effect.noiseAmount = PickValue(patch.fire, 0.42f, 0.96f);
-        effect.baseDim = 0.0f;
-        effect.alphaBoost = PickValue(patch.fire, 2.45f, 2.05f);
-        effect.surfaceTint = PickValue(patch.fire, 0.72f, 0.48f);
-        effect.time = sceneLightTime_ * PickValue(patch.fire, 1.10f, 0.36f) +
-                      patch.delay * 9.0f;
-        model->SetDrawEffect(effect);
-
-        Transform billboard{};
-        const float size = PickValue(patch.fire, 1.20f, 1.56f) *
-                           (1.0f + 1.22f * drift) *
-                           (1.0f + 0.34f * difficultyT);
-        billboard.position = {
-            center.x + patch.offset.x * (1.0f + 0.52f * drift),
-            center.y + patch.offset.y * (1.0f + 0.46f * drift) +
-                PickValue(patch.fire, 0.0f, 0.22f * drift),
-            center.z + patch.offset.z};
-        billboard.rotation = MakeQuat(0.0f, yaw, patch.roll);
-        const float pulse = 1.0f + 0.04f * std::sinf(sceneLightTime_ * 3.2f +
-                                                     patch.delay * 17.0f);
-        billboard.scale = {patch.scale.x * size * pulse,
-                           patch.scale.y * size * pulse, 1.0f};
-        model->Draw(patch.modelId, billboard, camera_);
+    for (const VictoryBillboardPatch &patch : patches) {
+        DrawVictoryBillboardPatch(patch, center, yaw, age, alpha);
     }
 
     model->ClearDrawEffect();
+}
+
+void GameScene::DrawVictoryBillboardPatch(const VictoryBillboardPatch &patch,
+                                          const XMFLOAT3 &center, float yaw,
+                                          float age, float alpha) {
+    if (patch.modelId == 0) {
+        return;
+    }
+    const float local = SmoothStep01(
+        (age - patch.delay) / kVictoryEnemyExplosionBillboardRise);
+    const float fireFade =
+        PickValue(patch.fire, 1.0f - SmoothStep01(age / 0.48f), 1.0f);
+    if (local <= 0.001f || (patch.fire && fireFade <= 0.001f)) {
+        return;
+    }
+    const float difficultyT = GetDifficultyRatio();
+    const XMFLOAT4 heat = DifficultyGaugeHeatColor(combatDifficulty_, 1.0f);
+    const XMFLOAT4 fireColor{std::clamp(heat.x + 0.30f, 0.0f, 1.0f),
+                             std::clamp(heat.y + 0.24f, 0.0f, 1.0f),
+                             std::clamp(heat.z + 0.12f, 0.0f, 1.0f), 1.0f};
+    const XMFLOAT4 smokeColor =
+        Lerp({0.20f, 0.18f, 0.16f, 1.0f}, heat, 0.22f + 0.18f * difficultyT);
+    ModelDrawEffect effect{};
+    effect.enabled = true;
+    effect.additiveBlend = patch.fire;
+    effect.disableCulling = true;
+    effect.blendOverride = ModelDrawEffectBlendOverride::Alpha;
+    effect.color = PickValue(patch.fire, fireColor, smokeColor);
+    effect.color.w = alpha * local * PickValue(patch.fire, fireFade, 0.92f);
+    effect.intensity = PickValue(patch.fire, 1.18f + 0.40f * difficultyT,
+                                 0.18f + 0.16f * difficultyT);
+    effect.fresnelPower = PickValue(patch.fire, 1.35f, 0.78f);
+    effect.noiseAmount = PickValue(patch.fire, 0.42f, 0.96f);
+    effect.alphaBoost = PickValue(patch.fire, 2.45f, 2.05f);
+    effect.surfaceTint = PickValue(patch.fire, 0.72f, 0.48f);
+    effect.time = sceneLightTime_ * PickValue(patch.fire, 1.10f, 0.36f) +
+                  patch.delay * 9.0f;
+    ctx_->rendering.model->SetDrawEffect(effect);
+
+    const float drift = SmoothStep01(age / 1.45f);
+    const float size = PickValue(patch.fire, 1.20f, 1.56f) *
+                       (1.0f + 1.22f * drift) *
+                       (1.0f + 0.34f * difficultyT);
+    Transform billboard{};
+    billboard.position = {
+        center.x + patch.offset.x * (1.0f + 0.52f * drift),
+        center.y + patch.offset.y * (1.0f + 0.46f * drift) +
+            PickValue(patch.fire, 0.0f, 0.22f * drift),
+        center.z + patch.offset.z};
+    billboard.rotation = MakeQuat(0.0f, yaw, patch.roll);
+    const float pulse = 1.0f + 0.04f * std::sinf(sceneLightTime_ * 3.2f +
+                                                 patch.delay * 17.0f);
+    billboard.scale = {patch.scale.x * size * pulse,
+                       patch.scale.y * size * pulse, 1.0f};
+    ctx_->rendering.model->Draw(patch.modelId, billboard, camera_);
 }
 
 void GameScene::DrawVictoryFlash() {
@@ -5681,46 +5671,6 @@ float GameScene::BattleIntroWorldRevealProgress() const {
     constexpr float kReleaseTime = 2.36f;
     constexpr float kRevealDuration = 0.20f;
     return SmoothStep01((battleIntroTimer_ - kReleaseTime) / kRevealDuration);
-}
-
-void GameScene::DrawBladeClashFinishBackdrop() {
-    ModelManager *model = ctx_->rendering.model;
-    if (model == nullptr) {
-        return;
-    }
-
-    ModelDrawEffect backdropEffect{};
-    backdropEffect.enabled = true;
-    backdropEffect.additiveBlend = false;
-    backdropEffect.disableCulling = true;
-    backdropEffect.color = {0.74f, 0.78f, 0.86f, 0.22f};
-    backdropEffect.intensity = 0.10f;
-    backdropEffect.fresnelPower = 1.60f;
-    backdropEffect.noiseAmount = 0.0f;
-    backdropEffect.time = sceneLightTime_;
-    model->SetDrawEffect(backdropEffect);
-
-    Transform terrain{};
-    terrain.position = {0.0f, -0.42f, 0.0f};
-    terrain.rotation = MakeQuat(0.0f, 0.0f, 0.0f);
-    terrain.scale = {1.0f, 1.0f, 1.0f};
-    model->Draw(arenaLowPolyTerrainModelId_, terrain, camera_);
-
-    DrawDistantHazardBackdrop(1.0f);
-
-    Transform floor{};
-    floor.position = {0.0f, -0.04f, 0.0f};
-    floor.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
-    floor.scale = {28.0f, 28.0f, 1.0f};
-    model->Draw(arenaFloorModelId_, floor, camera_);
-
-    Transform centerDisk{};
-    centerDisk.position = {0.0f, 0.006f, 0.0f};
-    centerDisk.rotation = MakeQuat(-kPi * 0.5f, 0.0f, 0.0f);
-    centerDisk.scale = {1.0f, 1.0f, 1.0f};
-    model->Draw(arenaCenterDiskModelId_, centerDisk, camera_);
-
-    model->ClearDrawEffect();
 }
 
 void GameScene::DrawDistantHazardBackdrop(float buildProgress) {

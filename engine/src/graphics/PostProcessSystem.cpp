@@ -270,6 +270,14 @@ void PostProcessSystem::UpdateConstantBuffer() {
         return;
     }
 
+    const PostProcessProfile defaults{};
+    UpdateBasicEffectConstants(defaults);
+    UpdateLensFlareConstants(defaults);
+    UpdateStylizationConstants(defaults);
+}
+
+void PostProcessSystem::UpdateBasicEffectConstants(
+    const PostProcessProfile &defaults) {
     const auto &color = profile_.colorGrade;
     const auto &filter = profile_.filter;
     const auto &edge = profile_.edge;
@@ -279,12 +287,7 @@ void PostProcessSystem::UpdateConstantBuffer() {
     const auto &special = profile_.special;
     const auto &vignette = profile_.vignette;
     const auto &radialBlur = profile_.radialBlur;
-    const auto &randomNoise = profile_.randomNoise;
-    const auto &sceneDim = profile_.sceneDim;
-    const auto &toon = profile_.toon;
     const auto &dissolve = profile_.dissolve;
-    const auto &lensFlare = profile_.lensFlare;
-    const PostProcessProfile defaults{};
 
     float nearZ = AtLeastFinite(edge.nearZ, defaults.edge.nearZ, 0.0001f);
     float farZ = AtLeastFinite(edge.farZ, defaults.edge.farZ, 0.0002f);
@@ -342,6 +345,11 @@ void PostProcessSystem::UpdateConstantBuffer() {
         AtLeastFinite(dissolve.softness, defaults.dissolve.softness, 0.0001f);
     mappedConstBuffer_->dissolveScale =
         FiniteOr(dissolve.scale, defaults.dissolve.scale);
+}
+
+void PostProcessSystem::UpdateLensFlareConstants(
+    const PostProcessProfile &defaults) {
+    const auto &lensFlare = profile_.lensFlare;
     mappedConstBuffer_->lensFlareEnabled = lensFlare.enabled ? 1 : 0;
     mappedConstBuffer_->lensFlareVisibility = ClampFinite(
         lensFlare.visibility, defaults.lensFlare.visibility, 0.0f, 1.0f);
@@ -380,6 +388,16 @@ void PostProcessSystem::UpdateConstantBuffer() {
     mappedConstBuffer_->lensFlareStreakAlpha = ClampFinite(
         lensFlare.streakAlpha, defaults.lensFlare.streakAlpha, 0.0f, 1.0f);
     mappedConstBuffer_->lensFlarePadding1 = 0.0f;
+}
+
+void PostProcessSystem::UpdateStylizationConstants(
+    const PostProcessProfile &defaults) {
+    const auto &color = profile_.colorGrade;
+    const auto &vignette = profile_.vignette;
+    const auto &radialBlur = profile_.radialBlur;
+    const auto &randomNoise = profile_.randomNoise;
+    const auto &sceneDim = profile_.sceneDim;
+    const auto &toon = profile_.toon;
     mappedConstBuffer_->enableVignetting = vignette.enabled ? 1 : 0;
     mappedConstBuffer_->randomMode = ValidModeOrNone(
         randomNoise.mode, 0,

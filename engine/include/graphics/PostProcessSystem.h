@@ -47,6 +47,9 @@ class PostProcessSystem {
     void CreateConstantBuffer();
 
     void UpdateConstantBuffer();
+    void UpdateBasicEffectConstants(const PostProcessProfile &defaults);
+    void UpdateLensFlareConstants(const PostProcessProfile &defaults);
+    void UpdateStylizationConstants(const PostProcessProfile &defaults);
 
     DirectXCommon *dxCommon_ = nullptr;
     SrvManager *srvManager_ = nullptr;

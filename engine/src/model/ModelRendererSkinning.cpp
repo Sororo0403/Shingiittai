@@ -215,11 +215,11 @@ static bool HasSkinningDescriptors(const SkinCluster &skinCluster) {
            skinCluster.skinnedVertexUavGpuHandle.ptr != 0;
 }
 
-static bool CreateSkinnedVertexResources(ID3D12Device *device,
-                                         SrvManager *srvManager,
-                                         MeshManager *meshManager,
-                                         ScopedSrvAllocations &allocations,
-                                         ModelSubMesh &subMesh) {
+static bool CreateInfluenceResources(ID3D12Device *device,
+                                     SrvManager *srvManager,
+                                     MeshManager *meshManager,
+                                     ScopedSrvAllocations &allocations,
+                                     ModelSubMesh &subMesh) {
     SkinCluster &cluster = subMesh.skinCluster;
     const Mesh &mesh = meshManager->GetMesh(subMesh.meshId);
     const UINT influenceBytes =
@@ -279,7 +279,14 @@ static bool CreateSkinnedVertexResources(ID3D12Device *device,
     device->CreateShaderResourceView(cluster.influenceResource.Get(),
                                      &influenceSrv,
                                      cluster.influenceSrvCpuHandle);
+    return true;
+}
 
+static bool CreateSkinnedOutputResources(ID3D12Device *device,
+                                         SrvManager *srvManager,
+                                         ScopedSrvAllocations &allocations,
+                                         ModelSubMesh &subMesh) {
+    SkinCluster &cluster = subMesh.skinCluster;
     const UINT vertexBytes =
         CheckedBufferSize(sizeof(Vertex), subMesh.vertexCount,
                           "ModelRenderer skinned vertex buffer size overflow");
@@ -322,6 +329,17 @@ static bool CreateSkinnedVertexResources(ID3D12Device *device,
                                       nullptr, &uav,
                                       cluster.skinnedVertexUavCpuHandle);
     return true;
+}
+
+static bool CreateSkinnedVertexResources(ID3D12Device *device,
+                                         SrvManager *srvManager,
+                                         MeshManager *meshManager,
+                                         ScopedSrvAllocations &allocations,
+                                         ModelSubMesh &subMesh) {
+    return CreateInfluenceResources(device, srvManager, meshManager,
+                                    allocations, subMesh) &&
+           CreateSkinnedOutputResources(device, srvManager, allocations,
+                                        subMesh);
 }
 
 static void PopulateSkinInfluences(const Model &model, ModelSubMesh &subMesh) {

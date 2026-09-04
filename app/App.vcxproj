@@ -114,7 +114,6 @@
     <ClCompile Include="src\scene\OptionScene.cpp" />
     <ClCompile Include="src\scene\RankingScene.cpp" />
     <ClCompile Include="src\scene\SoundTestScene.cpp" />
-    <ClCompile Include="src\effect\EffectManager.cpp" />
     <ClCompile Include="src\player\SwordSlashArcRenderer.cpp" />
     <ClCompile Include="src\player\SwordTrailRenderer.cpp" />
     <ClCompile Include="src\scene\BattleResultScene.cpp" />
@@ -159,8 +158,6 @@
     <ClInclude Include="include\scene\RankingScene.h" />
     <ClInclude Include="include\scene\SoundTestScene.h" />
     <ClInclude Include="include\player\SwordSlashArcRenderer.h" />
-    <ClInclude Include="include\effect\EffectAsset.h" />
-    <ClInclude Include="include\effect\EffectManager.h" />
     <ClInclude Include="include\player\SwordTrailRenderer.h" />
     <ClInclude Include="include\player\InputControlType.h" />
     <ClInclude Include="include\compat\EngineCompat.h" />

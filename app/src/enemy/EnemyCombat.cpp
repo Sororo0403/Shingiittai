@@ -271,17 +271,6 @@ float Enemy::GetArcaneLaserChargeRatio() const {
     return action_.step == ActionStep::Active ? 1.0f : 0.0f;
 }
 
-bool Enemy::IsArcaneLaserCounterWindow() const {
-    if (action_.kind != ActionKind::ArcaneLaser ||
-        action_.step != ActionStep::Active) {
-        return false;
-    }
-
-    const auto &timing = config_.attacks.arcaneLaser.profile.timing;
-    return stateTimer_ >= timing.activeStartTime &&
-           stateTimer_ <= timing.activeEndTime;
-}
-
 float Enemy::GetCataclysmLaserChargeRatio() const {
     if (action_.kind != ActionKind::CataclysmLaser) {
         return 0.0f;
@@ -294,17 +283,6 @@ float Enemy::GetCataclysmLaserChargeRatio() const {
         return std::clamp(stateTimer_ / chargeTime, 0.0f, 1.0f);
     }
     return action_.step == ActionStep::Active ? 1.0f : 0.0f;
-}
-
-bool Enemy::IsCataclysmLaserCounterWindow() const {
-    if (action_.kind != ActionKind::CataclysmLaser ||
-        action_.step != ActionStep::Active) {
-        return false;
-    }
-
-    const auto &timing = config_.attacks.cataclysmLaser.profile.timing;
-    return stateTimer_ >= timing.activeStartTime &&
-           stateTimer_ <= timing.activeEndTime;
 }
 
 float Enemy::TakeDamage(float damage) {

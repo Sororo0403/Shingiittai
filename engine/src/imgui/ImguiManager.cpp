@@ -135,7 +135,8 @@ void ImguiManager::AllocateSrvDescriptor(ImGui_ImplDX12_InitInfo *info,
 
 void ImguiManager::FreeSrvDescriptor(ImGui_ImplDX12_InitInfo *info,
                                      D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
-                                     D3D12_GPU_DESCRIPTOR_HANDLE) {
+                                     D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle) {
+    (void)gpuHandle;
     if (info == nullptr || info->UserData == nullptr) {
         return;
     }

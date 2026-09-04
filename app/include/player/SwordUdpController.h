@@ -8,23 +8,50 @@
 #include <cstdint>
 #include <string>
 
+/// <summary>
+/// UDPで受信した手のランドマークから左右の剣姿勢を生成する
+/// </summary>
 class SwordUdpController {
   public:
     SwordUdpController() = default;
+    /// <summary>
+    /// ~SwordUdpControllerに対応する公開処理を実行する
+    /// </summary>
     ~SwordUdpController();
 
     SwordUdpController(const SwordUdpController &) = delete;
     SwordUdpController &operator=(const SwordUdpController &) = delete;
 
+    /// <summary>
+    /// 入力と状態を1フレーム進める
+    /// </summary>
     void Update(float dt);
 
+    /// <summary>
+    /// IsActiveの条件を満たすか判定する
+    /// </summary>
     bool IsActive(size_t handIndex = 0) const;
+    /// <summary>
+    /// GetPoseに対応する現在値を取得する
+    /// </summary>
     SwordPose GetPose(size_t handIndex = 0) const;
+    /// <summary>
+    /// GetMotionSpeedに対応する現在値を取得する
+    /// </summary>
     float GetMotionSpeed(size_t handIndex = 0) const;
+    /// <summary>
+    /// SetCalibrationに対応する状態を設定する
+    /// </summary>
     void SetCalibration(const SwordInputCalibration &calibration);
+    /// <summary>
+    /// SetPostSlashCooldownEnabledに対応する状態を設定する
+    /// </summary>
     void SetPostSlashCooldownEnabled(bool enabled) {
         postSlashCooldownEnabled_ = enabled;
     }
+    /// <summary>
+    /// HasFreshInputの条件を満たすか判定する
+    /// </summary>
     bool HasFreshInput() const;
 
     struct DebugHandState {
@@ -66,6 +93,9 @@ class SwordUdpController {
         float tiltRadians = 0.0f;
     };
 
+    /// <summary>
+    /// GetDebugHandStateに対応する現在値を取得する
+    /// </summary>
     DebugHandState GetDebugHandState(size_t handIndex = 0) const;
 
   private:

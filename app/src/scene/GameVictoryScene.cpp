@@ -324,6 +324,14 @@ GameVictoryScene::~GameVictoryScene() { StopResultCrowdAudio(); }
 
 void GameVictoryScene::Initialize(const SceneContext &ctx) {
     BaseScene::Initialize(ctx);
+    ResetSceneState();
+    InitializePresentation();
+    LoadVictoryAssets();
+    LoadResultUi();
+    PlayOpeningSlashSounds();
+}
+
+void GameVictoryScene::ResetSceneState() {
     sceneTime_ = 0.0f;
     realSceneTime_ = 0.0f;
     resultTimer_ = 0.0f;
@@ -349,7 +357,9 @@ void GameVictoryScene::Initialize(const SceneContext &ctx) {
     slashSound3Played_ = false;
     resultCrowdIntroSoundId_ = SoundManager::kInvalidSoundId;
     resultCrowdIntroVoiceHandle_ = SoundManager::kInvalidVoiceHandle;
+}
 
+void GameVictoryScene::InitializePresentation() {
     const float aspect = static_cast<float>(ctx_->systems.winApp->GetWidth()) /
                          static_cast<float>(ctx_->systems.winApp->GetHeight());
     camera_.Initialize(aspect);
@@ -384,7 +394,10 @@ void GameVictoryScene::Initialize(const SceneContext &ctx) {
     enemy_.ApplyVictoryDefeatPose(kEnemyFallenPoseRatio,
                                   kEnemyFallenPoseBasePos,
                                   kEnemyFallenPoseReferencePos);
+}
 
+void GameVictoryScene::LoadVictoryAssets() {
+    ModelManager *model = ctx_->rendering.model;
     if (ctx_->systems.sound != nullptr) {
         ctx_->systems.sound->TryLoad(
             L"app/resources/audio/se/combat/explosion_4.mp3",
@@ -431,7 +444,9 @@ void GameVictoryScene::Initialize(const SceneContext &ctx) {
                                MakeTransparentMaterial(particleTextureId_,
                                                        darkSmokeMaterialColor));
     }
+}
 
+void GameVictoryScene::LoadResultUi() {
     missionCompleteLabel_ =
         LoadTextureImage(L"app/resources/ui/result/mplus/mission_complete.png");
     clearTimeLabel_ =
@@ -494,7 +509,9 @@ void GameVictoryScene::Initialize(const SceneContext &ctx) {
     secondImage_.inkRight = 43.0f;
     secondImage_.inkTop = 33.0f;
     secondImage_.inkBottom = 67.0f;
+}
 
+void GameVictoryScene::PlayOpeningSlashSounds() {
     // Play resonant slash sounds immediately upon scene initialization
     if (ctx_->systems.sound != nullptr &&
         slashSoundId_ != SoundManager::kInvalidSoundId) {
@@ -996,9 +1013,6 @@ void GameVictoryScene::DrawPreExplosionCharge() {
     const XMFLOAT4 heatColor = HeatColorForDifficulty(combatDifficulty_, 1.0f);
     const XMFLOAT4 brightHeat =
         BrightHeatColorForDifficulty(combatDifficulty_, 1.0f);
-    const XMFLOAT4 smokeHeat =
-        SmokeHeatColorForDifficulty(combatDifficulty_, 1.0f);
-
     baseCharge.color = {heatColor.x, heatColor.y, heatColor.z, 0.20f * alpha};
     baseCharge.intensity = (0.22f + 0.42f * pulse + 0.82f * finalSurge) * alpha;
     baseCharge.fresnelPower = 0.92f;
@@ -1035,9 +1049,22 @@ void GameVictoryScene::DrawPreExplosionCharge() {
     model->Draw(enemyModelId_, glowEnemy, camera_);
     model->ClearDrawEffect();
 
+    DrawPreExplosionBillboards(center, yaw, alpha, pulse, finalSurge, burst);
+}
+
+void GameVictoryScene::DrawPreExplosionBillboards(const XMFLOAT3 &center,
+                                                   float yaw, float alpha,
+                                                   float pulse,
+                                                   float finalSurge,
+                                                   float burst) {
+    ModelManager *model = ctx_->rendering.model;
     if (fireBillboardModelId_ == 0 && smokeBillboardModelId_ == 0) {
         return;
     }
+    const XMFLOAT4 brightHeat =
+        BrightHeatColorForDifficulty(combatDifficulty_, 1.0f);
+    const XMFLOAT4 smokeHeat =
+        SmokeHeatColorForDifficulty(combatDifficulty_, 1.0f);
 
     struct ChargePatch {
         uint32_t modelId = 0;
@@ -1237,23 +1264,12 @@ void GameVictoryScene::DrawExplosionBillboards() {
         return;
     }
 
-    const XMFLOAT4 smokeHeat =
-        SmokeHeatColorForDifficulty(combatDifficulty_, 1.0f);
-    const XMFLOAT4 sootHeat =
-        DarkSmokeHeatColorForDifficulty(combatDifficulty_, 1.0f);
     const XMFLOAT3 enemyPos = enemy_.GetTransform().position;
     const XMFLOAT3 center{enemyPos.x + 0.02f, enemyPos.y + 1.10f,
                           enemyPos.z - 0.42f};
     const XMFLOAT3 cameraPos = camera_.GetPosition();
     const float yaw =
         std::atan2f(cameraPos.x - center.x, cameraPos.z - center.z);
-
-    struct SmokePatch {
-        XMFLOAT3 offset{};
-        XMFLOAT2 scale{};
-        float roll = 0.0f;
-        float delay = 0.0f;
-    };
 
     const SmokePatch patches[] = {
         {{0.00f, 0.08f, -0.04f}, {2.10f, 1.02f}, 0.06f, 0.00f},
@@ -1280,50 +1296,56 @@ void GameVictoryScene::DrawExplosionBillboards() {
     }
 
     for (const SmokePatch &patch : patches) {
-        const float local = SmoothStep01(
-            (age - kExplosionBillboardStart - patch.delay * 0.75f) /
-            kExplosionBillboardRise);
-        if (local <= 0.001f) {
-            continue;
-        }
-
-        ModelDrawEffect effect{};
-        effect.enabled = true;
-        effect.additiveBlend = false;
-        effect.disableCulling = true;
-        effect.blendOverride = ModelDrawEffectBlendOverride::Alpha;
-        const float tintAmount =
-            0.46f + 0.26f * difficultyT +
-            0.10f * std::sinf(sceneTime_ * 1.35f + patch.delay * 11.0f);
-        effect.color = LerpColor(sootHeat, smokeHeat, tintAmount);
-        effect.color.w = alpha * local;
-        effect.intensity = 0.16f + 0.18f * difficultyT;
-        effect.fresnelPower = 0.78f;
-        effect.noiseAmount = 0.96f;
-        effect.baseDim = 0.0f;
-        effect.alphaBoost = 2.12f;
-        effect.surfaceTint = 0.48f;
-        effect.time = sceneTime_ * 0.38f + patch.delay * 7.0f;
-        model->SetDrawEffect(effect);
-
-        Transform billboard{};
-        const float drift =
-            SmoothStep01((age - kExplosionBillboardStart) / 1.65f);
-        const float size = (1.48f + 0.56f * difficultyT) *
-                           (1.0f + 1.46f * drift) * kExplosionSizeBoost;
-        billboard.position = {
-            center.x + patch.offset.x * (1.0f + 0.50f * drift),
-            center.y + patch.offset.y * (1.0f + 0.42f * drift),
-            center.z + patch.offset.z};
-        billboard.rotation = MakeQuat(0.0f, yaw, patch.roll);
-        const float pulse =
-            1.0f + 0.035f * std::sinf(sceneTime_ * 2.4f + patch.delay * 13.0f);
-        billboard.scale = {patch.scale.x * size * pulse,
-                           patch.scale.y * size * pulse, 1.0f};
-        model->Draw(smokeModelId, billboard, camera_);
+        DrawExplosionSmokePatch(patch, smokeModelId, center, yaw, age, alpha);
     }
 
     model->ClearDrawEffect();
+}
+
+void GameVictoryScene::DrawExplosionSmokePatch(
+    const SmokePatch &patch, uint32_t modelId, const XMFLOAT3 &center,
+    float yaw, float age, float alpha) {
+    const float local = SmoothStep01(
+        (age - kExplosionBillboardStart - patch.delay * 0.75f) /
+        kExplosionBillboardRise);
+    if (local <= 0.001f) {
+        return;
+    }
+    const float difficultyT = DifficultyRatio(combatDifficulty_);
+    const XMFLOAT4 smokeHeat =
+        SmokeHeatColorForDifficulty(combatDifficulty_, 1.0f);
+    const XMFLOAT4 sootHeat =
+        DarkSmokeHeatColorForDifficulty(combatDifficulty_, 1.0f);
+    ModelDrawEffect effect{};
+    effect.enabled = true;
+    effect.disableCulling = true;
+    effect.blendOverride = ModelDrawEffectBlendOverride::Alpha;
+    const float tint = 0.46f + 0.26f * difficultyT +
+                       0.10f * std::sinf(sceneTime_ * 1.35f +
+                                         patch.delay * 11.0f);
+    effect.color = LerpColor(sootHeat, smokeHeat, tint);
+    effect.color.w = alpha * local;
+    effect.intensity = 0.16f + 0.18f * difficultyT;
+    effect.fresnelPower = 0.78f;
+    effect.noiseAmount = 0.96f;
+    effect.alphaBoost = 2.12f;
+    effect.surfaceTint = 0.48f;
+    effect.time = sceneTime_ * 0.38f + patch.delay * 7.0f;
+    ctx_->rendering.model->SetDrawEffect(effect);
+
+    const float drift = SmoothStep01((age - kExplosionBillboardStart) / 1.65f);
+    const float size = (1.48f + 0.56f * difficultyT) *
+                       (1.0f + 1.46f * drift) * kExplosionSizeBoost;
+    Transform billboard{};
+    billboard.position = {center.x + patch.offset.x * (1.0f + 0.50f * drift),
+                          center.y + patch.offset.y * (1.0f + 0.42f * drift),
+                          center.z + patch.offset.z};
+    billboard.rotation = MakeQuat(0.0f, yaw, patch.roll);
+    const float pulse =
+        1.0f + 0.035f * std::sinf(sceneTime_ * 2.4f + patch.delay * 13.0f);
+    billboard.scale = {patch.scale.x * size * pulse,
+                       patch.scale.y * size * pulse, 1.0f};
+    ctx_->rendering.model->Draw(modelId, billboard, camera_);
 }
 
 void GameVictoryScene::DrawForegroundEnemy() {
@@ -1911,25 +1933,40 @@ void GameVictoryScene::DrawRankingPanel(float screenWidth, float screenHeight,
     DrawRect(timeRight + gap * 0.50f, tableTop, 1.0f, tableBottom - tableTop,
              Color(0.95f, 0.72f, 0.28f, lineAlpha));
 
+    DrawRankingRows({contentLeft, panelW, contentW, rowStartY, rowGap,
+                     rowFramePadY, rowFrameH, rowScale, scoreRight, timeRight,
+                     difficultyRight},
+                    alpha);
+}
+
+void GameVictoryScene::DrawRankingRows(const RankingTableLayout &layout,
+                                       float alpha) {
     const size_t rows = (std::min)(rankingEntries_.size(), kRankingDrawCount);
     for (size_t i = 0; i < rows; ++i) {
         const RankingEntry &entry = rankingEntries_[i];
-        const float rowY = rowStartY + static_cast<float>(i) * rowGap;
+        const float rowY =
+            layout.rowStartY + static_cast<float>(i) * layout.rowGap;
         const bool highlight = entry.isCurrent;
         const float pulse =
             highlight ? 0.5f + 0.5f * std::sinf(resultTimer_ * 8.0f) : 0.0f;
         DrawRect(
-            contentLeft - panelW * 0.020f, rowY - rowFramePadY,
-            contentW + panelW * 0.040f, rowFrameH,
+            layout.contentLeft - layout.panelWidth * 0.020f,
+            rowY - layout.rowFramePaddingY,
+            layout.contentWidth + layout.panelWidth * 0.040f,
+            layout.rowFrameHeight,
             Color(1.0f, 1.0f, 1.0f, (i % 2 == 0 ? 0.030f : 0.015f) * alpha));
         if (highlight) {
             DrawRect(
-                contentLeft - panelW * 0.020f, rowY - rowFramePadY,
-                contentW + panelW * 0.040f, rowFrameH,
+                layout.contentLeft - layout.panelWidth * 0.020f,
+                rowY - layout.rowFramePaddingY,
+                layout.contentWidth + layout.panelWidth * 0.040f,
+                layout.rowFrameHeight,
                 Color(1.0f, 0.74f, 0.24f, (0.20f + 0.20f * pulse) * alpha));
             DrawFrame(
-                contentLeft - panelW * 0.020f, rowY - rowFramePadY,
-                contentW + panelW * 0.040f, rowFrameH, 1.0f + pulse * 2.0f,
+                layout.contentLeft - layout.panelWidth * 0.020f,
+                rowY - layout.rowFramePaddingY,
+                layout.contentWidth + layout.panelWidth * 0.040f,
+                layout.rowFrameHeight, 1.0f + pulse * 2.0f,
                 Color(1.0f, 0.86f, 0.32f, (0.44f + 0.42f * pulse) * alpha));
         }
 
@@ -1938,24 +1975,28 @@ void GameVictoryScene::DrawRankingPanel(float screenWidth, float screenHeight,
         rank << rankNumber << ":";
         const float textAlpha = (highlight ? 1.0f : 0.88f) * alpha;
         const XMFLOAT4 textColor = Color(1.0f, 1.0f, 1.0f, textAlpha);
-        const float rowFrameY = rowY - rowFramePadY;
+        const float rowFrameY = rowY - layout.rowFramePaddingY;
         const float baselineY =
-            rowFrameY + rowFrameH * 0.5f +
-            MeasureTextInkCenterOffset("00:00.00s", rowScale);
+            rowFrameY + layout.rowFrameHeight * 0.5f +
+            MeasureTextInkCenterOffset("00:00.00s", layout.rowScale);
         const std::string score = FormatScore(entry.score);
         const std::string time = FormatTime(entry.clearTime);
         const std::string difficulty = FormatDifficulty(entry.difficulty);
-        DrawTextLineLeftBaseline(rank.str(), contentLeft, baselineY, rowScale,
-                                 textColor);
+        DrawTextLineLeftBaseline(rank.str(), layout.contentLeft, baselineY,
+                                 layout.rowScale, textColor);
         DrawTextLineLeftBaseline(score,
-                                 scoreRight - MeasureTextLine(score, rowScale),
-                                 baselineY, rowScale, textColor);
+                                 layout.scoreRight -
+                                     MeasureTextLine(score, layout.rowScale),
+                                 baselineY, layout.rowScale, textColor);
         DrawTextLineLeftBaseline(time,
-                                 timeRight - MeasureTextLine(time, rowScale),
-                                 baselineY, rowScale, textColor);
+                                 layout.timeRight -
+                                     MeasureTextLine(time, layout.rowScale),
+                                 baselineY, layout.rowScale, textColor);
         DrawTextLineLeftBaseline(
-            difficulty, difficultyRight - MeasureTextLine(difficulty, rowScale),
-            baselineY, rowScale, textColor);
+            difficulty,
+            layout.difficultyRight -
+                MeasureTextLine(difficulty, layout.rowScale),
+            baselineY, layout.rowScale, textColor);
     }
 }
 

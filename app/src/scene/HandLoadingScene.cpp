@@ -348,15 +348,6 @@ void HandLoadingScene::DrawImageCentered(const Image &image, float centerX,
     ctx_->rendering.sprite->DrawSprite(sprite);
 }
 
-void HandLoadingScene::DrawFacingInstruction(float screenWidth,
-                                             float screenHeight) {
-    constexpr const char *kText = "FACE CAMERA";
-    const float scale = std::clamp(screenWidth / 1250.0f, 0.78f, 1.25f);
-    const float textWidth = MeasureBlockText(kText, scale);
-    DrawBlockText(kText, (screenWidth - textWidth) * 0.5f, screenHeight * 0.42f,
-                  scale, Color(1.0f, 1.0f, 1.0f, 0.96f));
-}
-
 void HandLoadingScene::DrawCalibrationOverlay(float screenWidth,
                                               float screenHeight) {
     const auto left = handController_.GetDebugHandState(0);

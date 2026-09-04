@@ -6,11 +6,23 @@
 #include <cstdint>
 #include <string>
 
+/// <summary>
+/// 戦闘中の体力ゲージと状態表示を描画する
+/// </summary>
 class GameSceneHud {
   public:
+    /// <summary>
+    /// 使用するリソースと初期状態を準備する
+    /// </summary>
     void Initialize(const SceneContext &ctx);
+    /// <summary>
+    /// 入力と状態を1フレーム進める
+    /// </summary>
     void Update(const SceneContext &ctx, float playerHp, float enemyHp,
                 float enemyMaxHp);
+    /// <summary>
+    /// 現在の状態を描画する
+    /// </summary>
     void Draw(const SceneContext &ctx, float alpha = 1.0f);
 
   private:

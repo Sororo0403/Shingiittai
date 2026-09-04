@@ -8,12 +8,30 @@
 #include <cstdint>
 #include <vector>
 
+/// <summary>
+/// ハンドトラッキング入力とカメラ映像を可視化して診断する
+/// </summary>
 class HandTrackingTestScene : public BaseScene {
   public:
+    /// <summary>
+    /// ~HandTrackingTestSceneに対応する公開処理を実行する
+    /// </summary>
     ~HandTrackingTestScene() override;
+    /// <summary>
+    /// 使用するリソースと初期状態を準備する
+    /// </summary>
     void Initialize(const SceneContext &ctx) override;
+    /// <summary>
+    /// 入力と状態を1フレーム進める
+    /// </summary>
     void Update() override;
+    /// <summary>
+    /// 現在の状態を描画する
+    /// </summary>
     void Draw() override;
+    /// <summary>
+    /// 透明描画パスへ必要な要素を描画する
+    /// </summary>
     void DrawTransparent() override {}
 
   private:
@@ -52,8 +70,6 @@ class HandTrackingTestScene : public BaseScene {
     void UpdateHand(size_t handIndex);
     void UpdateRangedGesture();
     void UpdateRangedGestureState(bool pressed, bool released, bool joined);
-    void CalibrateNeutralFromCurrentHands();
-    void ResetCalibration();
     bool IsHandTrackingReady() const;
     DirectX::XMFLOAT2 ToFieldPosition(float screenWidth, float screenHeight,
                                       float x, float y) const;

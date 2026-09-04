@@ -177,13 +177,6 @@ static float GetReadableMeleeRadius(const OBB &box) {
     return (std::max)(box.size.x, box.size.z) * 0.55f + 0.75f;
 }
 
-static XMFLOAT4 MakeYawRotation(float yaw) {
-    XMFLOAT4 rotation{};
-    XMStoreFloat4(&rotation,
-                  XMQuaternionRotationAxis(XMVectorSet(0, 1, 0, 0), yaw));
-    return rotation;
-}
-
 static void TickCooldown(float &cooldown, float deltaTime) {
     if (cooldown <= 0.0f) {
         return;
@@ -295,11 +288,7 @@ void GameScene::BeginBladeClash(size_t swordIndex) {
     DispatchCombatFeedback(feedback);
 }
 
-void GameScene::UpdateBladeClash(float gameplayDeltaTime) {
-    if (!bladeClashActive_) {
-        return;
-    }
-
+bool GameScene::UpdateBladeClashPlayerSlashes() {
     const auto swords = player_.GetSwords();
     const auto slashStates = player_.GetSwordSlashStates();
     bool slashLanded = false;
@@ -342,6 +331,15 @@ void GameScene::UpdateBladeClash(float gameplayDeltaTime) {
             sparkParticles_, sparkPos, 16, 0.11f, AppParticleBurstStyle::Sparks,
             {0.90f, 0.98f, 1.0f, 0.62f}, bladeClashDirection_, 1.08f);
     }
+    return slashLanded;
+}
+
+void GameScene::UpdateBladeClash(float gameplayDeltaTime) {
+    if (!bladeClashActive_) {
+        return;
+    }
+
+    const bool slashLanded = UpdateBladeClashPlayerSlashes();
 
     if (bladeClashChainTimer_ > 0.0f) {
         bladeClashChainTimer_ =

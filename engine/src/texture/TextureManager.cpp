@@ -248,6 +248,46 @@ MakeTextureSrvDescription(const TexMetadata &metadata) {
     }
     return description;
 }
+
+ComPtr<ID3D12Resource>
+CreateDefaultTextureResource(ID3D12Device *device,
+                             const TexMetadata &metadata) {
+    const auto description = CD3DX12_RESOURCE_DESC::Tex2D(
+        metadata.format, static_cast<UINT64>(metadata.width),
+        static_cast<UINT>(metadata.height),
+        static_cast<UINT16>(metadata.arraySize),
+        static_cast<UINT16>(metadata.mipLevels));
+    const CD3DX12_HEAP_PROPERTIES heap(D3D12_HEAP_TYPE_DEFAULT);
+    ComPtr<ID3D12Resource> resource;
+    const HRESULT result = device->CreateCommittedResource(
+        &heap, D3D12_HEAP_FLAG_NONE, &description,
+        D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&resource));
+    return SUCCEEDED(result) ? resource : nullptr;
+}
+
+std::vector<D3D12_SUBRESOURCE_DATA>
+BuildTextureSubresources(const Image *images, size_t imageCount) {
+    std::vector<D3D12_SUBRESOURCE_DATA> subresources(imageCount);
+    std::transform(images, images + imageCount, subresources.begin(),
+                   [](const Image &image) {
+                       return D3D12_SUBRESOURCE_DATA{
+                           image.pixels,
+                           static_cast<LONG_PTR>(image.rowPitch),
+                           static_cast<LONG_PTR>(image.slicePitch)};
+                   });
+    return subresources;
+}
+
+ComPtr<ID3D12Resource> CreateTextureUploadBuffer(ID3D12Device *device,
+                                                 UINT64 uploadSize) {
+    const CD3DX12_HEAP_PROPERTIES heap(D3D12_HEAP_TYPE_UPLOAD);
+    const auto description = CD3DX12_RESOURCE_DESC::Buffer(uploadSize);
+    ComPtr<ID3D12Resource> resource;
+    const HRESULT result = device->CreateCommittedResource(
+        &heap, D3D12_HEAP_FLAG_NONE, &description,
+        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&resource));
+    return SUCCEEDED(result) ? resource : nullptr;
+}
 } // namespace
 
 TextureManager &TextureManager::GetInstance() {
@@ -304,9 +344,7 @@ void TextureManager::Initialize(DirectXCommon *dxCommon,
     whiteTextureId_ = CreateTexture(&image, 1, metadata);
 
     Image cubeImages[6]{};
-    for (Image &cubeImage : cubeImages) {
-        cubeImage = image;
-    }
+    std::fill(std::begin(cubeImages), std::end(cubeImages), image);
     TexMetadata cubeMetadata = metadata;
     cubeMetadata.arraySize = 6;
     cubeMetadata.miscFlags = TEX_MISC_TEXTURECUBE;
@@ -316,9 +354,7 @@ void TextureManager::Initialize(DirectXCommon *dxCommon,
     uint32_t blackPixel = 0xFF000000;
     image.pixels = reinterpret_cast<uint8_t *>(&blackPixel);
     Image blackCubeImages[6]{};
-    for (Image &cubeImage : blackCubeImages) {
-        cubeImage = image;
-    }
+    std::fill(std::begin(blackCubeImages), std::end(blackCubeImages), image);
     blackCubeTextureId_ =
         CreateTexture(blackCubeImages, _countof(blackCubeImages), cubeMetadata);
 
@@ -399,11 +435,11 @@ uint32_t TextureManager::Load(const std::wstring &filePath) {
 
 std::vector<uint32_t>
 TextureManager::LoadBatch(const std::vector<std::wstring> &filePaths) {
-    std::vector<uint32_t> textureIds;
-    textureIds.reserve(filePaths.size());
-    for (const std::wstring &filePath : filePaths) {
-        textureIds.push_back(Load(filePath));
-    }
+    std::vector<uint32_t> textureIds(filePaths.size());
+    std::transform(filePaths.begin(), filePaths.end(), textureIds.begin(),
+                   [this](const std::wstring &filePath) {
+                       return Load(filePath);
+                   });
     return textureIds;
 }
 
@@ -443,47 +479,19 @@ uint32_t TextureManager::CreateTexture(const Image *images, size_t imageCount,
     UploadPassScope uploadPass(dxCommon_, this, ownsUploadPass);
 
     Texture texture;
-
-    auto texDesc = CD3DX12_RESOURCE_DESC::Tex2D(
-        metadata.format, static_cast<UINT64>(metadata.width),
-        static_cast<UINT>(metadata.height),
-        static_cast<UINT16>(metadata.arraySize),
-        static_cast<UINT16>(metadata.mipLevels));
-
-    CD3DX12_HEAP_PROPERTIES defaultHeap(D3D12_HEAP_TYPE_DEFAULT);
-
-    const HRESULT textureResult =
-        dxCommon_->GetDevice()->CreateCommittedResource(
-            &defaultHeap, D3D12_HEAP_FLAG_NONE, &texDesc,
-            D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
-            IID_PPV_ARGS(&texture.resource));
-    if (FAILED(textureResult) || !texture.resource) {
+    texture.resource =
+        CreateDefaultTextureResource(dxCommon_->GetDevice(), metadata);
+    if (!texture.resource) {
         return fallbackTextureId;
     }
 
-    std::vector<D3D12_SUBRESOURCE_DATA> subresources(imageCount);
-    for (size_t imageIndex = 0; imageIndex < imageCount; ++imageIndex) {
-        subresources[imageIndex].pData = images[imageIndex].pixels;
-        subresources[imageIndex].RowPitch =
-            static_cast<LONG_PTR>(images[imageIndex].rowPitch);
-        subresources[imageIndex].SlicePitch =
-            static_cast<LONG_PTR>(images[imageIndex].slicePitch);
-    }
-
-    UINT64 uploadSize = GetRequiredIntermediateSize(
+    std::vector<D3D12_SUBRESOURCE_DATA> subresources =
+        BuildTextureSubresources(images, imageCount);
+    const UINT64 uploadSize = GetRequiredIntermediateSize(
         texture.resource.Get(), 0, static_cast<UINT>(subresources.size()));
-
-    ComPtr<ID3D12Resource> uploadBuffer;
-
-    CD3DX12_HEAP_PROPERTIES uploadHeap(D3D12_HEAP_TYPE_UPLOAD);
-    auto uploadDesc = CD3DX12_RESOURCE_DESC::Buffer(uploadSize);
-
-    const HRESULT uploadResult =
-        dxCommon_->GetDevice()->CreateCommittedResource(
-            &uploadHeap, D3D12_HEAP_FLAG_NONE, &uploadDesc,
-            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-            IID_PPV_ARGS(&uploadBuffer));
-    if (FAILED(uploadResult) || !uploadBuffer) {
+    ComPtr<ID3D12Resource> uploadBuffer =
+        CreateTextureUploadBuffer(dxCommon_->GetDevice(), uploadSize);
+    if (!uploadBuffer) {
         return fallbackTextureId;
     }
 
@@ -562,13 +570,9 @@ void TextureManager::ReleaseUploadBuffers() {
         return;
     }
 
-    bool hasFrameUploadBuffers = false;
-    for (const auto &buffers : frameUploadBuffers_) {
-        if (!buffers.empty()) {
-            hasFrameUploadBuffers = true;
-            break;
-        }
-    }
+    const bool hasFrameUploadBuffers =
+        std::any_of(frameUploadBuffers_.begin(), frameUploadBuffers_.end(),
+                    [](const auto &buffers) { return !buffers.empty(); });
 
     if (dxCommon_ && !dxCommon_->IsDeviceRemoved() &&
         (!uploadBuffers_.empty() || hasFrameUploadBuffers)) {

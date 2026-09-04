@@ -17,6 +17,8 @@
 #include "WinApp.h"
 #include "core/AssetManager.h"
 #include <Windows.h>
+#include <array>
+#include <cstring>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -398,6 +400,104 @@ class HandUdpSenderProcess {
     DWORD lastStartAttemptTick_ = 0;
 };
 
+struct MainLoopServices {
+    MainLoopServices(HandUdpSenderProcess &handTracking, WinApp &window,
+                     Input &input, SoundManager &sound,
+                     DirectXCommon &graphics, PostProcessSystem &postProcess,
+                     ModelManager &models, SpriteManager &sprites,
+                     SrvManager &srv, SceneManager &scenes,
+                     SceneContext &sceneContext, int &width, int &height)
+        : handTracking(handTracking), window(window), input(input), sound(sound),
+          graphics(graphics), postProcess(postProcess), models(models),
+          sprites(sprites), srv(srv), scenes(scenes),
+          sceneContext(sceneContext), width(width), height(height) {}
+
+    HandUdpSenderProcess &handTracking;
+    WinApp &window;
+    Input &input;
+    SoundManager &sound;
+    DirectXCommon &graphics;
+    PostProcessSystem &postProcess;
+    ModelManager &models;
+    SpriteManager &sprites;
+    SrvManager &srv;
+    SceneManager &scenes;
+    SceneContext &sceneContext;
+    int &width;
+    int &height;
+};
+
+void ConfigureHandTrackingCallbacks(HandUdpSenderProcess &handTracking,
+                                    WinApp &window, bool runtimeAvailable) {
+    AppSceneServices::ConfigureHandTracking(
+        [&handTracking, &window]() {
+            if (handTracking.IsRunning()) {
+                return true;
+            }
+            HWND hwnd = window.GetHwnd();
+            SetForegroundWindow(hwnd);
+            const bool started = handTracking.ActivateCamera();
+            SetForegroundWindow(hwnd);
+            return started;
+        },
+        [&handTracking]() { handTracking.DeactivateCamera(); },
+        [runtimeAvailable]() { return runtimeAvailable; },
+        [&handTracking]() { return handTracking.IsRunning(); });
+}
+
+void RunMainLoop(MainLoopServices &services) {
+    LARGE_INTEGER frequency{};
+    QueryPerformanceFrequency(&frequency);
+    LARGE_INTEGER previousTime{};
+    QueryPerformanceCounter(&previousTime);
+
+    while (services.window.ProcessMessage()) {
+        LARGE_INTEGER currentTime{};
+        QueryPerformanceCounter(&currentTime);
+        services.sceneContext.frame.deltaTime =
+            static_cast<float>(currentTime.QuadPart - previousTime.QuadPart) /
+            static_cast<float>(frequency.QuadPart);
+        previousTime = currentTime;
+
+        services.handTracking.Update();
+        services.input.Update();
+        const int currentWidth = services.window.GetWidth();
+        const int currentHeight = services.window.GetHeight();
+        if (currentWidth > 0 && currentHeight > 0 &&
+            (currentWidth != services.width || currentHeight != services.height)) {
+            services.width = currentWidth;
+            services.height = currentHeight;
+            services.graphics.Resize(services.width, services.height);
+            services.postProcess.Resize(services.width, services.height);
+            services.sprites.Resize(services.width, services.height);
+        }
+
+        services.scenes.Update();
+        services.sound.Update();
+        services.graphics.BeginFrame();
+        services.models.BeginFrame();
+        services.sprites.BeginFrame();
+
+        services.graphics.BeginScenePass();
+        services.scenes.Draw();
+        if (services.scenes.UsesForeground3DPass()) {
+            services.graphics.ClearDepth();
+            services.scenes.DrawForeground3D();
+        }
+        services.scenes.DrawTransparent();
+        services.graphics.EndScenePass();
+
+        services.graphics.BeginBackBufferPass(false);
+        services.graphics.TransitionDepthToShaderResource();
+        services.postProcess.Draw(
+            services.graphics.GetSceneSrvGpuHandle(&services.srv),
+            services.graphics.GetDepthStencilGpuHandle());
+        services.graphics.TransitionDepthToWrite();
+        services.scenes.DrawPostProcessOverlay();
+        services.graphics.EndFrame();
+    }
+}
+
 } // namespace
 
 int RunApp(HINSTANCE hInstance, int nCmdShow) {
@@ -445,9 +545,11 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
     TextureManager textureManager;
     textureManager.Initialize(&dxCommon, &srvManager);
     const float dummyShadowDepth = 1.0f;
+    std::array<uint8_t, sizeof(dummyShadowDepth)> dummyShadowDepthBytes{};
+    std::memcpy(dummyShadowDepthBytes.data(), &dummyShadowDepth,
+                sizeof(dummyShadowDepth));
     const uint32_t dummyShadowTextureId = textureManager.CreateTexture2D(
-        1, 1, DXGI_FORMAT_R32_FLOAT,
-        reinterpret_cast<const uint8_t *>(&dummyShadowDepth),
+        1, 1, DXGI_FORMAT_R32_FLOAT, dummyShadowDepthBytes.data(),
         sizeof(dummyShadowDepth));
 
     // ModelManager
@@ -481,89 +583,19 @@ int RunApp(HINSTANCE hInstance, int nCmdShow) {
     sceneCtx.rendering.dxCommon = &dxCommon;
     sceneCtx.rendering.postEffectManager = &postEffectManager;
     sceneCtx.frame.deltaTime = 0.0f;
-    AppSceneServices::ConfigureHandTracking(
-        [&handUdpSenderProcess, &winApp]() {
-            if (handUdpSenderProcess.IsRunning()) {
-                return true;
-            }
-
-            HWND hwnd = winApp.GetHwnd();
-            SetForegroundWindow(hwnd);
-            const bool started = handUdpSenderProcess.ActivateCamera();
-            SetForegroundWindow(hwnd);
-            return started;
-        },
-        [&handUdpSenderProcess]() { handUdpSenderProcess.DeactivateCamera(); },
-        [handTrackingRuntimeAvailable]() {
-            return handTrackingRuntimeAvailable;
-        },
-        [&handUdpSenderProcess]() { return handUdpSenderProcess.IsRunning(); });
+    ConfigureHandTrackingCallbacks(handUdpSenderProcess, winApp,
+                                   handTrackingRuntimeAvailable);
 
     // SceneManager
     SceneManager sceneManager;
     sceneManager.Initialize(sceneCtx);
     sceneManager.ChangeScene(std::make_unique<TitleScene>());
-    // 高精細タイマの周波数を取得
-    LARGE_INTEGER freq;
-    QueryPerformanceFrequency(&freq);
-
-    LARGE_INTEGER prevTime;
-    QueryPerformanceCounter(&prevTime);
-
-    // メインループ
-    while (winApp.ProcessMessage()) {
-        // deltaTime計算
-        LARGE_INTEGER currentTime;
-        QueryPerformanceCounter(&currentTime);
-
-        float deltaTime =
-            static_cast<float>(currentTime.QuadPart - prevTime.QuadPart) /
-            static_cast<float>(freq.QuadPart);
-
-        prevTime = currentTime;
-
-        sceneCtx.frame.deltaTime = deltaTime;
-        handUdpSenderProcess.Update();
-
-        // 入力更新
-        input.Update(deltaTime);
-
-        const int currentWidth = winApp.GetWidth();
-        const int currentHeight = winApp.GetHeight();
-        if (currentWidth > 0 && currentHeight > 0 &&
-            (currentWidth != width || currentHeight != height)) {
-            width = currentWidth;
-            height = currentHeight;
-            dxCommon.Resize(width, height);
-            postProcessSystem.Resize(width, height);
-            spriteManager.Resize(width, height);
-        }
-        // Scene 更新
-        sceneManager.Update();
-        soundManager.Update();
-        // 描画
-        dxCommon.BeginFrame();
-        modelManager.BeginFrame();
-        spriteManager.BeginFrame();
-
-        dxCommon.BeginScenePass();
-        sceneManager.Draw();
-        if (sceneManager.UsesForeground3DPass()) {
-            dxCommon.ClearDepth();
-            sceneManager.DrawForeground3D();
-        }
-        sceneManager.DrawTransparent();
-        dxCommon.EndScenePass();
-
-        dxCommon.BeginBackBufferPass(false);
-        dxCommon.TransitionDepthToShaderResource();
-        postProcessSystem.Draw(dxCommon.GetSceneSrvGpuHandle(&srvManager),
-                               dxCommon.GetDepthStencilGpuHandle());
-        dxCommon.TransitionDepthToWrite();
-        sceneManager.DrawPostProcessOverlay();
-
-        dxCommon.EndFrame();
-    }
+    MainLoopServices loopServices{
+        handUdpSenderProcess, winApp,          input,         soundManager,
+        dxCommon,             postProcessSystem, modelManager,  spriteManager,
+        srvManager,           sceneManager,    sceneCtx,       width,
+        height};
+    RunMainLoop(loopServices);
 
     winApp.SetCursorVisible(true);
     return 0;

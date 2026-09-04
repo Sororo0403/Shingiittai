@@ -112,6 +112,55 @@ uint32_t ResolveNormalTextureId(TextureManager *textureManager,
     return ResolveNormalTextureId(textureManager, textureId);
 }
 
+void CreateModelPipelineState(
+    ID3D12Device *device, ID3D12RootSignature *rootSignature,
+    D3D12_SHADER_BYTECODE vertexShader, D3D12_SHADER_BYTECODE pixelShader,
+    D3D12_INPUT_LAYOUT_DESC inputLayout, ModelBlendMode blendMode,
+    MaterialCullMode cullMode, bool depthWrite,
+    ComPtr<ID3D12PipelineState> &pipelineState) {
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC pso{};
+    pso.pRootSignature = rootSignature;
+    pso.VS = vertexShader;
+    pso.PS = pixelShader;
+    pso.InputLayout = inputLayout;
+    pso.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    pso.NumRenderTargets = 1;
+    pso.RTVFormats[0] = DirectXCommon::kSceneColorFormat;
+    pso.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    pso.SampleDesc.Count = 1;
+    pso.SampleMask = UINT_MAX;
+    pso.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+    pso.RasterizerState.CullMode = ToD3D12CullMode(cullMode);
+
+    D3D12_BLEND_DESC blend = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+    blend.RenderTarget[0].BlendEnable =
+        blendMode == ModelBlendMode::Opaque ? FALSE : TRUE;
+    blend.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+    blend.RenderTarget[0].DestBlend = blendMode == ModelBlendMode::Additive
+                                          ? D3D12_BLEND_ONE
+                                          : D3D12_BLEND_INV_SRC_ALPHA;
+    blend.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+    blend.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+    blend.RenderTarget[0].DestBlendAlpha =
+        blendMode == ModelBlendMode::Additive ? D3D12_BLEND_ONE
+                                              : D3D12_BLEND_ZERO;
+    blend.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    blend.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+    pso.BlendState = blend;
+
+    D3D12_DEPTH_STENCIL_DESC depth =
+        CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+    depth.DepthEnable = TRUE;
+    depth.DepthWriteMask = depthWrite ? D3D12_DEPTH_WRITE_MASK_ALL
+                                      : D3D12_DEPTH_WRITE_MASK_ZERO;
+    depth.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+    pso.DepthStencilState = depth;
+
+    ThrowIfFailed(device->CreateGraphicsPipelineState(
+                      &pso, IID_PPV_ARGS(&pipelineState)),
+                  "CreateGraphicsPipelineState(ModelRenderer) failed");
+}
+
 } // namespace
 
 static XMFLOAT4X4 StoreMatrix(const XMMATRIX &matrix) {
@@ -323,54 +372,6 @@ void ModelRenderer::CreatePipelineState() {
          D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, 1},
     };
 
-    auto makePso = [&](D3D12_SHADER_BYTECODE vertexShader,
-                       D3D12_INPUT_LAYOUT_DESC inputLayout,
-                       ModelBlendMode blendMode, MaterialCullMode cullMode,
-                       bool depthWrite, ComPtr<ID3D12PipelineState> &psoOut) {
-        D3D12_GRAPHICS_PIPELINE_STATE_DESC pso{};
-        pso.pRootSignature = rootSignature_.Get();
-        pso.VS = vertexShader;
-        pso.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
-        pso.InputLayout = inputLayout;
-        pso.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-        pso.NumRenderTargets = 1;
-        pso.RTVFormats[0] = DirectXCommon::kSceneColorFormat;
-        pso.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-        pso.SampleDesc.Count = 1;
-        pso.SampleMask = UINT_MAX;
-        pso.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-        pso.RasterizerState.CullMode = ToD3D12CullMode(cullMode);
-
-        D3D12_BLEND_DESC blend = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-        blend.RenderTarget[0].BlendEnable =
-            blendMode == ModelBlendMode::Opaque ? FALSE : TRUE;
-        blend.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
-        blend.RenderTarget[0].DestBlend = blendMode == ModelBlendMode::Additive
-                                              ? D3D12_BLEND_ONE
-                                              : D3D12_BLEND_INV_SRC_ALPHA;
-        blend.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-        blend.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-        blend.RenderTarget[0].DestBlendAlpha =
-            blendMode == ModelBlendMode::Additive ? D3D12_BLEND_ONE
-                                                  : D3D12_BLEND_ZERO;
-        blend.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
-        blend.RenderTarget[0].RenderTargetWriteMask =
-            D3D12_COLOR_WRITE_ENABLE_ALL;
-        pso.BlendState = blend;
-
-        D3D12_DEPTH_STENCIL_DESC depth =
-            CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
-        depth.DepthEnable = TRUE;
-        depth.DepthWriteMask = depthWrite ? D3D12_DEPTH_WRITE_MASK_ALL
-                                          : D3D12_DEPTH_WRITE_MASK_ZERO;
-        depth.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
-        pso.DepthStencilState = depth;
-
-        ThrowIfFailed(
-            device->CreateGraphicsPipelineState(&pso, IID_PPV_ARGS(&psoOut)),
-            "CreateGraphicsPipelineState(ModelRenderer) failed");
-    };
-
     for (ModelBlendMode blendMode :
          {ModelBlendMode::Opaque, ModelBlendMode::Alpha,
           ModelBlendMode::Additive}) {
@@ -380,13 +381,19 @@ void ModelRenderer::CreatePipelineState() {
             for (bool depthWrite : {false, true}) {
                 const size_t index =
                     PipelineVariantIndex(blendMode, cullMode, depthWrite);
-                makePso({vs->GetBufferPointer(), vs->GetBufferSize()},
-                        {baseLayout, _countof(baseLayout)}, blendMode, cullMode,
-                        depthWrite, pipelineStates_[index]);
-                makePso({instancedVs->GetBufferPointer(),
-                         instancedVs->GetBufferSize()},
-                        {instancedLayout, _countof(instancedLayout)}, blendMode,
-                        cullMode, depthWrite, instancedPipelineStates_[index]);
+                CreateModelPipelineState(
+                    device, rootSignature_.Get(),
+                    {vs->GetBufferPointer(), vs->GetBufferSize()},
+                    {ps->GetBufferPointer(), ps->GetBufferSize()},
+                    {baseLayout, _countof(baseLayout)}, blendMode, cullMode,
+                    depthWrite, pipelineStates_[index]);
+                CreateModelPipelineState(
+                    device, rootSignature_.Get(),
+                    {instancedVs->GetBufferPointer(),
+                     instancedVs->GetBufferSize()},
+                    {ps->GetBufferPointer(), ps->GetBufferSize()},
+                    {instancedLayout, _countof(instancedLayout)}, blendMode,
+                    cullMode, depthWrite, instancedPipelineStates_[index]);
             }
         }
     }

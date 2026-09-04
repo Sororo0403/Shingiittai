@@ -211,7 +211,7 @@ class ModelRenderer {
                                             const Transform *transforms,
                                             uint32_t instanceCount);
     D3D12_VERTEX_BUFFER_VIEW WriteInstances(const Model &model,
-                                            const InstanceData *instances,
+                                            const InstanceData *sourceInstances,
                                             uint32_t instanceCount);
     /// <summary>
     /// PipelineForMaterialを設定する

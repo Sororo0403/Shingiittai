@@ -1,12 +1,14 @@
 #pragma once
 #include <cstdint>
 
+/// <summary>色変換処理の種類</summary>
 enum class PostProcessColorMode : int32_t {
     None = 0,
     Grayscale = 1,
     Sepia = 2,
 };
 
+/// <summary>画面フィルター処理の種類</summary>
 enum class PostProcessFilterMode : int32_t {
     None = 0,
     Box3x3 = 1,
@@ -15,12 +17,14 @@ enum class PostProcessFilterMode : int32_t {
     GaussianBlur7x7 = 4,
 };
 
+/// <summary>輪郭抽出処理の種類</summary>
 enum class PostProcessEdgeMode : int32_t {
     None = 0,
     Luminance = 1,
     Depth = 2,
 };
 
+/// <summary>特殊な画面演出の種類</summary>
 enum class PostProcessSpecialMode : int32_t {
     None = 0,
     Vignette = 1,
@@ -28,22 +32,26 @@ enum class PostProcessSpecialMode : int32_t {
     Dissolve = 3,
 };
 
+/// <summary>ランダムノイズの生成方式</summary>
 enum class PostProcessRandomMode : int32_t {
     None = 0,
     GrayscaleNoise = 1,
     OverlayNoise = 2,
 };
 
+/// <summary>色調補正のパラメーターを保持する</summary>
 struct PostProcessColorGradeSettings {
     PostProcessColorMode mode = PostProcessColorMode::None;
     float grayscaleWeights[3]{0.2125f, 0.7154f, 0.0721f};
     float sepiaTone[3]{1.20f, 1.00f, 0.80f};
 };
 
+/// <summary>フィルター処理のパラメーターを保持する</summary>
 struct PostProcessFilterSettings {
     PostProcessFilterMode mode = PostProcessFilterMode::None;
 };
 
+/// <summary>輪郭抽出のパラメーターを保持する</summary>
 struct PostProcessEdgeSettings {
     PostProcessEdgeMode mode = PostProcessEdgeMode::None;
     float luminanceThreshold = 0.2f;
@@ -52,12 +60,14 @@ struct PostProcessEdgeSettings {
     float farZ = 100.0f;
 };
 
+/// <summary>トーンマッピングのパラメーターを保持する</summary>
 struct PostProcessTonemapSettings {
     bool enabled = false;
     float exposure = 1.0f;
     float gamma = 2.2f;
 };
 
+/// <summary>ブルーム処理のパラメーターを保持する</summary>
 struct PostProcessBloomSettings {
     bool enabled = false;
     float threshold = 1.0f;
@@ -65,6 +75,7 @@ struct PostProcessBloomSettings {
     float radius = 2.0f;
 };
 
+/// <summary>画面ノイズのパラメーターを保持する</summary>
 struct PostProcessNoiseSettings {
     bool enabled = false;
     float strength = 0.025f;
@@ -72,10 +83,12 @@ struct PostProcessNoiseSettings {
     float time = 0.0f;
 };
 
+/// <summary>特殊画面演出のパラメーターを保持する</summary>
 struct PostProcessSpecialSettings {
     PostProcessSpecialMode mode = PostProcessSpecialMode::None;
 };
 
+/// <summary>ビネット処理のパラメーターを保持する</summary>
 struct PostProcessVignetteSettings {
     bool enabled = false;
     float strength = 0.0f;
@@ -88,12 +101,14 @@ struct PostProcessVignetteSettings {
     float secondaryTintColor[3]{1.0f, 1.0f, 1.0f};
 };
 
+/// <summary>放射状ブラーのパラメーターを保持する</summary>
 struct PostProcessRadialBlurSettings {
     float strength = 0.0f;
     float center[2]{0.5f, 0.5f};
     int32_t sampleCount = 10;
 };
 
+/// <summary>ランダムノイズ演出のパラメーターを保持する</summary>
 struct PostProcessRandomNoiseSettings {
     PostProcessRandomMode mode = PostProcessRandomMode::None;
     float strength = 0.0f;
@@ -102,10 +117,12 @@ struct PostProcessRandomNoiseSettings {
     float seed = 0.0f;
 };
 
+/// <summary>シーン全体の減光パラメーターを保持する</summary>
 struct PostProcessSceneDimSettings {
     float strength = 0.0f;
 };
 
+/// <summary>トゥーン調整のパラメーターを保持する</summary>
 struct PostProcessToonSettings {
     bool enabled = false;
     float strength = 0.0f;
@@ -113,12 +130,14 @@ struct PostProcessToonSettings {
     float edgeStrength = 0.0f;
 };
 
+/// <summary>ディゾルブ演出のパラメーターを保持する</summary>
 struct PostProcessDissolveSettings {
     float amount = 0.0f;
     float softness = 0.08f;
     float scale = 42.0f;
 };
 
+/// <summary>レンズフレアのパラメーターを保持する</summary>
 struct PostProcessLensFlareSettings {
     bool enabled = false;
     float visibility = 0.0f;
@@ -139,6 +158,7 @@ struct PostProcessLensFlareSettings {
     float streakColor[3]{1.0f, 0.70f, 0.40f};
 };
 
+/// <summary>一連のポストプロセス設定を合成可能なプロファイルとして保持する</summary>
 struct PostProcessProfile {
     PostProcessColorGradeSettings colorGrade;
     PostProcessFilterSettings filter;
@@ -156,6 +176,7 @@ struct PostProcessProfile {
     PostProcessLensFlareSettings lensFlare;
 };
 
+/// <summary>ポストプロセスシェーダーへ転送する定数データ</summary>
 struct PostProcessConstants {
     int32_t colorMode = 0;
     int32_t filterMode = 0;

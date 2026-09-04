@@ -10,14 +10,35 @@
 #include <memory>
 #include <string>
 
+/// <summary>
+/// 戦闘操作を段階的に練習するチュートリアル進行を管理する
+/// </summary>
 class TutorialScene : public BaseScene {
   public:
+    /// <summary>
+    /// TutorialSceneに対応する公開処理を実行する
+    /// </summary>
     explicit TutorialScene(const SwordInputCalibration &inputCalibration);
+    /// <summary>
+    /// ~TutorialSceneに対応する公開処理を実行する
+    /// </summary>
     ~TutorialScene() override;
 
+    /// <summary>
+    /// 使用するリソースと初期状態を準備する
+    /// </summary>
     void Initialize(const SceneContext &ctx) override;
+    /// <summary>
+    /// 入力と状態を1フレーム進める
+    /// </summary>
     void Update() override;
+    /// <summary>
+    /// 現在の状態を描画する
+    /// </summary>
     void Draw() override;
+    /// <summary>
+    /// 透明描画パスへ必要な要素を描画する
+    /// </summary>
     void DrawTransparent() override;
 
   private:

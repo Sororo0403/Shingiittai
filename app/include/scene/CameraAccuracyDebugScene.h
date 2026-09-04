@@ -14,6 +14,9 @@
 
 class Input;
 
+/// <summary>
+/// カメラ入力精度と剣姿勢の調整結果を可視化する診断画面を管理する
+/// </summary>
 class CameraAccuracyDebugScene : public BaseScene {
   public:
     enum class ReturnTarget {
@@ -24,13 +27,31 @@ class CameraAccuracyDebugScene : public BaseScene {
         TutorialOption,
     };
 
+    /// <summary>
+    /// CameraAccuracyDebugSceneに対応する公開処理を実行する
+    /// </summary>
     explicit CameraAccuracyDebugScene(
         ReturnTarget returnTarget = ReturnTarget::Title);
+    /// <summary>
+    /// ~CameraAccuracyDebugSceneに対応する公開処理を実行する
+    /// </summary>
     ~CameraAccuracyDebugScene() override;
 
+    /// <summary>
+    /// 使用するリソースと初期状態を準備する
+    /// </summary>
     void Initialize(const SceneContext &ctx) override;
+    /// <summary>
+    /// 入力と状態を1フレーム進める
+    /// </summary>
     void Update() override;
+    /// <summary>
+    /// 現在の状態を描画する
+    /// </summary>
     void Draw() override;
+    /// <summary>
+    /// 透明描画パスへ必要な要素を描画する
+    /// </summary>
     void DrawTransparent() override;
 
   private:
@@ -56,7 +77,6 @@ class CameraAccuracyDebugScene : public BaseScene {
     void CaptureNeutral();
     void ResetNeutral();
     void UpdateGamePreview(float deltaTime);
-    SwordPose MakePoseFromPalm(const DirectX::XMFLOAT2 &palm) const;
     Transform BuildSwordTransform(const SwordPose &pose,
                                   const DirectX::XMFLOAT3 &anchor,
                                   bool isLeft) const;
@@ -81,7 +101,6 @@ class CameraAccuracyDebugScene : public BaseScene {
     float RequiredTravelForSensitivity(float axisSensitivity) const;
     void DrawHandPanel(const char *title, const char *subtitle,
                        size_t handIndex, float x, float y, float w, float h);
-    void DrawHandStats(size_t handIndex, float x, float y);
     void DrawRect(float x, float y, float w, float h,
                   const DirectX::XMFLOAT4 &color);
     void DrawFrame(float x, float y, float w, float h, float thickness,

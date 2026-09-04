@@ -3,6 +3,9 @@
 #include <DirectXMath.h>
 #include <array>
 
+/// <summary>
+/// ハンド入力を剣操作へ変換する際の補正値を保持する
+/// </summary>
 struct SwordInputCalibration {
     InputControlType controlType = InputControlType::KeyboardMouse;
     bool hasHandNeutral = false;

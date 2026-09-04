@@ -2,8 +2,6 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
-#include <filesystem>
-#include <string>
 
 #pragma comment(lib, "xinput.lib")
 
@@ -32,28 +30,9 @@ float NormalizeTrigger(BYTE value) {
         0.0f, 1.0f);
 }
 
-std::wstring GetDefaultReplayDirectory() {
-    std::array<wchar_t, MAX_PATH> pathBuffer{};
-    const DWORD length = GetModuleFileNameW(
-        nullptr, pathBuffer.data(), static_cast<DWORD>(pathBuffer.size()));
-    if (length == 0 || length >= pathBuffer.size()) {
-        return L"replays";
-    }
-
-    const std::filesystem::path executablePath(
-        std::wstring(pathBuffer.data(), length));
-    return (executablePath.parent_path() / L"replays").wstring();
-}
-
 } // namespace
 
-Input::~Input() { FinishRecording(); }
-
 void Input::Initialize(HINSTANCE hInstance, HWND hwnd) {
-    if (replayDirectory_.empty()) {
-        replayDirectory_ = GetDefaultReplayDirectory();
-    }
-
     directInput_.Reset();
     keyboard_.Reset();
     mouse_.Reset();
@@ -104,31 +83,10 @@ void Input::Initialize(HINSTANCE hInstance, HWND hwnd) {
     }
 }
 
-void Input::Update(float deltaTime) {
-    if (replayMode_ == ReplayMode::Replay) {
-        keyPrev_ = keyNow_;
-        mousePrevState_ = mouseState_;
-        gamepadPrevState_ = gamepadState_;
-
-        if (replayFrameIndex_ < replayFrames_.size()) {
-            ApplyReplayFrame(replayFrames_[replayFrameIndex_]);
-            ++replayFrameIndex_;
-            replayFinished_ = replayFrameIndex_ >= replayFrames_.size();
-        } else {
-            replayFinished_ = true;
-        }
-        return;
-    }
-
+void Input::Update() {
     UpdateKeyboard();
     UpdateMouse();
     UpdateGamepad();
-    UpdateReplayHotkeys(deltaTime);
-
-    if (replayMode_ == ReplayMode::Record) {
-        recordedFrames_.push_back(CaptureFrame());
-        recordingDirty_ = true;
-    }
 }
 
 void Input::UpdateKeyboard() {

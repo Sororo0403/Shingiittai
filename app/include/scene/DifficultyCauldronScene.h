@@ -13,16 +13,40 @@
 class GameScene;
 class Input;
 
+/// <summary>
+/// 難易度選択と戦闘開始前の釜演出を管理する
+/// </summary>
 class DifficultyCauldronScene : public BaseScene {
   public:
+    /// <summary>
+    /// DifficultyCauldronSceneに対応する公開処理を実行する
+    /// </summary>
     explicit DifficultyCauldronScene(
         const SwordInputCalibration &inputCalibration);
+    /// <summary>
+    /// ~DifficultyCauldronSceneに対応する公開処理を実行する
+    /// </summary>
     ~DifficultyCauldronScene() override;
 
+    /// <summary>
+    /// 使用するリソースと初期状態を準備する
+    /// </summary>
     void Initialize(const SceneContext &ctx) override;
+    /// <summary>
+    /// 入力と状態を1フレーム進める
+    /// </summary>
     void Update() override;
+    /// <summary>
+    /// 現在の状態を描画する
+    /// </summary>
     void Draw() override;
+    /// <summary>
+    /// 透明描画パスへ必要な要素を描画する
+    /// </summary>
     void DrawTransparent() override;
+    /// <summary>
+    /// ポストプロセス後のオーバーレイを描画する
+    /// </summary>
     void DrawPostProcessOverlay() override;
 
   private:

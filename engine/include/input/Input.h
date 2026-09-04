@@ -1,12 +1,9 @@
 #pragma once
 #define DIRECTINPUT_VERSION 0x0800
-#include "input/InputReplayTypes.h"
 #include <Windows.h>
 #include <Xinput.h>
 #include <array>
 #include <dinput.h>
-#include <string>
-#include <vector>
 #include <wrl.h>
 
 /// <summary>
@@ -14,11 +11,6 @@
 /// </summary>
 class Input {
   public:
-    using ReplayMode = InputReplayMode;
-    using ReplayStartupOptions = InputReplayStartupOptions;
-
-    ~Input();
-
     /// <summary>
     /// DirectInputのキーボードとマウス、XInputのゲームパッドを準備する
     /// </summary>
@@ -29,40 +21,7 @@ class Input {
     /// <summary>
     /// 各入力デバイスの現在状態を取得し、前フレーム状態と入れ替える
     /// </summary>
-    /// <param name="deltaTime">前フレームからの経過時間</param>
-    void Update(float deltaTime);
-
-    /// <summary>
-    /// 現在の入力をフレーム単位でJSONへ保存する録画を開始する
-    /// </summary>
-    bool StartRecording(const std::wstring &path, float fixedDeltaTime);
-
-    /// <summary>
-    /// JSONから読み込んだ入力フレームを実入力の代わりに再生する
-    /// </summary>
-    bool StartReplay(const std::wstring &path);
-
-    /// <summary>
-    /// 録画を保存して通常入力へ戻る
-    /// </summary>
-    bool StopRecording();
-
-    /// <summary>
-    /// 録画中なら現在までの入力フレームをファイルへ書き出す
-    /// </summary>
-    bool FinishRecording();
-
-    /// <summary>
-    /// 起動時の録画・再生設定をInputへ適用する
-    /// </summary>
-    bool ApplyReplayStartupOptions(const ReplayStartupOptions &options,
-                                   float fixedDeltaTime);
-
-    ReplayMode GetReplayMode() const { return replayMode_; }
-    bool IsReplayFinished() const { return replayFinished_; }
-    size_t GetReplayFrameIndex() const { return replayFrameIndex_; }
-    size_t GetReplayFrameCount() const { return replayFrames_.size(); }
-    const std::wstring &GetReplayPath() const { return replayPath_; }
+    void Update();
 
     /// <summary>
     /// 指定キーが押下中かを判定する
@@ -200,32 +159,6 @@ class Input {
     /// </summary>
     void UpdateGamepad();
 
-    struct InputFrame {
-        std::array<BYTE, 256> keys{};
-        DIMOUSESTATE mouse{};
-        bool gamepadConnected = false;
-        WORD gamepadButtons = 0;
-        float gamepadLeftStickX = 0.0f;
-        float gamepadLeftStickY = 0.0f;
-        float gamepadRightStickX = 0.0f;
-        float gamepadRightStickY = 0.0f;
-        float gamepadLeftTrigger = 0.0f;
-        float gamepadRightTrigger = 0.0f;
-    };
-
-    /// <summary>
-    /// CaptureFrameを実行する
-    /// </summary>
-    InputFrame CaptureFrame() const;
-    void ApplyReplayFrame(const InputFrame &frame);
-    void UpdateReplayHotkeys(float fixedDeltaTime);
-    /// <summary>
-    /// MakeAutoReplayPathを実行する
-    /// </summary>
-    std::wstring MakeAutoReplayPath() const;
-    bool SaveRecording() const;
-    bool LoadReplay(const std::wstring &path);
-
   private:
     static constexpr BYTE kPressMask = 0x80;
 
@@ -248,15 +181,4 @@ class Input {
     float gamepadRightStickY_ = 0.0f;
     float gamepadLeftTrigger_ = 0.0f;
     float gamepadRightTrigger_ = 0.0f;
-
-    ReplayMode replayMode_ = ReplayMode::Live;
-    std::wstring replayPath_;
-    float replayFixedDeltaTime_ = 0.0f;
-    std::vector<InputFrame> recordedFrames_;
-    std::vector<InputFrame> replayFrames_;
-    size_t replayFrameIndex_ = 0;
-    bool replayFinished_ = false;
-    bool recordingDirty_ = false;
-    std::wstring replayDirectory_;
-    bool replayHotkeysEnabled_ = true;
 };

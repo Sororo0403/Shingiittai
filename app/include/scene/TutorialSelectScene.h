@@ -10,13 +10,31 @@
 
 class Input;
 
+/// <summary>
+/// チュートリアルの開始方法と操作方式を選択する画面を管理する
+/// </summary>
 class TutorialSelectScene : public BaseScene {
   public:
+    /// <summary>
+    /// ~TutorialSelectSceneに対応する公開処理を実行する
+    /// </summary>
     ~TutorialSelectScene() override;
 
+    /// <summary>
+    /// 使用するリソースと初期状態を準備する
+    /// </summary>
     void Initialize(const SceneContext &ctx) override;
+    /// <summary>
+    /// 入力と状態を1フレーム進める
+    /// </summary>
     void Update() override;
+    /// <summary>
+    /// 現在の状態を描画する
+    /// </summary>
     void Draw() override;
+    /// <summary>
+    /// 透明描画パスへ必要な要素を描画する
+    /// </summary>
     void DrawTransparent() override {}
 
   private:
@@ -63,8 +81,11 @@ class TutorialSelectScene : public BaseScene {
     void DrawButtons();
     void DrawButtonIllustration(int index, const ButtonRect &rect, float lift,
                                 float alpha, bool selected);
+    void DrawHandButtonIllustration(int index, const ButtonRect &rect,
+                                    float lift, float alpha, bool selected);
     void DrawLabels(float screenWidth, float screenHeight);
     void DrawUtilityMenuWindow(float screenWidth, float screenHeight);
+    void DrawUtilityMenuButton(int index, float x, float y, float size);
     void DrawUtilityMenuIcon(int index, float centerX, float centerY,
                              float size, float alpha, bool selected);
     void DrawHandCameraConfirmWindow(float screenWidth, float screenHeight);

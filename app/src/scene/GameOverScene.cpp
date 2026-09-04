@@ -581,16 +581,10 @@ void GameOverScene::DrawTitleFade(float screenWidth, float screenHeight) {
 
     const float scale =
         std::clamp(screenWidth * 0.50f / totalLetterWidth, 0.44f, 0.86f);
-    const float textW = totalLetterWidth * scale;
-    const float textH = maxLetterHeight * scale;
-    const float x = (screenWidth - textW) * 0.5f;
-    const float y = (screenHeight - textH) * 0.5f;
-    const float blackFade =
-        SmoothStep01((titleFadeTimer_ - kGameOverBlackFadeStartTime) /
-                     kGameOverBlackFadeDuration);
+    const float y = (screenHeight - maxLetterHeight * scale) * 0.5f;
     const float crumbleStart =
         kGameOverTextCompleteTime + kGameOverCrumbleStartDelay;
-    float cursorX = x;
+    float cursorX = (screenWidth - totalLetterWidth * scale) * 0.5f;
     for (int i = 0; i < kGameOverLetterCount; ++i) {
         const Image &letter = gameOverLetterImages_[static_cast<size_t>(i)];
         const float letterStart =
@@ -606,7 +600,6 @@ void GameOverScene::DrawTitleFade(float screenWidth, float screenHeight) {
                                          static_cast<float>(i) * 1.83f);
             const float slide = ooze * (5.0f + 1.8f * wave);
             const float wobbleX = ooze * wave * 1.4f;
-            const float letterAlpha = appear;
             const float lx = cursorX + wobbleX;
             const float ly = y + slide;
             const float letterW = letter.width * scale;
@@ -619,7 +612,7 @@ void GameOverScene::DrawTitleFade(float screenWidth, float screenHeight) {
 
             for (int layer = 4; layer >= 1; --layer) {
                 const float layerF = static_cast<float>(layer);
-                const float bloomAlpha = letterAlpha * ooze *
+                const float bloomAlpha = appear * ooze *
                                          (1.0f - textDissolve) *
                                          (0.12f + 0.035f * layerF);
                 if (bloomAlpha <= 0.001f) {
@@ -648,88 +641,104 @@ void GameOverScene::DrawTitleFade(float screenWidth, float screenHeight) {
             const float bodyX = centerX - bodyW * 0.5f;
             const float bodyY = centerY - bodyH * 0.5f;
             if (textDissolve < 0.995f) {
-                const float wholeAlpha = letterAlpha * (1.0f - textDissolve);
+                const float wholeAlpha = appear * (1.0f - textDissolve);
                 DrawImageTint(letter, bodyX - 2.0f, bodyY + 2.0f, bodyScale,
                               Color(0.30f, 0.30f, 0.30f,
                                     wholeAlpha * (0.26f + ooze * 0.16f)));
                 DrawImageTint(letter, bodyX, bodyY, bodyScale,
                               Color(0.72f, 0.72f, 0.70f, wholeAlpha));
             }
-            const float cellW =
-                bodyW / static_cast<float>(kGameOverParticleColumns);
-            const float cellH =
-                bodyH / static_cast<float>(kGameOverParticleRows);
-            for (int row = 0; row < kGameOverParticleRows; ++row) {
-                for (int col = 0; col < kGameOverParticleColumns; ++col) {
-                    const float colF = static_cast<float>(col);
-                    const float rowF = static_cast<float>(row);
-                    const float seed = static_cast<float>(i) * 13.0f +
-                                       colF * 3.17f + rowF * 7.31f;
-                    const float randomA = std::sinf(seed) * 0.5f + 0.5f;
-                    const float randomB = std::cosf(seed * 1.63f) * 0.5f + 0.5f;
-                    const float startOffset = randomA * 0.28f + randomB * 0.10f;
-                    const float local = SmoothStep01(
-                        (titleFadeTimer_ - crumbleStart - startOffset) /
-                        kGameOverCrumbleDuration);
-                    if (local <= 0.002f) {
-                        continue;
-                    }
-                    const float gust = local * local;
-                    const float spray = SmoothStep01((local - 0.08f) / 0.62f);
-                    const float windX =
-                        screenWidth * (0.16f + randomA * 0.18f) + colF * 3.2f;
-                    const float windY =
-                        -screenHeight * (0.05f + randomB * 0.14f) +
-                        (rowF - 4.5f) * 4.2f;
-                    const float flutterX =
-                        std::sinf(titleFadeTimer_ * (8.0f + randomA * 4.0f) +
-                                  seed) *
-                        spray * 20.0f;
-                    const float flutterY =
-                        std::cosf(titleFadeTimer_ * (7.0f + randomB * 5.0f) +
-                                  seed * 0.71f) *
-                        spray * 14.0f;
-                    const float fade = letterAlpha *
-                                       SmoothStep01(local / 0.18f) *
-                                       (1.0f - local * 0.96f);
-                    if (fade <= 0.003f) {
-                        continue;
-                    }
-
-                    const float grainBase =
-                        std::clamp(scale * (2.6f + randomA * 2.4f), 1.0f, 3.6f);
-                    const float particleSize =
-                        grainBase * (1.0f - local * (0.22f + randomB * 0.24f));
-                    const float baseX = bodyX + cellW * colF;
-                    const float baseY = bodyY + cellH * rowF;
-                    const float particleX = baseX + cellW * randomA +
-                                            gust * windX + flutterX -
-                                            particleSize * 0.5f;
-                    const float particleY = baseY + cellH * randomB +
-                                            gust * windY + flutterY -
-                                            particleSize * 0.5f;
-                    const float uvLeft =
-                        colF / static_cast<float>(kGameOverParticleColumns);
-                    const float uvTop =
-                        rowF / static_cast<float>(kGameOverParticleRows);
-                    const float uvWidth =
-                        1.0f / static_cast<float>(kGameOverParticleColumns);
-                    const float uvHeight =
-                        1.0f / static_cast<float>(kGameOverParticleRows);
-                    const float particleAlpha = fade * (0.58f + spray * 0.32f);
-                    DrawImageSlice(letter, particleX, particleY, particleSize,
-                                   particleSize,
-                                   Color(0.72f, 0.72f, 0.70f, particleAlpha),
-                                   uvLeft, uvTop, uvWidth, uvHeight);
-                }
-            }
+            DrawTitleFadeParticles(
+                letter, i,
+                {bodyX, bodyY, bodyW, bodyH, scale, screenWidth, screenHeight,
+                 appear, crumbleStart});
         }
         cursorX += letter.width * scale;
     }
 
-    if (blackFade > 0.001f) {
-        DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
-                 Color(0.0f, 0.0f, 0.0f, blackFade));
+    DrawTitleFadeBlackOverlay(screenWidth, screenHeight);
+}
+
+void GameOverScene::DrawTitleFadeBlackOverlay(float screenWidth,
+                                              float screenHeight) {
+    const float blackFade =
+        SmoothStep01((titleFadeTimer_ - kGameOverBlackFadeStartTime) /
+                     kGameOverBlackFadeDuration);
+    if (blackFade <= 0.001f) {
+        return;
+    }
+    DrawRect(0.0f, 0.0f, screenWidth, screenHeight,
+             Color(0.0f, 0.0f, 0.0f, blackFade));
+}
+
+void GameOverScene::DrawTitleFadeParticles(
+    const Image &letter, int letterIndex,
+    const TitleFadeParticleLayout &layout) {
+    const float cellW =
+        layout.bodyWidth / static_cast<float>(kGameOverParticleColumns);
+    const float cellH =
+        layout.bodyHeight / static_cast<float>(kGameOverParticleRows);
+    for (int row = 0; row < kGameOverParticleRows; ++row) {
+        for (int col = 0; col < kGameOverParticleColumns; ++col) {
+            const float colF = static_cast<float>(col);
+            const float rowF = static_cast<float>(row);
+            const float seed = static_cast<float>(letterIndex) * 13.0f +
+                               colF * 3.17f + rowF * 7.31f;
+            const float randomA = std::sinf(seed) * 0.5f + 0.5f;
+            const float randomB = std::cosf(seed * 1.63f) * 0.5f + 0.5f;
+            const float startOffset = randomA * 0.28f + randomB * 0.10f;
+            const float local = SmoothStep01(
+                (titleFadeTimer_ - layout.crumbleStart - startOffset) /
+                kGameOverCrumbleDuration);
+            if (local <= 0.002f) {
+                continue;
+            }
+
+            const float gust = local * local;
+            const float spray = SmoothStep01((local - 0.08f) / 0.62f);
+            const float windX =
+                layout.screenWidth * (0.16f + randomA * 0.18f) + colF * 3.2f;
+            const float windY =
+                -layout.screenHeight * (0.05f + randomB * 0.14f) +
+                (rowF - 4.5f) * 4.2f;
+            const float flutterX =
+                std::sinf(titleFadeTimer_ * (8.0f + randomA * 4.0f) + seed) *
+                spray * 20.0f;
+            const float flutterY =
+                std::cosf(titleFadeTimer_ * (7.0f + randomB * 5.0f) +
+                          seed * 0.71f) *
+                spray * 14.0f;
+            const float fade = layout.letterAlpha *
+                               SmoothStep01(local / 0.18f) *
+                               (1.0f - local * 0.96f);
+            if (fade <= 0.003f) {
+                continue;
+            }
+
+            const float grainBase = std::clamp(
+                layout.scale * (2.6f + randomA * 2.4f), 1.0f, 3.6f);
+            const float particleSize =
+                grainBase * (1.0f - local * (0.22f + randomB * 0.24f));
+            const float particleX = layout.bodyX + cellW * (colF + randomA) +
+                                    gust * windX + flutterX -
+                                    particleSize * 0.5f;
+            const float particleY = layout.bodyY + cellH * (rowF + randomB) +
+                                    gust * windY + flutterY -
+                                    particleSize * 0.5f;
+            const float uvLeft =
+                colF / static_cast<float>(kGameOverParticleColumns);
+            const float uvTop =
+                rowF / static_cast<float>(kGameOverParticleRows);
+            constexpr float uvWidth =
+                1.0f / static_cast<float>(kGameOverParticleColumns);
+            constexpr float uvHeight =
+                1.0f / static_cast<float>(kGameOverParticleRows);
+            const float particleAlpha = fade * (0.58f + spray * 0.32f);
+            DrawImageSlice(letter, particleX, particleY, particleSize,
+                           particleSize,
+                           Color(0.72f, 0.72f, 0.70f, particleAlpha), uvLeft,
+                           uvTop, uvWidth, uvHeight);
+        }
     }
 }
 
