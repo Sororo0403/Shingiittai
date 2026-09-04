@@ -256,7 +256,7 @@ void WinApp::ApplyHiddenCursorState(HWND hwnd, bool lockToClient) {
         }
     }
     if (lockToClient) {
-        LockCursorToClient(hwnd);
+        LockCursorToClientCenter(hwnd);
     } else {
         ReleaseCursorLock();
     }
@@ -279,7 +279,7 @@ void WinApp::ApplyRequestedCursorState(HWND hwnd) {
     ApplyHiddenCursorState(hwnd, ShouldLockHiddenCursor(hwnd));
 }
 
-void WinApp::LockCursorToClient(HWND hwnd) {
+void WinApp::LockCursorToClientCenter(HWND hwnd) {
     if (hwnd == nullptr) {
         return;
     }
@@ -289,15 +289,15 @@ void WinApp::LockCursorToClient(HWND hwnd) {
         return;
     }
 
-    POINT topLeft{clientRect.left, clientRect.top};
-    POINT bottomRight{clientRect.right, clientRect.bottom};
-    if (!ClientToScreen(hwnd, &topLeft) ||
-        !ClientToScreen(hwnd, &bottomRight)) {
+    POINT center{(clientRect.left + clientRect.right) / 2,
+                 (clientRect.top + clientRect.bottom) / 2};
+    if (!ClientToScreen(hwnd, &center)) {
         return;
     }
 
-    RECT screenRect{topLeft.x, topLeft.y, bottomRight.x, bottomRight.y};
-    ClipCursor(&screenRect);
+    SetCursorPos(center.x, center.y);
+    RECT centerPixel{center.x, center.y, center.x + 1, center.y + 1};
+    ClipCursor(&centerPixel);
 }
 
 void WinApp::ReleaseCursorLock() { ClipCursor(nullptr); }
@@ -307,30 +307,11 @@ bool WinApp::ShouldLockHiddenCursor(HWND hwnd) {
 }
 
 bool WinApp::ShouldHideCursor(HWND hwnd) {
-    return hwnd != nullptr && GetActiveWindow() == hwnd && !IsIconic(hwnd) &&
-           IsCursorOverClient(hwnd);
+    return hwnd != nullptr && GetActiveWindow() == hwnd && !IsIconic(hwnd);
 }
 
 void WinApp::RestoreCursorForAppInteraction() {
     ApplyRequestedCursorState(cursorWindow_);
-}
-
-bool WinApp::IsCursorOverClient(HWND hwnd) {
-    if (hwnd == nullptr) {
-        return false;
-    }
-
-    POINT cursorPos{};
-    if (!GetCursorPos(&cursorPos) || !ScreenToClient(hwnd, &cursorPos)) {
-        return false;
-    }
-
-    RECT clientRect{};
-    if (!GetClientRect(hwnd, &clientRect)) {
-        return false;
-    }
-
-    return PtInRect(&clientRect, cursorPos) != FALSE;
 }
 
 int WinApp::GetWidth() const {

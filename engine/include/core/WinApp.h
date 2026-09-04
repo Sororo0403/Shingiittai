@@ -89,11 +89,10 @@ class WinApp {
     static void ApplyHiddenCursorState(HWND hwnd, bool lockToClient);
     static void ApplyVisibleCursorState();
     static void ApplyRequestedCursorState(HWND hwnd);
-    static void LockCursorToClient(HWND hwnd);
+    static void LockCursorToClientCenter(HWND hwnd);
     static void ReleaseCursorLock();
     static bool ShouldLockHiddenCursor(HWND hwnd);
     static bool ShouldHideCursor(HWND hwnd);
-    static bool IsCursorOverClient(HWND hwnd);
     /// <summary>
     /// RestoreCursorForAppInteractionを実行する
     /// </summary>
