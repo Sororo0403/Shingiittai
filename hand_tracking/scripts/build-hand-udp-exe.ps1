@@ -8,20 +8,13 @@ $ErrorActionPreference = "Stop"
 $handTrackingRoot = Split-Path -Parent $PSScriptRoot
 $repoRoot = Split-Path -Parent $handTrackingRoot
 $script = Join-Path $handTrackingRoot "src\hand_udp_sender.py"
-$requirements = Join-Path $handTrackingRoot "requirements\hand-udp.txt"
+$setupScript = Join-Path $PSScriptRoot "setup-hand-udp.ps1"
 $generated = Join-Path $repoRoot "generated"
 $projectName = "HandUdpSender"
 $dist = Join-Path $generated "outputs\$Platform\$Configuration\$projectName"
 $build = Join-Path $generated "intermediate\$Platform\$Configuration\$projectName\pyinstaller"
 $venv = Join-Path $generated "intermediate\$projectName\.venv"
 $venvPython = Join-Path $venv "Scripts\python.exe"
-
-function Invoke-BasePython {
-    & $basePython @basePythonArgs @args
-    if ($LASTEXITCODE -ne 0) {
-        throw "Python command failed with exit code ${LASTEXITCODE}: $($args -join ' ')"
-    }
-}
 
 function Invoke-VenvPython {
     & $venvPython @args
@@ -30,41 +23,10 @@ function Invoke-VenvPython {
     }
 }
 
-function Test-Python311 {
-    param(
-        [string]$Command,
-        [string[]]$CommandArgs = @()
-    )
-
-    $version = & $Command @CommandArgs -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
-    return $LASTEXITCODE -eq 0 -and $version -eq "3.11"
+& $setupScript
+if (-not (Test-Path -LiteralPath $venvPython)) {
+    throw "Failed to prepare the hand tracking build environment."
 }
-
-$python = Get-Command python -ErrorAction SilentlyContinue
-$py = Get-Command py -ErrorAction SilentlyContinue
-
-if ($python -and (Test-Python311 $python.Source)) {
-    $basePython = $python.Source
-    $basePythonArgs = @()
-} elseif ($py -and (Test-Python311 $py.Source @("-3.11"))) {
-    $basePython = $py.Source
-    $basePythonArgs = @("-3.11")
-} else {
-    throw "Python 3.11 is required to build the Release hand tracking helper. Install Python 3.11 and confirm 'py -3.11 --version' works."
-}
-
-if (-not (Test-Path $venvPython)) {
-    Invoke-BasePython -m venv $venv
-}
-
-if (-not (Test-Python311 $venvPython)) {
-    throw "The hand tracking virtual environment must use Python 3.11. Delete '$venv' and rebuild with Python 3.11 installed."
-}
-
-Invoke-VenvPython -m pip install --upgrade pip
-Invoke-VenvPython -m pip uninstall -y opencv-python opencv-python-headless opencv-contrib-python-headless
-Invoke-VenvPython -m pip install -r $requirements
-Invoke-VenvPython -m pip install pyinstaller
 
 Invoke-VenvPython -m PyInstaller `
     --noconfirm `

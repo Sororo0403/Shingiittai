@@ -341,7 +341,7 @@
     <None Include="resources\ui\weapon_select\weapon_select_bg.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <Target Name="BuildHandTrackingHelper" BeforeTargets="CopyRuntimeDlls" Condition="'$(Configuration)' == 'Release' and '$(BundleHandTrackingHelper)' == 'true'" Inputs="$(RepositoryRoot)hand_tracking\scripts\build-hand-udp-exe.ps1;$(RepositoryRoot)hand_tracking\src\hand_udp_sender.py;$(RepositoryRoot)hand_tracking\requirements\hand-udp.txt;$(RepositoryRoot)hand_tracking\models\hand_landmarker.task" Outputs="$(RepositoryRoot)generated\outputs\$(Platform)\$(Configuration)\HandUdpSender\hand_udp_sender\hand_udp_sender.exe">
+  <Target Name="BuildHandTrackingHelper" BeforeTargets="CopyRuntimeDlls" Condition="'$(Configuration)' == 'Release' and '$(BundleHandTrackingHelper)' == 'true'" Inputs="$(RepositoryRoot)hand_tracking\scripts\build-hand-udp-exe.ps1;$(RepositoryRoot)hand_tracking\scripts\setup-hand-udp.ps1;$(RepositoryRoot)hand_tracking\src\hand_udp_sender.py;$(RepositoryRoot)hand_tracking\requirements\hand-udp.txt;$(RepositoryRoot)hand_tracking\models\hand_landmarker.task" Outputs="$(RepositoryRoot)generated\outputs\$(Platform)\$(Configuration)\HandUdpSender\hand_udp_sender\hand_udp_sender.exe">
     <Message Text="Building hand tracking helper for Release output." Importance="High" />
     <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(RepositoryRoot)hand_tracking\scripts\build-hand-udp-exe.ps1&quot; -Platform &quot;$(Platform)&quot; -Configuration &quot;$(Configuration)&quot;" />
   </Target>
